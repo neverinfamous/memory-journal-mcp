@@ -32,7 +32,7 @@ async function getDb(options: ServerOptionsSchema & { team?: boolean }, command:
     }
 
     const dbPath = options.team ? (teamDb ?? serverOptions.dbPath) : serverOptions.dbPath
-    const db = await DatabaseAdapterFactory.create(dbPath)
+    const db = await DatabaseAdapterFactory.create(dbPath, serverOptions)
     await db.initialize()
     return { db, serverOptions }
 }

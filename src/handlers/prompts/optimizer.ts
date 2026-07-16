@@ -65,7 +65,7 @@ export function getOptimizerPromptDefinitions(): InternalPromptDef[] {
 
                     let projectBreakdownText = ''
                     if (stats.projectBreakdown && Array.isArray(stats.projectBreakdown)) {
-                        projectBreakdownText = '\n\n**Project Breakdown:**\n| Workspace | Project # | Entries |\n|---|---|---|\n'
+                        projectBreakdownText = '\n\n**Project Breakdown:**\n| Project Name | Project # | Entries |\n|---|---|---|\n'
                         for (const p of stats.projectBreakdown) {
                             const name = p.name || `Project ${p.project_number}`
                             projectBreakdownText += `| ${name} | ${p.project_number} | ${p.entry_count} |\n`
@@ -197,7 +197,7 @@ After a verification workflow, you MUST explicitly update the target entries usi
 
 To proceed:
 1. Review the live stats and the unverified recent entries.
-2. Output a concise Markdown table breaking down the total entries by workspace/project to the user (use the Project Breakdown data provided above).
+2. Output a concise Markdown table breaking down the total entries by project name to the user (use the Project Breakdown data provided above).
 3. Explicitly list the available workflows (Pruning, Consolidation, Tier 1/Tier 2 Verification) so the user understands their options. Let them know they can request verification on specific entries (even if they already passed) or use different subagents for the task.
 4. Tell the user your initial plan or recommendation based on the data.
 5. If pruning, identify candidates using the Code Mode script above (MAX_QUERY_LIMIT is 500).

@@ -8,6 +8,7 @@ import type {
     EntryRevision,
     AnchorStatus,
     Anchor,
+    ToolHandlerConfig,
 } from '../../types/index.js'
 import type { CreateEntryInput } from '../core/schema.js'
 import type {
@@ -43,10 +44,10 @@ export class DatabaseAdapter implements IDatabaseAdapter {
     private lifecycleOps: LifecycleOperations
     private insightsOps: InsightsOperations
 
-    constructor(dbPath: string) {
+    constructor(dbPath: string, config?: ToolHandlerConfig) {
         this.connection = new NativeConnectionManager(dbPath)
         this.tagsMgr = new TagsManager(this.connection)
-        this.entriesMgr = new EntriesManager(this.connection, this.tagsMgr)
+        this.entriesMgr = new EntriesManager(this.connection, this.tagsMgr, config)
         this.relationshipsMgr = new RelationshipsManager(this.connection, this.entriesMgr)
         this.backupMgr = new BackupManager(this.connection)
         this.membersMgr = new MembersManager(this.connection)

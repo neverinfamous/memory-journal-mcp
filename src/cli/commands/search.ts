@@ -36,7 +36,7 @@ async function getDb(options: ServerOptionsSchema & { team?: boolean }, command:
         process.stderr.write('Warning: --team specified but no TEAM_DB_PATH configured. Using core database.\n')
     }
 
-    const db = await DatabaseAdapterFactory.create(dbPath)
+    const db = await DatabaseAdapterFactory.create(dbPath, serverOptions)
     await db.initialize()
     return { db, serverOptions }
 }

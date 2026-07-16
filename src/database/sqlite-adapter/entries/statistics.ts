@@ -183,13 +183,13 @@ export function getStatistics(
         result['projectBreakdown'] = projRows.map((r) => {
             let name: string | undefined = undefined
             
-            // 1. Try to resolve from config registry by 1-based index (the load-briefing UI mapping)
+            // 1. Try to resolve from config registry by matching project_number
             if (context.config?.projectRegistry) {
-                const keys = Object.keys(context.config.projectRegistry);
-                // r.project_number maps to the 1-based index in the UI table
-                const index = r.project_number - 1;
-                if (index >= 0 && index < keys.length) {
-                    name = keys[index];
+                for (const [key, val] of Object.entries(context.config.projectRegistry)) {
+                    if (val.project_number === r.project_number) {
+                        name = key
+                        break
+                    }
                 }
             }
             

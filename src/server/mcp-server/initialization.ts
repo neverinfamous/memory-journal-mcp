@@ -19,13 +19,13 @@ export async function initializeDependencies(options: ServerOptions): Promise<Se
     const { transport, dbPath, teamDbPath, testDbPath, testTeamDbPath } = options
 
     // Initialize database
-    const primaryDb = await DatabaseAdapterFactory.create(dbPath)
+    const primaryDb = await DatabaseAdapterFactory.create(dbPath, options)
     await primaryDb.initialize()
     logger.info('Database initialized', { module: 'McpServer', dbPath })
 
     let testDb: IDatabaseAdapter | undefined
     if (testDbPath) {
-        testDb = await DatabaseAdapterFactory.create(testDbPath)
+        testDb = await DatabaseAdapterFactory.create(testDbPath, options)
         await testDb.initialize()
         logger.info('Test database initialized', { module: 'McpServer', testDbPath })
     }
@@ -89,13 +89,14 @@ export async function initializeDependencies(options: ServerOptions): Promise<Se
     let testTeamDb: IDatabaseAdapter | undefined
     let teamDb: IDatabaseAdapter | undefined
     if (teamDbPath) {
-        primaryTeamDb = await DatabaseAdapterFactory.create(teamDbPath)
+        primaryTeamDb = await DatabaseAdapterFactory.create(teamDbPath, options)
         await primaryTeamDb.initialize()
         primaryTeamDb.applyTeamSchema()
         logger.info('Team database initialized', { module: 'McpServer', teamDbPath })
 
         if (testTeamDbPath) {
-            testTeamDb = await DatabaseAdapterFactory.create(testTeamDbPath)
+            testTeamDb = await DatabaseAdapterFactory.create(testTeamDbPath, options)
+
             await testTeamDb.initialize()
             testTeamDb.applyTeamSchema()
             logger.info('Test team database initialized', { module: 'McpServer', testTeamDbPath })

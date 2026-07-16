@@ -100,7 +100,7 @@ export async function projectCreateAction(name: string, options: Record<string, 
     const { serverOptions } = buildServerOptions(resolver, options, command, [])
     
     try {
-        const db = await DatabaseAdapterFactory.create(serverOptions.dbPath)
+        const db = await DatabaseAdapterFactory.create(serverOptions.dbPath, serverOptions)
         await db.initialize()
         
         db.createEntry({

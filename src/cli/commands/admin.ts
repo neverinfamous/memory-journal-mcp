@@ -50,7 +50,7 @@ async function getDb(options: Record<string, unknown> & { config?: string, team?
     }
 
     const dbPath = options.team ? (teamDb ?? serverOptions.dbPath) : serverOptions.dbPath
-    const db = await DatabaseAdapterFactory.create(dbPath)
+    const db = await DatabaseAdapterFactory.create(dbPath, serverOptions)
     await db.initialize()
     return { db, serverOptions }
 }
