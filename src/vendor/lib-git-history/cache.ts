@@ -261,6 +261,11 @@ export function queryCommits(filters: Partial<CommitEntry> = {}): CommitEntry[] 
       validationErrors: safeParseJSON(row.validationErrors),
       isCorrupted: row.isCorrupted === 1 ? true : undefined
     };
-    return entrySchema.parse(rawObj);
-  });
+    const parsed = entrySchema.safeParse(rawObj);
+    if (!parsed.success) {
+      console.warn(`[lib-git-history] Warning: Failed to parse cached commit ${row.commit_hash}`);
+      return null;
+    }
+    return parsed.data;
+  }).filter((x): x is CommitEntry => x !== null);
 }

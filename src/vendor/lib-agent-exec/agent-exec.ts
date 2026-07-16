@@ -14,6 +14,7 @@ const DEFAULT_MAX_PAYLOAD_SIZE = 10 * 1024 * 1024;
 let payloadPath: string;
 let interceptorsPaths: string[] = [];
 let targetOverride: string | undefined;
+let positionals: string[] = [];
 const isJson = process.argv.includes('--json');
 
 function fatalError(msg: string, details?: string[]): never {
@@ -42,7 +43,6 @@ try {
   } as const;
 
   let values: Record<string, string | boolean | string[] | undefined>;
-  let positionals: string[];
   try {
     const parsed = parseArgs({
       args: process.argv.slice(2),
@@ -104,14 +104,33 @@ try {
     }
   }
 
-  const stat = fs.statSync(payloadPath);
-  if (!stat.isFile()) fatalError('Payload path must be a regular file.');
-  const envSize = process.env.AGENT_EXEC_MAX_PAYLOAD_SIZE ? parseInt(process.env.AGENT_EXEC_MAX_PAYLOAD_SIZE, 10) : NaN;
-  const maxPayloadSize = !Number.isNaN(envSize) && envSize > 0 ? envSize : DEFAULT_MAX_PAYLOAD_SIZE;
-  if (stat.size > maxPayloadSize) {
-    fatalError(`Payload file exceeds ${maxPayloadSize} bytes limit.`);
+  let payloadStr: string;
+  const absPayloadPath = path.resolve(payloadPath);
+  
+  if (!fs.existsSync(absPayloadPath)) {
+    if (payloadPath.trim().startsWith('{')) {
+      console.error(`\n   dY' AGENT HINT: You passed a JSON payload directly as an argument to agent-exec.ts.\n\x1b[38;5;208m   dY>,? AUTONOMOUS HEALING: Treating argument as JSON payload... (Frictionless Recovery)\x1b[0m`);
+      payloadStr = payloadPath;
+    } else {
+      console.error(`\n   dY' AGENT HINT: You passed a raw command directly to agent-exec.ts instead of a payload file.\n\x1b[38;5;208m   dY>,? AUTONOMOUS HEALING: Auto-wrapping command into JSON payload... (Frictionless Recovery)\x1b[0m`);
+      const payload = {
+        target: "windows",
+        command: positionals[0],
+        args: positionals.slice(1)
+      };
+      payloadStr = JSON.stringify(payload);
+    }
+  } else {
+    const stat = fs.statSync(absPayloadPath);
+    if (!stat.isFile()) fatalError('Payload path must be a regular file.');
+    const envSize = process.env.AGENT_EXEC_MAX_PAYLOAD_SIZE ? parseInt(process.env.AGENT_EXEC_MAX_PAYLOAD_SIZE, 10) : NaN;
+    const maxPayloadSize = !Number.isNaN(envSize) && envSize > 0 ? envSize : DEFAULT_MAX_PAYLOAD_SIZE;
+    if (stat.size > maxPayloadSize) {
+      fatalError(`Payload file exceeds ${maxPayloadSize} bytes limit.`);
+    }
+    payloadStr = fs.readFileSync(absPayloadPath, 'utf8');
   }
-  const payloadStr = fs.readFileSync(payloadPath, 'utf8');
+
   const rawPayload = JSON.parse(payloadStr);
 
   const parseResult = PayloadSchema.safeParse(rawPayload);

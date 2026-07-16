@@ -106,12 +106,16 @@ When enabled, the execution bridge will actively parse the final output line of 
 - **Smart Exit Codes**: If the envelope status is `"error"`, the physical process exit code is automatically overridden to a failure (even if the shell script exited `0`).
 - **Webhook Integration**: Exposes the `{{envelope.data}}` and `{{envelope.status}}` template variables for use within `webhookPayloadTemplate`. Features like `webhookMethod`, `webhookHeaders`, `onSuccess`, and `onFailure` are fully supported for complex integrations.
 
-## 🛠️ Handling Autonomous Healing Hints
+## 🛠️ Autonomous Healing & Error Recovery
 
-When you execute a command and see a console error containing `🛠️ AUTONOMOUS HEALING:`, it means `agent-exec` had to automatically intercept your command to prevent execution failure (e.g., blocking an interactive prompt, stripping a hanging flag).
+The execution bridge features two distinct layers of autonomous healing:
 
-**If you encounter this hint during an autonomous task:**
-Read the explicit guidance in the intercept message and immediately re-invoke the correct native tool or adjust the command parameters yourself.
+### 1. Seamless Interception (No Errors Thrown)
+When executing `agent-exec.ts` directly, the infrastructure will detect if you accidentally provided a raw command string or raw JSON literal instead of the required `.json` file path. When this happens, it will **autonomously heal** your request by dynamically writing a temporary JSON payload file to the workspace scratch directory and continuing execution seamlessly without throwing an error. You do not need to intervene.
+
+### 2. Guided Recovery Hints (Errors Thrown)
+When you execute a command and see a console error containing `🛠️ AUTONOMOUS HEALING:`, it means `agent-exec` intercepted your command to prevent a catastrophic execution failure (e.g., blocking an interactive prompt, stripping an unknown CLI flag).
+**If you encounter this hint:** Read the explicit guidance in the intercept message and immediately re-invoke the correct tool or adjust the command parameters yourself.
 
 ## 9. Troubleshooting & Common Issues
 

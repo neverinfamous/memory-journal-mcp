@@ -205,8 +205,8 @@ export const extractIssues = (text: string, issuesMap: Map<string, string | null
           issuesMap.set(potentialIssue, action);
         }
       }
-    } catch {
-      // Ignore invalid regex
+    } catch (err: unknown) {
+      console.warn(`[lib-git-history] Warning: Invalid issue-pattern regex '${issuePattern}': ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 };

@@ -6,8 +6,7 @@ import { cliArgsSchema, type CliArgs } from './schema.js';
 
 export type { CliArgs };
 
-export function parseArguments(): CliArgs {
-  const options = {
+export const CLI_OPTIONS = {
     limit: { type: 'string', short: 'n' },
     path: { type: 'string', short: 'p' },
     author: { type: 'string', short: 'a' },
@@ -49,8 +48,9 @@ export function parseArguments(): CliArgs {
     'stream-to-file': { type: 'string' },
   } as const;
 
+export function parseArguments(): CliArgs {
   try {
-    const { values } = parseArgs({ args: process.argv.slice(2), options, strict: true });
+    const { values } = parseArgs({ args: process.argv.slice(2), options: CLI_OPTIONS, strict: true });
     
     // Map before/after aliases
     if (values.before && !values.until) values.until = values.before;
@@ -62,7 +62,11 @@ export function parseArguments(): CliArgs {
     
     return cliArgsSchema.parse(values);
   } catch (err: unknown) {
-    console.error(err instanceof Error ? err.message : String(err));
+    console.error(JSON.stringify({
+      error: "InvalidCliArgs",
+      message: err instanceof Error ? err.message : String(err),
+      instruction: "Fix the CLI arguments and retry. Run with --help for usage."
+    }));
     showHelpAndExit(1);
   }
 }
