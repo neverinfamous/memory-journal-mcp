@@ -282,7 +282,7 @@ Team collaboration with a separate shared database. Requires `TEAM_DB_PATH`.
 
 ## ⚙️ Tool Filtering
 
-Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `--tool-filter`):
+Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `--tool-filter`). At runtime, agents can use the `update_configuration` tool to switch tools on-the-fly.
 
 | Filter               | Use Case                 |
 | -------------------- | ------------------------ |
@@ -298,5 +298,13 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 **Custom Selection:** List individual tool names to create your own whitelist: `--tool-filter "create_entry,search_entries,semantic_search"`
 
 **Groups:** `core`, `search`, `analytics`, `relationships`, `io`, `admin`, `github`, `git`, `backup`, `team`, `codemode`
+
+> **Note**: Both `update_configuration` and `mj_execute_code` are **always enabled** regardless of your filter to ensure you can never lock yourself out of the configuration system or Code Mode.
+
+### Runtime Tool Discovery
+Agents should use this workflow to dynamically load tools they need:
+1. Read the `memory://tools/available` resource to view the catalog of all tools and their current enabled/disabled state.
+2. Call `update_configuration({ tool_filter: "..." })` to enable the specific tools needed for the task.
+3. Perform the task.
 
 

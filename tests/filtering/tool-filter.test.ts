@@ -171,6 +171,14 @@ describe('parseToolFilter', () => {
         const config = parseToolFilter('starter,-delete_entry')
         expect(config.raw).toBe('starter,-delete_entry')
     })
+
+    it('should always include escape-hatch tools', () => {
+        // Even if we explicitly exclude the groups they belong to
+        const config = parseToolFilter('full,-admin,-codemode')
+        expect(config.enabledTools.has('delete_entry')).toBe(false) // admin tool excluded
+        expect(config.enabledTools.has('update_configuration')).toBe(true) // admin escape hatch included
+        expect(config.enabledTools.has('mj_execute_code')).toBe(true) // codemode escape hatch included
+    })
 })
 
 // ============================================================================
@@ -284,7 +292,7 @@ describe('parseToolFilter edge cases', () => {
     it('should handle single tool name whitelist', () => {
         const config = parseToolFilter('create_entry')
         expect(config.enabledTools.has('create_entry')).toBe(true)
-        expect(config.enabledTools.size).toBe(1)
+        expect(config.enabledTools.size).toBe(3) // 1 explicitly included + 2 always-enabled escape hatches
     })
 
     it('should handle meta-group in non-first position', () => {

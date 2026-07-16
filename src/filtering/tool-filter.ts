@@ -13,6 +13,12 @@ export type { ToolFilterConfig } from '../types/index.js'
 
 export { TOOL_GROUPS, META_GROUPS }
 
+/** 
+ * Tools that are always enabled regardless of filter configuration.
+ * Prevents agents from locking themselves out of the config system or Code Mode. 
+ */
+export const ALWAYS_ENABLED_TOOLS = ['update_configuration', 'mj_execute_code'] as const
+
 /**
  * Get all tool names across all groups
  */
@@ -186,6 +192,11 @@ export function parseToolFilter(filterString: string): ToolFilterConfig {
                 }
             }
         }
+    }
+
+    // Always include escape-hatch tools so agents can't lock themselves out
+    for (const tool of ALWAYS_ENABLED_TOOLS) {
+        enabledTools.add(tool)
     }
 
     return {
