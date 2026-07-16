@@ -41,8 +41,10 @@ test.describe('Configuration File Parsing', () => {
         // Call the server to ensure it is alive and the config loaded properly
         const response = await client.listTools()
         
-        // Since we provided 'toolFilter: "codemode"' in the JSON config, it should only return 1 tool
-        expect(response.tools.length).toBe(1)
-        expect(response.tools[0].name).toBe('mj_execute_code')
+        // Since 'update_configuration' and 'mj_execute_code' are globally always enabled, we expect 2
+        expect(response.tools.length).toBe(2)
+        const toolNames = response.tools.map(t => t.name)
+        expect(toolNames).toContain('mj_execute_code')
+        expect(toolNames).toContain('update_configuration')
     })
 })

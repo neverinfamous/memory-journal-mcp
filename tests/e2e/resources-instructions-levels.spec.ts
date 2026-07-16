@@ -68,9 +68,9 @@ test.describe('memory://instructions: core-only filter gating', () => {
         expect(text).toContain('core')
     })
 
-    test('core-only: Code Mode section is absent (codemode group disabled)', async () => {
+    test('core-only: Code Mode section is always present (mj_execute_code is escape-hatch)', async () => {
         const text = await readInstructions(client)
-        expect(text).not.toContain('## Code Mode')
+        expect(text).toContain('## Code Mode')
     })
 
     test('core-only: GitHub Integration section is absent (github group disabled)', async () => {

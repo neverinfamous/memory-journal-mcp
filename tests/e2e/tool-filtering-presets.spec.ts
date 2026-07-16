@@ -110,10 +110,12 @@ test.describe('Tool Filter: codemode-only preset', () => {
         stopServer(CODEMODE_PORT)
     })
 
-    test('codemode: exposes exactly 1 tool', async () => {
+    test('codemode: exposes 2 tools (mj_execute_code and update_configuration)', async () => {
         const response = await client.listTools()
-        expect(response.tools.length).toBe(1)
-        expect(response.tools[0]!.name).toBe('mj_execute_code')
+        expect(response.tools.length).toBe(2)
+        const toolNames = response.tools.map(t => t.name)
+        expect(toolNames).toContain('mj_execute_code')
+        expect(toolNames).toContain('update_configuration')
     })
 
     test('codemode: mj_execute_code is callable and executes code', async () => {
