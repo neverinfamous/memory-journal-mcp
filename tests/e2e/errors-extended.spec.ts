@@ -58,7 +58,7 @@ test.describe('Errors: Core', () => {
     test('create_entry with empty content → structured error', async () => {
         const client = await createClient()
         try {
-            const p = await callToolAndParse(client, 'create_entry', { workspace_id: 'default', 
+            const p = await callToolAndParse(client, 'create_entry', { workspace_id: 'default',  workspace_id: 'default', 
                 project_number: 1,
                 content: '',
                 entry_type: 'test_entry',
@@ -338,7 +338,7 @@ test.describe('Errors: Team', () => {
     test('team_link_entries self-loop → structured error', async () => {
         // Create a team entry so the self-loop test hits the domain check,
         // not a "not found" error
-        const create = await callToolAndParse(client, 'team_create_entry', { workspace_id: 'default', 
+        const create = await callToolAndParse(client, 'team_create_entry', { workspace_id: 'default',  workspace_id: 'default', 
             project_number: 1,
             content: 'Team self-loop test entry',
             entry_type: 'test_entry',

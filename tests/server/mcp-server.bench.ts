@@ -38,7 +38,7 @@ bench('getTools', () => {
 bench('callTool create_entry', async () => {
     await callTool(
         'create_entry',
-        { workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default', 
+        { workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default', 
             content: 'Bench creation entry text over a tool call',
             entry_type: 'personal_reflection',
         },

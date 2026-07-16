@@ -138,7 +138,7 @@ describe('Targeted Gap Closure', () => {
 
             const result = (await callTool(
                 'create_entry',
-                { workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  content: 'Minimal entry with vector indexing', project_number: 1 },
+                { workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  content: 'Minimal entry with vector indexing', project_number: 1 },
                 db,
                 vectorManager
             )) as { success: boolean }
@@ -214,7 +214,7 @@ describe('Targeted Gap Closure', () => {
         it('team_create_entry should return error', async () => {
             const result = (await callTool(
                 'team_create_entry',
-                { workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default', 
+                { workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default', 
                     project_number: 1,
                     content: 'Test entry',
                 },
@@ -271,7 +271,7 @@ describe('Targeted Gap Closure', () => {
         it('should create entry in team database', async () => {
             const result = (await callTool(
                 'team_create_entry',
-                { workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default', 
+                { workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default', 
                     project_number: 1,
                     content: 'Team collaboration entry',
                     tags: ['team-test'],
@@ -292,7 +292,7 @@ describe('Targeted Gap Closure', () => {
         it('should handle invalid entry_type', async () => {
             const result = (await callTool(
                 'team_create_entry',
-                { workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default', 
+                { workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default', 
                     project_number: 1,
                     content: 'Bad type entry',
                     entry_type: 'invalid_type_xyz',

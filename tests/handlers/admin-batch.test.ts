@@ -70,7 +70,7 @@ describe('Admin Batch Tool Handlers', () => {
             const entries = Array(51).fill({ content: 'Too many' })
             const result = (await callTool(
                 'batch_create_entries',
-                { workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  entries },
+                { workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  entries },
                 db,
                 vectorManager
             )) as any
@@ -94,7 +94,7 @@ describe('Admin Batch Tool Handlers', () => {
 
             const result = (await callTool(
                 'batch_create_entries',
-                { workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  entries, auto_index: true },
+                { workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  entries, auto_index: true },
                 db,
                 vectorManager,
                 undefined,
@@ -123,7 +123,7 @@ describe('Admin Batch Tool Handlers', () => {
 
             const result = (await callTool(
                 'batch_create_entries',
-                { workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  entries, auto_index: false },
+                { workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  entries, auto_index: false },
                 db,
                 vectorManager
             )) as any
@@ -151,7 +151,7 @@ describe('Admin Batch Tool Handlers', () => {
             // Seed
             const createRes = (await callTool(
                 'batch_create_entries',
-                { entries: [{ workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default', content: 'Old 1', project_number: 1 }, { workspace_id: 'default', content: 'Old 2', project_number: 1 }] },
+                { entries: [{ workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default', content: 'Old 1', project_number: 1 }, { workspace_id: 'default', content: 'Old 2', project_number: 1 }] },
                 db,
                 vectorManager
             )) as any
@@ -207,7 +207,7 @@ describe('Admin Batch Tool Handlers', () => {
             // Seed
             const createRes = (await callTool(
                 'batch_create_entries',
-                { entries: [{ workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default', content: 'Delete 1', project_number: 1 }, { workspace_id: 'default', content: 'Delete 2', project_number: 1 }] },
+                { entries: [{ workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default', content: 'Delete 1', project_number: 1 }, { workspace_id: 'default', content: 'Delete 2', project_number: 1 }] },
                 db,
                 vectorManager
             )) as any
