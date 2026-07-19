@@ -38,7 +38,7 @@
                 "aggregator": "sum",
                 "data_source": "metrics",
                 "name": "query1",
-                "query": "sum:memory_journal_mcp.mcp_tool_tokens_per_call.count{*}.as_count()"
+                "query": "sum:memory_journal_mcp.mcp_tool_tokens_by_name.count{*}.as_count()"
               }
             ],
             "response_format": "scalar"
@@ -83,7 +83,7 @@
                 "aggregator": "sum",
                 "data_source": "metrics",
                 "name": "query1",
-                "query": "sum:memory_journal_mcp.mcp_tool_tokens_per_call.count{*}.as_count()"
+                "query": "sum:memory_journal_mcp.mcp_tool_tokens_by_name.count{*}.as_count()"
               }
             ],
             "response_format": "scalar"
@@ -128,7 +128,7 @@
                 "aggregator": "sum",
                 "data_source": "metrics",
                 "name": "query1",
-                "query": "sum:memory_journal_mcp.mcp_tool_tokens_per_call.count{*}.as_count()"
+                "query": "sum:memory_journal_mcp.mcp_tool_tokens_by_name.count{*}.as_count()"
               }
             ],
             "response_format": "scalar"
@@ -173,7 +173,7 @@
                 "aggregator": "sum",
                 "data_source": "metrics",
                 "name": "query1",
-                "query": "sum:memory_journal_mcp.mcp_tool_tokens_per_call.count{*}.as_count()"
+                "query": "sum:memory_journal_mcp.mcp_tool_tokens_by_name.count{*}.as_count()"
               }
             ],
             "response_format": "scalar"
@@ -218,7 +218,7 @@
                 "aggregator": "sum",
                 "data_source": "metrics",
                 "name": "query1",
-                "query": "sum:memory_journal_mcp.mcp_tool_tokens_per_call.count{*}.as_count()"
+                "query": "sum:memory_journal_mcp.mcp_tool_tokens_by_name.count{*}.as_count()"
               }
             ],
             "response_format": "scalar"
@@ -262,7 +262,7 @@
                 "aggregator": "sum",
                 "data_source": "metrics",
                 "name": "query1",
-                "query": "sum:memory_journal_mcp.mcp_tool_tokens_per_call.count{*}.as_count()"
+                "query": "sum:memory_journal_mcp.mcp_tool_tokens_by_name.count{*}.as_count()"
               }
             ],
             "response_format": "scalar"
@@ -342,7 +342,7 @@
               {
                 "data_source": "metrics",
                 "name": "query1",
-                "query": "sum:memory_journal_mcp.mcp_tool_tokens_per_call.count{*} by {tool}.as_count()"
+                "query": "sum:memory_journal_mcp.mcp_tool_tokens_by_name.count{*} by {tool}.as_count()"
               }
             ],
             "response_format": "scalar",
@@ -886,7 +886,7 @@
               {
                 "data_source": "metrics",
                 "name": "a",
-                "query": "sum:memory_journal_mcp.mcp_tool_tokens_per_call.count{*}.as_count()"
+                "query": "sum:memory_journal_mcp.mcp_tool_tokens_by_name.count{*}.as_count()"
               },
               {
                 "data_source": "metrics",
@@ -1151,7 +1151,7 @@
               {
                 "data_source": "metrics",
                 "name": "a",
-                "query": "sum:memory_journal_mcp.mcp_tool_errors_by_name_total.count{*}.as_count()"
+                "query": "sum:memory_journal_mcp.mcp_tool_errors_by_name.count{*}.as_count()"
               },
               {
                 "data_source": "metrics",
@@ -1361,7 +1361,7 @@
               {
                 "data_source": "metrics",
                 "name": "query1",
-                "query": "sum:memory_journal_mcp.mcp_tool_errors_by_name_total.count{*} by {error_type}.as_count()"
+                "query": "sum:memory_journal_mcp.mcp_tool_errors_by_name.count{*} by {error_type}.as_count()"
               }
             ],
             "response_format": "timeseries"
