@@ -133,13 +133,12 @@ services:
       - DD_TAGS=env:development source:wsl2
       # Logs
       - DD_LOGS_ENABLED=true
-      - DD_IGNORE_AUTOCONF=mysql redisdb proxysql
+      - DD_CONTAINER_EXCLUDE=name:proxysql name:mysql-router name:mysql-node1 name:mysql-node2 name:mysql-node3 name:cluster-healer name:redis-server name:datadog-unified
       - DD_LOGS_CONFIG_CONTAINER_COLLECT_ALL=true
       # Process monitoring
       - DD_PROCESS_CONFIG_CONTAINER_COLLECTION_ENABLED=true
       - DD_PROCESS_CONFIG_PROCESS_COLLECTION_ENABLED=true
       # Container monitoring
-      - DD_CONTAINER_EXCLUDE=name:datadog-unified
       # System probe (eBPF network performance monitoring)
       - DD_SYSTEM_PROBE_ENABLED=true
       # APM tracing
