@@ -1,16 +1,17 @@
 {
   "author_handle": "admin@adamic.tech",
   "author_name": "Christopher David LeRoux",
-  "created_at": "2026-07-15T19:48:49.250446Z",
+  "created_at": "2026-07-19T06:24:43.774855Z",
   "description": "AI Efficiency metrics for memory-journal-mcp server (Opus 4.8 Standard pricing)\n\n*Note: Datadog automatically formats values less than 0.01 in scientific notation. During low-traffic periods, micro-costs may appear in scientific format (e.g., 5e-5 $) until the accumulated cost exceeds $0.01.*",
+  "id": "79q-b3r-jhu",
   "layout_type": "ordered",
-  "modified_at": "2026-07-18T21:43:38.304964Z",
+  "modified_at": "2026-07-19T07:31:31.698519Z",
   "notify_list": [],
   "reflow_type": "fixed",
   "restricted_roles": [],
   "template_variables": [],
   "title": "memory-journal-mcp AI Efficiency",
-  "url": "/dashboard/q48-mq9-3i7/memory-journal-mcp-ai-efficiency",
+  "url": "/dashboard/79q-b3r-jhu/memory-journal-mcp-ai-efficiency",
   "widgets": [
     {
       "definition": {
@@ -417,454 +418,6 @@
     },
     {
       "definition": {
-        "sizing": "zoom",
-        "type": "image",
-        "url": "/static/images/logos/proxysql_large.svg"
-      },
-      "id": 2524995767004926,
-      "layout": {
-        "height": 2,
-        "width": 3,
-        "x": 0,
-        "y": 6
-      }
-    },
-    {
-      "definition": {
-        "anomaly_detection": {
-          "detection_sensitivity": "never_detect"
-        },
-        "custom_links": [],
-        "legend_columns": [
-          "avg",
-          "min",
-          "max",
-          "value",
-          "sum"
-        ],
-        "legend_layout": "auto",
-        "requests": [
-          {
-            "display_type": "line",
-            "formulas": [
-              {
-                "alias": "Latency",
-                "formula": "query1"
-              }
-            ],
-            "queries": [
-              {
-                "data_source": "metrics",
-                "name": "query1",
-                "query": "avg:proxysql.pool.latency_ms{*} by {hostgroup}"
-              }
-            ],
-            "response_format": "timeseries",
-            "style": {
-              "line_type": "solid",
-              "line_width": "normal",
-              "palette": "green"
-            }
-          }
-        ],
-        "show_legend": false,
-        "time": {},
-        "title": "Latency per hostgroup",
-        "title_align": "left",
-        "title_size": "16",
-        "type": "timeseries",
-        "yaxis": {
-          "include_zero": true,
-          "label": "",
-          "max": "auto",
-          "min": "auto",
-          "scale": "linear"
-        }
-      },
-      "id": 3492022884748336,
-      "layout": {
-        "height": 2,
-        "width": 3,
-        "x": 3,
-        "y": 6
-      }
-    },
-    {
-      "definition": {
-        "anomaly_detection": {
-          "detection_sensitivity": "never_detect"
-        },
-        "custom_links": [],
-        "legend_columns": [
-          "avg",
-          "min",
-          "max",
-          "value",
-          "sum"
-        ],
-        "legend_layout": "auto",
-        "requests": [
-          {
-            "display_type": "line",
-            "formulas": [
-              {
-                "alias": "Used connections",
-                "formula": "query1"
-              }
-            ],
-            "queries": [
-              {
-                "data_source": "metrics",
-                "name": "query1",
-                "query": "sum:proxysql.pool.connections_used{*} by {hostgroup}"
-              }
-            ],
-            "response_format": "timeseries",
-            "style": {
-              "line_type": "solid",
-              "line_width": "normal",
-              "palette": "green"
-            }
-          }
-        ],
-        "show_legend": false,
-        "time": {},
-        "title": "Number of connections currently used per hostgroup",
-        "title_align": "left",
-        "title_size": "16",
-        "type": "timeseries",
-        "yaxis": {
-          "include_zero": true,
-          "label": "",
-          "max": "auto",
-          "min": "auto",
-          "scale": "linear"
-        }
-      },
-      "id": 7540542780441768,
-      "layout": {
-        "height": 2,
-        "width": 3,
-        "x": 6,
-        "y": 6
-      }
-    },
-    {
-      "definition": {
-        "anomaly_detection": {
-          "detection_sensitivity": "never_detect"
-        },
-        "custom_links": [],
-        "legend_columns": [
-          "avg",
-          "min",
-          "max",
-          "value",
-          "sum"
-        ],
-        "legend_layout": "auto",
-        "requests": [
-          {
-            "display_type": "line",
-            "formulas": [
-              {
-                "alias": "Bytes received",
-                "formula": "query1"
-              }
-            ],
-            "queries": [
-              {
-                "data_source": "metrics",
-                "name": "query1",
-                "query": "avg:proxysql.pool.bytes_data_recv{*} by {hostgroup}"
-              }
-            ],
-            "response_format": "timeseries",
-            "style": {
-              "line_type": "solid",
-              "line_width": "normal",
-              "palette": "green"
-            }
-          },
-          {
-            "display_type": "line",
-            "formulas": [
-              {
-                "alias": "Bytes sent",
-                "formula": "query1"
-              }
-            ],
-            "queries": [
-              {
-                "data_source": "metrics",
-                "name": "query1",
-                "query": "avg:proxysql.pool.bytes_data_sent{*} by {hostgroup}"
-              }
-            ],
-            "response_format": "timeseries",
-            "style": {
-              "line_type": "solid",
-              "line_width": "normal",
-              "palette": "red"
-            }
-          }
-        ],
-        "show_legend": false,
-        "time": {},
-        "title": "Bytes received and sent per hostgroup",
-        "title_align": "left",
-        "title_size": "16",
-        "type": "timeseries",
-        "yaxis": {
-          "include_zero": true,
-          "label": "",
-          "max": "auto",
-          "min": "auto",
-          "scale": "linear"
-        }
-      },
-      "id": 1317614184221328,
-      "layout": {
-        "height": 2,
-        "width": 3,
-        "x": 9,
-        "y": 6
-      }
-    },
-    {
-      "definition": {
-        "check": "proxysql.can_connect",
-        "group": "proxysql_port:6032,proxysql_server:localhost,host:adamic-wsl2",
-        "group_by": [
-          "proxysql_server",
-          "proxysql_port"
-        ],
-        "grouping": "cluster",
-        "tags": [],
-        "title": "Monitored instances status",
-        "title_align": "center",
-        "title_size": "16",
-        "type": "check_status"
-      },
-      "id": 4740005024234863,
-      "layout": {
-        "height": 1,
-        "width": 3,
-        "x": 0,
-        "y": 8
-      }
-    },
-    {
-      "definition": {
-        "anomaly_detection": {
-          "detection_sensitivity": "never_detect"
-        },
-        "custom_links": [],
-        "legend_columns": [
-          "avg",
-          "min",
-          "max",
-          "value",
-          "sum"
-        ],
-        "legend_layout": "auto",
-        "requests": [
-          {
-            "display_type": "bars",
-            "formulas": [
-              {
-                "formula": "query1 + query2 + query3"
-              }
-            ],
-            "queries": [
-              {
-                "data_source": "metrics",
-                "name": "query1",
-                "query": "sum:proxysql.performance.command.cnt_5s{*} by {sql_command}"
-              },
-              {
-                "data_source": "metrics",
-                "name": "query2",
-                "query": "sum:proxysql.performance.command.cnt_10s{*} by {sql_command}"
-              },
-              {
-                "data_source": "metrics",
-                "name": "query3",
-                "query": "sum:proxysql.performance.command.cnt_infs{*} by {sql_command}"
-              }
-            ],
-            "response_format": "timeseries",
-            "style": {
-              "line_type": "solid",
-              "line_width": "normal",
-              "palette": "green"
-            }
-          }
-        ],
-        "show_legend": false,
-        "time": {},
-        "title": "Number of statements that took more than 5 seconds to complete",
-        "title_align": "left",
-        "title_size": "16",
-        "type": "timeseries",
-        "yaxis": {
-          "include_zero": true,
-          "label": "",
-          "max": "auto",
-          "min": "auto",
-          "scale": "linear"
-        }
-      },
-      "id": 3120276336912668,
-      "layout": {
-        "height": 2,
-        "width": 3,
-        "x": 3,
-        "y": 8
-      }
-    },
-    {
-      "definition": {
-        "anomaly_detection": {
-          "detection_sensitivity": "never_detect"
-        },
-        "custom_links": [],
-        "legend_columns": [
-          "avg",
-          "min",
-          "max",
-          "value",
-          "sum"
-        ],
-        "legend_layout": "auto",
-        "requests": [
-          {
-            "display_type": "line",
-            "formulas": [
-              {
-                "alias": "Memory usage",
-                "formula": "query1"
-              }
-            ],
-            "queries": [
-              {
-                "data_source": "metrics",
-                "name": "query1",
-                "query": "avg:proxysql.query_cache.memory_bytes{*}"
-              }
-            ],
-            "response_format": "timeseries",
-            "style": {
-              "line_type": "solid",
-              "line_width": "normal",
-              "palette": "green"
-            }
-          }
-        ],
-        "show_legend": false,
-        "time": {},
-        "title": "Memory usage of the query cache",
-        "title_align": "left",
-        "title_size": "16",
-        "type": "timeseries",
-        "yaxis": {
-          "include_zero": true,
-          "label": "",
-          "max": "auto",
-          "min": "auto",
-          "scale": "linear"
-        }
-      },
-      "id": 4350687143204730,
-      "layout": {
-        "height": 2,
-        "width": 3,
-        "x": 6,
-        "y": 8
-      }
-    },
-    {
-      "definition": {
-        "anomaly_detection": {
-          "detection_sensitivity": "never_detect"
-        },
-        "custom_links": [],
-        "legend_columns": [
-          "avg",
-          "min",
-          "max",
-          "value",
-          "sum"
-        ],
-        "legend_layout": "auto",
-        "requests": [
-          {
-            "display_type": "line",
-            "formulas": [
-              {
-                "alias": "Bytes out",
-                "formula": "query1"
-              }
-            ],
-            "queries": [
-              {
-                "data_source": "metrics",
-                "name": "query1",
-                "query": "avg:proxysql.query_cache.bytes_out{*}"
-              }
-            ],
-            "response_format": "timeseries",
-            "style": {
-              "line_type": "solid",
-              "line_width": "normal",
-              "palette": "green"
-            }
-          }
-        ],
-        "show_legend": false,
-        "time": {},
-        "title": "Cache read throughput",
-        "title_align": "left",
-        "title_size": "16",
-        "type": "timeseries",
-        "yaxis": {
-          "include_zero": true,
-          "label": "",
-          "max": "auto",
-          "min": "auto",
-          "scale": "linear"
-        }
-      },
-      "id": 6039513278534726,
-      "layout": {
-        "height": 2,
-        "width": 3,
-        "x": 9,
-        "y": 8
-      }
-    },
-    {
-      "definition": {
-        "check": "proxysql.backend.status",
-        "group": "*",
-        "group_by": [],
-        "grouping": "cluster",
-        "tags": [],
-        "title": "Backends status",
-        "title_align": "center",
-        "title_size": "16",
-        "type": "check_status"
-      },
-      "id": 2452699725061914,
-      "layout": {
-        "height": 1,
-        "width": 3,
-        "x": 0,
-        "y": 9
-      }
-    },
-    {
-      "definition": {
         "autoscale": true,
         "precision": 0,
         "requests": [
@@ -908,213 +461,7 @@
         "is_column_break": true,
         "width": 2,
         "x": 0,
-        "y": 10
-      }
-    },
-    {
-      "definition": {
-        "autoscale": true,
-        "precision": 2,
-        "requests": [
-          {
-            "conditional_formats": [
-              {
-                "comparator": "<",
-                "custom_bg_color": "#0a3b07",
-                "palette": "custom_bg",
-                "value": 70
-              },
-              {
-                "comparator": "<",
-                "palette": "white_on_yellow",
-                "value": 90
-              },
-              {
-                "comparator": ">=",
-                "palette": "white_on_red",
-                "value": 90
-              }
-            ],
-            "formulas": [
-              {
-                "formula": "(a / b) * 100"
-              }
-            ],
-            "queries": [
-              {
-                "data_source": "metrics",
-                "name": "a",
-                "query": "avg:memory_journal_mcp.memory_journal_mcp_pool_connections_active{*}"
-              },
-              {
-                "data_source": "metrics",
-                "name": "b",
-                "query": "avg:memory_journal_mcp.memory_journal_mcp_pool_connections_total{*}"
-              }
-            ],
-            "response_format": "scalar"
-          }
-        ],
-        "title": "Pool Utilization (%)",
-        "title_align": "left",
-        "title_size": "16",
-        "type": "query_value"
-      },
-      "id": 19283746501928,
-      "layout": {
-        "height": 2,
-        "width": 2,
-        "x": 2,
-        "y": 10
-      }
-    },
-    {
-      "definition": {
-        "autoscale": true,
-        "precision": 2,
-        "requests": [
-          {
-            "aggregator": "sum",
-            "conditional_formats": [
-              {
-                "comparator": ">=",
-                "custom_bg_color": "#144007",
-                "custom_fg_color": "#ffffff",
-                "palette": "custom_bg",
-                "value": 0
-              }
-            ],
-            "formulas": [
-              {
-                "formula": "default_zero(query1)"
-              }
-            ],
-            "queries": [
-              {
-                "aggregator": "sum",
-                "data_source": "metrics",
-                "name": "query1",
-                "query": "sum:memory_journal_mcp.memory_journal_mcp_pool_queries.count{*}.as_count()"
-              }
-            ],
-            "response_format": "scalar"
-          }
-        ],
-        "title": "Pool Queries",
-        "title_align": "left",
-        "title_size": "16",
-        "type": "query_value"
-      },
-      "id": 47281928475610,
-      "layout": {
-        "height": 2,
-        "width": 2,
-        "x": 4,
-        "y": 10
-      }
-    },
-    {
-      "definition": {
-        "autoscale": true,
-        "precision": 2,
-        "requests": [
-          {
-            "conditional_formats": [
-              {
-                "comparator": ">=",
-                "custom_bg_color": "#0c3706",
-                "palette": "custom_bg",
-                "value": 80
-              },
-              {
-                "comparator": ">=",
-                "palette": "white_on_yellow",
-                "value": 49.9
-              },
-              {
-                "comparator": "<",
-                "custom_bg_color": "#841010",
-                "palette": "custom_bg",
-                "value": 49.9
-              }
-            ],
-            "formulas": [
-              {
-                "formula": "(default_zero(a) / (default_zero(a) + default_zero(b) + 0.0000001)) * 100"
-              }
-            ],
-            "queries": [
-              {
-                "aggregator": "sum",
-                "data_source": "metrics",
-                "name": "a",
-                "query": "sum:memory_journal_mcp.memory_journal_mcp_cache_hits.count{*}.as_count()"
-              },
-              {
-                "aggregator": "sum",
-                "data_source": "metrics",
-                "name": "b",
-                "query": "sum:memory_journal_mcp.memory_journal_mcp_cache_misses.count{*}.as_count()"
-              }
-            ],
-            "response_format": "scalar"
-          }
-        ],
-        "title": "Schema Cache Hit Rate (%)",
-        "title_align": "left",
-        "title_size": "16",
-        "type": "query_value"
-      },
-      "id": 92384719284751,
-      "layout": {
-        "height": 2,
-        "width": 2,
-        "x": 6,
-        "y": 10
-      }
-    },
-    {
-      "definition": {
-        "autoscale": true,
-        "precision": 2,
-        "requests": [
-          {
-            "aggregator": "sum",
-            "conditional_formats": [
-              {
-                "comparator": ">=",
-                "custom_bg_color": "#084a0c",
-                "palette": "custom_bg",
-                "value": 0
-              }
-            ],
-            "formulas": [
-              {
-                "formula": "default_zero(query1)"
-              }
-            ],
-            "queries": [
-              {
-                "aggregator": "sum",
-                "data_source": "metrics",
-                "name": "query1",
-                "query": "sum:memory_journal_mcp.memory_journal_mcp_cache_hits.count{*}.as_count()"
-              }
-            ],
-            "response_format": "scalar"
-          }
-        ],
-        "title": "Cache Hits",
-        "title_align": "left",
-        "title_size": "16",
-        "type": "query_value"
-      },
-      "id": 58392174893021,
-      "layout": {
-        "height": 2,
-        "width": 2,
-        "x": 8,
-        "y": 10
+        "y": 6
       }
     },
     {
@@ -1171,100 +518,8 @@
       "layout": {
         "height": 2,
         "width": 2,
-        "x": 10,
-        "y": 10
-      }
-    },
-    {
-      "definition": {
-        "anomaly_detection": {
-          "detection_sensitivity": "never_detect"
-        },
-        "legend_columns": [
-          "avg",
-          "min",
-          "max",
-          "value",
-          "sum"
-        ],
-        "legend_layout": "auto",
-        "requests": [
-          {
-            "display_type": "line",
-            "formulas": [
-              {
-                "alias": "Active",
-                "formula": "default_zero(query1)"
-              }
-            ],
-            "queries": [
-              {
-                "data_source": "metrics",
-                "name": "query1",
-                "query": "avg:memory_journal_mcp.memory_journal_mcp_pool_connections_active{*}.fill(last)"
-              }
-            ],
-            "response_format": "timeseries",
-            "style": {
-              "line_type": "solid",
-              "palette": "blue"
-            }
-          },
-          {
-            "display_type": "line",
-            "formulas": [
-              {
-                "alias": "Idle",
-                "formula": "default_zero(query2)"
-              }
-            ],
-            "queries": [
-              {
-                "data_source": "metrics",
-                "name": "query2",
-                "query": "avg:memory_journal_mcp.memory_journal_mcp_pool_connections_idle{*}.fill(last)"
-              }
-            ],
-            "response_format": "timeseries",
-            "style": {
-              "line_type": "solid",
-              "palette": "green"
-            }
-          },
-          {
-            "display_type": "line",
-            "formulas": [
-              {
-                "alias": "Total",
-                "formula": "default_zero(query3)"
-              }
-            ],
-            "queries": [
-              {
-                "data_source": "metrics",
-                "name": "query3",
-                "query": "avg:memory_journal_mcp.memory_journal_mcp_pool_connections_total{*}.fill(last)"
-              }
-            ],
-            "response_format": "timeseries",
-            "style": {
-              "line_type": "dashed",
-              "palette": "gray"
-            }
-          }
-        ],
-        "show_legend": true,
-        "title": "Connection Pool",
-        "title_align": "left",
-        "title_size": "16",
-        "type": "timeseries"
-      },
-      "id": 84756192038475,
-      "layout": {
-        "height": 4,
-        "width": 4,
-        "x": 0,
-        "y": 12
+        "x": 2,
+        "y": 6
       }
     },
     {
@@ -1330,10 +585,10 @@
       },
       "id": 61728394058271,
       "layout": {
-        "height": 4,
+        "height": 6,
         "width": 4,
         "x": 4,
-        "y": 12
+        "y": 6
       }
     },
     {
@@ -1375,10 +630,67 @@
       },
       "id": 203565609753226,
       "layout": {
-        "height": 4,
+        "height": 6,
         "width": 4,
         "x": 8,
-        "y": 12
+        "y": 6
+      }
+    },
+    {
+      "definition": {
+        "sizing": "zoom",
+        "type": "image",
+        "url": "/static/images/logos/proxysql_large.svg"
+      },
+      "id": 2524995767004926,
+      "layout": {
+        "height": 2,
+        "width": 4,
+        "x": 0,
+        "y": 8
+      }
+    },
+    {
+      "definition": {
+        "check": "proxysql.can_connect",
+        "group": "proxysql_port:6032,proxysql_server:localhost,host:adamic-wsl2",
+        "group_by": [
+          "proxysql_server",
+          "proxysql_port"
+        ],
+        "grouping": "cluster",
+        "tags": [],
+        "title": "Monitored instances status",
+        "title_align": "center",
+        "title_size": "16",
+        "type": "check_status"
+      },
+      "id": 4740005024234863,
+      "layout": {
+        "height": 1,
+        "width": 4,
+        "x": 0,
+        "y": 10
+      }
+    },
+    {
+      "definition": {
+        "check": "proxysql.backend.status",
+        "group": "*",
+        "group_by": [],
+        "grouping": "cluster",
+        "tags": [],
+        "title": "Backends status",
+        "title_align": "center",
+        "title_size": "16",
+        "type": "check_status"
+      },
+      "id": 2452699725061914,
+      "layout": {
+        "height": 1,
+        "width": 4,
+        "x": 0,
+        "y": 11
       }
     }
   ]

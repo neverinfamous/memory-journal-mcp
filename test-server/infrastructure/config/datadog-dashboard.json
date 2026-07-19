@@ -1,10 +1,11 @@
 {
   "author_handle": "admin@adamic.tech",
   "author_name": "Christopher David LeRoux",
-  "created_at": "2026-07-14T16:18:07.496573Z",
+  "created_at": "2026-07-19T06:24:41.856221Z",
   "description": "Real-time observability for memory-journal-mcp MCP server: token usage, tool latency, error rates, and resource reads.",
+  "id": "my6-q9k-682",
   "layout_type": "ordered",
-  "modified_at": "2026-07-18T22:10:39.411441Z",
+  "modified_at": "2026-07-19T07:32:45.110336Z",
   "notify_list": [],
   "reflow_type": "fixed",
   "restricted_roles": [],
@@ -17,7 +18,7 @@
     }
   ],
   "title": "memory-journal-mcp Token & Tool Metrics",
-  "url": "/dashboard/qwe-2un-us8/memory-journal-mcp-token--tool-metrics",
+  "url": "/dashboard/my6-q9k-682/memory-journal-mcp-token--tool-metrics",
   "widgets": [
     {
       "definition": {
@@ -64,6 +65,9 @@
     },
     {
       "definition": {
+        "anomaly_detection": {
+          "detection_sensitivity": "never_detect"
+        },
         "legend_columns": [
           "avg",
           "min",
@@ -91,6 +95,7 @@
           }
         ],
         "show_legend": true,
+        "time": {},
         "title": "Uptime Seconds",
         "type": "timeseries"
       },
@@ -149,6 +154,9 @@
     },
     {
       "definition": {
+        "anomaly_detection": {
+          "detection_sensitivity": "never_detect"
+        },
         "legend_columns": [
           "avg",
           "min",
@@ -176,6 +184,7 @@
           }
         ],
         "show_legend": true,
+        "time": {},
         "title": "Tool Tokens Per Call",
         "type": "timeseries"
       },
@@ -189,6 +198,9 @@
     },
     {
       "definition": {
+        "anomaly_detection": {
+          "detection_sensitivity": "never_detect"
+        },
         "legend_columns": [
           "avg",
           "min",
@@ -216,6 +228,7 @@
           }
         ],
         "show_legend": true,
+        "time": {},
         "title": "Tool Latency P50",
         "type": "timeseries"
       },
@@ -229,6 +242,9 @@
     },
     {
       "definition": {
+        "anomaly_detection": {
+          "detection_sensitivity": "never_detect"
+        },
         "legend_columns": [
           "avg",
           "sum",
@@ -261,6 +277,7 @@
           }
         ],
         "show_legend": true,
+        "time": {},
         "title": "Tokens by Tool",
         "title_align": "left",
         "title_size": "16",
@@ -276,6 +293,9 @@
     },
     {
       "definition": {
+        "anomaly_detection": {
+          "detection_sensitivity": "never_detect"
+        },
         "legend_columns": [
           "avg",
           "min",
@@ -303,6 +323,7 @@
           }
         ],
         "show_legend": true,
+        "time": {},
         "title": "Tool Latency P95",
         "type": "timeseries"
       },
@@ -422,6 +443,9 @@
     },
     {
       "definition": {
+        "anomaly_detection": {
+          "detection_sensitivity": "never_detect"
+        },
         "legend_columns": [
           "avg",
           "min",
@@ -449,6 +473,7 @@
           }
         ],
         "show_legend": true,
+        "time": {},
         "title": "Tool Latency P99",
         "type": "timeseries"
       },
@@ -594,7 +619,7 @@
             "query": {
               "data_source": "logs_stream",
               "indexes": [],
-              "query_string": "source:memory_journal_mcp status:error OR @log_type:agent_issues",
+              "query_string": "service:memory_journal_mcp (status:error OR log_type:agent_issues)",
               "sort": {
                 "column": "timestamp",
                 "order": "desc"
@@ -681,7 +706,6 @@
           }
         ],
         "show_legend": true,
-        "time": {},
         "title": "Calls vs Errors",
         "title_align": "left",
         "title_size": "16",
@@ -729,7 +753,7 @@
             "query": {
               "data_source": "logs_stream",
               "indexes": [],
-              "query_string": "source:memory_journal_mcp log_type:mcp_audit",
+              "query_string": "service:memory_journal_mcp log_type:mcp_audit",
               "sort": {
                 "column": "timestamp",
                 "order": "desc"
