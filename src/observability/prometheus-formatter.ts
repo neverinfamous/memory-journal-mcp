@@ -167,6 +167,36 @@ export function formatPrometheusMetrics(metrics: MetricsAccumulator): string {
         )
     }
 
+    const errorsByName: { value: number; labels: Record<string, string> }[] = []
+    const tokensPerCall: { value: number; labels: Record<string, string> }[] = []
+
+    for (const [toolName, toolData] of Object.entries(summary.toolBreakdown)) {
+        if (toolData.errorCount > 0) {
+            errorsByName.push({ value: toolData.errorCount, labels: { tool: toolName } })
+        }
+    }
+    
+    for (const data of tokenBreakdown) {
+        if (data.callCount > 0) {
+            tokensPerCall.push({ 
+                value: Math.round((data.inputTokens + data.outputTokens) / data.callCount), 
+                labels: { tool: data.toolName } 
+            })
+        }
+    }
+
+    if (errorsByName.length > 0) {
+        blocks.push(
+            formatMetricBlock('mcp_tool_errors_by_name_total', 'Total tool errors partitioned by tool name', 'counter', errorsByName)
+        )
+    }
+
+    if (tokensPerCall.length > 0) {
+        blocks.push(
+            formatMetricBlock('mcp_tool_tokens_per_call', 'Average total tokens per call partitioned by tool name', 'gauge', tokensPerCall)
+        )
+    }
+
     // 5. Per-User Breakdown
     const users: { value: number; labels: Record<string, string> }[] = []
     for (const [user, count] of Object.entries(userBreakdown)) {
@@ -179,30 +209,20 @@ export function formatPrometheusMetrics(metrics: MetricsAccumulator): string {
         )
     }
 
-    // 6. Latency Percentiles (Summary)
-    // For Prometheus Summaries, we typically output the count/sum along with the quantiles.
-    // Our accumulator tracks sum and count globally, but LatencyTracker only has percentiles and counts.
-    // For simplicity we will output the quantiles.
-    const latencyMetrics: { value: number; labels: Record<string, string>; _isCount?: boolean }[] = []
+    const p50Metrics: { value: number; labels: Record<string, string> }[] = []
+    const p95Metrics: { value: number; labels: Record<string, string> }[] = []
+    const p99Metrics: { value: number; labels: Record<string, string> }[] = []
+
     for (const l of latencySummary) {
-        latencyMetrics.push({ value: l.p50Ms / 1000, labels: { tool: l.toolName, quantile: '0.5' } })
-        latencyMetrics.push({ value: l.p95Ms / 1000, labels: { tool: l.toolName, quantile: '0.95' } })
-        latencyMetrics.push({ value: l.p99Ms / 1000, labels: { tool: l.toolName, quantile: '0.99' } })
-        latencyMetrics.push({ value: l.count, labels: { tool: l.toolName }, _isCount: true })
+        p50Metrics.push({ value: l.p50Ms, labels: { tool: l.toolName } })
+        p95Metrics.push({ value: l.p95Ms, labels: { tool: l.toolName } })
+        p99Metrics.push({ value: l.p99Ms, labels: { tool: l.toolName } })
     }
 
-    if (latencyMetrics.length > 0) {
-        let block = '# HELP mcp_tool_duration_seconds Tool latency in seconds\n'
-        block += '# TYPE mcp_tool_duration_seconds summary\n'
-        
-        for (const m of latencyMetrics) {
-            if (m._isCount === true) {
-                block += formatMetric('mcp_tool_duration_seconds_count', m.value, m.labels) + '\n'
-            } else {
-                block += formatMetric('mcp_tool_duration_seconds', m.value, m.labels) + '\n'
-            }
-        }
-        blocks.push(block)
+    if (p50Metrics.length > 0) {
+        blocks.push(formatMetricBlock('mcp_tool_latency_ms_p50', 'Median (p50) latency in milliseconds', 'gauge', p50Metrics))
+        blocks.push(formatMetricBlock('mcp_tool_latency_ms_p95', '95th percentile (p95) latency in milliseconds', 'gauge', p95Metrics))
+        blocks.push(formatMetricBlock('mcp_tool_latency_ms_p99', '99th percentile (p99) latency in milliseconds', 'gauge', p99Metrics))
     }
 
     // Join with double newlines between blocks, ensuring trailing newline.

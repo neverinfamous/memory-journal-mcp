@@ -1,14 +1,14 @@
-name: infrastructure
+name: mj-infrastructure
 services:
   # ==========================================
   # MONITORING & TOOLS
   # ==========================================
   dozzle:
     image: amir20/dozzle:v10.6.10
-    container_name: dozzle
+    container_name: mj-dozzle
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      - "8082:8080"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     stop_grace_period: 15s
@@ -21,10 +21,10 @@ services:
 
   prometheus:
     image: prom/prometheus:v2.54.1
-    container_name: prometheus
+    container_name: mj-prometheus
     restart: unless-stopped
     ports:
-      - "9090:9090"
+      - "9091:9090"
     volumes:
       - ./config/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
       - prometheus_data:/prometheus
@@ -45,10 +45,10 @@ services:
 
   grafana:
     image: grafana/grafana:11.2.0
-    container_name: grafana
+    container_name: mj-grafana
     restart: unless-stopped
     ports:
-      - "3001:3000"
+      - "3002:3000"
     volumes:
       - ./config/grafana/provisioning:/etc/grafana/provisioning
       - ./config/grafana/dashboards:/var/lib/grafana/dashboards
@@ -67,10 +67,10 @@ services:
 
   loki:
     image: grafana/loki:3.1.0
-    container_name: loki
+    container_name: mj-loki
     restart: unless-stopped
     ports:
-      - "3101:3100"
+      - "3102:3100"
     command: -config.file=/etc/loki/local-config.yaml
     stop_grace_period: 15s
     mem_limit: 256m
@@ -87,7 +87,7 @@ services:
 
   promtail:
     image: grafana/promtail:3.1.0
-    container_name: promtail
+    container_name: mj-promtail
     restart: unless-stopped
     volumes:
       - ./config/promtail/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
@@ -110,7 +110,7 @@ services:
 
   datadog-unified:
     image: gcr.io/datadoghq/agent:7.81.0
-    container_name: datadog-unified
+    container_name: mj-datadog-unified
     restart: unless-stopped
     pid: host
     cgroup: host

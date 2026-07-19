@@ -3,7 +3,6 @@
   "author_name": "Christopher David LeRoux",
   "created_at": "2026-07-14T16:18:07.496573Z",
   "description": "Real-time observability for memory-journal-mcp MCP server: token usage, tool latency, error rates, and resource reads.",
-  "id": "qwe-2un-us8",
   "layout_type": "ordered",
   "modified_at": "2026-07-18T22:10:39.411441Z",
   "notify_list": [],
@@ -31,7 +30,7 @@
                 "comparator": ">=",
                 "custom_bg_color": "#133a09",
                 "palette": "custom_bg",
-                "value": 0.0
+                "value": 0
               }
             ],
             "formulas": [
@@ -44,7 +43,7 @@
                 "aggregator": "sum",
                 "data_source": "metrics",
                 "name": "query1",
-                "query": "sum:memory_journal_mcp.mcp_tool_tokens_by_name.count{$tool}.as_count()"
+                "query": "sum:memory_journal_mcp.mcp_tool_tokens_per_call.count{$tool}.as_count()"
               }
             ],
             "response_format": "scalar"
@@ -165,7 +164,7 @@
               {
                 "data_source": "metrics",
                 "name": "query1",
-                "query": "avg:memory_journal_mcp.mcp_tool_tokens_by_name{*}"
+                "query": "avg:memory_journal_mcp.mcp_tool_tokens_per_call{*}"
               }
             ],
             "response_format": "timeseries",
@@ -205,7 +204,7 @@
               {
                 "data_source": "metrics",
                 "name": "query1",
-                "query": "avg:memory_journal_mcp.mcp_tool_duration_seconds{quantile:0.5}"
+                "query": "avg:memory_journal_mcp.mcp_tool_latency_ms_p50{*}"
               }
             ],
             "response_format": "timeseries",
@@ -249,7 +248,7 @@
               {
                 "data_source": "metrics",
                 "name": "query1",
-                "query": "sum:memory_journal_mcp.mcp_tool_tokens_by_name.count{*} by {tool}.as_count()"
+                "query": "sum:memory_journal_mcp.mcp_tool_tokens_per_call.count{*} by {tool}.as_count()"
               }
             ],
             "response_format": "timeseries",
@@ -292,7 +291,7 @@
               {
                 "data_source": "metrics",
                 "name": "query1",
-                "query": "avg:memory_journal_mcp.mcp_tool_duration_seconds{quantile:0.95}"
+                "query": "avg:memory_journal_mcp.mcp_tool_latency_ms_p95{*}"
               }
             ],
             "response_format": "timeseries",
@@ -438,7 +437,7 @@
               {
                 "data_source": "metrics",
                 "name": "query1",
-                "query": "avg:memory_journal_mcp.mcp_tool_duration_seconds{quantile:0.99}"
+                "query": "avg:memory_journal_mcp.mcp_tool_latency_ms_p99{*}"
               }
             ],
             "response_format": "timeseries",
@@ -477,7 +476,7 @@
                 "aggregator": "avg",
                 "data_source": "metrics",
                 "name": "query1",
-                "query": "avg:memory_journal_mcp.mcp_tool_duration_seconds{quantile:0.95} by {tool}"
+                "query": "avg:memory_journal_mcp.mcp_tool_latency_ms_p95{*} by {tool}"
               }
             ],
             "response_format": "scalar",
@@ -533,12 +532,12 @@
               {
                 "data_source": "metrics",
                 "name": "query1",
-                "query": "sum:memory_journal_mcp.mcp_tool_errors.count{*}.as_count()"
+                "query": "sum:memory_journal_mcp.mcp_tool_errors_by_name_total.count{*}.as_count()"
               },
               {
                 "data_source": "metrics",
                 "name": "query2",
-                "query": "sum:memory_journal_mcp.mcp_tool_errors.count{*}.as_count()"
+                "query": "sum:memory_journal_mcp.mcp_tool_errors_by_name_total.count{*}.as_count()"
               }
             ],
             "response_format": "timeseries",
@@ -660,7 +659,7 @@
               {
                 "data_source": "metrics",
                 "name": "errors",
-                "query": "sum:memory_journal_mcp.mcp_tool_errors.count{$tool}.as_count()"
+                "query": "sum:memory_journal_mcp.mcp_tool_errors_by_name_total.count{$tool}.as_count()"
               },
               {
                 "data_source": "metrics",
@@ -670,7 +669,7 @@
               {
                 "data_source": "metrics",
                 "name": "old_errors",
-                "query": "sum:memory_journal_mcp.mcp_tool_errors.count{$tool}.as_count()"
+                "query": "sum:memory_journal_mcp.mcp_tool_errors_by_name_total.count{$tool}.as_count()"
               }
             ],
             "response_format": "timeseries",
