@@ -1,0 +1,41 @@
+init_config:
+
+instances:
+  ## @param docker_root - string - optional - default: /var/lib/docker
+  ## Change the root directory to look at to get cgroup statistics. Useful when running inside a
+  ## container with host directories mounted on a different folder.
+  ## Default is /var/lib/docker for Linux and C:\ProgramData\docker for Windows.
+  ## This does not affect the `docker_sock` path.
+  #
+  # - docker_root: /var/lib/docker
+
+  ## @param docker_sock - string - optional - default: unix://var/run/docker.sock
+  ## Path to the docker socket
+  #
+  # - docker_sock: unix://var/run/docker.sock
+
+  ## @param container_tags - list of strings - optional
+  ## List of tags to collect for each container. See available tags in the documentation.
+  ## http://docs.datadoghq.com/integrations/docker/#tagging
+  - container_tags:
+      - image_name
+      - image_tag
+      - docker_image
+      - container_name
+      - container_id
+    performance_tags:
+      - image_name
+      - container_name
+    container_size: true
+    collect_container_size_frequency: 5
+    collect_images_stats: true
+    collect_image_size: true
+    collect_disk_stats: false
+    collect_volume_count: true
+    collect_exit_codes: true
+    tags:
+      - env:development
+      - source:wsl2
+    service: docker
+    min_collection_interval: 15
+

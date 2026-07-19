@@ -307,6 +307,7 @@ export function addMetricsOptions(command: Command): Command {
             )
             .option('--persist-metrics', 'Persist metrics to disk across server restarts (env: PERSIST_METRICS)')
             .option('--metrics-path <path>', 'Custom path to the metrics JSON file (env: METRICS_PATH)')
+            .option('--metrics-port <port>', 'Standalone metrics server port (env: MJ_METRICS_PORT)')
     })
 }
 

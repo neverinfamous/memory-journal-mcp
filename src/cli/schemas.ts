@@ -104,7 +104,8 @@ export const briefingOptionsSchema = z.object({
 export const metricsOptionsSchema = z.object({
     metricsExport: z.string().optional(),
     persistMetrics: z.boolean().optional(),
-    metricsPath: z.string().optional()
+    metricsPath: z.string().optional(),
+    metricsPort: z.string().optional()
 })
 
 export const outputOptionsSchema = z.object({

@@ -13,6 +13,7 @@ import { globalSubscriptionManager } from '../subscription-manager.js'
 import type { ServerOptions } from './types.js'
 import { initializeDependencies } from './initialization.js'
 import { createServerInstance } from './tool-registration.js'
+import { startMetricsServer } from '../../observability/metrics-server.js'
 
 export async function createServer(options: ServerOptions): Promise<void> {
     const context = await initializeDependencies(options);
@@ -99,6 +100,11 @@ export async function createServer(options: ServerOptions): Promise<void> {
         customToolHandlerConfig
     );
 
+    let shutdownMetrics: (() => Promise<void>) | undefined;
+    if (options.metricsExport === 'prometheus') {
+        shutdownMetrics = startMetricsServer(runtime);
+    }
+
     // Start server based on transport
     if (transport === 'stdio') {
         const stdioTransport = new StdioServerTransport()
@@ -111,6 +117,11 @@ export async function createServer(options: ServerOptions): Promise<void> {
             // Flush audit log before exit
             if (runtime.auditLogger) {
                 void runtime.auditLogger.close()
+            }
+            if (shutdownMetrics) {
+                void shutdownMetrics().catch((err: unknown) => {
+                    logger.debug('Error shutting down metrics server', { module: 'McpServer', error: String(err) })
+                });
             }
             if (activeMetricsPath) {
                 void runtime.metrics.saveToFile(activeMetricsPath).then(() => {
@@ -163,6 +174,11 @@ export async function createServer(options: ServerOptions): Promise<void> {
 
         const handleHttpShutdown = (): void => {
             void (async () => {
+                if (shutdownMetrics) {
+                    await shutdownMetrics().catch((err: unknown) => {
+                    logger.debug('Error shutting down metrics server', { module: 'McpServer', error: String(err) })
+                });
+                }
                 await httpTransport.stop(scheduler)
                 // Flush audit log before exit
                 if (runtime.auditLogger) {

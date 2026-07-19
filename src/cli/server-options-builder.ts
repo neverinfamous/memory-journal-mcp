@@ -50,6 +50,11 @@ export function buildServerOptions(
         process.env['CODE_MODE_MAX_RESULT_SIZE'] = codemodeMaxResultSize;
     }
 
+    const metricsPort = catchConfig(() => resolver.resolve<string>('metricsPort', 'MJ_METRICS_PORT'), undefined);
+    if (metricsPort) {
+        process.env['MJ_METRICS_PORT'] = metricsPort;
+    }
+
     const auditLogPath = catchConfig(() => resolver.resolve<string>('auditLog', 'AUDIT_LOG_PATH'), undefined);
     const auditConfig: AuditConfig | undefined = auditLogPath
         ? {
@@ -240,16 +245,13 @@ export function buildServerOptions(
             const raw = resolver.resolve<string>('metricsExport', 'METRICS_EXPORT');
             if (raw) {
                 if (raw !== 'prometheus') throw new Error(`Unsupported metrics export format: ${raw}`);
-                if (transport !== 'http') {
-                    process.stderr.write(`\n[WARN] --metrics-export is only supported when --transport http is used. Ignoring.\n\n`);
-                    return undefined;
-                }
                 return 'prometheus';
             }
             return undefined;
         }, undefined),
         persistMetrics: catchConfig(() => resolver.resolveBool('persistMetrics', 'PERSIST_METRICS') ?? false, false),
         metricsPath: catchConfig(() => resolver.resolve<string>('metricsPath', 'METRICS_PATH'), undefined),
+        metricsPort: catchConfig(() => resolver.resolveInt('metricsPort', 'MJ_METRICS_PORT', 1, 65535), undefined),
         configFilePath: catchConfig(() => resolver.loadedConfigPath, undefined),
     };
 

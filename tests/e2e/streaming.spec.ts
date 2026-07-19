@@ -5,7 +5,7 @@
  * (GET /mcp) and Legacy SSE (GET /sse) transports.
  *
  * Uses a dedicated server on port 3107 to avoid disrupting SDK-based
- * tests on the shared port 3100 (raw SSE connections interfere with
+ * tests on the shared port 3105 (raw SSE connections interfere with
  * McpServer.connect() single-transport state).
  */
 

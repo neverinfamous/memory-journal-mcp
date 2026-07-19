@@ -18,7 +18,7 @@ const MOCK_ISSUER_PORT = 5198 + (Number(process.env.TEST_PARALLEL_INDEX || 0) * 
 test.describe('OAuth 2.1 Discovery', () => {
     test.describe('Without OAuth enabled (default)', () => {
         test('/.well-known/oauth-protected-resource should return 404', async ({ request }) => {
-            // Default webServer on port 3100 does not have OAuth enabled
+            // Default webServer on port 3105 does not have OAuth enabled
             const response = await request.get('/.well-known/oauth-protected-resource')
 
             // Without OAuth, the endpoint should not be registered

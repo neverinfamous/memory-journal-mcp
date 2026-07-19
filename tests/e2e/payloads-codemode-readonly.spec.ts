@@ -5,7 +5,7 @@
  * returns structured errors for mutation attempts instead of
  * TypeError or undefined behavior.
  *
- * Uses the standard E2E server (port 3100) with the built-in
+ * Uses the standard E2E server (port 3105) with the built-in
  * readonly parameter on mj_execute_code (not --tool-filter readonly
  * which would exclude mj_execute_code entirely).
  */

@@ -1,0 +1,18 @@
+init_config:
+
+instances:
+  - openmetrics_endpoint: http://host.docker.internal:9465/metrics
+    namespace: memory_journal_mcp
+    tags:
+      - service:memory_journal_mcp
+      - env:development
+    min_collection_interval: 15
+    metrics:
+      - mcp_tool_calls
+      - mcp_tool_errors
+      - mcp_tool_duration_seconds
+      - mcp_tool_input_tokens
+      - mcp_tool_output_tokens
+      - mcp_tool_calls_by_name
+      - mcp_tool_tokens_by_name
+      - mcp_process_uptime_seconds

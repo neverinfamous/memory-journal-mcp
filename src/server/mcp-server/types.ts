@@ -58,6 +58,7 @@ export interface ServerOptions {
     embeddingModel?: string
     // Metrics export
     metricsExport?: 'prometheus'
+    metricsPort?: number
     // Metrics persistence
     persistMetrics?: boolean
     metricsPath?: string

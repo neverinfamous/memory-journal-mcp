@@ -23,7 +23,7 @@ export default defineConfig({
         },
     ],
     webServer: {
-        command: `node dist/cli.js --transport http --port 3100 --db ./.test-output/e2e/test-e2e-worker-0.db --backup-interval 1 --keep-backups 3 --vacuum-interval 2 --rebuild-index-interval 2`,
+        command: `node dist/cli.js --transport http --port 3105 --db ./.test-output/e2e/test-e2e-worker-0.db --backup-interval 1 --keep-backups 3 --vacuum-interval 2 --rebuild-index-interval 2`,
         env: {
             ...process.env,
             // Elevate rate limit boundary for test runner concurrency (simulating realistic clustered traffic)
@@ -36,7 +36,7 @@ export default defineConfig({
             METRICS_EXPORT: 'prometheus',
             MEMORY_JOURNAL_CONFIG: path.join(process.cwd(), 'tests', 'e2e', 'empty-config.json'),
         },
-        url: `http://localhost:3100/health`,
+        url: `http://localhost:3105/health`,
         reuseExistingServer: !process.env.CI,
         timeout: 60000,
         stdout: 'pipe',

@@ -1,0 +1,805 @@
+{
+  "author_handle": "admin@adamic.tech",
+  "author_name": "Christopher David LeRoux",
+  "created_at": "2026-07-14T16:18:07.496573Z",
+  "description": "Real-time observability for memory-journal-mcp MCP server: token usage, tool latency, error rates, and resource reads.",
+  "id": "qwe-2un-us8",
+  "layout_type": "ordered",
+  "modified_at": "2026-07-18T22:10:39.411441Z",
+  "notify_list": [],
+  "reflow_type": "fixed",
+  "restricted_roles": [],
+  "template_variables": [
+    {
+      "available_values": [],
+      "default": "*",
+      "name": "tool",
+      "prefix": "tool"
+    }
+  ],
+  "title": "memory-journal-mcp Token & Tool Metrics",
+  "url": "/dashboard/qwe-2un-us8/memory-journal-mcp-token--tool-metrics",
+  "widgets": [
+    {
+      "definition": {
+        "autoscale": true,
+        "precision": 2,
+        "requests": [
+          {
+            "conditional_formats": [
+              {
+                "comparator": ">=",
+                "custom_bg_color": "#133a09",
+                "palette": "custom_bg",
+                "value": 0.0
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "query1"
+              }
+            ],
+            "queries": [
+              {
+                "aggregator": "sum",
+                "data_source": "metrics",
+                "name": "query1",
+                "query": "sum:memory_journal_mcp.mcp_tool_tokens_by_name.count{$tool}.as_count()"
+              }
+            ],
+            "response_format": "scalar"
+          }
+        ],
+        "title": "Total Tokens",
+        "title_align": "left",
+        "title_size": "16",
+        "type": "query_value"
+      },
+      "id": 7378643571903931,
+      "layout": {
+        "height": 2,
+        "width": 4,
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "definition": {
+        "legend_columns": [
+          "avg",
+          "min",
+          "max",
+          "value",
+          "sum"
+        ],
+        "legend_layout": "auto",
+        "requests": [
+          {
+            "display_type": "line",
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "query1",
+                "query": "max:memory_journal_mcp.mcp_process_uptime_seconds{*}"
+              }
+            ],
+            "response_format": "timeseries",
+            "style": {
+              "line_type": "solid",
+              "line_width": "normal",
+              "palette": "green"
+            }
+          }
+        ],
+        "show_legend": true,
+        "title": "Uptime Seconds",
+        "type": "timeseries"
+      },
+      "id": 2441970712143854,
+      "layout": {
+        "height": 2,
+        "width": 4,
+        "x": 4,
+        "y": 0
+      }
+    },
+    {
+      "definition": {
+        "has_search_bar": "auto",
+        "requests": [
+          {
+            "formulas": [
+              {
+                "cell_display_mode": "bar",
+                "formula": "query1"
+              }
+            ],
+            "queries": [
+              {
+                "aggregator": "sum",
+                "data_source": "metrics",
+                "name": "query1",
+                "query": "sum:memory_journal_mcp.mcp_tool_calls.count{*} by {tool}.as_count()"
+              }
+            ],
+            "response_format": "scalar",
+            "sort": {
+              "count": 500,
+              "order_by": [
+                {
+                  "index": 0,
+                  "order": "desc",
+                  "type": "formula"
+                }
+              ]
+            }
+          }
+        ],
+        "title": "Top Tools by Calls",
+        "title_align": "left",
+        "title_size": "16",
+        "type": "query_table"
+      },
+      "id": 1888404469028689,
+      "layout": {
+        "height": 5,
+        "width": 4,
+        "x": 8,
+        "y": 0
+      }
+    },
+    {
+      "definition": {
+        "legend_columns": [
+          "avg",
+          "min",
+          "max",
+          "value",
+          "sum"
+        ],
+        "legend_layout": "auto",
+        "requests": [
+          {
+            "display_type": "line",
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "query1",
+                "query": "avg:memory_journal_mcp.mcp_tool_tokens_by_name{*}"
+              }
+            ],
+            "response_format": "timeseries",
+            "style": {
+              "line_type": "solid",
+              "line_width": "normal",
+              "palette": "green"
+            }
+          }
+        ],
+        "show_legend": true,
+        "title": "Tool Tokens Per Call",
+        "type": "timeseries"
+      },
+      "id": 2699983344402485,
+      "layout": {
+        "height": 2,
+        "width": 4,
+        "x": 0,
+        "y": 2
+      }
+    },
+    {
+      "definition": {
+        "legend_columns": [
+          "avg",
+          "min",
+          "max",
+          "value",
+          "sum"
+        ],
+        "legend_layout": "auto",
+        "requests": [
+          {
+            "display_type": "line",
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "query1",
+                "query": "avg:memory_journal_mcp.mcp_tool_duration_seconds{quantile:0.5}"
+              }
+            ],
+            "response_format": "timeseries",
+            "style": {
+              "line_type": "solid",
+              "line_width": "normal",
+              "palette": "green"
+            }
+          }
+        ],
+        "show_legend": true,
+        "title": "Tool Latency P50",
+        "type": "timeseries"
+      },
+      "id": 2800603218336626,
+      "layout": {
+        "height": 2,
+        "width": 4,
+        "x": 4,
+        "y": 2
+      }
+    },
+    {
+      "definition": {
+        "legend_columns": [
+          "avg",
+          "sum",
+          "max",
+          "value"
+        ],
+        "legend_layout": "auto",
+        "requests": [
+          {
+            "display_type": "line",
+            "formulas": [
+              {
+                "formula": "query1"
+              }
+            ],
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "query1",
+                "query": "sum:memory_journal_mcp.mcp_tool_tokens_by_name.count{*} by {tool}.as_count()"
+              }
+            ],
+            "response_format": "timeseries",
+            "style": {
+              "line_type": "solid",
+              "line_width": "normal",
+              "order_by": "values",
+              "palette": "green"
+            }
+          }
+        ],
+        "show_legend": true,
+        "title": "Tokens by Tool",
+        "title_align": "left",
+        "title_size": "16",
+        "type": "timeseries"
+      },
+      "id": 6809842510829163,
+      "layout": {
+        "height": 2,
+        "width": 4,
+        "x": 0,
+        "y": 4
+      }
+    },
+    {
+      "definition": {
+        "legend_columns": [
+          "avg",
+          "min",
+          "max",
+          "value",
+          "sum"
+        ],
+        "legend_layout": "auto",
+        "requests": [
+          {
+            "display_type": "line",
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "query1",
+                "query": "avg:memory_journal_mcp.mcp_tool_duration_seconds{quantile:0.95}"
+              }
+            ],
+            "response_format": "timeseries",
+            "style": {
+              "line_type": "solid",
+              "line_width": "normal",
+              "palette": "green"
+            }
+          }
+        ],
+        "show_legend": true,
+        "title": "Tool Latency P95",
+        "type": "timeseries"
+      },
+      "id": 3783879016448095,
+      "layout": {
+        "height": 2,
+        "width": 4,
+        "x": 4,
+        "y": 4
+      }
+    },
+    {
+      "definition": {
+        "anomaly_detection": {
+          "detection_sensitivity": "never_detect"
+        },
+        "legend_columns": [
+          "avg",
+          "sum",
+          "max",
+          "value"
+        ],
+        "legend_layout": "auto",
+        "requests": [
+          {
+            "display_type": "bars",
+            "formulas": [
+              {
+                "formula": "query1"
+              }
+            ],
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "query1",
+                "query": "sum:memory_journal_mcp.memory_journal_mcp_resource_reads.count{*} by {resource}.as_count()"
+              }
+            ],
+            "response_format": "timeseries",
+            "style": {
+              "line_type": "solid",
+              "line_width": "normal",
+              "palette": "green"
+            }
+          }
+        ],
+        "show_legend": true,
+        "title": "Resource Reads",
+        "title_align": "left",
+        "title_size": "16",
+        "type": "timeseries",
+        "yaxis": {
+          "include_zero": true,
+          "scale": "linear"
+        }
+      },
+      "id": 1255873323847733,
+      "layout": {
+        "height": 3,
+        "width": 4,
+        "x": 8,
+        "y": 5
+      }
+    },
+    {
+      "definition": {
+        "anomaly_detection": {
+          "detection_sensitivity": "never_detect"
+        },
+        "legend_columns": [
+          "avg",
+          "min",
+          "max",
+          "value",
+          "sum"
+        ],
+        "legend_layout": "auto",
+        "requests": [
+          {
+            "display_type": "line",
+            "formulas": [
+              {
+                "formula": "default_zero(query1) + default_zero(query2)"
+              }
+            ],
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "query1",
+                "query": "sum:memory_journal_mcp.mcp_tool_calls.count{*}.as_count()"
+              },
+              {
+                "data_source": "metrics",
+                "name": "query2",
+                "query": "sum:memory_journal_mcp.mcp_tool_calls.count{*}.as_count()"
+              }
+            ],
+            "response_format": "timeseries",
+            "style": {
+              "line_type": "solid",
+              "line_width": "normal",
+              "palette": "green"
+            }
+          }
+        ],
+        "show_legend": true,
+        "title": "Tool Calls Count",
+        "type": "timeseries"
+      },
+      "id": 4824133100420303,
+      "layout": {
+        "height": 2,
+        "width": 4,
+        "x": 0,
+        "y": 6
+      }
+    },
+    {
+      "definition": {
+        "legend_columns": [
+          "avg",
+          "min",
+          "max",
+          "value",
+          "sum"
+        ],
+        "legend_layout": "auto",
+        "requests": [
+          {
+            "display_type": "line",
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "query1",
+                "query": "avg:memory_journal_mcp.mcp_tool_duration_seconds{quantile:0.99}"
+              }
+            ],
+            "response_format": "timeseries",
+            "style": {
+              "line_type": "solid",
+              "line_width": "normal",
+              "palette": "green"
+            }
+          }
+        ],
+        "show_legend": true,
+        "title": "Tool Latency P99",
+        "type": "timeseries"
+      },
+      "id": 5308687878533278,
+      "layout": {
+        "height": 2,
+        "width": 4,
+        "x": 4,
+        "y": 6
+      }
+    },
+    {
+      "definition": {
+        "has_search_bar": "auto",
+        "requests": [
+          {
+            "formulas": [
+              {
+                "cell_display_mode": "bar",
+                "formula": "query1"
+              }
+            ],
+            "queries": [
+              {
+                "aggregator": "avg",
+                "data_source": "metrics",
+                "name": "query1",
+                "query": "avg:memory_journal_mcp.mcp_tool_duration_seconds{quantile:0.95} by {tool}"
+              }
+            ],
+            "response_format": "scalar",
+            "sort": {
+              "count": 500,
+              "order_by": [
+                {
+                  "index": 0,
+                  "order": "desc",
+                  "type": "formula"
+                }
+              ]
+            }
+          }
+        ],
+        "title": "P95 Latency (ms)",
+        "title_align": "left",
+        "title_size": "16",
+        "type": "query_table"
+      },
+      "id": 1502111351131205,
+      "layout": {
+        "height": 5,
+        "is_column_break": true,
+        "width": 4,
+        "x": 0,
+        "y": 8
+      }
+    },
+    {
+      "definition": {
+        "anomaly_detection": {
+          "detection_sensitivity": "never_detect"
+        },
+        "description": "Note: This captures all errors across all tools. The Error Logs widget only displays audited errors (Writes/Admin) unless the server is started with the `--audit-reads` flag.",
+        "legend_columns": [
+          "avg",
+          "min",
+          "max",
+          "value",
+          "sum"
+        ],
+        "legend_layout": "auto",
+        "requests": [
+          {
+            "display_type": "line",
+            "formulas": [
+              {
+                "formula": "default_zero(query1) + default_zero(query2)"
+              }
+            ],
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "query1",
+                "query": "sum:memory_journal_mcp.mcp_tool_errors.count{*}.as_count()"
+              },
+              {
+                "data_source": "metrics",
+                "name": "query2",
+                "query": "sum:memory_journal_mcp.mcp_tool_errors.count{*}.as_count()"
+              }
+            ],
+            "response_format": "timeseries",
+            "style": {
+              "line_type": "solid",
+              "line_width": "normal",
+              "palette": "green"
+            }
+          }
+        ],
+        "show_legend": true,
+        "title": "Tool Errors Count",
+        "type": "timeseries"
+      },
+      "id": 1079119422175585,
+      "layout": {
+        "height": 3,
+        "width": 4,
+        "x": 4,
+        "y": 8
+      }
+    },
+    {
+      "definition": {
+        "description": "Note: The Error Logs widget only displays audited errors (Writes/Admin) unless the server is started with the `--audit-reads` flag.\"",
+        "requests": [
+          {
+            "columns": [
+              {
+                "field": "status_line",
+                "width": "auto"
+              },
+              {
+                "field": "timestamp",
+                "width": "auto"
+              },
+              {
+                "field": "host",
+                "width": "auto"
+              },
+              {
+                "field": "service",
+                "width": "auto"
+              },
+              {
+                "field": "message",
+                "width": "auto"
+              },
+              {
+                "field": "content",
+                "width": "compact"
+              }
+            ],
+            "query": {
+              "data_source": "logs_stream",
+              "indexes": [],
+              "query_string": "source:memory_journal_mcp status:error OR @log_type:agent_issues",
+              "sort": {
+                "column": "timestamp",
+                "order": "desc"
+              },
+              "storage": "hot"
+            },
+            "response_format": "event_list"
+          }
+        ],
+        "title": "memory-journal-mcp Error Log",
+        "title_align": "left",
+        "title_size": "16",
+        "type": "list_stream"
+      },
+      "id": 2516024086793335,
+      "layout": {
+        "height": 4,
+        "width": 4,
+        "x": 8,
+        "y": 8
+      }
+    },
+    {
+      "definition": {
+        "anomaly_detection": {
+          "detection_sensitivity": "never_detect"
+        },
+        "description": "Note: This captures all errors across all tools. The Error Logs widget only displays audited errors (Writes/Admin) unless the server is started with the `--audit-reads` flag.",
+        "legend_columns": [
+          "avg",
+          "sum",
+          "max",
+          "value"
+        ],
+        "legend_layout": "auto",
+        "markers": [
+          {
+            "display_type": "ok dashed",
+            "label": "Zero baseline",
+            "value": "y = 0"
+          }
+        ],
+        "requests": [
+          {
+            "display_type": "line",
+            "formulas": [
+              {
+                "alias": "Total Calls",
+                "formula": "default_zero(calls) + default_zero(old_calls)"
+              },
+              {
+                "alias": "Total Errors",
+                "formula": "default_zero(errors) + default_zero(old_errors)"
+              }
+            ],
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "calls",
+                "query": "sum:memory_journal_mcp.mcp_tool_calls.count{$tool}.as_count()"
+              },
+              {
+                "data_source": "metrics",
+                "name": "errors",
+                "query": "sum:memory_journal_mcp.mcp_tool_errors.count{$tool}.as_count()"
+              },
+              {
+                "data_source": "metrics",
+                "name": "old_calls",
+                "query": "sum:memory_journal_mcp.mcp_tool_calls.count{$tool}.as_count()"
+              },
+              {
+                "data_source": "metrics",
+                "name": "old_errors",
+                "query": "sum:memory_journal_mcp.mcp_tool_errors.count{$tool}.as_count()"
+              }
+            ],
+            "response_format": "timeseries",
+            "style": {
+              "line_type": "solid",
+              "line_width": "normal",
+              "palette": "green"
+            }
+          }
+        ],
+        "show_legend": true,
+        "time": {},
+        "title": "Calls vs Errors",
+        "title_align": "left",
+        "title_size": "16",
+        "type": "timeseries",
+        "yaxis": {
+          "include_zero": true,
+          "scale": "linear"
+        }
+      },
+      "id": 6126676673229792,
+      "layout": {
+        "height": 5,
+        "width": 4,
+        "x": 4,
+        "y": 11
+      }
+    },
+    {
+      "definition": {
+        "description": "Note: This captures all audited tools executed by the AI agent.",
+        "requests": [
+          {
+            "columns": [
+              {
+                "field": "@tool",
+                "width": "auto"
+              },
+              {
+                "field": "@category",
+                "width": "auto"
+              },
+              {
+                "field": "@success",
+                "width": "compact"
+              },
+              {
+                "field": "@durationMs",
+                "width": "compact"
+              },
+              {
+                "field": "content",
+                "width": "auto"
+              }
+            ],
+            "query": {
+              "data_source": "logs_stream",
+              "indexes": [],
+              "query_string": "source:memory_journal_mcp log_type:mcp_audit",
+              "sort": {
+                "column": "timestamp",
+                "order": "desc"
+              },
+              "storage": "hot"
+            },
+            "response_format": "event_list"
+          }
+        ],
+        "title": "memory-journal-mcp Audit Log",
+        "title_align": "left",
+        "title_size": "16",
+        "type": "list_stream"
+      },
+      "id": 8706701828007376,
+      "layout": {
+        "height": 4,
+        "width": 4,
+        "x": 8,
+        "y": 12
+      }
+    },
+    {
+      "definition": {
+        "anomaly_detection": {
+          "detection_sensitivity": "never_detect"
+        },
+        "legend_columns": [
+          "avg",
+          "min",
+          "max",
+          "value",
+          "sum"
+        ],
+        "legend_layout": "auto",
+        "requests": [
+          {
+            "display_type": "line",
+            "formulas": [
+              {
+                "formula": "query1"
+              }
+            ],
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "query1",
+                "query": "sum:memory_journal_mcp.memory_journal_mcp_resource_reads.count{*}.as_count()"
+              }
+            ],
+            "response_format": "timeseries",
+            "style": {
+              "line_type": "solid",
+              "line_width": "normal",
+              "palette": "green"
+            }
+          }
+        ],
+        "show_legend": true,
+        "title": "Resource Reads Count",
+        "type": "timeseries"
+      },
+      "id": 2504942699509431,
+      "layout": {
+        "height": 3,
+        "width": 4,
+        "x": 0,
+        "y": 13
+      }
+    }
+  ]
+}

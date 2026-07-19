@@ -20,13 +20,13 @@ import { createWriteStream } from 'node:fs'
 import { setTimeout as delay } from 'node:timers/promises'
 import { join } from 'node:path'
 
-const DEFAULT_PORT = 3100
+export const DEFAULT_PORT = 3105
 
 // ─── Base URL resolution ────────────────────────────────────────────────────
 
 /**
  * Resolve the base URL from Playwright test info.
- * Falls back to http://localhost:3100 if not set in project config.
+ * Falls back to http://localhost:3105 if not set in project config.
  */
 export function getBaseURL(testInfo: TestInfo): string {
     const customBaseURL = (testInfo.project.use as { baseURL?: string }).baseURL
