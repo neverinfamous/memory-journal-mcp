@@ -43,12 +43,12 @@ async function main() {
     while (running) {
       try {
         // Successful Tool Calls (3 requests per loop)
-        await client.callTool({ name: "get_recent_entries", arguments: { limit: 5 } }).catch(() => {});
-        await client.callTool({ name: "get_statistics", arguments: {} }).catch(() => {});
-        await client.callTool({ name: "list_tags", arguments: {} }).catch(() => {});
+        await client.callTool({ name: "mj_execute_code", arguments: { code: "return await mj.searchEntries({ query: 'test' });" } }).catch(() => {});
+        await client.callTool({ name: "mj_execute_code", arguments: { code: "return await mj.getStatistics();" } }).catch(() => {});
+        await client.callTool({ name: "mj_execute_code", arguments: { code: "return await mj.listTags();" } }).catch(() => {});
 
         // Intentional Error (for error rate % and error log)
-        await client.callTool({ name: "get_entry_by_id", arguments: { id: "non-existent-id-12345" } }).catch(() => {});
+        await client.callTool({ name: "mj_execute_code", arguments: { code: "throw new Error('Intentional error to trigger error metrics');" } }).catch(() => {});
 
         // Resource Reads
         await client.readResource({ uri: "memory://briefing" }).catch(() => {});
