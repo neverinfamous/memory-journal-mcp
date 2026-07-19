@@ -296,7 +296,7 @@
               {
                 "data_source": "metrics",
                 "name": "calls",
-                "query": "sum:memory_journal_mcp.mcp_tool_calls.count{*} by {tool}.as_count()"
+                "query": "sum:memory_journal_mcp.mcp_tool_calls_by_name.count{*} by {tool}.as_count()"
               },
               {
                 "data_source": "metrics",
@@ -387,7 +387,7 @@
                 "aggregator": "sum",
                 "data_source": "metrics",
                 "name": "query1",
-                "query": "sum:memory_journal_mcp.mcp_tool_calls.count{*} by {tool}.as_count()"
+                "query": "sum:memory_journal_mcp.mcp_tool_calls_by_name.count{*} by {tool}.as_count()"
               }
             ],
             "response_format": "scalar",
@@ -1152,7 +1152,7 @@
               {
                 "data_source": "metrics",
                 "name": "a",
-                "query": "sum:memory_journal_mcp.mcp_tool_errors.count{!error_type:historical}.as_count()"
+                "query": "sum:memory_journal_mcp.mcp_tool_errors.count{*}.as_count()"
               },
               {
                 "data_source": "metrics",
@@ -1362,7 +1362,7 @@
               {
                 "data_source": "metrics",
                 "name": "query1",
-                "query": "sum:memory_journal_mcp.mcp_tool_errors.count{!error_type:historical} by {error_type}.as_count()"
+                "query": "sum:memory_journal_mcp.mcp_tool_errors.count{*} by {error_type}.as_count()"
               }
             ],
             "response_format": "timeseries"

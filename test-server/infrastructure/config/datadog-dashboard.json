@@ -119,7 +119,7 @@
                 "aggregator": "sum",
                 "data_source": "metrics",
                 "name": "query1",
-                "query": "sum:memory_journal_mcp.mcp_tool_calls.count{*} by {tool}.as_count()"
+                "query": "sum:memory_journal_mcp.mcp_tool_calls_by_name.count{*} by {tool}.as_count()"
               }
             ],
             "response_format": "scalar",
@@ -339,7 +339,7 @@
               {
                 "data_source": "metrics",
                 "name": "query1",
-                "query": "sum:memory_journal_mcp.memory_journal_mcp_resource_reads.count{*} by {resource}.as_count()"
+                "query": "sum:memory_journal_mcp.mcp_tool_calls_by_name.count{*} by {resource}.as_count()"
               }
             ],
             "response_format": "timeseries",
@@ -778,7 +778,7 @@
               {
                 "data_source": "metrics",
                 "name": "query1",
-                "query": "sum:memory_journal_mcp.memory_journal_mcp_resource_reads.count{*}.as_count()"
+                "query": "sum:memory_journal_mcp.mcp_tool_calls_by_name.count{*}.as_count()"
               }
             ],
             "response_format": "timeseries",
