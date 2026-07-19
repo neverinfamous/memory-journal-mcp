@@ -4,19 +4,21 @@ import { fileURLToPath } from 'url'
 
 export interface AgentIssue {
     timestamp: string
+    level: 'error' | 'warn' | 'info'
     source: 'CLI' | 'MCP'
     action: string
     input: unknown
     error: string
 }
 
-export function logAgentIssue(issue: Omit<AgentIssue, 'timestamp'>): void {
+export function logAgentIssue(issue: Omit<AgentIssue, 'timestamp' | 'level'>): void {
     if (process.env['NODE_ENV'] === 'test') {
         return
     }
 
     const fullIssue: AgentIssue = {
         timestamp: new Date().toISOString(),
+        level: 'error',
         ...issue,
     }
 

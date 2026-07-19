@@ -56,8 +56,8 @@ describe('formatPrometheusMetrics', () => {
         expect(output).toContain('mcp_tool_tokens_by_name_total{tool="create_entry",type="input"}')
         expect(output).toContain('mcp_tool_tokens_by_name_total{tool="create_entry",type="output"}')
         
-        // Latency summaries (converted from MS to seconds)
-        expect(output).toContain('mcp_tool_duration_seconds{tool="create_entry",quantile="0.5"} 0.15')
-        expect(output).toContain('mcp_tool_duration_seconds_count{tool="create_entry"} 1')
+        // Latency percentiles in MS
+        expect(output).toContain('mcp_tool_latency_ms_p50{tool="create_entry"} 150')
+        expect(output).toContain('mcp_tool_latency_ms_p95{tool="create_entry"} 150')
     })
 })
