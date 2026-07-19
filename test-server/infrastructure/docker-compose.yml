@@ -133,6 +133,7 @@ services:
       - DD_TAGS=env:development source:wsl2
       # Logs
       - DD_LOGS_ENABLED=true
+      - DD_IGNORE_AUTOCONF=mysql redisdb proxysql
       - DD_LOGS_CONFIG_CONTAINER_COLLECT_ALL=true
       # Process monitoring
       - DD_PROCESS_CONFIG_CONTAINER_COLLECTION_ENABLED=true
