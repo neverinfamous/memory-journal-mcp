@@ -162,7 +162,7 @@
             "type": "prometheus",
             "uid": "prometheus_datasource"
           },
-          "expr": "sum(rate(memory_journal_mcp_tool_calls_total{tool=~\"$tool\"}[1m])) by (tool)",
+          "expr": "sum(rate(mcp_tool_calls_total{tool=~\"$tool\"}[1m])) by (tool)",
           "legendFormat": "{{tool}}",
           "refId": "A"
         }
@@ -263,7 +263,7 @@
             "type": "prometheus",
             "uid": "prometheus_datasource"
           },
-          "expr": "memory_journal_mcp_tool_latency_ms_p95{tool=~\"$tool\"}",
+          "expr": "mcp_tool_latency_ms_p95{tool=~\"$tool\"}",
           "legendFormat": "{{tool}}",
           "refId": "A"
         }
@@ -356,7 +356,7 @@
             "type": "prometheus",
             "uid": "prometheus_datasource"
           },
-          "expr": "sum(rate(memory_journal_mcp_tool_errors_total{tool=~\"$tool\"}[1m])) by (tool)",
+          "expr": "sum(rate(mcp_tool_errors_total{tool=~\"$tool\"}[1m])) by (tool)",
           "legendFormat": "{{tool}}",
           "refId": "A"
         }
@@ -445,7 +445,7 @@
             "type": "prometheus",
             "uid": "prometheus_datasource"
           },
-          "expr": "sum(memory_journal_mcp_resource_reads_total) by (resource)",
+          "expr": "sum(mcp_resource_reads_total) by (resource)",
           "legendFormat": "{{resource}}",
           "refId": "A"
         }
@@ -532,7 +532,7 @@
             "type": "prometheus",
             "uid": "prometheus_datasource"
           },
-          "expr": "sum(memory_journal_mcp_tool_tokens_total{tool=~\"$tool\"})",
+          "expr": "sum(mcp_tool_tokens_by_name_total{tool=~\"$tool\"})",
           "legendFormat": "Total Tokens",
           "refId": "A"
         }
@@ -603,7 +603,7 @@
             "type": "prometheus",
             "uid": "prometheus_datasource"
           },
-          "expr": "memory_journal_mcp_tool_tokens_per_call{tool=~\"$tool\"}",
+          "expr": "mcp_tool_tokens_per_call{tool=~\"$tool\"}",
           "legendFormat": "{{tool}}",
           "refId": "A"
         }
@@ -695,7 +695,7 @@
             "type": "prometheus",
             "uid": "prometheus_datasource"
           },
-          "expr": "sum(rate(memory_journal_mcp_tool_tokens_total{tool=~\"$tool\"}[5m])) by (tool)",
+          "expr": "sum(rate(mcp_tool_tokens_by_name_total{tool=~\"$tool\"}[5m])) by (tool)",
           "legendFormat": "{{tool}}",
           "refId": "A"
         }
@@ -786,7 +786,7 @@
             "type": "prometheus",
             "uid": "prometheus_datasource"
           },
-          "expr": "sum(memory_journal_mcp_tool_tokens_total{tool=~\"$tool\"}) by (tool)",
+          "expr": "sum(mcp_tool_tokens_by_name_total{tool=~\"$tool\"}) by (tool)",
           "legendFormat": "{{tool}}",
           "refId": "A"
         }
@@ -861,7 +861,7 @@
             "type": "prometheus",
             "uid": "prometheus_datasource"
           },
-          "expr": "(sum(memory_journal_mcp_tool_errors_total{tool=~\"$tool\"}) by (tool) / sum(memory_journal_mcp_tool_calls_total{tool=~\"$tool\"}) by (tool)) * 100",
+          "expr": "(sum(mcp_tool_errors_total{tool=~\"$tool\"}) by (tool) / sum(mcp_tool_calls_total{tool=~\"$tool\"}) by (tool)) * 100",
           "legendFormat": "{{tool}}",
           "refId": "A"
         }
@@ -936,7 +936,7 @@
             "type": "prometheus",
             "uid": "prometheus_datasource"
           },
-          "expr": "memory_journal_mcp_uptime_seconds",
+          "expr": "mcp_process_uptime_seconds",
           "legendFormat": "Uptime",
           "refId": "A"
         }
@@ -999,7 +999,7 @@
             "type": "prometheus",
             "uid": "prometheus_datasource"
           },
-          "expr": "sum(memory_journal_mcp_tool_calls_total)",
+          "expr": "sum(mcp_tool_calls_total)",
           "legendFormat": "Total Calls",
           "refId": "A"
         }
@@ -1066,7 +1066,7 @@
             "type": "prometheus",
             "uid": "prometheus_datasource"
           },
-          "expr": "sum(memory_journal_mcp_tool_errors_total)",
+          "expr": "sum(mcp_tool_errors_total)",
           "legendFormat": "Total Errors",
           "refId": "A"
         }
@@ -1129,7 +1129,7 @@
             "type": "prometheus",
             "uid": "prometheus_datasource"
           },
-          "expr": "sum(memory_journal_mcp_resource_reads_total)",
+          "expr": "sum(mcp_resource_reads_total)",
           "legendFormat": "Total Reads",
           "refId": "A"
         }
@@ -1153,7 +1153,7 @@
           "type": "prometheus",
           "uid": "prometheus_datasource"
         },
-        "definition": "label_values(memory_journal_mcp_tool_calls_total, tool)",
+        "definition": "label_values(mcp_tool_calls_total, tool)",
         "hide": 0,
         "includeAll": true,
         "label": "Tool",
@@ -1161,7 +1161,7 @@
         "name": "tool",
         "options": [],
         "query": {
-          "query": "label_values(memory_journal_mcp_tool_calls_total, tool)",
+          "query": "label_values(mcp_tool_calls_total, tool)",
           "refId": "StandardVariableQuery"
         },
         "refresh": 2,

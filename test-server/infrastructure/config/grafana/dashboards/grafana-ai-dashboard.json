@@ -123,7 +123,7 @@
             "type": "prometheus",
             "uid": "prometheus_datasource"
           },
-          "expr": "(((sum(increase(memory_journal_mcp_tool_tokens_total[$__range]))) / 1000000) * 2)",
+          "expr": "(((sum(increase(mcp_tool_tokens_by_name_total[$__range]))) / 1000000) * 2)",
           "legendFormat": "{{tool}}",
           "refId": "A"
         }
@@ -183,7 +183,7 @@
             "type": "prometheus",
             "uid": "prometheus_datasource"
           },
-          "expr": "(((sum(increase(memory_journal_mcp_tool_tokens_total[$__range]))) / 1000000) * 5)",
+          "expr": "(((sum(increase(mcp_tool_tokens_by_name_total[$__range]))) / 1000000) * 5)",
           "legendFormat": "{{tool}}",
           "refId": "A"
         }
@@ -243,7 +243,7 @@
             "type": "prometheus",
             "uid": "prometheus_datasource"
           },
-          "expr": "(((sum(increase(memory_journal_mcp_tool_tokens_total[$__range]))) / 1000000) * 5)",
+          "expr": "(((sum(increase(mcp_tool_tokens_by_name_total[$__range]))) / 1000000) * 5)",
           "legendFormat": "{{tool}}",
           "refId": "A"
         }
@@ -303,7 +303,7 @@
             "type": "prometheus",
             "uid": "prometheus_datasource"
           },
-          "expr": "(((sum(increase(memory_journal_mcp_tool_tokens_total[$__range]))) / 1000000) * 6)",
+          "expr": "(((sum(increase(mcp_tool_tokens_by_name_total[$__range]))) / 1000000) * 6)",
           "legendFormat": "{{tool}}",
           "refId": "A"
         }
@@ -363,7 +363,7 @@
             "type": "prometheus",
             "uid": "prometheus_datasource"
           },
-          "expr": "(((sum(increase(memory_journal_mcp_tool_tokens_total[$__range]))) / 1000000) * 30)",
+          "expr": "(((sum(increase(mcp_tool_tokens_by_name_total[$__range]))) / 1000000) * 30)",
           "legendFormat": "{{tool}}",
           "refId": "A"
         }
@@ -423,7 +423,7 @@
             "type": "prometheus",
             "uid": "prometheus_datasource"
           },
-          "expr": "sum(increase(memory_journal_mcp_tool_tokens_total[$__range]))",
+          "expr": "sum(increase(mcp_tool_tokens_by_name_total[$__range]))",
           "legendFormat": "Tokens",
           "refId": "A"
         }
@@ -529,7 +529,7 @@
             "type": "prometheus",
             "uid": "prometheus_datasource"
           },
-          "expr": "sum(increase(memory_journal_mcp_tool_tokens_total[$__rate_interval])) by (tool)",
+          "expr": "sum(increase(mcp_tool_tokens_by_name_total[$__rate_interval])) by (tool)",
           "legendFormat": "{{tool}}",
           "refId": "A"
         }
@@ -623,7 +623,7 @@
             "type": "prometheus",
             "uid": "prometheus_datasource"
           },
-          "expr": "sum(increase(memory_journal_mcp_tool_calls_total[$__rate_interval])) by (tool)",
+          "expr": "sum(increase(mcp_tool_calls_total[$__rate_interval])) by (tool)",
           "legendFormat": "{{tool}}",
           "refId": "A"
         }
@@ -683,7 +683,7 @@
             "type": "prometheus",
             "uid": "prometheus_datasource"
           },
-          "expr": "sum(increase(memory_journal_mcp_tool_tokens_total[$__range])) / sum(increase(memory_journal_mcp_tool_calls_total[$__range]))",
+          "expr": "sum(increase(mcp_tool_tokens_by_name_total[$__range])) / sum(increase(mcp_tool_calls_total[$__range]))",
           "legendFormat": "{{tool}}",
           "refId": "A"
         }
@@ -743,7 +743,7 @@
             "type": "prometheus",
             "uid": "prometheus_datasource"
           },
-          "expr": "sum(increase(memory_journal_mcp_tool_calls_total[$__range])) * max(memory_journal_mcp_tool_latency_ms_p95)",
+          "expr": "sum(increase(mcp_tool_calls_total[$__range])) * max(mcp_tool_latency_ms_p95)",
           "legendFormat": "Latency",
           "refId": "A"
         }
@@ -809,7 +809,7 @@
             "type": "prometheus",
             "uid": "prometheus_datasource"
           },
-          "expr": "(sum(increase(memory_journal_mcp_tool_errors_total[$__range])) / sum(increase(memory_journal_mcp_tool_calls_total[$__range]))) * 100",
+          "expr": "(sum(increase(mcp_tool_errors_total[$__range])) / sum(increase(mcp_tool_calls_total[$__range]))) * 100",
           "legendFormat": "Error Rate",
           "refId": "A"
         }
@@ -903,7 +903,7 @@
             "type": "prometheus",
             "uid": "prometheus_datasource"
           },
-          "expr": "sum(increase(memory_journal_mcp_tool_errors_total[$__rate_interval])) by (tool)",
+          "expr": "sum(increase(mcp_tool_errors_total[$__rate_interval])) by (tool)",
           "legendFormat": "{{tool}}",
           "refId": "A"
         }
