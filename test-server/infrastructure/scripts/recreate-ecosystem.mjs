@@ -6,6 +6,18 @@ import { dirname, join } from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+import fs from 'fs';
+if (fs.existsSync('C:/Users/chris/Desktop/adamic/secrets.env')) {
+  const envConfig = fs.readFileSync('C:/Users/chris/Desktop/adamic/secrets.env', 'utf-8');
+  envConfig.split('\n').forEach(line => {
+    const match = line.match(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/);
+    if (match) {
+      process.env[match[1]] = (match[2] || '').trim().replace(/^['"](.*)['"]$/, '$1');
+    }
+  });
+  process.env.WSLENV = process.env.WSLENV ? `${process.env.WSLENV}:DD_API_KEY/u` : 'DD_API_KEY/u';
+}
+
 const REPO_ROOT = join(__dirname, '..');
 const MAX_RETRIES = 60;
 const RETRY_DELAY_MS = 2000;

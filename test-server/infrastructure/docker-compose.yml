@@ -128,6 +128,7 @@ services:
     env_file:
       - .env
     environment:
+      - DD_API_KEY=${DD_API_KEY}
       - DD_SITE=datadoghq.com
       - DD_HOSTNAME=adamic-wsl2
       - DD_TAGS=env:development source:wsl2
