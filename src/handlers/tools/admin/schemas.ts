@@ -74,6 +74,7 @@ export const UpdateEntrySchema = z.preprocess(
         expected_version: z.number().optional(),
         auto_context: z.string().nullable().optional(),
         workspace_id: z.string().optional(),
+        target_workspace_id: z.string().optional().describe('Target workspace to move entry into (e.g. "mysql-mcp")'),
         impact_score: z.number().min(0).max(1).optional(),
         trust_score: z.number().min(0).max(1).optional(),
         validation_status: z.enum(['passed', 'none', 'failed']).optional(),

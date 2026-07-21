@@ -150,6 +150,7 @@ export interface IDatabaseAdapter {
             impactScore?: number
             validationStatus?: 'passed' | 'failed' | 'none'
             sessionId?: string
+            targetWorkspaceId?: string
         }
     ): JournalEntry | null
     deleteEntry(id: number, permanent?: boolean): boolean

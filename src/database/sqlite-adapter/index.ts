@@ -149,6 +149,8 @@ export class DatabaseAdapter implements IDatabaseAdapter {
             trustScore?: number
             impactScore?: number
             validationStatus?: 'passed' | 'failed' | 'none'
+            workspaceId?: string
+            targetWorkspaceId?: string
         }
     ): JournalEntry | null {
         return this.entriesMgr.updateEntry(id, updates)

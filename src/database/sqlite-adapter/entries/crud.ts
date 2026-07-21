@@ -236,6 +236,7 @@ export function updateEntry(
         validationStatus?: 'passed' | 'failed' | 'none'
         impactScore?: number
         sessionId?: string | null
+        targetWorkspaceId?: string
     }
 ): JournalEntry | null {
     const { db, tagsMgr } = context
@@ -317,6 +318,10 @@ export function updateEntry(
     if (input.impactScore !== undefined) {
         updates.push('impact_score = ?')
         values.push(input.impactScore)
+    }
+    if (input.targetWorkspaceId !== undefined) {
+        updates.push('workspace_id = ?')
+        values.push(input.targetWorkspaceId)
     }
     if (input.sessionId !== undefined) {
         updates.push('session_id = ?')

@@ -96,6 +96,7 @@ export class EntriesManager {
             trustScore?: number
             impactScore?: number
             validationStatus?: 'passed' | 'failed' | 'none'
+            targetWorkspaceId?: string
         }
     ): JournalEntry | null {
         return updateEntry(this.sharedContext, id, input)

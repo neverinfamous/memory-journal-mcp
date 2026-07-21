@@ -142,6 +142,8 @@ export class DatabaseAdapter implements IDatabaseAdapter {
             workflowStatus?: string | null
             isArchived?: boolean
             expectedVersion?: number
+            workspaceId?: string
+            targetWorkspaceId?: string
         }
     ): JournalEntry | null {
         return this.entriesMgr.updateEntry(id, updates)
