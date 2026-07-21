@@ -175,7 +175,7 @@ export function healAgentHallucinations(val: unknown): unknown {
         }
 
         // Clean up common extra keys that cause strict schema validation failures
-        for (const extraKey of ['author', 'date', 'created_at', 'updated_at', 'type']) {
+        for (const extraKey of ['date', 'created_at', 'updated_at', 'type']) {
             if (extraKey in obj && extraKey !== 'entry_type') {
                 if (extraKey === 'type' && !('entry_type' in obj)) {
                     obj['entry_type'] = obj['type']
