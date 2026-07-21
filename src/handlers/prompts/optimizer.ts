@@ -147,7 +147,7 @@ ${autoRun ? '3. **AUTO-RUN MODE**: You have pre-approval to soft-delete low-valu
 4. **NEVER** delete entries with \`significance_type\` set.
 5. Max batch size: 50 entries.
 6. **Log operations**: Create a journal entry with \`entry_type: 'maintenance'\` and tag \`database-optimizer\`.
-7. **Scope Limitation**: ALWAYS narrow the scope to doing ONE project at a time. The user will invoke this prompt sequentially for multiple projects.
+7. **Execution Scope**: Systematically process entries across ALL registered projects in \`PROJECT_REGISTRY\`.
 
 ## Identifying Orphans Safely
 Do NOT use \`search_entries\` to dump the database. Use this pre-optimized Code Mode script in \`mj_execute_code\`. Because Code Mode executes directly against the sandboxed SQLite adapter, you can safely perform 500+ read iterations in milliseconds without triggering RPC serialization limits:
@@ -176,34 +176,35 @@ while (processed < 500) {
 return orphans;
 \`\`\`
 
-## Optimization & Verification Workflows
+## Optimization & Verification Workflows (Two-Phase Execution)
 
-Select one or more workflows to run based on the user's request or the presence of unverified entries. **Crucially, prioritize high-quality, agent-managed editing over blind predetermined scripts.**
+Execution MUST proceed in two distinct phases:
 
-1. **Multi-Project Iteration (Mandatory Rule)**: Iterate systematically across **ALL registered projects** in \`PROJECT_REGISTRY\` (e.g. \`mysql-mcp\`, \`adamic\`, \`do-test-worker\`, etc.). Do NOT restrict optimization to a single workspace unless explicitly directed by the user.
-2. **Agent-Managed Cognitive Optimization (30–60 Entry Batches)**: 
-   - **Full Content Reading**: Agents/subagents MUST read entries in full (content, tags, relationships, importance score, trust score, impact score) in manageable batches of **30–60 entries** at a time.
-   - **Cognitive Evaluation Criteria**:
-     - *Metadata & Tag Enrichment*: Infer missing tags, verify significance types, and set correct project numbers.
-     - *Relationship Graphing*: Discover and record inter-entry connections (\`evolves_from\`, \`references\`, \`implements\`, \`blocked_by\`, \`resolved\`).
-     - *Noise Pruning*: Soft-delete zero-value debug/test noise (where \`baseScore === 0\` and no significance or relationships exist).
-     - *Scoring*: Update \`trust_score\` (0.0 to 1.0), \`impact_score\` (0.0 to 1.0), and \`validation_status\` ('passed'/'failed'/'none').
-   - **Execution Paradigm**: Compile subagent outputs into a JavaScript Code Mode payload using \`mj.updateEntry(id, payload)\` via \`mj_execute_code\`. Use \`target_workspace_id\` if migrating entries between workspace boundaries.
-3. **Orphan Resolution & Project Consolidation**: Audit entries unassigned to projects or in \`default\`:
-   - *Miscategorized Projects*: Migrate entries to the correct project workspace using \`target_workspace_id\`.
-4. **Importance Audit** (Pruning): Find older orphans with a base importance of 0.0. Soft-delete after creating a backup.
-5. **Tier 1 & Tier 2 Verification**: Use \`mj.git.getCommitHistory()\` and file inspection to verify entry claims. Adjust \`trust_score\` and \`validation_status\` accordingly.
+### Phase 1: Rapid Pre-Audit & Health Scan (Quick-Wins)
+1. **Safety Backup**: Call \`backup_journal\` before any mutations.
+2. **Unassigned & Missing Tag Scan**: Identify recent unassigned entries or entries missing project numbers/tags and perform immediate workspace migration/tag enrichment.
+
+### Phase 2: Systematic Multi-Project Cognitive Batch Audit (30–60 Entry Batches)
+1. **Multi-Project Iteration**: Systematically iterate through **ALL registered projects** in \`PROJECT_REGISTRY\` (e.g. \`mysql-mcp\`, \`adamic\`, \`memory-journal-mcp\`, \`do-test-worker\`, etc.).
+2. **Full Content Reading**: Read entries in full (content, tags, relationships, importance score, trust score, impact score) in batches of **30–60 entries** at a time.
+3. **Cognitive Evaluation Criteria**:
+   - *Metadata & Tag Enrichment*: Infer missing tags, verify significance types, set correct project numbers.
+   - *Relationship Graphing*: Discover and record inter-entry connections (\`evolves_from\`, \`references\`, \`implements\`, \`blocked_by\`, \`resolved\`).
+   - *Noise Pruning*: Soft-delete zero-value debug/test noise (where \`baseScore === 0\` and no significance or relationships exist).
+   - *Scoring*: Update \`trust_score\` (0.0 to 1.0), \`impact_score\` (0.0 to 1.0), and \`validation_status\` ('passed'/'failed'/'none').
+4. **Execution Paradigm**: Execute mutations via Code Mode using \`mj.updateEntry(id, payload)\` / \`mj.admin.updateEntry\` via \`mj_execute_code\`. Use \`workspace_id: '*'\` if migrating entries across workspace boundaries.
 
 ${autoRun ? `To proceed (AUTO-RUN MODE):
-1. Review the live stats and the unverified recent entries across all projects.
-2. You are running in an autonomous mode. DO NOT ask the user for confirmation or output plans for them to review.
-3. Systematically process each registered project in batches of 30–60 entries using the Cognitive Reading Protocol.
-4. Execute mutations via Code Mode using \`mj_execute_code\`.
-5. Output a single concise Markdown summary of all actions taken, any anomalies found, and the final state of all project workspaces.` : `To proceed:
-1. Review the live stats and output a Markdown table breaking down entry counts for ALL registered projects.
-2. Explicitly list the available workflows (Cognitive Batch Optimization, Consolidation, Verification) for each project.
+1. Review the live stats and unverified recent entries across all projects.
+2. Autonomous Execution: Do NOT ask for user confirmation or output plans for review.
+3. Execute Phase 1 (Safety backup, unassigned & missing tag quick-wins).
+4. Execute Phase 2: Systematically process each registered project in batches of 30–60 entries using Cognitive Reading Protocol.
+5. Execute mutations via Code Mode using \`mj_execute_code\`.
+6. Output a single concise Markdown summary of all actions taken, any anomalies found, and final database state.` : `To proceed:
+1. Review live stats and output a Markdown table breaking down entry counts for ALL registered projects.
+2. List available workflows (Phase 1 Quick-Wins, Phase 2 Cognitive Batch Optimization) for each project.
 3. Recommend starting with the project having the largest unverified entry count in batches of 30–60 entries.
-4. IDENTIFY candidates using Code Mode scripts and present them in manageable 30–60 entry batches.
+4. Identify candidates using Code Mode scripts and present them in 30–60 entry batches.
 5. Ask for user confirmation before executing batch mutations.`}`,
                             },
                         },
