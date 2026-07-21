@@ -23,7 +23,8 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
         if (obj['project_name'] !== undefined) {
             if (obj['project_number'] === undefined) {
                 const num = Number(obj['project_name']);
-                if (!Number.isNaN(num) && String(obj['project_name']).trim() !== '') {
+                const strVal = typeof obj['project_name'] === 'string' || typeof obj['project_name'] === 'number' ? String(obj['project_name']) : '';
+                if (!Number.isNaN(num) && strVal.trim() !== '') {
                     obj['project_number'] = num;
                 }
             }
@@ -32,7 +33,8 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
         if (obj['projectName'] !== undefined) {
             if (obj['project_number'] === undefined) {
                 const num = Number(obj['projectName']);
-                if (!Number.isNaN(num) && String(obj['projectName']).trim() !== '') {
+                const strVal = typeof obj['projectName'] === 'string' || typeof obj['projectName'] === 'number' ? String(obj['projectName']) : '';
+                if (!Number.isNaN(num) && strVal.trim() !== '') {
                     obj['project_number'] = num;
                 }
             }

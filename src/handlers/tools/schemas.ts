@@ -135,7 +135,8 @@ export function healAgentHallucinations(val: unknown): unknown {
         if (rawProjName !== undefined) {
             if (!('project_number' in obj) || obj['project_number'] === undefined) {
                 const num = Number(rawProjName)
-                if (!Number.isNaN(num) && String(rawProjName).trim() !== '') {
+                const strVal = typeof rawProjName === 'string' || typeof rawProjName === 'number' ? String(rawProjName) : ''
+                if (!Number.isNaN(num) && strVal.trim() !== '') {
                     obj['project_number'] = num
                 }
             }
@@ -179,7 +180,7 @@ export function healAgentHallucinations(val: unknown): unknown {
                 if (extraKey === 'type' && !('entry_type' in obj)) {
                     obj['entry_type'] = obj['type']
                 }
-                delete obj[extraKey]
+                Reflect.deleteProperty(obj, extraKey)
                 modified = true
             }
         }
