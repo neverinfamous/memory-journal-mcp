@@ -129,6 +129,18 @@ async function executeCode(
                         })
                     }
                 }
+                if (prop === 'logger') {
+                    return consoleShim
+                }
+                if (prop === 'loadBriefing' || prop === 'load_briefing' || prop === 'getBriefing' || prop === 'get_briefing') {
+                    if ('core' in target) {
+                        const coreGroup = target['core'] as Record<string, unknown>
+                        const fn = coreGroup['getRecentEntries'] ?? coreGroup['get_recent_entries']
+                        if (typeof fn === 'function') {
+                            return (args?: Record<string, unknown>) => (fn as (a: unknown) => unknown)({ limit: 10, sort_by: 'importance', ...args })
+                        }
+                    }
+                }
                 // Handle `memory.journal.addEntry` natural hallucination
                 if ((prop === 'addEntry' || prop === 'create_entry' || prop === 'createEntry') && 'core' in target) {
                     const coreGroup = target['core'] as Record<string, unknown>
@@ -249,6 +261,15 @@ async function executeCode(
             db: shimMj,
             api: shimMj,
             memory: shimMj, // Unified with shimMj to catch memory.append and memory.journal
+            mcp: shimMj,
+            mcpx: shimMj,
+            memoryJournal: shimMj,
+            sdk: shimMj,
+            client: shimMj,
+            system: shimMj,
+            utils: shimMj,
+            sql: shimMj,
+            connectToDatabase: () => shimMj,
             sqlite_journal_add_entry: (shimMj['core'] as Record<string, unknown>)?.['createEntry'] ?? (shimMj['core'] as Record<string, unknown>)?.['create_entry'],
             create_entry: (shimMj['core'] as Record<string, unknown>)?.['createEntry'] ?? (shimMj['core'] as Record<string, unknown>)?.['create_entry'],
             createEntry: (shimMj['core'] as Record<string, unknown>)?.['createEntry'] ?? (shimMj['core'] as Record<string, unknown>)?.['create_entry'],

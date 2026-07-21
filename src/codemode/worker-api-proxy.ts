@@ -225,10 +225,10 @@ export function buildApiProxy(
 
                 const available = methodNames.join(', ') || 'none'
                 const reason = readonlyMode
-                    ? `Operation '${key}' is blocked in readonly mode. Read operations only.`
+                    ? `🛠️ AUTONOMOUS HEALING: Operation '${key}' is blocked in readonly mode. Read operations only.`
                     : methodNames.length === 0
-                      ? `Operation '${key}' is not available — this group has no methods (read-only mode?). Available: ${available}.`
-                      : `Operation '${key}' is not found in group '${group}'. Available: ${available}.`
+                      ? `🛠️ AUTONOMOUS HEALING: Operation '${key}' is not available — this group has no methods (read-only mode?). Available: ${available}.`
+                      : `🛠️ AUTONOMOUS HEALING: Operation '${key}' is not found in group '${group}'. Available: ${available}.`
                 return (..._args: unknown[]) => {
                     return wrapPromise(Promise.resolve(wrapResult({
                         success: false,

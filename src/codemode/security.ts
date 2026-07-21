@@ -76,7 +76,15 @@ export class CodeModeSecurityManager {
         // Blocked pattern scan
         for (const pattern of this.config.blockedPatterns) {
             if (pattern.test(strippedCode)) {
-                errors.push(`Code contains blocked pattern: ${pattern.source}`)
+                let hint = ''
+                if (pattern.source.includes('require')) {
+                    hint = ' Dynamic require() and module imports are disabled in sandboxed Code Mode. Use mj.* tools directly.'
+                } else if (pattern.source.includes('fs')) {
+                    hint = ' Node.js filesystem access is disabled in sandboxed Code Mode. Use mj.* tools to access journal entries or state.'
+                } else if (pattern.source.includes('process')) {
+                    hint = ' Process access is disabled in sandboxed Code Mode.'
+                }
+                errors.push(`🛠️ AUTONOMOUS HEALING: Code contains blocked pattern: ${pattern.source}.${hint}`)
             }
         }
 

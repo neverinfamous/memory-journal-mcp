@@ -130,13 +130,37 @@ export function healAgentHallucinations(val: unknown): unknown {
             }
         }
 
-        // 2. Heal 'text', 'message', 'description', 'title' -> 'content'
-        for (const key of ['text', 'message', 'description']) {
+        // Heal project_name / projectName hallucination
+        const rawProjName = obj['project_name'] ?? obj['projectName']
+        if (rawProjName !== undefined) {
+            if (!('project_number' in obj) || obj['project_number'] === undefined) {
+                const num = Number(rawProjName)
+                if (!Number.isNaN(num) && String(rawProjName).trim() !== '') {
+                    obj['project_number'] = num
+                }
+            }
+            delete obj['project_name']
+            delete obj['projectName']
+            modified = true
+        }
+
+        // Default workspace_id to 'default' if missing, null, or empty string
+        if (!('workspace_id' in obj) || obj['workspace_id'] === null || obj['workspace_id'] === undefined || obj['workspace_id'] === '') {
+            obj['workspace_id'] = process.env['MCP_WORKSPACE_ID'] || 'default'
+            modified = true
+        }
+
+        // 2. Heal 'text', 'message', 'description', 'title', 'summary', 'notes' -> 'content'
+        for (const key of ['text', 'message', 'description', 'summary', 'notes']) {
             if (key in obj && !('content' in obj)) {
                 obj['content'] = obj[key]
                 Reflect.deleteProperty(obj, key)
                 modified = true
                 break
+            } else if (key in obj) {
+                // Delete extraneous key if content is already present so strict schema succeeds
+                Reflect.deleteProperty(obj, key)
+                modified = true
             }
         }
         if ('title' in obj) {
@@ -147,6 +171,17 @@ export function healAgentHallucinations(val: unknown): unknown {
             }
             delete obj['title']
             modified = true
+        }
+
+        // Clean up common extra keys that cause strict schema validation failures
+        for (const extraKey of ['author', 'date', 'created_at', 'updated_at', 'type']) {
+            if (extraKey in obj && extraKey !== 'entry_type') {
+                if (extraKey === 'type' && !('entry_type' in obj)) {
+                    obj['entry_type'] = obj['type']
+                }
+                delete obj[extraKey]
+                modified = true
+            }
         }
 
         // 3. Heal auto_context

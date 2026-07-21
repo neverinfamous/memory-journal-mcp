@@ -20,6 +20,28 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
         if (obj['orderBy'] !== undefined && obj['sort_by'] === undefined) { obj['sort_by'] = obj['orderBy']; delete obj['orderBy']; }
         if (obj['order_by'] !== undefined && obj['sort_by'] === undefined) { obj['sort_by'] = obj['order_by']; delete obj['order_by']; }
         
+        if (obj['project_name'] !== undefined) {
+            if (obj['project_number'] === undefined) {
+                const num = Number(obj['project_name']);
+                if (!Number.isNaN(num) && String(obj['project_name']).trim() !== '') {
+                    obj['project_number'] = num;
+                }
+            }
+            delete obj['project_name'];
+        }
+        if (obj['projectName'] !== undefined) {
+            if (obj['project_number'] === undefined) {
+                const num = Number(obj['projectName']);
+                if (!Number.isNaN(num) && String(obj['projectName']).trim() !== '') {
+                    obj['project_number'] = num;
+                }
+            }
+            delete obj['projectName'];
+        }
+        if ((obj['workspace_id'] === undefined || obj['workspace_id'] === null || obj['workspace_id'] === '') && (methodName === 'create_entry' || methodName === 'createEntry')) {
+            obj['workspace_id'] = process.env['MCP_WORKSPACE_ID'] || 'default';
+        }
+        
         if (typeof obj['sort_by'] === 'string') {
             const lowerSort = obj['sort_by'].toLowerCase();
             if (lowerSort.endsWith('_asc')) {
