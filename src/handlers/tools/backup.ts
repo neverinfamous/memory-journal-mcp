@@ -12,6 +12,7 @@ import { relaxedNumber } from './schemas.js'
 import { ErrorFieldsMixin } from './error-fields-mixin.js'
 import { logger } from '../../utils/logger.js'
 import * as path from 'node:path'
+import { ValidationError } from '../../types/errors.js'
 
 // ============================================================================
 // Output Schemas
@@ -294,7 +295,7 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
 
                     const keepCountNum = typeof keep_count === 'string' ? parseInt(keep_count, 10) : keep_count
                     if (isNaN(keepCountNum) || keepCountNum < 1) {
-                        throw new Error('keep_count must be a positive integer')
+                        throw new ValidationError('keep_count must be a positive integer')
                     }
 
                     const result = db.deleteOldBackups(keepCountNum)
