@@ -15,7 +15,7 @@ export function getOptimizerPromptDefinitions(): InternalPromptDef[] {
     return [
         {
             name: 'optimize-journal',
-            description: 'Guided database pruning and verification workflow. Optional arguments: `lookback` (Number of recent entries to audit, default: 10, max: 50).',
+            description: 'Guided database pruning and verification workflow. Optional arguments: `lookback` (Number of recent entries to audit, default: 10, max: 50), `autoRun` (boolean, run autonomously without asking for confirmation, default: false).',
             icons: [ICON_PROMPT],
             arguments: [],
             handler: (args: Record<string, string> | undefined, db: IDatabaseAdapter) => {
@@ -24,10 +24,15 @@ export function getOptimizerPromptDefinitions(): InternalPromptDef[] {
                         coerceNumber,
                         z.number().int().min(1).max(50).optional().default(10)
                     ),
+                    autoRun: z.preprocess(
+                        (val) => val === 'true' || val === true,
+                        z.boolean().optional().default(false)
+                    ),
                 })
 
                 const parsed = schema.safeParse(args ?? {})
                 const limit = parsed.success ? parsed.data.lookback : 10
+                const autoRun = parsed.success ? parsed.data.autoRun : false
 
                 let statsSnippet = '_Could not fetch database statistics_'
                 try {
@@ -138,7 +143,7 @@ Entries have an \`importance\` score (0.00 to 1.00), which includes a baseline *
 ## Safety Rules (MANDATORY)
 1. **NEVER** use \`permanent: true\` unless explicitly asked to "hard delete".
 2. **ALWAYS** call \`backup_journal\` before any batch delete. Abort if it fails.
-3. **ALWAYS** show the user what will be deleted before mutating.
+${autoRun ? '3. **AUTO-RUN MODE**: You have pre-approval to soft-delete low-value entries (e.g. orphans with base score 0). Proceed without asking.' : '3. **ALWAYS** show the user what will be deleted before mutating.'}
 4. **NEVER** delete entries with \`significance_type\` set.
 5. Max batch size: 50 entries.
 6. **Log operations**: Create a journal entry with \`entry_type: 'maintenance'\` and tag \`database-optimizer\`.
@@ -195,14 +200,19 @@ After a verification workflow, you MUST explicitly update the target entries usi
 - **Failed**: If claims are false or hallucinatory, heavily downgrade \`trust_score\` (e.g. \`0.1\`) and set \`validation_status\` to \`"failed"\`.
 - **Impact**: Adjust \`impact_score\` if the original claim exaggerated the work done.
 
-To proceed:
+${autoRun ? `To proceed (AUTO-RUN MODE):
+1. Review the live stats and the unverified recent entries.
+2. You are running in an autonomous mode. DO NOT ask the user for confirmation or output plans for them to review.
+3. Automatically select the most appropriate workflows (Pruning, Consolidation, Tier 1/Tier 2 Verification) based on the unverified entries and stats.
+4. Execute the chosen workflows autonomously. If pruning, identify candidates using the Code Mode script above (MAX_QUERY_LIMIT is 500) and soft-delete them. If verifying, apply Tier 1 or Tier 2 steps and use the Scoring Protocol to update entries.
+5. Once all automatic optimizations and verifications are complete, output a single concise Markdown summary of all actions taken, any anomalies found, and the final state of the database.` : `To proceed:
 1. Review the live stats and the unverified recent entries.
 2. Output a concise Markdown table breaking down the total entries by project name to the user (use the Project Breakdown data provided above).
 3. Explicitly list the available workflows (Pruning, Consolidation, Tier 1/Tier 2 Verification) so the user understands their options. Let them know they can request verification on specific entries (even if they already passed) or use different subagents for the task.
 4. Tell the user your initial plan or recommendation based on the data.
 5. If pruning, identify candidates using the Code Mode script above (MAX_QUERY_LIMIT is 500).
 6. If verifying, apply Tier 1 or Tier 2 steps, and then use the Scoring Protocol to update entries via \`mj_execute_code\`.
-7. Ask for user confirmation before deleting or consolidating projects, or before running intensive verification!`,
+7. Ask for user confirmation before deleting or consolidating projects, or before running intensive verification!`}`,
                             },
                         },
                     ],

@@ -191,7 +191,9 @@ These prompts focus on maintaining system health and validating state.
 
 ### `optimize-journal`
 **Description**: Run health checks and optimizations on the journal database.
-- **Arguments**: None
+- **Arguments**: 
+  - `lookback` (optional): limit unverified entries to review, default: 10
+  - `autoRun` (optional): boolean, bypass user confirmation and execute optimizations automatically, default: false
 
 ### `verify-work`
 **Description**: Verify recently completed work against requirements.
