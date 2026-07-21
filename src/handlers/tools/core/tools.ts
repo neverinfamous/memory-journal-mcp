@@ -4,7 +4,7 @@ import { sendProgress } from '../../../utils/progress-utils.js'
 import { resolveAuthor } from '../../../utils/security-utils.js'
 import { getAuthContext } from '../../../auth/auth-context.js'
 import { resolveIssueUrl } from '../../../utils/github-helpers.js'
-import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
+import { resolveWorkspaceId, resolveProjectNumberFromPath } from '../../../utils/workspace-resolver.js'
 
 import {
     CreateEntrySchema,
@@ -57,8 +57,10 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                     coerceSignificanceAlias(params)
                     const input = CreateEntrySchema.parse(params)
                     
-                    const wsId = input.workspace_id
-                    let projectNumber = input.project_number ?? context.config?.defaultProjectNumber
+                    const initialProj = input.project_number ?? context.config?.defaultProjectNumber
+                    let projectNumber = initialProj ?? resolveProjectNumberFromPath(process.cwd())
+
+                    const wsId = resolveWorkspaceId(input.workspace_id, projectNumber, context.config)
                     if ((projectNumber === undefined || projectNumber === null) && context.config?.projectRegistry) {
                         const registryEntry = context.config.projectRegistry[wsId]
                         if (registryEntry) {

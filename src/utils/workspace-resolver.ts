@@ -12,13 +12,16 @@ export function resolveWorkspaceId(
     projectNumber: number | undefined,
     config?: ToolHandlerConfig
 ): string {
-    if (explicitWorkspaceId) return explicitWorkspaceId
-    if (projectNumber !== undefined && projectNumber !== null && config?.projectRegistry) {
+    if (explicitWorkspaceId && explicitWorkspaceId !== 'default') return explicitWorkspaceId
+    
+    const effectiveProjectNumber = projectNumber ?? resolveProjectNumberFromPath(process.cwd())
+
+    if (effectiveProjectNumber !== undefined && effectiveProjectNumber !== null && config?.projectRegistry) {
         for (const [key, entry] of Object.entries(config.projectRegistry)) {
-            if (entry.project_number === projectNumber) return key
+            if (entry.project_number === effectiveProjectNumber) return key
         }
     }
-    return config?.defaultWorkspaceId ?? 'default'
+    return explicitWorkspaceId || config?.defaultWorkspaceId || 'default'
 }
 
 interface RegistryEntry {
