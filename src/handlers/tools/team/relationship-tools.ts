@@ -52,7 +52,7 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                         project_number,
                         workspace_id,
                     } = TeamLinkEntriesSchema.parse(params)
-                    const wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
+                    const wsId = workspace_id ? resolveWorkspaceId(workspace_id, project_number, context.config) : '*'
 
                     // Guard: self-referential links are not meaningful
                     if (from_entry_id === to_entry_id) {
@@ -69,26 +69,44 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
 
                     // Verify both entries exist and belong to the project
                     const fromEntry = teamDb.getEntryById(from_entry_id, wsId)
-                    if (fromEntry?.projectNumber !== project_number) {
+                    if (!fromEntry) {
                         return {
                             success: false,
-                            error: `Team entry ${String(from_entry_id)} not found or lacks permission for project ${project_number}`,
+                            error: `Team entry ${String(from_entry_id)} not found`,
                             code: 'RESOURCE_NOT_FOUND',
                             category: 'resource',
-                            suggestion:
-                                'Verify the team entry ID and project number, and try again',
+                            suggestion: 'Verify the team entry ID and try again',
+                            recoverable: true,
+                        }
+                    }
+                    if (project_number !== undefined && fromEntry.projectNumber !== undefined && fromEntry.projectNumber !== project_number) {
+                        return {
+                            success: false,
+                            error: `Team entry ${String(from_entry_id)} does not belong to project ${project_number}`,
+                            code: 'RESOURCE_NOT_FOUND',
+                            category: 'resource',
+                            suggestion: 'Verify the team entry ID and project number, and try again',
                             recoverable: true,
                         }
                     }
                     const toEntry = teamDb.getEntryById(to_entry_id, wsId)
-                    if (toEntry?.projectNumber !== project_number) {
+                    if (!toEntry) {
                         return {
                             success: false,
-                            error: `Team entry ${String(to_entry_id)} not found or lacks permission for project ${project_number}`,
+                            error: `Team entry ${String(to_entry_id)} not found`,
                             code: 'RESOURCE_NOT_FOUND',
                             category: 'resource',
-                            suggestion:
-                                'Verify the team entry ID and project number, and try again',
+                            suggestion: 'Verify the team entry ID and try again',
+                            recoverable: true,
+                        }
+                    }
+                    if (project_number !== undefined && toEntry.projectNumber !== undefined && toEntry.projectNumber !== project_number) {
+                        return {
+                            success: false,
+                            error: `Team entry ${String(to_entry_id)} does not belong to project ${project_number}`,
+                            code: 'RESOURCE_NOT_FOUND',
+                            category: 'resource',
+                            suggestion: 'Verify the team entry ID and project number, and try again',
                             recoverable: true,
                         }
                     }
@@ -152,7 +170,7 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                     }
 
                     const { entry_id, tag, depth, workspace_id } = TeamVisualizeRelationshipsSchema.parse(params)
-                    const wsId = resolveWorkspaceId(workspace_id, undefined, context.config)
+                    const wsId = workspace_id ? resolveWorkspaceId(workspace_id, undefined, context.config) : '*'
 
                     // Collect entry IDs to visualize
                     let entryIds: number[] = []

@@ -89,7 +89,7 @@ describe('Team Admin Tool Handlers', () => {
         it('should update an existing team entry', async () => {
             const createResult = (await callTool(
                 'team_create_entry',
-                { workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default', 
+                { workspace_id: 'default', 
                     project_number: 1,
                     content: 'Original content',
                     entry_type: 'technical_note',
@@ -169,7 +169,7 @@ describe('Team Admin Tool Handlers', () => {
         it('should update metadata fields on team entry', async () => {
             const createResult = (await callTool(
                 'team_create_entry',
-                { workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default', 
+                { workspace_id: 'default', 
                     project_number: 1,
                     content: 'Team metadata test',
                 },
@@ -213,7 +213,7 @@ describe('Team Admin Tool Handlers', () => {
         it('should successfully update an entry when project_number is omitted by falling back to its existing project number', async () => {
             const createResult = (await callTool(
                 'team_create_entry',
-                { workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default', 
+                { workspace_id: 'default', 
                     project_number: 1,
                     content: 'test',
                 },
@@ -258,7 +258,7 @@ describe('Team Admin Tool Handlers', () => {
         it('should successfully fallback to defaultProjectNumber on update', async () => {
             const createResult = (await callTool(
                 'team_create_entry',
-                { workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default', 
+                { workspace_id: 'default', 
                     project_number: 1,
                     content: 'test',
                 },
@@ -303,7 +303,7 @@ describe('Team Admin Tool Handlers', () => {
         it('should successfully change the project number of an entry', async () => {
             const createResult = (await callTool(
                 'team_create_entry',
-                { workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default', 
+                { workspace_id: 'default', 
                     project_number: 1,
                     content: 'project 1 entry',
                 },
@@ -339,7 +339,7 @@ describe('Team Admin Tool Handlers', () => {
         it('should soft-delete an existing team entry', async () => {
             const createResult = (await callTool(
                 'team_create_entry',
-                { workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default', 
+                { workspace_id: 'default', 
                     project_number: 1,
                     content: 'To be deleted',
                 },
@@ -432,7 +432,7 @@ describe('Team Admin Tool Handlers', () => {
             // Create entries with source tag
             await callTool(
                 'team_create_entry',
-                { workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default', 
+                { workspace_id: 'default', 
                     project_number: 1,
                     content: '1',
                     tags: ['merge-source-tag'],
@@ -446,7 +446,7 @@ describe('Team Admin Tool Handlers', () => {
             )
             await callTool(
                 'team_create_entry',
-                { workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default', 
+                { workspace_id: 'default', 
                     project_number: 1,
                     content: '2',
                     tags: ['merge-source-tag', 'other-tag'],
@@ -460,7 +460,7 @@ describe('Team Admin Tool Handlers', () => {
             )
             await callTool(
                 'team_create_entry',
-                { workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default', 
+                { workspace_id: 'default', 
                     project_number: 1,
                     content: '3',
                     tags: ['merge-target-tag'],

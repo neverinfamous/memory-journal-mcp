@@ -188,7 +188,7 @@ test.describe('Boundary: Relationship Edge Cases', () => {
     test('setup: create entry for relationship tests', async () => {
         const client = await createClient()
         try {
-            const p = await callToolAndParse(client, 'create_entry', { workspace_id: 'default',  workspace_id: 'default', 
+            const p = await callToolAndParse(client, 'create_entry', { workspace_id: 'default', 
                 project_number: 1,
                 content: 'Boundary test entry for self-loop validation',
                 entry_type: 'test_entry',
@@ -220,7 +220,7 @@ test.describe('Boundary: Relationship Edge Cases', () => {
         const client = await createClient()
         try {
             // Create a fresh entry with no relationships
-            const create = await callToolAndParse(client, 'create_entry', { workspace_id: 'default',  workspace_id: 'default', 
+            const create = await callToolAndParse(client, 'create_entry', { workspace_id: 'default', 
                 project_number: 1,
                 content: 'Isolated entry for relationship visualization boundary test',
                 entry_type: 'test_entry',

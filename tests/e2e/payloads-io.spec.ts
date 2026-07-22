@@ -58,7 +58,7 @@ test.describe('Payload Contracts: IO', () => {
 
     test('export_markdown returns success payload and outputs files', async () => {
         // First ensure we have an entry to export
-        const createPayload = await callToolAndParse(client, 'create_entry', { workspace_id: 'default',  workspace_id: 'default', 
+        const createPayload = await callToolAndParse(client, 'create_entry', { workspace_id: 'default', 
             project_number: 1,
             content: 'Test IO Export',
         })

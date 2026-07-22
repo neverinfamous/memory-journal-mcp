@@ -95,7 +95,7 @@ test.describe('Payload Contracts: Team Tools (Happy Path)', () => {
 
     // --- Core ---
     test('team_create_entry returns { success, entry }', async () => {
-        const payload = await callToolAndParse(client, 'team_create_entry', { workspace_id: 'default',  workspace_id: 'default', 
+        const payload = await callToolAndParse(client, 'team_create_entry', { workspace_id: 'default', 
             project_number: 1,
             content: 'Team happy path test entry 1',
             entry_type: 'test_entry',
@@ -108,7 +108,7 @@ test.describe('Payload Contracts: Team Tools (Happy Path)', () => {
     })
 
     test('team_create_entry (second entry)', async () => {
-        const payload = await callToolAndParse(client, 'team_create_entry', { workspace_id: 'default',  workspace_id: 'default', 
+        const payload = await callToolAndParse(client, 'team_create_entry', { workspace_id: 'default', 
             project_number: 1,
             content: 'Team happy path test entry 2',
             entry_type: 'project_decision',

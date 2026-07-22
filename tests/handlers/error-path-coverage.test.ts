@@ -287,7 +287,7 @@ describe('Error Path Coverage', () => {
         it('should ignore share_with_team when teamDb is missing', async () => {
             const result = (await callTool(
                 'create_entry',
-                { workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default', 
+                { workspace_id: 'default', 
                     project_number: 1,
                     content: 'Test share without team',
                     share_with_team: true,

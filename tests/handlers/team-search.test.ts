@@ -69,7 +69,7 @@ describe('Team Search Tool Handlers', () => {
 
         const r1 = (await callTool(
             'team_create_entry',
-            { workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default', 
+            { workspace_id: 'default', 
                 project_number: 1,
                 content: 'Strategic Search test 1',
                 tags: ['strategy', 'shared'],
@@ -83,7 +83,7 @@ describe('Team Search Tool Handlers', () => {
         )) as any
         const r2 = (await callTool(
             'team_create_entry',
-            { workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default', 
+            { workspace_id: 'default', 
                 project_number: 1,
                 content: 'Tactical Search test 2',
                 tags: ['tactics'],

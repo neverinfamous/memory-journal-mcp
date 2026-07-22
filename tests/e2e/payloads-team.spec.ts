@@ -46,7 +46,7 @@ test.describe('Payload Contracts: Team Tools (no TEAM_DB_PATH)', () => {
 
     // --- Core ---
     test('team_create_entry → CONFIGURATION_ERROR', async () => {
-        const payload = await callToolAndParse(client, 'team_create_entry', { workspace_id: 'default',  workspace_id: 'default', 
+        const payload = await callToolAndParse(client, 'team_create_entry', { workspace_id: 'default', 
             project_number: 1,
             content: 'test',
             author: 'e2e',

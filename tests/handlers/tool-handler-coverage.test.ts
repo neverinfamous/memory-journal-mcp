@@ -459,7 +459,7 @@ describe('Tool Handler Coverage', () => {
         it('should attempt team sharing when share_with_team is true', async () => {
             const result = (await callTool(
                 'create_entry',
-                { workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default', 
+                { workspace_id: 'default', 
                     project_number: 1,
                     content: 'Team shared entry test',
                     share_with_team: true,
@@ -482,7 +482,7 @@ describe('Tool Handler Coverage', () => {
         it('should not share when no teamDb', async () => {
             const result = (await callTool(
                 'create_entry',
-                { workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default', 
+                { workspace_id: 'default', 
                     project_number: 1,
                     content: 'No team entry test',
                     share_with_team: true,
@@ -504,7 +504,7 @@ describe('Tool Handler Coverage', () => {
         it('should auto-heal invalid entry_type into other and tag it', async () => {
             const result = (await callTool(
                 'create_entry',
-                { workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  project_number: 1, content: 'Test', entry_type: 'invalid_type_xyz' },
+                { workspace_id: 'default',  project_number: 1, content: 'Test', entry_type: 'invalid_type_xyz' },
                 db
             )) as { success: boolean; entry: { entryType: string; tags: string[] } }
 
@@ -516,7 +516,7 @@ describe('Tool Handler Coverage', () => {
         it('should auto-heal invalid significance_type into a tag', async () => {
             const result = (await callTool(
                 'create_entry',
-                { workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  project_number: 1, content: 'Test', significance_type: 'invalid_sig' },
+                { workspace_id: 'default',  project_number: 1, content: 'Test', significance_type: 'invalid_sig' },
                 db
             )) as { success: boolean; entry: { significanceType: string | null | undefined; tags: string[] } }
 
@@ -528,7 +528,7 @@ describe('Tool Handler Coverage', () => {
         it('should return error for empty content', async () => {
             const result = (await callTool(
                 'create_entry',
-                { workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  project_number: 1, content: '' },
+                { workspace_id: 'default',  project_number: 1, content: '' },
                 db
             )) as {
                 error: string

@@ -60,7 +60,7 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     const input = TeamSemanticSearchSchema.parse(params)
-                    const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
+                    const wsId = input.workspace_id ? resolveWorkspaceId(input.workspace_id, input.project_number, context.config) : undefined
 
                     if (!input.query && input.entry_id === undefined) {
                         return {

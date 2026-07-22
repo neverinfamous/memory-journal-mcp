@@ -32,7 +32,7 @@ test.describe('Integration: Core → Search → Analytics Pipeline', () => {
         try {
             // Step 1: Create entries
             for (let i = 0; i < 3; i++) {
-                const p = await callToolAndParse(client, 'create_entry', { workspace_id: 'default',  workspace_id: 'default', 
+                const p = await callToolAndParse(client, 'create_entry', { workspace_id: 'default', 
                     project_number: 1,
                     content: `Integration test entry ${i + 1}: _e2e_integration_pipeline_`,
                     entry_type: 'test_entry',
@@ -87,7 +87,7 @@ test.describe('Integration: Core → Relationships → Visualization', () => {
         const client = await createClient()
         try {
             // Step 1: Create two entries
-            const a = await callToolAndParse(client, 'create_entry', { workspace_id: 'default',  workspace_id: 'default', 
+            const a = await callToolAndParse(client, 'create_entry', { workspace_id: 'default', 
                 project_number: 1,
                 content: 'Integration entry A _e2e_integration_links_',
                 entry_type: 'test_entry',
@@ -95,7 +95,7 @@ test.describe('Integration: Core → Relationships → Visualization', () => {
             expectSuccess(a)
             entryIdA = (a.entry as Record<string, unknown>).id as number
 
-            const b = await callToolAndParse(client, 'create_entry', { workspace_id: 'default',  workspace_id: 'default', 
+            const b = await callToolAndParse(client, 'create_entry', { workspace_id: 'default', 
                 project_number: 1,
                 content: 'Integration entry B _e2e_integration_links_',
                 entry_type: 'test_entry',
@@ -151,7 +151,7 @@ test.describe('Integration: Core → Export Pipeline', () => {
         const client = await createClient()
         try {
             // Step 1: Create entry with unique tag
-            const p = await callToolAndParse(client, 'create_entry', { workspace_id: 'default',  workspace_id: 'default', 
+            const p = await callToolAndParse(client, 'create_entry', { workspace_id: 'default', 
                 project_number: 1,
                 content: 'Integration export test _e2e_integration_export_',
                 entry_type: 'test_entry',

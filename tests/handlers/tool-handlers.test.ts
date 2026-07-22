@@ -117,7 +117,7 @@ describe('Tool Handlers', () => {
         it('should create a basic entry', async () => {
             const result = (await callTool(
                 'create_entry',
-                { workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  project_number: 1, content: 'Tool handler test entry' },
+                { workspace_id: 'default',  project_number: 1, content: 'Tool handler test entry' },
                 db
             )) as { success: boolean; entry: { id: number; content: string } }
 
@@ -130,7 +130,7 @@ describe('Tool Handlers', () => {
         it('should create entry with all fields', async () => {
             const result = (await callTool(
                 'create_entry',
-                { workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default', 
+                { workspace_id: 'default', 
                     project_number: 1,
                     content: 'Full tool entry',
                     entry_type: 'project_decision',
@@ -155,7 +155,7 @@ describe('Tool Handlers', () => {
         it('should create entry in specific workspace', async () => {
             const result = (await callTool(
                 'create_entry',
-                { workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  content: 'Workspace entry', workspace_id: 'test-ws-1', project_number: 1 },
+                { workspace_id: 'default',  content: 'Workspace entry', workspace_id: 'test-ws-1', project_number: 1 },
                 db
             )) as { success: boolean; entry: { id: number; workspaceId: string } }
 
@@ -168,7 +168,7 @@ describe('Tool Handlers', () => {
         it('should create a minimal entry', async () => {
             const result = (await callTool(
                 'create_entry',
-                { workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  content: 'Quick note', project_number: 1 },
+                { workspace_id: 'default',  content: 'Quick note', project_number: 1 },
                 db
             )) as { success: boolean; entry: { content: string } }
 
@@ -181,7 +181,7 @@ describe('Tool Handlers', () => {
         it('should retrieve an entry by ID', async () => {
             const created = (await callTool(
                 'create_entry',
-                { workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  project_number: 1, content: 'Retrievable entry' },
+                { workspace_id: 'default',  project_number: 1, content: 'Retrievable entry' },
                 db
             )) as { entry: { id: number } }
 
@@ -215,7 +215,7 @@ describe('Tool Handlers', () => {
         })
 
         it('should filter by workspace_id and use default if omitted', async () => {
-            await callTool('create_entry', { workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  content: 'WS-Alpha entry', workspace_id: 'ws-alpha', project_number: 1 }, db)
+            await callTool('create_entry', { workspace_id: 'default',  content: 'WS-Alpha entry', workspace_id: 'ws-alpha', project_number: 1 }, db)
             
             const alphaResult = (await callTool('get_recent_entries', { limit: 10, workspace_id: 'ws-alpha' }, db)) as { entries: { content: string }[] }
             expect(alphaResult.entries.some(e => e.content === 'WS-Alpha entry')).toBe(true)
@@ -244,7 +244,7 @@ describe('Tool Handlers', () => {
         it('should search by content', async () => {
             await callTool(
                 'create_entry',
-                { workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  project_number: 1, content: 'Unique unicorn xyz99' },
+                { workspace_id: 'default',  project_number: 1, content: 'Unique unicorn xyz99' },
                 db
             )
 
@@ -278,7 +278,7 @@ describe('Tool Handlers', () => {
             // Ensure an entry exists today
             await callTool(
                 'create_entry',
-                { workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  project_number: 1, content: 'Date range test entry' },
+                { workspace_id: 'default',  project_number: 1, content: 'Date range test entry' },
                 db
             )
 
@@ -324,14 +324,14 @@ describe('Tool Handlers', () => {
         it('should link two entries', async () => {
             const e1 = (await callTool(
                 'create_entry',
-                { workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  project_number: 1, content: 'Link source' },
+                { workspace_id: 'default',  project_number: 1, content: 'Link source' },
                 db
             )) as {
                 entry: { id: number }
             }
             const e2 = (await callTool(
                 'create_entry',
-                { workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  project_number: 1, content: 'Link target' },
+                { workspace_id: 'default',  project_number: 1, content: 'Link target' },
                 db
             )) as {
                 entry: { id: number }
@@ -375,7 +375,7 @@ describe('Tool Handlers', () => {
         it('should update entry content', async () => {
             const created = (await callTool(
                 'create_entry',
-                { workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  project_number: 1, content: 'Original content' },
+                { workspace_id: 'default',  project_number: 1, content: 'Original content' },
                 db
             )) as { entry: { id: number } }
 
@@ -392,7 +392,7 @@ describe('Tool Handlers', () => {
         it('should update project_number on an existing entry', async () => {
             const created = (await callTool(
                 'create_entry',
-                { workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  project_number: 1, content: 'Needs project reassignment' },
+                { workspace_id: 'default',  project_number: 1, content: 'Needs project reassignment' },
                 db
             )) as { entry: { id: number; projectNumber: number | null } }
 
@@ -411,7 +411,7 @@ describe('Tool Handlers', () => {
         it('should update multiple GitHub metadata fields', async () => {
             const created = (await callTool(
                 'create_entry',
-                { workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  project_number: 1, content: 'Metadata update test' },
+                { workspace_id: 'default',  project_number: 1, content: 'Metadata update test' },
                 db
             )) as { entry: { id: number } }
 
@@ -448,7 +448,7 @@ describe('Tool Handlers', () => {
         it('should clear a metadata field when null is passed', async () => {
             const created = (await callTool(
                 'create_entry',
-                { workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  content: 'Clear test', project_number: 99, issue_number: 123 },
+                { workspace_id: 'default',  content: 'Clear test', project_number: 99, issue_number: 123 },
                 db
             )) as { entry: { id: number; projectNumber: number; issueNumber: number | null } }
 
@@ -469,7 +469,7 @@ describe('Tool Handlers', () => {
         it('should soft delete an entry', async () => {
             const created = (await callTool(
                 'create_entry',
-                { workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  project_number: 1, content: 'To be deleted' },
+                { workspace_id: 'default',  project_number: 1, content: 'To be deleted' },
                 db
             )) as {
                 entry: { id: number }
@@ -515,7 +515,7 @@ describe('Tool Handlers', () => {
         it('should merge tags', async () => {
             await callTool(
                 'create_entry',
-                { workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  project_number: 1, content: 'Merge tag source', tags: ['merge-src'] },
+                { workspace_id: 'default',  project_number: 1, content: 'Merge tag source', tags: ['merge-src'] },
                 db
             )
 
@@ -620,14 +620,14 @@ describe('Tool Handlers', () => {
         it('should generate mermaid diagram', async () => {
             const e1 = (await callTool(
                 'create_entry',
-                { workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  project_number: 1, content: 'Viz entry A' },
+                { workspace_id: 'default',  project_number: 1, content: 'Viz entry A' },
                 db
             )) as {
                 entry: { id: number }
             }
             const e2 = (await callTool(
                 'create_entry',
-                { workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  project_number: 1, content: 'Viz entry B' },
+                { workspace_id: 'default',  project_number: 1, content: 'Viz entry B' },
                 db
             )) as {
                 entry: { id: number }
@@ -655,21 +655,21 @@ describe('Tool Handlers', () => {
         it('should filter by relationship_type', async () => {
             const e1 = (await callTool(
                 'create_entry',
-                { workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  project_number: 1, content: 'Node X' },
+                { workspace_id: 'default',  project_number: 1, content: 'Node X' },
                 db
             )) as {
                 entry: { id: number }
             }
             const e2 = (await callTool(
                 'create_entry',
-                { workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  project_number: 1, content: 'Node Y' },
+                { workspace_id: 'default',  project_number: 1, content: 'Node Y' },
                 db
             )) as {
                 entry: { id: number }
             }
             const e3 = (await callTool(
                 'create_entry',
-                { workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  project_number: 1, content: 'Node Z' },
+                { workspace_id: 'default',  project_number: 1, content: 'Node Z' },
                 db
             )) as {
                 entry: { id: number }
@@ -720,7 +720,7 @@ describe('Tool Handlers', () => {
         it('should update anchor status', async () => {
             const entry = (await callTool(
                 'create_entry',
-                { workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  project_number: 1, content: 'Anchor test entry' },
+                { workspace_id: 'default',  project_number: 1, content: 'Anchor test entry' },
                 db
             )) as { entry: { id: number } }
 
@@ -751,9 +751,9 @@ describe('Tool Handlers', () => {
     describe('callTool - get_cross_project_insights', () => {
         it('should return insights structure', async () => {
             // Need project entries for insights
-            await callTool('create_entry', { workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  content: 'Insight entry 1', project_number: 100, workspace_id: 'default', }, db)
-            await callTool('create_entry', { workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  content: 'Insight entry 2', project_number: 100, workspace_id: 'default', }, db)
-            await callTool('create_entry', { workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  workspace_id: 'default',  content: 'Insight entry 3', project_number: 100, workspace_id: 'default', }, db)
+            await callTool('create_entry', { workspace_id: 'default',  content: 'Insight entry 1', project_number: 100, workspace_id: 'default', }, db)
+            await callTool('create_entry', { workspace_id: 'default',  content: 'Insight entry 2', project_number: 100, workspace_id: 'default', }, db)
+            await callTool('create_entry', { workspace_id: 'default',  content: 'Insight entry 3', project_number: 100, workspace_id: 'default', }, db)
 
             const result = (await callTool(
                 'get_cross_project_insights',

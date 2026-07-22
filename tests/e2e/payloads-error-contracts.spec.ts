@@ -23,7 +23,7 @@ test.describe('Payload Contracts: Structured Error Fields', () => {
     test.beforeAll(async () => {
         client = await createClient()
         // Seed two entries for relationship error tests
-        const e1 = await callToolAndParse(client, 'create_entry', { workspace_id: 'default',  workspace_id: 'default', 
+        const e1 = await callToolAndParse(client, 'create_entry', { workspace_id: 'default', 
             project_number: 1,
             content: 'Error contract test entry A',
             entry_type: 'test_entry',
@@ -31,7 +31,7 @@ test.describe('Payload Contracts: Structured Error Fields', () => {
         expectSuccess(e1)
         entryId1 = (e1.entry as Record<string, unknown>).id as number
 
-        const e2 = await callToolAndParse(client, 'create_entry', { workspace_id: 'default',  workspace_id: 'default', 
+        const e2 = await callToolAndParse(client, 'create_entry', { workspace_id: 'default', 
             project_number: 1,
             content: 'Error contract test entry B',
             entry_type: 'test_entry',

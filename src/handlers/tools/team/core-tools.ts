@@ -11,7 +11,7 @@ import { sendProgress } from '../../../utils/progress-utils.js'
 import { resolveAuthor } from '../../../utils/security-utils.js'
 import { getAuthContext } from '../../../auth/auth-context.js'
 import { resolveIssueUrl } from '../../../utils/github-helpers.js'
-import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
+import { resolveWorkspaceId, resolveProjectContext } from '../../../utils/workspace-resolver.js'
 import { TEAM_DB_ERROR_RESPONSE, batchFetchAuthors, fetchAuthor } from './helpers.js'
 import {
     TeamCreateEntrySchema,
@@ -67,14 +67,17 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                     coerceSignificanceAlias(params)
 
                     const input = TeamCreateEntrySchema.parse(params)
-                    const wsId = input.workspace_id
-                    let projectNumber = input.project_number ?? context.config?.defaultProjectNumber
-                    if ((projectNumber === undefined || projectNumber === null) && context.config?.projectRegistry) {
-                        const registryEntry = context.config.projectRegistry[wsId]
-                        if (registryEntry) {
-                            projectNumber = registryEntry.project_number
-                        }
-                    }
+                    const resolved = resolveProjectContext(
+                        {
+                            workspace_id: input.workspace_id,
+                            project_number: input.project_number,
+                            content: input.content,
+                            tags: input.tags
+                        },
+                        context.config
+                    )
+                    const wsId = resolved.workspaceId
+                    const projectNumber = resolved.projectNumber
 
                     // SEC-2.3: Bind authorship to the authenticated principal when OAuth is active.
                     // Hard-reject if caller supplies a mismatched author — prevents impersonation.
@@ -207,31 +210,36 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
 
                     const { entry_id, include_relationships, project_number, workspace_id } =
                         TeamGetEntryByIdSchema.parse(params)
-                    const wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
+                    const wsId = workspace_id ? resolveWorkspaceId(workspace_id, project_number, context.config) : '*'
                     const projectNumber = project_number
                     const entry = teamDb.getEntryById(entry_id, wsId)
 
-                    if (
-                        !entry ||
-                        (projectNumber !== undefined && entry.projectNumber !== projectNumber)
-                    ) {
+                    if (!entry) {
                         return {
                             success: false,
-                            error: `Team entry ${String(entry_id)} not found or does not belong to project ${projectNumber}`,
+                            error: `Team entry ${String(entry_id)} not found`,
                             code: 'RESOURCE_NOT_FOUND',
                             category: 'resource',
-                            suggestion:
-                                'Verify the team entry ID and project number, and try again',
+                            suggestion: 'Verify the team entry ID and try again',
+                            recoverable: true,
+                        }
+                    }
+
+                    if (projectNumber !== undefined && entry.projectNumber !== undefined && entry.projectNumber !== projectNumber) {
+                        return {
+                            success: false,
+                            error: `Team entry ${String(entry_id)} does not belong to project ${projectNumber}`,
+                            code: 'RESOURCE_NOT_FOUND',
+                            category: 'resource',
+                            suggestion: 'Verify the team entry ID and project number, and try again',
                             recoverable: true,
                         }
                     }
 
                     const author = fetchAuthor(teamDb, entry_id)
-                    const enrichedEntry = { ...entry, author }
-
                     const result: Record<string, unknown> = {
                         success: true,
-                        entry: enrichedEntry,
+                        entry: { ...entry, author },
                     }
 
                     if (include_relationships) {
@@ -268,7 +276,7 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     const { limit, cursor, sort_by, project_number, workspace_id } = TeamGetRecentSchema.parse(params)
-                    const wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
+                    const wsId = workspace_id ? resolveWorkspaceId(workspace_id, project_number, context.config) : undefined
                     const projectNumber = project_number
                     const result = teamDb.searchEntries('', {
                         limit,

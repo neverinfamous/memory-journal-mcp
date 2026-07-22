@@ -4,7 +4,7 @@ import { sendProgress } from '../../../utils/progress-utils.js'
 import { resolveAuthor } from '../../../utils/security-utils.js'
 import { getAuthContext } from '../../../auth/auth-context.js'
 import { resolveIssueUrl } from '../../../utils/github-helpers.js'
-import { resolveWorkspaceId, resolveProjectNumberFromPath } from '../../../utils/workspace-resolver.js'
+import { resolveWorkspaceId, resolveProjectContext } from '../../../utils/workspace-resolver.js'
 
 import {
     CreateEntrySchema,
@@ -57,16 +57,17 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                     coerceSignificanceAlias(params)
                     const input = CreateEntrySchema.parse(params)
                     
-                    const initialProj = input.project_number ?? context.config?.defaultProjectNumber
-                    let projectNumber = initialProj ?? resolveProjectNumberFromPath(process.cwd())
-
-                    const wsId = resolveWorkspaceId(input.workspace_id, projectNumber, context.config)
-                    if ((projectNumber === undefined || projectNumber === null) && context.config?.projectRegistry) {
-                        const registryEntry = context.config.projectRegistry[wsId]
-                        if (registryEntry) {
-                            projectNumber = registryEntry.project_number
-                        }
-                    }
+                    const resolved = resolveProjectContext(
+                        {
+                            workspace_id: input.workspace_id,
+                            project_number: input.project_number,
+                            content: input.content,
+                            tags: input.tags
+                        },
+                        context.config
+                    )
+                    const wsId = resolved.workspaceId
+                    const projectNumber = resolved.projectNumber
 
                     // Optional progress for long operations
                     await sendProgress(progress, 0, 2, 'Creating entry...')
@@ -210,7 +211,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     const input = GetEntryByIdSchema.parse(params)
-                    const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
+                    const wsId = input.workspace_id ? resolveWorkspaceId(input.workspace_id, input.project_number, context.config) : '*'
                     const entry = db.getEntryById(input.entry_id, wsId)
                     if (!entry) {
                         return {
