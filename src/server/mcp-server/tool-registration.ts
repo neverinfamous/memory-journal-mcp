@@ -496,7 +496,6 @@ export function createServerInstance(
                                         },
                                     ],
                                     structuredContent: errorResult,
-                                    isError: true,
                                 }
                             } else {
                                 const normalizedArgs = intercept.args?.[0]

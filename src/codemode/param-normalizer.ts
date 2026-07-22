@@ -353,7 +353,7 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
             obj['limit'] = obj['keep'];
             delete obj['keep'];
         }
-        if (obj['project_number'] !== undefined) {
+        if ((methodName === 'list_deleted_entries' || methodName === 'listDeletedEntries') && obj['project_number'] !== undefined) {
             delete obj['project_number'];
         }
         if (obj['project_id'] !== undefined) {
@@ -920,7 +920,7 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
             obj['expected_version'] = obj['version'];
             delete obj['version'];
         }
-        if (obj['project_number'] !== undefined) {
+        if ((methodName === 'delete_entry' || methodName === 'deleteEntry') && obj['project_number'] !== undefined) {
             delete obj['project_number'];
         }
     }
