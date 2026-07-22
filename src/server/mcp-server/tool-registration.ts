@@ -13,6 +13,7 @@ import { VERSION } from '../../version.js'
 import { globalSubscriptionManager } from '../subscription-manager.js'
 import { SubscribeRequestSchema, UnsubscribeRequestSchema, type CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import { logAgentIssue } from '../../utils/issue-logger.js'
+import { applyArgInterceptions } from '../../codemode/param-normalizer.js'
 
 import type { ServerContext, ServerOptions } from './types.js'
 import type { ToolRegistration, ToolHandlerConfig } from '../../types/index.js'
@@ -466,6 +467,42 @@ export function createServerInstance(
                             req.params.name = 'create_entry';
                             if (typeof toolArgs['entry_type'] === 'undefined') {
                                 toolArgs['entry_type'] = 'personal_reflection';
+                            }
+                        }
+
+                        // Apply global anti-hallucination parameter interceptions & smoothing
+                        if (req.params.name) {
+                            const intercept = applyArgInterceptions(req.params.name, [toolArgs])
+                            if ('error' in intercept) {
+                                const errorResult = intercept.error
+                                logAgentIssue({
+                                    source: 'MCP',
+                                    action: req.params.name,
+                                    input: toolArgs,
+                                    error: (errorResult['error'] as string) ?? 'Validation Error',
+                                })
+                                const enriched = JSON.stringify({
+                                    ...errorResult,
+                                    _meta: { tokenEstimate: 0 },
+                                })
+                                const tokenEstimate = Math.ceil(Buffer.byteLength(enriched, 'utf8') / 4)
+                                const finalText = enriched.replace('"tokenEstimate":0', `"tokenEstimate":${tokenEstimate}`)
+
+                                return {
+                                    content: [
+                                        {
+                                            type: 'text',
+                                            text: finalText,
+                                        },
+                                    ],
+                                    structuredContent: errorResult,
+                                    isError: true,
+                                }
+                            } else {
+                                const normalizedArgs = intercept.args?.[0]
+                                if (normalizedArgs !== null && typeof normalizedArgs === 'object' && !Array.isArray(normalizedArgs)) {
+                                    req.params.arguments = normalizedArgs as Record<string, unknown>
+                                }
                             }
                         }
 
