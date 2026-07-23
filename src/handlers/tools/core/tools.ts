@@ -69,6 +69,17 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                     const wsId = resolved.workspaceId
                     const projectNumber = resolved.projectNumber
 
+                    if (projectNumber === undefined || projectNumber === null) {
+                        return {
+                            success: false,
+                            error: 'Missing or unresolvable project_number. Entry creation blocked because no valid project could be determined for this entry.',
+                            code: 'VALIDATION_ERROR',
+                            category: 'validation',
+                            suggestion: 'Specify project_number or workspace_id explicitly in your request, or include tags/content matching a registered project.',
+                            recoverable: true,
+                        }
+                    }
+
                     // Optional progress for long operations
                     await sendProgress(progress, 0, 2, 'Creating entry...')
 

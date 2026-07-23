@@ -339,8 +339,9 @@ export async function createEntryAction(...args: unknown[]): Promise<void> {
         }
         
         z.object({
-            workspace_id: z.string().min(1, "workspace_id (repository name) is required. It could not be auto-resolved from project_number or current directory.")
-        }).parse({ workspace_id: resolvedWs })
+            workspace_id: z.string().min(1, "workspace_id (repository name) is required. It could not be auto-resolved from project_number or current directory."),
+            project_number: z.number({ message: "project_number is required. Entries must be assigned to a valid project." })
+        }).parse({ workspace_id: resolvedWs, project_number: payload.projectNumber })
 
         const entryInput: CreateEntryInput = {
             content,

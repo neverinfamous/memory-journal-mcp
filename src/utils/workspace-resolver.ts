@@ -47,7 +47,7 @@ export function resolveProjectContext(
     if (input.workspace_id !== undefined && input.workspace_id !== null) {
         const wsId = input.workspace_id
         let projNum = input.project_number ?? (registry?.[wsId]?.project_number)
-        projNum ??= config?.defaultProjectNumber ?? resolveProjectNumberFromPath(process.cwd())
+        projNum ??= resolveProjectNumberFromPath(process.cwd())
         return {
             workspaceId: wsId,
             projectNumber: projNum
@@ -100,11 +100,11 @@ export function resolveProjectContext(
         }
     }
 
-    // 4. Fallback (default workspace, inferred project number from cwd or config)
-    const cwdProjNum = config?.defaultProjectNumber ?? resolveProjectNumberFromPath(process.cwd())
+    // 4. Fallback (default workspace, inferred project number ONLY from working directory path)
+    const cwdProjNum = resolveProjectNumberFromPath(process.cwd())
     return {
         workspaceId: config?.defaultWorkspaceId ?? 'default',
-        projectNumber: cwdProjNum ?? config?.defaultProjectNumber
+        projectNumber: cwdProjNum
     }
 }
 

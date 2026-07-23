@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { resolveProjectContext, resolveWorkspaceId } from '../../src/utils/workspace-resolver.js'
 import type { ToolHandlerConfig } from '../../src/types/index.js'
 
@@ -58,16 +58,21 @@ describe('workspace-resolver with keyword and tag inference', () => {
         expect(res.projectNumber).toBe(9)
     })
 
-    it('falls back to default workspace when no keywords or explicit IDs match', () => {
-        const res = resolveProjectContext(
-            {
-                content: 'Random general reflection with no project references',
-                tags: ['journal']
-            },
-            mockConfig
-        )
-        expect(res.workspaceId).toBe('default')
-        expect(res.projectNumber).toBe(1)
+    it('returns undefined projectNumber when no keywords or explicit IDs match and cwd is unregistered', () => {
+        const spy = vi.spyOn(process, 'cwd').mockReturnValue('C:\\tmp\\unregistered-project')
+        try {
+            const res = resolveProjectContext(
+                {
+                    content: 'Random general reflection with no project references',
+                    tags: ['journal']
+                },
+                mockConfig
+            )
+            expect(res.workspaceId).toBe('default')
+            expect(res.projectNumber).toBeUndefined()
+        } finally {
+            spy.mockRestore()
+        }
     })
 
     it('resolveWorkspaceId helper delegates accurately', () => {
