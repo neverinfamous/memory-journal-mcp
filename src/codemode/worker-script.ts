@@ -141,10 +141,42 @@ async function executeCode(
                         }
                     }
                 }
-                // Handle `memory.journal.addEntry` natural hallucination
-                if ((prop === 'addEntry' || prop === 'create_entry' || prop === 'createEntry') && 'core' in target) {
+                // Handle `memory.journal.addEntry` or `Entry.create` / `mj.add` / `mj.log` natural hallucination
+                if ((prop === 'addEntry' || prop === 'create_entry' || prop === 'createEntry' || prop === 'create' || prop === 'add' || prop === 'log') && 'core' in target) {
                     const coreGroup = target['core'] as Record<string, unknown>
                     return coreGroup['create_entry'] ?? coreGroup['createEntry']
+                }
+                if ((prop === 'get' || prop === 'read' || prop === 'find' || prop === 'fetch') && 'core' in target && 'search' in target) {
+                    const coreGroup = target['core'] as Record<string, unknown>
+                    const searchGroup = target['search'] as Record<string, unknown>
+                    const getFn = coreGroup['get_entry_by_id'] ?? coreGroup['getEntryById']
+                    const searchFn = searchGroup['search_entries'] ?? searchGroup['searchEntries']
+                    return (arg: unknown) => {
+                        if (typeof arg === 'number' || typeof arg === 'string') {
+                            const parsedId = Number(arg)
+                            if (!Number.isNaN(parsedId)) {
+                                return (getFn as (a: unknown) => unknown)({ entry_id: parsedId })
+                            }
+                        }
+                        if (arg !== null && typeof arg === 'object') {
+                            const obj = arg as Record<string, unknown>
+                            if ('entry_id' in obj || 'id' in obj) {
+                                return (getFn as (a: unknown) => unknown)(obj)
+                            }
+                            if ('query' in obj || 'tags' in obj || 'search' in obj || 'text' in obj || 'q' in obj) {
+                                return (searchFn as (a: unknown) => unknown)(obj)
+                            }
+                        }
+                        return (getFn as (a: unknown) => unknown)(arg)
+                    }
+                }
+                if ((prop === 'update' || prop === 'edit') && 'core' in target) {
+                    const coreGroup = target['core'] as Record<string, unknown>
+                    return coreGroup['update_entry'] ?? coreGroup['updateEntry']
+                }
+                if ((prop === 'delete' || prop === 'remove') && 'core' in target) {
+                    const coreGroup = target['core'] as Record<string, unknown>
+                    return coreGroup['delete_entry'] ?? coreGroup['deleteEntry']
                 }
                 // Handle get/list/searchProjects hallucination via proxy intercept
                 if (prop === 'getProjects' || prop === 'listProjects' || prop === 'searchProjects') {
@@ -252,9 +284,19 @@ async function executeCode(
         }
         Object.freeze(consoleShim)
 
+        const servicesProxy = new Proxy({}, { get: () => shimMj })
+        const kernelProxy = new Proxy({}, { get: () => shimMj })
+
         const sandbox: Record<string, unknown> = {
             mj: shimMj,
             journal: shimMj,
+            _journal: shimMj,
+            MJ: shimMj,
+            adapter: shimMj,
+            Entry: shimMj,
+            getJournal: () => Promise.resolve(shimMj),
+            services: servicesProxy,
+            kernel: kernelProxy,
             sqlite: shimMj,
             postgres: shimMj,
             mysql: shimMj,

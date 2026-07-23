@@ -815,17 +815,33 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
                 obj['from_entry_id'] = obj['source'];
                 delete obj['source'];
             }
+            if (obj['from'] !== undefined && obj['from_entry_id'] === undefined) {
+                obj['from_entry_id'] = obj['from'];
+                delete obj['from'];
+            }
             if (obj['source_id'] !== undefined && obj['from_entry_id'] === undefined) {
                 obj['from_entry_id'] = obj['source_id'];
                 delete obj['source_id'];
+            }
+            if (obj['from_id'] !== undefined && obj['from_entry_id'] === undefined) {
+                obj['from_entry_id'] = obj['from_id'];
+                delete obj['from_id'];
             }
             if (obj['target'] !== undefined && obj['to_entry_id'] === undefined) {
                 obj['to_entry_id'] = obj['target'];
                 delete obj['target'];
             }
+            if (obj['to'] !== undefined && obj['to_entry_id'] === undefined) {
+                obj['to_entry_id'] = obj['to'];
+                delete obj['to'];
+            }
             if (obj['target_id'] !== undefined && obj['to_entry_id'] === undefined) {
                 obj['to_entry_id'] = obj['target_id'];
                 delete obj['target_id'];
+            }
+            if (obj['to_id'] !== undefined && obj['to_entry_id'] === undefined) {
+                obj['to_entry_id'] = obj['to_id'];
+                delete obj['to_id'];
             }
             if (obj['dest'] !== undefined && obj['to_entry_id'] === undefined) {
                 obj['to_entry_id'] = obj['dest'];

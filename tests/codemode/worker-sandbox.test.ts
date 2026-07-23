@@ -62,6 +62,29 @@ describe('WorkerSandbox', () => {
         expect(result.result).toBe(42)
     })
 
+    it('should support global aliases (_journal, MJ, adapter, Entry, getJournal, services, kernel)', async () => {
+        const sandbox = new WorkerSandbox()
+        const bindings = {
+            core: {
+                testFunc: async (x: number) => x * 2,
+            },
+        }
+        const code = `
+            const r1 = await _journal.core.testFunc(1);
+            const r2 = await MJ.core.testFunc(2);
+            const r3 = await adapter.core.testFunc(3);
+            const r4 = await Entry.core.testFunc(4);
+            const j = await getJournal();
+            const r5 = await j.core.testFunc(5);
+            const r6 = await services.journal.core.testFunc(6);
+            const r7 = await kernel.memory.core.testFunc(7);
+            return [r1, r2, r3, r4, r5, r6, r7];
+        `
+        const result = await sandbox.execute(code, bindings)
+        expect(result.success).toBe(true)
+        expect(result.result).toEqual([2, 4, 6, 8, 10, 12, 14])
+    })
+
     it('should enforce timeout limiting', async () => {
         // Provide a very short timeout
         const sandbox = new WorkerSandbox({ timeoutMs: 50 })

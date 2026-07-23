@@ -228,5 +228,16 @@ describe('mj_execute_code Tool Handler', () => {
 
             expect(result.success).toBe(false)
         })
+
+        it('should accept code via alternative keys (query, content, text, etc.) instead of returning missing code error', async () => {
+            // Passing a blocked security pattern via 'query' to test that execution reaches security validation (beyond missing code parameter check)
+            const result = (await callTool('mj_execute_code', { query: 'process.exit(1)' }, db)) as {
+                success: boolean
+                error: string
+            }
+
+            expect(result.success).toBe(false)
+            expect(result.error).toContain('Security validation failed')
+        })
     })
 })

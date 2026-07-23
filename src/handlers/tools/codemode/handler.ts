@@ -36,7 +36,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                 
                 try {
                     const input = ExecuteCodeSchema.parse(params)
-                    let executionCode = input.code || input.script || input.source
+                    let executionCode = input.code || input.script || input.source || input.query || input.content || input.text || input.body || input.js || input.javascript || input.payload || input.executionCode || input.input
 
                     // [Layer 2 Dispatcher Healing] Prevent literal placeholder SyntaxErrors
                     if (executionCode) {
