@@ -6,6 +6,7 @@ import { WorkerSandbox, WorkerSandboxPool } from '../../src/codemode/index.js'
 
 const workerScriptSrc = path.join(__dirname, '../../src/codemode/worker-script.ts')
 const workerScriptJs = path.join(__dirname, '../../src/codemode/worker-script.js')
+const workerScriptDistJs = path.join(__dirname, '../../dist/worker-script.js')
 
 beforeAll(() => {
     // Compile worker-script.ts to .js specifically for test execution
@@ -18,10 +19,12 @@ beforeAll(() => {
         format: 'esm',
         outfile: workerScriptJs,
     })
+    fs.mkdirSync(path.dirname(workerScriptDistJs), { recursive: true })
+    fs.copyFileSync(workerScriptJs, workerScriptDistJs)
 }, 30_000)
 
 afterAll(() => {
-    // Cleanup generated JS file
+    // Cleanup generated JS files
     if (fs.existsSync(workerScriptJs)) {
         fs.unlinkSync(workerScriptJs)
     }
