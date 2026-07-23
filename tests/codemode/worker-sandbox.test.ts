@@ -11,15 +11,13 @@ beforeAll(() => {
     // Compile worker-script.ts to .js specifically for test execution
     // worker_threads cannot run .ts files directly in this vitest setup
     // Uses esbuild's JS API directly (npx esbuild via execSync hangs on Windows)
-    if (!fs.existsSync(workerScriptJs)) {
-        esbuild.buildSync({
-            entryPoints: [workerScriptSrc],
-            bundle: true,
-            platform: 'node',
-            format: 'esm',
-            outfile: workerScriptJs,
-        })
-    }
+    esbuild.buildSync({
+        entryPoints: [workerScriptSrc],
+        bundle: true,
+        platform: 'node',
+        format: 'esm',
+        outfile: workerScriptJs,
+    })
 }, 30_000)
 
 afterAll(() => {
