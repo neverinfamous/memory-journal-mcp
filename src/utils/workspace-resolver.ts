@@ -16,6 +16,9 @@ export interface ResolvedContext {
 }
 
 export function loadProjectRegistryFromConfig(): Record<string, RegistryEntry> | undefined {
+    if (process.env['NODE_ENV'] === 'test' || process.env['VITEST'] === 'true') {
+        return undefined
+    }
     try {
         const configPath = path.resolve(os.homedir(), '.gemini', 'config', 'memory-journal.config.json')
         if (!fs.existsSync(configPath)) return undefined
@@ -43,8 +46,12 @@ export function resolveProjectContext(
 ): ResolvedContext {
     const registry = config?.projectRegistry ?? loadProjectRegistryFromConfig()
 
-    // 1. Explicit workspace_id provided (even if 'default')
-    if (input.workspace_id !== undefined && input.workspace_id !== null) {
+    // 1. Truly explicit non-default workspace_id provided
+    if (
+        input.workspace_id !== undefined &&
+        input.workspace_id !== null &&
+        input.workspace_id !== 'default'
+    ) {
         const wsId = input.workspace_id
         let projNum = input.project_number ?? (registry?.[wsId]?.project_number)
         projNum ??= resolveProjectNumberFromPath(process.cwd())
@@ -54,7 +61,7 @@ export function resolveProjectContext(
         }
     }
 
-    // 2. Explicit project_number provided (without explicit workspace_id)
+    // 2. Explicit project_number provided (or workspace_id was 'default'/missing)
     if (input.project_number !== undefined && input.project_number !== null) {
         const projNum = input.project_number
         let wsId: string | undefined
@@ -66,13 +73,15 @@ export function resolveProjectContext(
                 }
             }
         }
-        return {
-            workspaceId: wsId ?? config?.defaultWorkspaceId ?? 'default',
-            projectNumber: projNum
+        if (wsId) {
+            return {
+                workspaceId: wsId,
+                projectNumber: projNum
+            }
         }
     }
 
-    // 3. Content / Tags keyword matching against projectRegistry (without explicit workspace_id or project_number)
+    // 3. Content / Tags keyword matching against projectRegistry
     if (registry) {
         const tagSet = new Set((input.tags ?? []).map((t) => t.toLowerCase().trim()))
         const contentLower = (input.content ?? '').toLowerCase()
@@ -94,16 +103,17 @@ export function resolveProjectContext(
             if (matched) {
                 return {
                     workspaceId: key,
-                    projectNumber: entry.project_number
+                    projectNumber: input.project_number ?? entry.project_number
                 }
             }
         }
     }
 
-    // 4. Fallback (default workspace, inferred project number ONLY from working directory path)
-    const cwdProjNum = resolveProjectNumberFromPath(process.cwd())
+    // 4. Fallback (respect explicit input.workspace_id if passed, otherwise defaultWorkspaceId or 'default')
+    const cwdProjNum = input.project_number ?? resolveProjectNumberFromPath(process.cwd())
+
     return {
-        workspaceId: config?.defaultWorkspaceId ?? 'default',
+        workspaceId: input.workspace_id ?? config?.defaultWorkspaceId ?? 'default',
         projectNumber: cwdProjNum
     }
 }
@@ -145,6 +155,9 @@ interface ParsedConfig {
  * and matching the provided working directory against registered paths.
  */
 export function resolveProjectNumberFromPath(cwd: string): number | undefined {
+    if (process.env['NODE_ENV'] === 'test' || process.env['VITEST'] === 'true') {
+        return undefined
+    }
     try {
         const configPath = path.resolve(os.homedir(), '.gemini', 'config', 'memory-journal.config.json')
         if (!fs.existsSync(configPath)) return undefined
