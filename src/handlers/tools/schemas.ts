@@ -276,8 +276,9 @@ export function healAgentHallucinations(val: unknown): unknown {
                 modified = true
             } else if (!ENTRY_TYPES.some(t => t === obj['entry_type'])) {
                 obj['tags'] ??= []
-                if (Array.isArray(obj['tags']) && !obj['tags'].includes(etLower)) {
-                    obj['tags'].push(etLower)
+                const cleanedTag = etLower.replace(/^[^a-z0-9]+/, '').replace(/_/g, '-')
+                if (Array.isArray(obj['tags']) && cleanedTag.length > 0 && !obj['tags'].includes(cleanedTag)) {
+                    obj['tags'].push(cleanedTag)
                 }
                 obj['entry_type'] = 'other'
                 modified = true

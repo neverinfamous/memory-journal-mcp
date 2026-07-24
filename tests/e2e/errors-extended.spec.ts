@@ -73,6 +73,8 @@ test.describe('Errors: Core', () => {
         const client = await createClient()
         try {
             const response = await callToolRaw(client, 'create_entry', {
+                workspace_id: 'default',
+                project_number: 1,
                 content: 'Valid content',
                 entry_type: '_e2e_invalid_type_xyz',
             })

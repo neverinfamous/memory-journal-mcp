@@ -15,12 +15,19 @@ export interface ResolvedContext {
     projectNumber: number | undefined
 }
 
+function getConfigPath(): string {
+    if (process.env['MEMORY_JOURNAL_CONFIG']) {
+        return path.resolve(process.env['MEMORY_JOURNAL_CONFIG'])
+    }
+    return path.resolve(os.homedir(), '.gemini', 'config', 'memory-journal.config.json')
+}
+
 export function loadProjectRegistryFromConfig(): Record<string, RegistryEntry> | undefined {
     if (process.env['NODE_ENV'] === 'test' || process.env['VITEST'] === 'true') {
         return undefined
     }
     try {
-        const configPath = path.resolve(os.homedir(), '.gemini', 'config', 'memory-journal.config.json')
+        const configPath = getConfigPath()
         if (!fs.existsSync(configPath)) return undefined
         const content = fs.readFileSync(configPath, 'utf-8')
         const config = JSON.parse(content) as ParsedConfig
@@ -159,7 +166,7 @@ export function resolveProjectNumberFromPath(cwd: string): number | undefined {
         return undefined
     }
     try {
-        const configPath = path.resolve(os.homedir(), '.gemini', 'config', 'memory-journal.config.json')
+        const configPath = getConfigPath()
         if (!fs.existsSync(configPath)) return undefined
         
         const content = fs.readFileSync(configPath, 'utf-8')
