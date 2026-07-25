@@ -1,7 +1,7 @@
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { autoIndexEntry } from '../../../utils/vector-index-helpers.js'
-import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
+import { resolveProjectContext, resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { createBatchProgressReporter, sendProgress } from '../../../utils/progress-utils.js'
 import {
     BatchCreateEntriesSchema,
