@@ -63,13 +63,18 @@ test.describe('Resources: Briefing Environment Configurations', () => {
         serverProcess.stdout?.on('data', (data) => fs.appendFileSync('serverProcess.log', `[OUT] ${data.toString()}`));
         serverProcess.stderr?.on('data', (data) => fs.appendFileSync('serverProcess.log', `[ERR] ${data.toString()}`));
 
-        for (let i = 0; i < 30; i++) {
+        let ready = false
+        for (let i = 0; i < 120; i++) {
             try {
                 const res = await fetch(`${BRIEFING_BASE}/health`)
-                if (res.ok) break
+                if (res.ok) {
+                    ready = true
+                    break
+                }
             } catch {}
             await delay(500)
         }
+        if (!ready) throw new Error('Briefing MCP server failed to start within 60 seconds')
 
         const transport = new StreamableHTTPClientTransport(new URL(`${BRIEFING_BASE}/mcp`), {
             requestInit: { headers: { Authorization: 'Bearer test-token' } },

@@ -70,16 +70,20 @@ test.describe('Payload Contracts: Team Tools (Happy Path)', () => {
         serverProcess.stdout?.pipe(process.stdout)
         serverProcess.stderr?.pipe(process.stderr)
 
-        // Wait for server readiness
-        for (let i = 0; i < 30; i++) {
+        let ready = false
+        for (let i = 0; i < 120; i++) {
             try {
                 const res = await fetch(`${TEAM_BASE}/health`)
-                if (res.ok) break
+                if (res.ok) {
+                    ready = true
+                    break
+                }
             } catch {
                 // Not ready
             }
             await delay(500)
         }
+        if (!ready) throw new Error('Team MCP server failed to start within 60 seconds')
 
         const transport = new StreamableHTTPClientTransport(new URL(`${TEAM_BASE}/mcp`), {
             requestInit: { headers: { Authorization: 'Bearer test-token' } },

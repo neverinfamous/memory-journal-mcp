@@ -102,6 +102,7 @@ test.describe('OAuth 2.1 Scope Enforcement E2E', () => {
                 stdio: 'pipe',
                 env: {
                     ...process.env,
+                    MJ_METRICS_PORT: '0',
                     ALLOWED_IO_ROOTS: process.cwd(),
                     MCP_RATE_LIMIT_MAX: '10000',
                     MEMORY_JOURNAL_CONFIG: join(process.cwd(), 'tests', 'e2e', 'empty-config.json'),
@@ -113,7 +114,7 @@ test.describe('OAuth 2.1 Scope Enforcement E2E', () => {
         serverProcess.stderr?.on('data', (d) => console.error('E2E SERVER STDERR:', d.toString()))
         serverProcess.stdout?.on('data', (d) => console.log('E2E SERVER STDOUT:', d.toString()))
         let ready = false
-        for (let i = 0; i < 30; i++) {
+        for (let i = 0; i < 120; i++) {
             try {
                 const res = await fetch(`http://localhost:${OAUTH_SCOPES_PORT}/health`)
                 if (res.ok) {
@@ -123,7 +124,7 @@ test.describe('OAuth 2.1 Scope Enforcement E2E', () => {
             } catch {}
             await delay(500)
         }
-        if (!ready) throw new Error('MCP server failed to start within 15 seconds')
+        if (!ready) throw new Error('MCP server failed to start within 60 seconds')
     })
 
     test.afterAll(async () => {

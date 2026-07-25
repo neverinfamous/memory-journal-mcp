@@ -197,6 +197,34 @@ async function executeCode(
                     const coreGroup = target['core'] as Record<string, unknown>
                     return coreGroup['delete_entry'] ?? coreGroup['deleteEntry']
                 }
+                // Handle load/init/connect shim
+                if (prop === 'load' || prop === 'loadJournal' || prop === 'loadMemory' || prop === 'init' || prop === 'connect') {
+                    return () => Promise.resolve(shimMj)
+                }
+                // Handle sdk.projects hallucination
+                if (prop === 'projects') {
+                    const coreGroup = target['core'] as Record<string, unknown> | undefined
+                    const analyticsGroup = target['analytics'] as Record<string, unknown> | undefined
+                    const createFn = coreGroup?.['create_entry'] ?? coreGroup?.['createEntry']
+                    const listFn = analyticsGroup?.['get_cross_project_insights'] ?? analyticsGroup?.['getCrossProjectInsights']
+                    return {
+                        list: () => (listFn as ((...args: unknown[]) => unknown) | undefined)?.(),
+                        entries: {
+                            create: createFn,
+                            add: createFn
+                        }
+                    }
+                }
+                // Handle direct SQL execution shim (e.g. db.execute)
+                if (prop === 'execute' || prop === 'query' || prop === 'raw' || prop === 'exec') {
+                    return (..._args: unknown[]) => Promise.resolve({
+                        success: false,
+                        error: `Direct database execution '${typeof prop === 'string' ? prop : String(prop)}()' is disabled in Code Mode. Use mj.core.createEntry({ ... }), mj.search.searchEntries({ ... }), or mj.core.getRecentEntries() instead.`,
+                        code: 'VALIDATION_ERROR',
+                        category: 'validation',
+                        recoverable: true
+                    })
+                }
                 // Handle get/list/searchProjects hallucination via proxy intercept
                 if (prop === 'getProjects' || prop === 'listProjects' || prop === 'searchProjects') {
                     if ('analytics' in target) {
@@ -292,7 +320,23 @@ async function executeCode(
             preventExtensions() { return false }
         })
 
-        const frozenContext = Object.freeze(contextObj ?? {})
+        const contextProxy = new Proxy(contextObj ?? {}, {
+            get(target, prop) {
+                if (typeof prop === 'symbol') return undefined
+                if (prop in target) return target[prop]
+                if (prop === 'executeSystemPrompt' || prop === 'getPrompt' || prop === 'executePrompt') {
+                    return (_promptName?: string) => Promise.resolve({
+                        success: false,
+                        error: `Code Mode cannot execute MCP Prompts via context.${prop}(). Code Mode is for running JavaScript with mj.* tools. Use mj.core.createEntry to save entries.`,
+                        code: 'VALIDATION_ERROR',
+                        category: 'validation',
+                        recoverable: true
+                    })
+                }
+                return target[prop]
+            }
+        })
+        const frozenContext = Object.freeze(contextProxy)
 
         const consoleShim = {
             log: (...args: unknown[]) => args,
@@ -345,8 +389,16 @@ async function executeCode(
             writeJournal: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
             loadMemory: (): Promise<unknown> => Promise.resolve(shimMj),
             saveMemory: (): Promise<unknown> => Promise.resolve({ success: true }),
-            update_configuration: (arg: unknown): unknown => (shimMj['admin'] as Record<string, ((...args: unknown[]) => unknown)>)?.['updateConfiguration']?.(arg),
-            updateConfiguration: (arg: unknown): unknown => (shimMj['admin'] as Record<string, ((...args: unknown[]) => unknown)>)?.['updateConfiguration']?.(arg),
+            update_configuration: (arg: unknown): unknown => {
+                const adminGroup = shimMj['admin'] as Record<string, ((...args: unknown[]) => unknown)> | undefined
+                const fn = adminGroup?.['update_configuration'] ?? adminGroup?.['updateConfiguration']
+                return fn?.(arg)
+            },
+            updateConfiguration: (arg: unknown): unknown => {
+                const adminGroup = shimMj['admin'] as Record<string, ((...args: unknown[]) => unknown)> | undefined
+                const fn = adminGroup?.['update_configuration'] ?? adminGroup?.['updateConfiguration']
+                return fn?.(arg)
+            },
             context: frozenContext,
             console: consoleShim,
             fetch: undefined,
@@ -364,15 +416,19 @@ async function executeCode(
             Proxy: undefined,
         }
 
-        // Spread callable top-level methods (e.g., find, recent, createEntry) from
-        // shimMj into the sandbox as standalone globals so agents can call `find({...})`
-        // without the `mj.` prefix. Only functions are spread; group namespaces (objects)
-        // and existing sandbox keys are skipped to avoid collisions.
+        // Spread all callable methods from all groups into the sandbox as standalone globals
         for (const key of Object.keys(mjApi)) {
-            if (key in sandbox) continue
             const val = shimMj[key]
-            if (typeof val === 'function') {
+            if (typeof val === 'function' && !(key in sandbox)) {
                 sandbox[key] = val
+            } else if (val !== null && typeof val === 'object') {
+                for (const groupMethod of Object.keys(val)) {
+                    if (groupMethod in sandbox) continue
+                    const fn = (val as Record<string, unknown>)[groupMethod]
+                    if (typeof fn === 'function') {
+                        sandbox[groupMethod] = fn
+                    }
+                }
             }
         }
 

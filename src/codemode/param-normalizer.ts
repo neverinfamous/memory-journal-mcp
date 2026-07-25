@@ -4,17 +4,57 @@ export function isRecord(val: unknown): val is Record<string, unknown> {
     return typeof val === 'object' && val !== null && !Array.isArray(val);
 }
 
+function safeString(val: unknown): string {
+    if (typeof val === 'string') return val;
+    if (typeof val === 'number' || typeof val === 'boolean') return String(val);
+    if (typeof val === 'object' && val !== null) {
+        try {
+            return JSON.stringify(val, null, 2);
+        } catch {
+            return '';
+        }
+    }
+    return '';
+}
+
 export function applyArgInterceptions(methodName: string, args: unknown[]): { args: unknown[] } | { error: Record<string, unknown> } {
     const gitIntercept = applyGitInterceptions(methodName, args);
     if (gitIntercept) return gitIntercept;
+
+    // Positional Argument Normalization (e.g. MemoryJournal.appendEntry('workspace-id', { ... }))
+    if (args.length === 2 && typeof args[0] === 'string' && isRecord(args[1])) {
+        const firstStr = args[0].trim();
+        const mergedObj = { ...args[1] };
+        if (mergedObj['workspace_id'] === undefined && mergedObj['workspaceId'] === undefined) {
+            mergedObj['workspace_id'] = firstStr;
+        } else if (mergedObj['title'] === undefined && mergedObj['content'] === undefined) {
+            mergedObj['title'] = firstStr;
+        }
+        args = [mergedObj];
+    }
 
     // Generic Parameter Aliases (Phase 31.1 Hallucination Smoothing)
     if (args.length === 1 && isRecord(args[0])) {
         const obj = { ...args[0] };
         args[0] = obj; // We clone it below
+
+        // Clean up system/SDK metadata keys
+        if (obj['_u_r_i'] !== undefined) {
+            if (obj['uri'] === undefined && obj['Uri'] === undefined) obj['uri'] = obj['_u_r_i'];
+            delete obj['_u_r_i'];
+        }
+        delete obj['_server_name'];
+        delete obj['_tool_name'];
+        delete obj['_meta'];
+        for (const key of Object.keys(obj)) {
+            if (key.startsWith('_') && key !== '_journal') {
+                Reflect.deleteProperty(obj, key);
+            }
+        }
+
         if (obj['user'] !== undefined && obj['target_user'] === undefined) { obj['target_user'] = obj['user']; delete obj['user']; }
         if (obj['severity'] !== undefined && obj['flag_type'] === undefined) { obj['flag_type'] = obj['severity']; delete obj['severity']; }
-        if (obj['msg'] !== undefined && obj['message'] === undefined) { obj['message'] = obj['msg']; delete obj['msg']; }
+        if (obj['msg'] !== undefined && obj['message'] === undefined) { obj['message'] = obj['msg']; delete obj['message']; }
         if (obj['sort'] !== undefined && obj['sort_by'] === undefined) { obj['sort_by'] = obj['sort']; delete obj['sort']; }
         if (obj['sortBy'] !== undefined && obj['sort_by'] === undefined) { obj['sort_by'] = obj['sortBy']; delete obj['sortBy']; }
         if (obj['orderBy'] !== undefined && obj['sort_by'] === undefined) { obj['sort_by'] = obj['orderBy']; delete obj['orderBy']; }
@@ -40,7 +80,7 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
             }
             delete obj['projectName'];
         }
-        if ((obj['workspace_id'] === undefined || obj['workspace_id'] === null || obj['workspace_id'] === '') && (methodName === 'create_entry' || methodName === 'createEntry')) {
+        if ((obj['workspace_id'] === undefined || obj['workspace_id'] === null || obj['workspace_id'] === '') && (methodName === 'create_entry' || methodName === 'createEntry' || methodName === 'team_create_entry' || methodName === 'teamCreateEntry')) {
             obj['workspace_id'] = process.env['MCP_WORKSPACE_ID'] || 'default';
         }
         
@@ -55,18 +95,91 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
             }
         }
 
-        if (obj['comment'] !== undefined && obj['resolution'] === undefined) { obj['resolution'] = obj['comment']; delete obj['comment']; }
-        if (obj['version'] !== undefined && obj['expected_version'] === undefined) { obj['expected_version'] = obj['version']; delete obj['version']; }
-        if (obj['repo'] !== undefined && obj['repo_name'] === undefined) { obj['repo_name'] = obj['repo']; delete obj['repo']; }
+        if (methodName === 'execute_code' || methodName === 'executeCode' || methodName === 'mj_execute_code' || methodName === 'mjExecuteCode') {
+            if (obj['repo_name'] !== undefined && obj['repo'] === undefined) {
+                obj['repo'] = obj['repo_name'];
+                delete obj['repo_name'];
+            }
+        } else {
+            if (obj['repo'] !== undefined && obj['repo_name'] === undefined) {
+                obj['repo_name'] = obj['repo'];
+                delete obj['repo'];
+            }
+        }
         if (obj['item_type'] !== undefined && obj['type'] === undefined) { obj['type'] = obj['item_type']; delete obj['item_type']; }
         if (obj['category'] !== undefined && obj['type'] === undefined) { obj['type'] = obj['category']; delete obj['category']; }
         if (obj['metadata'] !== undefined && obj['context'] === undefined) { obj['context'] = obj['metadata']; delete obj['metadata']; }
-        if ((methodName === 'create_entry' || methodName === 'createEntry' || methodName === 'update_entry' || methodName === 'updateEntry') && obj['content'] === undefined) {
-            if (obj['text'] !== undefined) { obj['content'] = obj['text']; delete obj['text']; }
-            else if (obj['message'] !== undefined) { obj['content'] = obj['message']; delete obj['message']; }
+
+        // Intercept update_configuration hallucination when passed project notes
+        if (methodName === 'update_configuration' || methodName === 'updateConfiguration') {
+            if (obj['update_notes'] !== undefined || obj['notes'] !== undefined || (obj['text'] !== undefined && obj['tool_filter'] === undefined && obj['briefing'] === undefined)) {
+                return { error: {
+                    success: false,
+                    error: "update_configuration is for changing server configuration (tool_filter, briefing). To create journal entries or update notes, use mj.core.createEntry({ ... }).",
+                    code: 'VALIDATION_ERROR',
+                    category: 'validation',
+                    suggestion: "Use mj.core.createEntry({ content: '...', project_number: 1 }) instead.",
+                    recoverable: true
+                }};
+            }
         }
+
+        const isEntryMutation = methodName === 'create_entry' || methodName === 'createEntry' || methodName === 'update_entry' || methodName === 'updateEntry' || methodName === 'team_create_entry' || methodName === 'teamCreateEntry';
+        if (isEntryMutation) {
+            const contentParts: string[] = [];
+
+            const title = obj['title'] ?? obj['heading'] ?? obj['subject'];
+            if (title !== undefined) {
+                const titleStr = safeString(title);
+                if (titleStr !== '') contentParts.push(`# ${titleStr}`);
+                delete obj['title']; delete obj['heading']; delete obj['subject'];
+            }
+
+            const desc = obj['description'] ?? obj['details'] ?? obj['summary'] ?? obj['notes'] ?? obj['text'] ?? obj['message'];
+            if (desc !== undefined) {
+                const descStr = safeString(desc);
+                if (descStr !== '') contentParts.push(descStr);
+                delete obj['description']; delete obj['details']; delete obj['summary']; delete obj['notes']; delete obj['text']; delete obj['message'];
+            }
+
+            if (obj['context'] !== undefined) {
+                const ctxStr = safeString(obj['context']);
+                if (ctxStr !== '') contentParts.push(`**Context:** ${ctxStr}`);
+                delete obj['context'];
+            }
+
+            const focus = obj['focus'] ?? obj['goal'] ?? obj['objective'];
+            if (focus !== undefined) {
+                const focusStr = safeString(focus);
+                if (focusStr !== '') contentParts.push(`**Focus:** ${focusStr}`);
+                delete obj['focus']; delete obj['goal']; delete obj['objective'];
+            }
+
+            const resolution = obj['resolution'] ?? obj['fix'] ?? obj['solution'] ?? obj['result'];
+            if (resolution !== undefined) {
+                const resStr = safeString(resolution);
+                if (resStr !== '') contentParts.push(`**Resolution:** ${resStr}`);
+                delete obj['resolution']; delete obj['fix']; delete obj['solution']; delete obj['result'];
+            }
+
+            const artifacts = obj['artifacts'] ?? obj['files'] ?? obj['changes'] ?? obj['modified_files'];
+            if (artifacts !== undefined) {
+                const artStr = Array.isArray(artifacts) ? artifacts.map(safeString).join(', ') : safeString(artifacts);
+                if (artStr !== '') contentParts.push(`**Artifacts:** ${artStr}`);
+                delete obj['artifacts']; delete obj['files']; delete obj['changes']; delete obj['modified_files'];
+            }
+
+            if (obj['content'] !== undefined) {
+                const existing = safeString(obj['content']);
+                if (contentParts.length > 0) {
+                    obj['content'] = existing !== '' ? `${existing}\n\n${contentParts.join('\n\n')}` : contentParts.join('\n\n');
+                }
+            } else if (contentParts.length > 0) {
+                obj['content'] = contentParts.join('\n\n');
+            }
+        }
+
         if (obj['search'] !== undefined && obj['query'] === undefined) { obj['query'] = obj['search']; delete obj['search']; }
-        // (Other param normalization logic was here previously but removed for instruction_level)
         if ((methodName === 'import_external' || methodName === 'importExternal' || methodName === 'team_import_external' || methodName === 'teamImportExternal') && obj['source_dir'] === undefined) {
             if (obj['filename'] !== undefined) { obj['source_dir'] = obj['filename']; delete obj['filename']; }
         }

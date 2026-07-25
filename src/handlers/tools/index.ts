@@ -42,6 +42,7 @@ import { enforceAccessBoundary } from '../../auth/validation.js'
 import { ResourceNotFoundError, ConfigurationError } from '../../types/errors.js'
 import { z } from 'zod'
 import { requestContextStorage } from '../../utils/request-context.js'
+import { applyArgInterceptions } from '../../codemode/param-normalizer.js'
 
 // Re-export for backward compatibility (McpServer imports these)
 export type { ToolHandlerConfig }
@@ -367,6 +368,13 @@ export async function callTool(
     teamVectorManager?: VectorSearchManager
 ): Promise<unknown> {
     ensureToolCache(db, vectorManager, github, config, teamDb, teamVectorManager)
+
+    const intercept = applyArgInterceptions(name, [args])
+    if ('error' in intercept) {
+        return intercept.error
+    }
+    const cleanArgs = (intercept.args[0] as Record<string, unknown>) ?? args
+    args = cleanArgs
 
     const mapToUse = config?.runtime?.toolMapCache ?? toolMapCache ?? EMPTY_TOOL_MAP
     const tool = mapToUse.get(name)

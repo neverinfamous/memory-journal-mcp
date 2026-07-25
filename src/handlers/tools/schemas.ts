@@ -224,6 +224,15 @@ export function healAgentHallucinations(val: unknown): unknown {
             return ''
         }
 
+        if ('context' in obj) {
+            const ctxVal = typeof obj['context'] === 'object' && obj['context'] !== null ? JSON.stringify(obj['context'], null, 2) : toStr(obj['context'])
+            if (ctxVal !== '') {
+                const existingContent = toStr(obj['content'])
+                obj['content'] = existingContent !== '' ? `${existingContent}\n\n**Context:** ${ctxVal}` : ctxVal
+            }
+            Reflect.deleteProperty(obj, 'context')
+            modified = true
+        }
         if ('focus' in obj) {
             const focusVal = toStr(obj['focus'])
             if (focusVal !== '') {

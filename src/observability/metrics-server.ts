@@ -27,12 +27,16 @@ export function startMetricsServer(runtime: ServerRuntime): () => Promise<void> 
         }
     });
 
-    server.listen(port, '0.0.0.0', () => {
-        logger.info(`Standalone metrics server listening on port ${port}`, { module: 'MetricsServer' });
+    server.on('error', (error: any) => {
+        if (error?.code === 'EADDRINUSE') {
+            logger.warning(`Metrics server port ${port} is already in use; standalone metrics server disabled for this instance`, { module: 'MetricsServer' });
+        } else {
+            logger.error('Metrics server error', { error: error instanceof Error ? error.message : String(error), module: 'MetricsServer' });
+        }
     });
 
-    server.on('error', (error) => {
-        logger.error('Metrics server error', { error: error.message, module: 'MetricsServer' });
+    server.listen(port, '0.0.0.0', () => {
+        logger.info(`Standalone metrics server listening on port ${port}`, { module: 'MetricsServer' });
     });
 
     return () => {
