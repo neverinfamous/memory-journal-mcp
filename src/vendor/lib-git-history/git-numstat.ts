@@ -37,7 +37,7 @@ export async function getNumstatMap(lockedArgs: string[], stdinShas?: string) {
         }
 
         let firstStr = readUntilNul();
-        firstStr = firstStr.replace(/^\n+/, '');
+        firstStr = firstStr.replace(/^[\r\n]+/, '');
         if (!firstStr) continue;
 
         const parts = firstStr.split('\t');

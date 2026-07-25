@@ -10,7 +10,6 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
   let { args } = ctx;
   if (!args) args = [];
   if (args.includes('--help') || args.includes('-h')) return;
-  if (args.includes('--help') || args.includes('-h')) return;
 
   if (['apt', 'apt-get'].includes(cmdBasename)) {
     envOverrides['DEBIAN_FRONTEND'] = 'noninteractive';
@@ -101,7 +100,7 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
       }
 
       if (rewriteToPnpm) {
-        console.error(`\n   🛠️ AUTONOMOUS HEALING: Transparently rewriting '${cmdBasename} ${subCmd || ''}'.trim() to pnpm... (Frictionless Recovery)`);
+        console.error(`\n   🛠️ AUTONOMOUS HEALING: Transparently rewriting '${`${cmdBasename} ${subCmd || ''}`.trim()}' to pnpm... (Frictionless Recovery)`);
         cmdBasename = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
         ctx.cmdBasename = cmdBasename;
         if ('command' in ctx.payload) {
@@ -111,7 +110,7 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
     } else if (isBunProject && (isNpm || isYarn || isPnpm)) {
       const nonFlagArgs = args.filter(a => !a.startsWith('-'));
       const subCmd = nonFlagArgs[0];
-      console.error(`\n   🛠️ AUTONOMOUS HEALING: Bun project detected. Transparently rewriting '${cmdBasename} ${subCmd || ''}'.trim() to bun... (Frictionless Recovery)`);
+      console.error(`\n   🛠️ AUTONOMOUS HEALING: Bun project detected. Transparently rewriting '${`${cmdBasename} ${subCmd || ''}`.trim()}' to bun... (Frictionless Recovery)`);
       if (isNpm && subCmd === 'uninstall') args[args.indexOf('uninstall')] = 'remove';
       if (isNpm && subCmd === 'ci') { args[args.indexOf('ci')] = 'install'; if (!args.includes('--frozen-lockfile')) args.push('--frozen-lockfile'); }
       if (isYarn && !subCmd && args.length === 0) args.push('install');

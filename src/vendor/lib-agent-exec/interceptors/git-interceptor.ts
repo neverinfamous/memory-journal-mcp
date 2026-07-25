@@ -209,9 +209,9 @@ export function gitInterceptor(ctx: ExecutionContext): void {
       }
     )
     .with(
-      { cmd: P.union('cherry-pick', 'revert'), args: P.when((a: string[]) => !a.includes('--no-edit')) },
+      { cmd: P.union('cherry-pick', 'revert'), args: P.when((a: string[]) => !a.includes('--no-edit') && !a.includes('--no-commit') && !a.includes('-n')) },
       ({ cmd }) => {
-        console.error(`\n   💡 AGENT HINT: 'git ${cmd}' may open an interactive editor. Automatically injecting '--no-edit'.\n${AUTONOMOUS_HEALING_MSG}`);
+        console.error(`\n   🛠️ AUTONOMOUS HEALING: 'git ${cmd}' may open an interactive editor. Automatically injecting '--no-edit'.... (Frictionless Recovery)`);
         args.push('--no-edit');
       }
     )

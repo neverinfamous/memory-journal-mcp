@@ -46,6 +46,7 @@ export const CLI_OPTIONS = {
     'slack-map': { type: 'string' },
     'package-version': { type: 'boolean' },
     'stream-to-file': { type: 'string' },
+    uncommitted: { type: 'boolean' },
   } as const;
 
 export function parseArguments(): CliArgs {
@@ -105,6 +106,7 @@ ${pc.bold('Search Options:')}
   -G, --patch-search <q>   Search within the actual patch diffs (git log -G)
 
 ${pc.bold('Content & Formatting Options:')}
+  --uncommitted            Output the current uncommitted working tree state instead of history
   -f, --format <fmt>       Output format: json (default), markdown, slack, or custom script path
   --summary                Output summary metadata only (omits bodies, files, patches)
   --stats                  Output summary metadata plus file stats (omits bodies, patches)

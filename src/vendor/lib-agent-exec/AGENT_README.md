@@ -17,7 +17,7 @@ You only need to manually pass a JSON payload (as described below) if you are ex
 > [!WARNING]
 > Native commands run in **PowerShell 5.1**, which **DOES NOT SUPPORT** `&&` or `||` operators. If you run `run_command("bun check && bun test")`, the parser will instantly throw a fatal syntax error. 
 > 
-> Whenever you must chain commands natively or utilize robust Unix pipelines, you **MUST** leverage WSL2 execution by creating a JSON payload with `"target": "wsl2"` and running it via `agent-exec`. This routes the command seamlessly into the Linux VM environment, fully supporting `&&`, `||`, `|`, and other POSIX shell features.
+> Whenever you must chain commands natively or utilize robust Unix pipelines, you **MUST** leverage WSL2 execution by creating a JSON payload with `"target": "wsl2"` and running it via `agent-exec`. This routes the command seamlessly into the Linux VM environment, fully supporting `&&`, `||`, `|`, CRLF stripping, and other POSIX shell features.
 
 ## 🧹 Scratch Workspace Protocol
 
@@ -41,10 +41,10 @@ If you are a **human user** attempting to run interactive commands natively in y
 
 ## Payload Schemas
 
-There are three execution types (`command`, `script`, `eval`). Always provide the payload via a `.json` file.
+There are three execution types (`command`, `script`, `eval`). Payloads can be provided via a `.json` file path, passed directly as a raw JSON string literal, or auto-wrapped by the PowerShell proxy interceptors.
 
 > [!NOTE]
-> **Payload Validation**: Ensures `command`, `script`, and `eval` schemas strictly adhere to Zod definitions and `ts-pattern` routing. Covers edge cases like `cwd`, `args`, `env`, `timeoutMs`, `stallTimeoutMs`, `target`, `integrationContext`, `templateOverride`, `keepPayload`, `expectJsonEnvelope`, `bypassInterceptors`, `webhookHeaders`, `webhookPayloadTemplate`, `webhookMethod`, `webhookTimeoutMs`, `onSuccess`, `onFailure`, `stdin`, `stdoutFile`, `stderrFile`, `maxBuffer`, and `truncateOutputLength`.
+> **Payload Validation**: Ensures `command`, `script`, and `eval` schemas strictly adhere to Zod definitions and `ts-pattern` routing.
 
 ### 1. Command Payload
 Used for executing standard CLI binaries.
@@ -55,7 +55,7 @@ Used for executing standard CLI binaries.
   "args": ["log", "-n", "5"],
   "cwd": "C:\\path\\to\\dir", // Optional
   "env": { "CUSTOM_VAR": "value", "IS_TRUE": true, "PORT": 8080 }, // Optional (numbers and booleans are automatically coerced to strings)
-  "stdin": "input string", // Optional (max 10MB, supports null bytes)
+  "stdin": "input string", // Optional (max 10MB UTF-8 string; safeString/noNullString schemas enforce valid characters)
   "stdoutFile": "C:\\path\\to\\out.log", // Optional
   "stderrFile": "C:\\path\\to\\err.log", // Optional
   "maxBuffer": 10485760, // Optional
@@ -65,13 +65,15 @@ Used for executing standard CLI binaries.
   "timeoutMs": 30000, // Optional
   "stallTimeoutMs": 10000, // Optional
   "expectJsonEnvelope": false, // Optional
+  "integrationContext": { "key": "value" }, // Optional (arbitrary context object passed to interceptors)
+  "templateOverride": "C:\\path\\to\\custom-template.hbs", // Optional (custom format/output template override)
   "onSuccess": ["http://localhost:9999/success"], // Optional (string or array of strings)
   "onFailure": "http://localhost:9999/fail", // Optional (string or array of strings)
   "webhookMethod": "POST", // Optional (GET, POST, PUT, PATCH, DELETE)
-  "webhookHeaders": { "Authorization": "Bearer {{integrationContext.token}}" }, // Optional
+  "webhookHeaders": { "Authorization": "Bearer my-token" }, // Optional
   "webhookPayloadTemplate": { "status": "{{envelope.status}}", "data": "{{envelope.data}}" }, // Optional (Accepts string, object, or array)
   "webhookTimeoutMs": 5000, // Optional
-  "target": "wsl2" // Optional (routes execution natively into the WSL2 Linux VM)
+  "target": "wsl2" // Optional ("wsl2" | "windows"; preprocessors auto-map "wsl"/"linux"/"ubuntu" to "wsl2", and "native"/"win"/"win32" to "windows")
 }
 ```
 **CRITICAL**: Do NOT pass arguments containing spaces as part of the `command` string. Use the `args` array. (e.g. `{"command": "gh pr view"}` is invalid. Use `{"command": "gh", "args": ["pr", "view"]}`).
@@ -82,7 +84,8 @@ Used for executing a script file (e.g. `.ts`, `.py`, `.sh`).
 {
   "type": "script",
   "scriptPath": "C:\\path\\to\\script.ts", // Can also be a relative path (resolves against the payload's 'cwd')
-  "args": ["--flag", "value"]
+  "args": ["--flag", "value"],
+  "interpreter": "bun" // Optional (e.g., bun, python, node, bash, pwsh)
 }
 ```
 
@@ -96,8 +99,6 @@ Used for executing raw code snippets dynamically.
 }
 ```
 
-### Note on Templates (`integrationContext`)
-If an `integrationContext` object is provided in the payload, you may use template string substitution (e.g. `{{integrationContext.slackToken}}`) across the `command`, `args`, `env`, `scriptPath`, `code`, `templateOverride`, `webhookHeaders`, `onSuccess`, and `onFailure` properties. This simplifies injection of dynamic credentials and external configuration strings.
 
 ### Structured JSON Envelopes (`expectJsonEnvelope`)
 All payload types (`command`, `script`, `eval`) support an optional boolean flag: `"expectJsonEnvelope": true`. 
@@ -111,13 +112,13 @@ When enabled, the execution bridge will actively parse the final output line of 
 The execution bridge features two distinct layers of autonomous healing:
 
 ### 1. Seamless Interception (No Errors Thrown)
-When executing `agent-exec.ts` directly, the infrastructure will detect if you accidentally provided a raw command string or raw JSON literal instead of the required `.json` file path. When this happens, it will **autonomously heal** your request by dynamically writing a temporary JSON payload file to the workspace scratch directory and continuing execution seamlessly without throwing an error. You do not need to intervene.
+When executing `agent-exec.ts` directly, the infrastructure will detect if you accidentally provided a raw command string or raw JSON literal instead of the required `.json` file path. When this happens, it will **autonomously heal** your request by parsing the payload directly in memory and continuing execution seamlessly without throwing an error. You do not need to intervene.
 
 ### 2. Guided Recovery Hints (Errors Thrown)
 When you execute a command and see a console error containing `🛠️ AUTONOMOUS HEALING:`, it means `agent-exec` intercepted your command to prevent a catastrophic execution failure (e.g., blocking an interactive prompt, stripping an unknown CLI flag).
 **If you encounter this hint:** Read the explicit guidance in the intercept message and immediately re-invoke the correct tool or adjust the command parameters yourself.
 
-## 9. Troubleshooting & Common Issues
+## Troubleshooting & Common Issues
 
 ### WSL2 Test Flakiness
 When running the full test suite via `bun test`, WSL2-related tests may occasionally timeout or fail (e.g., `grep -E` tests or generic stream boundaries) due to high concurrency overloading the host's WSL instance. If you encounter WSL timeouts during a full suite run, run the failing tests in isolation to verify if they are genuinely broken.
@@ -138,7 +139,7 @@ To ensure non-interactive reliability, `agent-exec.ts` actively intercepts and m
 - **Interactive REPL Blocks**: Attempting to launch `node`, `python`, or `bash` without arguments or a script file will be intercepted and terminated immediately to prevent hanging.
 - **Shell Wrapper Blocking**: Wrapping standard tools (`git`, `docker`, `gh`, `npm`, `npx`, `bunx`, etc.) inside inline shell invocations (e.g., `pwsh -c "git log"`) bypasses the interceptor pipeline and is strictly blocked across native commands, `eval` snippets, and `script` payloads. Invoke the tool directly via a `command` payload, or write the raw script commands without an inline shell wrapper.
 - **Prompt Detection & Stall Prevention**: Deep heuristic regexes detect unexpected interactive prompts (including standard package manager queries, `inquirer.js` progress flows, editor blocks like `Waiting for Emacs...`, standard TTY forced shells like `bash$`, `sh$`, and `bash-5.1$`, `title:`, `body:`, and `y/n` confirmations) and terminate the process to prevent indefinite hanging.
-- **Git Interception**: The bridge aggressively intercepts forbidden git flows. History commands (`git log`, `git shortlog`, `git show`) and raw `git commit` are completely blocked to prevent unparsable text dumps and interactive hanging. You MUST use the deterministic wrappers (`bun .\\.agents\\scripts\\get-git-history-json.ts` and `bun .\\.agents\\scripts\\commit.ts`). Interactive patching (`-p`) and interactive rebasing (`-i`) are also blocked. While explicit file staging (`--add <path>`) is strongly preferred for atomic commits, wildcard staging (`--add .`) is fully supported by the commit wrapper as a convenient fallback for sweeping changes.
+- **Git Interception**: The bridge aggressively intercepts forbidden git flows. History commands (`git log`, `git shortlog`, `git show`) and raw `git commit` are completely blocked to prevent unparsable text dumps and interactive hanging. You MUST use the deterministic wrappers (`bun .\.agents\scripts\get-git-history-json.ts` and `bun .\.agents\scripts\commit.ts`). Interactive patching (`-p`) and interactive rebasing (`-i`) are also blocked. While explicit file staging (`--add <path>`) is strongly preferred for atomic commits, wildcard staging (`--add .`) and positional staging are fully supported by `commit.ts`. `commit.ts` also features comprehensive **Autonomous Healing** (auto-corrects conventional commit message formatting, defaults missing `--impact`, `--confidence`, and `--validation`, maps deprecated `--trust` to `--confidence`, auto-enables `--journal` when `--journal-project` is provided, and auto-recovers paths with spaces).
 - **Quote Stripping**: Spurious quotes around arguments are stripped since the shell execution is bypassed.
 
 ## 🪤 Common PowerShell Hallucination Traps
@@ -174,7 +175,7 @@ The bridge standardizes the environment to enforce non-interactive behaviors. Th
 
 If you modify interceptors or execution logic, programmatic `bun test` passes are **not enough**. You MUST run the usability testing suite to ensure actual agents don't get trapped by false positives (e.g. `&&` chains or pipeline character bugs).
 - **Run the Fuzzing Suite:** Ask the user to "Execute the `/dynamic-audit-usability` workflow", or manually trigger the subagents defined in `.agents/scripts/usability/coordinator-workflow.md`.
-- **Test Auto-Generation:** The tests in `test-usability-*.md` are **auto-generated**. Do not edit them directly. Update `.agents/scripts/usability/scripts/test-manifest.ts` or the `content/` partials instead, then run `bun generate-tests.ts`.
+- **Test Auto-Generation:** The tests in `test-usability-*.md` are **auto-generated**. Do not edit them directly. Update `.agents/scripts/usability/scripts/test-manifest.ts` or the `content/` partials instead, then run `bun .\.agents\scripts\usability\scripts\generate-tests.ts`.
 
 ---
 

@@ -288,9 +288,17 @@ export function dockerInterceptor({ cmdBasename, args, payload }: ExecutionConte
     if (containerCmd && allContainerRepls.includes(containerCmd)) {
       const shellExecFlags = ['-c', '--command'];
       const dbExecFlags = ['-c', '--command', '-e', '--execute', '--eval', '-f', '--file'];
-      const hasExecFlag = containerDbRepls.includes(containerCmd)
+      let hasExecFlag = containerDbRepls.includes(containerCmd)
         ? containerCmdArgs.some(a => dbExecFlags.includes(a))
         : containerCmdArgs.some(a => shellExecFlags.includes(a));
+
+      // Exception for sqlite3 which can take a query directly without flags
+      if (containerCmd === 'sqlite3') {
+        const nonFlags = containerCmdArgs.filter(a => !a.startsWith('-'));
+        if (nonFlags.length >= 2) {
+          hasExecFlag = true;
+        }
+      }
 
       if (!hasExecFlag && !payload.stdin) {
         console.error(`\n   💡 AGENT HINT: 'docker ... ${containerCmd}' targets an interactive shell/REPL inside the container.\n${AUTONOMOUS_HEALING_MSG}`);

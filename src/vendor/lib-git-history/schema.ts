@@ -108,6 +108,7 @@ export const cliArgsSchema = z.object({
   'slack-map': z.string().optional(),
   'package-version': z.boolean().optional(),
   'stream-to-file': z.string().optional(),
+  uncommitted: z.boolean().optional(),
 });
 
 export type CliArgs = z.infer<typeof cliArgsSchema>;

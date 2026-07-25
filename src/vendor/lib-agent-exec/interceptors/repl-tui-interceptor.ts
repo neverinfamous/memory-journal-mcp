@@ -3,7 +3,6 @@ import { ExecutionContext } from './types.js';
 import { match, P } from 'ts-pattern';
 import fs from 'node:fs';
 export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }: ExecutionContext): void {
-  console.error("DEBUG EXECUTION:", JSON.stringify({cmdBasename, args, type: payload.type, command: 'command' in payload ? payload.command : undefined, code: 'code' in payload ? payload.code : undefined, scriptPath: 'scriptPath' in payload ? payload.scriptPath : undefined}));
   const replCommands = [
     'node', 'node.exe', 'node.cmd', 'python', 'python.exe', 'python.cmd', 'python3', 'python3.exe',
     'pwsh', 'pwsh.exe', 'powershell', 'powershell.exe', 'cmd', 'cmd.exe', 'wsl', 'wsl.exe', 'adb', 'adb.exe',

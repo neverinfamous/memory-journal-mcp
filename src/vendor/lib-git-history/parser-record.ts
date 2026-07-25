@@ -66,13 +66,14 @@ function parseFilesBlock(filesBlock: string, sha: string): { rawFiles: Array<{ s
 
   let firstStatus = getNextFilePart();
   if (firstStatus !== null) {
-    firstStatus = firstStatus.replace(/^\n+/, '');
+    firstStatus = firstStatus.replace(/^[\r\n]+/, '');
     if (firstStatus || fileBlockIdx < filesBlock.length) {
       let statusRaw: string | null = firstStatus;
       let iterations = 0;
       let emptyCount = 0;
       while (statusRaw !== null && iterations < MAX_STATUS_ITERATIONS) {
         iterations++;
+        statusRaw = statusRaw.replace(/\r/g, '');
         if (statusRaw === '') {
           emptyCount++;
           if (emptyCount > MAX_EMPTY_STATUS_COUNT) break; // Safeguard against malformed NUL floods

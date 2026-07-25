@@ -5,7 +5,11 @@ import { IMPACT_HIGH, IMPACT_MEDIUM, IMPACT_LOW } from './constants.js';
 
 export function evaluateNumericFilter(filterString: string, recordValue: number | undefined): boolean {
   if (recordValue === undefined) return false;
-  const matchObj = filterString.match(/^(>=|<=|>|<|==|=|)?\s*(-?\d+(?:\.\d+)?)$/);
+  const normalizedFilter = filterString.toLowerCase()
+    .replace(/\bhigh\b/g, String(IMPACT_HIGH))
+    .replace(/\bmedium\b/g, String(IMPACT_MEDIUM))
+    .replace(/\blow\b/g, String(IMPACT_LOW));
+  const matchObj = normalizedFilter.match(/^(>=|<=|>|<|==|=|)?\s*(-?\d+(?:\.\d+)?)$/);
   if (!matchObj) return false;
   const op = matchObj[1] || '==';
   const val = parseFloat(matchObj[2]);
