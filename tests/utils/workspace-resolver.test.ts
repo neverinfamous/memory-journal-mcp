@@ -88,7 +88,7 @@ describe('workspace-resolver with keyword and tag inference', () => {
         expect(res.projectNumber).toBe(9) // Corrected from 7 to mysql-mcp's registered project_number 9
     })
 
-    it('falls back safely without creating ghost project number when project_number is unregistered and no keywords match', () => {
+    it('preserves explicit project_number when no workspace keywords conflict', () => {
         const spy = vi.spyOn(process, 'cwd').mockReturnValue('C:\\tmp\\unregistered-project')
         try {
             const res = resolveProjectContext(
@@ -100,7 +100,7 @@ describe('workspace-resolver with keyword and tag inference', () => {
                 mockConfig
             )
             expect(res.workspaceId).toBe('default')
-            expect(res.projectNumber).toBeUndefined() // Does NOT keep unregistered 7
+            expect(res.projectNumber).toBe(7) // Preserves explicit project_number when no workspace keyword conflict occurs
         } finally {
             spy.mockRestore()
         }

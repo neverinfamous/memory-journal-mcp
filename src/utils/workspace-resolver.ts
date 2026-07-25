@@ -52,13 +52,6 @@ export function resolveProjectContext(
     config?: ToolHandlerConfig
 ): ResolvedContext {
     const registry = config?.projectRegistry ?? loadProjectRegistryFromConfig()
-    
-    // Helper to verify if a project_number exists in the registry
-    const isRegisteredProjNum =
-        registry !== undefined &&
-        input.project_number !== undefined &&
-        input.project_number !== null &&
-        Object.values(registry).some((r) => r.project_number === input.project_number)
 
     // 1. Truly explicit non-default workspace_id provided
     if (
@@ -67,8 +60,7 @@ export function resolveProjectContext(
         input.workspace_id !== 'default'
     ) {
         const wsId = input.workspace_id
-        const regProjNum = registry?.[wsId]?.project_number
-        let projNum = (isRegisteredProjNum ? input.project_number : undefined) ?? regProjNum
+        let projNum = input.project_number ?? (registry?.[wsId]?.project_number)
         projNum ??= resolveProjectNumberFromPath(process.cwd())
         return {
             workspaceId: wsId,
@@ -76,8 +68,8 @@ export function resolveProjectContext(
         }
     }
 
-    // 2. Explicit registered project_number provided (or workspace_id was 'default'/missing)
-    if (isRegisteredProjNum && input.project_number !== undefined && input.project_number !== null) {
+    // 2. Explicit project_number provided -> lookup matching workspace_id in projectRegistry
+    if (input.project_number !== undefined && input.project_number !== null) {
         const projNum = input.project_number
         let wsId: string | undefined
         if (registry) {
@@ -136,16 +128,25 @@ export function resolveProjectContext(
             }
 
             if (matched) {
+                // Matched registered workspace entry takes precedence for projectNumber
                 return {
                     workspaceId: key,
-                    projectNumber: isRegisteredProjNum ? input.project_number : entry.project_number
+                    projectNumber: entry.project_number ?? input.project_number
                 }
             }
         }
     }
 
-    // 4. Fallback (respect explicit input.workspace_id if passed, otherwise defaultWorkspaceId or 'default')
-    const cwdProjNum = isRegisteredProjNum ? input.project_number : resolveProjectNumberFromPath(process.cwd())
+    // 4. Explicit input.project_number fallback (when no conflicting registry workspace matched)
+    if (input.project_number !== undefined && input.project_number !== null) {
+        return {
+            workspaceId: input.workspace_id ?? config?.defaultWorkspaceId ?? 'default',
+            projectNumber: input.project_number
+        }
+    }
+
+    // 5. CWD / Config Fallback
+    const cwdProjNum = resolveProjectNumberFromPath(process.cwd())
 
     return {
         workspaceId: input.workspace_id ?? config?.defaultWorkspaceId ?? 'default',
