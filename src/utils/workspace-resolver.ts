@@ -90,7 +90,27 @@ export function resolveProjectContext(
 
     // 3. Content / Tags keyword matching against projectRegistry
     if (registry) {
+        const TAG_ALIASES: Record<string, string> = {
+            mysql: 'mysql-mcp',
+            postgres: 'postgres-mcp',
+            postgresql: 'postgres-mcp',
+            kv: 'kv-manager',
+            r2: 'R2-Manager-Worker',
+            d1: 'd1-manager',
+            do: 'do-manager',
+            adamic: 'adamic'
+        }
+
         const tagSet = new Set((input.tags ?? []).map((t) => t.toLowerCase().trim()))
+        
+        // Expand aliases in tagSet
+        for (const tag of Array.from(tagSet)) {
+            const aliasKey = TAG_ALIASES[tag]
+            if (aliasKey) {
+                tagSet.add(aliasKey.toLowerCase())
+            }
+        }
+
         const contentLower = (input.content ?? '').toLowerCase()
 
         for (const [key, entry] of Object.entries(registry)) {

@@ -40,12 +40,24 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
 
                     const { created: results, errors } = db.createEntries(input.entries.map((e) => {
                         const wsId = e.workspace_id
-                        let pNumber = e.project_number ?? input.project_number ?? context.config?.defaultProjectNumber
-                        if ((pNumber === undefined || pNumber === null) && context.config?.projectRegistry) {
-                            const registryEntry = context.config.projectRegistry[wsId]
-                            if (registryEntry) {
-                                pNumber = registryEntry.project_number
-                            }
+                        let pNumber = e.project_number ?? input.project_number
+                        if (pNumber === undefined || pNumber === null || pNumber <= 0) {
+                            const resolved = resolveProjectContext(
+                                {
+                                    workspace_id: wsId,
+                                    project_number: pNumber,
+                                    content: e.content,
+                                    tags: e.tags
+                                },
+                                context.config
+                            )
+                            pNumber = resolved.projectNumber
+                        }
+
+                        if (pNumber === undefined || pNumber === null || pNumber <= 0) {
+                            throw new Error(
+                                `project_number is required. Batch entry must be assigned to a valid project (failed to resolve project_number for workspace '${wsId}').`
+                            )
                         }
                         
                         return {
