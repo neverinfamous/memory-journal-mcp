@@ -174,8 +174,34 @@ export function healAgentHallucinations(val: unknown): unknown {
             modified = true
         }
 
+        // Heal entry_id / entry_ids numeric string coercion
+        if ('entry_id' in obj && obj['entry_id'] !== undefined && obj['entry_id'] !== null) {
+            if (typeof obj['entry_id'] === 'string') {
+                const cleaned = obj['entry_id'].replace(/^[^0-9]+/, '')
+                const num = Number(cleaned)
+                if (!Number.isNaN(num) && cleaned.trim() !== '') {
+                    obj['entry_id'] = num
+                    modified = true
+                }
+            }
+        }
+        if ('entry_ids' in obj && Array.isArray(obj['entry_ids'])) {
+            const healedIds = obj['entry_ids'].map((id: unknown) => {
+                if (typeof id === 'string') {
+                    const cleaned = id.replace(/^[^0-9]+/, '')
+                    const num = Number(cleaned)
+                    return !Number.isNaN(num) && cleaned.trim() !== '' ? num : id
+                }
+                return id
+            })
+            if (JSON.stringify(obj['entry_ids']) !== JSON.stringify(healedIds)) {
+                obj['entry_ids'] = healedIds
+                modified = true
+            }
+        }
+
         // Clean up common extra keys that cause strict schema validation failures
-        for (const extraKey of ['date', 'created_at', 'updated_at', 'type']) {
+        for (const extraKey of ['date', 'created_at', 'updated_at', 'type', 'status']) {
             if (extraKey in obj && extraKey !== 'entry_type') {
                 if (extraKey === 'type' && !('entry_type' in obj)) {
                     obj['entry_type'] = obj['type']
@@ -183,6 +209,39 @@ export function healAgentHallucinations(val: unknown): unknown {
                 Reflect.deleteProperty(obj, extraKey)
                 modified = true
             }
+        }
+
+        if ('focus' in obj) {
+            if (obj['focus']) {
+                obj['content'] = obj['content'] ? `${String(obj['content'])}\n\n**Focus:** ${String(obj['focus'])}` : String(obj['focus'])
+            }
+            delete obj['focus']
+            modified = true
+        }
+        if ('resolution' in obj) {
+            if (obj['resolution']) {
+                obj['content'] = obj['content'] ? `${String(obj['content'])}\n\n**Resolution:** ${String(obj['resolution'])}` : String(obj['resolution'])
+            }
+            delete obj['resolution']
+            modified = true
+        }
+        if ('artifacts' in obj) {
+            if (Array.isArray(obj['artifacts']) && obj['artifacts'].length > 0) {
+                const artStr = obj['artifacts'].map(a => typeof a === 'string' ? a : JSON.stringify(a)).join(', ')
+                obj['content'] = obj['content'] ? `${String(obj['content'])}\n\n**Artifacts:** ${artStr}` : artStr
+            }
+            delete obj['artifacts']
+            modified = true
+        }
+        if ('category' in obj) {
+            if (typeof obj['category'] === 'string' && obj['category'].trim() !== '') {
+                obj['tags'] ??= []
+                if (Array.isArray(obj['tags']) && !obj['tags'].includes(obj['category'])) {
+                    obj['tags'].push(obj['category'])
+                }
+            }
+            delete obj['category']
+            modified = true
         }
 
         // 3. Heal auto_context

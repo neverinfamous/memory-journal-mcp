@@ -141,6 +141,25 @@ async function executeCode(
                         }
                     }
                 }
+                // Handle `mj.entries.create` or `mj.entries(...)` hallucination
+                if (prop === 'entries' && 'core' in target) {
+                    const coreGroup = target['core'] as Record<string, unknown>
+                    const listFunc = coreGroup['get_recent_entries'] ?? coreGroup['getRecentEntries']
+                    if (typeof listFunc === 'function') {
+                        const callableEntries = function(this: unknown, ...args: unknown[]): unknown {
+                            return (listFunc as (...args: unknown[]) => unknown).apply(this, args)
+                        }
+                        const adminGroup = target['admin'] as Record<string, unknown> | undefined
+                        Object.assign(callableEntries, {
+                            create: coreGroup['create_entry'] ?? coreGroup['createEntry'],
+                            add: coreGroup['create_entry'] ?? coreGroup['createEntry'],
+                            get: coreGroup['get_entry_by_id'] ?? coreGroup['getEntryById'],
+                            update: adminGroup?.['update_entry'] ?? adminGroup?.['updateEntry'],
+                            delete: adminGroup?.['delete_entry'] ?? adminGroup?.['deleteEntry'],
+                        })
+                        return callableEntries
+                    }
+                }
                 // Handle `memory.journal.addEntry` or `Entry.create` / `mj.add` / `mj.log` natural hallucination
                 if ((prop === 'addEntry' || prop === 'create_entry' || prop === 'createEntry' || prop === 'create' || prop === 'add' || prop === 'log') && 'core' in target) {
                     const coreGroup = target['core'] as Record<string, unknown>
@@ -306,6 +325,8 @@ async function executeCode(
             mcp: shimMj,
             mcpx: shimMj,
             memoryJournal: shimMj,
+            MemoryJournal: shimMj,
+            tools: shimMj,
             sdk: shimMj,
             client: shimMj,
             system: shimMj,
@@ -315,6 +336,17 @@ async function executeCode(
             sqlite_journal_add_entry: (shimMj['core'] as Record<string, unknown>)?.['createEntry'] ?? (shimMj['core'] as Record<string, unknown>)?.['create_entry'],
             create_entry: (shimMj['core'] as Record<string, unknown>)?.['createEntry'] ?? (shimMj['core'] as Record<string, unknown>)?.['create_entry'],
             createEntry: (shimMj['core'] as Record<string, unknown>)?.['createEntry'] ?? (shimMj['core'] as Record<string, unknown>)?.['create_entry'],
+            createMemory: (arg: unknown) => (shimMj['core'] as Record<string, unknown>)?.['createEntry']?.(arg),
+            appendEntry: (arg: unknown) => (shimMj['core'] as Record<string, unknown>)?.['createEntry']?.(arg),
+            createJournalEntry: (arg: unknown) => (shimMj['core'] as Record<string, unknown>)?.['createEntry']?.(arg),
+            loadJournal: () => Promise.resolve(shimMj),
+            saveJournal: () => Promise.resolve({ success: true }),
+            readJournal: () => (shimMj['core'] as Record<string, unknown>)?.['getRecentEntries']?.({ limit: 50 }),
+            writeJournal: (arg: unknown) => (shimMj['core'] as Record<string, unknown>)?.['createEntry']?.(arg),
+            loadMemory: () => Promise.resolve(shimMj),
+            saveMemory: () => Promise.resolve({ success: true }),
+            update_configuration: (arg: unknown) => (shimMj['admin'] as Record<string, unknown>)?.['updateConfiguration']?.(arg),
+            updateConfiguration: (arg: unknown) => (shimMj['admin'] as Record<string, unknown>)?.['updateConfiguration']?.(arg),
             context: frozenContext,
             console: consoleShim,
             fetch: undefined,

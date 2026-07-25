@@ -115,6 +115,8 @@ export const DEFAULT_SECURITY_CONFIG: SecurityConfig = {
     blockedPatterns: [
         /\brequire\s*\(/, // No require()
         /\bimport\s*\(/, // No dynamic import()
+        /\bimport\s+[\s\S]*?\bfrom\b/, // No static ES module import from
+        /\bimport\s*[\{*]/, // No static ES module import statement
         /(?<![.-])\bprocess\./, // No process access
         /(?<![.-])\bglobal\./, // No global access
         /(?<![.-])\bglobalThis\./, // No globalThis access

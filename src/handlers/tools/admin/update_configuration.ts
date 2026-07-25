@@ -17,6 +17,24 @@ export const updateConfigurationSchema = z.preprocess(
                 }
                 delete obj['filter'];
             }
+
+            if ('project_number' in obj && obj['project_number'] !== undefined && obj['project_number'] !== null) {
+                if (typeof obj['project_number'] === 'string') {
+                    const cleaned = obj['project_number'].replace(/^[^0-9]+/, '')
+                    const num = Number(cleaned)
+                    if (!Number.isNaN(num) && cleaned.trim() !== '') {
+                        obj['project_number'] = num
+                    } else {
+                        delete obj['project_number']
+                    }
+                }
+            }
+
+            for (const key of ['session_id', 'update_notes', 'notes', 'title', 'content', 'tags', 'description']) {
+                if (key in obj) {
+                    delete obj[key]
+                }
+            }
             return obj;
         }
         return val;

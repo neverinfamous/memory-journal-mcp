@@ -77,8 +77,8 @@ export class CodeModeSecurityManager {
         for (const pattern of this.config.blockedPatterns) {
             if (pattern.test(strippedCode)) {
                 let hint = ''
-                if (pattern.source.includes('require')) {
-                    hint = ' Dynamic require() and module imports are disabled in sandboxed Code Mode. Use mj.* tools directly.'
+                if (pattern.source.includes('require') || pattern.source.includes('import')) {
+                    hint = ' Dynamic require() and ES module import statements are disabled in sandboxed Code Mode. Use mj.* tools directly.'
                 } else if (pattern.source.includes('fs')) {
                     hint = ' Node.js filesystem access is disabled in sandboxed Code Mode. Use mj.* tools to access journal entries or state.'
                 } else if (pattern.source.includes('process')) {
