@@ -429,13 +429,6 @@ export function systemInterceptor(ctx: ExecutionContext): void {
       process.exit(1);
     })
 
-    // Search tool enforcement (FS Alias Hallucinations)
-    .with({ isCommand: true, originalCmd: P.union('grep', 'grep.exe', 'egrep', 'egrep.exe', 'fgrep', 'fgrep.exe', 'rg', 'rg.exe', 'select-string', 'select-string.exe'), hasStdin: false, payload: P.when((p: unknown) => typeof p === 'object' && p !== null && !('target' in p && p.target === 'wsl2')) }, () => {
-      if (args && (args.includes('--help') || args.includes('-h'))) return;
-      console.error(`\n   💡 AGENT HINT: Do NOT use '${originalCmd}' or its PowerShell cmdlet equivalent (Select-String) natively. You MUST use the agent-native 'grep_search' tool instead.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
-      process.exit(1);
-    })
-
     .with({ isCommand: true, hasStdin: false, cmd: P.union('grep', 'grep.exe', 'egrep', 'fgrep', 'rg', 'rg.exe'), positionalArgs: P.when(pa => pa.length <= 1) }, () => {
       if (!args) args = [];
       if (args.includes('--help') || args.includes('-h')) return;
@@ -443,6 +436,13 @@ export function systemInterceptor(ctx: ExecutionContext): void {
         console.error(`\n   💡 AGENT HINT: '${cmd.replace(/\.exe$/, '')}' called without file arguments, no recursive flag, and no stdin. It will hang indefinitely.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
         process.exit(1);
       }
+    })
+
+    // Search tool enforcement (FS Alias Hallucinations)
+    .with({ isCommand: true, originalCmd: P.union('grep', 'grep.exe', 'egrep', 'egrep.exe', 'fgrep', 'fgrep.exe', 'rg', 'rg.exe', 'select-string', 'select-string.exe'), hasStdin: false, payload: P.when((p: unknown) => typeof p === 'object' && p !== null && !('target' in p && p.target === 'wsl2')) }, () => {
+      if (args && (args.includes('--help') || args.includes('-h'))) return;
+      console.error(`\n   💡 AGENT HINT: Do NOT use '${originalCmd}' or its PowerShell cmdlet equivalent (Select-String) natively. You MUST use the agent-native 'grep_search' tool instead.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+      process.exit(1);
     })
 
     // List dir tool enforcement (FS Alias Hallucinations)
