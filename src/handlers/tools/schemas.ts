@@ -212,35 +212,41 @@ export function healAgentHallucinations(val: unknown): unknown {
         }
 
         if ('focus' in obj) {
-            if (obj['focus']) {
-                obj['content'] = obj['content'] ? `${String(obj['content'])}\n\n**Focus:** ${String(obj['focus'])}` : String(obj['focus'])
+            const focusVal = typeof obj['focus'] === 'string' ? obj['focus'] : (obj['focus'] ? String(obj['focus']) : '')
+            if (focusVal !== '') {
+                const existingContent = typeof obj['content'] === 'string' ? obj['content'] : (obj['content'] ? String(obj['content']) : '')
+                obj['content'] = existingContent !== '' ? `${existingContent}\n\n**Focus:** ${focusVal}` : focusVal
             }
-            delete obj['focus']
+            Reflect.deleteProperty(obj, 'focus')
             modified = true
         }
         if ('resolution' in obj) {
-            if (obj['resolution']) {
-                obj['content'] = obj['content'] ? `${String(obj['content'])}\n\n**Resolution:** ${String(obj['resolution'])}` : String(obj['resolution'])
+            const resVal = typeof obj['resolution'] === 'string' ? obj['resolution'] : (obj['resolution'] ? String(obj['resolution']) : '')
+            if (resVal !== '') {
+                const existingContent = typeof obj['content'] === 'string' ? obj['content'] : (obj['content'] ? String(obj['content']) : '')
+                obj['content'] = existingContent !== '' ? `${existingContent}\n\n**Resolution:** ${resVal}` : resVal
             }
-            delete obj['resolution']
+            Reflect.deleteProperty(obj, 'resolution')
             modified = true
         }
         if ('artifacts' in obj) {
             if (Array.isArray(obj['artifacts']) && obj['artifacts'].length > 0) {
                 const artStr = obj['artifacts'].map(a => typeof a === 'string' ? a : JSON.stringify(a)).join(', ')
-                obj['content'] = obj['content'] ? `${String(obj['content'])}\n\n**Artifacts:** ${artStr}` : artStr
+                const existingContent = typeof obj['content'] === 'string' ? obj['content'] : (obj['content'] ? String(obj['content']) : '')
+                obj['content'] = existingContent !== '' ? `${existingContent}\n\n**Artifacts:** ${artStr}` : artStr
             }
-            delete obj['artifacts']
+            Reflect.deleteProperty(obj, 'artifacts')
             modified = true
         }
         if ('category' in obj) {
             if (typeof obj['category'] === 'string' && obj['category'].trim() !== '') {
+                const cat = obj['category'].trim()
                 obj['tags'] ??= []
-                if (Array.isArray(obj['tags']) && !obj['tags'].includes(obj['category'])) {
-                    obj['tags'].push(obj['category'])
+                if (Array.isArray(obj['tags']) && !obj['tags'].includes(cat)) {
+                    obj['tags'].push(cat)
                 }
             }
-            delete obj['category']
+            Reflect.deleteProperty(obj, 'category')
             modified = true
         }
 

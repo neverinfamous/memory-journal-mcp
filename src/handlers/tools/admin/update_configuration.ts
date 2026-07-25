@@ -25,14 +25,14 @@ export const updateConfigurationSchema = z.preprocess(
                     if (!Number.isNaN(num) && cleaned.trim() !== '') {
                         obj['project_number'] = num
                     } else {
-                        delete obj['project_number']
+                        Reflect.deleteProperty(obj, 'project_number')
                     }
                 }
             }
 
             for (const key of ['session_id', 'update_notes', 'notes', 'title', 'content', 'tags', 'description']) {
                 if (key in obj) {
-                    delete obj[key]
+                    Reflect.deleteProperty(obj, key)
                 }
             }
             return obj;
