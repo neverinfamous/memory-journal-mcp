@@ -95,4 +95,15 @@ test.describe('Payload Contracts: Admin', () => {
         expect(Array.isArray(payload.updated)).toBe(true)
         expect(payload.updated).toContain('briefing_entries')
     })
+
+    test('update_configuration gracefully strips hallucinatory meta keys like target', async () => {
+        const payload = await callToolAndParse(client, 'update_configuration', {
+            target: 'test',
+            briefing_entries: 5,
+        })
+        expectSuccess(payload)
+        expect(payload.success).toBe(true)
+        expect(Array.isArray(payload.updated)).toBe(true)
+        expect(payload.updated).toContain('briefing_entries')
+    })
 })
