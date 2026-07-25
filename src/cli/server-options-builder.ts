@@ -251,7 +251,7 @@ export function buildServerOptions(
         }, undefined),
         persistMetrics: catchConfig(() => resolver.resolveBool('persistMetrics', 'PERSIST_METRICS') ?? false, false),
         metricsPath: catchConfig(() => resolver.resolve<string>('metricsPath', 'METRICS_PATH'), undefined),
-        metricsPort: catchConfig(() => resolver.resolveInt('metricsPort', 'MJ_METRICS_PORT', 1, 65535), undefined),
+        metricsPort: catchConfig(() => resolver.resolveInt('metricsPort', 'MJ_METRICS_PORT', 0, 65535), undefined),
         configFilePath: catchConfig(() => resolver.loadedConfigPath, undefined),
     };
 

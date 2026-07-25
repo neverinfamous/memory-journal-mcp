@@ -1098,11 +1098,10 @@ export const TeamCrossProjectInsightsSchema = z.object({
 export const TeamCrossProjectInsightsSchemaMcp = z.object({
     start_date: z.string().optional().describe('Start date (YYYY-MM-DD)'),
     end_date: z.string().optional().describe('End date (YYYY-MM-DD)'),
-    min_entries: relaxedNumber().optional()
+    min_entries: relaxedNumber()
         .optional()
-        .default(3)
         .describe('Minimum entries to include project'),
-    limit: relaxedNumber().optional().default(100).describe('Max projects to return'),
+    limit: relaxedNumber().optional().describe('Max projects to return'),
     workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
 })
 

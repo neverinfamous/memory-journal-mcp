@@ -27,8 +27,9 @@ export function startMetricsServer(runtime: ServerRuntime): () => Promise<void> 
         }
     });
 
-    server.on('error', (error: any) => {
-        if (error?.code === 'EADDRINUSE') {
+    server.on('error', (error: unknown) => {
+        const err = error as { code?: string } | null | undefined;
+        if (typeof err === 'object' && err !== null && err.code === 'EADDRINUSE') {
             logger.warning(`Metrics server port ${port} is already in use; standalone metrics server disabled for this instance`, { module: 'MetricsServer' });
         } else {
             logger.error('Metrics server error', { error: error instanceof Error ? error.message : String(error), module: 'MetricsServer' });
