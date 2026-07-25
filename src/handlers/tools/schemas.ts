@@ -211,19 +211,32 @@ export function healAgentHallucinations(val: unknown): unknown {
             }
         }
 
+        const toStr = (v: unknown): string => {
+            if (typeof v === 'string') return v
+            if (typeof v === 'number' || typeof v === 'boolean') return String(v)
+            if (v !== null && v !== undefined) {
+                try {
+                    return JSON.stringify(v)
+                } catch {
+                    return ''
+                }
+            }
+            return ''
+        }
+
         if ('focus' in obj) {
-            const focusVal = typeof obj['focus'] === 'string' ? obj['focus'] : (obj['focus'] ? String(obj['focus']) : '')
+            const focusVal = toStr(obj['focus'])
             if (focusVal !== '') {
-                const existingContent = typeof obj['content'] === 'string' ? obj['content'] : (obj['content'] ? String(obj['content']) : '')
+                const existingContent = toStr(obj['content'])
                 obj['content'] = existingContent !== '' ? `${existingContent}\n\n**Focus:** ${focusVal}` : focusVal
             }
             Reflect.deleteProperty(obj, 'focus')
             modified = true
         }
         if ('resolution' in obj) {
-            const resVal = typeof obj['resolution'] === 'string' ? obj['resolution'] : (obj['resolution'] ? String(obj['resolution']) : '')
+            const resVal = toStr(obj['resolution'])
             if (resVal !== '') {
-                const existingContent = typeof obj['content'] === 'string' ? obj['content'] : (obj['content'] ? String(obj['content']) : '')
+                const existingContent = toStr(obj['content'])
                 obj['content'] = existingContent !== '' ? `${existingContent}\n\n**Resolution:** ${resVal}` : resVal
             }
             Reflect.deleteProperty(obj, 'resolution')
@@ -232,7 +245,7 @@ export function healAgentHallucinations(val: unknown): unknown {
         if ('artifacts' in obj) {
             if (Array.isArray(obj['artifacts']) && obj['artifacts'].length > 0) {
                 const artStr = obj['artifacts'].map(a => typeof a === 'string' ? a : JSON.stringify(a)).join(', ')
-                const existingContent = typeof obj['content'] === 'string' ? obj['content'] : (obj['content'] ? String(obj['content']) : '')
+                const existingContent = toStr(obj['content'])
                 obj['content'] = existingContent !== '' ? `${existingContent}\n\n**Artifacts:** ${artStr}` : artStr
             }
             Reflect.deleteProperty(obj, 'artifacts')
