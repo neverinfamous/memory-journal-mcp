@@ -75,6 +75,37 @@ describe('workspace-resolver with keyword and tag inference', () => {
         }
     })
 
+    it('auto-corrects unregistered project_number (like 7) when content matches a registered workspace', () => {
+        const res = resolveProjectContext(
+            {
+                project_number: 7, // Unregistered project number
+                content: 'Tested mysql-mcp stats_moving_avg and mysql_stats_ntile',
+                tags: ['journal']
+            },
+            mockConfig
+        )
+        expect(res.workspaceId).toBe('mysql-mcp')
+        expect(res.projectNumber).toBe(9) // Corrected from 7 to mysql-mcp's registered project_number 9
+    })
+
+    it('falls back safely without creating ghost project number when project_number is unregistered and no keywords match', () => {
+        const spy = vi.spyOn(process, 'cwd').mockReturnValue('C:\\tmp\\unregistered-project')
+        try {
+            const res = resolveProjectContext(
+                {
+                    project_number: 7, // Unregistered project number
+                    content: 'Random general reflection',
+                    tags: ['journal']
+                },
+                mockConfig
+            )
+            expect(res.workspaceId).toBe('default')
+            expect(res.projectNumber).toBeUndefined() // Does NOT keep unregistered 7
+        } finally {
+            spy.mockRestore()
+        }
+    })
+
     it('resolveWorkspaceId helper delegates accurately', () => {
         const wsId = resolveWorkspaceId(
             undefined,
