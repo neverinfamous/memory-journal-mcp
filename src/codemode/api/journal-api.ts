@@ -502,6 +502,29 @@ export class JournalApi {
             
             // Global Hallucinations
             readResource: (uri?: string) => {
+                if (typeof uri === 'string') {
+                    if (uri.startsWith('memory://briefing') && typeof this.core['getBriefing'] === 'function') {
+                        return this.core['getBriefing']()
+                    }
+                    if ((uri.startsWith('memory://agent-id') || uri.startsWith('memory://config')) && typeof this.core['getConfig'] === 'function') {
+                        return this.core['getConfig']()
+                    }
+                    if (uri.startsWith('memory://recent') && typeof this.core['getRecentEntries'] === 'function') {
+                        return this.core['getRecentEntries']()
+                    }
+                    if (uri.startsWith('memory://statistics') && typeof this.analytics['getStatistics'] === 'function') {
+                        return this.analytics['getStatistics']()
+                    }
+                    if (uri.startsWith('memory://tags') && typeof this.core['listTags'] === 'function') {
+                        return this.core['listTags']()
+                    }
+                    if (uri.startsWith('memory://flags') && typeof this.team['teamListFlags'] === 'function') {
+                        return this.team['teamListFlags']({ status: 'active' })
+                    }
+                    if (uri.startsWith('memory://insights') && typeof this.analytics['getCrossProjectInsights'] === 'function') {
+                        return this.analytics['getCrossProjectInsights']()
+                    }
+                }
                 const suggestions: Record<string, string> = {
                     'memory://recent': 'mj.core.getRecentEntries()',
                     'memory://statistics': 'mj.analytics.getStatistics()',

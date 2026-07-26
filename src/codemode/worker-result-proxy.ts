@@ -125,6 +125,23 @@ export function wrapResult(result: unknown): unknown {
                         }
                     }
 
+                    // Property aliases for primary array or result object
+                    if (prop === 'data' || prop === 'items' || prop === 'entries' || prop === 'results' || prop === 'rows' || prop === 'dataArray') {
+                        const targetRecord = target as Record<string, unknown>
+                        const arrayKeys = Object.keys(targetRecord).filter(k => Array.isArray(targetRecord[k]))
+                        let targetKey = arrayKeys.find(k => ['entries', 'results', 'projects', 'items', 'rows', 'tables', 'flags', 'groups', 'users', 'capabilities', 'metrics', 'events', 'records', 'logs', 'aliases', 'tags', 'issues', 'pullRequests', 'milestones', 'columns', 'comments', 'files', 'errors', 'backups', 'deleted', 'updated', 'notFound', 'history', 'relationships', 'members'].includes(k))
+                        if (targetKey === undefined && arrayKeys.length === 1) {
+                            targetKey = arrayKeys[0]
+                        }
+                        if (targetKey !== undefined) {
+                            return targetRecord[targetKey]
+                        }
+                    }
+
+                    if (prop === 'result') {
+                        return target
+                    }
+
                     if (prop === 'length') {
                         const targetRecord = target as Record<string, unknown>
                         const arrayKeys = Object.keys(targetRecord).filter(k => Array.isArray(targetRecord[k]))

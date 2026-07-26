@@ -159,15 +159,15 @@ async function executeCode(
                             get: coreGroup['get_entry_by_id'] ?? coreGroup['getEntryById'],
                             getEntryById: coreGroup['get_entry_by_id'] ?? coreGroup['getEntryById'],
                             get_entry_by_id: coreGroup['get_entry_by_id'] ?? coreGroup['getEntryById'],
-                            update: adminGroup?.['update_entry'] ?? adminGroup?.['updateEntry'],
-                            updateEntry: adminGroup?.['update_entry'] ?? adminGroup?.['updateEntry'],
-                            update_entry: adminGroup?.['update_entry'] ?? adminGroup?.['updateEntry'],
-                            delete: adminGroup?.['delete_entry'] ?? adminGroup?.['deleteEntry'],
-                            deleteEntry: adminGroup?.['delete_entry'] ?? adminGroup?.['deleteEntry'],
-                            delete_entry: adminGroup?.['delete_entry'] ?? adminGroup?.['deleteEntry'],
-                            search: searchGroup?.['search_entries'] ?? searchGroup?.['searchEntries'],
-                            searchEntries: searchGroup?.['search_entries'] ?? searchGroup?.['searchEntries'],
-                            search_entries: searchGroup?.['search_entries'] ?? searchGroup?.['searchEntries'],
+                            update: adminGroup?.['update_entry'] ?? adminGroup?.['updateEntry'] ?? coreGroup['update_entry'] ?? coreGroup['updateEntry'],
+                            updateEntry: adminGroup?.['update_entry'] ?? adminGroup?.['updateEntry'] ?? coreGroup['update_entry'] ?? coreGroup['updateEntry'],
+                            update_entry: adminGroup?.['update_entry'] ?? adminGroup?.['updateEntry'] ?? coreGroup['update_entry'] ?? coreGroup['updateEntry'],
+                            delete: adminGroup?.['delete_entry'] ?? adminGroup?.['deleteEntry'] ?? coreGroup['delete_entry'] ?? coreGroup['deleteEntry'],
+                            deleteEntry: adminGroup?.['delete_entry'] ?? adminGroup?.['deleteEntry'] ?? coreGroup['delete_entry'] ?? coreGroup['deleteEntry'],
+                            delete_entry: adminGroup?.['delete_entry'] ?? adminGroup?.['deleteEntry'] ?? coreGroup['delete_entry'] ?? coreGroup['deleteEntry'],
+                            search: searchGroup?.['search_entries'] ?? searchGroup?.['searchEntries'] ?? coreGroup['search_entries'] ?? coreGroup['searchEntries'],
+                            searchEntries: searchGroup?.['search_entries'] ?? searchGroup?.['searchEntries'] ?? coreGroup['search_entries'] ?? coreGroup['searchEntries'],
+                            search_entries: searchGroup?.['search_entries'] ?? searchGroup?.['searchEntries'] ?? coreGroup['search_entries'] ?? coreGroup['searchEntries'],
                             list: listFunc,
                             listEntries: listFunc,
                             list_entries: listFunc,
@@ -175,7 +175,40 @@ async function executeCode(
                             getRecentEntries: listFunc,
                             get_recent_entries: listFunc,
                         })
-                        return callableEntries
+                        return new Proxy(callableEntries, {
+                            get(targetFn, p, receiver) {
+                                if (p in targetFn) return (targetFn as unknown as Record<string | symbol, unknown>)[p]
+                                if (typeof p === 'string') {
+                                    const pLower = p.toLowerCase().replace(/_/g, '')
+                                    if (pLower.includes('search') || pLower.includes('query') || pLower.includes('find')) {
+                                        const searchFn = searchGroup?.['search_entries'] ?? searchGroup?.['searchEntries'] ?? coreGroup['search_entries'] ?? coreGroup['searchEntries']
+                                        if (typeof searchFn === 'function') return searchFn
+                                    }
+                                    if (pLower.includes('create') || pLower.includes('add') || pLower.includes('insert') || pLower.includes('append')) {
+                                        const createFn = coreGroup['create_entry'] ?? coreGroup['createEntry']
+                                        if (typeof createFn === 'function') return createFn
+                                    }
+                                    if (pLower.includes('get') || pLower.includes('fetch') || pLower.includes('read') || pLower.includes('byid')) {
+                                        const getFn = coreGroup['get_entry_by_id'] ?? coreGroup['getEntryById']
+                                        if (typeof getFn === 'function') return getFn
+                                    }
+                                    if (pLower.includes('update') || pLower.includes('edit') || pLower.includes('patch')) {
+                                        const updateFn = adminGroup?.['update_entry'] ?? adminGroup?.['updateEntry'] ?? coreGroup['update_entry'] ?? coreGroup['updateEntry']
+                                        if (typeof updateFn === 'function') return updateFn
+                                    }
+                                    if (pLower.includes('delete') || pLower.includes('remove')) {
+                                        const deleteFn = adminGroup?.['delete_entry'] ?? adminGroup?.['deleteEntry'] ?? coreGroup['delete_entry'] ?? coreGroup['deleteEntry']
+                                        if (typeof deleteFn === 'function') return deleteFn
+                                    }
+                                    if (pLower.includes('recent') || pLower.includes('list') || pLower.includes('all')) {
+                                        return listFunc
+                                    }
+                                    const methodOnCore = coreGroup[p] ?? searchGroup?.[p] ?? adminGroup?.[p]
+                                    if (typeof methodOnCore === 'function') return methodOnCore
+                                }
+                                return Reflect.get(targetFn, p, receiver) as unknown
+                            }
+                        })
                     }
                 }
                 // Handle `memory.journal.addEntry` or `Entry.create` / `mj.add` / `mj.log` natural hallucination
