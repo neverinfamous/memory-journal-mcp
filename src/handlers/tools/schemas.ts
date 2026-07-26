@@ -14,6 +14,7 @@
 
 import { z } from 'zod'
 import { ErrorFieldsMixin } from './error-fields-mixin.js'
+import { resolveProjectContext } from '../../utils/workspace-resolver.js'
 
 // ============================================================================
 // Shared Constants
@@ -145,10 +146,29 @@ export function healAgentHallucinations(val: unknown): unknown {
             modified = true
         }
 
-        // Default workspace_id to 'default' if missing, null, or empty string
-        if (!('workspace_id' in obj) || obj['workspace_id'] === null || obj['workspace_id'] === undefined || obj['workspace_id'] === '') {
-            obj['workspace_id'] = process.env['MCP_WORKSPACE_ID'] || 'default'
-            modified = true
+        // Auto-resolve workspace_id from project_number, tags, content, or registry if missing, null, empty, or 'default'
+        const wsId = typeof obj['workspace_id'] === 'string' ? obj['workspace_id'] : undefined
+        const projNum = typeof obj['project_number'] === 'number' && !Number.isNaN(obj['project_number']) ? obj['project_number'] : undefined
+        const contentStr = typeof obj['content'] === 'string' ? obj['content'] : undefined
+        const tagsArr = Array.isArray(obj['tags']) ? obj['tags'].filter((t): t is string => typeof t === 'string') : undefined
+
+        if (!wsId || wsId === '' || wsId === 'default') {
+            const resolved = resolveProjectContext({
+                workspace_id: wsId,
+                project_number: projNum,
+                content: contentStr,
+                tags: tagsArr
+            })
+            if (resolved.workspaceId && resolved.workspaceId !== 'default') {
+                obj['workspace_id'] = resolved.workspaceId
+                modified = true
+            } else if (process.env['MCP_WORKSPACE_ID']) {
+                obj['workspace_id'] = process.env['MCP_WORKSPACE_ID']
+                modified = true
+            } else if (!wsId) {
+                obj['workspace_id'] = 'default'
+                modified = true
+            }
         }
 
         // 2. Heal 'text', 'message', 'description', 'title', 'summary', 'notes' -> 'content'

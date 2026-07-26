@@ -1,4 +1,5 @@
 import { applyGitInterceptions } from './api/git-api.js';
+import { resolveProjectContext } from '../utils/workspace-resolver.js';
 
 export function isRecord(val: unknown): val is Record<string, unknown> {
     return typeof val === 'object' && val !== null && !Array.isArray(val);
@@ -80,8 +81,23 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
             }
             delete obj['projectName'];
         }
-        if ((obj['workspace_id'] === undefined || obj['workspace_id'] === null || obj['workspace_id'] === '') && (methodName === 'create_entry' || methodName === 'createEntry' || methodName === 'team_create_entry' || methodName === 'teamCreateEntry')) {
-            obj['workspace_id'] = process.env['MCP_WORKSPACE_ID'] || 'default';
+        if ((obj['workspace_id'] === undefined || obj['workspace_id'] === null || obj['workspace_id'] === '' || obj['workspace_id'] === 'default') && (methodName === 'create_entry' || methodName === 'createEntry' || methodName === 'team_create_entry' || methodName === 'teamCreateEntry')) {
+            const projNum = typeof obj['project_number'] === 'number' ? obj['project_number'] : undefined;
+            const content = typeof obj['content'] === 'string' ? obj['content'] : undefined;
+            const tags = Array.isArray(obj['tags']) ? obj['tags'].filter((t): t is string => typeof t === 'string') : undefined;
+            const resolved = resolveProjectContext({
+                workspace_id: typeof obj['workspace_id'] === 'string' ? obj['workspace_id'] : undefined,
+                project_number: projNum,
+                content,
+                tags
+            });
+            if (resolved.workspaceId && resolved.workspaceId !== 'default') {
+                obj['workspace_id'] = resolved.workspaceId;
+            } else if (process.env['MCP_WORKSPACE_ID']) {
+                obj['workspace_id'] = process.env['MCP_WORKSPACE_ID'];
+            } else if (!obj['workspace_id']) {
+                obj['workspace_id'] = 'default';
+            }
         }
         
         if (typeof obj['sort_by'] === 'string') {

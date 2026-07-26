@@ -126,7 +126,7 @@ export function generateStandardInstructions(
     let instructions = CORE_INSTRUCTIONS
 
     if (config?.defaultWorkspaceId) {
-        instructions += `\n\n### Multi-Tenancy\n**Active Workspace:** \`${config.defaultWorkspaceId}\`\nAll entries and searches are isolated to this workspace by default. Include \`workspace_id\` parameter in tool calls if you need to override this.`
+        instructions += `\n\n### Multi-Tenancy\n**Active Workspace:** \`${config.defaultWorkspaceId}\`\nAll entries and searches are isolated to this workspace by default. Include \`workspace_id\` parameter in tool calls if you need to override this. When creating entries, \`workspace_id\` is automatically resolved from \`project_number\` or registry mappings if omitted.`
     }
 
     // Code Mode snippet — only when codemode group is enabled

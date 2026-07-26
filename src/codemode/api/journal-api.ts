@@ -12,6 +12,7 @@ import { METHOD_ALIASES } from '../api-constants.js'
 import { getZodTypeString } from '../type-generator.js'
 import type { ToolDispatcher, GroupApiRecord } from './types.js'
 import { parseProjectRegistry } from './types.js'
+import { resolveProjectContext } from '../../utils/workspace-resolver.js'
 import { createGroupApi, toolNameToMethodName } from './group-factory.js'
 import * as fs from 'node:fs'
 import * as os from 'node:os'
@@ -95,23 +96,22 @@ export class JournalApi {
         // db-mcp bleedover: upsert maps to createEntry in journal context
         const _createEntryFn = this.core['createEntry']
         if (_createEntryFn) {
-            // Auto-resolve workspaceId from projectNumber if omitted by the script
+            // Auto-resolve workspaceId from projectNumber, content, tags, or registry if omitted by the script
             const wrappedCreateEntryFn = async (...args: unknown[]): Promise<unknown> => {
                 const params = args[0]
-                if (isRecord(params) && params['workspace_id'] === undefined && params['workspaceId'] === undefined) {
-                    const projectNumber = params['project_number'] ?? params['projectNumber']
-                    if (typeof projectNumber === 'number' && !Number.isNaN(projectNumber)) {
-                        try {
-                            const registryArr = parseProjectRegistry() as { name: string; project_number?: number | null; projectNumber?: number | null }[] | undefined
-                            if (registryArr) {
-                                const match = registryArr.find(p => p.projectNumber === projectNumber || p.project_number === projectNumber)
-                                if (match && typeof match.name === 'string') {
-                                    params['workspace_id'] = match.name
-                                }
-                            }
-                        } catch {
-                            // Silent fallback
-                        }
+                if (isRecord(params) && (params['workspace_id'] === undefined || params['workspace_id'] === 'default') && (params['workspaceId'] === undefined || params['workspaceId'] === 'default')) {
+                    const projNum = typeof params['project_number'] === 'number' ? params['project_number'] : (typeof params['projectNumber'] === 'number' ? params['projectNumber'] : undefined)
+                    const contentStr = typeof params['content'] === 'string' ? params['content'] : undefined
+                    const tagsArr = Array.isArray(params['tags']) ? params['tags'].filter((t): t is string => typeof t === 'string') : undefined
+                    
+                    const resolved = resolveProjectContext({
+                        project_number: projNum,
+                        content: contentStr,
+                        tags: tagsArr
+                    })
+                    if (resolved.workspaceId && resolved.workspaceId !== 'default') {
+                        params['workspace_id'] = resolved.workspaceId
+                        params['workspaceId'] = resolved.workspaceId
                     }
                 }
                 return await _createEntryFn(...args)

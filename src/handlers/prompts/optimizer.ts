@@ -207,9 +207,9 @@ Execution MUST proceed in two distinct phases:
 
 ### Phase 1: Rapid Pre-Audit & Health Scan (Quick-Wins & Unassigned Priority)
 1. **Safety Backup**: Call \`backup_journal\` before any mutations. Abort if backup creation fails.
-2. **Priority Zero-Tolerance Unassigned & Default Scan**:
-   - Run the Unassigned Scan script to check for entries where \`workspaceId === 'default'\` or \`projectNumber\` is missing/0.
-   - Perform immediate workspace migration using \`mj.admin.updateEntry({ id, project_number, workspace_id })\`.
+2. **Priority Zero-Tolerance Unassigned & Default Scan & Auto-Repair**:
+   - Run the Unassigned Scan script to check for entries where \`workspaceId === 'default'\` or \`projectNumber\` is missing/0 across all workspaces (\`workspace_id: '*'\`).
+   - Auto-repair entries: if an entry belongs to \`workspaceId: 'default'\` and has \`projectNumber\` deterministically matching a registered project in \`PROJECT_REGISTRY\`, migrate it immediately using \`mj.admin.updateEntry({ entry_id: id, target_workspace_id: correctWorkspace, workspace_id: '*' })\`.
    - **Root-Cause Investigation**: Investigate why any unassigned/default entries bypass project assignment (caller tool, missing CLI \`--project\` flag, or context resolution failure). Formulate a remediation plan.
 
 ### Phase 2: Systematic Multi-Project Cognitive Batch Audit (30–60 Entry Batches)
