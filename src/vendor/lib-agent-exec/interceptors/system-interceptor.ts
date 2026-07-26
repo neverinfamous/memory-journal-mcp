@@ -5,6 +5,7 @@ import { execSync } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
+import { convertToWslPath } from '../command-builder.js';
 
 
 export function systemInterceptor(ctx: ExecutionContext): void {
@@ -131,8 +132,8 @@ export function systemInterceptor(ctx: ExecutionContext): void {
     .with({ cmd: P.union('awk', 'sed', 'jq', 'jq.exe') }, () => {
       console.error(`\n   🛠️ AUTONOMOUS HEALING: '${cmdBasename}' natively fails, lacks features, or is not installed on Windows. Switching execution target to WSL2... (Frictionless Recovery)\x1b[0m`);
       ctx.payload.target = 'wsl2';
-      // Automatically convert Windows paths (like C:\...) to WSL paths (/mnt/c/...)
-      ctx.args = ctx.args.map(a => a.replace(/^([a-zA-Z]):\\/, (m, drive) => `/mnt/${drive.toLowerCase()}/`).replace(/\\/g, '/'));
+      // Automatically convert Windows paths (like C:\... or C:/... or "C:\...") to WSL paths (/mnt/c/...)
+      ctx.args = ctx.args.map(a => convertToWslPath(a));
     })
     .with({ isCommand: true, originalCmd: P.union('grep', 'grep.exe', 'egrep', 'egrep.exe', 'fgrep', 'fgrep.exe', 'rg', 'rg.exe'), hasStdin: true }, () => {
       console.error(`\n   🛠️ AUTONOMOUS HEALING: Search command with stdin detected. Switching execution target to WSL2... (Frictionless Recovery)\x1b[0m`);

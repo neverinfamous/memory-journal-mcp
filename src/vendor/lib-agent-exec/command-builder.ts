@@ -58,19 +58,28 @@ export function convertToWslPath(winPath: string): string {
     return transform(winPath);
   }
 
+  const doubleQuoteMatch = winPath.match(/^"(.+)"$/);
+  const singleQuoteMatch = winPath.match(/^'(.+)'$/);
+  if (doubleQuoteMatch && path.win32.isAbsolute(doubleQuoteMatch[1])) {
+    return `"${transform(doubleQuoteMatch[1])}"`;
+  }
+  if (singleQuoteMatch && path.win32.isAbsolute(singleQuoteMatch[1])) {
+    return `'${transform(singleQuoteMatch[1])}'`;
+  }
+
   const kvMatch = winPath.match(/^([a-zA-Z0-9_-]+[=:])(.+)$/);
   if (kvMatch) {
     const prefix = kvMatch[1];
     const value = kvMatch[2];
     
-    const doubleQuoteMatch = value.match(/^"(.+)"$/);
-    const singleQuoteMatch = value.match(/^'(.+)'$/);
+    const doubleQuoteMatchValue = value.match(/^"(.+)"$/);
+    const singleQuoteMatchValue = value.match(/^'(.+)'$/);
     
-    if (doubleQuoteMatch && path.win32.isAbsolute(doubleQuoteMatch[1])) {
-      return `${prefix}"${transform(doubleQuoteMatch[1])}"`;
+    if (doubleQuoteMatchValue && path.win32.isAbsolute(doubleQuoteMatchValue[1])) {
+      return `${prefix}"${transform(doubleQuoteMatchValue[1])}"`;
     }
-    if (singleQuoteMatch && path.win32.isAbsolute(singleQuoteMatch[1])) {
-      return `${prefix}'${transform(singleQuoteMatch[1])}'`;
+    if (singleQuoteMatchValue && path.win32.isAbsolute(singleQuoteMatchValue[1])) {
+      return `${prefix}'${transform(singleQuoteMatchValue[1])}'`;
     }
     if (path.win32.isAbsolute(value)) {
       return `${prefix}${transform(value)}`;
@@ -323,15 +332,17 @@ export function buildCommand(payload: ExecPayload, cwd: string, isJson: boolean 
           const nonFlagIdx = localArgs.findIndex(a => !a.startsWith('-'));
           if (nonFlagIdx !== -1) {
             localArgs[nonFlagIdx] = sanitizeWslRegex(localArgs[nonFlagIdx]);
-            if (localArgs.includes('-E')) {
-              localArgs[localArgs.indexOf('-E')] = '-P';
-              localArgs[nonFlagIdx] = localArgs[nonFlagIdx].replace(/\$$/, '\\r?$');
-            } else if (!localArgs.includes('-P')) {
-              localArgs.unshift('-P');
-              const newNonFlagIdx = localArgs.findIndex(a => !a.startsWith('-'));
-              localArgs[newNonFlagIdx] = localArgs[newNonFlagIdx].replace(/\$$/, '\\r?$');
-            } else {
-              localArgs[nonFlagIdx] = localArgs[nonFlagIdx].replace(/\$$/, '\\r?$');
+            if (localArgs[nonFlagIdx].endsWith('$')) {
+              if (localArgs.includes('-E')) {
+                localArgs[localArgs.indexOf('-E')] = '-P';
+                localArgs[nonFlagIdx] = localArgs[nonFlagIdx].replace(/\$$/, '\\r?$');
+              } else if (!localArgs.includes('-P')) {
+                localArgs.unshift('-P');
+                const newNonFlagIdx = localArgs.findIndex(a => !a.startsWith('-'));
+                localArgs[newNonFlagIdx] = localArgs[newNonFlagIdx].replace(/\$$/, '\\r?$');
+              } else {
+                localArgs[nonFlagIdx] = localArgs[nonFlagIdx].replace(/\$$/, '\\r?$');
+              }
             }
           }
         }

@@ -141,8 +141,8 @@ async function executeCode(
                         }
                     }
                 }
-                // Handle `mj.entries.create` or `mj.entries(...)` hallucination
-                if (prop === 'entries' && 'core' in target) {
+                // Handle `mj.entries.create` or `mj.entries(...)` or `mj.entry(...)` hallucination
+                if ((prop === 'entries' || prop === 'entry') && 'core' in target) {
                     const coreGroup = target['core'] as Record<string, unknown>
                     const listFunc = coreGroup['get_recent_entries'] ?? coreGroup['getRecentEntries']
                     if (typeof listFunc === 'function') {
@@ -150,12 +150,30 @@ async function executeCode(
                             return (listFunc as (...args: unknown[]) => unknown).apply(this, args)
                         }
                         const adminGroup = target['admin'] as Record<string, unknown> | undefined
+                        const searchGroup = target['search'] as Record<string, unknown> | undefined
                         Object.assign(callableEntries, {
                             create: coreGroup['create_entry'] ?? coreGroup['createEntry'],
+                            createEntry: coreGroup['create_entry'] ?? coreGroup['createEntry'],
+                            create_entry: coreGroup['create_entry'] ?? coreGroup['createEntry'],
                             add: coreGroup['create_entry'] ?? coreGroup['createEntry'],
                             get: coreGroup['get_entry_by_id'] ?? coreGroup['getEntryById'],
+                            getEntryById: coreGroup['get_entry_by_id'] ?? coreGroup['getEntryById'],
+                            get_entry_by_id: coreGroup['get_entry_by_id'] ?? coreGroup['getEntryById'],
                             update: adminGroup?.['update_entry'] ?? adminGroup?.['updateEntry'],
+                            updateEntry: adminGroup?.['update_entry'] ?? adminGroup?.['updateEntry'],
+                            update_entry: adminGroup?.['update_entry'] ?? adminGroup?.['updateEntry'],
                             delete: adminGroup?.['delete_entry'] ?? adminGroup?.['deleteEntry'],
+                            deleteEntry: adminGroup?.['delete_entry'] ?? adminGroup?.['deleteEntry'],
+                            delete_entry: adminGroup?.['delete_entry'] ?? adminGroup?.['deleteEntry'],
+                            search: searchGroup?.['search_entries'] ?? searchGroup?.['searchEntries'],
+                            searchEntries: searchGroup?.['search_entries'] ?? searchGroup?.['searchEntries'],
+                            search_entries: searchGroup?.['search_entries'] ?? searchGroup?.['searchEntries'],
+                            list: listFunc,
+                            listEntries: listFunc,
+                            list_entries: listFunc,
+                            getRecent: listFunc,
+                            getRecentEntries: listFunc,
+                            get_recent_entries: listFunc,
                         })
                         return callableEntries
                     }
@@ -216,6 +234,20 @@ async function executeCode(
                     }
                 }
                 // Handle direct SQL execution shim (e.g. db.execute)
+                if (prop === 'db' && 'core' in target) {
+                    return new Proxy({}, {
+                        get(_t, dbProp) {
+                            return (..._args: unknown[]) => Promise.resolve({
+                                success: false,
+                                error: `Direct SQLite database access 'mj.db.${String(dbProp)}()' is not available in Code Mode sandbox. Use high-level API methods instead: mj.core.createEntry({ ... }), mj.core.getRecentEntries({ ... }), or mj.search.searchEntries({ ... }).`,
+                                code: 'VALIDATION_ERROR',
+                                category: 'validation',
+                                suggestion: 'Use mj.core or mj.search methods.',
+                                recoverable: true
+                            })
+                        }
+                    })
+                }
                 if (prop === 'execute' || prop === 'query' || prop === 'raw' || prop === 'exec') {
                     return (..._args: unknown[]) => Promise.resolve({
                         success: false,
@@ -240,7 +272,12 @@ async function executeCode(
                         const callableSearch = function(this: unknown, ...args: unknown[]): unknown {
                             return (searchFunc as (...args: unknown[]) => unknown).apply(this, args)
                         }
-                        Object.assign(callableSearch, searchGroup)
+                        Object.assign(callableSearch, searchGroup, {
+                            search: searchFunc,
+                            query: searchFunc,
+                            searchEntries: searchFunc,
+                            search_entries: searchFunc,
+                        })
                         return callableSearch
                     }
                     return searchGroup

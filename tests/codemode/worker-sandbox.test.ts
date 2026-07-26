@@ -86,6 +86,36 @@ describe('WorkerSandbox', () => {
         expect(result.result).toEqual([2, 4, 6, 8, 10, 12, 14])
     })
 
+    it('should support entries, search, and db shim method calls', async () => {
+        const sandbox = new WorkerSandbox()
+        const bindings = {
+            core: {
+                get_recent_entries: async (args: any) => ({ success: true, entries: [{ id: 1 }] }),
+                create_entry: async (args: any) => ({ success: true, id: 2 }),
+            },
+            search: {
+                search_entries: async (args: any) => ({ success: true, results: [{ id: 3 }] }),
+            },
+        }
+        const code = `
+            const s1 = await mj.entries.search({ query: 'test' });
+            const l1 = await mj.entries.listEntries();
+            const c1 = await mj.entries.createEntry({ content: 'test' });
+            const q1 = await mj.search.query({ query: 'test' });
+            const dbRes = await mj.db.all('SELECT * FROM entries');
+            return { s1, l1, c1, q1, dbRes };
+        `
+        const result = await sandbox.execute(code, bindings)
+        expect(result.success).toBe(true)
+        const res = result.result as any
+        expect(res.s1.results[0].id).toBe(3)
+        expect(res.l1.entries[0].id).toBe(1)
+        expect(res.c1.id).toBe(2)
+        expect(res.q1.results[0].id).toBe(3)
+        expect(res.dbRes.success).toBe(false)
+        expect(res.dbRes.error).toContain('Direct SQLite database access')
+    })
+
     it('should enforce timeout limiting', async () => {
         // Provide a very short timeout
         const sandbox = new WorkerSandbox({ timeoutMs: 50 })
