@@ -141,17 +141,42 @@ Entries have an \`importance\` score (0.00 to 1.00), which includes a baseline *
 - **Review Threshold**: Recent orphans will score around \`0.15\` due to the recency boost. Consider \`baseScore === 0\` as the true threshold for soft-deletion.
 
 ## Safety Rules (MANDATORY)
-1. **NEVER** use \`permanent: true\` unless explicitly asked to "hard delete".
-2. **ALWAYS** call \`backup_journal\` before any batch delete. Abort if it fails.
-${autoRun ? '3. **AUTO-RUN MODE**: You have pre-approval to soft-delete low-value entries (e.g. orphans with base score 0). Proceed without asking.' : '3. **ALWAYS** show the user what will be deleted before mutating.'}
-4. **NEVER** delete entries with \`significance_type\` set.
-5. Max batch size: 50 entries.
-6. **Log operations**: Create a journal entry with \`entry_type: 'maintenance'\` and tag \`database-optimizer\`.
-7. **Execution Scope**: Systematically process entries across ALL registered projects in \`PROJECT_REGISTRY\`.
+1. **ZERO TOLERANCE FOR UNASSIGNED / DEFAULT ENTRIES (TOP PRIORITY)**: There MUST be no unassigned entries or entries assigned to 'default'. If any exist, migrate them to their proper project immediately. The agent MUST investigate why they ended up unassigned/in 'default' and include a root cause analysis and fix plan in the report.
+2. **NEVER** use \`permanent: true\` unless explicitly asked to "hard delete".
+3. **ALWAYS** call \`backup_journal\` before any batch delete. Abort if it fails.
+${autoRun ? '4. **AUTO-RUN MODE**: You have pre-approval to soft-delete low-value entries (e.g. orphans with base score 0). Proceed without asking.' : '4. **ALWAYS** show the user what will be deleted before mutating.'}
+5. **NEVER** delete entries with \`significance_type\` set.
+6. Max batch size: 50 entries.
+7. **Log operations**: Create a journal entry with \`entry_type: 'maintenance'\` and tag \`database-optimizer\`.
+8. **Execution Scope**: Systematically process entries across ALL registered projects in \`PROJECT_REGISTRY\`.
 
-## Identifying Orphans Safely
-Do NOT use \`search_entries\` to dump the database. Use this pre-optimized Code Mode script in \`mj_execute_code\`. Because Code Mode executes directly against the sandboxed SQLite adapter, you can safely perform 500+ read iterations in milliseconds without triggering RPC serialization limits:
+## Identifying Orphans & Unassigned Entries Safely
+Do NOT use \`search_entries\` to dump the database. Use these pre-optimized Code Mode scripts in \`mj_execute_code\`. Because Code Mode executes directly against the sandboxed SQLite adapter, you can safely perform 500+ read iterations in milliseconds without triggering RPC serialization limits:
 
+### 1. Scan for Unassigned / Default Workspace Entries (High Priority)
+\`\`\`javascript
+const unassigned = [];
+let cursor = undefined;
+let processed = 0;
+
+while (processed < 500) {
+  const res = await mj.core.getRecentEntries({ limit: 50, cursor, workspace_id: '*' });
+  if (!res.entries || res.entries.length === 0) break;
+  
+  for (const entry of res.entries) {
+    if (!entry.projectNumber || entry.projectNumber === 0 || entry.workspaceId === 'default' || !entry.projectName) {
+      unassigned.push({ id: entry.id, type: entry.entryType, workspace: entry.workspaceId, project: entry.projectNumber, snippet: entry.content ? entry.content.slice(0, 100) : '' });
+    }
+  }
+  
+  processed += res.entries.length;
+  if (!res.hasMore) break;
+  cursor = res.next_cursor;
+}
+return unassigned;
+\`\`\`
+
+### 2. Scan for Zero-Value Orphans
 \`\`\`javascript
 const orphans = [];
 let cursor = undefined;
@@ -180,9 +205,12 @@ return orphans;
 
 Execution MUST proceed in two distinct phases:
 
-### Phase 1: Rapid Pre-Audit & Health Scan (Quick-Wins)
-1. **Safety Backup**: Call \`backup_journal\` before any mutations.
-2. **Unassigned & Missing Tag Scan**: Identify recent unassigned entries or entries missing project numbers/tags and perform immediate workspace migration/tag enrichment.
+### Phase 1: Rapid Pre-Audit & Health Scan (Quick-Wins & Unassigned Priority)
+1. **Safety Backup**: Call \`backup_journal\` before any mutations. Abort if backup creation fails.
+2. **Priority Zero-Tolerance Unassigned & Default Scan**:
+   - Run the Unassigned Scan script to check for entries where \`workspaceId === 'default'\` or \`projectNumber\` is missing/0.
+   - Perform immediate workspace migration using \`mj.admin.updateEntry({ id, project_number, workspace_id })\`.
+   - **Root-Cause Investigation**: Investigate why any unassigned/default entries bypass project assignment (caller tool, missing CLI \`--project\` flag, or context resolution failure). Formulate a remediation plan.
 
 ### Phase 2: Systematic Multi-Project Cognitive Batch Audit (30–60 Entry Batches)
 1. **Multi-Project Iteration**: Systematically iterate through **ALL registered projects** in \`PROJECT_REGISTRY\` (e.g. \`mysql-mcp\`, \`adamic\`, \`memory-journal-mcp\`, \`do-test-worker\`, etc.).
@@ -194,16 +222,26 @@ Execution MUST proceed in two distinct phases:
    - *Scoring*: Update \`trust_score\` (0.0 to 1.0), \`impact_score\` (0.0 to 1.0), and \`validation_status\` ('passed'/'failed'/'none').
 4. **Execution Paradigm**: Execute mutations via Code Mode using \`mj.updateEntry(id, payload)\` / \`mj.admin.updateEntry\` via \`mj_execute_code\`. Use \`workspace_id: '*'\` if migrating entries across workspace boundaries.
 
+## Mandatory Report Structure (Enforced for ALL Runs)
+Every execution report MUST follow this exact 4-part Markdown layout:
+1. **Global Database Health & Resource Metrics**: Summary of total entries, unique tags, active relationships & avg density, orphan count & %, and DB/Vector Index health.
+2. **Project & Workspace Matrix Table**: A complete table listing entry counts and unassigned status across ALL registered projects:
+   | Project Name | Project # | Total Entries | Unassigned / Default | Status |
+3. **Unassigned / Default Workspace Investigation & Fix Plan**:
+   - Details of any migrated entries.
+   - Root cause analysis explaining how the misallocation occurred.
+   - Actionable fix plan / task recommendations to prevent future occurrences (or "Zero unassigned entries found" if clear).
+4. **Optimization Actions & Artifacts Summary**: Safety backup filename, enriched entries count, soft-deleted debug/test noise count, and maintenance journal entry ID.
+
 ${autoRun ? `To proceed (AUTO-RUN MODE):
-1. Review the live stats and unverified recent entries across all projects.
-2. Autonomous Execution: Do NOT ask for user confirmation or output plans for review.
-3. Execute Phase 1 (Safety backup, unassigned & missing tag quick-wins).
-4. Execute Phase 2: Systematically process each registered project in batches of 30–60 entries using Cognitive Reading Protocol.
-5. Execute mutations via Code Mode using \`mj_execute_code\`.
-6. Output a single concise Markdown summary of all actions taken, any anomalies found, and final database state.` : `To proceed:
-1. Review live stats and output a Markdown table breaking down entry counts for ALL registered projects.
-2. List available workflows (Phase 1 Quick-Wins, Phase 2 Cognitive Batch Optimization) for each project.
-3. Recommend starting with the project having the largest unverified entry count in batches of 30–60 entries.
+1. Autonomous Execution: Do NOT ask for user confirmation or output plans for review.
+2. Execute Phase 1 (Safety backup, priority unassigned/default entry scan & migration, root cause investigation).
+3. Execute Phase 2: Systematically process each registered project in batches of 30–60 entries using Cognitive Reading Protocol.
+4. Execute mutations via Code Mode using \`mj_execute_code\`.
+5. Output the mandatory 4-part Markdown report summary.` : `To proceed:
+1. Review live stats and output the mandatory 4-part Markdown report baseline.
+2. List available workflows (Phase 1 Quick-Wins & Unassigned Audit, Phase 2 Cognitive Batch Optimization) for each project.
+3. Recommend starting with unassigned migration or the project with the largest unverified entry count in batches of 30–60 entries.
 4. Identify candidates using Code Mode scripts and present them in 30–60 entry batches.
 5. Ask for user confirmation before executing batch mutations.`}`,
                             },
