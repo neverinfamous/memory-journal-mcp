@@ -112,7 +112,7 @@ type: "retrospective"
 tags: ["session-summary", "your-tag-1", "your-tag-2"]
 project: <Integer ID mapped from your active workspace context>
 impact: <Decimal score analyzing blast radius (e.g., 0.9+ for core architecture, 0.1 for docs)>
-trust: <Decimal score analyzing testing rigor. 0.3-0.5 for unverified, 0.8-1.0 if rigorously tested>
+confidence: <Decimal score analyzing testing rigor. 0.3-0.5 for unverified, 0.8-1.0 if rigorously tested>
 validation_status: "passed" # or "none", or "failed"
 auto_context: 
   type: "session-commits"
@@ -142,6 +142,7 @@ relationships:
 - Do NOT omit any of the three required sections
 - Use bullet points within each section
 - Reference specific entry IDs, file names, and PR numbers where relevant
+- To populate \`auto_context.commits\`, use \`bun .\\.agents\\scripts\\get-git-history-json.ts --summary -n 20\` to retrieve recent commit SHAs. Do NOT use raw \`git log\`.
 ${registryHint}- If you lose track of your project number, workspace, or agent ID, read the \`memory://agent-context/{repo}\` resource to retrieve it instead of reloading the full briefing (which wastes tokens)
 
 **Recent Entries (for context):**
@@ -174,7 +175,7 @@ type: "architecture" # MUST be "decision", "bug_fix", "milestone", or "architect
 tags: ["domain-tag", "another-tag"]
 project: <Integer ID mapped from your active workspace context>
 impact: <Decimal score analyzing blast radius (e.g., 0.9+ for core architecture, 0.1 for docs)>
-trust: <Decimal score analyzing testing rigor. 0.3-0.5 for unverified, 0.8-1.0 if rigorously tested>
+confidence: <Decimal score analyzing testing rigor. 0.3-0.5 for unverified, 0.8-1.0 if rigorously tested>
 validation_status: "passed" # or "none", or "failed"
 relationships: 
   - target_id: 123

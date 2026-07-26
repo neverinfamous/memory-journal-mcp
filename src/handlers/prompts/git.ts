@@ -39,13 +39,30 @@ You are initiating a high-integrity procedure for committing code changes. You m
 ${validationText}
 
 ## 2. Commit Invocation
-Stage your changes and commit using standard Git tooling.
+Stage your changes and commit. If your environment provides \`commit.ts\` (available via proxy interceptors or at \`.agents/scripts/commit.ts\`), use it as the primary commit method. Otherwise, fall back to standard \`git commit\` with conventional commit format.
 
 > [!WARNING]
 > **DO NOT USE \`git add .\` OR \`git commit -a\`**. You MUST only stage the specific files you modified (e.g., \`git add src/foo.ts\`) to avoid committing in-progress work from other agents or humans. Only use \`git add .\` if the user explicitly asks you to commit everything.
 
-> **Environment Note:** If your system environment enforces custom commit wrappers (e.g., via proxy interceptors or project rules), use them with the appropriate semantic flags (impact, confidence, validation). Otherwise, use standard \`git commit\` with conventional commit format.
+> [!WARNING]
+> **Scratch File Guard:** \`commit.ts\` will **abort** if files matching \`scratch/\`, \`.agents/scratch\`, \`scratch.ts\`, or \`scratch.js\` are staged. Ensure temporary files are written to the isolated scratch directory (\`<appDataDir>\\\\brain\\\\<conversation-id>\\\\scratch\\\\\`) and never staged for commit.
+
 > **🛠️ AUTONOMOUS HEALING - PowerShell Operators:** If you are executing commands natively in Windows PowerShell, you MUST use semicolons (\`;\`) to chain commands. DO NOT use Unix shell operators like \`&&\` or \`||\`, as they will throw a ParserError.
+
+**\`commit.ts\` CLI Reference:**
+\\\`\\\`\\\`
+bun .\\.agents\\\\scripts\\\\commit.ts --msg "type(scope): subject" --impact <0.1-1.0> --confidence <0.1-1.0> --validation <passed|none|failed> --add <path> [--add <path2>]
+\\\`\\\`\\\`
+
+Key flags:
+- \`--msg\` / \`-m\`: Conventional commit subject (\`type(scope): message\`). Also accepted as the first positional argument.
+- \`--impact\`: Blast radius score (0.0–1.0). Defaults to 0.5 if omitted.
+- \`--confidence\`: Testing rigor score (0.0–1.0). Defaults to 1.0 if omitted. **Note:** \`--trust\` is deprecated; use \`--confidence\`.
+- \`--validation\`: Validation state (\`passed\`, \`none\`, \`failed\`). Auto-heals common aliases (\`pass\`→\`passed\`, \`fail\`→\`failed\`, \`skip\`→\`none\`).
+- \`--add\`: File paths to stage (repeatable, or pass as additional positional arguments after the message).
+- \`--journal\`: Create an automated memory journal entry for this commit.
+- \`--journal-project <id>\`: Specify the project ID for the journal entry (auto-enables \`--journal\`).
+- \`--history-file <path>\`: Path to a text file containing the history narrative (avoids shell escaping issues with multi-line text). Write to your scratch directory first.
 
 **Scoring Guide (CRITICAL: Do NOT just rubber-stamp 1.0!):**
 - \`impact\`: 0.1 (trivial docs/chores) | 0.5 (standard features/fixes) | 0.9+ (core architecture)
@@ -56,7 +73,9 @@ Stage your changes and commit using standard Git tooling.
 - \`validation\`: 'passed', 'none', or 'failed'
 
 ## 3. Journal Entry
-Ensure a journal entry is created for substantive changes (impact > 0.4). If your environment's commit wrapper automatically handles this, you may rely on it. Otherwise, manually create the entry via the journal MCP.`
+For substantive changes (impact > 0.4), ensure a journal entry is created:
+- **Primary:** Pass \`--journal --journal-project <id>\` to \`commit.ts\` to automate journal creation as part of the commit.
+- **Fallback:** If your environment does not have \`commit.ts\`, manually create the entry via the journal MCP's \`create-entry\` prompt.`
 
                 return {
                     messages: [
