@@ -60,8 +60,8 @@ Key flags:
 - \`--confidence\`: Testing rigor score (0.0–1.0). Defaults to 1.0 if omitted. **Note:** \`--trust\` is deprecated; use \`--confidence\`.
 - \`--validation\`: Validation state (\`passed\`, \`none\`, \`failed\`). Auto-heals common aliases (\`pass\`→\`passed\`, \`fail\`→\`failed\`, \`skip\`→\`none\`).
 - \`--add\`: File paths to stage (repeatable, or pass as additional positional arguments after the message).
-- \`--journal\`: Create an automated memory journal entry for this commit.
-- \`--journal-project <id>\`: Specify the project ID for the journal entry (auto-enables \`--journal\`).
+- \`--journal\`: Create an automated memory journal entry for this commit (project and workspace context are auto-resolved from active directory).
+- \`--journal-project <id>\`: Optionally override the project ID for the journal entry (auto-enables \`--journal\`).
 - \`--history-file <path>\`: Path to a text file containing the history narrative (avoids shell escaping issues with multi-line text). Write to your scratch directory first.
 
 **Scoring Guide (CRITICAL: Do NOT just rubber-stamp 1.0!):**
@@ -74,8 +74,8 @@ Key flags:
 
 ## 3. Journal Entry
 For substantive changes (impact > 0.4), ensure a journal entry is created:
-- **Primary:** Pass \`--journal --journal-project <id>\` to \`commit.ts\` to automate journal creation as part of the commit.
-- **Fallback:** If your environment does not have \`commit.ts\`, manually create the entry via the journal MCP's \`create-entry\` prompt.`
+- **Primary:** Pass \`--journal\` to \`commit.ts\` to automate journal creation as part of the commit (workspace context is auto-resolved).
+- **Fallback:** If your environment does not have \`commit.ts\`, manually create the entry via Code Mode (\`mj.core.createEntry\`) or the journal MCP's \`create-entry\` prompt.`
 
                 return {
                     messages: [

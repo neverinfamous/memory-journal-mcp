@@ -110,9 +110,9 @@ At the top of your markdown file, include a YAML frontmatter block with the foll
 ---
 type: "retrospective"
 tags: ["session-summary", "your-tag-1", "your-tag-2"]
-project: <Integer ID mapped from your active workspace context>
+project: <Integer ID or repository name - OPTIONAL, auto-resolved from active workspace>
 impact: <Decimal score analyzing blast radius (e.g., 0.9+ for core architecture, 0.1 for docs)>
-confidence: <Decimal score analyzing testing rigor. 0.3-0.5 for unverified, 0.8-1.0 if rigorously tested>
+trust: <Decimal score analyzing testing rigor. 0.3-0.5 for unverified, 0.8-1.0 if rigorously tested>
 validation_status: "passed" # or "none", or "failed"
 auto_context: 
   type: "session-commits"
@@ -143,13 +143,15 @@ relationships:
 - Use bullet points within each section
 - Reference specific entry IDs, file names, and PR numbers where relevant
 - To populate \`auto_context.commits\`, use \`bun .\\.agents\\scripts\\get-git-history-json.ts --summary -n 20\` to retrieve recent commit SHAs. Do NOT use raw \`git log\`.
+- Note: \`workspace_id\` and \`project_number\` are automatically resolved from your active workspace context if omitted.
 ${registryHint}- If you lose track of your project number, workspace, or agent ID, read the \`memory://agent-context/{repo}\` resource to retrieve it instead of reloading the full briefing (which wastes tokens)
 
 **Recent Entries (for context):**
 ${markUntrustedContent(entrySummary)}
 
 **Execution:**
-Write your markdown file (with the YAML frontmatter at the top) to your scratch directory (e.g. \`<appDataDir>\\brain\\<conversation-id>\\scratch\\\`) to avoid shell quotes. Then execute: \`memory-journal-mcp entry create ${target === 'team' ? '--team ' : ''}--file <scratch_dir>/session.md\``,
+- **Option 1 (Code Mode / MCP Tool - Recommended):** Execute directly via \`mj.core.createEntry({ content: "...", entry_type: "retrospective", tags: ["session-summary"], auto_context: { commits: ["<sha>"] }${target === 'team' ? ', share_with_team: true' : ''} })\`.
+- **Option 2 (CLI Scratch File):** Write markdown file (with YAML frontmatter) to your scratch directory (e.g. \`<appDataDir>\\brain\\<conversation-id>\\scratch\\\`) then execute: \`memory-journal-mcp entry create ${target === 'team' ? '--team ' : ''}--file <scratch_dir>/session.md\``,
                 },
             },
         ],
@@ -173,9 +175,9 @@ At the top of your markdown file, include a YAML frontmatter block with the foll
 ---
 type: "architecture" # MUST be "decision", "bug_fix", "milestone", or "architecture" (do NOT use "retrospective")
 tags: ["domain-tag", "another-tag"]
-project: <Integer ID mapped from your active workspace context>
+project: <Integer ID or repository name - OPTIONAL, auto-resolved from active workspace>
 impact: <Decimal score analyzing blast radius (e.g., 0.9+ for core architecture, 0.1 for docs)>
-confidence: <Decimal score analyzing testing rigor. 0.3-0.5 for unverified, 0.8-1.0 if rigorously tested>
+trust: <Decimal score analyzing testing rigor. 0.3-0.5 for unverified, 0.8-1.0 if rigorously tested>
 validation_status: "passed" # or "none", or "failed"
 relationships: 
   - target_id: 123
@@ -187,10 +189,12 @@ relationships:
 Just provide a concise markdown description of the specific architectural decision, strategic pivot, or blocker. Do NOT log routine code changes or bug fixes here; those belong strictly in Git. Keep it under 150 words. No top-level headers required.
 
 **Rules:**
+- Note: \`workspace_id\` and \`project_number\` are automatically resolved from your active workspace context if omitted.
 ${registryHint}- If you lose track of your project number, workspace, or agent ID, read the \`memory://agent-context/{repo}\` resource to retrieve it instead of reloading the full briefing (which wastes tokens)
 
 **Execution:**
-Write your markdown file (with the YAML frontmatter at the top) to your scratch directory (e.g. \`<appDataDir>\\brain\\<conversation-id>\\scratch\\\`) to avoid shell quotes. Then execute: \`memory-journal-mcp entry create ${target === 'team' ? '--team ' : ''}--file <scratch_dir>/entry.md\``
+- **Option 1 (Code Mode / MCP Tool - Recommended):** Execute directly via \`mj.core.createEntry({ content: "...", entry_type: "architecture", tags: ["tag1"]${target === 'team' ? ', share_with_team: true' : ''} })\`.
+- **Option 2 (CLI Scratch File):** Write markdown file (with YAML frontmatter) to your scratch directory (e.g. \`<appDataDir>\\brain\\<conversation-id>\\scratch\\\`) then execute: \`memory-journal-mcp entry create ${target === 'team' ? '--team ' : ''}--file <scratch_dir>/entry.md\``
                 }
             }
         ]
