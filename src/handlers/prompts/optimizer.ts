@@ -222,6 +222,18 @@ Execution MUST proceed in two distinct phases:
    - *Scoring*: Update \`trust_score\` (0.0 to 1.0), \`impact_score\` (0.0 to 1.0), and \`validation_status\` ('passed'/'failed'/'none').
 4. **Execution Paradigm**: Execute mutations via Code Mode using \`mj.updateEntry(id, payload)\` / \`mj.admin.updateEntry\` via \`mj_execute_code\`. Use \`workspace_id: '*'\` if migrating entries across workspace boundaries.
 
+### Phase 3: Knowledge Graph Anchor Optimization & Subagent Batch Linking Protocol
+For projects or datasets with high orphan density (entries with 0 relationships):
+1. **Orphan Batch Discovery (Code Mode)**:
+   Scan orphan entries in batches of **40–60 entries** per target project using Code Mode.
+2. **Subagent Batch Delegation & Model Allocation**:
+   - Delegate each 40–60 entry batch to a subagent equipped with high-reasoning capability (e.g., Gemini 3.1 Pro / \`pro\` model).
+   - Subagents read entry content in full, evaluate topic/SHA/file overlaps, and discover valid graph relationships (\`references\`, \`implements\`, \`evolves_from\`, \`resolves\`, \`blocked_by\`).
+3. **Execution & Strict Subagent Directives**:
+   - Apply relationship links directly via Code Mode: \`mj.relationships.linkEntries({ source_id, target_id, relation_type })\`.
+   - **Isolation Directives**: Subagents MUST NEVER write scratch files or temporary payloads to project workspace directories. All temporary files must be stored in \`<appDataDir>\\\\brain\\\\<conversation-id>\\\\scratch\\\\\`.
+   - **Lifecycle Directive**: Subagents MUST cleanly report results and self-terminate upon completing their assigned batch task.
+
 ## Mandatory Report Structure (Enforced for ALL Runs)
 Every execution report MUST follow this exact 4-part Markdown layout:
 1. **Global Database Health & Resource Metrics**: Summary of total entries, unique tags, active relationships & avg density, orphan count & %, and DB/Vector Index health.
