@@ -255,13 +255,19 @@ Select the workflow based on the requested mode (\`${mode}\`):
 2. Process entries in batches of 30–50, updating metadata via Code Mode.
 
 ### Option C: Comprehensive Multi-Agent Full-Database Audit (\`mode: 'full'\`)
-1. **Multi-Project Iteration**: Systematically iterate through **ALL registered projects** in \`PROJECT_REGISTRY\` (e.g. \`mysql-mcp\`, \`adamic\`, \`memory-journal-mcp\`, \`do-test-worker\`, etc.).
-2. **Full Content Reading**: Read entries in full (content, tags, relationships, importance score, trust score, impact score) in batches of **30–60 entries** at a time.
+1. **Domain-Based Subagent Partitioning**: Systematically partition entries by **Project Workspace Domain** (e.g., Subagent 1 for \`mysql-mcp\`, Subagent 2 for \`adamic\`, Subagent 3 for \`memory-journal-mcp\`, Subagent 4 for secondary projects). Domain-based partitioning preserves contextual coherence across commit narratives, retrospectives, and technical subsystem tags.
+2. **Full Content & 4-Dimension Single-Pass Optimization**:
+   - Instruct subagents to read entries in full and optimize all 4 core entry dimensions simultaneously:
+     - 🔗 **Graph Anchors**: Link related entries via Code Mode (\`mj.linkEntries({ from_id, to_id, relationship_type, workspace_id })\`) using valid relationship types (\`references\`, \`implements\`, \`evolves_from\`, \`resolves\`).
+     - 🛡️ **Trust Calibration**: Normalize trust scores (\`trust_score\` between \`0.90\`–\`1.00\` for verified code/tests).
+     - 💥 **Impact Calibration**: Calibrate impact scores (\`impact_score\` between \`0.30\`–\`0.80\` based on blast radius).
+     - 🏷️ **Tag Enrichment & Significance**: Assign explicit \`significance_type\` and enrich empty/generic tag lists with technical subsystem keywords.
 3. **Subagent Batch Parallelization**:
-   - Delegate 40–60 entry batches to parallel subagents using high-reasoning models (e.g., Gemini 3.1 Pro / \`pro\` model).
-   - Subagents link related entries via Code Mode: \`mj.relationships.linkEntries({ from_id, to_id, relationship_type, workspace_id })\`.
+   - Delegate domain project workloads to parallel subagents using high-reasoning models (e.g., Gemini 3.1 Pro / \`pro\` model).
    - **Strict Isolation**: Subagents MUST NEVER write files to project directories; all scratch files must be saved in \`<appDataDir>\\\\brain\\\\<conversation-id>\\\\scratch\\\\\`.
-   - **Subagent Lifecycle**: Subagents MUST self-terminate upon completing their batch task.
+4. **Parent Agent Resource Reclamation Guarantee**:
+   - The parent agent MUST actively monitor subagent completion notifications.
+   - As soon as each subagent reports completion, the parent agent MUST immediately terminate it using \`manage_subagents\` with \`Action: 'kill'\` and its \`ConversationId\` to free system resources.
 
 ## Mandatory Report Structure (Enforced for ALL Runs)
 Every execution report MUST follow this exact 4-part Markdown layout:
