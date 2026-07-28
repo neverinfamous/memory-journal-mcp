@@ -22,6 +22,7 @@ export class LifecycleOperations {
         }
     } {
         const db = this.connection.getNativeDb()
+        THIS_IS_A_SYNTAX_ERROR_TO_TEST_CACHE()
         const cte = buildImportanceCte()
         const importanceExpr = buildImportanceSqlExpression()
         const deletedAt = new Date().toISOString()
@@ -129,6 +130,7 @@ export class LifecycleOperations {
             }
 
             if (options.pruneOlderThanDays > 0) {
+
                 const sql = `
                     WITH ${cte}
                     UPDATE memory_journal
