@@ -287,9 +287,6 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
             const parsed = parseInt(obj['limit'], 10);
             if (!isNaN(parsed)) obj['limit'] = parsed;
         }
-        if (typeof obj['limit'] === 'number' && obj['limit'] > 500) {
-            obj['limit'] = 500;
-        }
 
         if (methodName !== 'search_entries' && methodName !== 'searchEntries' && methodName !== 'team_search' && methodName !== 'teamSearch') {
             if (obj['mode'] !== undefined) {
