@@ -100,6 +100,18 @@ export const ERROR_SUGGESTIONS: ErrorSuggestion[] = [
         suggestion: 'Internal sandbox error. Retry the operation.',
         code: 'INTERNAL_ERROR',
     },
+    {
+        pattern: /(?:memory|mcp) is not defined/i,
+        suggestion:
+            'In Code Mode (mj_execute_code), global "memory" and "mcp" objects do not exist. Use the top-level "mj" object to access tools (e.g. mj.core.createEntry or mj.analytics.getStatistics).',
+        code: 'VALIDATION_ERROR',
+    },
+    {
+        pattern: /import statement|dynamic import|require.*not allowed/i,
+        suggestion:
+            'Dynamic import() and require() statements are not permitted in Code Mode sandbox scripts. All API methods are available pre-loaded under the top-level "mj" global object.',
+        code: 'VALIDATION_ERROR',
+    },
     // Zod enum validation patterns — return valid values for self-correction
     {
         pattern: /invalid enum value.*significance/i,

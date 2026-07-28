@@ -15,14 +15,22 @@ export function getOptimizerPromptDefinitions(): InternalPromptDef[] {
     return [
         {
             name: 'optimize-journal',
-            description: 'Guided database pruning and verification workflow. Optional arguments: `lookback` (Number of recent entries to audit, default: 10, max: 50), `autoRun` (boolean, default: false), `mode` (\'quick\' | \'targeted\' | \'full\', default: \'quick\'), `targetDimension` (\'unassigned\' | \'relationships\' | \'scores\' | \'tags\' | \'all\', default: \'all\').',
+            description: 'Guided database pruning, graph verification, and multi-agent audit workflow. Optional arguments: `lookback` (Number of recent entries, default: 10), `limit` (Entry processing cap for multi-agent audit, default: 500), `project` (Target project name or number, optional), `autoRun` (boolean, default: false), `mode` (\'quick\' | \'targeted\' | \'full\', default: \'quick\'), `targetDimension` (\'unassigned\' | \'relationships\' | \'scores\' | \'tags\' | \'all\', default: \'all\').',
             icons: [ICON_PROMPT],
             arguments: [],
             handler: (args: Record<string, string> | undefined, db: IDatabaseAdapter) => {
                 const schema = z.object({
                     lookback: z.preprocess(
                         coerceNumber,
-                        z.number().int().min(1).max(50).optional().default(10)
+                        z.number().int().min(1).max(2000).optional().default(10)
+                    ),
+                    limit: z.preprocess(
+                        coerceNumber,
+                        z.number().int().min(1).max(5000).optional().default(500)
+                    ),
+                    project: z.preprocess(
+                        (val) => (typeof val === 'string' ? val.trim() : val),
+                        z.string().optional()
                     ),
                     autoRun: z.preprocess(
                         (val) => val === 'true' || val === true,
@@ -39,7 +47,9 @@ export function getOptimizerPromptDefinitions(): InternalPromptDef[] {
                 })
 
                 const parsed = schema.safeParse(args ?? {})
-                const limit = parsed.success ? parsed.data.lookback : 10
+                const lookback = parsed.success ? parsed.data.lookback : 10
+                const entryLimit = parsed.success ? parsed.data.limit : 500
+                const targetProject = parsed.success ? parsed.data.project : undefined
                 const autoRun = parsed.success ? parsed.data.autoRun : false
                 const mode = parsed.success ? parsed.data.mode : 'quick'
                 const targetDimension = parsed.success ? parsed.data.targetDimension : 'all'
@@ -51,20 +61,27 @@ export function getOptimizerPromptDefinitions(): InternalPromptDef[] {
                         relationshipComplexity?: {
                             totalRelationships?: unknown;
                             avgPerEntry?: unknown;
+                            density?: unknown;
                         };
                         projectBreakdown?: { name?: string; project_number: number; entry_count: number }[];
                         entriesByType?: Record<string, number>;
                         causalMetrics?: Record<string, number>;
+                        significanceBreakdown?: Record<string, number>;
+                        validationDistribution?: Record<string, number>;
                     }
                     const stats = db.getStatistics('week', undefined, undefined, true, '*') as Stats
                     const totalEntries = typeof stats.totalEntries === 'number' ? stats.totalEntries : 'Unknown'
                     
                     let totalRelationships: number | string = 'Unknown'
                     let avgPerEntry: number | string = 'Unknown'
+                    let graphDensity = 'Unknown'
                     const rc = stats.relationshipComplexity
                     if (rc !== null && typeof rc === 'object') {
                         totalRelationships = typeof rc.totalRelationships === 'number' ? rc.totalRelationships : 'Unknown'
                         avgPerEntry = typeof rc.avgPerEntry === 'number' ? rc.avgPerEntry : 'Unknown'
+                        if (typeof rc.density === 'number') {
+                            graphDensity = (rc.density * 100).toFixed(2) + '%'
+                        }
                     }
 
                     let orphanCount: number | string = 'Unknown'
@@ -89,17 +106,20 @@ export function getOptimizerPromptDefinitions(): InternalPromptDef[] {
 
                     let causalMetricsText = ''
                     if (stats.causalMetrics) {
-                        const blockedBy = stats.causalMetrics['blocked_by'] ?? 0
-                        const resolved = stats.causalMetrics['resolved'] ?? 0
-                        const caused = stats.causalMetrics['caused'] ?? 0
-                        causalMetricsText = `\n  - Types: ${blockedBy} blocked_by | ${resolved} resolved | ${caused} caused`
+                        const ref = stats.causalMetrics['references'] ?? 0
+                        const imp = stats.causalMetrics['implements'] ?? 0
+                        const evo = stats.causalMetrics['evolves_from'] ?? 0
+                        const res = stats.causalMetrics['resolves'] ?? 0
+                        const blk = stats.causalMetrics['blocked_by'] ?? 0
+                        const cau = stats.causalMetrics['caused'] ?? 0
+                        causalMetricsText = `\n  - Relationship Types: ${ref} references | ${imp} implements | ${evo} evolves_from | ${res} resolves | ${blk} blocked_by | ${cau} caused`
                     }
 
                     let entryTypesText = ''
                     if (stats.entriesByType) {
                         const types = Object.entries(stats.entriesByType)
                             .sort((a, b) => b[1] - a[1])
-                            .slice(0, 5) // top 5
+                            .slice(0, 5)
                             .map(([k, v]) => `${k} (${v})`)
                             .join(', ')
                         entryTypesText = `\n- Top Entry Types: ${types}`
@@ -108,10 +128,10 @@ export function getOptimizerPromptDefinitions(): InternalPromptDef[] {
                     const allTags = typeof db.listTags === 'function' ? db.listTags() : []
                     const totalTags = allTags.length
 
-                    statsSnippet = `**Global Database Health:**
+                    statsSnippet = `**Global Database Health & Relationship Graph Metrics:**
 - Total Entries: ${totalEntries}
 - Total Unique Tags: ${totalTags}
-- Active Relationships: ${totalRelationships} (Avg: ${avgPerEntry}/entry)${causalMetricsText}${entryTypesText}
+- Active Relationship Links: ${totalRelationships} (Avg: ${avgPerEntry}/entry | Density: ${graphDensity})${causalMetricsText}${entryTypesText}
 - Orphans: ${orphanCount} (${orphanDensity} density)${projectBreakdownText}`
                 } catch {
                     // ignore
@@ -120,7 +140,7 @@ export function getOptimizerPromptDefinitions(): InternalPromptDef[] {
                 let unverifiedSnippet = '_No unverified entries found._'
                 try {
                     const { entries } = db.getRecentEntries(50)
-                    const unverified = entries.filter(e => e.validationStatus === 'none' || (e.trustScore !== undefined && e.trustScore < 0.9)).slice(0, limit)
+                    const unverified = entries.filter(e => e.validationStatus === 'none' || (e.trustScore !== undefined && e.trustScore < 0.9)).slice(0, lookback)
                     if (unverified.length > 0) {
                         unverifiedSnippet = unverified.map(e => {
                             return `ID: ${e.id} | Type: ${e.entryType} | Tags: ${e.tags.join(', ')}\nTrust: ${e.trustScore} | Impact: ${e.impactScore} | Validation: ${e.validationStatus}\nContent:\n${e.content}\n---`
@@ -130,28 +150,44 @@ export function getOptimizerPromptDefinitions(): InternalPromptDef[] {
                     unverifiedSnippet = '_Could not fetch unverified entries_'
                 }
 
+                const targetProjectText = targetProject ? ` | **Target Project**: \`${targetProject}\`` : ''
+                const limitText = ` | **Entry Limit**: \`${entryLimit}\``
+                const autoRunText = autoRun ? ` | **Auto-Run**: \`true\`` : ''
+
                 return {
                     messages: [
                         {
                             role: 'user',
                             content: {
                                 type: 'text',
-                                text: `# Journal Optimizer & Verification
+                                text: `# Journal Optimizer & Verification Workflow
 
-You are initiating a guided workflow for intelligently pruning, verifying, and auditing the global memory journal database. Every operation uses the soft-delete system as a safe first pass.
+You are executing the guided workflow for intelligently pruning, verifying, and auditing the global memory journal database. Every operation uses soft-deletion as a safe first pass.
 
-**Requested Mode**: \`${mode}\` | **Target Quality Dimension**: \`${targetDimension}\`
+**Requested Mode**: \`${mode}\` | **Quality Dimension**: \`${targetDimension}\`${targetProjectText}${limitText}${autoRunText}
 
 ${statsSnippet}
 
 ## Unverified Recent Entries
 ${markUntrustedContent(unverifiedSnippet)}
 
-> [!WARNING]
-> **TOKEN CONSUMPTION NOTICE**:
-> - **Quick Mode (\`quick\`)**: Low token consumption (~5k–15k tokens). Performs fast health checks, zero-value orphan scanning, and priority unassigned workspace migration.
-> - **Targeted Mode (\`targeted\`)**: Moderate token consumption (~25k–60k tokens). Audits entries filtered by missing quality dimensions (e.g. missing relationships, missing trust/impact scores, or vague tags).
-> - **Full Pass Mode (\`full\`)**: High token consumption (~200k–500k+ tokens across subagents). Systematically reads and updates every entry in every registered project in batches of 40–60 entries. Warn the user before initiating a full pass unless \`autoRun: true\`.
+> [!IMPORTANT]
+> **AUTOMATED INITIAL EXECUTION PROTOCOL (MANDATORY)**:
+> When this prompt starts, you MUST **automatically execute Option A and Option B** first without waiting for additional user instructions:
+> 1. **Option A (Safety Backup & Priority Unassigned Scan)**: Immediately create a database safety backup via \`backup_journal\` and run the unassigned workspace scan across all projects (\`workspace_id: '*'\`). If any default/unassigned entries are found, auto-repair/migrate them immediately and formulate a root-cause analysis.
+> 2. **Option B (Targeted Quality Dimension Scan)**: Perform a fast baseline scan of recent entries lacking relationships, trust/impact scores, or technical subsystem tags.
+> 3. **Report Initial Findings**: Present the mandatory health summary, safety backup details, and unassigned status to the user.
+
+> [!TIP]
+> **INTERACTIVE HANDOVER FOR COMPREHENSIVE MULTI-AGENT DOMAIN AUDIT**:
+> Upon completing the initial automated execution (Option A & B), present **Comprehensive Multi-Agent Domain Audit & Noise Pruning** to the user as an available next step.
+> Explicitly inform the user that they can choose to execute it directly or customize it with natural commands, such as:
+> - *"Proceed with Comprehensive Multi-Agent Domain Audit"*
+> - *"Do it but only on 500 entries"*
+> - *"Run Multi-Agent Audit on project mysql-mcp"*
+> - *"Run Multi-Agent Audit focusing on missing relationships and noise pruning"*
+
+---
 
 ## Standard of a Complete Entry (7 Core Quality Dimensions)
 An entry is considered incomplete and worthy of auditing/enrichment if it lacks any of the following:
@@ -159,29 +195,27 @@ An entry is considered incomplete and worthy of auditing/enrichment if it lacks 
 2. **Significance Classification**: \`significance_type\` (e.g., \`architectural\`, \`decision\`, \`milestone\`, \`bugfix\`, \`convention\`) and non-zero \`importance\` score (0.0 to 1.0).
 3. **Trust & Validation**: \`trust_score\` (0.0 to 1.0) and non-\`none\` \`validation_status\` (\`passed\` or \`failed\`).
 4. **Impact Assessment**: \`impact_score\` (0.0 to 1.0) reflecting downstream code or architecture impact.
-5. **Relationships & Graph Anchors**: Inter-entry graph links (\`evolves_from\`, \`references\`, \`implements\`, \`resolves\`, \`blocked_by\`).
+5. **Relationships & Graph Anchors**: Inter-entry graph links (\`evolves_from\`, \`references\`, \`implements\`, \`resolves\`, \`blocked_by\`, \`caused\`).
 6. **Domain & Activity Tags**: Specific, searchable tags categorizing tech stack, subsystem, and activity type.
 7. **Context & Git Lineage**: \`autoContext\` commit hashes, branch info, author context, or issue/PR links.
 
-## Importance Score Guide
-Entries have an \`importance\` score (0.00 to 1.00), which includes a baseline **recency boost** (usually \`+0.15\` for recent entries).
-- **Base Importance**: To find truly low-value entries, look at their base score by checking \`importanceBreakdown.recency\`.
-- **Review Threshold**: Recent orphans will score around \`0.15\` due to the recency boost. Consider \`baseScore === 0\` as the true threshold for soft-deletion.
+---
 
 ## Safety Rules (MANDATORY)
 1. **ZERO TOLERANCE FOR UNASSIGNED / DEFAULT ENTRIES (TOP PRIORITY #1)**: There MUST be no unassigned entries or entries assigned to 'default'. If any exist, migrate them to their proper project immediately. The agent MUST investigate why they ended up unassigned/in 'default' and include a root cause analysis and fix plan in the report.
 2. **NEVER** use \`permanent: true\` unless explicitly asked to "hard delete".
 3. **ALWAYS** call \`backup_journal\` before any batch delete. Abort if it fails.
-${autoRun ? '4. **AUTO-RUN MODE**: You have pre-approval to soft-delete low-value entries (e.g. orphans with base score 0). Proceed without asking.' : '4. **ALWAYS** show the user what will be deleted before mutating.'}
-5. **NEVER** delete entries with \`significance_type\` set.
-6. Max batch size: 50 entries.
-7. **Log operations**: Create a journal entry with \`entry_type: 'maintenance'\` and tag \`database-optimizer\`.
-8. **Execution Scope**: Systematically process entries across ALL registered projects in \`PROJECT_REGISTRY\`.
+4. **NEVER** delete entries with \`significance_type\` set.
+5. Max batch size: 50 entries per mutation pass.
+6. **Log operations**: Create a journal entry with \`entry_type: 'maintenance'\` and tag \`database-optimizer\`.
+7. **Execution Scope**: Systematically process entries across registered projects in \`PROJECT_REGISTRY\` (or restricted to \`${targetProject || 'all'}\` if specified).
 
-## Identifying Orphans & Unassigned Entries Safely
-Do NOT use \`search_entries\` to dump the database. Use these pre-optimized Code Mode scripts in \`mj_execute_code\`. Because Code Mode executes directly against the sandboxed SQLite adapter, you can safely perform 500+ read iterations in milliseconds without triggering RPC serialization limits:
+---
 
-### 1. Scan for Unassigned / Default Workspace Entries (High Priority #1)
+## Code Mode Inspection & Graph Dump Scripts
+Do NOT use \`search_entries\` to dump the database. Use these pre-optimized Code Mode scripts in \`mj_execute_code\` for fast, sandboxed execution:
+
+### 1. Scan for Unassigned / Default Workspace Entries (Automated Option A)
 \`\`\`javascript
 const unassigned = [];
 let cursor = undefined;
@@ -204,49 +238,37 @@ while (processed < 500) {
 return unassigned;
 \`\`\`
 
-### 2. Scan for Zero-Value Orphans & Missing Quality Dimensions
+### 2. Inspect Full Relationship Graph Structure for a Project Domain
 \`\`\`javascript
-const candidates = [];
-let cursor = undefined;
-let processed = 0;
+const entries = await mj.core.getRecentEntries({ limit: 100, workspace_id: '*' });
+const graph = [];
 
-while (processed < 500) {
-  const res = await mj.core.getRecentEntries({ limit: 50, cursor, workspace_id: '<target_workspace_id>' });
-  if (!res.entries || res.entries.length === 0) break;
-  
-  for (const entry of res.entries) {
-    const full = await mj.core.getEntryById({ id: entry.id });
-    if (full.success) {
-      const isOrphan = !full.relationships || full.relationships.length === 0;
-      const isUnverified = full.validationStatus === 'none' || (full.trustScore ?? 0) < 0.9;
-      const isUntagged = !full.tags || full.tags.length === 0;
-      const baseScore = full.importance - (full.importanceBreakdown?.recency || 0);
-      
-      if (isOrphan || isUnverified || isUntagged || baseScore === 0) {
-        candidates.push({ id: entry.id, type: entry.entryType, isOrphan, isUnverified, isUntagged, baseScore });
-      }
-    }
+for (const entry of (entries.entries || [])) {
+  const full = await mj.core.getEntryById({ id: entry.id });
+  if (full.success && full.relationships && full.relationships.length > 0) {
+    graph.push({
+      id: entry.id,
+      title: entry.title,
+      project: entry.projectName,
+      relationships: full.relationships.map(r => ({ toId: r.toId, type: r.relationshipType }))
+    });
   }
-  
-  processed += res.entries.length;
-  if (!res.hasMore) break;
-  cursor = res.next_cursor;
 }
-return candidates;
+return graph;
 \`\`\`
 
-## Optimization & Verification Workflows (Three Execution Options)
+---
 
-Select the workflow based on the requested mode (\`${mode}\`):
+## Workflow Execution Options
 
-### Option A: Quick Health & Priority Workspace Unassigned Audit (\`mode: 'quick'\`)
+### Option A: Quick Health & Priority Workspace Unassigned Audit (Executed Automatically)
 1. **Safety Backup**: Call \`backup_journal\` before any mutations. Abort if backup creation fails.
 2. **Priority Zero-Tolerance Unassigned & Default Scan & Auto-Repair**:
-   - Run the Unassigned Scan script to check for entries where \`workspaceId === 'default'\` or \`projectNumber\` is missing/0 across all workspaces (\`workspace_id: '*'\`).
-   - Auto-repair entries: if an entry belongs to \`workspaceId: 'default'\` and has \`projectNumber\` deterministically matching a registered project in \`PROJECT_REGISTRY\`, migrate it immediately using \`mj.admin.updateEntry({ entry_id: id, target_workspace_id: correctWorkspace, workspace_id: '*' })\`.
-   - **Root-Cause Investigation**: Investigate why any unassigned/default entries bypass project assignment (caller tool, missing CLI \`--project\` flag, or context resolution failure). Formulate a remediation plan.
+   - Run the Unassigned Scan script across all workspaces (\`workspace_id: '*'\`).
+   - Auto-repair entries: if an entry belongs to \`workspaceId: 'default'\` and has \`projectNumber\` deterministically matching a registered project, migrate it immediately using \`mj.admin.updateEntry({ entry_id: id, target_workspace_id: correctWorkspace, workspace_id: '*' })\`.
+   - **Root-Cause Investigation**: Investigate why any unassigned/default entries bypass project assignment. Formulate a remediation plan.
 
-### Option B: Targeted Quality Dimension Audit (\`mode: 'targeted'\`)
+### Option B: Targeted Quality Dimension Audit (Executed Automatically)
 1. Filter database entries by the requested target dimension (\`${targetDimension}\`):
    - \`unassigned\`: Audit only unassigned or default workspace entries.
    - \`relationships\`: Audit only orphan entries lacking graph anchors.
@@ -254,14 +276,15 @@ Select the workflow based on the requested mode (\`${mode}\`):
    - \`tags\`: Audit entries with generic or empty tag arrays.
 2. Process entries in batches of 30–50, updating metadata via Code Mode.
 
-### Option C: Comprehensive Multi-Agent Full-Database Audit (\`mode: 'full'\`)
-1. **Domain-Based Subagent Partitioning**: Systematically partition entries by **Project Workspace Domain** (e.g., Subagent 1 for \`mysql-mcp\`, Subagent 2 for \`adamic\`, Subagent 3 for \`memory-journal-mcp\`, Subagent 4 for secondary projects). Domain-based partitioning preserves contextual coherence across commit narratives, retrospectives, and technical subsystem tags.
-2. **Full Content & 4-Dimension Single-Pass Optimization**:
-   - Instruct subagents to read entries in full and optimize all 4 core entry dimensions simultaneously:
-     - 🔗 **Graph Anchors**: Link related entries via Code Mode (\`mj.linkEntries({ from_id, to_id, relationship_type, workspace_id })\`) using valid relationship types (\`references\`, \`implements\`, \`evolves_from\`, \`resolves\`).
+### Comprehensive Multi-Agent Domain Audit & Noise Pruning (Presented to User for Choice)
+1. **Domain-Based Subagent Partitioning**: Partition entries by **Project Workspace Domain** (or focus exclusively on \`${targetProject || 'all projects'}\` capped at \`${entryLimit}\` entries). Domain partitioning preserves contextual coherence across commit narratives, retrospectives, and technical subsystem tags.
+2. **Full Content & 5-Dimension Single-Pass Optimization & Noise Pruning**:
+   - Instruct subagents to read entries in full and optimize all core entry dimensions while pruning noise simultaneously:
+     - 🔗 **Graph Anchors**: Link related entries via Code Mode (\`mj.linkEntries({ from_id, to_id, relationship_type, workspace_id })\`) using valid relationship types (\`references\`, \`implements\`, \`evolves_from\`, \`resolves\`, \`blocked_by\`, \`caused\`).
      - 🛡️ **Trust Calibration**: Normalize trust scores (\`trust_score\` between \`0.90\`–\`1.00\` for verified code/tests).
      - 💥 **Impact Calibration**: Calibrate impact scores (\`impact_score\` between \`0.30\`–\`0.80\` based on blast radius).
      - 🏷️ **Tag Enrichment & Significance**: Assign explicit \`significance_type\` and enrich empty/generic tag lists with technical subsystem keywords.
+     - 🧹 **Noise Pruning & Soft-Deletion**: Identify zero-value entries, obsolete transient debug notes, or duplicate test artifacts lacking significance (\`baseScore <= 0\`, no \`significance_type\`) and perform safe soft-deletions using Code Mode (\`mj.admin.deleteEntry({ entry_id, workspace_id })\`).
 3. **Subagent Batch Parallelization**:
    - Delegate domain project workloads to parallel subagents using high-reasoning models (e.g., Gemini 3.1 Pro / \`pro\` model).
    - **Strict Isolation**: Subagents MUST NEVER write files to project directories; all scratch files must be saved in \`<appDataDir>\\\\brain\\\\<conversation-id>\\\\scratch\\\\\`.
@@ -269,28 +292,19 @@ Select the workflow based on the requested mode (\`${mode}\`):
    - The parent agent MUST actively monitor subagent completion notifications.
    - As soon as each subagent reports completion, the parent agent MUST immediately terminate it using \`manage_subagents\` with \`Action: 'kill'\` and its \`ConversationId\` to free system resources.
 
-## Mandatory Report Structure (Enforced for ALL Runs)
+---
+
+## Mandatory Report Structure
 Every execution report MUST follow this exact 4-part Markdown layout:
-1. **Global Database Health & Resource Metrics**: Summary of total entries, unique tags, active relationships & avg density, orphan count & %, and DB/Vector Index health.
+1. **Global Database Health & Resource Metrics**: Summary of total entries, unique tags, active relationships & avg density, relationship types breakdown, orphan count & %, and DB/Vector Index health.
 2. **Project & Workspace Matrix Table**: A complete table listing entry counts and unassigned status across ALL registered projects:
    | Project Name | Project # | Total Entries | Unassigned / Default | Status |
 3. **Unassigned / Default Workspace Investigation & Fix Plan**:
    - Details of any migrated entries.
    - Root cause analysis explaining how the misallocation occurred.
    - Actionable fix plan / task recommendations to prevent future occurrences (or "Zero unassigned entries found" if clear).
-4. **Optimization Actions & Artifacts Summary**: Safety backup filename, enriched entries count, soft-deleted debug/test noise count, and maintenance journal entry ID.
-
-${autoRun ? `To proceed (AUTO-RUN MODE):
-1. Autonomous Execution: Do NOT ask for user confirmation or output plans for review.
-2. Execute Option A (Safety backup, priority unassigned/default entry scan & migration, root cause investigation).
-3. Execute Option B or C depending on mode (\`${mode}\`).
-4. Execute mutations via Code Mode using \`mj_execute_code\`.
-5. Output the mandatory 4-part Markdown report summary.` : `To proceed:
-1. Review live stats and output the mandatory 4-part Markdown report baseline.
-2. List available workflows (Option A Quick-Wins & Unassigned Audit, Option B Targeted Quality Dimension Audit, Option C Full-Database Multi-Agent Audit) for each project.
-3. Recommend starting with Option A unassigned migration or Option B targeted quality audit in batches of 30–60 entries.
-4. Identify candidates using Code Mode scripts and present them in 30–60 entry batches.
-5. Ask for user confirmation before executing batch mutations.`}`,
+4. **Optimization Actions & Next Steps**: Safety backup filename, enriched entries count, soft-deleted debug/test noise count, maintenance journal entry ID, and clear instructions for initiating the Comprehensive Multi-Agent Domain Audit & Noise Pruning.
+`,
                             },
                         },
                     ],

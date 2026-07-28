@@ -219,7 +219,7 @@ function buildEntryPayload(options: z.infer<typeof createEntrySchema>, metadata:
     const tagsStr = options.tags
     let tags: string[] | undefined
     if (tagsStr !== undefined) {
-        tags = tagsStr.split(',').map(t => t.trim()).filter(Boolean)
+        tags = tagsStr.split(/[,\s]+/).map(t => t.trim()).filter(Boolean)
     } else if (metadata['tags'] !== undefined && metadata['tags'] !== null) {
         tags = Array.isArray(metadata['tags']) ? metadata['tags'].map(String) : undefined
     }
@@ -299,6 +299,7 @@ export async function createEntryAction(...args: unknown[]): Promise<void> {
     if (options.body !== undefined && options.content === undefined) options.content = options.body;
     if (options.validation !== undefined && options.validationStatus === undefined) options.validationStatus = options.validation;
     if (options.workspace !== undefined && options.workspaceId === undefined) options.workspaceId = options.workspace;
+    if (options.summary !== undefined && options.title === undefined) options.title = options.summary;
 
     // Handle `[args...]` rest arguments for content
     const restArgs = args.slice(0, args.length - 2);

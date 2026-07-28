@@ -112,7 +112,7 @@ export class WorkerSandbox {
         this.worker.on('exit', (exitCode) => {
             if (exitCode !== 0) {
                 this.handleWorkerDeath(
-                    `Worker exited with code ${String(exitCode)} (likely timeout or OOM)`
+                    `🛠️ AUTONOMOUS HEALING: Worker execution timed out or ran out of memory. Avoid executing hundreds of sequential RPC calls (e.g. inside a loop calling getEntryById). Reduce batch/sample size or filter results server-side. (Worker exit code ${String(exitCode)})`
                 )
             }
         })

@@ -87,12 +87,18 @@ export function formatHandlerError(err: unknown): ErrorResponse {
         '<sanitized_path>'
     )
 
+    const isAutonomousHealing = message.includes('🛠️ AUTONOMOUS HEALING:')
+    const isRuntimeError = err instanceof ReferenceError || err instanceof TypeError || err instanceof SyntaxError
+    const displayError = isAutonomousHealing || isRuntimeError || matched !== undefined
+        ? sanitizedMessage
+        : 'An internal error occurred during tool execution. Please check the server logs for more details.'
+
     return {
         success: false,
-        error: 'An internal error occurred during tool execution. Please check the server logs for more details.',
-        code: matched?.code ?? 'INTERNAL_ERROR',
-        category: 'internal',
-        recoverable: false,
+        error: displayError,
+        code: matched?.code ?? (isAutonomousHealing || isRuntimeError ? 'VALIDATION_ERROR' : 'INTERNAL_ERROR'),
+        category: isAutonomousHealing || isRuntimeError ? 'validation' : 'internal',
+        recoverable: isAutonomousHealing || isRuntimeError || (matched !== undefined),
         ...(matched?.suggestion ? { suggestion: matched.suggestion } : {}),
         ...(process.env['DEBUG'] === 'true'
             ? { details: { internal_message: sanitizedMessage } }

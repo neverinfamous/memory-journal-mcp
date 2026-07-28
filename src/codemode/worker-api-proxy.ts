@@ -199,7 +199,7 @@ export function buildApiProxy(
                     const teamSnakeKey = `team_${snakeKey}`;
                     const teamGroup = Object.keys(methods).find(g => methods[g]?.includes(teamSnakeKey));
                     if (teamGroup && !Object.keys(methods).some(g => methods[g]?.includes(snakeKey))) {
-                        return (...args: unknown[]): Promise<unknown> => {
+                        const teamFn = (...args: unknown[]): Promise<unknown> => {
                             const intercept = applyArgInterceptions(teamSnakeKey, args);
                             if ('error' in intercept) {
                                 return wrapPromise(Promise.resolve(wrapResult(intercept.error)), teamSnakeKey);
@@ -207,12 +207,17 @@ export function buildApiProxy(
                             const resultPromise = safeRpcCall(teamGroup, teamSnakeKey, intercept.args).then(wrapResult);
                             return wrapPromise(resultPromise, teamSnakeKey);
                         }
+                        Object.assign(teamFn, {
+                            schema: (): Promise<string> =>
+                                Promise.resolve(schemas?.[teamGroup]?.[teamSnakeKey] ?? 'unknown'),
+                        })
+                        return teamFn
                     }
 
                     // 2. Check for cross-group hallucination (e.g. mj.core.searchEntries -> mj.search.searchEntries)
                     const foundGroup = Object.keys(methods).find(g => methods[g]?.includes(snakeKey));
                     if (foundGroup) {
-                        return (...args: unknown[]): Promise<unknown> => {
+                        const crossFn = (...args: unknown[]): Promise<unknown> => {
                             const intercept = applyArgInterceptions(snakeKey, args);
                             if ('error' in intercept) {
                                 return wrapPromise(Promise.resolve(wrapResult(intercept.error)), snakeKey);
@@ -220,6 +225,11 @@ export function buildApiProxy(
                             const resultPromise = safeRpcCall(foundGroup, snakeKey, intercept.args).then(wrapResult);
                             return wrapPromise(resultPromise, snakeKey);
                         }
+                        Object.assign(crossFn, {
+                            schema: (): Promise<string> =>
+                                Promise.resolve(schemas?.[foundGroup]?.[snakeKey] ?? schemas?.[foundGroup]?.[resolvedKey] ?? 'unknown'),
+                        })
+                        return crossFn
                     }
                 }
 
@@ -229,7 +239,7 @@ export function buildApiProxy(
                     : methodNames.length === 0
                       ? `🛠️ AUTONOMOUS HEALING: Operation '${key}' is not available — this group has no methods (read-only mode?). Available: ${available}.`
                       : `🛠️ AUTONOMOUS HEALING: Operation '${key}' is not found in group '${group}'. Available: ${available}.`
-                return (..._args: unknown[]) => {
+                const fallbackFn = (..._args: unknown[]): Promise<unknown> => {
                     return wrapPromise(Promise.resolve(wrapResult({
                         success: false,
                         error: reason,
@@ -238,6 +248,10 @@ export function buildApiProxy(
                         recoverable: true
                     })), key)
                 }
+                Object.assign(fallbackFn, {
+                    schema: (): Promise<string> => Promise.resolve('unknown'),
+                })
+                return fallbackFn
             },
         })
 
