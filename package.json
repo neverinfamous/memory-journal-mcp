@@ -15,6 +15,7 @@
     ],
     "scripts": {
         "build": "tsup",
+        "cli": "tsx src/cli/index.ts",
         "dev": "tsc --watch",
         "lint": "tsx scripts/run-checks.ts lint",
         "lint:fix": "eslint src/ tests/ --fix && tsx scripts/run-checks.ts lint",
