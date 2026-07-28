@@ -48,6 +48,22 @@ describe('Anti-Hallucination Fixes', () => {
                 expect((res.args[0] as Record<string, unknown>).project_number).toBe(42)
             }
         })
+
+        it('should auto-map get_statistics period and timeframe to group_by', () => {
+            const res1 = applyArgInterceptions('get_statistics', [{ period: 'week' }])
+            expect('args' in res1).toBe(true)
+            if ('args' in res1) {
+                expect((res1.args[0] as Record<string, unknown>).group_by).toBe('week')
+                expect((res1.args[0] as Record<string, unknown>).period).toBeUndefined()
+            }
+
+            const res2 = applyArgInterceptions('get_statistics', [{ timeframe: 'day' }])
+            expect('args' in res2).toBe(true)
+            if ('args' in res2) {
+                expect((res2.args[0] as Record<string, unknown>).group_by).toBe('day')
+                expect((res2.args[0] as Record<string, unknown>).timeframe).toBeUndefined()
+            }
+        })
     })
 
     describe('Result Proxy Property Aliases', () => {

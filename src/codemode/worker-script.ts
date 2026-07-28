@@ -87,7 +87,20 @@ async function executeCode(
             get(_fakeTarget: Record<string, unknown>, prop: string | symbol): unknown {
                 const target = mjApi
                 // Handle infinite chaining
-                if (prop === 'mj' || prop === 'journal' || prop === 'memory') return shimMj
+                if (
+                    prop === 'mj' ||
+                    prop === 'journal' ||
+                    prop === 'memory' ||
+                    prop === 'memory_journal' ||
+                    prop === 'memory_journal_mcp' ||
+                    prop === 'm' ||
+                    prop === 'env' ||
+                    prop === 'agent' ||
+                    prop === 'mcp' ||
+                    prop === 'mcpx' ||
+                    prop === 'memoryJournal' ||
+                    prop === 'MemoryJournal'
+                ) return shimMj
                 // Handle `sqlite.mj.executeCode` (from db-mcp parity)
                 if (prop === 'executeCode') {
                     if ('codemode' in target) {
@@ -440,6 +453,11 @@ async function executeCode(
             mcpx: shimMj,
             memoryJournal: shimMj,
             MemoryJournal: shimMj,
+            memory_journal: shimMj,
+            memory_journal_mcp: shimMj,
+            m: shimMj,
+            env: shimMj,
+            agent: shimMj,
             tools: shimMj,
             sdk: shimMj,
             client: shimMj,

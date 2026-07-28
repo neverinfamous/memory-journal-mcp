@@ -297,6 +297,8 @@ export async function createEntryAction(...args: unknown[]): Promise<void> {
     if (options.tag !== undefined && options.tags === undefined) options.tags = options.tag;
     if (options.contentFile !== undefined && options.file === undefined) options.file = options.contentFile;
     if (options.body !== undefined && options.content === undefined) options.content = options.body;
+    if (options.validation !== undefined && options.validationStatus === undefined) options.validationStatus = options.validation;
+    if (options.workspace !== undefined && options.workspaceId === undefined) options.workspaceId = options.workspace;
 
     // Handle `[args...]` rest arguments for content
     const restArgs = args.slice(0, args.length - 2);
@@ -400,6 +402,8 @@ export async function updateEntryAction(...args: unknown[]): Promise<void> {
     if (options.tag !== undefined && options.tags === undefined) options.tags = options.tag;
     if (options.contentFile !== undefined && options.file === undefined) options.file = options.contentFile;
     if (options.body !== undefined && options.content === undefined) options.content = options.body;
+    if (options.validation !== undefined && options.validationStatus === undefined) options.validationStatus = options.validation;
+    if (options.workspace !== undefined && options.workspaceId === undefined) options.workspaceId = options.workspace;
 
     // Handle `[args...]` rest arguments for content
     const restArgs = args.slice(0, args.length - 2);

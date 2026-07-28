@@ -520,15 +520,15 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
         }
 
         if (methodName.includes('get_statistics') || methodName.includes('getStatistics')) {
-            if (obj['time'] !== undefined || obj['timeframe'] !== undefined || obj['period'] !== undefined) {
-                return { error: {
-                    success: false,
-                    error: `get_statistics does not accept a time/timeframe parameter. Use 'group_by' ('day', 'week', 'month') instead.`,
-                    code: 'VALIDATION_ERROR',
-                    category: 'validation',
-                    suggestion: 'Remove time/timeframe and use group_by.',
-                    recoverable: true
-                }};
+            const timeVal = obj['time'] ?? obj['timeframe'] ?? obj['period']
+            if (timeVal !== undefined) {
+                if (obj['group_by'] === undefined && typeof timeVal === 'string') {
+                    const validGroupBy = ['day', 'week', 'month'].includes(timeVal.toLowerCase()) ? timeVal.toLowerCase() : 'month'
+                    obj['group_by'] = validGroupBy
+                }
+                delete obj['time']
+                delete obj['timeframe']
+                delete obj['period']
             }
         }
 
