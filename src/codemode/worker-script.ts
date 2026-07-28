@@ -273,9 +273,9 @@ async function executeCode(
                     const createFn = coreGroup?.['create_entry'] ?? coreGroup?.['createEntry']
                     const listFn = analyticsGroup?.['get_cross_project_insights'] ?? analyticsGroup?.['getCrossProjectInsights'] ?? adminGroup?.['list_projects'] ?? adminGroup?.['listProjects']
                     
-                    const projectsFn = function(this: unknown, ...args: unknown[]) {
+                    const projectsFn = function(this: unknown, ...args: unknown[]): Promise<unknown> {
                         if (typeof listFn === 'function') {
-                            return (listFn as (...a: unknown[]) => unknown).apply(this, args)
+                            return (listFn as (...a: unknown[]) => Promise<unknown>).apply(this, args)
                         }
                         return Promise.resolve({ success: true, projects: [] })
                     }
@@ -505,7 +505,7 @@ async function executeCode(
             setInterval: undefined,
             setImmediate: undefined,
             getConfig: () => Promise.resolve({ dbPath: 'memory-journal.db' }),
-            process: { exit: (code?: number) => process.exit(200 + (code || 0)) },
+            process: { exit: (code?: number) => process.exit(200 + (code ?? 0)) },
             require: undefined,
             __dirname: undefined,
             __filename: undefined,

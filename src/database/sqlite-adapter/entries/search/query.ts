@@ -22,7 +22,8 @@ export function getRecentEntries(
     sortBy: SortBy = 'timestamp',
     cursor?: string,
     includeArchived = false,
-    workspaceId = 'default'
+    workspaceId = 'default',
+    projectNumber?: number
 ): { entries: JournalEntry[]; nextCursor?: string } {
     const { db, tagsMgr } = context
 
@@ -37,6 +38,7 @@ export function getRecentEntries(
         
         const params: unknown[] = []
         if (workspaceId !== '*') params.push(workspaceId)
+        if (projectNumber !== undefined) params.push(projectNumber)
         params.push(limit, offset)
 
         const stmt = db.prepare(`
@@ -45,7 +47,7 @@ export function getRecentEntries(
             FROM memory_journal e
             LEFT JOIN rel_stats rs ON e.id = rs.entry_id
             LEFT JOIN anchor_stats ans ON e.id = ans.entry_id
-            WHERE e.deleted_at IS NULL ${!includeArchived ? 'AND e.is_archived = 0' : ''} ${workspaceId !== '*' ? 'AND e.workspace_id = ?' : ''}
+            WHERE e.deleted_at IS NULL ${!includeArchived ? 'AND e.is_archived = 0' : ''} ${workspaceId !== '*' ? 'AND e.workspace_id = ?' : ''} ${projectNumber !== undefined ? 'AND e.project_number = ?' : ''}
             ORDER BY importanceScore DESC, e.timestamp DESC, e.id DESC LIMIT ? OFFSET ?
         `)
         const rows = stmt.all(params)
@@ -64,6 +66,12 @@ export function getRecentEntries(
     if (workspaceId !== '*') {
         params.push(workspaceId)
     }
+
+    let projectCondition = ''
+    if (projectNumber !== undefined) {
+        projectCondition = ' AND project_number = ?'
+        params.push(projectNumber)
+    }
     
     if (cursor) {
         const decoded = decodeCursor(cursor)
@@ -75,7 +83,7 @@ export function getRecentEntries(
 
     const stmt = db.prepare(`
         SELECT ${ENTRY_COLUMNS} FROM memory_journal 
-        WHERE deleted_at IS NULL ${!includeArchived ? 'AND is_archived = 0' : ''} ${workspaceId !== '*' ? 'AND workspace_id = ?' : ''} ${cursorCondition}
+        WHERE deleted_at IS NULL ${!includeArchived ? 'AND is_archived = 0' : ''} ${workspaceId !== '*' ? 'AND workspace_id = ?' : ''} ${projectCondition} ${cursorCondition}
         ORDER BY timestamp DESC, id DESC LIMIT ?
     `)
     params.push(limit)

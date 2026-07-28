@@ -112,7 +112,7 @@ export class WorkerSandbox {
         this.worker.on('exit', (exitCode) => {
             if (exitCode >= 200 && exitCode < 300) {
                 const actualExitCode = exitCode - 200
-                console.log(`[CodeMode] Triggering graceful host exit with code ${actualExitCode}`)
+                process.stderr.write(`[CodeMode] Triggering graceful host exit with code ${actualExitCode}\n`)
                 process.exit(actualExitCode)
             } else if (exitCode !== 0) {
                 this.handleWorkerDeath(

@@ -120,7 +120,8 @@ export interface IDatabaseAdapter {
         sortBy?: 'timestamp' | 'importance',
         cursor?: string,
         includeArchived?: boolean,
-        workspaceId?: string
+        workspaceId?: string,
+        projectNumber?: number
     ): { entries: JournalEntry[]; nextCursor?: string }
     getEntriesPage(offset: number, limit: number): { entries: JournalEntry[]; nextCursor?: string }
     getActiveEntryCount(workspaceId?: string): number

@@ -143,11 +143,11 @@ export class EntriesManager {
         return deleteEntries(this.sharedContext, ids, permanent)
     }
 
-    getRecentEntries(limit = 10, isPersonal?: boolean, sortBy?: SortBy, cursor?: string, includeArchived?: boolean, workspaceId?: string): { entries: JournalEntry[]; nextCursor?: string } {
+    getRecentEntries(limit = 10, isPersonal?: boolean, sortBy?: SortBy, cursor?: string, includeArchived?: boolean, workspaceId?: string, projectNumber?: number): { entries: JournalEntry[]; nextCursor?: string } {
         if (isPersonal !== undefined) {
-            return searchEntries(this.sharedContext, '', { limit, isPersonal, sortBy, cursor, includeArchived, workspaceId })
+            return searchEntries(this.sharedContext, '', { limit, isPersonal, sortBy, cursor, includeArchived, workspaceId, projectNumber })
         }
-        return getRecentEntriesQuery(this.sharedContext, limit, sortBy, cursor, includeArchived, workspaceId)
+        return getRecentEntriesQuery(this.sharedContext, limit, sortBy, cursor, includeArchived, workspaceId, projectNumber)
     }
 
     getEntriesPage(offset: number, limit: number, order: 'asc' | 'desc' = 'desc'): { entries: JournalEntry[]; nextCursor?: string } {
