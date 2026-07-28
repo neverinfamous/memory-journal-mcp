@@ -12,7 +12,14 @@ export interface AgentIssue {
 }
 
 export function logAgentIssue(issue: Omit<AgentIssue, 'timestamp' | 'level'>): void {
-    if (process.env['NODE_ENV'] === 'test') {
+    if (
+        process.env['NODE_ENV'] === 'test' ||
+        process.env['VITEST'] !== undefined ||
+        process.env['VITEST_WORKER_ID'] !== undefined ||
+        process.env['PLAYWRIGHT_TEST'] !== undefined ||
+        process.env['E2E_TEST'] === 'true' ||
+        process.env['DISABLE_ISSUE_LOGGING'] === 'true'
+    ) {
         return
     }
 
