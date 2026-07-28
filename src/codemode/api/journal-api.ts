@@ -426,6 +426,7 @@ export class JournalApi {
         // Automatically map all METHOD_ALIASES into the group proxies to ensure the sandbox
         // worker proxy seamlessly inherits aliases without needing duplicate hardcoding.
         for (const [groupName, aliases] of Object.entries(METHOD_ALIASES)) {
+            // eslint-disable-next-line @typescript-eslint/unbound-method
             const groupApi = this[groupName as keyof JournalApi] as GroupApiRecord | undefined
             if (!groupApi) continue
 
@@ -451,6 +452,7 @@ export class JournalApi {
      * Get method names for a group
      */
     getGroupMethods(group: ToolGroup): string[] {
+        // eslint-disable-next-line @typescript-eslint/unbound-method
         const groupApi = this[group as keyof JournalApi] as GroupApiRecord | undefined
         if (!groupApi || typeof groupApi !== 'object') return []
         return Object.keys(groupApi)
