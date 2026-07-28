@@ -326,7 +326,7 @@ describe('WorkerSandbox', () => {
 
         const result = await execPromise
         expect(result.success).toBe(false)
-        expect(result.error).toContain('Worker exited')
+        expect(result.error).toContain('Worker exit code')
     }, 15000)
 })
 describe('WorkerSandboxPool', () => {
