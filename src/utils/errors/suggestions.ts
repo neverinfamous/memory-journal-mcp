@@ -101,9 +101,15 @@ export const ERROR_SUGGESTIONS: ErrorSuggestion[] = [
         code: 'INTERNAL_ERROR',
     },
     {
-        pattern: /(?:memory|mcp) is not defined/i,
+        pattern: /(?:memory|mcp|core|journal|api) is not defined/i,
         suggestion:
-            'In Code Mode (mj_execute_code), global "memory" and "mcp" objects do not exist. Use the top-level "mj" object to access tools (e.g. mj.core.createEntry or mj.analytics.getStatistics).',
+            'In Code Mode (mj_execute_code), top-level objects like "mj" or "core" provide API access (e.g. mj.core.createEntry, core.getRecentEntries, or mj.analytics.getStatistics). Verify object variable references.',
+        code: 'VALIDATION_ERROR',
+    },
+    {
+        pattern: /egress policy|egress limit|output limit exceeded/i,
+        suggestion:
+            'Result payload exceeds egress size boundary. Extract specific fields or reduce search limit (e.g. limit: 10) instead of returning full objects.',
         code: 'VALIDATION_ERROR',
     },
     {

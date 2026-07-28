@@ -445,6 +445,7 @@ async function executeCode(
 
         const sandbox: Record<string, unknown> = {
             mj: shimMj,
+            core: shimMj,
             journal: shimMj,
             _journal: shimMj,
             MJ: shimMj,

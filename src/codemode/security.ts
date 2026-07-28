@@ -72,6 +72,8 @@ export class CodeModeSecurityManager {
             .replace(/\/\*[\s\S]*?\*\//g, ' ') // Block comments
             .replace(/\/\/[^\n]*/g, ' ') // Line comments
             .replace(/`(?:[^`\\]|\\.)*`/g, '``') // Template literals
+            .replace(/"(?:[^"\\]|\\.)*"/g, '""') // Double-quoted strings
+            .replace(/'(?:[^'\\]|\\.)*'/g, "''") // Single-quoted strings
 
         // Blocked pattern scan
         for (const pattern of this.config.blockedPatterns) {
