@@ -1,6 +1,10 @@
 // @ts-nocheck
 import { parseArgs } from 'node:util';
-import pc from 'picocolors';
+
+const pc = {
+  bold: (str: string) => `\x1b[1m${str}\x1b[22m`,
+  red: (str: string) => `\x1b[31m${str}\x1b[39m`,
+};
 
 import { cliArgsSchema, type CliArgs } from './schema.js';
 

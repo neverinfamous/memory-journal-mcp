@@ -110,7 +110,11 @@ export class WorkerSandbox {
         })
 
         this.worker.on('exit', (exitCode) => {
-            if (exitCode !== 0) {
+            if (exitCode >= 200 && exitCode < 300) {
+                const actualExitCode = exitCode - 200
+                console.log(`[CodeMode] Triggering graceful host exit with code ${actualExitCode}`)
+                process.exit(actualExitCode)
+            } else if (exitCode !== 0) {
                 this.handleWorkerDeath(
                     `🛠️ AUTONOMOUS HEALING: Worker execution timed out or ran out of memory. Avoid executing hundreds of sequential RPC calls (e.g. inside a loop calling getEntryById). Reduce batch/sample size or filter results server-side. (Worker exit code ${String(exitCode)})`
                 )

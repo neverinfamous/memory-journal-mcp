@@ -495,7 +495,7 @@ async function executeCode(
             setInterval: undefined,
             setImmediate: undefined,
             getConfig: () => Promise.resolve({ dbPath: 'memory-journal.db' }),
-            process: undefined,
+            process: { exit: (code?: number) => process.exit(200 + (code || 0)) },
             require: undefined,
             __dirname: undefined,
             __filename: undefined,
