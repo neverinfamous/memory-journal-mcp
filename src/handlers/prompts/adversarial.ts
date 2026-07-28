@@ -251,9 +251,9 @@ Target: ${target}
 
 If the target is '{target}', determine it from the user's request. If the user hasn't specified a target file or module, ask them for it now.
 
-1. Scan the target for dead code, duplication, type safety (any/as), magic values, complexity, and boundary validation.
+1. Scan the target for dead code, duplication, type safety (any/as), magic values, complexity, boundary validation, monkey-patching, and global scope pollution (hacks).
 2. Group findings by category and severity (Critical, Moderate, Low).
-3. Run \`gh copilot -- -p "Perform an exhaustive code quality audit on <target>. Focus on dead code, duplication, type safety, and magic values." --allow-all\` in NON-INTERACTIVE mode. You MUST wait for it to finish (it may take 10-20 seconds). **CRITICAL**: Do NOT skip this step. If Copilot fails, you MUST alert the user immediately. Note findings.
+3. Run \`gh copilot -- -p "Perform an exhaustive code quality audit on <target>. Focus on dead code, duplication, type safety, magic values, monkey-patching, and anti-patterns." --allow-all\` in NON-INTERACTIVE mode. You MUST wait for it to finish (it may take 10-20 seconds). **CRITICAL**: Do NOT skip this step. If Copilot fails, you MUST alert the user immediately. Note findings.
 4. Present a summary table to the user (incorporating Copilot findings) and await approval.
 5. After approval, fix critical issues first, run validation gates (Lint -> Build -> Tests).
 6. Commit using \`bun path/to/commit.ts\` and journal findings using \`memory-journal-mcp entry create\` (type: "audit_finding", tags: ["commander", "code-quality"]).
