@@ -97,7 +97,7 @@ services:
         max-file: "3"
 
   datadog-unified:
-    image: gcr.io/datadoghq/agent:7.81.0
+    image: gcr.io/datadoghq/agent:7.81.2
     container_name: mj-datadog-unified
     restart: unless-stopped
     pid: host
