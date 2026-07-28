@@ -117,11 +117,11 @@ export class LifecycleOperations {
                 if (ids.length > 0) {
                     const placeholders = ids.map(() => '?').join(',')
                     const deleteSql = `DELETE FROM memory_journal WHERE id IN (${placeholders})`
-                    const result = db.prepare(deleteSql).run()
+                    const result = db.prepare(deleteSql).run(...ids)
                     hardDeletedCount = result.changes
                     
                     try {
-                        db.prepare(`DELETE FROM vec_embeddings WHERE entry_id IN (${placeholders})`).run()
+                        db.prepare(`DELETE FROM vec_embeddings WHERE entry_id IN (${placeholders})`).run(...ids)
                     } catch {
                         // ignore vector cleanup error if table doesn't exist
                     }
