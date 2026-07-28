@@ -20,7 +20,7 @@ services:
         max-file: "3"
 
   prometheus:
-    image: prom/prometheus:v2.54.1
+    image: prom/prometheus:v3.13.1
     container_name: mj-prometheus
     restart: unless-stopped
     ports:
@@ -44,7 +44,7 @@ services:
       retries: 3
 
   grafana:
-    image: grafana/grafana:11.2.0
+    image: grafana/grafana:13.1.1
     container_name: mj-grafana
     restart: unless-stopped
     ports:
@@ -60,13 +60,13 @@ services:
         max-size: "10m"
         max-file: "3"
     healthcheck:
-      test: [ "CMD", "wget", "--spider", "-q", "http://localhost:3000/api/health" ]
+      test: [ "CMD", "curl", "-s", "--fail", "http://localhost:3000/api/health" ]
       interval: 15s
       timeout: 5s
       retries: 3
 
   loki:
-    image: grafana/loki:3.1.0
+    image: grafana/loki:3.6.13
     container_name: mj-loki
     restart: unless-stopped
     ports:
@@ -79,14 +79,9 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-    healthcheck:
-      test: [ "CMD-SHELL", "wget -qO- http://localhost:3100/ready | grep -q ready" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
   promtail:
-    image: grafana/promtail:3.1.0
+    image: grafana/promtail:3.6.11
     container_name: mj-promtail
     restart: unless-stopped
     volumes:
@@ -100,13 +95,6 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-    depends_on:
-      - loki
-    healthcheck:
-      test: [ "CMD-SHELL", "wget -qO- http://localhost:9080/ready | grep -iq ready" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
   datadog-unified:
     image: gcr.io/datadoghq/agent:7.81.0
