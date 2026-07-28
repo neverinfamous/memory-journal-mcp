@@ -111,10 +111,13 @@ try {
     if (payloadPath.startsWith('base64:')) {
       payloadStr = Buffer.from(payloadPath.slice(7), 'base64').toString('utf8');
     } else if (payloadPath.trim().startsWith('{')) {
-      console.error(`\n   dY' AGENT HINT: You passed a JSON payload directly as an argument to agent-exec.ts.\n\x1b[38;5;208m   dY>,? AUTONOMOUS HEALING: Treating argument as JSON payload... (Frictionless Recovery)\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: You passed a JSON payload directly as an argument to agent-exec.ts.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Treating argument as JSON payload... (Frictionless Recovery)\x1b[0m`);
       payloadStr = payloadPath;
     } else {
-      console.error(`\n   dY' AGENT HINT: You passed a raw command directly to agent-exec.ts instead of a payload file.\n\x1b[38;5;208m   dY>,? AUTONOMOUS HEALING: Auto-wrapping command into JSON payload... (Frictionless Recovery)\x1b[0m`);
+      if (!positionals[0]) {
+        fatalError('Missing payload JSON file path or raw command.');
+      }
+      console.error(`\n   💡 AGENT HINT: You passed a raw command directly to agent-exec.ts instead of a payload file.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-wrapping command into JSON payload... (Frictionless Recovery)\x1b[0m`);
       const payload = {
         target: "windows",
         command: positionals[0],

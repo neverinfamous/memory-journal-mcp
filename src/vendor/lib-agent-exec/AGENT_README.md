@@ -150,7 +150,8 @@ Agents frequently hallucinate Unix tools or specific flags that break natively i
    * **Fix**: Always use the native `read_url_content` tool. If you must use curl CLI, invoke `curl.exe` explicitly to bypass the PowerShell alias.
 2. **`cat`, `ls`, `grep` & Native PowerShell Cmdlets**: PowerShell aliases `cat` to `Get-Content`, `ls` to `Get-ChildItem`, and lacks native Unix `grep` (often substituted with `Select-String`). Do NOT use these commands or their PowerShell cmdlet equivalents for file operations. They bypass the proxy's safety guardrails and will fail ungracefully if you hallucinate file paths.
    * **Fix**: You MUST use the agent-native tools instead for files: `view_file` (instead of cat/Get-Content), `list_dir` (instead of ls/Get-ChildItem), and `grep_search` (instead of grep/Select-String).
-   * **Exception**: You ARE allowed to use `grep`, `rg`, or `cat` natively when piping data into them as a stream filter (e.g., `npm list | grep foo`). The interceptor will block them if used as standalone file commands without stdin.
+   * **Exception 1 (Streaming)**: You ARE allowed to use `grep`, `rg`, or `cat` natively when piping data into them as a stream filter (e.g., `npm list | grep foo`). The interceptor will block them if used as standalone file commands without stdin.
+   * **Exception 2 (Sandbox Limits)**: The native `grep_search` tool can only search within the IDE's active workspace roots. If you need to search a directory outside these roots and `grep_search` fails, you MAY fallback to executing `rg` natively (e.g., `run_command("rg 'pattern' C:\\path\\outside\\workspace")`), as `rg` is explicitly whitelisted from the standalone block.
 3. **`gh run view --log`**: If a GitHub Action job is still running, this command exits with code 1 instead of waiting.
    * **Fix**: Do NOT poll this in a loop. Use the `schedule` tool to set an asynchronous timer to check back later.
 
