@@ -128,6 +128,12 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
                 obj['repo'] = obj['repo_name'];
                 delete obj['repo_name'];
             }
+            if (obj['code'] === undefined) {
+                const codeAlias = obj['script'] ?? obj['js'] ?? obj['javascript'] ?? obj['query'] ?? obj['command'] ?? obj['content'] ?? obj['eval'] ?? obj['source'] ?? obj['body'];
+                if (typeof codeAlias === 'string') {
+                    obj['code'] = codeAlias;
+                }
+            }
         } else {
             if (obj['repo'] !== undefined && obj['repo_name'] === undefined) {
                 obj['repo_name'] = obj['repo'];

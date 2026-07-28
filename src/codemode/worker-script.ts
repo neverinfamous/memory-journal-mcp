@@ -261,23 +261,33 @@ async function executeCode(
                     const coreGroup = target['core'] as Record<string, unknown>
                     return coreGroup['delete_entry'] ?? coreGroup['deleteEntry']
                 }
-                // Handle load/init/connect shim
-                if (prop === 'load' || prop === 'loadJournal' || prop === 'loadMemory' || prop === 'init' || prop === 'connect') {
+                // Handle load/init/connect/getJournal shim
+                if (prop === 'load' || prop === 'loadJournal' || prop === 'loadMemory' || prop === 'init' || prop === 'connect' || prop === 'getJournal' || prop === 'get_journal' || prop === 'load_journal') {
                     return () => Promise.resolve(shimMj)
                 }
                 // Handle sdk.projects hallucination
                 if (prop === 'projects') {
                     const coreGroup = target['core'] as Record<string, unknown> | undefined
                     const analyticsGroup = target['analytics'] as Record<string, unknown> | undefined
+                    const adminGroup = target['admin'] as Record<string, unknown> | undefined
                     const createFn = coreGroup?.['create_entry'] ?? coreGroup?.['createEntry']
-                    const listFn = analyticsGroup?.['get_cross_project_insights'] ?? analyticsGroup?.['getCrossProjectInsights']
-                    return {
+                    const listFn = analyticsGroup?.['get_cross_project_insights'] ?? analyticsGroup?.['getCrossProjectInsights'] ?? adminGroup?.['list_projects'] ?? adminGroup?.['listProjects']
+                    
+                    const projectsFn = function(this: unknown, ...args: unknown[]) {
+                        if (typeof listFn === 'function') {
+                            return (listFn as (...a: unknown[]) => unknown).apply(this, args)
+                        }
+                        return Promise.resolve({ success: true, projects: [] })
+                    }
+                    Object.assign(projectsFn, {
                         list: () => (listFn as ((...args: unknown[]) => unknown) | undefined)?.(),
+                        get: (name: unknown) => (adminGroup?.['get_project'] as ((...args: unknown[]) => unknown) | undefined)?.(typeof name === 'string' || typeof name === 'number' ? { name: String(name) } : name),
                         entries: {
                             create: createFn,
                             add: createFn
                         }
-                    }
+                    })
+                    return projectsFn
                 }
                 // Handle direct SQL execution shim (e.g. db.execute)
                 if (prop === 'db' && 'core' in target) {

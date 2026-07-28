@@ -86,6 +86,28 @@ describe('WorkerSandbox', () => {
         expect(result.result).toEqual([2, 4, 6, 8, 10, 12, 14])
     })
 
+    it('should support mj.projects() as callable function and mj.getJournal("proj")', async () => {
+        const sandbox = new WorkerSandbox()
+        const bindings = {
+            analytics: {
+                get_cross_project_insights: async () => ({ success: true, insights: [] }),
+            },
+            core: {
+                create_entry: async (args: any) => ({ success: true, id: 99 }),
+            },
+        }
+        const code = `
+            const p = await mj.projects();
+            const j = await mj.getJournal("mysql-mcp");
+            const entryRes = await j.addEntry({ content: "test entry" });
+            return { p, entryRes };
+        `
+        const result = await sandbox.execute(code, bindings)
+        expect(result.success).toBe(true)
+        expect(result.result.p.success).toBe(true)
+        expect(result.result.entryRes.id).toBe(99)
+    })
+
     it('should support entries, search, and db shim method calls', async () => {
         const sandbox = new WorkerSandbox()
         const bindings = {

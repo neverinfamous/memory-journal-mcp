@@ -1,5 +1,11 @@
 import { z } from 'zod'
 
+export const safeCoerceNumber = z.preprocess((val) => {
+    if (val === undefined || val === null || val === '') return undefined
+    const num = Number(val)
+    return isNaN(num) ? undefined : num
+}, z.number().optional())
+
 export const coreOptionsSchema = z.object({
     config: z.string().optional(),
     dumpConfig: z.boolean().optional(),
@@ -15,7 +21,7 @@ export const databaseOptionsSchema = z.object({
 })
 
 export const workspaceOptionsSchema = z.object({
-    defaultProject: z.coerce.number().optional(),
+    defaultProject: safeCoerceNumber,
     defaultWorkspaceId: z.string().optional()
 })
 
@@ -170,12 +176,12 @@ export const baseEntryOptionsSchema = z.object({
     type: z.string().optional(),
     category: z.string().optional(),
     tags: z.string().optional(),
-    project: z.coerce.number().optional(),
-    project_number: z.coerce.number().optional(),
-    trustScore: z.coerce.number().optional(),
-    trust_score: z.coerce.number().optional(),
-    impactScore: z.coerce.number().optional(),
-    impact_score: z.coerce.number().optional(),
+    project: safeCoerceNumber,
+    project_number: safeCoerceNumber,
+    trustScore: safeCoerceNumber,
+    trust_score: safeCoerceNumber,
+    impactScore: safeCoerceNumber,
+    impact_score: safeCoerceNumber,
     validationStatus: z.enum(['passed', 'failed', 'none']).optional(),
     validation: z.enum(['passed', 'failed', 'none']).optional(),
     workspace: z.string().optional(),
