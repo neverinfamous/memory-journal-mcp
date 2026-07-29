@@ -75,19 +75,20 @@ export function wrapResult(result: unknown): unknown {
                 get(target, prop) {
                     if (prop in target) return target[prop]
                     
+                    const targetRecord = target as Record<string, unknown>
                     // Helper to safely check and cast arrays
                     const isObject = (val: unknown): val is Record<string, unknown> => typeof val === 'object' && val !== null;
                     const hasNumberId = (val: unknown): val is { id: number } => isObject(val) && typeof val['id'] === 'number';
 
                     // Hallucination Intercept: Single entry creation returns { success: true, entry: { id: 42 } }.
                     // Allow accessing result.id or result.entryId directly on the success result wrapper.
-                    if ((prop === 'id' || prop === 'entryId') && 'entry' in targetRecord && isObject(targetRecord['entry']) && 'id' in (targetRecord['entry'] as Record<string, unknown>)) {
-                        return (targetRecord['entry'] as Record<string, unknown>)['id']
+                    const entryObj = targetRecord['entry']
+                    if ((prop === 'id' || prop === 'entryId') && isObject(entryObj) && 'id' in entryObj) {
+                        return entryObj['id']
                     }
 
                     // Hallucination Intercept: Agents frequently expect batchCreateEntries to return `entryIds` array
                     // instead of the actual `entries` array. Expose it gracefully as an iterable array of numbers.
-                    const targetRecord = target as Record<string, unknown>
                     if (prop === 'entryIds' && 'entries' in targetRecord && Array.isArray(targetRecord['entries'])) {
                         return targetRecord['entries'].filter(hasNumberId).map((e) => e.id)
                     }

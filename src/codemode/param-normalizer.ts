@@ -59,7 +59,7 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
         }
 
         // Extract parameter hallucinations nested inside metadata/context
-        const metaObj = isRecord(obj['metadata']) ? (obj['metadata'] as Record<string, unknown>) : (isRecord(obj['context']) ? (obj['context'] as Record<string, unknown>) : undefined);
+        const metaObj = isRecord(obj['metadata']) ? obj['metadata'] : (isRecord(obj['context']) ? obj['context'] : undefined);
         if (metaObj) {
             if (obj['project_number'] === undefined && metaObj['project_number'] !== undefined) obj['project_number'] = metaObj['project_number'];
             if (obj['project_number'] === undefined && metaObj['projectNumber'] !== undefined) obj['project_number'] = metaObj['projectNumber'];
@@ -83,7 +83,7 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
                     if (!isNaN(parsed)) obj[key] = parsed;
                 } else if (key === 'project_number' || key === 'projectNumber') {
                     // Delete non-numeric string representations (e.g. 'N/A', 'none', 'unknown')
-                    delete obj[key];
+                    Reflect.deleteProperty(obj, key);
                 }
             }
         }
