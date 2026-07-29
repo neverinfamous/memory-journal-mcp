@@ -119,6 +119,7 @@ try {
       }
       console.error(`\n   💡 AGENT HINT: You passed a raw command directly to agent-exec.ts instead of a payload file.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-wrapping command into JSON payload... (Frictionless Recovery)\x1b[0m`);
       const payload = {
+        type: "command",
         target: "windows",
         command: positionals[0],
         args: positionals.slice(1)

@@ -84,6 +84,9 @@ export function convertToWslPath(winPath: string): string {
     if (path.win32.isAbsolute(value)) {
       return `${prefix}${transform(value)}`;
     }
+    if (value.includes('\\')) {
+      return `${prefix}${value.replace(/\\/g, '/')}`;
+    }
   }
 
   return winPath;
@@ -314,13 +317,13 @@ export function buildCommand(payload: ExecPayload, cwd: string, isJson: boolean 
       if (p.target === 'wsl2') {
         localCmd = convertToWslPath(localCmd);
         
-        let grepRegexIdx = -1;
-        if (['grep', 'grep.exe', 'egrep', 'fgrep', 'rg', 'rg.exe'].includes(localCmd.toLowerCase())) {
-          grepRegexIdx = localArgs.findIndex(a => !a.startsWith('-'));
+        let patternExprIdx = -1;
+        if (['grep', 'grep.exe', 'egrep', 'fgrep', 'rg', 'rg.exe', 'jq', 'jq.exe', 'yq', 'yq.exe', 'sed', 'sed.exe', 'awk', 'awk.exe', 'gawk', 'gawk.exe'].includes(localCmd.toLowerCase())) {
+          patternExprIdx = localArgs.findIndex(a => !a.startsWith('-'));
         }
 
         localArgs = localArgs.map((a, idx) => {
-          if (idx === grepRegexIdx) return a;
+          if (idx === patternExprIdx) return a;
           return convertToWslPath(a);
         });
 
@@ -584,17 +587,14 @@ export function buildCommand(payload: ExecPayload, cwd: string, isJson: boolean 
       wslEnvArgs.push(`${k}=${convertToWslPath(v)}`);
     }
 
-    let grepRegexIdx = -1;
-    if (['grep', 'grep.exe', 'egrep', 'fgrep', 'rg', 'rg.exe'].includes(path.basename(cmd).toLowerCase())) {
-      grepRegexIdx = args.findIndex(a => !a.startsWith('-'));
+    let patternExprIdx = -1;
+    if (['grep', 'grep.exe', 'egrep', 'fgrep', 'rg', 'rg.exe', 'jq', 'jq.exe', 'yq', 'yq.exe', 'sed', 'sed.exe', 'awk', 'awk.exe', 'gawk', 'gawk.exe'].includes(path.basename(cmd).toLowerCase())) {
+      patternExprIdx = args.findIndex(a => !a.startsWith('-'));
     }
 
     const wslArgs = args.map((arg, idx) => {
-      if (idx === grepRegexIdx) return arg;
-      if (/[a-zA-Z]:[/\\]/.test(arg)) {
-        return convertToWslPath(arg);
-      }
-      return arg;
+      if (idx === patternExprIdx) return arg;
+      return convertToWslPath(arg);
     });
 
     let wslCmd = cmd;
