@@ -224,8 +224,8 @@ async function executeCode(
                         })
                     }
                 }
-                // Handle `memory.journal.addEntry` or `Entry.create` / `mj.add` / `mj.log` natural hallucination
-                if ((prop === 'addEntry' || prop === 'create_entry' || prop === 'createEntry' || prop === 'create' || prop === 'add' || prop === 'log') && 'core' in target) {
+                // Handle `memory.journal.addEntry` or `Entry.create` / `mj.add` / `mj.log` / `insertEntry` natural hallucination
+                if ((prop === 'addEntry' || prop === 'create_entry' || prop === 'createEntry' || prop === 'create' || prop === 'add' || prop === 'log' || prop === 'insertEntry' || prop === 'insert_entry' || prop === 'insert' || prop === 'add_entry' || prop === 'newEntry' || prop === 'new_entry' || prop === 'logEntry' || prop === 'log_entry' || prop === 'saveEntry' || prop === 'save_entry' || prop === 'writeEntry' || prop === 'write_entry' || prop === 'appendEntry' || prop === 'append_entry') && 'core' in target) {
                     const coreGroup = target['core'] as Record<string, unknown>
                     return coreGroup['create_entry'] ?? coreGroup['createEntry']
                 }
@@ -476,9 +476,21 @@ async function executeCode(
             utils: shimMj,
             sql: shimMj,
             connectToDatabase: () => shimMj,
-            sqlite_journal_add_entry: (shimMj['core'] as Record<string, unknown>)?.['createEntry'] ?? (shimMj['core'] as Record<string, unknown>)?.['create_entry'],
-            create_entry: (shimMj['core'] as Record<string, unknown>)?.['createEntry'] ?? (shimMj['core'] as Record<string, unknown>)?.['create_entry'],
-            createEntry: (shimMj['core'] as Record<string, unknown>)?.['createEntry'] ?? (shimMj['core'] as Record<string, unknown>)?.['create_entry'],
+            sqlite_journal_add_entry: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
+            create_entry: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
+            createEntry: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
+            insert_entry: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
+            insertEntry: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
+            add_entry: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
+            addEntry: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
+            new_entry: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
+            newEntry: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
+            log_entry: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
+            logEntry: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
+            save_entry: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
+            saveEntry: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
+            write_entry: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
+            writeEntry: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
             createMemory: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
             appendEntry: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
             createJournalEntry: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),

@@ -68,9 +68,12 @@ export class CodeModeSecurityManager {
         const SENSITIVE_KEYWORDS = /constructor|require|import|process|eval|Function|__proto__|child_process/i
         const stripString = (match: string): string => (SENSITIVE_KEYWORDS.test(match) ? match : '""')
 
+        // Strip harmless memory-journal package import statements before checking blocked patterns
+        const cleanCode = code.replace(/import\s+(?:\{[^}]*\}|\*\s+as\s+\w+|\w+)\s+from\s+['"](?:@neverinfamous\/)?memory-journal-mcp['"];?/gi, '')
+
         // Normalize and strip comments/template literals before pattern matching
         // (e.g., the word "process." in a Markdown string triggering the process.env block).
-        const strippedCode = code
+        const strippedCode = cleanCode
             .normalize('NFKC')
             .replace(/\/\*[\s\S]*?\*\//g, ' ') // Block comments
             .replace(/\/\/[^\n]*/g, ' ') // Line comments

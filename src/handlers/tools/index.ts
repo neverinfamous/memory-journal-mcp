@@ -24,7 +24,7 @@ import type { GitHubIntegration } from '../../github/github-integration/index.js
 import type { ProgressContext } from '../../utils/progress-utils.js'
 import type { ProjectRegistryEntry } from '../../types/index.js'
 
-import { getCoreTools, getStalenessTools, getDummyHealingTools } from './core/index.js'
+import { getCoreTools, getStalenessTools, getDummyHealingTools, DUMMY_HEALING_TOOL_NAMES } from './core/index.js'
 import { getSearchTools } from './search/index.js'
 import { getAnalyticsTools } from './analytics.js'
 import { getRelationshipTools } from './relationships.js'
@@ -182,7 +182,7 @@ export function getTools(
         // Filtered lists are not cached — filter sets vary per call
         const mapToUse = config?.runtime?.toolMapCache ?? toolMapCache ?? EMPTY_TOOL_MAP
         return Array.from(mapToUse.values())
-            .filter((t) => filterConfig.enabledTools.has(t.name))
+            .filter((t) => filterConfig.enabledTools.has(t.name) || DUMMY_HEALING_TOOL_NAMES.has(t.name))
             .map(mapTool)
     }
 
@@ -486,7 +486,7 @@ export async function callTool(
  * Compose all tool definitions from group modules
  */
 function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
-    return [
+    const primaryTools = [
         ...getCoreTools(context),
         ...getStalenessTools(context),
         ...getSearchTools(context),
@@ -499,6 +499,8 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
         ...getTeamTools(context),
         ...getCodeModeTools(context),
         ...getGitTools(context),
-        ...getDummyHealingTools(),
     ]
+    const primaryNames = new Set(primaryTools.map((t) => t.name))
+    const dummyTools = getDummyHealingTools(context).filter((t) => !primaryNames.has(t.name))
+    return [...primaryTools, ...dummyTools]
 }
