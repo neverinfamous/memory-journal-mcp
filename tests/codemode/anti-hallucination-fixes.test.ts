@@ -105,4 +105,16 @@ describe('Anti-Hallucination Fixes', () => {
             expect(res).toEqual({ success: true, entries: [] })
         })
     })
+
+    describe('Markdown Payload Auto-Healing Detection', () => {
+        it('should identify markdown bullet strings and entry creation objects', () => {
+            const code1 = "- **Test execution for vector tools**: Performed usability and fuzzing"
+            const isMarkdown1 = /^\s*([*#-]\s*\*?|\d+\.\s|[A-Z][a-z0-9_-]+:)/m.test(code1) && !/\b(const|let|var|function|return|await|mj\.|import|export)\b/.test(code1)
+            expect(isMarkdown1).toBe(true)
+
+            const code2 = "return await mj.searchEntries({ query: \"- **vector**\" })"
+            const isMarkdown2 = /^\s*([*#-]\s*\*?|\d+\.\s|[A-Z][a-z0-9_-]+:)/m.test(code2) && !/\b(const|let|var|function|return|await|mj\.|import|export)\b/.test(code2)
+            expect(isMarkdown2).toBe(false)
+        })
+    })
 })

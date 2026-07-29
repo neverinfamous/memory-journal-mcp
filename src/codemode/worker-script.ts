@@ -606,10 +606,11 @@ async function executeCode(
         if (
             errString.includes('missing ) after argument list') ||
             errString.includes('is not a function') ||
-            errString.includes('Invalid or unexpected token')
+            errString.includes('Invalid or unexpected token') ||
+            errString.includes('Unexpected token') ||
+            errString.includes('Unexpected identifier')
         ) {
-            error.message +=
-                '\n\n💡 Tip: When passing long multi-line strings or markdown with embedded quotes/backticks, NEVER use template literals (backticks `) in the code string as they will prematurely evaluate and cause SyntaxErrors or Tagged Template TypeErrors. ALWAYS pass them safely via the `context` parameter and reference them as `context.myParam`.'
+            error.message = `🛠️ AUTONOMOUS HEALING: Syntax error in Code Mode execution (${error.message}). Code Mode requires valid JavaScript code (e.g., 'return await mj.createEntry(...)'), not raw Markdown text or invalid syntax.\n\n💡 Tip: When passing long multi-line strings or markdown with embedded quotes/backticks, NEVER use template literals (backticks \`) in the code string as they will prematurely evaluate and cause SyntaxErrors or Tagged Template TypeErrors. ALWAYS pass them safely via the \`context\` parameter and reference them as \`context.myParam\`.`
         }
 
         return {

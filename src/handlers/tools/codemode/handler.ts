@@ -44,6 +44,22 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                         executionCode = executionCode.replace(/<CURRENT_PROJECT_ID>/g, 'undefined')
                         executionCode = executionCode.replace(/<PROJECT_NUMBER>/g, 'undefined')
                         executionCode = executionCode.replace(/<PROJECT_ID>/g, 'undefined')
+
+                        // Anti-Hallucination: Auto-heal raw Markdown text or journal entry payloads passed directly to mj_execute_code
+                        const rawObj = (typeof params === 'object' && params !== null ? params : {}) as Record<string, unknown>
+                        const hasEntryFields = Boolean(rawObj['type'] || rawObj['entry_type'] || rawObj['title'] || rawObj['category'])
+                        const isMarkdownText = /^\s*([*#-]\s*\*?|\d+\.\s|[A-Z][a-z0-9_-]+:)/m.test(executionCode) && !/\b(const|let|var|function|return|await|mj\.|import|export)\b/.test(executionCode)
+
+                        if (hasEntryFields || isMarkdownText) {
+                            const titleVal = (rawObj['title'] as string | undefined) ?? 'Journal Entry'
+                            const typeVal = (rawObj['type'] as string | undefined) ?? (rawObj['entry_type'] as string | undefined) ?? (rawObj['category'] as string | undefined) ?? 'technical_decision'
+                            const tagsVal = Array.isArray(rawObj['tags']) ? rawObj['tags'] : []
+                            const safeContent = JSON.stringify(executionCode)
+                            const safeTitle = JSON.stringify(titleVal)
+                            const safeType = JSON.stringify(typeVal)
+                            const safeTags = JSON.stringify(tagsVal)
+                            executionCode = `return await mj.createEntry({ title: ${safeTitle}, content: ${safeContent}, entry_type: ${safeType}, tags: ${safeTags} });`
+                        }
                     }
 
                     // 1. Configuration Validation
