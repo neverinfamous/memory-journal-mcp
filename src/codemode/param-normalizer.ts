@@ -22,6 +22,11 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
     const gitIntercept = applyGitInterceptions(methodName, args);
     if (gitIntercept) return gitIntercept;
 
+    // Raw string argument normalization for execute_code
+    if ((methodName === 'execute_code' || methodName === 'executeCode' || methodName === 'mj_execute_code' || methodName === 'mjExecuteCode') && args.length === 1 && typeof args[0] === 'string') {
+        args = [{ code: args[0] }];
+    }
+
     // Positional Argument Normalization (e.g. MemoryJournal.appendEntry('workspace-id', { ... }))
     if (args.length === 2 && typeof args[0] === 'string' && isRecord(args[1])) {
         const firstStr = args[0].trim();
@@ -152,9 +157,17 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
                 delete obj['repo_name'];
             }
             if (obj['code'] === undefined) {
-                const codeAlias = obj['script'] ?? obj['js'] ?? obj['javascript'] ?? obj['query'] ?? obj['command'] ?? obj['content'] ?? obj['eval'] ?? obj['source'] ?? obj['body'];
+                const codeAlias = obj['script'] ?? obj['js'] ?? obj['javascript'] ?? obj['query'] ?? obj['command'] ?? obj['content'] ?? obj['eval'] ?? obj['source'] ?? obj['body'] ?? obj['expression'] ?? obj['fn'] ?? obj['exec'] ?? obj['code_snippet'] ?? obj['raw_code'] ?? obj['statement'] ?? obj['statements'] ?? obj['codeBlock'] ?? obj['code_block'] ?? obj['script_content'] ?? obj['js_code'] ?? obj['code_string'] ?? obj['action'] ?? obj['task'] ?? obj['instruction'] ?? obj['instructions'] ?? obj['input'] ?? obj['payload'] ?? obj['text'];
                 if (typeof codeAlias === 'string') {
                     obj['code'] = codeAlias;
+                } else {
+                    // Fallback: search any string property in obj that looks like JS code or contains text
+                    for (const [k, v] of Object.entries(obj)) {
+                        if (typeof v === 'string' && v.trim().length > 0 && !['repo', 'workspace_id', 'expected_version', 'auto_version', 'project_number'].includes(k)) {
+                            obj['code'] = v;
+                            break;
+                        }
+                    }
                 }
             }
         } else {

@@ -21,7 +21,10 @@ export const VERSION_AWARE_TOOL_NAMES = new Set([
 // Execution Schemas
 // ============================================================================
 
-export const ExecuteCodeSchema = z.object({
+export const ExecuteCodeSchema = z.preprocess((val) => {
+    if (typeof val === 'string') return { code: val }
+    return val
+}, z.object({
     code: z.string().optional(),
     script: z.string().optional(),
     source: z.string().optional(),
@@ -34,6 +37,24 @@ export const ExecuteCodeSchema = z.object({
     payload: z.string().optional(),
     executionCode: z.string().optional(),
     input: z.string().optional(),
+    command: z.string().optional(),
+    expression: z.string().optional(),
+    fn: z.string().optional(),
+    exec: z.string().optional(),
+    eval: z.string().optional(),
+    code_snippet: z.string().optional(),
+    raw_code: z.string().optional(),
+    statement: z.string().optional(),
+    statements: z.string().optional(),
+    codeBlock: z.string().optional(),
+    code_block: z.string().optional(),
+    script_content: z.string().optional(),
+    js_code: z.string().optional(),
+    code_string: z.string().optional(),
+    action: z.string().optional(),
+    task: z.string().optional(),
+    instruction: z.string().optional(),
+    instructions: z.string().optional(),
     auto_version: z.boolean().optional().default(true),
     project_number: relaxedNumber().optional(),
     workspace_id: z.string().optional(),
@@ -43,7 +64,7 @@ export const ExecuteCodeSchema = z.object({
     timeout_ms: z.coerce.number().optional(),
     timeout: z.coerce.number().optional(),
     readonly: z.boolean().optional(),
-})
+}).passthrough())
 
 export const ExecuteCodeSchemaMcp = z.object({
     code: z

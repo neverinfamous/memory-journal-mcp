@@ -35,8 +35,18 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                 const start = performance.now()
                 
                 try {
-                    const input = ExecuteCodeSchema.parse(params)
-                    let executionCode = input.code || input.script || input.source || input.query || input.content || input.text || input.body || input.js || input.javascript || input.payload || input.executionCode || input.input
+                    let executionCode = input.code || input.script || input.source || input.query || input.content || input.text || input.body || input.js || input.javascript || input.payload || input.executionCode || input.input || input.command || input.expression || input.fn || input.exec || input.eval || input.code_snippet || input.raw_code || input.statement || input.statements || input.codeBlock || input.code_block || input.script_content || input.js_code || input.code_string || input.action || input.task || input.instruction || input.instructions
+
+                    // Fallback: search params object for any string property if code is still undefined
+                    if (!executionCode && typeof params === 'object' && params !== null) {
+                        const paramObj = params as Record<string, unknown>
+                        for (const [k, v] of Object.entries(paramObj)) {
+                            if (typeof v === 'string' && v.trim().length > 0 && !['repo', 'workspace_id', 'expected_version', 'auto_version', 'project_number', 'readonly'].includes(k)) {
+                                executionCode = v
+                                break
+                            }
+                        }
+                    }
 
                     // [Layer 2 Dispatcher Healing] Prevent literal placeholder SyntaxErrors
                     if (executionCode) {
