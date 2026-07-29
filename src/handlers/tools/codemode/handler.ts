@@ -47,12 +47,12 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
 
                         // Anti-Hallucination: Auto-heal raw Markdown text or journal entry payloads passed directly to mj_execute_code
                         const rawObj = (typeof params === 'object' && params !== null ? params : {}) as Record<string, unknown>
-                        const hasEntryFields = Boolean(rawObj['type'] || rawObj['entry_type'] || rawObj['title'] || rawObj['category'])
+                        const hasEntryFields = typeof rawObj['type'] === 'string' || typeof rawObj['entry_type'] === 'string' || typeof rawObj['title'] === 'string' || typeof rawObj['category'] === 'string'
                         const isMarkdownText = /^\s*([*#-]\s*\*?|\d+\.\s|[A-Z][a-z0-9_-]+:)/m.test(executionCode) && !/\b(const|let|var|function|return|await|mj\.|import|export)\b/.test(executionCode)
 
                         if (hasEntryFields || isMarkdownText) {
-                            const titleVal = (rawObj['title'] as string | undefined) ?? 'Journal Entry'
-                            const typeVal = (rawObj['type'] as string | undefined) ?? (rawObj['entry_type'] as string | undefined) ?? (rawObj['category'] as string | undefined) ?? 'technical_decision'
+                            const titleVal = typeof rawObj['title'] === 'string' ? rawObj['title'] : 'Journal Entry'
+                            const typeVal = typeof rawObj['type'] === 'string' ? rawObj['type'] : typeof rawObj['entry_type'] === 'string' ? rawObj['entry_type'] : typeof rawObj['category'] === 'string' ? rawObj['category'] : 'technical_decision'
                             const tagsVal = Array.isArray(rawObj['tags']) ? rawObj['tags'] : []
                             const safeContent = JSON.stringify(executionCode)
                             const safeTitle = JSON.stringify(titleVal)
