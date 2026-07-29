@@ -35,6 +35,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                 const start = performance.now()
                 
                 try {
+                    const input = ExecuteCodeSchema.parse(params)
                     let executionCode = input.code || input.script || input.source || input.query || input.content || input.text || input.body || input.js || input.javascript || input.payload || input.executionCode || input.input || input.command || input.expression || input.fn || input.exec || input.eval || input.code_snippet || input.raw_code || input.statement || input.statements || input.codeBlock || input.code_block || input.script_content || input.js_code || input.code_string || input.action || input.task || input.instruction || input.instructions
 
                     // Fallback: search params object for any string property if code is still undefined

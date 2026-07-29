@@ -64,7 +64,7 @@ export const ExecuteCodeSchema = z.preprocess((val) => {
     timeout_ms: z.coerce.number().optional(),
     timeout: z.coerce.number().optional(),
     readonly: z.boolean().optional(),
-}).passthrough())
+}).catchall(z.unknown()))
 
 export const ExecuteCodeSchemaMcp = z.object({
     code: z
