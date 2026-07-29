@@ -234,11 +234,18 @@ async function executeCode(
                     const searchGroup = target['search'] as Record<string, unknown>
                     const getFn = coreGroup['get_entry_by_id'] ?? coreGroup['getEntryById']
                     const searchFn = searchGroup['search_entries'] ?? searchGroup['searchEntries']
-                    return (arg: unknown) => {
+                    return (arg?: unknown) => {
+                        if (arg === undefined) {
+                            return Promise.resolve(shimMj)
+                        }
                         if (typeof arg === 'number' || typeof arg === 'string') {
                             const parsedId = Number(arg)
                             if (!Number.isNaN(parsedId)) {
                                 return (getFn as (a: unknown) => unknown)({ entry_id: parsedId })
+                            }
+                            if (typeof arg === 'string') {
+                                // Non-numeric string arg (e.g. "neverinfamous/mysql-mcp") is an SDK workspace/journal getter hallucination
+                                return Promise.resolve(shimMj)
                             }
                         }
                         if (arg !== null && typeof arg === 'object') {
@@ -449,6 +456,7 @@ async function executeCode(
             journal: shimMj,
             _journal: shimMj,
             MJ: shimMj,
+            M: shimMj,
             adapter: shimMj,
             Entry: shimMj,
             getJournal: () => Promise.resolve(shimMj),

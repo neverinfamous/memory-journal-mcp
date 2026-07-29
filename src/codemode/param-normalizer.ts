@@ -53,6 +53,21 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
             }
         }
 
+        // Extract parameter hallucinations nested inside metadata/context
+        const metaObj = isRecord(obj['metadata']) ? (obj['metadata'] as Record<string, unknown>) : (isRecord(obj['context']) ? (obj['context'] as Record<string, unknown>) : undefined);
+        if (metaObj) {
+            if (obj['project_number'] === undefined && metaObj['project_number'] !== undefined) obj['project_number'] = metaObj['project_number'];
+            if (obj['project_number'] === undefined && metaObj['projectNumber'] !== undefined) obj['project_number'] = metaObj['projectNumber'];
+            if (obj['session_id'] === undefined && metaObj['session_id'] !== undefined) obj['session_id'] = metaObj['session_id'];
+            if (obj['session_id'] === undefined && metaObj['sessionId'] !== undefined) obj['session_id'] = metaObj['sessionId'];
+            if (obj['type'] === undefined && metaObj['type'] !== undefined) obj['type'] = metaObj['type'];
+            if (obj['type'] === undefined && metaObj['entry_type'] !== undefined) obj['type'] = metaObj['entry_type'];
+            if (obj['type'] === undefined && metaObj['category'] !== undefined) obj['type'] = metaObj['category'];
+            if (obj['tags'] === undefined && metaObj['tags'] !== undefined) obj['tags'] = metaObj['tags'];
+            if (obj['workspace_id'] === undefined && metaObj['workspace_id'] !== undefined) obj['workspace_id'] = metaObj['workspace_id'];
+            if (obj['workspace_id'] === undefined && metaObj['workspaceId'] !== undefined) obj['workspace_id'] = metaObj['workspaceId'];
+        }
+
         // Global coercion of numeric strings for integer ID parameters
         for (const key of ['entry_id', 'entryId', 'id', 'from_entry_id', 'fromEntryId', 'to_entry_id', 'toEntryId', 'project_number', 'projectNumber', 'issue_number', 'issueNumber', 'pr_number', 'prNumber', 'milestone_number', 'milestoneNumber']) {
             const val = obj[key];
@@ -61,6 +76,9 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
                 if (/^-?\d+$/.test(strVal)) {
                     const parsed = parseInt(strVal, 10);
                     if (!isNaN(parsed)) obj[key] = parsed;
+                } else if (key === 'project_number' || key === 'projectNumber') {
+                    // Delete non-numeric string representations (e.g. 'N/A', 'none', 'unknown')
+                    delete obj[key];
                 }
             }
         }
@@ -93,7 +111,7 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
             }
             delete obj['projectName'];
         }
-        if ((obj['workspace_id'] === undefined || obj['workspace_id'] === null || obj['workspace_id'] === '' || obj['workspace_id'] === 'default') && (methodName === 'create_entry' || methodName === 'createEntry' || methodName === 'team_create_entry' || methodName === 'teamCreateEntry')) {
+        if ((methodName === 'create_entry' || methodName === 'createEntry' || methodName === 'team_create_entry' || methodName === 'teamCreateEntry')) {
             const projNum = typeof obj['project_number'] === 'number' ? obj['project_number'] : undefined;
             const content = typeof obj['content'] === 'string' ? obj['content'] : undefined;
             const tags = Array.isArray(obj['tags']) ? obj['tags'].filter((t): t is string => typeof t === 'string') : undefined;
@@ -103,12 +121,17 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
                 content,
                 tags
             });
-            if (resolved.workspaceId && resolved.workspaceId !== 'default') {
-                obj['workspace_id'] = resolved.workspaceId;
-            } else if (process.env['MCP_WORKSPACE_ID']) {
-                obj['workspace_id'] = process.env['MCP_WORKSPACE_ID'];
-            } else if (!obj['workspace_id']) {
-                obj['workspace_id'] = 'default';
+            if (resolved.workspaceId && (obj['workspace_id'] === undefined || obj['workspace_id'] === null || obj['workspace_id'] === '' || obj['workspace_id'] === 'default')) {
+                if (resolved.workspaceId !== 'default') {
+                    obj['workspace_id'] = resolved.workspaceId;
+                } else if (process.env['MCP_WORKSPACE_ID']) {
+                    obj['workspace_id'] = process.env['MCP_WORKSPACE_ID'];
+                } else {
+                    obj['workspace_id'] = 'default';
+                }
+            }
+            if (obj['project_number'] === undefined && resolved.projectNumber !== undefined) {
+                obj['project_number'] = resolved.projectNumber;
             }
         }
         
