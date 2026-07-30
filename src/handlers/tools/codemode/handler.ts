@@ -56,6 +56,20 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                         executionCode = executionCode.replace(/<PROJECT_NUMBER>/g, 'undefined')
                         executionCode = executionCode.replace(/<PROJECT_ID>/g, 'undefined')
 
+                        // Auto-heal ES module import and CommonJS require statements
+                        executionCode = executionCode.replace(/(?:const|let|var)\s+(\{[^}]*\}|[\w$]+)\s*=\s*require\s*\(\s*['"]([^'"]+)['"]\s*\);?/g, (_m: string, varName: string, modName: string): string => {
+                            if (modName.includes('memory-journal') || modName.includes('journal') || modName.includes('mcp')) {
+                                return `const ${varName} = mj;`
+                            }
+                            return `// stripped require of ${modName}`
+                        })
+                        executionCode = executionCode.replace(/import\s+(\{[^}]*\}|\*\s+as\s+[\w$]+|[\w$]+)\s+from\s+['"]([^'"]+)['"]\s*;?/g, (_m: string, varName: string, modName: string): string => {
+                            if (modName.includes('memory-journal') || modName.includes('journal') || modName.includes('mcp')) {
+                                return `const ${varName} = mj;`
+                            }
+                            return `// stripped import of ${modName}`
+                        })
+
                         // Anti-Hallucination: Auto-heal raw Markdown text or journal entry payloads passed directly to mj_execute_code
                         const rawObj = (typeof params === 'object' && params !== null ? params : {}) as Record<string, unknown>
                         const hasEntryFields = typeof rawObj['type'] === 'string' || typeof rawObj['entry_type'] === 'string' || typeof rawObj['title'] === 'string' || typeof rawObj['category'] === 'string'

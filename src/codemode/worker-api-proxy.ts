@@ -97,27 +97,54 @@ export function buildApiProxy(
                 methods: methodNames,
             })
 
-        const groupProxyWrapped = new Proxy(groupProxy, {
-            get(target, prop) {
+        const groupCallable = function (): void {
+            // Callable group namespace target shim
+        }
+        Object.assign(groupCallable, groupProxy)
+
+        const groupProxyWrapped = new Proxy(groupCallable, {
+            apply(_target, _thisArg, args: unknown[]): Promise<unknown> {
+                const primaryMethod = methodNames.find((m) => !m.endsWith('_help') && m !== 'help')
+                if (primaryMethod !== undefined) {
+                    const fn = groupProxy[primaryMethod]
+                    if (fn !== undefined) {
+                        return fn(...args)
+                    }
+                }
+                return wrapPromise(
+                    Promise.resolve(
+                        wrapResult({
+                            success: false,
+                            error: `Group '${group}' is a tool namespace, not a function. Available methods in '${group}': ${methodNames.join(', ')}.`,
+                            code: 'VALIDATION_ERROR',
+                            category: 'validation',
+                            recoverable: true,
+                        })
+                    ),
+                    group
+                )
+            },
+            get(target: object, prop: string | symbol): unknown {
                 if (typeof prop === 'symbol') return undefined
                 const key = prop
-                if (key in target) return target[key]
+                const targetRecord = target as unknown as Record<string, unknown>
+                if (key in targetRecord) return targetRecord[key]
 
                 // Generic camelCase to snake_case fallback
-                if (typeof key === 'string' && /[A-Z]/.test(key)) {
+                if (/[A-Z]/.test(key)) {
                     const snakeKey = key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
-                    if (snakeKey in target) return target[snakeKey]
+                    if (snakeKey in targetRecord) return targetRecord[snakeKey]
                 }
 
                 // Resolve using unified METHOD_ALIASES map
                 const aliases = METHOD_ALIASES[group]
                 let resolvedKey = key
-                if (aliases && typeof key === 'string' && aliases[key]) {
+                if (aliases?.[key] !== undefined) {
                     const canonicalCamel = aliases[key]
                     // Convert the canonical camelCase to the target's snake_case keys
                     const canonicalSnake = canonicalCamel.replace(/[A-Z]/g, (l) => `_${l.toLowerCase()}`)
-                    if (canonicalSnake in target) return target[canonicalSnake]
-                    if (canonicalCamel in target) return target[canonicalCamel]
+                    if (canonicalSnake in targetRecord) return targetRecord[canonicalSnake]
+                    if (canonicalCamel in targetRecord) return targetRecord[canonicalCamel]
                     
                     resolvedKey = canonicalCamel
                 }

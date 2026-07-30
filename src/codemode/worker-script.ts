@@ -98,8 +98,13 @@ async function executeCode(
                     prop === 'agent' ||
                     prop === 'mcp' ||
                     prop === 'mcpx' ||
+                    prop === 'mc' ||
                     prop === 'memoryJournal' ||
-                    prop === 'MemoryJournal'
+                    prop === 'MemoryJournal' ||
+                    prop === 'mjJournal' ||
+                    prop === 'mjClient' ||
+                    prop === 'mj_client' ||
+                    prop === 'app'
                 ) return shimMj
                 // Handle `sqlite.mj.executeCode` (from db-mcp parity)
                 if (prop === 'executeCode') {
@@ -169,6 +174,7 @@ async function executeCode(
                             createEntry: coreGroup['create_entry'] ?? coreGroup['createEntry'],
                             create_entry: coreGroup['create_entry'] ?? coreGroup['createEntry'],
                             add: coreGroup['create_entry'] ?? coreGroup['createEntry'],
+                            push: coreGroup['create_entry'] ?? coreGroup['createEntry'],
                             get: coreGroup['get_entry_by_id'] ?? coreGroup['getEntryById'],
                             getEntryById: coreGroup['get_entry_by_id'] ?? coreGroup['getEntryById'],
                             get_entry_by_id: coreGroup['get_entry_by_id'] ?? coreGroup['getEntryById'],
@@ -531,7 +537,7 @@ async function executeCode(
             __dirname: undefined,
             __filename: undefined,
             global: undefined,
-            globalThis: undefined,
+            globalThis: shimMj,
             Proxy: undefined,
         }
 

@@ -1,0 +1,53 @@
+// Grafana Alloy configuration
+// Migrated from grafana/promtail:3.6.11 (EOL March 2026)
+// Equivalent pipeline: tail JSON files → parse → label → push to Loki
+
+// Discover log files to tail
+local.file_match "mcp_logs" {
+  path_targets = [{
+    "__path__" = "/var/log/memory-journal-mcp/*.jsonl",
+    "job"      = "memory_journal_mcp_logs",
+  }]
+}
+
+// Tail matched files, tracking positions across restarts
+loki.source.file "mcp_logs" {
+  targets    = local.file_match.mcp_logs.targets
+  forward_to = [loki.process.mcp_logs.receiver]
+}
+
+// Parse JSON log entries and promote structured fields as labels
+loki.process "mcp_logs" {
+  forward_to = [loki.write.loki_server.receiver]
+
+  // Extract structured fields from JSON log entries
+  stage.json {
+    expressions = {
+      tool       = "tool",
+      category   = "category",
+      scope      = "scope",
+      status     = "status",
+      success    = "success",
+      durationMs = "durationMs",
+      requestId  = "requestId",
+    }
+  }
+
+  // Promote parsed fields as Loki stream labels
+  stage.labels {
+    values = {
+      tool     = "",
+      category = "",
+      scope    = "",
+      status   = "",
+      success  = "",
+    }
+  }
+}
+
+// Push log streams to Loki
+loki.write "loki_server" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}

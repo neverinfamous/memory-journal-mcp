@@ -80,14 +80,14 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  promtail:
-    image: grafana/promtail:3.6.11
-    container_name: mj-promtail
+  alloy:
+    image: grafana/alloy:v1.18.0
+    container_name: mj-alloy
     restart: unless-stopped
     volumes:
-      - ./config/promtail/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
+      - ./config/alloy/alloy-config.alloy:/etc/alloy/config.alloy:ro
       - ../../../memory-journal-mcp/logs:/var/log/memory-journal-mcp:ro
-    command: -config.file=/etc/promtail/promtail-config.yml
+    command: run --server.http.listen-addr=0.0.0.0:12345 /etc/alloy/config.alloy
     stop_grace_period: 15s
     mem_limit: 128m
     logging:
@@ -95,6 +95,12 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+    healthcheck:
+      test: ["CMD-SHELL", "grep -q ':3039 ' /proc/net/tcp /proc/net/tcp6 2>/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   datadog-unified:
     image: gcr.io/datadoghq/agent:7.81.2
