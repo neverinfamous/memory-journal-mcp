@@ -28,7 +28,7 @@ export default defineConfig({
         },
         hookTimeout: 30000,
         testTimeout: 10000,
-        pool: 'forks',
+        pool: 'threads',
         fileParallelism: true,
     },
 })

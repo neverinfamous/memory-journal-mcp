@@ -4,7 +4,7 @@ import * as path from 'node:path'
 import { startServer, stopServer, createClient } from './helpers'
 
 test.describe('Configuration File Parsing', () => {
-    const port = 3125
+    const port = 5127 + (Number(process.env.TEST_PARALLEL_INDEX || 0) * 100)
     let client: any
     const testConfigPath = path.join(process.cwd(), '.test-output', 'e2e', `test-config-${port}.json`)
 

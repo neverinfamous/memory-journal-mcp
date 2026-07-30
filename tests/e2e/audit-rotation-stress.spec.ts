@@ -15,7 +15,7 @@ import {
 } from './helpers.js'
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
 
-const AUDIT_PORT_BASE = 3170
+const AUDIT_PORT_BASE = 5140 + (Number(process.env.TEST_PARALLEL_INDEX || 0) * 100)
 const AUDIT_FILTER = 'core'
 
 function auditLogPath(suffix: string): string {

@@ -239,7 +239,7 @@ export async function startServer(
 
     managedServers.set(port, { process: serverProcess, port })
 
-    const maxAttempts = 180
+    const maxAttempts = 600
     for (let i = 0; i < maxAttempts; i++) {
         try {
             const res = await fetch(`http://localhost:${port}/health`)
@@ -247,7 +247,7 @@ export async function startServer(
         } catch {
             // Server not ready yet
         }
-        await delay(500)
+        await delay(50)
     }
 
     serverProcess.kill()

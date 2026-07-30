@@ -29,7 +29,7 @@ import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
 
 test.describe.configure({ mode: 'serial', timeout: 120_000 })
 
-const AUDIT_PORT_BASE = 3150
+const AUDIT_PORT_BASE = 5130 + (Number(process.env.TEST_PARALLEL_INDEX || 0) * 100)
 const AUDIT_FILTER = 'core,admin'
 
 function auditLogPath(suffix: string): string {

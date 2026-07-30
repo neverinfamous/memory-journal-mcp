@@ -4,7 +4,7 @@ import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js'
 import { ResourceUpdatedNotificationSchema } from '@modelcontextprotocol/sdk/types.js'
 import { startServer, stopServer } from './helpers.js'
 
-const PORT = 3190
+const PORT = 5129 + (Number(process.env.TEST_PARALLEL_INDEX || 0) * 100)
 
 test.describe.configure({ mode: 'serial' })
 

@@ -7,7 +7,7 @@ import {
 } from './helpers.js'
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
 
-const WORKER_PORT = 3125
+const WORKER_PORT = 5128 + (Number(process.env.TEST_PARALLEL_INDEX || 0) * 100)
 
 test.describe.configure({ mode: 'serial' })
 
