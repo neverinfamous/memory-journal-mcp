@@ -394,12 +394,7 @@ export function formatUserMessage(opts: {
     if (trackingParts.length > 0) {
         tableRows.push(`| **Tracking** | ${trackingParts.join('<br>')} |`)
     }
-    if (totalEntries > 0) {
-        tableRows.push(`| **Journal** | ${journalParts.join('<br>')} |`)
-    }
-    // if (sysLines.length > 0) {
-    //     tableRows.push(`| **System** | ${sysLines.join('<br>')} |`)
-    // }
+    tableRows.push(`| **Journal** | ${journalParts.join('<br>')} |`)
     if (configLines.length > 0) {
         tableRows.push(`| **Config** | ${configLines.join('<br>')} |`)
     }
