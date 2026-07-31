@@ -18,6 +18,7 @@ Use the following tools in this test pass:
 - Try to execute MCP Prompts as if they were tools to verify that the server heals this.
 - For mutation/destructive tools, call them without expected constraints (like omitting `expected_version`) to test optimistic concurrency and explicit traps.
 - Do not try to bypass the sandbox, simply test the API surface.
+- **Workspace & Project Binding**: When testing `create_entry`, ensure you query `memory://agent-id` or pass `project_number` / `workspace_id` explicitly. Creating entries under `workspace_id: 'default'` is strictly prohibited.
 - Note any errors, exceptions, or unexpected behavior.
 
 ## 2. Heal Phase

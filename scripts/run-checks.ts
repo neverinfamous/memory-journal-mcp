@@ -47,6 +47,11 @@ if (!target) {
     // Also run code-map if running all
     console.log('Running code-map generation...')
     runCommand('pnpm', ['exec', 'tsx', 'scripts/update-code-map.ts'])
+
+    // Run workspace isolation check
+    console.log('Running workspace isolation check...')
+    const unassignedPassed = runCommand('pnpm', ['exec', 'tsx', 'scripts/check-unassigned-entries.ts'])
+    if (!unassignedPassed) success = false
 }
 
 const overallOk = lintOk && typecheckOk

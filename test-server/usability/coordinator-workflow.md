@@ -29,6 +29,9 @@ Execute all usability tests in `test-server/usability/` to fuzz the `memory-jour
 6. **Coordinator Progress Reporting**:
    - The Coordinator MUST provide the user with clear, frequent progress reports. After each subagent finishes, emit a message like: "Test pass 4 out of X completed."
    - The Coordinator MUST keep a running tally of how many total issues were fixed by the subagents.
+7. **Strict Project Binding & Workspace Isolation**:
+   - Subagents executing usability tests MUST explicitly specify a target project number (or workspace ID) for any `create_entry` / `team_create_entry` or mutation test pass (e.g. `--project mysql-mcp` or read `memory://agent-id` to retrieve project number).
+   - Creating journal entries under `workspace_id: 'default'` or without a registered project number is strictly prohibited and will be rejected with an actionable error hint referencing `memory://agent-id`.
 
 ## Test Sequence Queue
 

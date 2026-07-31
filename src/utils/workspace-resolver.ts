@@ -139,17 +139,35 @@ export function resolveProjectContext(
 
     // 4. Explicit input.project_number fallback (when no conflicting registry workspace matched)
     if (input.project_number !== undefined && input.project_number !== null) {
+        let wsId = input.workspace_id
+        if ((!wsId || wsId === 'default') && registry) {
+            for (const [key, entry] of Object.entries(registry)) {
+                if (entry.project_number === input.project_number) {
+                    wsId = key
+                    break
+                }
+            }
+        }
         return {
-            workspaceId: input.workspace_id ?? config?.defaultWorkspaceId ?? 'default',
+            workspaceId: wsId ?? config?.defaultWorkspaceId ?? 'default',
             projectNumber: input.project_number
         }
     }
 
     // 5. CWD / Config Fallback
     const cwdProjNum = resolveProjectNumberFromPath(process.cwd())
+    let resolvedWsId = input.workspace_id
+    if ((!resolvedWsId || resolvedWsId === 'default') && cwdProjNum !== undefined && registry) {
+        for (const [key, entry] of Object.entries(registry)) {
+            if (entry.project_number === cwdProjNum) {
+                resolvedWsId = key
+                break
+            }
+        }
+    }
 
     return {
-        workspaceId: input.workspace_id ?? config?.defaultWorkspaceId ?? 'default',
+        workspaceId: resolvedWsId ?? config?.defaultWorkspaceId ?? 'default',
         projectNumber: cwdProjNum
     }
 }
