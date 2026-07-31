@@ -56,7 +56,7 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
 
                         if (pNumber === undefined || pNumber === null || pNumber <= 0) {
                             throw new Error(
-                                `project_number is required. Batch entry must be assigned to a valid project (failed to resolve project_number for workspace '${wsId}').`
+                                `project_number is required. Batch entry must be assigned to a valid project (failed to resolve project_number for workspace '${wsId}'). To find your project_number, read memory://agent-id via read_resource, call mj.core.listProjects(), or check memory://briefing/<project-name>.`
                             )
                         }
                         

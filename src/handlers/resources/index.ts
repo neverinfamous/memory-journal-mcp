@@ -177,6 +177,8 @@ const RESOURCE_URI_ALIASES: Record<string, string> = {
     'memory://status': 'memory://health',
     'memory://server': 'memory://health',
     'memory://tools': 'memory://help',
+    'memory://agent-id': 'memory://agent-context/default',
+    'memory://agent-context': 'memory://agent-context/default',
 }
 
 /**

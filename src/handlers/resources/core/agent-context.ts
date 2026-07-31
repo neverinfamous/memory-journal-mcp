@@ -1,4 +1,4 @@
-import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
+import { resolveWorkspaceId, resolveProjectNumberFromPath } from '../../../utils/workspace-resolver.js'
 import type { InternalResourceDef, ResourceContext } from '../shared.js'
 import { withPriority, ASSISTANT_FOCUSED } from '../../../utils/resource-annotations.js'
 
@@ -15,7 +15,7 @@ export function getAgentContextResource(): InternalResourceDef {
             const registry = config?.projectRegistry ?? {}
             const defaultProjectNumber = config?.defaultProjectNumber
 
-            const match = /^memory:\/\/agent-context\/(.+)$/.exec(uri)
+            const match = /^memory:\/\/(?:agent-context\/|agent-id$)(.+)?$/.exec(uri)
             const repo = match?.[1] ?? 'default'
 
             let projectNumber = defaultProjectNumber ?? -1
@@ -26,7 +26,7 @@ export function getAgentContextResource(): InternalResourceDef {
                 if (exactMatch) {
                     projectNumber = exactMatch.project_number ?? projectNumber
                 } else {
-                    // Try to match by path basename
+                    // Try to match by path basename or cwd
                     const entries = Object.entries(registry)
                     const found = entries.find(([_, entry]) => {
                         return entry.path.endsWith(`/${repo}`) || entry.path.endsWith(`\\${repo}`)
@@ -35,6 +35,10 @@ export function getAgentContextResource(): InternalResourceDef {
                         projectNumber = found[1].project_number ?? projectNumber
                     }
                 }
+            }
+
+            if (projectNumber === -1) {
+                projectNumber = resolveProjectNumberFromPath(process.cwd()) ?? -1
             }
 
             // resolveWorkspaceId takes explicitWorkspaceId first. We don't have an explicit one, 
