@@ -280,6 +280,10 @@ export function buildApiProxy(
                 })
                 return fallbackFn
             },
+            set(): boolean { return false },
+            defineProperty(): boolean { return false },
+            deleteProperty(): boolean { return false },
+            setPrototypeOf(): boolean { return false },
         })
 
         api[group] = groupProxyWrapped
