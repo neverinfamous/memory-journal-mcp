@@ -88,18 +88,6 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
             }
         }
 
-        // Global limit capping at MAX_SEARCH_LIMIT (500) to prevent validation errors
-        if (obj['limit'] !== undefined) {
-            if (typeof obj['limit'] === 'number' && obj['limit'] > 500) {
-                obj['limit'] = 500;
-            } else if (typeof obj['limit'] === 'string') {
-                const parsed = parseInt(obj['limit'], 10);
-                if (!isNaN(parsed)) {
-                    obj['limit'] = Math.min(parsed, 500);
-                }
-            }
-        }
-
         if (obj['user'] !== undefined && obj['target_user'] === undefined) { obj['target_user'] = obj['user']; delete obj['user']; }
         if (obj['severity'] !== undefined && obj['flag_type'] === undefined) { obj['flag_type'] = obj['severity']; delete obj['severity']; }
         if (obj['msg'] !== undefined && obj['message'] === undefined) { obj['message'] = obj['msg']; delete obj['message']; }
