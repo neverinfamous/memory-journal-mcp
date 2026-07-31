@@ -90,6 +90,9 @@ async function executeCode(
                 if (
                     prop === 'mj' ||
                     prop === 'journal' ||
+                    prop === 'journals' ||
+                    prop === 'journal_entries' ||
+                    prop === 'journalEntries' ||
                     prop === 'memory' ||
                     prop === 'memory_journal' ||
                     prop === 'memory_journal_mcp' ||
@@ -317,14 +320,24 @@ async function executeCode(
                         }
                     })
                 }
-                if (prop === 'execute' || prop === 'query' || prop === 'raw' || prop === 'exec') {
-                    return (..._args: unknown[]) => Promise.resolve({
-                        success: false,
-                        error: `Direct database execution '${typeof prop === 'string' ? prop : String(prop)}()' is disabled in Code Mode. Use mj.core.createEntry({ ... }), mj.search.searchEntries({ ... }), or mj.core.getRecentEntries() instead.`,
-                        code: 'VALIDATION_ERROR',
-                        category: 'validation',
-                        recoverable: true
-                    })
+                if (prop === 'execute' || prop === 'query' || prop === 'raw' || prop === 'exec' || prop === 'prepare' || prop === 'stmt' || prop === 'statement') {
+                    return (..._args: unknown[]) => {
+                        const errResult = Promise.resolve({
+                            success: false,
+                            error: `Direct database execution/preparation '${typeof prop === 'string' ? prop : String(prop)}()' is disabled in Code Mode. Use mj.core.createEntry({ ... }), mj.search.searchEntries({ ... }), or mj.core.getRecentEntries() instead.`,
+                            code: 'VALIDATION_ERROR',
+                            category: 'validation',
+                            suggestion: 'Use mj.core.createEntry({ ... }) to insert entries.',
+                            recoverable: true,
+                        })
+                        return Object.assign(errResult, {
+                            run: () => errResult,
+                            all: () => errResult,
+                            get: () => errResult,
+                            exec: () => errResult,
+                            execute: () => errResult,
+                        })
+                    }
                 }
                 // Handle get/list/searchProjects hallucination via proxy intercept
                 if (prop === 'getProjects' || prop === 'listProjects' || prop === 'searchProjects') {
@@ -489,6 +502,10 @@ async function executeCode(
             system: shimMj,
             utils: shimMj,
             sql: shimMj,
+            getDb: () => shimMj,
+            get_db: () => shimMj,
+            getDatabase: () => shimMj,
+            get_database: () => shimMj,
             connectToDatabase: () => shimMj,
             sqlite_journal_add_entry: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
             create_entry: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
