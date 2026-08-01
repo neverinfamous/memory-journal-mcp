@@ -28,7 +28,21 @@ function checkUnassignedEntries(): void {
     let db: Database.Database
     try {
         db = new Database(dbPath, { readonly: true })
-        const rawKey = process.env['MJ_DB_ENCRYPTION_KEY'] || process.env['DB_ENCRYPTION_KEY']
+        let rawKey = process.env['MJ_DB_ENCRYPTION_KEY'] || process.env['DB_ENCRYPTION_KEY']
+        
+        // Fallback to IDE MCP configuration if running directly
+        if (!rawKey) {
+            try {
+                const configPath = path.resolve(os.homedir(), '.gemini', 'config', 'mcp_config.json')
+                if (fs.existsSync(configPath)) {
+                    const mcpConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'))
+                    rawKey = mcpConfig.mcpServers?.['memory-journal-mcp']?.env?.DB_ENCRYPTION_KEY
+                }
+            } catch (err) {
+                // Ignore
+            }
+        }
+
         if (rawKey) {
             if (rawKey.startsWith("x'") && rawKey.endsWith("'")) {
                 db.pragma(`key = "${rawKey}"`)
@@ -50,7 +64,7 @@ function checkUnassignedEntries(): void {
         }
 
         const rows = db.prepare(`
-            SELECT id, entry_type, workspace_id, project_number, created_at 
+            SELECT id, entry_type, workspace_id, project_number, timestamp 
             FROM memory_journal 
             WHERE workspace_id = 'default' 
                OR workspace_id IS NULL 
@@ -61,14 +75,14 @@ function checkUnassignedEntries(): void {
             entry_type: string
             workspace_id: string
             project_number: number
-            created_at: string
+            timestamp: string
         }>
 
         if (rows.length > 0) {
             console.error(`\n❌ Workspace Isolation Validation Failed!`)
             console.error(`Found ${rows.length} unassigned or 'default' workspace entries in database '${dbPath}':\n`)
             for (const row of rows) {
-                console.error(`- Entry #${row.id}: [Type: ${row.entry_type}, Workspace: '${row.workspace_id}', Project: #${row.project_number}] (${row.created_at})`)
+                console.error(`- Entry #${row.id}: [Type: ${row.entry_type}, Workspace: '${row.workspace_id}', Project: #${row.project_number}] (${row.timestamp})`)
             }
             console.error(`\n💡 All journal entries must be explicitly bound to a valid workspace and project number. Read resource memory://agent-id to retrieve your project number.`)
             db.close()
