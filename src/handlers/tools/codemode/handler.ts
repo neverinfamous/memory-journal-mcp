@@ -59,16 +59,48 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                         // Auto-heal ES module import and CommonJS require statements
                         executionCode = executionCode.replace(/(?:const|let|var)\s+(\{[^}]*\}|[\w$]+)\s*=\s*require\s*\(\s*['"]([^'"]+)['"]\s*\);?/g, (m: string, varName: string, modName: string): string => {
                             if (modName.includes('memory-journal') || modName.includes('journal') || modName.includes('mcp')) {
+                                if (varName.trim() === 'mj') {
+                                    return `/* auto-healed require */`
+                                }
                                 return `const ${varName} = mj;`
                             }
                             return m
                         })
                         executionCode = executionCode.replace(/import\s+(\{[^}]*\}|\*\s+as\s+[\w$]+|[\w$]+)\s+from\s+['"]([^'"]+)['"]\s*;?/g, (m: string, varName: string, modName: string): string => {
                             if (modName.includes('memory-journal') || modName.includes('journal') || modName.includes('mcp')) {
+                                if (varName.trim() === 'mj') {
+                                    return `/* auto-healed import */`
+                                }
                                 return `const ${varName} = mj;`
                             }
                             return m
                         })
+
+                        // Auto-heal process.env access in Code Mode scripts before security checks
+                        executionCode = executionCode.replace(/process\.env\.([a-zA-Z0-9_]+)/g, () => 'undefined')
+                        executionCode = executionCode.replace(/process\.env/g, '{}')
+
+                        // Anti-Hallucination: Auto-heal raw JSON string passed directly as code parameter
+                        const trimmedCode = executionCode.trim()
+                        if (trimmedCode.startsWith('{') && trimmedCode.endsWith('}')) {
+                            try {
+                                const parsedJson = JSON.parse(trimmedCode) as Record<string, unknown>
+                                if (typeof parsedJson === 'object' && parsedJson !== null && (parsedJson['content'] || parsedJson['op'] === 'create_entry' || parsedJson['type'] || parsedJson['entry_type'])) {
+                                    const entryParams = {
+                                        title: typeof parsedJson['title'] === 'string' ? parsedJson['title'] : undefined,
+                                        content: typeof parsedJson['content'] === 'string' ? parsedJson['content'] : String(parsedJson['content'] ?? ''),
+                                        entry_type: typeof parsedJson['entry_type'] === 'string' ? parsedJson['entry_type'] : typeof parsedJson['type'] === 'string' ? parsedJson['type'] : 'technical_decision',
+                                        tags: Array.isArray(parsedJson['tags']) ? parsedJson['tags'] : [],
+                                        workspace_id: typeof parsedJson['workspace_id'] === 'string' ? parsedJson['workspace_id'] : undefined,
+                                        session_id: typeof parsedJson['session_id'] === 'string' ? parsedJson['session_id'] : undefined,
+                                        project_number: typeof parsedJson['project_number'] === 'number' ? parsedJson['project_number'] : undefined,
+                                    }
+                                    executionCode = `return await mj.createEntry(${JSON.stringify(entryParams)});`
+                                }
+                            } catch {
+                                // Not valid JSON, continue normal execution
+                            }
+                        }
 
                         // Anti-Hallucination: Auto-heal raw Markdown text or journal entry payloads passed directly to mj_execute_code
                         const rawObj = (typeof params === 'object' && params !== null ? params : {}) as Record<string, unknown>

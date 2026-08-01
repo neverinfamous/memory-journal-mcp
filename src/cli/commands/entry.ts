@@ -239,7 +239,7 @@ function buildEntryPayload(options: z.infer<typeof createEntrySchema>, metadata:
     const explicitWorkspaceId = optsRec['workspaceId'] ?? optsRec['workspace_id'] ?? metadata['workspaceId'] ?? metadata['workspace_id'];
     const workspaceId = resolveWorkspaceId(explicitWorkspaceId as string | undefined, projectNumber, config)
 
-    const trustRaw = options.trustScore ?? options.trust_score ?? metadata['trust'] ?? metadata['trustScore'] ?? metadata['trust_score']
+    const trustRaw = options.trustScore ?? options.trust_score ?? options.confidence ?? metadata['trust'] ?? metadata['trustScore'] ?? metadata['trust_score'] ?? metadata['confidence']
     const trustScore = trustRaw !== undefined ? Number(trustRaw) : undefined
 
     const impactRaw = options.impactScore ?? options.impact_score ?? metadata['impact'] ?? metadata['impactScore'] ?? metadata['impact_score']

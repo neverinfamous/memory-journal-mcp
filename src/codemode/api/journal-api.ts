@@ -557,6 +557,30 @@ export class JournalApi {
             mergeTags: this.admin['mergeTags'],
             exportEntries: this.io['exportEntries'],
 
+            // Bare global function aliases to catch LLM top-level function hallucinations
+            memory_journal_search: this.search['searchEntries'],
+            memory_journal_create: this.core['createEntry'],
+            journal_create: this.core['createEntry'],
+            journal_search: this.search['searchEntries'],
+            create_entry: this.core['createEntry'],
+            search_entries: this.search['searchEntries'],
+            get_recent_entries: this.core['getRecentEntries'],
+            get_entry_by_id: this.core['getEntryById'],
+            update_entry: this.admin['updateEntry'],
+            delete_entry: this.admin['deleteEntry'],
+
+            // Anti-Hallucination: Agent shell execution interceptor
+            Agent: {
+                system: {
+                    exec: () => Promise.reject(new Error(
+                        `🛠️ AUTONOMOUS HEALING: Code Mode sandbox cannot execute shell commands via 'Agent.system.exec'. To execute terminal commands or scripts, call 'run_command' outside of Code Mode in the agent shell.`
+                    )),
+                },
+                exec: () => Promise.reject(new Error(
+                    `🛠️ AUTONOMOUS HEALING: Code Mode sandbox cannot execute shell commands via 'Agent.exec'. To execute terminal commands or scripts, call 'run_command' outside of Code Mode in the agent shell.`
+                )),
+            },
+
             // Anti-Hallucination: setWorkspace interceptor
             setWorkspace: () => {
                 return Promise.reject(new Error(

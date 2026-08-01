@@ -30,7 +30,7 @@ export const updateConfigurationSchema = z.preprocess(
                 }
             }
 
-            for (const key of ['session_id', 'update_notes', 'notes', 'title', 'content', 'tags', 'description', 'target', 'scope', 'action', 'mode', 'type', 'name', 'target_user', 'params', 'input', 'args', 'entry_type', 'entryType', 'category', 'metadata']) {
+            for (const key of ['mcp_servers', 'mcpServers', 'servers', 'session_id', 'update_notes', 'notes', 'title', 'content', 'tags', 'description', 'target', 'scope', 'action', 'mode', 'type', 'name', 'target_user', 'params', 'input', 'args', 'entry_type', 'entryType', 'category', 'metadata']) {
                 if (key in obj) {
                     Reflect.deleteProperty(obj, key)
                 }

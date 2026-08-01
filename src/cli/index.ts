@@ -250,6 +250,7 @@ withGroup(createEntryCmd, 'Command Options', (cmd: Command) => {
         .option('--project_number <number>', 'Project number (alias)')
         .option('--trust, --trust-score <number>', 'Trust score (0.0 to 1.0)')
         .option('--trust_score <number>', 'Trust score (0.0 to 1.0) (alias)')
+        .option('--confidence <number>', 'Trust score (0.0 to 1.0) (alias)')
         .option('--impact, --impact-score <number>', 'Impact score (0.0 to 1.0)')
         .option('--impact_score <number>', 'Impact score (0.0 to 1.0) (alias)')
         .option('--validation-status <status>', 'Validation status (passed|none|failed)')

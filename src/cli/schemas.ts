@@ -180,6 +180,7 @@ export const baseEntryOptionsSchema = z.object({
     project_number: safeCoerceNumber,
     trustScore: safeCoerceNumber,
     trust_score: safeCoerceNumber,
+    confidence: safeCoerceNumber,
     impactScore: safeCoerceNumber,
     impact_score: safeCoerceNumber,
     validationStatus: z.enum(['passed', 'failed', 'none']).optional(),

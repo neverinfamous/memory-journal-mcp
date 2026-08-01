@@ -80,7 +80,11 @@ export function formatHandlerError(err: unknown): ErrorResponse {
     }
 
     // Unknown / raw errors — enrich via ERROR_SUGGESTIONS pattern matching
-    const message = err instanceof Error ? err.message : String(err)
+    const message = err instanceof Error
+        ? err.message
+        : (typeof err === 'object' && err !== null && 'message' in err && typeof (err as Record<string, unknown>)['message'] === 'string'
+            ? (err as Record<string, unknown>)['message'] as string
+            : String(err))
     const matched = matchSuggestion(message)
     const sanitizedMessage = message.replace(
         /(?:[A-Za-z]:)?(?:[\\/][\w.-]+)+[\\/]?/g,
@@ -88,7 +92,7 @@ export function formatHandlerError(err: unknown): ErrorResponse {
     )
 
     const isAutonomousHealing = message.includes('🛠️ AUTONOMOUS HEALING:')
-    const isRuntimeError = err instanceof Error
+    const isRuntimeError = err instanceof Error || (typeof err === 'object' && err !== null && 'message' in err && typeof (err as Record<string, unknown>)['message'] === 'string')
     const displayError = isAutonomousHealing || isRuntimeError || matched !== undefined
         ? sanitizedMessage
         : 'An internal error occurred during tool execution. Please check the server logs for more details.'

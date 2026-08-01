@@ -42,10 +42,10 @@ export function buildApiProxy(
                 if (prop === 'catch') return target.catch.bind(target)
                 if (prop === 'finally') return target.finally.bind(target)
                 if (typeof prop === 'string' && prop !== 'constructor' && prop !== 'toString' && prop !== 'valueOf' && prop !== 'toJSON') {
-                    throw new Error(`Attempted to access property '${prop}' on a Promise object. Did you forget to 'await' the tool call? (e.g. const result = await mj.group.${methodName}(...))`)
+                    throw new Error(`🛠️ AUTONOMOUS HEALING: Attempted to access property '${prop}' on a Promise object. Did you forget to 'await' the tool call? (e.g. const result = await mj.group.${methodName}(...))`)
                 }
                 if (prop === Symbol.iterator) {
-                    throw new Error(`Attempted to iterate over a Promise object. Did you forget to 'await' the tool call? (e.g. const [item] = await mj.group.${methodName}(...))`)
+                    throw new Error(`🛠️ AUTONOMOUS HEALING: Attempted to iterate over a Promise object. Did you forget to 'await' the tool call? (e.g. const [item] = await mj.group.${methodName}(...))`)
                 }
                 // eslint-disable-next-line @typescript-eslint/no-unsafe-return
                 return Reflect.get(target, prop)
