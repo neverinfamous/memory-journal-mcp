@@ -88,7 +88,7 @@ export function formatHandlerError(err: unknown): ErrorResponse {
     )
 
     const isAutonomousHealing = message.includes('🛠️ AUTONOMOUS HEALING:')
-    const isRuntimeError = err instanceof ReferenceError || err instanceof TypeError || err instanceof SyntaxError
+    const isRuntimeError = err instanceof Error
     const displayError = isAutonomousHealing || isRuntimeError || matched !== undefined
         ? sanitizedMessage
         : 'An internal error occurred during tool execution. Please check the server logs for more details.'

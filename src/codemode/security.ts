@@ -65,8 +65,8 @@ export class CodeModeSecurityManager {
             errors.push('Code cannot be empty')
         }
 
-        const SENSITIVE_KEYWORDS = /constructor|require|import|process|eval|Function|__proto__|child_process/i
-        const stripString = (match: string): string => (SENSITIVE_KEYWORDS.test(match) ? match : '""')
+        const SENSITIVE_BRACKETS = /^['"`](?:constructor|__proto__)['"`]$/i
+        const stripString = (match: string): string => (SENSITIVE_BRACKETS.test(match) ? match : '""')
 
         // Normalize and strip comments/template literals before pattern matching
         // (e.g., the word "process." in a Markdown string triggering the process.env block).
@@ -74,7 +74,7 @@ export class CodeModeSecurityManager {
             .normalize('NFKC')
             .replace(/\/\*[\s\S]*?\*\//g, ' ') // Block comments
             .replace(/\/\/[^\n]*/g, ' ') // Line comments
-            .replace(/`(?:[^`\\]|\\.)*`/g, (m) => (SENSITIVE_KEYWORDS.test(m) ? m : '``')) // Template literals
+            .replace(/`(?:[^`\\]|\\.)*`/g, (m) => (SENSITIVE_BRACKETS.test(m) ? m : '``')) // Template literals
             .replace(/"(?:[^"\\]|\\.)*"/g, stripString) // Double-quoted strings
             .replace(/'(?:[^'\\]|\\.)*'/g, stripString) // Single-quoted strings
 

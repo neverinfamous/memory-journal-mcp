@@ -295,7 +295,7 @@ return graph;
 ---
 
 ## Mandatory Report Structure
-Every execution report MUST follow this exact 4-part Markdown layout:
+Every execution report MUST follow this exact 5-part Markdown layout plus the Reference Parameters Addendum:
 1. **Global Database Health & Resource Metrics**: Summary of total entries, unique tags, active relationships & avg density, relationship types breakdown, orphan count & %, and DB/Vector Index health.
 2. **Project & Workspace Matrix Table**: A complete table listing entry counts and unassigned status across ALL registered projects (Note: Retrieve project breakdown via \`mj.analytics.getStatistics({ workspace_id: '*' })\` or query \`getRecentEntries({ workspace_id: project.workspaceId })\` per explicit workspace to avoid wildcard limit caps):
    | Project Name | Project # | Total Entries | Unassigned / Default | Status |
@@ -303,7 +303,26 @@ Every execution report MUST follow this exact 4-part Markdown layout:
    - Details of any migrated entries.
    - Root cause analysis explaining how the misallocation occurred.
    - Actionable fix plan / task recommendations to prevent future occurrences (or "Zero unassigned entries found" if clear).
-4. **Optimization Actions & Next Steps**: Safety backup filename, enriched entries count, soft-deleted debug/test noise count, maintenance journal entry ID, and clear instructions for initiating the Comprehensive Multi-Agent Domain Audit & Noise Pruning.
+4. **The 3 Optimization Workflow Options**:
+   - Detailed breakdown of Option A (Safety Backup & Priority Unassigned Scan - Executed Automatically).
+   - Detailed breakdown of Option B (Targeted Quality Dimension Audit - Executed Automatically).
+5. **Comprehensive Multi-Agent Domain Audit & Noise Pruning (Advanced Tier)**:
+   - Domain-based subagent partitioning description.
+   - 5-Dimension single-pass optimization & noise pruning breakdown.
+   - Subagent parallelization & parent agent resource reclamation guarantee.
+
+---
+
+### Addendum: Optimization Reference Parameters
+Include the reference table of configurable prompt parameters (\`mode\`, \`targetDimension\`, \`project\`, \`limit\`, \`lookback\`, \`autoRun\`) formatted with single-line markdown table rows:
+| Parameter | Type / Values | Default | Purpose |
+| :--- | :--- | :---: | :--- |
+| \`mode\` | \`'quick'\` \\| \`'targeted'\` \\| \`'full'\` | \`'quick'\` | Controls overall execution depth. |
+| \`targetDimension\` | \`'unassigned'\` \\| \`'relationships'\` \\| \`'scores'\` \\| \`'tags'\` \\| \`'all'\` | \`'all'\` | Narrows optimization to specific quality defects. |
+| \`project\` | Project name or number (e.g., \`'mysql-mcp'\` or \`9\`) | \`undefined\` (all) | Restricts analysis/pruning to a single project domain. |
+| \`limit\` | Number (1 – 5000) | \`500\` | Processing cap for entry auditing. |
+| \`lookback\` | Number (1 – 2000) | \`10\` | Recent unverified entry lookback window. |
+| \`autoRun\` | Boolean (\`true\` \\| \`false\`) | \`false\` | Enables autonomous pass execution. |
 `,
                             },
                         },
