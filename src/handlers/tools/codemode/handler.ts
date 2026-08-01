@@ -85,12 +85,22 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                         if (trimmedCode.startsWith('{') && trimmedCode.endsWith('}')) {
                             try {
                                 const parsedJson = JSON.parse(trimmedCode) as Record<string, unknown>
-                                if (typeof parsedJson === 'object' && parsedJson !== null && (parsedJson['content'] || parsedJson['op'] === 'create_entry' || parsedJson['type'] || parsedJson['entry_type'])) {
+                                const hasContent = typeof parsedJson['content'] === 'string' && parsedJson['content'].length > 0
+                                const hasOp = parsedJson['op'] === 'create_entry'
+                                const hasType = typeof parsedJson['type'] === 'string' || typeof parsedJson['entry_type'] === 'string'
+
+                                if (hasContent || hasOp || hasType) {
+                                    const rawContent = parsedJson['content']
+                                    const contentStr = typeof rawContent === 'string'
+                                        ? rawContent
+                                        : typeof rawContent === 'number' || typeof rawContent === 'boolean'
+                                            ? String(rawContent)
+                                            : ''
                                     const entryParams = {
                                         title: typeof parsedJson['title'] === 'string' ? parsedJson['title'] : undefined,
-                                        content: typeof parsedJson['content'] === 'string' ? parsedJson['content'] : String(parsedJson['content'] ?? ''),
+                                        content: contentStr,
                                         entry_type: typeof parsedJson['entry_type'] === 'string' ? parsedJson['entry_type'] : typeof parsedJson['type'] === 'string' ? parsedJson['type'] : 'technical_decision',
-                                        tags: Array.isArray(parsedJson['tags']) ? parsedJson['tags'] : [],
+                                        tags: Array.isArray(parsedJson['tags']) ? parsedJson['tags'].map(String) : [],
                                         workspace_id: typeof parsedJson['workspace_id'] === 'string' ? parsedJson['workspace_id'] : undefined,
                                         session_id: typeof parsedJson['session_id'] === 'string' ? parsedJson['session_id'] : undefined,
                                         project_number: typeof parsedJson['project_number'] === 'number' ? parsedJson['project_number'] : undefined,
