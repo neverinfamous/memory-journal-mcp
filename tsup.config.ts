@@ -8,7 +8,7 @@ export default defineConfig({
         'worker-script': 'src/codemode/worker-script.ts',
     },
     format: ['esm'],
-    dts: true,
+    dts: false,
     clean: true,
     treeshake: true,
     splitting: true,
