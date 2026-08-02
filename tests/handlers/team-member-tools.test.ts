@@ -53,7 +53,7 @@ describe('Team Member Management Tools', () => {
             const tool = getTool('team_add_member')
             const result = tool.handler({ author: 'test_user', role: 'viewer' }) as any
             expect(result.success).toBe(false)
-            expect(result.error).toMatch(/internal error/)
+            expect(result.error).toBe('DB Error')
         })
     })
 

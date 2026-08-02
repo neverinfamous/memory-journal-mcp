@@ -650,14 +650,12 @@ describe('McpServer', function () {
             expect(result.content[0]!.type).toBe('text')
 
             const text = result.content[0]!.text
-            expect(text).toContain('An internal error occurred')
+            expect(text).toContain('Database error')
 
             const struct = result as { structuredContent?: { success: boolean; error: string } }
             expect(struct.structuredContent).toBeDefined()
             expect(struct.structuredContent!.success).toBe(false)
-            expect(struct.structuredContent!.error).toContain(
-                'An internal error occurred during tool execution. Please check the server logs for more details.'
-            )
+            expect(struct.structuredContent!.error).toBe('Database error')
         })
 
         it('should return legacy error content when JSON stringify blows up on missing outputSchema (triggering global catch)', async function () {

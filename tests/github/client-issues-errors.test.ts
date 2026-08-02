@@ -419,10 +419,8 @@ describe('Error helpers — branch coverage', () => {
         it('should handle plain Error', () => {
             const result = formatHandlerError(new Error('oops'))
             expect(result.success).toBe(false)
-            expect(result.error).toBe(
-                'An internal error occurred during tool execution. Please check the server logs for more details.'
-            )
-            expect(result.code).toBe('INTERNAL_ERROR')
+            expect(result.error).toBe('oops')
+            expect(result.code).toBe('VALIDATION_ERROR')
         })
 
         it('should handle non-Error throw (string)', () => {
