@@ -297,7 +297,7 @@ return graph;
 ## Mandatory Report Structure
 Every execution report MUST follow this exact 5-part Markdown layout plus the Reference Parameters Addendum:
 1. **Global Database Health & Resource Metrics**: Summary of total entries, unique tags, active relationships & avg density, relationship types breakdown, orphan count & %, and DB/Vector Index health.
-2. **Project & Workspace Matrix Table**: A complete table listing entry counts and unassigned status across ALL registered projects (Note: Retrieve project breakdown via \`mj.analytics.getStatistics({ workspace_id: '*' })\` or query \`getRecentEntries({ workspace_id: project.workspaceId })\` per explicit workspace to avoid wildcard limit caps):
+2. **Project & Workspace Matrix Table**: A complete table listing entry counts and unassigned status across ALL registered projects (Note: Always retrieve global multi-project breakdown using \`mj.analytics.getStatistics({ project_breakdown: true, workspace_id: '*' })\` or \`mj.analytics.getCrossProjectInsights({ workspace_id: '*' })\`. DO NOT filter \`getRecentEntries\` by hypothetical string workspace IDs e.g. \`ws_<name>\`, as multi-tenancy in SQLite is indexed by numeric \`project_number\`):
    | Project Name | Project # | Total Entries | Unassigned / Default | Status |
 3. **Unassigned / Default Workspace Investigation & Fix Plan**:
    - Details of any migrated entries.

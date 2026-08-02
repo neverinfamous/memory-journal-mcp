@@ -145,7 +145,7 @@ const GetStatisticsSchemaMcp = z.object({
     group_by: z.string().optional().default('week'),
     start_date: z.string().optional(),
     end_date: z.string().optional(),
-    project_breakdown: z.boolean().optional().default(false),
+    project_breakdown: z.boolean().optional().default(false).describe('Set to true to return multi-project entry breakdown across all registered projects (workspace_id: "*").'),
     workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
     project_number: z.unknown().optional().describe('Anti-Hallucination Hint: get_statistics cannot be filtered by project_number. It always returns global stats. Use project_breakdown: true instead.'),
     timeframe: z.unknown().optional().describe('Anti-Hallucination Hint: Use group_by instead of timeframe or period.'),
