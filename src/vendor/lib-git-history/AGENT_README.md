@@ -15,6 +15,7 @@ The module utilizes native Git `--name-status -z` and `--numstat -z` flags, leve
    - **`parser-metadata.ts`**: Provides helper utilities for evaluating and extracting numeric metadata (like Impact, Confidence, and deprecated Trust) from string values.
 3. **`schema.ts`**: The contract. Uses `zod` to enforce strict constraints (e.g., `.int()` precision for metrics). **Always consult this schema** if modifying the data returned by the parser.
 4. **`../get-git-history-json.ts`**: The primary CLI entrypoint. Agent workflows invoke this file (using `bun`) to retrieve filtered JSON subsets of the history. Use the `--summary` flag to retrieve `metadata` without the heavy patch/body diffs, or the `--stats` flag for lightweight file modification metrics.
+5. **`../search-conversation-history.ts`**: The conversation history search wrapper. Target-binds execution (`process.chdir`) to the `~/.gemini` repository to allow agents to search past conversation logs, session history, and system state snapshots.
 
 ## 🧹 Scratch Workspace Protocol
 
@@ -41,6 +42,7 @@ The module utilizes native Git `--name-status -z` and `--numstat -z` flags, leve
   - `--diff-filter <filter>`, `--patch-search <pattern>`, `--reverse` (filter by file status, patch content, or order)
   - `--diff-context <lines>`, `--max-body-length <bytes>`, `--max-patch-length <bytes>` (constrain diff patch and body memory boundaries)
 - **Uncommitted State**: To get a deterministic JSON readout of the current staged, unstaged, and untracked files in the working directory, use `bun .\.agents\scripts\get-git-history-json.ts --uncommitted --stats`. Do NOT parse raw `git status` text.
+- **Historical Conversation Search**: To search Antigravity conversation logs, session histories, or state snapshots tracked in `~/.gemini`, use `bun .\.agents\scripts\search-conversation-history.ts` (e.g., `--search "query"` or `--summary`).
 - **Output Formats & Streaming**: The default output is a JSON object. Use `--jsonl` to stream JSON Lines output. Use `--stream-to-file <path>` to write directly to disk and avoid stdout buffer limits. Use `--no-body` to skip retrieving expensive diff patches, file metrics, and commit bodies. You can also specify `--max-body-length` (default 100MB) to constrain parser memory.
 - **Context & Caching**: Use `--package-version` to inject the `package.json` version into the output metadata. Enable caching with `--cache` and auto-expand issue references (e.g., `#123`) using `--issue-tracker <url>`.
 - **Read-Only**: Treat this library as core infrastructure. If you must modify it, ensure you run the rigorous test suite using **Bun** (`bun test`) to prevent regressions. Do NOT attempt to run Vitest or Playwright.

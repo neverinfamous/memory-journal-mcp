@@ -129,6 +129,14 @@ export function systemInterceptor(ctx: ExecutionContext): void {
       console.error(`\n   💡 AGENT HINT: Do NOT use 'cat', 'cat.exe', or 'get-content' natively. You MUST use the agent-native 'view_file' tool instead.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
       process.exit(1);
     })
+    .with({ originalCmd: P.union('grep', 'grep.exe', 'egrep', 'egrep.exe', 'fgrep', 'fgrep.exe', 'select-string', 'select-string.exe'), hasStdin: false, payload: P.when((p: unknown) => typeof p === 'object' && p !== null && !('target' in p && p.target === 'wsl2')) }, () => {
+      console.error(`\n   💡 AGENT HINT: Do NOT use 'grep' or its PowerShell cmdlet equivalent (Select-String) natively. You MUST use the agent-native 'grep_search' tool instead.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+      process.exit(1);
+    })
+    .with({ originalCmd: P.union('ls', 'ls.exe', 'dir', 'dir.exe', 'get-childitem', 'get-childitem.exe', 'gci', 'tree', 'tree.com'), hasStdin: false, payload: P.when((p: unknown) => typeof p === 'object' && p !== null && !('target' in p && p.target === 'wsl2')) }, () => {
+      console.error(`\n   💡 AGENT HINT: Do NOT use 'ls' or its PowerShell cmdlet equivalent (Get-ChildItem) natively. You MUST use the agent-native 'list_dir' tool instead.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+      process.exit(1);
+    })
     .with({ cmd: P.union('awk', 'sed', 'jq', 'jq.exe') }, () => {
       console.error(`\n   🛠️ AUTONOMOUS HEALING: '${cmdBasename}' natively fails, lacks features, or is not installed on Windows. Switching execution target to WSL2... (Frictionless Recovery)\x1b[0m`);
       ctx.payload.target = 'wsl2';

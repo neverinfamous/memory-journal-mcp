@@ -89,6 +89,10 @@ export function convertToWslPath(winPath: string): string {
     }
   }
 
+  if (!winPath.startsWith('-') && winPath.includes('\\')) {
+    return winPath.replace(/\\/g, '/');
+  }
+
   return winPath;
 }
 

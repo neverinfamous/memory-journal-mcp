@@ -148,9 +148,9 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
     .otherwise(() => {});
 
   const pathPrefix = `(?:[^\\s;\\|&'"]*[\\\\\\/])?`;
-  const tuiRegex = new RegExp(`(^|\\s|;|&&|\\|\\||\\||\\{|&|\\n|['"])(${pathPrefix})(${[...tuiCommands, 'journalctl', 'journalctl.exe'].join('|')})\\b`, 'i');
-  const replRegex = new RegExp(`(^|\\s|;|&&|\\|\\||\\{|&|\\n|['"])(${pathPrefix})(${replCommands.join('|')})(?=\\s*['"]?\\s*(?:$|;|&&|\\|\\||\\||&|\\n))`, 'i');
-  const interactiveFlagRegex = new RegExp(`(^|\\s|;|&&|\\|\\||\\||\\{|&|\\n|['"])(${pathPrefix})(${replCommands.join('|')})\\s+(?:[^;\\n|&]*\\s)?(?:-(?!-)[a-zA-Z0-9]{0,3}i[a-zA-Z0-9]{0,3}\\b|--interactive\\b|inspect\\b|--inspect\\b|-m\\s+pdb\\b)`, 'i');
+  const tuiRegex = new RegExp(`(^|;|&&|\\|\\||\\||\\{|&|\\n|['"])\\s*(?:(?:sudo|env|su|doas|time|timeout|stdbuf)\\s+)*(${pathPrefix})(${[...tuiCommands, 'journalctl', 'journalctl.exe'].join('|')})\\b`, 'i');
+  const replRegex = new RegExp(`(^|;|&&|\\|\\||\\{|&|\\n|['"])\\s*(?:(?:sudo|env|su|doas|time|timeout|stdbuf)\\s+)*(${pathPrefix})(${replCommands.join('|')})(?=\\s*['"]?\\s*(?:$|;|&&|\\|\\||\\||&|\\n))`, 'i');
+  const interactiveFlagRegex = new RegExp(`(^|;|&&|\\|\\||\\||\\{|&|\\n|['"])\\s*(?:(?:sudo|env|su|doas|time|timeout|stdbuf)\\s+)*(${pathPrefix})(${replCommands.join('|')})\\s+(?:[^;\\n|&]*\\s)?(?:-(?!-)[a-zA-Z0-9]{0,3}i[a-zA-Z0-9]{0,3}\\b|--interactive\\b|inspect\\b|--inspect\\b|-m\\s+pdb\\b)`, 'i');
   
   const isBlockedRepl = (body: string) => {
     if (interactiveFlagRegex.test(body)) return true;
