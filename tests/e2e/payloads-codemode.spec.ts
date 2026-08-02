@@ -81,7 +81,7 @@ test.describe('Payload Contracts: Code Mode', () => {
         const response = await client.callTool({
             name: 'mj_execute_code',
             arguments: {
-                code: `return process.env;`,
+                code: `return process.cwd();`,
             },
         })
 
