@@ -109,7 +109,8 @@ describe('mj_execute_code Tool Handler', () => {
 
         it('should match getAllToolNames() count', () => {
             const tools = getTools(db, null)
-            expect(tools.length).toBe(getAllToolNames().length)
+            const primaryTools = tools.filter((t) => !(t as { name: string }).name.startsWith('mj.'))
+            expect(primaryTools.length).toBe(getAllToolNames().length)
         })
     })
 
