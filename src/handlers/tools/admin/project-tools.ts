@@ -205,8 +205,10 @@ export function getProjectTools(_context: ToolContext): ToolDefinition[] {
                     
                     let foundName = parsed.name
                     let projectInfo = registry[foundName]
-                    if (!projectInfo && (!isNaN(Number(parsed.name)) || parsed.project_number !== undefined)) {
-                        const targetNum = parsed.project_number ?? Number(parsed.name)
+                    const rawProjNum = (parsed as Record<string, unknown>)['project_number']
+                    const parsedProjNum = typeof rawProjNum === 'number' ? rawProjNum : undefined
+                    if (!projectInfo && (!isNaN(Number(parsed.name)) || parsedProjNum !== undefined)) {
+                        const targetNum = parsedProjNum ?? Number(parsed.name)
                         for (const [pName, pData] of Object.entries(registry)) {
                             if (pData.project_number === targetNum || pData.id === targetNum) {
                                 foundName = pName
