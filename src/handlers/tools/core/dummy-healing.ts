@@ -3,6 +3,25 @@ import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { getCoreTools } from './tools.js'
 import { getSearchTools } from '../search/index.js'
 
+export const DUMMY_DOTTED_TOOL_NAMES = [
+    'mj.core.createEntry',
+    'mj.core.create_entry',
+    'mj.core.searchEntries',
+    'mj.core.search_entries',
+    'mj.core.getRecentEntries',
+    'mj.core.get_recent_entries',
+    'mj.core.getEntryById',
+    'mj.core.get_entry_by_id',
+    'mj.core.updateEntry',
+    'mj.core.update_entry',
+    'mj.core.deleteEntry',
+    'mj.core.delete_entry',
+    'mj.admin.getProject',
+    'mj.admin.get_project',
+    'mj.admin.listProjects',
+    'mj.admin.list_projects',
+]
+
 export const DUMMY_HEALING_TOOL_NAMES = new Set<string>([
     'create_entry',
     'search_entries',
@@ -14,6 +33,7 @@ export const DUMMY_HEALING_TOOL_NAMES = new Set<string>([
     'mj_read_resource',
     'load-briefing',
     'mj_session_summary',
+    ...DUMMY_DOTTED_TOOL_NAMES,
 ])
 
 export function getDummyHealingTools(context?: ToolContext): ToolDefinition[] {
@@ -263,5 +283,23 @@ export function getDummyHealingTools(context?: ToolContext): ToolDefinition[] {
                 })
             },
         },
+        ...DUMMY_DOTTED_TOOL_NAMES.map((name): ToolDefinition => ({
+            name,
+            title: 'DO NOT USE (Code Mode Function)',
+            description: `DO NOT USE. 🛠️ AUTONOMOUS HEALING: '${name}' is a Code Mode function, not a direct MCP tool.`,
+            group: 'core',
+            inputSchema: z.any(),
+            outputSchema: z.any(),
+            annotations: { readOnlyHint: true, openWorldHint: false },
+            handler: () => {
+                return Promise.resolve({
+                    success: false,
+                    error: `🛠️ AUTONOMOUS HEALING: '${name}' is a Code Mode JavaScript function, not a top-level MCP tool. Use 'mj_execute_code' with JavaScript (e.g. return await ${name}({ ... })).`,
+                    code: 'VALIDATION_ERROR',
+                    category: 'validation',
+                    recoverable: true
+                })
+            }
+        }))
     ]
 }

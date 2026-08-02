@@ -201,13 +201,33 @@ export function getProjectTools(_context: ToolContext): ToolDefinition[] {
                     const parsed = GetProjectSchemaMcp.parse(params)
                     const config = loadConfig()
                     config['projectRegistry'] ??= {}
-                    const registry = config['projectRegistry'] as Record<string, { path: string, project_number?: number }>
+                    const registry = config['projectRegistry'] as Record<string, { path: string, project_number?: number, id?: number }>
                     
-                    if (!registry[parsed.name]) {
+                    let foundName = parsed.name
+                    let projectInfo = registry[foundName]
+                    if (!projectInfo && (!isNaN(Number(parsed.name)) || parsed.project_number !== undefined)) {
+                        const targetNum = parsed.project_number ?? Number(parsed.name)
+                        for (const [pName, pData] of Object.entries(registry)) {
+                            if (pData.project_number === targetNum || pData.id === targetNum) {
+                                foundName = pName
+                                projectInfo = pData
+                                break
+                            }
+                        }
+                    }
+
+                    if (!projectInfo) {
                         return Promise.resolve({ success: false, error: `🛠️ AUTONOMOUS HEALING: Project not found: '${parsed.name}'` })
                     }
                     
-                    return Promise.resolve({ success: true, project: { name: parsed.name, ...registry[parsed.name] } })
+                    return Promise.resolve({
+                        success: true,
+                        project: {
+                            name: foundName,
+                            id: projectInfo.project_number ?? projectInfo.id,
+                            ...projectInfo
+                        }
+                    })
                 } catch (err) {
                     return Promise.resolve(formatHandlerError(err))
                 }

@@ -392,6 +392,12 @@ export async function callTool(
                 `${name}. memory-journal-mcp uses Code Mode: use 'mj_execute_code' with JavaScript (e.g. return await mj.core.${name}(...)).`
             )
         }
+        if (name.includes('.') || name.startsWith('mj.') || name.startsWith('mj_core_') || name.startsWith('mj_admin_') || name.startsWith('mj_search_')) {
+            throw new ResourceNotFoundError(
+                'Tool',
+                `${name}. '${name}' is a Code Mode JavaScript function/namespace, not a top-level MCP tool. Use 'mj_execute_code' with JavaScript (e.g. return await ${name}({ ... })).`
+            )
+        }
         throw new ResourceNotFoundError('Tool', name)
     }
 
