@@ -82,6 +82,30 @@ export const TOOL_SCOPE_OVERRIDES: Record<string, StandardScope> = {
     create_entry_minimal: SCOPES.WRITE,
     link_entries: SCOPES.WRITE,
     export_markdown: SCOPES.WRITE,
+
+    // Synthetic & healing fallback tools
+    read_resource: SCOPES.READ,
+    mj_read_resource: SCOPES.READ,
+    'load-briefing': SCOPES.READ,
+    mj_session_summary: SCOPES.READ,
+
+    // Dotted Code Mode tools
+    'mj.core.createEntry': SCOPES.WRITE,
+    'mj.core.create_entry': SCOPES.WRITE,
+    'mj.core.searchEntries': SCOPES.READ,
+    'mj.core.search_entries': SCOPES.READ,
+    'mj.core.getRecentEntries': SCOPES.READ,
+    'mj.core.get_recent_entries': SCOPES.READ,
+    'mj.core.getEntryById': SCOPES.READ,
+    'mj.core.get_entry_by_id': SCOPES.READ,
+    'mj.core.updateEntry': SCOPES.ADMIN,
+    'mj.core.update_entry': SCOPES.ADMIN,
+    'mj.core.deleteEntry': SCOPES.ADMIN,
+    'mj.core.delete_entry': SCOPES.ADMIN,
+    'mj.admin.getProject': SCOPES.ADMIN,
+    'mj.admin.get_project': SCOPES.ADMIN,
+    'mj.admin.listProjects': SCOPES.ADMIN,
+    'mj.admin.list_projects': SCOPES.ADMIN,
 }
 
 /**

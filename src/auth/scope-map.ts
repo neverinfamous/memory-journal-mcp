@@ -7,7 +7,7 @@
  */
 
 import { TOOL_GROUPS } from '../filtering/tool-constants.js'
-import { TOOL_GROUP_SCOPES, TOOL_SCOPE_OVERRIDES } from './scopes.js'
+import { SCOPES, TOOL_GROUP_SCOPES, TOOL_SCOPE_OVERRIDES } from './scopes.js'
 import type { StandardScope } from './scopes.js'
 import type { ToolGroup } from '../types/index.js'
 
@@ -35,12 +35,36 @@ for (const [toolName, scope] of Object.entries(TOOL_SCOPE_OVERRIDES)) {
 
 export function getRequiredScope(toolName: string): StandardScope {
     const scope = toolScopeMap.get(toolName)
-    if (!scope) {
-        throw new Error(
-            `CRITICAL SECURITY FAILURE: Tool '${toolName}' is missing from scope mapping`
-        )
+    if (scope) {
+        return scope
     }
-    return scope
+
+    // Dynamic fallback for synthetic & dotted Code Mode tools
+    if (toolName.startsWith('mj.admin.')) {
+        return SCOPES.ADMIN
+    }
+    if (toolName.startsWith('mj.core.')) {
+        const lower = toolName.toLowerCase()
+        if (lower.includes('update') || lower.includes('delete')) {
+            return SCOPES.ADMIN
+        }
+        if (lower.includes('create')) {
+            return SCOPES.WRITE
+        }
+        return SCOPES.READ
+    }
+    if (
+        toolName === 'read_resource' ||
+        toolName === 'mj_read_resource' ||
+        toolName === 'load-briefing' ||
+        toolName === 'mj_session_summary'
+    ) {
+        return SCOPES.READ
+    }
+
+    throw new Error(
+        `CRITICAL SECURITY FAILURE: Tool '${toolName}' is missing from scope mapping`
+    )
 }
 
 /**
