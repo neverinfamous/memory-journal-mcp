@@ -4,7 +4,7 @@ services:
   # MONITORING & TOOLS
   # ==========================================
   dozzle:
-    image: amir20/dozzle:v10.6.14
+    image: amir20/dozzle:latest
     container_name: mj-dozzle
     restart: unless-stopped
     ports:
