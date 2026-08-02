@@ -137,7 +137,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
       console.error(`\n   💡 AGENT HINT: Do NOT use 'ls' or its PowerShell cmdlet equivalent (Get-ChildItem) natively. You MUST use the agent-native 'list_dir' tool instead.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
       process.exit(1);
     })
-    .with({ cmd: P.union('awk', 'sed', 'jq', 'jq.exe') }, () => {
+    .with({ cmd: P.union('awk', 'gawk', 'sed', 'sed.exe', 'jq', 'jq.exe', 'yq', 'yq.exe', 'find', 'find.exe') }, () => {
       console.error(`\n   🛠️ AUTONOMOUS HEALING: '${cmdBasename}' natively fails, lacks features, or is not installed on Windows. Switching execution target to WSL2... (Frictionless Recovery)\x1b[0m`);
       ctx.payload.target = 'wsl2';
       // Automatically convert Windows paths (like C:\... or C:/... or "C:\...") to WSL paths (/mnt/c/...)
