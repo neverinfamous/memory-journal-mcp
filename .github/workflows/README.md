@@ -91,7 +91,7 @@ These are AI-powered workflows using [GitHub Copilot Coding Agent](https://docs.
 | Prompt                                               | Lock File                                                    | Schedule             | Purpose                                                                                  |
 | ---------------------------------------------------- | ------------------------------------------------------------ | -------------------- | ---------------------------------------------------------------------------------------- |
 | [ci-health-monitor.md](ci-health-monitor.md)         | [ci-health-monitor.lock.yml](ci-health-monitor.lock.yml)     | Wed 14:00 UTC        | Audits workflows for deprecated actions, Node.js runtime issues, stale Dependabot config |
-| [docs-drift-detector.md](docs-drift-detector.md)     | [docs-drift-detector.lock.yml](docs-drift-detector.lock.yml) | PR (on code changes) | Audits README, DOCKER_README, CONTRIBUTING for drift against code changes                |
+| docs-drift-detector.md     | docs-drift-detector.lock.yml | PR (on code changes) | Audits README, DOCKER_README, CONTRIBUTING for drift against code changes                |
 
 ---
 
