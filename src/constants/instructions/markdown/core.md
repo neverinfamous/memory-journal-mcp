@@ -38,6 +38,7 @@ Choose the correct `entry_type` — do NOT default everything to `personal_refle
 - `plan_draft` — Initial drafts of implementation plans
 - `adversarial_review` — Reviews and critiques from adversarial subagents
 - `plan_refinement` — Refinements to plans based on reviews
+- `plan_finalized` — Finalized implementation plans after review
 - `copilot_validation` — Validation of copilot suggestions
 - `other` — Anything that doesn't fit the above categories
 - `personal_reflection` — Only for genuinely personal notes that don't fit above

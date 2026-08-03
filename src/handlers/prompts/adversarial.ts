@@ -120,25 +120,11 @@ export function getAdversarialPromptDefinitions(): InternalPromptDef[] {
                 const topic = parsed.topic ?? '{topic}'
                 const depth: ReviewDepth = parsed.depth ?? 'standard'
 
-                // Pre-fetch prior plan drafts related to this topic
-                const { entries: priorDrafts } = db.searchEntries(topic, {
-                    entryType: 'plan_draft',
+                // Pre-fetch prior finalized plans related to this topic
+                const { entries: priorPlans } = db.searchEntries(topic, {
+                    entryType: 'plan_finalized',
                     tags: ['adversarial-planner'],
                     limit: 5,
-                })
-
-                // Pre-fetch prior adversarial reviews for recurring findings
-                const { entries: priorReviews } = db.searchEntries(topic, {
-                    entryType: 'adversarial_review',
-                    tags: ['adversarial-planner'],
-                    limit: 5,
-                })
-
-                // Pre-fetch plan refinements for evolution tracking
-                const { entries: priorRefinements } = db.searchEntries(topic, {
-                    entryType: 'plan_refinement',
-                    tags: ['adversarial-planner'],
-                    limit: 3,
                 })
 
                 const dimensionsTable = buildDimensionsTable(depth)
@@ -172,8 +158,6 @@ Produce a plan with these sections:
 - **Risk Assessment**: Table with Risk, Likelihood, Impact, Mitigation
 - **Open Questions**: Anything requiring user input
 
-Journal: Write the plan to your scratch dir and use the CLI (\`memory-journal-mcp entry create --file <path> --metadata <json>\`) with type "plan_draft" and tags ["adversarial-planner", "plan-draft"]. (Skip if no changes were needed).
-
 ### Phase 2: Adversarial Review (Agent B)
 
 Switch to a skeptical reviewer mindset. Score each dimension 1–5:
@@ -187,8 +171,6 @@ Produce a findings table:
 
 List any **blocking issues** that must be addressed before proceeding.
 
-Journal: Use the \`memory-journal-mcp entry create\` CLI with type "adversarial_review" and tags ["adversarial-planner", "review"]. (Skip if no changes were needed).
-
 ### Phase 3: Refinement (Agent A)
 
 Address every finding with a disposition:
@@ -199,8 +181,6 @@ Address every finding with a disposition:
 | **Reject** | Explain why it doesn't apply |
 | **Modify** | Accept the spirit, implement differently |
 
-Journal: Use the \`memory-journal-mcp entry create\` CLI with type "plan_refinement" and tags ["adversarial-planner", "refinement"]. (Skip if no changes were needed).
-
 ### Phase 4: External Validation (Copilot)
 
 Run \`gh copilot -- -p "Review the plan at <PATH> for correctness and edge cases. Explore the codebase to verify assumptions. When viewing or reading files, always provide the 'path' parameter correctly. What did we miss?" --allow-all\` in NON-INTERACTIVE mode. You MUST wait for it to finish (it may take 10-20 seconds). **CRITICAL**: Do NOT skip this step. If Copilot fails, you MUST alert the user immediately. Note findings.
@@ -209,23 +189,16 @@ Run \`gh copilot -- -p "Review the plan at <PATH> for correctness and edge cases
 
 Present the refined plan for approval with the final score, all disposition decisions, and Copilot feedback.
 
+**Journaling Rule**: Do NOT create any journal entries during Phase 1-4. ONLY if the user explicitly approves the plan for implementation, create a single consolidated journal entry using the CLI (\`memory-journal-mcp entry create --file <path> --metadata <json>\`) with type "plan_finalized" and tags ["adversarial-planner"].
+
 ## Link Entries
 
-Connect planning entries using relationships:
-- Review → Draft: \`references\`
-- Refinement → Review: \`evolves_from\`
-- Implementation → Refinement: \`implements\`
+Connect implementation entries to the finalized plan using the \`implements\` relationship.
 
 ## Prior Context
 
-### Prior Plan Drafts
-${markUntrustedContent(formatPriorEntries(priorDrafts, 5))}
-
-### Prior Adversarial Reviews
-${markUntrustedContent(formatPriorEntries(priorReviews, 5))}
-
-### Prior Refinements
-${markUntrustedContent(formatPriorEntries(priorRefinements, 3))}
+### Prior Finalized Plans
+${markUntrustedContent(formatPriorEntries(priorPlans, 5))}
 
 Review prior entries for recurring findings and reusable patterns before drafting.`,
                             },

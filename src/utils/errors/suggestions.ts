@@ -128,7 +128,7 @@ export const ERROR_SUGGESTIONS: ErrorSuggestion[] = [
     {
         pattern: /invalid enum value.*entry.?type/i,
         suggestion:
-            'Valid entry_type values: retrospective, bug_fix, project_decision, feature_implementation, technical_note, code_review, planning, research, enhancement, milestone, adversarial_review, development_note, learning, standup, meeting_notes, technical_achievement, plan_draft, plan_refinement, copilot_validation, other, personal_reflection',
+            'Valid entry_type values: retrospective, bug_fix, project_decision, feature_implementation, technical_note, code_review, planning, research, enhancement, milestone, adversarial_review, development_note, learning, standup, meeting_notes, technical_achievement, plan_draft, plan_refinement, plan_finalized, copilot_validation, other, personal_reflection',
         code: 'VALIDATION_ERROR',
     },
 ]

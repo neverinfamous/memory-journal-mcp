@@ -27,6 +27,7 @@ export const ENTRY_TYPES = [
     'plan_draft',
     'adversarial_review',
     'plan_refinement',
+    'plan_finalized',
     'copilot_validation',
     'other',
 ] as const
