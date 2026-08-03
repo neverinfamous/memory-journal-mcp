@@ -538,9 +538,30 @@ export const DeleteProjectSchemaMcp = z.object({
     name: z.string().describe('The key/name of the project to delete.'),
 }).strict()
 
-export const GetProjectSchemaMcp = z.object({
-    name: z.string().describe('The key/name of the project to retrieve.'),
-}).strict()
+export const GetProjectSchemaMcp = z.preprocess(
+    (val: unknown) => {
+        if (typeof val === 'object' && val !== null) {
+            const obj = { ...(val as Record<string, unknown>) };
+            if (!('name' in obj)) {
+                if ('project_name' in obj && typeof obj['project_name'] === 'string') {
+                    obj['name'] = obj['project_name'];
+                } else if ('project' in obj && typeof obj['project'] === 'string') {
+                    obj['name'] = obj['project'];
+                } else if ('project_number' in obj && (typeof obj['project_number'] === 'string' || typeof obj['project_number'] === 'number')) {
+                    obj['name'] = String(obj['project_number']);
+                } else if ('id' in obj && (typeof obj['id'] === 'string' || typeof obj['id'] === 'number')) {
+                    obj['name'] = String(obj['id']);
+                }
+            }
+            return obj;
+        }
+        return val;
+    },
+    z.object({
+        name: z.string().describe('The key/name or project number of the project to retrieve.'),
+        project_number: relaxedNumber().optional(),
+    }).strict()
+)
 
 export const ListProjectsSchemaMcp = z.object({}).strict()
 

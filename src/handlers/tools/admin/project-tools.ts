@@ -227,6 +227,7 @@ export function getProjectTools(_context: ToolContext): ToolDefinition[] {
                         project: {
                             name: foundName,
                             id: projectInfo.project_number ?? projectInfo.id,
+                            project_number: projectInfo.project_number ?? projectInfo.id,
                             ...projectInfo
                         }
                     })

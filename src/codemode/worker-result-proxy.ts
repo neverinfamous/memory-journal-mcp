@@ -87,6 +87,21 @@ export function wrapResult(result: unknown): unknown {
                         return entryObj['id']
                     }
 
+                    // Hallucination Intercept: Single project retrieval returns { success: true, project: { name: "foo", project_number: 1 } }.
+                    // Allow accessing result.project_number, result.name, result.path directly on the success result wrapper.
+                    const projObj = targetRecord['project']
+                    if (isObject(projObj)) {
+                        if (prop === 'project_number' && ('project_number' in projObj || 'id' in projObj)) {
+                            return projObj['project_number'] ?? projObj['id']
+                        }
+                        if ((prop === 'name' || prop === 'project_name') && 'name' in projObj) {
+                            return projObj['name']
+                        }
+                        if (typeof prop === 'string' && prop in projObj) {
+                            return projObj[prop]
+                        }
+                    }
+
                     // Hallucination Intercept: Agents frequently expect batchCreateEntries to return `entryIds` array
                     // instead of the actual `entries` array. Expose it gracefully as an iterable array of numbers.
                     if (prop === 'entryIds' && 'entries' in targetRecord && Array.isArray(targetRecord['entries'])) {

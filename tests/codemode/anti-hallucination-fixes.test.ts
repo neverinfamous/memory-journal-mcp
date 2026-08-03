@@ -117,4 +117,23 @@ describe('Anti-Hallucination Fixes', () => {
             expect(isMarkdown2).toBe(false)
         })
     })
+
+    describe('Project Aliases and Result Proxy Access', () => {
+        it('should forward project object property access on result wrapper', () => {
+            const rawResult = {
+                success: true,
+                project: {
+                    name: 'mysql-mcp',
+                    path: 'C:/Users/chris/Desktop/mysql-mcp',
+                    project_number: 2,
+                    id: 2,
+                },
+            }
+            const wrapped = wrapResult(rawResult) as Record<string, unknown>
+
+            expect(wrapped.project_number).toBe(2)
+            expect(wrapped.name).toBe('mysql-mcp')
+            expect(wrapped.path).toBe('C:/Users/chris/Desktop/mysql-mcp')
+        })
+    })
 })
