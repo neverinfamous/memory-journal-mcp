@@ -189,12 +189,6 @@ Run \`gh copilot -- -p "Review the plan at <PATH> for correctness and edge cases
 
 Present the refined plan for approval with the final score, all disposition decisions, and Copilot feedback.
 
-**Journaling Rule**: Do NOT create any journal entries during Phase 1-4. ONLY if the user explicitly approves the plan for implementation, create a single consolidated journal entry using the CLI (\`memory-journal-mcp entry create --file <path> --metadata <json>\`) with type "plan_finalized" and tags ["adversarial-planner"].
-
-## Link Entries
-
-Connect implementation entries to the finalized plan using the \`implements\` relationship.
-
 ## Prior Context
 
 ### Prior Finalized Plans
@@ -224,13 +218,17 @@ Target: ${target}
 
 If the target is '{target}', determine it from the user's request. If the user hasn't specified a target file or module, ask them for it now.
 
-1. Scan the target for dead code, duplication, type safety (any/as), magic values, complexity, boundary validation, monkey-patching, and global scope pollution (hacks).
+1. Scan the target for dead code, duplication, type safety (any/as), magic values, complexity, boundary validation, monkey-patching, global scope pollution (hacks), and **files exceeding 500 lines**.
+
+> [!IMPORTANT]
+> **High Priority — File Size**: Any file exceeding 500 lines is a high-priority finding. Flag all such files in the findings table with severity **High**. Do NOT begin refactoring automatically — present them to the user for approval in step 4.
+
 2. Group findings by category and severity (Critical, Moderate, Low).
 3. Run \`gh copilot -- -p "Perform an exhaustive code quality audit on <target>. Focus on dead code, duplication, type safety, magic values, monkey-patching, and anti-patterns." --allow-all\` in NON-INTERACTIVE mode. You MUST wait for it to finish (it may take 10-20 seconds). **CRITICAL**: Do NOT skip this step. If Copilot fails, you MUST alert the user immediately. Note findings.
 4. Present a summary table to the user (incorporating Copilot findings) and await approval.
 5. After approval, fix critical issues first, run validation gates (Lint -> Build -> Tests).
-6. Commit using \`bun path/to/commit.ts\` and journal findings using \`memory-journal-mcp entry create\` (type: "audit_finding", tags: ["commander", "code-quality"]).
-**Rule**: If you don't make changes, do not commit or journal. If you make only minor documentation changes, commit but do not journal.`
+6. Commit using \`bun path/to/commit.ts\`.
+**Rule**: If you don't make changes, do not commit. If you make only minor documentation changes, commit.`
                         }
                     }]
                 }
@@ -259,7 +257,7 @@ If the target is '{target}', determine it from the user's request. If the user h
    - **External Integrations**: Data exfiltration paths and excessive API permission scopes.
 2. Run \`gh copilot -- -p "Perform a security audit on <target> looking for injection vectors, auth/authz gaps, data boundaries, and agent-specific risks like prompt injection, excessive agency, or tool poisoning." --allow-all\` in NON-INTERACTIVE mode. You MUST wait for it to finish (it may take 10-20 seconds). **CRITICAL**: Do NOT skip this step. If Copilot fails, you MUST alert the user immediately. Note findings.
 3. Present findings table (incorporating Copilot findings).
-4. Await HITL approval before applying fixes.\n5. Commit fixes using \`bun path/to/commit.ts\` and journal findings using \`memory-journal-mcp entry create\`.\n**Rule**: If you do not make changes, do not commit or journal. If you make only minor documentation changes, commit but do not journal.`
+4. Await HITL approval before applying fixes.\n5. Commit fixes using \`bun path/to/commit.ts\`.\n**Rule**: If you do not make changes, do not commit. If you make only minor documentation changes, commit.`
                         }
                     }]
                 }
@@ -285,7 +283,7 @@ If the target is '{target}', determine it from the user's request. If the user h
 1. Perform a multi-pass performance audit looking for N+1 queries, unnecessary allocations, hot-path bottlenecks.
 2. Run \`gh copilot -- -p "Perform a performance audit on <target> looking for N+1 queries, unnecessary allocations, and hot-path bottlenecks." --allow-all\` in NON-INTERACTIVE mode. You MUST wait for it to finish (it may take 10-20 seconds). **CRITICAL**: Do NOT skip this step. If Copilot fails, you MUST alert the user immediately. Note findings.
 3. Present findings table (incorporating Copilot findings).
-4. Await HITL approval before applying fixes.\n5. Commit fixes using \`bun path/to/commit.ts\` and journal findings using \`memory-journal-mcp entry create\`.\n**Rule**: If you do not make changes, do not commit or journal. If you make only minor documentation changes, commit but do not journal.`
+4. Await HITL approval before applying fixes.\n5. Commit fixes using \`bun path/to/commit.ts\`.\n**Rule**: If you do not make changes, do not commit. If you make only minor documentation changes, commit.`
                         }
                     }]
                 }
@@ -315,7 +313,7 @@ If the target is '{target}', determine it from the user's request. If the user h
    - Structured data (JSON-LD) and E-E-A-T signals.
 2. Run \`gh copilot -- -p "Perform an SEO and Core Web Vitals audit on <target>." --allow-all\` in NON-INTERACTIVE mode. You MUST wait for it to finish (it may take 10-20 seconds). **CRITICAL**: Do NOT skip this step. If Copilot fails, you MUST alert the user immediately. Note findings.
 3. Present findings table (incorporating Copilot findings).
-4. Await HITL approval before applying fixes.\n5. Commit fixes using \`bun path/to/commit.ts\` and journal findings using \`memory-journal-mcp entry create\`.\n**Rule**: If you do not make changes, do not commit or journal. If you make only minor documentation changes, commit but do not journal.`
+4. Await HITL approval before applying fixes.\n5. Commit fixes using \`bun path/to/commit.ts\`.\n**Rule**: If you do not make changes, do not commit. If you make only minor documentation changes, commit.`
                         }
                     }]
                 }
@@ -344,8 +342,8 @@ If the target is '{target}', determine it from the user's request. If the user h
 4. **Validation via Copilot**: Run \`gh copilot -- -p "Evaluate the agent skill at <target> for trigger reliability, safety gates, and frontmatter compliance. When viewing or reading files, always provide the 'path' parameter correctly." --allow-all\` in NON-INTERACTIVE mode. You MUST wait for it to finish (it may take 10-20 seconds). **CRITICAL**: Do NOT skip this step. If Copilot fails, you MUST alert the user immediately. Note findings.
 5. **Presentation**: Present findings table incorporating Copilot structural findings and the new research gaps.
 6. **HITL Approval**: Await HITL approval before applying fixes.
-7. Commit fixes using \`bun path/to/commit.ts\` and journal findings using \`memory-journal-mcp entry create\`.
-**Rule**: If you don't make changes, do not commit or journal. If you make only minor documentation changes, commit but do not journal.`
+7. Commit fixes using \`bun path/to/commit.ts\`.
+**Rule**: If you don't make changes, do not commit. If you make only minor documentation changes, commit.`
                         }
                     }]
                 }
@@ -368,7 +366,7 @@ If the target is '{target}', determine it from the user's request. If the user h
 1. Evaluate the workflow for sequential clarity, human-in-the-loop safety gates, and infinite loop prevention.
 2. Run \`gh copilot -- -p "Evaluate the workflow <target> for sequential clarity, human-in-the-loop safety gates, and infinite loop prevention." --allow-all\` in NON-INTERACTIVE mode. You MUST wait for it to finish (it may take 10-20 seconds). **CRITICAL**: Do NOT skip this step. If Copilot fails, you MUST alert the user immediately. Note findings.
 3. Present findings table (incorporating Copilot findings).
-4. Await HITL approval before applying fixes.\n5. Commit fixes using \`bun path/to/commit.ts\` and journal findings using \`memory-journal-mcp entry create\`.\n**Rule**: If you do not make changes, do not commit or journal. If you make only minor documentation changes, commit but do not journal.`
+4. Await HITL approval before applying fixes.\n5. Commit fixes using \`bun path/to/commit.ts\`.\n**Rule**: If you do not make changes, do not commit. If you make only minor documentation changes, commit.`
                     }
                 }]
             })
