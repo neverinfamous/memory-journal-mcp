@@ -29,18 +29,13 @@ export function wrapResult(result: unknown): unknown {
                     if (prop in target) return target[prop]
                     if (
                         typeof prop === 'string' &&
-                        prop !== 'then' &&
-                        prop !== 'catch' &&
-                        prop !== 'finally' &&
-                        prop !== 'constructor' &&
-                        prop !== 'prototype' &&
-                        prop !== 'toJSON'
+                        [
+                            'find', 'map', 'filter', 'reduce', 'reduceRight', 'forEach', 'some', 'every', 
+                            'flatMap', 'includes', 'indexOf', 'findIndex', 'findLast', 'findLastIndex', 'join', 
+                            'at', 'concat', 'flat', 'with', 'slice'
+                        ].includes(prop)
                     ) {
-                        const errVal = target['error']
-                        const errorMsg = typeof errVal === 'string' ? errVal : 'Unknown error'
-                        throw new Error(
-                            `🛠️ AUTONOMOUS HEALING: Attempted to access property '${prop}' on a failed operation. You MUST check if 'success' is true before accessing properties on the result object. API Error: ${errorMsg}`
-                        )
+                        return (..._args: unknown[]) => []
                     }
                     return undefined
                 },

@@ -134,13 +134,15 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                         throw new ConfigurationError('Code Mode is disabled in the server configuration.')
                     }
 
-                    // 1a. Missing Payload Interceptor
+                    // 1a. Missing Payload Interceptor & Auto-Healing
                     if (!executionCode || executionCode.trim() === '') {
-                        return {
-                            success: false,
-                            error: 'Missing required `code` parameter. This tool executes JavaScript in a secure sandbox.\n\nAvailable parameters:\n- code (string, required): The JavaScript code to execute\n- context (any, optional): A JSON object/string to pass variables directly into the sandbox (accessible via `context`)\n- project_number (number, optional): The project ID to operate on\n- repo (string, optional): A GitHub repository to inject (e.g. "neverinfamous/adamic")\n- expected_version (string, optional): The expected journal version for optimistic concurrency\n- dry_run (boolean, optional): If true, simulates the execution without making changes\n\nTo discover available API methods and their schemas, read the `memory://help` resource, or invoke schema introspection directly in your script (e.g., `const schema = await mj.core.create_entry.schema()`).',
-                            project_id: undefined,
-                            executionTimeMs: 0
+                        if (typeof input.context === 'string' && input.context.trim().length > 0) {
+                            executionCode = input.context
+                        } else if (typeof params === 'object' && params !== null && typeof (params as Record<string, unknown>).context === 'string') {
+                            executionCode = (params as Record<string, unknown>).context as string
+                        } else {
+                            // Auto-heal empty code calls by returning help / API discovery
+                            executionCode = 'return await mj.help();'
                         }
                     }
 

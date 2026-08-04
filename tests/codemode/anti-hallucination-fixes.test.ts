@@ -136,4 +136,23 @@ describe('Anti-Hallucination Fixes', () => {
             expect(wrapped.path).toBe('C:/Users/chris/Desktop/mysql-mcp')
         })
     })
+
+    describe('Failed Result Graceful Handling', () => {
+        it('should return undefined for missing properties on failed result proxy without throwing', () => {
+            const rawFailedResult = {
+                success: false,
+                error: 'Entry 6259 not found',
+                code: 'ENTRY_NOT_FOUND',
+                category: 'crud',
+            }
+            const wrapped = wrapResult(rawFailedResult) as Record<string, unknown>
+
+            expect(wrapped.success).toBe(false)
+            expect(wrapped.error).toBe('[ENTRY_NOT_FOUND] Entry 6259 not found')
+            expect(wrapped.relationships).toBeUndefined()
+            expect(wrapped.entries).toBeUndefined()
+            expect(typeof wrapped.map).toBe('function')
+            expect((wrapped.map as () => unknown[])()).toEqual([])
+        })
+    })
 })
