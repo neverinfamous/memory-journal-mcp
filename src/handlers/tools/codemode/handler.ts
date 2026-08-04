@@ -136,12 +136,10 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
 
                     // 1a. Missing Payload Interceptor & Auto-Healing
                     if (!executionCode || executionCode.trim() === '') {
-                        // eslint-disable-next-line @typescript-eslint/dot-notation
                         const inputContext = (input as Record<string, unknown>)['context']
                         if (typeof inputContext === 'string' && inputContext.trim().length > 0) {
                             executionCode = inputContext
                         } else if (typeof params === 'object' && params !== null) {
-                            // eslint-disable-next-line @typescript-eslint/dot-notation
                             const paramsContext = (params as Record<string, unknown>)['context']
                             if (typeof paramsContext === 'string' && paramsContext.trim().length > 0) {
                                 executionCode = paramsContext
