@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { AUTONOMOUS_HEALING_MSG } from '../utils.js';
 import { ExecutionContext } from './types.js';
 

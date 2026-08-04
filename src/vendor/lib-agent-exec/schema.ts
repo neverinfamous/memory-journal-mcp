@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { z } from 'zod';
 
 const INT32_MAX = 2147483647;

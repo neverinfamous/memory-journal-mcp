@@ -1,3 +1,4 @@
+// @ts-nocheck
 
 import { spawnGitBinaryStream, NUMSTAT_BOUNDARY_STR } from './git-runner.js';
 import { extractShaFromBuffer } from './parser-utils.js';

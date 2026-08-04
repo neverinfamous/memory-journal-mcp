@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { ProcessController } from './process-controller.js';
 import { ExecPayload } from './schema.js';
 

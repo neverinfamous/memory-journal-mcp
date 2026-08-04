@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { stripVTControlCharacters } from 'node:util';
 import { match } from 'ts-pattern';
 

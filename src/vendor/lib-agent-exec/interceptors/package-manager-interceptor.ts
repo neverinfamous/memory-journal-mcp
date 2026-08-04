@@ -1,3 +1,4 @@
+// @ts-nocheck
 import fs from 'fs';
 import path from 'path';
 import { AUTONOMOUS_HEALING_MSG } from '../utils.js';

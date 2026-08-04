@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { match, P } from 'ts-pattern';
 import { z } from 'zod';
 import { IMPACT_HIGH, IMPACT_MEDIUM, IMPACT_LOW } from './constants.js';

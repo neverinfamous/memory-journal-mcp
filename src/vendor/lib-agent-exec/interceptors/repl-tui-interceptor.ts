@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { ExecutionContext } from './types.js';
 import { match, P } from 'ts-pattern';
 import fs from 'node:fs';

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { readFileSync } from 'node:fs';
 import type { z } from 'zod';
 import type { entrySchema } from './schema.js';

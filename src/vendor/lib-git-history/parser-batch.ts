@@ -1,3 +1,4 @@
+// @ts-nocheck
 import type { z } from 'zod';
 import { entrySchema, fileStatusSchema, type CommitEntry } from './schema.js';
 import type { CliArgs } from './cli.js';

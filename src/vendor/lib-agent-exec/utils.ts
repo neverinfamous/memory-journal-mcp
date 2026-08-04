@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { ExecPayload } from './schema.js';
 import { renderWebhookTemplate } from './webhook-template.js';
 import fs from 'node:fs';

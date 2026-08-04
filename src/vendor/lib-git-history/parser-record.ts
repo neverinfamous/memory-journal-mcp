@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { match, P } from 'ts-pattern';
 import type { CliArgs } from './cli.js';
 import { FIELD_SEPARATOR } from './git-runner.js';

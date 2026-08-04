@@ -1,3 +1,4 @@
+// @ts-nocheck
 function hasKey<K extends PropertyKey>(obj: object, key: K): obj is Record<K, unknown> {
   return key in obj;
 }

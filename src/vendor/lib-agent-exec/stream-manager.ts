@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { Writable } from 'node:stream';
 import { stripVTControlCharacters } from 'node:util';
 

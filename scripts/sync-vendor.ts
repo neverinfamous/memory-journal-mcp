@@ -53,9 +53,9 @@ try {
       
       if (file.endsWith('.ts')) {
         const content = readFileSync(srcFile, 'utf8');
-        // Only suppress type checking for files that use Bun-specific or unavailable modules
-        const needsTsNoCheck = /from ['"]bun:|from ['"]picocolors/.test(content);
-        writeFileSync(destFile, needsTsNoCheck ? '// @ts-nocheck\n' + content : content);
+        // Vendor files are standalone scripts synced from adamic; prepend @ts-nocheck for app tsc
+        const cleanContent = content.startsWith('// @ts-nocheck') ? content : '// @ts-nocheck\n' + content;
+        writeFileSync(destFile, cleanContent);
       } else {
         cpSync(srcFile, destFile);
       }

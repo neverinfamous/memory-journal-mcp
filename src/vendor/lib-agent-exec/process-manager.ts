@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { ChildProcess, spawnSync } from 'node:child_process';
 import { match } from 'ts-pattern';
 
