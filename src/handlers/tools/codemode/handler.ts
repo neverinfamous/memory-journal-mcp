@@ -136,10 +136,10 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
 
                     // 1a. Missing Payload Interceptor & Auto-Healing
                     if (!executionCode || executionCode.trim() === '') {
-                        if (typeof input.context === 'string' && input.context.trim().length > 0) {
-                            executionCode = input.context
-                        } else if (typeof params === 'object' && params !== null && typeof (params as Record<string, unknown>).context === 'string') {
-                            executionCode = (params as Record<string, unknown>).context as string
+                        if (typeof input['context'] === 'string' && input['context'].trim().length > 0) {
+                            executionCode = input['context']
+                        } else if (typeof params === 'object' && params !== null && typeof (params as Record<string, unknown>)['context'] === 'string') {
+                            executionCode = (params as Record<string, unknown>)['context'] as string
                         } else {
                             // Auto-heal empty code calls by returning help / API discovery
                             executionCode = 'return await mj.help();'
