@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { parseArgs } from 'node:util';
 
 const pc = {

@@ -2,8 +2,8 @@
   "libs": {
     "lib-git-history": {
       "source": ".agents/scripts/lib-git-history",
-      "syncedAt": "2026-08-02T18:10:54.978Z",
-      "syncedFromCommit": "8e664a0ac03c3d8f757d7a9f8882ed548ae52f30",
+      "syncedAt": "2026-08-04T08:50:31.952Z",
+      "syncedFromCommit": "29105ddc4b62a004ccfeb677e9185cdcc6029520",
       "files": [
         "cache.ts",
         "cli.ts",
@@ -22,8 +22,8 @@
     },
     "lib-agent-exec": {
       "source": ".agents/scripts/lib-agent-exec",
-      "syncedAt": "2026-08-02T18:10:55.481Z",
-      "syncedFromCommit": "8e664a0ac03c3d8f757d7a9f8882ed548ae52f30",
+      "syncedAt": "2026-08-04T08:50:32.076Z",
+      "syncedFromCommit": "29105ddc4b62a004ccfeb677e9185cdcc6029520",
       "files": [
         "schema.ts",
         "environment.ts",

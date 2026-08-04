@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { match, P } from 'ts-pattern';
 import type { CliArgs } from './cli.js';
 import { FIELD_SEPARATOR } from './git-runner.js';
@@ -370,7 +369,6 @@ export function parseGitRecord(
 
   if (args['issue-tracker']) {
     const tracker = args['issue-tracker'];
-    const newIssuesMap = new Map<string, string | null>();
     for (const [issue, action] of issuesMap.entries()) {
       let finalIssue = issue;
       if (issue.startsWith('#')) {
@@ -378,11 +376,10 @@ export function parseGitRecord(
       } else if (!issue.startsWith('http')) {
         finalIssue = tracker.endsWith('/') ? tracker + issue : tracker + '/' + issue;
       }
-      newIssuesMap.set(finalIssue, action);
-    }
-    issuesMap.clear();
-    for (const [k, v] of newIssuesMap.entries()) {
-      issuesMap.set(k, v);
+      if (finalIssue !== issue) {
+        issuesMap.delete(issue);
+        issuesMap.set(finalIssue, action);
+      }
     }
   }
 

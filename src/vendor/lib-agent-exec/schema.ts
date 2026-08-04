@@ -1,5 +1,6 @@
-// @ts-nocheck
 import { z } from 'zod';
+
+const INT32_MAX = 2147483647;
 
 const noNullString = z.string().refine(val => !val.includes('\0'), "Must not contain null bytes");
 const safeString = noNullString
@@ -24,21 +25,21 @@ const basePayloadSchema = z.object({
     }
     return val;
   }, z.union([z.literal("windows"), z.literal("wsl2")])).optional(),
-  timeoutMs: z.number().int().nonnegative().transform(val => Math.min(val, 2147483647)).optional(),
+  timeoutMs: z.number().int().nonnegative().transform(val => Math.min(val, INT32_MAX)).optional(),
   stdin: z.string().max(10 * 1024 * 1024).optional(),
   stdoutFile: safeString.optional(),
   stderrFile: safeString.optional(),
-  maxBuffer: z.number().int().positive().max(2147483647).optional(),
-  truncateOutputLength: z.number().int().positive().max(2147483647).optional(),
+  maxBuffer: z.number().int().positive().max(INT32_MAX).optional(),
+  truncateOutputLength: z.number().int().positive().max(INT32_MAX).optional(),
   keepPayload: lenientBoolean.optional(),
-  stallTimeoutMs: z.number().int().nonnegative().transform(val => Math.min(val, 2147483647)).optional(),
+  stallTimeoutMs: z.number().int().nonnegative().transform(val => Math.min(val, INT32_MAX)).optional(),
   bypassInterceptors: lenientBoolean.optional(),
   onSuccess: z.union([safeString, safeStringArray]).optional(),
   onFailure: z.union([safeString, safeStringArray]).optional(),
   webhookHeaders: z.record(safeString, z.union([z.string(), z.number(), z.boolean()]).transform(String).pipe(safeString)).optional(),
   webhookPayloadTemplate: z.unknown().transform(val => typeof val === 'string' ? val : JSON.stringify(val)).pipe(noNullString).optional(),
   webhookMethod: z.union([z.literal("GET"), z.literal("POST"), z.literal("PUT"), z.literal("PATCH"), z.literal("DELETE")]).optional(),
-  webhookTimeoutMs: z.number().int().nonnegative().transform(val => Math.min(val, 2147483647)).optional(),
+  webhookTimeoutMs: z.number().int().nonnegative().transform(val => Math.min(val, INT32_MAX)).optional(),
   expectJsonEnvelope: lenientBoolean.optional(),
 }).strict();
 
@@ -68,10 +69,23 @@ export const agentExecCliArgsSchema = z.object({
   json: z.boolean().optional(),
   payloadPath: z.string().max(1024).optional(),
   target: z.string().max(1024).optional(),
-  n: z.string().max(1024).optional(),
 });
 
 export type AgentExecCliArgs = z.infer<typeof agentExecCliArgsSchema>;
+
+const targetNormalizeSchema = z.preprocess(val => {
+  if (typeof val === 'string') {
+    const v = val.toLowerCase();
+    if (['wsl', 'linux', 'ubuntu'].includes(v)) return 'wsl2';
+    if (['native', 'win', 'win32'].includes(v)) return 'windows';
+  }
+  return val;
+}, z.union([z.literal("windows"), z.literal("wsl2")]));
+
+export function normalizeTarget(raw: string): "windows" | "wsl2" | null {
+  const result = targetNormalizeSchema.safeParse(raw);
+  return result.success ? result.data : null;
+}
 
 export const JsonEnvelopeSchema = z.object({
   status: z.union([z.literal("success"), z.literal("error")]),

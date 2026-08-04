@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { ProcessController } from './process-controller.js';
 import { ExecPayload } from './schema.js';
 
@@ -41,17 +40,21 @@ async function acquireWslLock(maxConcurrent = 4, timeoutMs = 30000): Promise<str
   while (Date.now() - startTime < timeoutMs) {
     await acquireMutex();
     try {
-      const locks = fs.readdirSync(WSL_LOCK_DIR).filter(f => f.endsWith('.lock'));
-      // Clean up stale locks (older than 60s to prevent deadlocks from crashed processes)
-      for (const l of locks) {
+      const allLocks = fs.readdirSync(WSL_LOCK_DIR).filter(f => f.endsWith('.lock'));
+      // Clean stale locks and count active ones in a single pass
+      let activeLockCount = 0;
+      for (const l of allLocks) {
         const lPath = path.join(WSL_LOCK_DIR, l);
         try {
           const stats = fs.statSync(lPath);
-          if (Date.now() - stats.mtimeMs > 60000) fs.unlinkSync(lPath);
+          if (Date.now() - stats.mtimeMs > 60000) {
+            fs.unlinkSync(lPath);
+          } else {
+            activeLockCount++;
+          }
         } catch { /* ignore */ }
       }
-      const activeLocks = fs.readdirSync(WSL_LOCK_DIR).filter(f => f.endsWith('.lock'));
-      if (activeLocks.length < maxConcurrent) {
+      if (activeLockCount < maxConcurrent) {
         fs.writeFileSync(lockFile, process.pid.toString(), 'utf8');
         releaseMutex();
         return lockFile;
@@ -100,14 +103,17 @@ export async function executeCommand(
     const maxConcurrency = process.env.AGENT_WSL_CONCURRENCY ? parseInt(process.env.AGENT_WSL_CONCURRENCY, 10) : 4;
     const lockFile = await acquireWslLock(maxConcurrency);
     
-    // Ensure we release the lock when the process exits
     const releaseLock = () => {
       try { if (fs.existsSync(lockFile)) fs.unlinkSync(lockFile); } catch { /* ignore */ }
+      process.off('exit', releaseLock);
+      process.off('SIGINT', releaseLock);
+      process.off('SIGTERM', releaseLock);
+      process.off('uncaughtException', releaseLock);
     };
-    process.on('exit', releaseLock);
-    process.on('SIGINT', releaseLock);
-    process.on('SIGTERM', releaseLock);
-    process.on('uncaughtException', () => releaseLock());
+    process.once('exit', releaseLock);
+    process.once('SIGINT', releaseLock);
+    process.once('SIGTERM', releaseLock);
+    process.once('uncaughtException', releaseLock);
   }
   
   controller.start();

@@ -1,4 +1,3 @@
-// @ts-nocheck
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -7,7 +6,7 @@ import { match, P } from 'ts-pattern';
 import { executeCommand } from './execution-engine.js';
 import { buildCommand, customInterceptors } from './command-builder.js';
 import { buildEnvironment } from './environment.js';
-import { PayloadSchema, agentExecCliArgsSchema } from './schema.js';
+import { PayloadSchema, agentExecCliArgsSchema, normalizeTarget } from './schema.js';
 import { showHelp, showUsageError } from './help.js';
 
 const DEFAULT_MAX_PAYLOAD_SIZE = 10 * 1024 * 1024;
@@ -39,7 +38,6 @@ try {
     json: { type: 'boolean' },
     payloadPath: { type: 'string' },
     target: { type: 'string' },
-    n: { type: 'string' },
   } as const;
 
   let values: Record<string, string | boolean | string[] | undefined>;
@@ -150,7 +148,9 @@ try {
 
   const payload = parseResult.data;
   if (targetOverride) {
-    payload.target = targetOverride as "windows" | "wsl2";
+    const normalized = normalizeTarget(targetOverride);
+    if (!normalized) fatalError(`Invalid --target value: '${targetOverride}'. Must be 'windows', 'wsl2', or an alias (wsl, linux, native, win).`);
+    payload.target = normalized;
   }
   
   if (payload.keepPayload !== true) {

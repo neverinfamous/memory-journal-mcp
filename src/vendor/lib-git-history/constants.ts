@@ -1,4 +1,3 @@
-// @ts-nocheck
 export const GIT_TIMEOUT_MS = 10000;
 export const GIT_CMD_MAX_BUFFER = 10 * 1024 * 1024;
 export const GIT_STREAM_BUFFER_DEFAULT = 100 * 1024 * 1024;

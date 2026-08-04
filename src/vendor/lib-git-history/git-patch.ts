@@ -1,4 +1,3 @@
-// @ts-nocheck
 
 import { spawnGitBinaryStream, PATCH_BOUNDARY_STR } from './git-runner.js';
 import type { CliArgs } from './cli.js';

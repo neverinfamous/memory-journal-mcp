@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { spawn, ChildProcess } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -227,17 +226,15 @@ export class ProcessController {
   }
 
   private onChildExit(code: number | null, signal: NodeJS.Signals | null) {
-    let lastDataTime = Date.now();
-    const updateDataTime = () => { lastDataTime = Date.now(); };
-    if (this.child.stdout) this.child.stdout.on('data', updateDataTime);
-    if (this.child.stderr) this.child.stderr.on('data', updateDataTime);
-
+    // IOController already tracks stream activity; read its last-seen timestamp
+    // rather than attaching new data listeners after the process has already exited.
     const exitTime = Date.now();
     const checkStreams = setInterval(() => {
       if (this.isFinished) {
         clearInterval(checkStreams);
         return;
       }
+      const lastDataTime = this.ioController?.lastDataTime ?? exitTime;
       const timeSinceData = Date.now() - lastDataTime;
       const timeSinceExit = Date.now() - exitTime;
 

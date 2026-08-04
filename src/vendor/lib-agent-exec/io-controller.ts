@@ -1,4 +1,3 @@
-// @ts-nocheck
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { Writable } from 'node:stream';
@@ -30,9 +29,11 @@ export class IOController {
   private _stderrTail = '';
   private _lastParsedEnvelope: Record<string, unknown> | null = null;
   private pendingStdout = '';
+  private _lastDataTime = Date.now();
   
   public get stdoutTail() { return this._stdoutTail; }
   public get stderrTail() { return this._stderrTail; }
+  public get lastDataTime() { return this._lastDataTime; }
   
   public getParsedEnvelope(): Record<string, unknown> | null {
     if (!this.payload.expectJsonEnvelope) return null;
@@ -414,6 +415,7 @@ export class IOController {
   }
 
   private processData(isErr: boolean, data: Buffer) {
+    this._lastDataTime = Date.now();
     let decoded = isErr ? this.stderrDecoder.write(data) : this.stdoutDecoder.write(data);
     
     if (!isErr && this.payload.expectJsonEnvelope) {

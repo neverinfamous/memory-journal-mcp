@@ -15,9 +15,18 @@ You only need to manually pass a JSON payload (as described below) if you are ex
 ## ⚠️ The `&&` Pipeline Chaining Rule & WSL2 Linux Support
 
 > [!WARNING]
-> Native commands run in **PowerShell 5.1**, which **DOES NOT SUPPORT** `&&` or `||` operators. If you run `run_command("bun check && bun test")`, the parser will instantly throw a fatal syntax error. 
+> Even though we develop and test natively on **PowerShell 7.6.4** (which *does* support `&&` and `||`), the system's global agent rules strictly **FORBID** their use natively to prevent proxy interception conflicts and syntax hallucination traps. If you use `&&` natively, it may cause a `ParserError`.
 > 
-> Whenever you must chain commands natively or utilize robust Unix pipelines, you **MUST** leverage WSL2 execution by creating a JSON payload with `"target": "wsl2"` and running it via `agent-exec`. This routes the command seamlessly into the Linux VM environment, fully supporting `&&`, `||`, `|`, CRLF stripping, and other POSIX shell features.
+> **Rule of Thumb:**
+> 1. For native Windows command separation, **MUST** use semicolons (`;`).
+> 2. Whenever you must chain complex commands natively or utilize robust Unix pipelines, you **MUST** leverage WSL2 execution by creating a JSON payload with `"target": "wsl2"` and running it via `agent-exec`. This routes the command seamlessly into the Linux VM environment, fully supporting `&&`, `||`, `|`, CRLF stripping, and other POSIX shell features.
+
+## 🐳 Docker CLI & WSL Containers (No Docker Desktop)
+
+We use **WSL Containers for Windows** natively with the Docker CLI, and **do NOT have Docker Desktop installed**. 
+- The native Windows `docker` CLI communicates directly with the Docker engine running inside WSL (or via native WSL Containers / `wslc`).
+- When executing container orchestration natively on Windows, remember that paths passed to volume mounts might require `wslpath` translation or UNC paths (`\\wsl.localhost\...`) depending on the execution context.
+- When running `docker` or `wslc` commands, the proxy interceptors automatically strip interactive TTY flags (`-t`, `--tty`, `-i`) and prevent hanging TUI apps.
 
 ## 🧹 Scratch Workspace Protocol
 

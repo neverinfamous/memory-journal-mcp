@@ -7,7 +7,24 @@ import { entrySchema, commitSizeSchema, type CommitEntry } from './schema.js';
 
 let db: Database | null = null;
 
-const dbCommitRowSchema = z.object({
+// Cached prepared statements keyed by query string to avoid re-preparing on every call
+const stmtCache = new Map<string, ReturnType<Database['prepare']>>();
+
+function getOrPrepare(database: Database, query: string): ReturnType<Database['prepare']> {
+  let stmt = stmtCache.get(query);
+  if (!stmt) {
+    stmt = database.prepare(query);
+    stmtCache.set(query, stmt);
+  }
+  return stmt;
+}
+
+const safeParseJSON = (str: string | null | undefined): unknown => {
+  if (!str) return undefined;
+  try { return JSON.parse(str); } catch { return undefined; }
+};
+
+export const dbCommitRowSchema = z.object({
   commit_hash: z.string(),
   parents: z.string().nullable(),
   refs: z.string().nullable(),
@@ -117,6 +134,7 @@ export function closeCache(): void {
   if (db) {
     db.close();
     db = null;
+    stmtCache.clear();
   }
 }
 
@@ -216,13 +234,8 @@ export function queryCommits(filters: Partial<CommitEntry> = {}): CommitEntry[] 
     query += ' WHERE ' + conditions.join(' AND ');
   }
   
-  const stmt = currentDb.prepare(query);
-  const rows = z.array(dbCommitRowSchema).parse(stmt.all(params));
-  const safeParseJSON = (str: string | null | undefined): unknown => {
-    if (!str) return undefined;
-    try { return JSON.parse(str); } catch { return undefined; }
-  };
-
+  const stmt = getOrPrepare(currentDb, query);
+  const rows = stmt.all(params) as z.infer<typeof dbCommitRowSchema>[];
   return rows.map(row => {
     const rawObj = {
       commit: row.commit_hash,
@@ -268,4 +281,75 @@ export function queryCommits(filters: Partial<CommitEntry> = {}): CommitEntry[] 
     }
     return parsed.data;
   }).filter((x): x is CommitEntry => x !== null);
+}
+
+/**
+ * Batch-query commits by SHA list, replacing the N+1 per-commit lookup pattern.
+ * Returns a Map keyed by commit SHA for O(1) caller lookup.
+ */
+export function batchQueryCommits(shas: string[]): Map<string, CommitEntry> {
+  if (shas.length === 0) return new Map();
+  const currentDb = db || initCache();
+
+  // SQLite has a default bind parameter limit of 999; chunk if needed
+  const CHUNK = 900;
+  const result = new Map<string, CommitEntry>();
+
+  for (let i = 0; i < shas.length; i += CHUNK) {
+    const chunk = shas.slice(i, i + CHUNK);
+    const placeholders = chunk.map((_, j) => `$s${i + j}`).join(',');
+    const query = `SELECT * FROM commits WHERE commit_hash IN (${placeholders})`;
+    const params: Record<string, string> = {};
+    chunk.forEach((sha, j) => { params[`$s${i + j}`] = sha; });
+
+    const stmt = getOrPrepare(currentDb, query);
+    const rows = stmt.all(params) as z.infer<typeof dbCommitRowSchema>[];
+    for (const row of rows) {
+      const rawObj = {
+        commit: row.commit_hash,
+        parents: safeParseJSON(row.parents),
+        refs: safeParseJSON(row.refs),
+        tags: safeParseJSON(row.tags),
+        author: row.author,
+        email: row.email || undefined,
+        committer: row.committer || undefined,
+        committerEmail: row.committerEmail || undefined,
+        committerDate: row.committerDate || undefined,
+        date: row.date,
+        type: row.type || undefined,
+        scope: row.scope || undefined,
+        isBreaking: row.isBreaking === 1 ? true : undefined,
+        breakingChangeDescription: row.breakingChangeDescription || undefined,
+        isRevert: row.isRevert === 1 ? true : undefined,
+        revertedCommit: row.revertedCommit || undefined,
+        isRebased: row.isRebased === 1 ? true : undefined,
+        subject: row.subject,
+        cleanSubject: row.cleanSubject || undefined,
+        body: row.body || undefined,
+        size: row.size || undefined,
+        files: safeParseJSON(row.files),
+        fileCount: row.fileCount || undefined,
+        isFilesTruncated: row.isFilesTruncated === 1 ? true : undefined,
+        totalInsertions: row.totalInsertions !== null ? row.totalInsertions : undefined,
+        totalDeletions: row.totalDeletions !== null ? row.totalDeletions : undefined,
+        metadata: safeParseJSON(row.metadata),
+        patch: row.patch || undefined,
+        isPatchTruncated: row.isPatchTruncated === 1 ? true : undefined,
+        references: safeParseJSON(row.references),
+        coAuthors: safeParseJSON(row.coAuthors),
+        reviewers: safeParseJSON(row.reviewers),
+        associatedIssues: safeParseJSON(row.associatedIssues),
+        validationErrors: safeParseJSON(row.validationErrors),
+        isCorrupted: row.isCorrupted === 1 ? true : undefined
+      };
+      const parsed = entrySchema.safeParse(rawObj);
+      if (parsed.success) {
+        result.set(row.commit_hash, parsed.data);
+      } else {
+        console.warn(`[lib-git-history] Warning: Failed to parse cached commit ${row.commit_hash}`);
+      }
+    }
+  }
+
+  return result;
 }

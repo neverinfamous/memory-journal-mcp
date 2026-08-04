@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { AUTONOMOUS_HEALING_MSG, findEcosystemScript } from '../utils.js';
 import { match, P } from 'ts-pattern';
 import { ExecutionContext } from './types.js';

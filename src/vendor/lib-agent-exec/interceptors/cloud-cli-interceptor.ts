@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { AUTONOMOUS_HEALING_MSG } from '../utils.js';
 import { ExecutionContext } from './types.js';
 import { match, P } from 'ts-pattern';

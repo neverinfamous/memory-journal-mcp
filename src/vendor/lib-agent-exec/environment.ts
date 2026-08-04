@@ -1,4 +1,3 @@
-// @ts-nocheck
 import path from 'node:path';
 import { ExecPayload } from './schema.js';
 import { recordAgentIssue } from './utils.js';
@@ -17,7 +16,7 @@ export const DEFAULT_ENV_VARS: Record<string, string> = {
     GH_PAGER: '',
     GH_NO_UPDATE_NOTIFIER: '1',
     GIT_PAGER: process.platform === 'win32' ? '' : 'cat',
-    GIT_CONFIG_COUNT: '3',
+    GIT_CONFIG_COUNT: '4',
     GIT_CONFIG_KEY_0: 'core.pager',
     GIT_CONFIG_VALUE_0: '',
     GIT_CONFIG_KEY_1: 'core.editor',

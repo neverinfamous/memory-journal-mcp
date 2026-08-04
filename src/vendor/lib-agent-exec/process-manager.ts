@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { ChildProcess, spawnSync } from 'node:child_process';
 import { match } from 'ts-pattern';
 
@@ -46,10 +45,10 @@ export function killProcessTree(child: ChildProcess) {
             const parts = line.trim().split(',');
             if (parts.length >= 3) {
               const ppid = parseInt(parts[parts.length - 2], 10);
-              const pid = parseInt(parts[parts.length - 1], 10);
-              if (!isNaN(ppid) && !isNaN(pid)) {
+              const childPid = parseInt(parts[parts.length - 1], 10);
+              if (!isNaN(ppid) && !isNaN(childPid)) {
                 if (!parentMap.has(ppid)) parentMap.set(ppid, []);
-                parentMap.get(ppid)!.push(pid);
+                parentMap.get(ppid)!.push(childPid);
               }
             }
           }

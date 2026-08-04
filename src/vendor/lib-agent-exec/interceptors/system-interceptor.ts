@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { ExecutionContext } from './types.js';
 import { match, P } from 'ts-pattern';
 import { execSync } from 'node:child_process';
@@ -32,20 +31,18 @@ export function systemInterceptor(ctx: ExecutionContext): void {
       })()
     : cmd;
 
-  // 0. Early intercept: detect blocked commands embedded in the command string with spaces
-  // Agents hallucinate by putting "curl https://example.com" as the command instead of using args
+  // 0. Early intercept: detect commands embedded in command string or scripts
   const networkAliases = ['curl', 'wget', 'invoke-webrequest', 'iwr'];
   if (isCommand && 'command' in payload && typeof payload.command === 'string' && payload.command.includes(' ')) {
     const firstToken = payload.command.trim().split(/\s+/)[0].toLowerCase();
     const firstTokenBase = path.basename(firstToken).replace(/\.exe$/, '');
     if (networkAliases.includes(firstTokenBase) && !firstToken.endsWith('.exe') && payload.target !== 'wsl2') {
-      const nativeExe = firstTokenBase === 'wget' ? 'wget.exe' : 'curl.exe';
-      console.error(`\n   💡 AGENT HINT: Do NOT use '${firstToken}' natively. You MUST use the agent-native 'read_url_content' tool instead, or natively invoke '${nativeExe}' to bypass the alias.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
-      process.exit(1);
+      console.error(`\n   🛠️ AUTONOMOUS HEALING: Network request command '${firstToken}' detected in command string. Switching execution target to WSL2... (Frictionless Recovery)\x1b[0m`);
+      payload.target = 'wsl2';
     }
   }
 
-  // Intercept network and fs search aliases in eval and script payloads
+  // Intercept network, search, and fs list aliases in eval and script payloads
   if ((payload.type === 'eval' || payload.type === 'script') && (!payload.interpreter || ['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe', 'cmd', 'cmd.exe', 'bash', 'bash.exe', 'sh', 'sh.exe'].includes(payload.interpreter)) && payload.target !== 'wsl2') {
     let scriptContent = '';
     if (payload.type === 'eval') {
@@ -56,24 +53,15 @@ export function systemInterceptor(ctx: ExecutionContext): void {
     const tokens = scriptContent.split(/[\s;|{>&<]+/).filter(Boolean).map((t: string) => t.toLowerCase());
     
     const cmdStr = tokens.find((t: string) => networkAliases.includes(t));
-    if (cmdStr) {
-      const nativeExe = cmdStr === 'wget' ? 'wget.exe' : 'curl.exe';
-      console.error(`\n   💡 AGENT HINT: Do NOT use '${cmdStr}' natively. You MUST use the agent-native 'read_url_content' tool instead, or natively invoke '${nativeExe}' to bypass the alias.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
-      process.exit(1);
-    }
-
     const fsSearchAliases = ['grep', 'grep.exe', 'egrep', 'egrep.exe', 'fgrep', 'fgrep.exe', 'select-string', 'select-string.exe'];
     const searchCmdStr = tokens.find((t: string) => fsSearchAliases.includes(t));
-    if (searchCmdStr) {
-      console.error(`\n   💡 AGENT HINT: Do NOT use '${searchCmdStr}' or its PowerShell cmdlet equivalent (Select-String) natively. You MUST use the agent-native 'grep_search' tool instead.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
-      process.exit(1);
-    }
-
     const fsListAliases = ['ls', 'ls.exe', 'dir', 'dir.exe', 'get-childitem', 'get-childitem.exe', 'gci', 'tree', 'tree.com'];
     const listCmdStr = tokens.find((t: string) => fsListAliases.includes(t));
-    if (listCmdStr) {
-      console.error(`\n   💡 AGENT HINT: Do NOT use '${listCmdStr}' or its PowerShell cmdlet equivalent (Get-ChildItem) natively. You MUST use the agent-native 'list_dir' tool instead.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
-      process.exit(1);
+
+    if (cmdStr || searchCmdStr || listCmdStr) {
+      const detected = cmdStr || searchCmdStr || listCmdStr;
+      console.error(`\n   🛠️ AUTONOMOUS HEALING: Shell command/script using '${detected}' detected. Switching execution target to WSL2... (Frictionless Recovery)\x1b[0m`);
+      payload.target = 'wsl2';
     }
   }
 
@@ -125,17 +113,27 @@ export function systemInterceptor(ctx: ExecutionContext): void {
         }
       }
     })
-    .with({ originalCmd: P.union('cat', 'cat.exe', 'get-content'), hasStdin: false, payload: P.when((p: unknown) => typeof p === 'object' && p !== null && !('target' in p && p.target === 'wsl2')) }, () => {
-      console.error(`\n   💡 AGENT HINT: Do NOT use 'cat', 'cat.exe', or 'get-content' natively. You MUST use the agent-native 'view_file' tool instead.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
-      process.exit(1);
+    .with({ originalCmd: P.union('cat', 'cat.exe', 'get-content') }, () => {
+      if (!hasStdin && positionalArgs.length === 0) {
+        console.error(`\n   💡 AGENT HINT: 'cat' called without file arguments and no stdin. It will hang indefinitely.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Provide a file argument or use view_file.\x1b[0m`);
+        process.exit(1);
+      }
+      console.error(`\n   🛠️ AUTONOMOUS HEALING: 'cat' file inspection command detected. Switching execution target to WSL2... (Frictionless Recovery)\x1b[0m`);
+      ctx.payload.target = 'wsl2';
+      ctx.args = ctx.args.map(a => convertToWslPath(a));
     })
-    .with({ originalCmd: P.union('grep', 'grep.exe', 'egrep', 'egrep.exe', 'fgrep', 'fgrep.exe', 'select-string', 'select-string.exe'), hasStdin: false, payload: P.when((p: unknown) => typeof p === 'object' && p !== null && !('target' in p && p.target === 'wsl2')) }, () => {
-      console.error(`\n   💡 AGENT HINT: Do NOT use 'grep' or its PowerShell cmdlet equivalent (Select-String) natively. You MUST use the agent-native 'grep_search' tool instead.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
-      process.exit(1);
+    .with({ originalCmd: P.union('grep', 'grep.exe', 'egrep', 'egrep.exe', 'fgrep', 'fgrep.exe', 'select-string', 'select-string.exe') }, () => {
+      console.error(`\n   🛠️ AUTONOMOUS HEALING: 'grep' search command detected. Switching execution target to WSL2... (Frictionless Recovery)\x1b[0m`);
+      ctx.payload.target = 'wsl2';
+      ctx.args = ctx.args.map(a => convertToWslPath(a));
     })
-    .with({ originalCmd: P.union('ls', 'ls.exe', 'dir', 'dir.exe', 'get-childitem', 'get-childitem.exe', 'gci', 'tree', 'tree.com'), hasStdin: false, payload: P.when((p: unknown) => typeof p === 'object' && p !== null && !('target' in p && p.target === 'wsl2')) }, () => {
-      console.error(`\n   💡 AGENT HINT: Do NOT use 'ls' or its PowerShell cmdlet equivalent (Get-ChildItem) natively. You MUST use the agent-native 'list_dir' tool instead.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
-      process.exit(1);
+    .with({ originalCmd: P.union('ls', 'ls.exe', 'dir', 'dir.exe', 'get-childitem', 'get-childitem.exe', 'gci', 'tree', 'tree.com') }, () => {
+      console.error(`\n   🛠️ AUTONOMOUS HEALING: '${cmdBasename}' directory listing command detected. Switching execution target to WSL2... (Frictionless Recovery)\x1b[0m`);
+      ctx.payload.target = 'wsl2';
+      ctx.args = ctx.args.map(a => {
+        if (a.toLowerCase() === '-recurse') return '-R';
+        return convertToWslPath(a);
+      });
     })
     .with({ cmd: P.union('awk', 'gawk', 'sed', 'sed.exe', 'jq', 'jq.exe', 'yq', 'yq.exe', 'find', 'find.exe') }, () => {
       console.error(`\n   🛠️ AUTONOMOUS HEALING: '${cmdBasename}' natively fails, lacks features, or is not installed on Windows. Switching execution target to WSL2... (Frictionless Recovery)\x1b[0m`);
@@ -356,23 +354,25 @@ export function systemInterceptor(ctx: ExecutionContext): void {
       const networkAliases = ['curl', 'wget', 'invoke-webrequest', 'iwr'];
       const netCmdStr = tokens.find(t => networkAliases.includes(t));
       if (netCmdStr) {
-        const nativeExe = netCmdStr === 'wget' ? 'wget.exe' : 'curl.exe';
-        console.error(`\n   💡 AGENT HINT: Do NOT use '${netCmdStr}' natively. You MUST use the agent-native 'read_url_content' tool instead, or natively invoke '${nativeExe}' to bypass the alias.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
-        process.exit(1);
+        console.error(`\n   🛠️ AUTONOMOUS HEALING: Network request command in shell string detected. Switching execution target to WSL2... (Frictionless Recovery)\x1b[0m`);
+        payload.target = 'wsl2';
+        return;
       }
 
       const fsSearchAliases = ['grep', 'grep.exe', 'egrep', 'egrep.exe', 'fgrep', 'fgrep.exe', 'select-string', 'select-string.exe'];
       const searchCmdStr = tokens.find(t => fsSearchAliases.includes(t));
       if (searchCmdStr) {
-        console.error(`\n   💡 AGENT HINT: Do NOT use '${searchCmdStr}' or its PowerShell cmdlet equivalent (Select-String) natively. You MUST use the agent-native 'grep_search' tool instead.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
-        process.exit(1);
+        console.error(`\n   🛠️ AUTONOMOUS HEALING: Search command in shell string detected. Switching execution target to WSL2... (Frictionless Recovery)\x1b[0m`);
+        payload.target = 'wsl2';
+        return;
       }
 
       const fsListAliases = ['ls', 'ls.exe', 'dir', 'dir.exe', 'get-childitem', 'get-childitem.exe', 'gci', 'tree', 'tree.com'];
       const listCmdStr = tokens.find(t => fsListAliases.includes(t));
       if (listCmdStr) {
-        console.error(`\n   💡 AGENT HINT: Do NOT use '${listCmdStr}' or its PowerShell cmdlet equivalent (Get-ChildItem) natively. You MUST use the agent-native 'list_dir' tool instead.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
-        process.exit(1);
+        console.error(`\n   🛠️ AUTONOMOUS HEALING: Directory list command in shell string detected. Switching execution target to WSL2... (Frictionless Recovery)\x1b[0m`);
+        payload.target = 'wsl2';
+        return;
       }
 
       const wrappedShell = (cmdBasename === 'wsl.exe' || cmdBasename === 'wsl') ? (args.find((a: string) => ['bash', 'sh', 'pwsh', 'powershell'].includes(a.toLowerCase())) || cmdBasename) : cmdBasename;
@@ -446,32 +446,36 @@ export function systemInterceptor(ctx: ExecutionContext): void {
     })
     // Web request tool enforcement
     .with({ isCommand: true, originalCmd: P.union('curl', 'wget', 'invoke-webrequest', 'iwr'), payload: P.when((p: unknown) => typeof p === 'object' && p !== null && !('target' in p && p.target === 'wsl2')) }, () => {
-      const cmdStr = originalCmd;
-      const nativeExe = originalCmd === 'wget' ? 'wget.exe' : 'curl.exe';
-      console.error(`\n   💡 AGENT HINT: Do NOT use '${cmdStr}' natively. You MUST use the agent-native 'read_url_content' tool instead, or natively invoke '${nativeExe}' to bypass the alias.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
-      process.exit(1);
+      console.error(`\n   🛠️ AUTONOMOUS HEALING: Network request command '${originalCmd}' detected. Switching execution target to WSL2... (Frictionless Recovery)\x1b[0m`);
+      ctx.payload.target = 'wsl2';
+      ctx.args = ctx.args.map(a => convertToWslPath(a));
     })
 
     .with({ isCommand: true, hasStdin: false, cmd: P.union('grep', 'grep.exe', 'egrep', 'fgrep'), positionalArgs: P.when(pa => pa.length <= 1) }, () => {
       if (!args) args = [];
       if (args.includes('--help') || args.includes('-h')) return;
       if (!['-r', '-R', '--recursive', '--files', '--help', '-h'].some(a => args.includes(a))) {
-        console.error(`\n   💡 AGENT HINT: '${cmd.replace(/\.exe$/, '')}' called without file arguments, no recursive flag, and no stdin. It will hang indefinitely.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+        console.error(`\n   💡 AGENT HINT: '${cmd.replace(/\.exe$/, '')}' called without file arguments and no recursive flag. It will hang indefinitely.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters or use grep_search.\x1b[0m`);
         process.exit(1);
       }
     })
 
-    // Search tool enforcement (FS Alias Hallucinations)
+    // Search tool enforcement
     .with({ isCommand: true, originalCmd: P.union('grep', 'grep.exe', 'egrep', 'egrep.exe', 'fgrep', 'fgrep.exe', 'select-string', 'select-string.exe'), hasStdin: false, payload: P.when((p: unknown) => typeof p === 'object' && p !== null && !('target' in p && p.target === 'wsl2')) }, () => {
       if (args && (args.includes('--help') || args.includes('-h'))) return;
-      console.error(`\n   💡 AGENT HINT: Do NOT use '${originalCmd}' or its PowerShell cmdlet equivalent (Select-String) natively. You MUST use the agent-native 'grep_search' tool instead.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
-      process.exit(1);
+      console.error(`\n   🛠️ AUTONOMOUS HEALING: Search command '${originalCmd}' detected. Switching execution target to WSL2... (Frictionless Recovery)\x1b[0m`);
+      ctx.payload.target = 'wsl2';
+      ctx.args = ctx.args.map(a => convertToWslPath(a));
     })
 
-    // List dir tool enforcement (FS Alias Hallucinations)
+    // List dir tool enforcement
     .with({ isCommand: true, originalCmd: P.union('ls', 'ls.exe', 'dir', 'dir.exe', 'get-childitem', 'get-childitem.exe', 'gci', 'tree', 'tree.com'), payload: P.when((p: unknown) => typeof p === 'object' && p !== null && !('target' in p && p.target === 'wsl2')) }, () => {
-      console.error(`\n   💡 AGENT HINT: Do NOT use '${originalCmd}' or its PowerShell cmdlet equivalent (Get-ChildItem) natively. You MUST use the agent-native 'list_dir' tool instead.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
-      process.exit(1);
+      console.error(`\n   🛠️ AUTONOMOUS HEALING: Directory listing command '${originalCmd}' detected. Switching execution target to WSL2... (Frictionless Recovery)\x1b[0m`);
+      ctx.payload.target = 'wsl2';
+      ctx.args = ctx.args.map(a => {
+        if (a.toLowerCase() === '-recurse') return '-R';
+        return convertToWslPath(a);
+      });
     })
 
 
