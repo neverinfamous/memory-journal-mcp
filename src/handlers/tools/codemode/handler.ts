@@ -134,21 +134,21 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                         throw new ConfigurationError('Code Mode is disabled in the server configuration.')
                     }
 
-                    // 1a. Missing Payload Interceptor & Auto-Healing
+                    // 1a. Missing Payload Interceptor
                     if (!executionCode || executionCode.trim() === '') {
                         const inputContext = (input as Record<string, unknown>)['context']
+                        const paramsContext = typeof params === 'object' && params !== null ? (params as Record<string, unknown>)['context'] : undefined
                         if (typeof inputContext === 'string' && inputContext.trim().length > 0) {
                             executionCode = inputContext
-                        } else if (typeof params === 'object' && params !== null) {
-                            const paramsContext = (params as Record<string, unknown>)['context']
-                            if (typeof paramsContext === 'string' && paramsContext.trim().length > 0) {
-                                executionCode = paramsContext
-                            } else {
-                                executionCode = 'return await mj.help();'
-                            }
+                        } else if (typeof paramsContext === 'string' && paramsContext.trim().length > 0) {
+                            executionCode = paramsContext
                         } else {
-                            // Auto-heal empty code calls by returning help / API discovery
-                            executionCode = 'return await mj.help();'
+                            return {
+                                success: false,
+                                error: 'Missing required `code` parameter. This tool executes JavaScript in a secure sandbox.\n\nAvailable parameters:\n- code (string, required): The JavaScript code to execute\n- context (any, optional): A JSON object/string to pass variables directly into the sandbox (accessible via `context`)\n- project_number (number, optional): The project ID to operate on\n- repo (string, optional): A GitHub repository to inject (e.g. "neverinfamous/adamic")\n- expected_version (string, optional): The expected journal version for optimistic concurrency\n- dry_run (boolean, optional): If true, simulates the execution without making changes\n\nTo discover available API methods and their schemas, read the `memory://help` resource, or invoke schema introspection directly in your script (e.g., `const schema = await mj.core.create_entry.schema()`).',
+                                project_id: undefined,
+                                executionTimeMs: 0
+                            }
                         }
                     }
 
