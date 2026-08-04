@@ -46,9 +46,11 @@ export async function getNumstatMap(lockedArgs: string[], stdinShas?: string) {
           let ins = 0;
           let del = 0;
           for (let j = 0; j < pathStartIndex - 1; j += 2) {
-             if (parts[j] === '-' || parts[j+1] === '-') isBinary = true;
-             const parsedIns = parseInt(parts[j], 10) || 0;
-             const parsedDel = parseInt(parts[j+1], 10) || 0;
+             const p0 = parts[j] ?? '';
+             const p1 = parts[j+1] ?? '';
+             if (p0 === '-' || p1 === '-') isBinary = true;
+             const parsedIns = parseInt(p0, 10) || 0;
+             const parsedDel = parseInt(p1, 10) || 0;
              ins += Math.min(parsedIns, Number.MAX_SAFE_INTEGER);
              del += Math.min(parsedDel, Number.MAX_SAFE_INTEGER);
           }

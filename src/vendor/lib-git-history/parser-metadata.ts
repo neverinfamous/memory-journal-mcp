@@ -11,7 +11,7 @@ export function evaluateNumericFilter(filterString: string, recordValue: number 
   const matchObj = normalizedFilter.match(/^(>=|<=|>|<|==|=|)?\s*(-?\d+(?:\.\d+)?)$/);
   if (!matchObj) return false;
   const op = matchObj[1] || '==';
-  const val = parseFloat(matchObj[2]);
+  const val = parseFloat(matchObj[2] ?? '0');
   return match(op)
     .with('>', () => recordValue > val)
     .with('>=', () => recordValue >= val)

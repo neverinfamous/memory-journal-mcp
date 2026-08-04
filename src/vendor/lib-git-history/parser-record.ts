@@ -91,7 +91,7 @@ function parseFilesBlock(filesBlock: string, sha: string): { rawFiles: Array<{ s
         let status = statusRaw;
         let similarityScore;
         const digitsMatch = statusRaw.match(/(\d{1,3})$/);
-        if (digitsMatch) {
+        if (digitsMatch && digitsMatch[1]) {
           similarityScore = parseInt(digitsMatch[1], 10);
           status = statusRaw.slice(0, -digitsMatch[1].length);
         }
@@ -139,7 +139,7 @@ export function parseGitRecord(
   args: CliArgs
 ): RawCommitBatchItem | null {
   const parts = extractRecordParts(commitBlock);
-  if (!parts) return null;
+  if (!parts || parts.length < 12) return null;
 
   const sha = parts[0].trim();
   const refsRaw = parts[1].trim();
@@ -162,10 +162,10 @@ export function parseGitRecord(
   if (hasBOM && !body.startsWith('\uFEFF')) {
     body = '\uFEFF' + body;
   }
-  const exactTrailerBlock = parts[bodyEndIdx].trim();
-  const rawTrailers = parts[bodyEndIdx + 1].trim();
+  const exactTrailerBlock = (parts[bodyEndIdx] ?? '').trim();
+  const rawTrailers = (parts[bodyEndIdx + 1] ?? '').trim();
   
-  const parentsAndFiles = parts[bodyEndIdx + 2];
+  const parentsAndFiles = parts[bodyEndIdx + 2] ?? '';
   let parentsRaw: string;
   let filesBlock = '';
   const firstNewline = parentsAndFiles.indexOf('\n');

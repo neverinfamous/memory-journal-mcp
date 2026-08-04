@@ -20,13 +20,13 @@ export function renderWebhookTemplate(templateStr: string, integrationContext: u
     const obj = JSON.parse(templateStr);
     const walk = (node: unknown): unknown => {
       if (typeof node === 'string') {
-        if (node === '{{envelope.data}}') return safeGet(vars.envData, 'data') ?? null;
-        if (node === '{{envelope.status}}') return safeGet(vars.envData, 'status') ?? null;
-        if (node === '{{stdout}}') return vars.stdout ?? '';
-        if (node === '{{stderr}}') return vars.stderr ?? '';
-        if (node === '{{code}}') return vars.code ?? null;
-        if (node === '{{signal}}') return vars.signal ?? null;
-        if (node === '{{success}}') return vars.success ?? false;
+        if (node === '{{envelope.data}}') return safeGet(vars['envData'], 'data') ?? null;
+        if (node === '{{envelope.status}}') return safeGet(vars['envData'], 'status') ?? null;
+        if (node === '{{stdout}}') return vars['stdout'] ?? '';
+        if (node === '{{stderr}}') return vars['stderr'] ?? '';
+        if (node === '{{code}}') return vars['code'] ?? null;
+        if (node === '{{signal}}') return vars['signal'] ?? null;
+        if (node === '{{success}}') return vars['success'] ?? false;
         
         let replaced: string = node;
         if (integrationContext !== undefined) {
@@ -45,17 +45,17 @@ export function renderWebhookTemplate(templateStr: string, integrationContext: u
         }
         
         replaced = replaced.replace(/\{\{(stdout|stderr|code|signal|success|envelope\.data|envelope\.status)\}\}/g, (match, key) => {
-          if (key === 'stdout') return String(vars.stdout ?? '');
-          if (key === 'stderr') return String(vars.stderr ?? '');
-          if (key === 'code') return String(vars.code ?? 'null');
-          if (key === 'signal') return String(vars.signal ?? 'null');
-          if (key === 'success') return vars.success ? 'true' : 'false';
+          if (key === 'stdout') return String(vars['stdout'] ?? '');
+          if (key === 'stderr') return String(vars['stderr'] ?? '');
+          if (key === 'code') return String(vars['code'] ?? 'null');
+          if (key === 'signal') return String(vars['signal'] ?? 'null');
+          if (key === 'success') return vars['success'] ? 'true' : 'false';
           if (key === 'envelope.data') {
-            const data = safeGet(vars.envData, 'data');
+            const data = safeGet(vars['envData'], 'data');
             return data !== undefined ? JSON.stringify(data) : 'null';
           }
           if (key === 'envelope.status') {
-            const status = safeGet(vars.envData, 'status');
+            const status = safeGet(vars['envData'], 'status');
             return status !== undefined ? String(status) : 'null';
           }
           return match;
@@ -87,17 +87,17 @@ export function renderWebhookTemplate(templateStr: string, integrationContext: u
     let body = replaceCtx(templateStr);
     
     body = body.replace(/\{\{(stdout|stderr|code|signal|success|envelope\.data|envelope\.status)\}\}/g, (match, key) => {
-      if (key === 'stdout') return JSON.stringify(vars.stdout ?? '').slice(1, -1);
-      if (key === 'stderr') return JSON.stringify(vars.stderr ?? '').slice(1, -1);
-      if (key === 'code') return String(vars.code ?? 'null');
-      if (key === 'signal') return String(vars.signal ?? 'null');
-      if (key === 'success') return vars.success ? 'true' : 'false';
+      if (key === 'stdout') return JSON.stringify(vars['stdout'] ?? '').slice(1, -1);
+      if (key === 'stderr') return JSON.stringify(vars['stderr'] ?? '').slice(1, -1);
+      if (key === 'code') return String(vars['code'] ?? 'null');
+      if (key === 'signal') return String(vars['signal'] ?? 'null');
+      if (key === 'success') return vars['success'] ? 'true' : 'false';
       if (key === 'envelope.data') {
-        const data = safeGet(vars.envData, 'data');
+        const data = safeGet(vars['envData'], 'data');
         return data !== undefined ? JSON.stringify(data).slice(1, -1) : 'null';
       }
       if (key === 'envelope.status') {
-        const status = safeGet(vars.envData, 'status');
+        const status = safeGet(vars['envData'], 'status');
         return status !== undefined ? String(status) : 'null';
       }
       return match;

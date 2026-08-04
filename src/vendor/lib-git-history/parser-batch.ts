@@ -38,12 +38,12 @@ function parseWithFallbacks(entryObj: Record<string, unknown>, sha: string, subj
     return finalData;
   }
 
-  coercedObj.commit = coercedObj.commit || sha || 'unknown_commit';
-  coercedObj.subject = coercedObj.subject || subject || 'No Subject';
-  coercedObj.date = coercedObj.date || date || new Date().toISOString();
-  coercedObj.author = coercedObj.author || authorName || 'Unknown Author';
-  coercedObj.validationErrors = parseResult.error.issues;
-  coercedObj.isCorrupted = true;
+  coercedObj['commit'] = coercedObj['commit'] || sha || 'unknown_commit';
+  coercedObj['subject'] = coercedObj['subject'] || subject || 'No Subject';
+  coercedObj['date'] = coercedObj['date'] || date || new Date().toISOString();
+  coercedObj['author'] = coercedObj['author'] || authorName || 'Unknown Author';
+  coercedObj['validationErrors'] = parseResult.error.issues;
+  coercedObj['isCorrupted'] = true;
   
   const fallbackResult = entrySchema.safeParse(coercedObj);
   return fallbackResult.success ? fallbackResult.data : null;
@@ -194,21 +194,21 @@ export async function processBatch(
     };
 
     if (issuesMap.size > 0) {
-      entryObj.associatedIssues = Array.from(issuesMap.entries()).map(([issue, action]) => ({ issue, action }));
+      entryObj['associatedIssues'] = Array.from(issuesMap.entries()).map(([issue, action]) => ({ issue, action }));
     }
 
     if ((args['include-patch'] || args['diff-context'] !== undefined) && patchMap.has(sha)) {
       const patchData = patchMap.get(sha);
       if (patchData) {
-        entryObj.patch = patchData.patch;
-        if (patchData.truncated) entryObj.isPatchTruncated = true;
+        entryObj['patch'] = patchData.patch;
+        if (patchData.truncated) entryObj['isPatchTruncated'] = true;
       }
     }
 
     if (Object.keys(metadataObj).length > 0) entryObj['metadata'] = metadataObj;
-    if (references.length > 0) entryObj.references = references;
-    if (coAuthors.length > 0) entryObj.coAuthors = coAuthors;
-    if (reviewers.length > 0) entryObj.reviewers = reviewers;
+    if (references.length > 0) entryObj['references'] = references;
+    if (coAuthors.length > 0) entryObj['coAuthors'] = coAuthors;
+    if (reviewers.length > 0) entryObj['reviewers'] = reviewers;
     if (trailersObj && Object.keys(trailersObj).length > 0) entryObj['trailersObj'] = trailersObj;
 
     if (isRevert) entryObj['isRevert'] = true;

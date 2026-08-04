@@ -46,16 +46,16 @@ export function resolveIssueTrackerUrl(issue: string, repoHost: string, repoPath
   if (args['issue-tracker']) {
     let urlTemplate = args['issue-tracker'];
     
-    if (urlTemplate.includes(',')) {
-       const parts = urlTemplate.split(',');
-       for (const p of parts) {
-         const [prefix, tpl] = p.split('=', 2);
-         if (tpl && issue.startsWith(prefix)) {
-           urlTemplate = tpl;
-           break;
-         }
-       }
-    }
+     if (urlTemplate.includes(',')) {
+        const parts = urlTemplate.split(',');
+        for (const p of parts) {
+          const [prefix = '', tpl = ''] = p.split('=', 2);
+          if (tpl && issue.startsWith(prefix)) {
+            urlTemplate = tpl;
+            break;
+          }
+        }
+     }
     
     const cleanIssue = issue.startsWith('#') ? issue.slice(1) : issue;
     return urlTemplate.replace(/\{id\}/g, cleanIssue).replace(/\{\}/g, issue);
@@ -149,7 +149,7 @@ export const extractIssues = (text: string, issuesMap: Map<string, string | null
     const fullPath = match[3];
     let issue: string | undefined;
     
-    if (domain === 'github.com' || domain === 'gitlab.com' || domain === 'bitbucket.org') {
+    if (fullPath && (domain === 'github.com' || domain === 'gitlab.com' || domain === 'bitbucket.org')) {
       const pathMatch = fullPath.match(/^(?:([\w.-]+\/[\w.-]+)\/)?(?:-\/)?(?:issues|pull|merge_requests|pull-requests)\/([A-Z0-9_.-]+)/i);
       if (pathMatch) {
         let repo = pathMatch[1];
@@ -157,15 +157,15 @@ export const extractIssues = (text: string, issuesMap: Map<string, string | null
         if (repo && repo.endsWith('.git')) repo = repo.slice(0, -4);
         issue = repo ? `${repo}#${num}` : `#${num}`;
       }
-    } else if (domain === 'atlassian.net') {
+    } else if (fullPath && domain === 'atlassian.net') {
       const pathMatch = fullPath.match(/browse\/([A-Z0-9_.-]+)/i);
       if (pathMatch) issue = pathMatch[1];
-    } else if (domain === 'linear.app') {
+    } else if (fullPath && domain === 'linear.app') {
       const pathMatch = fullPath.match(/issue\/([A-Z0-9_.-]+)/i);
       if (pathMatch) issue = pathMatch[1];
     } else if (domain === 'slack.com' && fullPath?.startsWith('archives/')) {
       issue = fullPath;
-    } else if (domain === 'notion.so') {
+    } else if (domain === 'notion.so' && fullPath) {
       issue = fullPath;
     }
     

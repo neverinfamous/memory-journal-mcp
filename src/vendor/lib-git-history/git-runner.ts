@@ -332,6 +332,7 @@ export async function* spawnGitBinaryStream(args: string[], boundaryStr: string,
         const gatherChunks = [buf];
         for (let i = chunks.length - 2; i >= 0 && gathered < needed; i--) {
           const c = chunks[i];
+          if (!c) continue;
           const take = Math.min(c.length, needed - gathered);
           gatherChunks.unshift(c.subarray(c.length - take));
           gathered += take;
