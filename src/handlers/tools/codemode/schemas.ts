@@ -71,7 +71,7 @@ export const ExecuteCodeSchemaMcp = z.object({
         .string()
         .optional()
         .describe(
-            'The JavaScript code to execute inside the sandbox. Uses the `mj` global object for API access. Anti-Hallucination Hint: DO NOT call with an empty payload `{}` to "list tools" or introspect. If you want to see available tools, read the `memory://help` resource instead. Introspect groups (e.g. `Object.keys(mj.team)`) or inspect returned data structures (`return res[0]`) instead of guessing method names or schemas.'
+            'REQUIRED string parameter containing JavaScript code to execute inside the sandbox. Uses the `mj` global object for API access (e.g. `return await mj.core.createEntry(context.entry)`). Anti-Hallucination Hint: DO NOT call with an empty payload `{}` or pass entry/query payloads directly without including the `code` parameter. Node.js native modules (`fs`, `path`, `child_process`, `require()`, `import`) are disabled in the sandbox; pass file content or external data using the `context` parameter instead.'
         ),
     auto_version: z
         .boolean()
@@ -107,7 +107,7 @@ export const ExecuteCodeSchemaMcp = z.object({
     context: z.unknown()
         .optional()
         .describe(
-            'A JSON object, string, or array to pass variables directly into the sandbox (accessible via `context`). Use this for large strings or complex data to avoid string-escaping issues in the code parameter.'
+            'A JSON object, string, or array to pass variables directly into the sandbox (accessible via `context` inside JS code). Use this to pass file contents, external text, or complex entry objects into Code Mode without requiring `fs` or dynamic `require()`.'
         ),
     readonly: z
         .boolean()

@@ -440,6 +440,7 @@ The `memory://briefing` resource is modular — each section is a separate file:
 | `project-milestone-tracker` | Track progress against a specific project milestone |
 | `project-setup` | Guide for initializing and registering a new project in the memory-journal-mcp g... |
 | `project-status-summary` | Generate a comprehensive status summary for a GitHub project |
+| `quickcommit` | Quick commit for configuration, documentation, Markdown, and text files — skips ... |
 | `session-summary` | Create a formatted session summary entry |
 | `team-session-summary` | Create a formatted team session summary entry |
 | `update-entry` | Safely update an existing mid-thread entry or session summary |
