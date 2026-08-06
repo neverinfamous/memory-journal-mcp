@@ -86,7 +86,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                         executionCode = executionCode.replace(/\btools\./g, 'mj.')
 
                         // Auto-heal ES module import and CommonJS require statements
-                        executionCode = executionCode.replace(/(?:const|let|var)\s+(\{[^}]*\}|[\w$]+)\s*=\s*require\s*\(\s*['"]([^'"]+)['"]\s*\);?/g, (m: string, varName: string, modName: string): string => {
+                        executionCode = executionCode.replace(/(?:const|let|var)\s+(\{[^}]*\}|[\w$]+)\s*=\s*require\s*\(\s*['"]([^'"]+)['"]\s*\);?/g, (_m: string, varName: string, modName: string): string => {
                             if (modName.includes('memory-journal') || modName.includes('journal') || modName.includes('mcp')) {
                                 if (varName.trim() === 'mj') return `/* auto-healed require */`
                                 return `const ${varName} = mj;`
@@ -96,7 +96,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                             }
                             return `/* auto-healed require: ${modName} */`
                         })
-                        executionCode = executionCode.replace(/import\s+(\{[^}]*\}|\*\s+as\s+[\w$]+|[\w$]+)\s+from\s+['"]([^'"]+)['"]\s*;?/g, (m: string, varName: string, modName: string): string => {
+                        executionCode = executionCode.replace(/import\s+(\{[^}]*\}|\*\s+as\s+[\w$]+|[\w$]+)\s+from\s+['"]([^'"]+)['"]\s*;?/g, (_m: string, varName: string, modName: string): string => {
                             if (modName.includes('memory-journal') || modName.includes('journal') || modName.includes('mcp')) {
                                 if (varName.trim() === 'mj') return `/* auto-healed import */`
                                 return `const ${varName} = mj;`
