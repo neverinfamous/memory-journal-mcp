@@ -55,6 +55,7 @@ export const ExecuteCodeSchema = z.preprocess((val) => {
     task: z.string().optional(),
     instruction: z.string().optional(),
     instructions: z.string().optional(),
+    entry: z.unknown().optional(),
     auto_version: z.boolean().optional().default(true),
     project_number: relaxedNumber().optional(),
     workspace_id: z.string().optional(),

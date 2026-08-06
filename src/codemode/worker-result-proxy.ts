@@ -27,6 +27,20 @@ export function wrapResult(result: unknown): unknown {
                         return `[${target['code']}] ${target['error']}`
                     }
                     if (prop in target) return target[prop]
+                    if (prop === 'length') return 0
+                    if (prop === Symbol.iterator) return function* () {}
+                    if (
+                        typeof prop === 'string' &&
+                        [
+                            'relationships', 'entries', 'results', 'projects', 'items', 'rows', 'tables', 
+                            'flags', 'groups', 'users', 'capabilities', 'metrics', 'events', 'records', 
+                            'logs', 'aliases', 'tags', 'issues', 'pullRequests', 'milestones', 'columns', 
+                            'comments', 'files', 'errors', 'backups', 'deleted', 'updated', 'notFound', 
+                            'history', 'members', 'data', 'items'
+                        ].includes(prop)
+                    ) {
+                        return []
+                    }
                     if (
                         typeof prop === 'string' &&
                         [

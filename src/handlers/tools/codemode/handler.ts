@@ -38,13 +38,34 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                     const input = ExecuteCodeSchema.parse(params)
                     let executionCode = input.code || input.script || input.source || input.query || input.content || input.text || input.body || input.js || input.javascript || input.payload || input.executionCode || input.input || input.command || input.expression || input.fn || input.exec || input.eval || input.code_snippet || input.raw_code || input.statement || input.statements || input.codeBlock || input.code_block || input.script_content || input.js_code || input.code_string || input.action || input.task || input.instruction || input.instructions
 
-                    // Fallback: search params object for any string property if code is still undefined
+                    // Fallback: search params object for entry object or string properties if code is still undefined
                     if (!executionCode && typeof params === 'object' && params !== null) {
-                        const paramObj = params as Record<string, unknown>
-                        for (const [k, v] of Object.entries(paramObj)) {
-                            if (typeof v === 'string' && v.trim().length > 0 && !['repo', 'workspace_id', 'expected_version', 'auto_version', 'project_number', 'readonly'].includes(k)) {
-                                executionCode = v
-                                break
+                        const rawObj = params as Record<string, unknown>
+                        const entryObj = (typeof rawObj['entry'] === 'object' && rawObj['entry'] !== null ? rawObj['entry'] : rawObj) as Record<string, unknown>
+                        if (typeof entryObj['content'] === 'string' || typeof entryObj['title'] === 'string' || typeof entryObj['type'] === 'string' || typeof entryObj['entry_type'] === 'string' || typeof entryObj['instructions'] === 'string' || typeof rawObj['instructions'] === 'string') {
+                            const titleVal = typeof entryObj['title'] === 'string' ? entryObj['title'] : 'Journal Entry'
+                            const contentVal = typeof entryObj['content'] === 'string' ? entryObj['content'] : typeof entryObj['instructions'] === 'string' ? entryObj['instructions'] : typeof rawObj['instructions'] === 'string' ? rawObj['instructions'] : ''
+                            const typeVal = typeof entryObj['type'] === 'string' ? entryObj['type'] : typeof entryObj['entry_type'] === 'string' ? entryObj['entry_type'] : typeof entryObj['category'] === 'string' ? entryObj['category'] : 'technical_decision'
+                            const tagsVal = Array.isArray(entryObj['tags']) ? entryObj['tags'] : []
+                            const projVal = typeof entryObj['project_number'] === 'number' ? entryObj['project_number'] : typeof rawObj['project_number'] === 'number' ? rawObj['project_number'] : undefined
+                            const sessVal = typeof entryObj['session_id'] === 'string' ? entryObj['session_id'] : typeof rawObj['session_id'] === 'string' ? rawObj['session_id'] : undefined
+                            
+                            const payload: Record<string, unknown> = {
+                                title: titleVal,
+                                content: contentVal,
+                                entry_type: typeVal,
+                                tags: tagsVal
+                            }
+                            if (projVal !== undefined) payload['project_number'] = projVal
+                            if (sessVal !== undefined) payload['session_id'] = sessVal
+                            
+                            executionCode = `return await mj.createEntry(${JSON.stringify(payload)});`
+                        } else {
+                            for (const [k, v] of Object.entries(rawObj)) {
+                                if (typeof v === 'string' && v.trim().length > 0 && !['repo', 'workspace_id', 'expected_version', 'auto_version', 'project_number', 'readonly'].includes(k)) {
+                                    executionCode = v
+                                    break
+                                }
                             }
                         }
                     }
@@ -56,25 +77,39 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                         executionCode = executionCode.replace(/<PROJECT_NUMBER>/g, 'undefined')
                         executionCode = executionCode.replace(/<PROJECT_ID>/g, 'undefined')
 
+                        // Auto-heal export default function / export default async function / export default
+                        executionCode = executionCode.replace(/export\s+default\s+async\s+function\s*[\w$]*\s*\(([^)]*)\)\s*\{([\s\S]*)\}/g, '(async ($1) => { $2 })()')
+                        executionCode = executionCode.replace(/export\s+default\s+function\s*[\w$]*\s*\(([^)]*)\)\s*\{([\s\S]*)\}/g, '(async ($1) => { $2 })()')
+                        executionCode = executionCode.replace(/export\s+default\s+/g, '')
+
+                        // Auto-heal tools.* -> mj.*
+                        executionCode = executionCode.replace(/\btools\./g, 'mj.')
+
                         // Auto-heal ES module import and CommonJS require statements
                         executionCode = executionCode.replace(/(?:const|let|var)\s+(\{[^}]*\}|[\w$]+)\s*=\s*require\s*\(\s*['"]([^'"]+)['"]\s*\);?/g, (m: string, varName: string, modName: string): string => {
                             if (modName.includes('memory-journal') || modName.includes('journal') || modName.includes('mcp')) {
-                                if (varName.trim() === 'mj') {
-                                    return `/* auto-healed require */`
-                                }
+                                if (varName.trim() === 'mj') return `/* auto-healed require */`
                                 return `const ${varName} = mj;`
                             }
-                            return m
+                            if (['fs', 'node:fs', 'path', 'node:path', 'os', 'node:os', 'util', 'crypto', 'buffer', 'child_process'].includes(modName)) {
+                                return `/* auto-healed node module require: ${modName} */`
+                            }
+                            return `/* auto-healed require: ${modName} */`
                         })
                         executionCode = executionCode.replace(/import\s+(\{[^}]*\}|\*\s+as\s+[\w$]+|[\w$]+)\s+from\s+['"]([^'"]+)['"]\s*;?/g, (m: string, varName: string, modName: string): string => {
                             if (modName.includes('memory-journal') || modName.includes('journal') || modName.includes('mcp')) {
-                                if (varName.trim() === 'mj') {
-                                    return `/* auto-healed import */`
-                                }
+                                if (varName.trim() === 'mj') return `/* auto-healed import */`
                                 return `const ${varName} = mj;`
                             }
-                            return m
+                            if (['fs', 'node:fs', 'path', 'node:path', 'os', 'node:os', 'util', 'crypto', 'buffer', 'child_process'].includes(modName)) {
+                                return `/* auto-healed node module import: ${modName} */`
+                            }
+                            return `/* auto-healed import: ${modName} */`
                         })
+
+                        // Auto-heal fs.readFileSync / fs.readFile calls before security checks
+                        executionCode = executionCode.replace(/(?:fs|fs\.promises)\.readFileSync\s*\([^)]*\)/g, '(typeof context !== "undefined" && context.content ? context.content : "")')
+                        executionCode = executionCode.replace(/(?:fs|fs\.promises)\.readFile\s*\([^)]*\)/g, 'Promise.resolve(typeof context !== "undefined" && context.content ? context.content : "")')
 
                         // Auto-heal process.env access in Code Mode scripts before security checks
                         executionCode = executionCode.replace(/process\.env\.([a-zA-Z0-9_]+)/g, () => 'undefined')
@@ -112,20 +147,37 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                             }
                         }
 
-                        // Anti-Hallucination: Auto-heal raw Markdown text or journal entry payloads passed directly to mj_execute_code
+                        // Anti-Hallucination: Auto-heal raw Markdown text or natural language prompts passed directly to mj_execute_code
                         const rawObj = (typeof params === 'object' && params !== null ? params : {}) as Record<string, unknown>
-                        const hasEntryFields = typeof rawObj['type'] === 'string' || typeof rawObj['entry_type'] === 'string' || typeof rawObj['title'] === 'string' || typeof rawObj['category'] === 'string'
-                        const isMarkdownText = /^\s*([*#-]\s*\*?|\d+\.\s|[A-Z][a-z0-9_-]+:)/m.test(executionCode) && !/\b(const|let|var|function|return|await|mj\.|import|export)\b/.test(executionCode)
+                        const entryObj = (typeof rawObj['entry'] === 'object' && rawObj['entry'] !== null ? rawObj['entry'] : rawObj) as Record<string, unknown>
+                        const hasEntryFields = typeof entryObj['type'] === 'string' || typeof entryObj['entry_type'] === 'string' || typeof entryObj['title'] === 'string' || typeof entryObj['category'] === 'string'
+                        
+                        const isNaturalLanguagePrompt = (text: string): boolean => {
+                            const trimmed = text.trim()
+                            if (/\b(const|let|var|function|return|await|mj\.|import|export|\(\s*\)\s*=>)\b/.test(trimmed)) {
+                                return false // Has JS keywords or mj.* calls
+                            }
+                            return /^(write|document|create|include|record|summary|log|add|please|here\s+is|this\s+is|note|task)\b/i.test(trimmed) ||
+                                   /^\s*([*#-]\s*\*?|\d+\.\s|[A-Z][a-z0-9_-]+:)/m.test(trimmed)
+                        }
 
-                        if (hasEntryFields || isMarkdownText) {
-                            const titleVal = typeof rawObj['title'] === 'string' ? rawObj['title'] : 'Journal Entry'
-                            const typeVal = typeof rawObj['type'] === 'string' ? rawObj['type'] : typeof rawObj['entry_type'] === 'string' ? rawObj['entry_type'] : typeof rawObj['category'] === 'string' ? rawObj['category'] : 'technical_decision'
-                            const tagsVal = Array.isArray(rawObj['tags']) ? rawObj['tags'] : []
-                            const safeContent = JSON.stringify(executionCode)
-                            const safeTitle = JSON.stringify(titleVal)
-                            const safeType = JSON.stringify(typeVal)
-                            const safeTags = JSON.stringify(tagsVal)
-                            executionCode = `return await mj.createEntry({ title: ${safeTitle}, content: ${safeContent}, entry_type: ${safeType}, tags: ${safeTags} });`
+                        if (hasEntryFields || isNaturalLanguagePrompt(executionCode)) {
+                            const titleVal = typeof entryObj['title'] === 'string' ? entryObj['title'] : typeof rawObj['title'] === 'string' ? rawObj['title'] : 'Journal Entry'
+                            const typeVal = typeof entryObj['type'] === 'string' ? entryObj['type'] : typeof entryObj['entry_type'] === 'string' ? entryObj['entry_type'] : typeof entryObj['category'] === 'string' ? entryObj['category'] : typeof rawObj['type'] === 'string' ? rawObj['type'] : 'technical_decision'
+                            const tagsVal = Array.isArray(entryObj['tags']) ? entryObj['tags'] : Array.isArray(rawObj['tags']) ? rawObj['tags'] : []
+                            const projVal = typeof entryObj['project_number'] === 'number' ? entryObj['project_number'] : typeof rawObj['project_number'] === 'number' ? rawObj['project_number'] : undefined
+                            const sessVal = typeof entryObj['session_id'] === 'string' ? entryObj['session_id'] : typeof rawObj['session_id'] === 'string' ? rawObj['session_id'] : undefined
+
+                            const payload: Record<string, unknown> = {
+                                title: titleVal,
+                                content: executionCode,
+                                entry_type: typeVal,
+                                tags: tagsVal
+                            }
+                            if (projVal !== undefined) payload['project_number'] = projVal
+                            if (sessVal !== undefined) payload['session_id'] = sessVal
+
+                            executionCode = `return await mj.createEntry(${JSON.stringify(payload)});`
                         }
                     }
 
