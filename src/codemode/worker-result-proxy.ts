@@ -28,7 +28,7 @@ export function wrapResult(result: unknown): unknown {
                     }
                     if (prop in target) return target[prop]
                     if (prop === 'length') return 0
-                    if (prop === Symbol.iterator) return function* () { return }
+                    if (prop === Symbol.iterator) return function* () { yield* [] }
                     if (
                         typeof prop === 'string' &&
                         [
