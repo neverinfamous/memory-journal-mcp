@@ -107,7 +107,16 @@ async function executeCode(
                     prop === 'mjJournal' ||
                     prop === 'mjClient' ||
                     prop === 'mj_client' ||
-                    prop === 'app'
+                    prop === 'app' ||
+                    prop === 'tools' ||
+                    prop === 'tool' ||
+                    prop === 'api' ||
+                    prop === 'client' ||
+                    prop === 'sdk' ||
+                    prop === 'service' ||
+                    prop === 'services' ||
+                    prop === 'kernel' ||
+                    prop === 'node'
                 ) return shimMj
                 // Handle `sqlite.mj.executeCode` (from db-mcp parity)
                 if (prop === 'executeCode') {
@@ -543,7 +552,22 @@ async function executeCode(
             },
             context: frozenContext,
             console: consoleShim,
-            fetch: undefined,
+            fetch: (..._args: unknown[]) => {
+                const errObj = {
+                    success: false,
+                    error: `🛠️ AUTONOMOUS HEALING: Direct HTTP 'fetch()' is disabled in sandboxed Code Mode. To query metrics or system state, use mj.analytics.* or mj.admin.* tools (e.g. mj.analytics.getStatistics()).`,
+                    code: 'VALIDATION_ERROR',
+                    category: 'validation',
+                    recoverable: true,
+                }
+                return Promise.resolve({
+                    ...errObj,
+                    json: () => Promise.resolve(errObj),
+                    text: () => Promise.resolve(JSON.stringify(errObj)),
+                    ok: false,
+                    status: 403,
+                })
+            },
             sleep: (ms: number) => new Promise((resolve) => setTimeout(resolve, ms)),
             setTimeout: (cb: (...args: unknown[]) => void, ms: number, ...args: unknown[]) => setTimeout(cb, ms, ...args),
             setInterval: undefined,

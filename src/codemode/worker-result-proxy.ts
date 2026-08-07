@@ -81,7 +81,7 @@ export function wrapResult(result: unknown): unknown {
             return new Proxy(successResult, {
                 ownKeys(target) { return Reflect.ownKeys(target) },
                 getOwnPropertyDescriptor(target, prop) { return Reflect.getOwnPropertyDescriptor(target, prop) },
-                get(target, prop) {
+                get(target, prop, receiver) {
                     if (prop in target) return target[prop]
                     
                     const targetRecord = target as Record<string, unknown>
@@ -170,7 +170,7 @@ export function wrapResult(result: unknown): unknown {
                     }
 
                     if (prop === 'result') {
-                        return target
+                        return receiver as unknown
                     }
 
                     if (prop === 'length') {

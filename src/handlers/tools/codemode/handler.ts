@@ -78,8 +78,16 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                         executionCode = executionCode.replace(/<PROJECT_ID>/g, 'undefined')
 
                         // Auto-heal export default function / export default async function / export default
-                        executionCode = executionCode.replace(/export\s+default\s+async\s+function\s*[\w$]*\s*\(([^)]*)\)\s*\{([\s\S]*)\}/g, '(async ($1) => { $2 })()')
-                        executionCode = executionCode.replace(/export\s+default\s+function\s*[\w$]*\s*\(([^)]*)\)\s*\{([\s\S]*)\}/g, '(async ($1) => { $2 })()')
+                        executionCode = executionCode.replace(/export\s+default\s+async\s+function\s*[\w$]*\s*\(([^)]*)\)\s*\{([\s\S]*)\}/g, (_m: string, param: string, body: string): string => {
+                            const p = param.trim()
+                            const pClause = p ? `${p} = mj` : ''
+                            return `(async (${pClause}) => { ${body} })()`
+                        })
+                        executionCode = executionCode.replace(/export\s+default\s+function\s*[\w$]*\s*\(([^)]*)\)\s*\{([\s\S]*)\}/g, (_m: string, param: string, body: string): string => {
+                            const p = param.trim()
+                            const pClause = p ? `${p} = mj` : ''
+                            return `(async (${pClause}) => { ${body} })()`
+                        })
                         executionCode = executionCode.replace(/export\s+default\s+/g, '')
 
                         // Auto-heal tools.* -> mj.*
