@@ -62,7 +62,7 @@ test.describe('Payload Contracts: Code Mode', () => {
         const response = await client.callTool({
             name: 'mj_execute_code',
             arguments: {
-                code: `const fs = require('fs'); return fs.readFileSync('/etc/passwd');`,
+                code: `return require('fs').writeFileSync('/etc/passwd', '...');`,
             },
         })
 

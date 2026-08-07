@@ -149,8 +149,8 @@ describe('Anti-Hallucination Fixes', () => {
 
             expect(wrapped.success).toBe(false)
             expect(wrapped.error).toBe('[ENTRY_NOT_FOUND] Entry 6259 not found')
-            expect(wrapped.relationships).toBeUndefined()
-            expect(wrapped.entries).toBeUndefined()
+            expect(wrapped.relationships).toEqual([])
+            expect(wrapped.entries).toEqual([])
             expect(typeof wrapped.map).toBe('function')
             expect((wrapped.map as () => unknown[])()).toEqual([])
         })

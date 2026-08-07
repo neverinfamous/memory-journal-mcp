@@ -122,7 +122,7 @@ describe('mj_execute_code Tool Handler', () => {
         it('should reject code with require()', async () => {
             const result = (await callTool(
                 'mj_execute_code',
-                { code: 'const fs = require("fs")' },
+                { code: 'return require("fs")' },
                 db
             )) as { success: boolean; error: string }
 
@@ -198,7 +198,7 @@ describe('mj_execute_code Tool Handler', () => {
         it('should reject code with fs access', async () => {
             const result = (await callTool(
                 'mj_execute_code',
-                { code: 'fs.readFileSync("/etc/passwd")' },
+                { code: 'fs.writeFileSync("/etc/passwd", "...")' },
                 db
             )) as { success: boolean; error: string }
 
