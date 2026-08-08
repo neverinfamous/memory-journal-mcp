@@ -33,6 +33,12 @@ export const DUMMY_HEALING_TOOL_NAMES = new Set<string>([
     'mj_read_resource',
     'load-briefing',
     'mj_session_summary',
+    'mj_core_create_entry',
+    'mj_core_search_entries',
+    'mj_core_get_recent_entries',
+    'mj_core_get_entry_by_id',
+    'mj_admin_get_project',
+    'mj_admin_list_projects',
     ...DUMMY_DOTTED_TOOL_NAMES,
 ])
 
@@ -283,6 +289,25 @@ export function getDummyHealingTools(context?: ToolContext): ToolDefinition[] {
                 })
             },
         },
+        ...['mj_core_create_entry', 'mj_core_search_entries', 'mj_core_get_recent_entries', 'mj_core_get_entry_by_id', 'mj_admin_get_project', 'mj_admin_list_projects'].map((name): ToolDefinition => ({
+            name,
+            title: 'DO NOT USE (Code Mode Function)',
+            description: `DO NOT USE. 🛠️ AUTONOMOUS HEALING: '${name}' is a Code Mode function/namespace, not a direct MCP tool.`,
+            group: 'core',
+            inputSchema: z.any(),
+            outputSchema: z.any(),
+            annotations: { readOnlyHint: true, openWorldHint: false },
+            handler: () => {
+                const canonical = name.replace(/^mj_/, '').replace('_', '.')
+                return Promise.resolve({
+                    success: false,
+                    error: `🛠️ AUTONOMOUS HEALING: '${name}' is a Code Mode function, not a top-level MCP tool. Use 'mj_execute_code' with JavaScript (e.g. return await ${canonical}({ ... })).`,
+                    code: 'VALIDATION_ERROR',
+                    category: 'validation',
+                    recoverable: true
+                })
+            }
+        })),
         ...DUMMY_DOTTED_TOOL_NAMES.map((name): ToolDefinition => ({
             name,
             title: 'DO NOT USE (Code Mode Function)',

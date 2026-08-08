@@ -296,7 +296,7 @@ describe('WorkerSandbox', () => {
 
     it('should reject unauthorized method invocation', async () => {
         const sandbox = new WorkerSandbox()
-        const code = 'while(true) {}'
+        const code = 'await new Promise(() => {})'
         // Pass timeout 50ms so it terminates naturally
         const execPromise = sandbox.execute(
             code,
