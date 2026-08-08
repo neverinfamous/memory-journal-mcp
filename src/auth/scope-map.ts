@@ -40,10 +40,10 @@ export function getRequiredScope(toolName: string): StandardScope {
     }
 
     // Dynamic fallback for synthetic & dotted Code Mode tools
-    if (toolName.startsWith('mj.admin.')) {
+    if (toolName.startsWith('mj.admin.') || toolName.startsWith('mj_admin_')) {
         return SCOPES.ADMIN
     }
-    if (toolName.startsWith('mj.core.')) {
+    if (toolName.startsWith('mj.core.') || toolName.startsWith('mj_core_')) {
         const lower = toolName.toLowerCase()
         if (lower.includes('update') || lower.includes('delete')) {
             return SCOPES.ADMIN

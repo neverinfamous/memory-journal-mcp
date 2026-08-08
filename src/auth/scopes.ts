@@ -106,6 +106,14 @@ export const TOOL_SCOPE_OVERRIDES: Record<string, StandardScope> = {
     'mj.admin.get_project': SCOPES.ADMIN,
     'mj.admin.listProjects': SCOPES.ADMIN,
     'mj.admin.list_projects': SCOPES.ADMIN,
+
+    // Prefixed Code Mode fallback tools
+    mj_core_create_entry: SCOPES.WRITE,
+    mj_core_search_entries: SCOPES.READ,
+    mj_core_get_recent_entries: SCOPES.READ,
+    mj_core_get_entry_by_id: SCOPES.READ,
+    mj_admin_get_project: SCOPES.ADMIN,
+    mj_admin_list_projects: SCOPES.ADMIN,
 }
 
 /**
