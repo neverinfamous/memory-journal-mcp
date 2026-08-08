@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import { IOController } from './io-controller.js';
 import { killProcessTree } from './process-manager.js';
 import { ExecPayload } from './schema.js';
-import { sendWebhook, BUILT_INS, AUTONOMOUS_HEALING_MSG } from './utils.js';
+import { sendWebhook, sendDatadogTelemetry, BUILT_INS, AUTONOMOUS_HEALING_MSG } from './utils.js';
 
 const TIMEOUT_EXIT_FORCE_MS = 5000;
 const STREAM_DAEMON_CHECK_MS = 100;
@@ -350,6 +350,20 @@ export class ProcessController {
          }
       }
       code = computedCode;
+
+      const { isGrepNoMatch: isGrep, isDiffFound: isDiff, isOutdatedInfo: isOutdated } = (code !== null && code !== 0) ? analyzeExitCode1(this.payload, code, this.ioController?.stdoutTail || '', this.ioController?.stderrTail || '') : { isGrepNoMatch: false, isDiffFound: false, isOutdatedInfo: false };
+      const isGracefulExit = isGrep || isDiff || isOutdated;
+      const telemetryCode = isGracefulExit ? 0 : code;
+      
+      await sendDatadogTelemetry(
+        this.payload,
+        this.cwd,
+        'agent_exec.command.count',
+        telemetryCode === 0 ? 'success' : 'error',
+        code,
+        this.ioController?.stdoutTail || '',
+        this.ioController?.stderrTail || ''
+      );
 
       if (this.isJson) {
          const { isGrepNoMatch, isDiffFound, isOutdatedInfo } = (computedCode !== null && computedCode !== 0) ? analyzeExitCode1(this.payload, computedCode, this.ioController?.stdoutTail || '', this.ioController?.stderrTail || '') : { isGrepNoMatch: false, isDiffFound: false, isOutdatedInfo: false };

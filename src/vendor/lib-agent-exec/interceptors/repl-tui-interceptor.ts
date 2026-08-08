@@ -18,11 +18,11 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
 
   match({ cmdBasename, type: payload.type, hasStdin: !!payload.stdin, args })
     .with({ cmdBasename: P.union('tsx', 'tsx.cmd', 'tsx.exe'), args: P.when(a => a.includes('watch')) }, () => {
-       console.error(`\n   💡 AGENT HINT: 'tsx watch' runs indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+       console.error(`\n   💡 AGENT HINT: 'tsx watch' runs indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
        process.exit(1);
     })
     .with({ cmdBasename: P.union('nodemon', 'nodemon.cmd', 'nodemon.exe', 'ts-node-dev', 'ts-node-dev.cmd', 'ts-node-dev.exe') }, () => {
-       console.error(`\n   💡 AGENT HINT: '${cmdBasename}' runs indefinitely in watch mode. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+       console.error(`\n   💡 AGENT HINT: '${cmdBasename}' runs indefinitely in watch mode. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
        process.exit(1);
     })
     .with({ type: 'command', hasStdin: false, cmdBasename: P.when((c: string) => replCommands.includes(c)) }, ({ cmdBasename, args }) => {
@@ -48,7 +48,7 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
       
       if (wasInteractiveStripped) {
         console.error(`\n   💡 AGENT HINT: Stripping interactive/TTY flags from ${cmdBasename} to prevent hanging.`);
-        console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+        console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
         args.length = 0;
         args.push(...newArgs);
       }
@@ -68,7 +68,7 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
         .otherwise(() => null);
 
       if (blockReason !== null) {
-        console.error(`\n   💡 AGENT HINT: You attempted to start an interactive REPL (${cmdBasename} ${blockReason}).\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+        console.error(`\n   💡 AGENT HINT: You attempted to start an interactive REPL (${cmdBasename} ${blockReason}).\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
         console.error(`   Because 'agent-exec.ts' is non-interactive, this will hang indefinitely.`);
         console.error(`   If you meant to execute code, use the 'eval' payload type, provide a script, or pass 'stdin'.`);
         process.exit(1);
@@ -77,14 +77,14 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
       if (['python', 'python.exe', 'python.cmd', 'python3', 'python3.exe'].includes(cmdBasename)) {
         const isPythonDebug = args.some((a, i) => a === '-m' && args[i + 1] === 'pdb');
         if (isPythonDebug) {
-          console.error(`\n   💡 AGENT HINT: You attempted to start Python with a debugger (-m pdb).\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+          console.error(`\n   💡 AGENT HINT: You attempted to start Python with a debugger (-m pdb).\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
           console.error(`   Because 'agent-exec.ts' is non-interactive, this will hang indefinitely.`);
           process.exit(1);
         }
       }
     })
     .with({ cmdBasename: P.when((c: string) => tuiCommands.includes(c)) }, () => {
-      console.error(`\n   💡 AGENT HINT: You attempted to start an interactive TUI application (${cmdBasename}).\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: You attempted to start an interactive TUI application (${cmdBasename}).\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
       console.error(`   Because 'agent-exec.ts' is non-interactive, this will hang indefinitely.`);
       console.error(`   Please use standard terminal commands (e.g. cat, grep, list_dir, view_file) instead.`);
       process.exit(1);
@@ -98,10 +98,10 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
       const usedWatchTool = args.find(a => watchTools.includes(a));
       
       if (usedWatchTool) {
-        console.error(`\n   💡 AGENT HINT: '${usedWatchTool}' runs indefinitely in watch mode. Blocking execution to prevent hanging.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+        console.error(`\n   💡 AGENT HINT: '${usedWatchTool}' runs indefinitely in watch mode. Blocking execution to prevent hanging.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
         process.exit(1);
       } else {
-        console.error(`\n   💡 AGENT HINT: '${cmdBasename} --watch' runs indefinitely.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+        console.error(`\n   💡 AGENT HINT: '${cmdBasename} --watch' runs indefinitely.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
         console.error(`   Because 'agent-exec.ts' is non-interactive, this will hang until timeout.`);
         console.error(`   Please use standard execution without watch mode.`);
         process.exit(1);
@@ -110,24 +110,24 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
 
     .with({ cmdBasename: P.union('pm2', 'pm2.cmd', 'pm2.exe') }, ({ args }) => {
        if (args.includes('logs') || args.includes('monit') || args.includes('dash')) {
-           console.error(`\n   💡 AGENT HINT: 'pm2 ${args.find(a => ['logs', 'monit', 'dash'].includes(a))}' is interactive/runs indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+           console.error(`\n   💡 AGENT HINT: 'pm2 ${args.find(a => ['logs', 'monit', 'dash'].includes(a))}' is interactive/runs indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
            process.exit(1);
        }
     })
     .with({ cmdBasename: P.union('bun', 'bun.exe', 'bun.cmd'), args: P.when(a => a.includes('repl')) }, () => {
-       console.error(`\n   💡 AGENT HINT: 'bun repl' is interactive and will hang indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+       console.error(`\n   💡 AGENT HINT: 'bun repl' is interactive and will hang indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
        process.exit(1);
     })
     .with({ cmdBasename: P.union('cmd', 'cmd.exe'), args: P.when(a => a.some(arg => arg.toLowerCase() === 'pause')) }, () => {
-       console.error(`\n   💡 AGENT HINT: 'pause' in cmd.exe waits for a keypress and will hang indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+       console.error(`\n   💡 AGENT HINT: 'pause' in cmd.exe waits for a keypress and will hang indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
        process.exit(1);
     })
     .with({ cmdBasename: P.union('watch', 'watch.exe') }, () => {
-       console.error(`\n   💡 AGENT HINT: 'watch' runs indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+       console.error(`\n   💡 AGENT HINT: 'watch' runs indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
        process.exit(1);
     })
     .with({ cmdBasename: P.union('tail', 'tail.exe'), args: P.when(a => a.includes('-f') || a.includes('--follow')) }, () => {
-       console.error(`\n   💡 AGENT HINT: 'tail -f' runs indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+       console.error(`\n   💡 AGENT HINT: 'tail -f' runs indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
        process.exit(1);
     })
     .with({ cmdBasename: P.union('pwsh', 'pwsh.exe', 'powershell', 'powershell.exe') }, ({ args }) => {
@@ -135,13 +135,13 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
       envOverrides['DOTNET_CLI_TELEMETRY_OPTOUT'] = '1';
       
       if (args.some(a => a.toLowerCase() === '-noexit')) {
-        console.error(`\n   💡 AGENT HINT: 'pwsh -NoExit' prevents the shell from exiting and will hang indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+        console.error(`\n   💡 AGENT HINT: 'pwsh -NoExit' prevents the shell from exiting and will hang indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
         process.exit(1);
       }
   
       const uiCmdlets = ['Get-Credential', 'Show-Command', 'Out-GridView', 'Read-Host', 'PromptForChoice'];
       if (args.some(a => uiCmdlets.some(c => a.includes(c)))) {
-        console.error(`\n   💡 AGENT HINT: PowerShell UI cmdlets like Get-Credential or Out-GridView will hang headlessly. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+        console.error(`\n   💡 AGENT HINT: PowerShell UI cmdlets like Get-Credential or Out-GridView will hang headlessly. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
         process.exit(1);
       }
     })
@@ -251,7 +251,7 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
   if (payload.type === 'command' && ['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe'].includes(cmdBasename)) {
     const cIndex = args.findIndex(a => a.toLowerCase() === '-c' || a.toLowerCase() === '-command');
     if (cIndex !== -1 && cIndex + 1 < args.length) {
-      console.error(`\n   💡 AGENT HINT: Intercepted inline PowerShell command. Converting to Base64 -EncodedCommand to prevent quote parsing failures.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: Intercepted inline PowerShell command. Converting to Base64 -EncodedCommand to prevent quote parsing failures.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
       const scriptArgs = args.slice(cIndex + 1);
       const safeArgs = scriptArgs.map(a => {
         if (!/[ \t]/.test(a)) return a;
@@ -278,7 +278,7 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
     
     if (newArgs.length > 0) {
       args.unshift(...newArgs);
-      console.error(`\n   💡 AGENT HINT: Automatically injected [${newArgs.join(', ')}] into ${cmdBasename} command to prevent hanging.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: Automatically injected [${newArgs.join(', ')}] into ${cmdBasename} command to prevent hanging.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
     }
   }
 
@@ -286,7 +286,7 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
     .with({ scriptBody: P.when(body => typeof body === 'string' && tuiRegex.test(body)) }, (p) => {
       const m = typeof p.scriptBody === 'string' ? tuiRegex.exec(p.scriptBody) : null;
       const innerCmdBasename = m ? m[3].toLowerCase() : 'tui-app';
-      console.error(`\n   💡 AGENT HINT: You wrapped '${innerCmdBasename}' inside an inline script.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: You wrapped '${innerCmdBasename}' inside an inline script.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
       console.error(`   Because 'agent-exec.ts' is non-interactive, running TUI/REPL applications inside inline scripts will hang indefinitely.`);
       console.error(`   Please run ${innerCmdBasename} directly in the payload or use standard terminal commands instead.`);
       process.exit(1);
@@ -294,19 +294,19 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
     .with({ scriptBody: P.when(body => typeof body === 'string' && isBlockedRepl(body)) }, (p) => {
       const m = typeof p.scriptBody === 'string' ? (replRegex.exec(p.scriptBody) || interactiveFlagRegex.exec(p.scriptBody)) : null;
       const innerCmdBasename = m ? m[3].toLowerCase() : 'repl-app';
-      console.error(`\n   💡 AGENT HINT: You wrapped '${innerCmdBasename}' inside an inline script.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: You wrapped '${innerCmdBasename}' inside an inline script.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
       console.error(`   Because 'agent-exec.ts' is non-interactive, running TUI/REPL applications inside inline scripts will hang indefinitely.`);
       console.error(`   Please run ${innerCmdBasename} directly in the payload or use standard terminal commands instead.`);
       process.exit(1);
     })
     .with({ scriptBody: P.when(body => typeof body === 'string' && watchRegex.test(body)) }, () => {
-       console.error(`\n   💡 AGENT HINT: You wrapped 'watch' inside an inline script.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+       console.error(`\n   💡 AGENT HINT: You wrapped 'watch' inside an inline script.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
        console.error(`   Because 'agent-exec.ts' is non-interactive, running continuous processes like 'watch' inside inline scripts will hang indefinitely.`);
        console.error(`   Please use standard terminal commands instead.`);
        process.exit(1);
     })
     .with({ scriptBody: P.when(body => typeof body === 'string' && tailFRegex.test(body)) }, () => {
-      console.error(`\n   💡 AGENT HINT: You wrapped 'tail' inside an inline script.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: You wrapped 'tail' inside an inline script.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
       console.error(`   Because 'agent-exec.ts' is non-interactive, running TUI/REPL applications inside inline scripts will hang indefinitely.`);
       console.error(`   Please run tail directly in the payload or use standard terminal commands instead.`);
       process.exit(1);
@@ -314,7 +314,7 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
     .with({ type: 'eval', code: P.when(c => typeof c === 'string' && tuiRegex.test(c)) }, (p) => {
        const m = typeof p.code === 'string' ? tuiRegex.exec(p.code) : null;
        const innerCmdBasename = m ? m[3].toLowerCase() : 'tui-app';
-       console.error(`\n   💡 AGENT HINT: You passed '${innerCmdBasename}' inside an eval payload.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+       console.error(`\n   💡 AGENT HINT: You passed '${innerCmdBasename}' inside an eval payload.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
        console.error(`   Because 'agent-exec.ts' is non-interactive, running TUI/REPL applications natively will hang indefinitely.`);
        console.error(`   Please use standard terminal commands instead.`);
        process.exit(1);
@@ -322,90 +322,90 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
     .with({ type: 'eval', code: P.when(c => typeof c === 'string' && isBlockedRepl(c)) }, (p) => {
        const m = typeof p.code === 'string' ? (replRegex.exec(p.code) || interactiveFlagRegex.exec(p.code)) : null;
        const innerCmdBasename = m ? m[3].toLowerCase() : 'repl-app';
-       console.error(`\n   💡 AGENT HINT: You passed '${innerCmdBasename}' inside an eval payload.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+       console.error(`\n   💡 AGENT HINT: You passed '${innerCmdBasename}' inside an eval payload.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
        console.error(`   Because 'agent-exec.ts' is non-interactive, running TUI/REPL applications natively will hang indefinitely.`);
        console.error(`   Please use standard terminal commands instead.`);
        process.exit(1);
     })
     .with({ type: 'eval', code: P.when(c => typeof c === 'string' && watchRegex.test(c)) }, () => {
-       console.error(`\n   💡 AGENT HINT: You passed 'watch' inside an eval payload.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+       console.error(`\n   💡 AGENT HINT: You passed 'watch' inside an eval payload.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
        console.error(`   Because 'agent-exec.ts' is non-interactive, running continuous processes like 'watch' natively will hang indefinitely.`);
        console.error(`   Please use standard terminal commands instead.`);
        process.exit(1);
     })
     .with({ type: 'eval', code: P.when(c => typeof c === 'string' && tailFRegex.test(c)) }, () => {
-       console.error(`\n   💡 AGENT HINT: You passed 'tail' inside an eval payload.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+       console.error(`\n   💡 AGENT HINT: You passed 'tail' inside an eval payload.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
        console.error(`   Because 'agent-exec.ts' is non-interactive, running TUI/REPL applications natively will hang indefinitely.`);
        console.error(`   Please use standard terminal commands instead.`);
        process.exit(1);
     })
     .with({ scriptBody: P.when(body => typeof body === 'string' && dockerLogsRegex.test(body)) }, () => {
-       console.error(`\n   💡 AGENT HINT: 'docker logs -f' runs indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+       console.error(`\n   💡 AGENT HINT: 'docker logs -f' runs indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
        process.exit(1);
     })
     .with({ type: 'eval', code: P.when(c => typeof c === 'string' && dockerLogsRegex.test(c)) }, () => {
-       console.error(`\n   💡 AGENT HINT: 'docker logs -f' runs indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+       console.error(`\n   💡 AGENT HINT: 'docker logs -f' runs indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
        process.exit(1);
     })
     .with({ scriptBody: P.when(body => typeof body === 'string' && (nodeWatchRegex.test(body) || watchToolRegex.test(body) || tsxWatchRegex.test(body))) }, () => {
-       console.error(`\n   💡 AGENT HINT: Node watch mode runs indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+       console.error(`\n   💡 AGENT HINT: Node watch mode runs indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
        process.exit(1);
     })
     .with({ type: 'eval', code: P.when(c => typeof c === 'string' && (nodeWatchRegex.test(c) || watchToolRegex.test(c) || tsxWatchRegex.test(c))) }, () => {
-       console.error(`\n   💡 AGENT HINT: Node watch mode runs indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+       console.error(`\n   💡 AGENT HINT: Node watch mode runs indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
        process.exit(1);
     })
     .with({ scriptBody: P.when(body => typeof body === 'string' && pm2InteractiveRegex.test(body)) }, () => {
-       console.error(`\n   💡 AGENT HINT: 'pm2' is interactive/runs indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+       console.error(`\n   💡 AGENT HINT: 'pm2' is interactive/runs indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
        process.exit(1);
     })
     .with({ type: 'eval', code: P.when(c => typeof c === 'string' && pm2InteractiveRegex.test(c)) }, () => {
-       console.error(`\n   💡 AGENT HINT: 'pm2' is interactive/runs indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+       console.error(`\n   💡 AGENT HINT: 'pm2' is interactive/runs indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
        process.exit(1);
     })
     .with({ scriptBody: P.when(body => typeof body === 'string' && bunReplRegex.test(body)) }, () => {
-       console.error(`\n   💡 AGENT HINT: 'bun repl' is interactive and will hang indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+       console.error(`\n   💡 AGENT HINT: 'bun repl' is interactive and will hang indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
        process.exit(1);
     })
     .with({ type: 'eval', code: P.when(c => typeof c === 'string' && bunReplRegex.test(c)) }, () => {
-       console.error(`\n   💡 AGENT HINT: 'bun repl' is interactive and will hang indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+       console.error(`\n   💡 AGENT HINT: 'bun repl' is interactive and will hang indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
        process.exit(1);
     })
     .with({ scriptBody: P.when(body => typeof body === 'string' && cmdPauseRegex.test(body)) }, () => {
-       console.error(`\n   💡 AGENT HINT: 'pause' in cmd waits for a keypress and will hang indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+       console.error(`\n   💡 AGENT HINT: 'pause' in cmd waits for a keypress and will hang indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
        process.exit(1);
     })
     .with({ type: 'eval', code: P.when(c => typeof c === 'string' && cmdPauseRegex.test(c)) }, () => {
-       console.error(`\n   💡 AGENT HINT: 'pause' in cmd waits for a keypress and will hang indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+       console.error(`\n   💡 AGENT HINT: 'pause' in cmd waits for a keypress and will hang indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
        process.exit(1);
     })
     .with({ scriptBody: P.when(body => typeof body === 'string' && (pwshNoExitRegex.test(body) || pwshUiRegex.test(body))) }, () => {
-       console.error(`\n   💡 AGENT HINT: PowerShell -NoExit or UI cmdlets will hang headlessly. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+       console.error(`\n   💡 AGENT HINT: PowerShell -NoExit or UI cmdlets will hang headlessly. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
        process.exit(1);
     })
     .with({ type: 'eval', code: P.when(c => typeof c === 'string' && (pwshNoExitRegex.test(c) || pwshUiRegex.test(c))) }, () => {
-       console.error(`\n   💡 AGENT HINT: PowerShell -NoExit or UI cmdlets will hang headlessly. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+       console.error(`\n   💡 AGENT HINT: PowerShell -NoExit or UI cmdlets will hang headlessly. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
        process.exit(1);
     })
     .with({ scriptBody: P.when(body => typeof body === 'string' && inlineShellRegex.test(body)) }, () => {
-       console.error(`\n   💡 AGENT HINT: You attempted to run an inline shell command inside an eval/script payload. This is an agent hallucination.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
-       console.error(`   Please use the proper execution payloads ('command', 'eval', or 'script') or native tools.`);
+       console.error(`\n   💡 AGENT HINT: You attempted to run an inline shell command inside an eval/script payload. This is an agent hallucination.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+       console.error(`   Please use the proper execution payloads ('command', 'eval', or 'script') or native tools (like list_dir, view_file).`);
        process.exit(1);
     })
     .with({ type: 'eval', code: P.when(c => typeof c === 'string' && inlineShellRegex.test(c)) }, () => {
-       console.error(`\n   💡 AGENT HINT: You attempted to run an inline shell command inside an eval/script payload. This is an agent hallucination.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
-       console.error(`   Please use the proper execution payloads ('command', 'eval', or 'script') or native tools.`);
+       console.error(`\n   💡 AGENT HINT: You attempted to run an inline shell command inside an eval/script payload. This is an agent hallucination.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+       console.error(`   Please use the proper execution payloads ('command', 'eval', or 'script') or native tools (like list_dir, view_file).`);
        process.exit(1);
     })
     .with({ scriptBody: P.when(body => typeof body === 'string' && implicitPwshRegex.test(body)) }, () => {
-       console.error(`\n   💡 AGENT HINT: You attempted to run an inline shell command implicitly via powershell.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+       console.error(`\n   💡 AGENT HINT: You attempted to run an inline shell command implicitly via powershell.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
        console.error(`   This bypasses the agent-exec robustness interceptors and risks hanging the process.`);
        console.error(`   Please use the proper execution payloads ('command', 'eval', or 'script') or native tools.`);
        console.error(`   If you need shell pipes/redirects, write a script file to the scratch directory and use a 'script' payload.`);
        process.exit(1);
     })
     .with({ type: 'eval', code: P.when(c => typeof c === 'string' && implicitPwshRegex.test(c)) }, () => {
-       console.error(`\n   💡 AGENT HINT: You attempted to run an inline shell command implicitly via powershell.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+       console.error(`\n   💡 AGENT HINT: You attempted to run an inline shell command implicitly via powershell.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
        console.error(`   This bypasses the agent-exec robustness interceptors and risks hanging the process.`);
        console.error(`   Please use the proper execution payloads ('command', 'eval', or 'script') or native tools.`);
        console.error(`   If you need shell pipes/redirects, write a script file to the scratch directory and use a 'script' payload.`);

@@ -50,6 +50,14 @@ export function formatForCmdExe(args: string[]): string[] {
 }
 
 export function convertToWslPath(winPath: string): string {
+  if (winPath.startsWith('^') || winPath.startsWith('$')) {
+    return winPath;
+  }
+
+  if (!winPath || typeof winPath !== 'string') {
+    return winPath ?? '';
+  }
+
   const transform = (p: string) => {
     return p.replace(/^([a-zA-Z]):[/\\](.*)/, (match, drive, rest) => `/mnt/${drive.toLowerCase()}/${rest.replace(/\\/g, '/')}`);
   };
@@ -90,6 +98,7 @@ export function convertToWslPath(winPath: string): string {
   }
 
   if (!winPath.startsWith('-') && winPath.includes('\\')) {
+    if (/[{}`;]/.test(winPath)) return winPath;
     return winPath.replace(/\\/g, '/');
   }
 
@@ -233,6 +242,12 @@ export function buildCommand(payload: ExecPayload, cwd: string, isJson: boolean 
   let tempScriptPath: string | null = null;
   const envOverrides: Record<string, string> = {};
 
+  if (!payload.bypassInterceptors) {
+    const initialCmdBasename = payload.type === 'command' ? path.basename(payload.command).toLowerCase() : '';
+    const initialCtx: ExecutionContext = { cmdBasename: initialCmdBasename, args: payload.args || [], envOverrides, payload };
+    systemInterceptor(initialCtx);
+  }
+
   if (process.platform === 'win32' && payload.target !== 'wsl2') {
     const hasPipeCommand = payload.type === 'command' && (payload.command.includes(' && ') || payload.command.includes(' || ') || payload.command.includes(' | ') || payload.command.includes(' > '));
     const hasPipeArg = payload.args?.some(a => a.trim() === '&&' || a.trim() === '||' || a.trim() === '|' || a.trim() === '>');
@@ -307,6 +322,12 @@ export function buildCommand(payload: ExecPayload, cwd: string, isJson: boolean 
         if (singleQuoteMatch[2]) {
           p.args = [...tokenizeArgs(singleQuoteMatch[2]), ...(p.args || [])];
         }
+      } else if (c.includes(' ')) {
+        const tokens = tokenizeArgs(c);
+        if (tokens.length > 1) {
+          p.command = tokens[0];
+          p.args = [...tokens.slice(1), ...(p.args || [])];
+        }
       }
     })
     .with({ type: 'script' }, () => {})
@@ -327,8 +348,13 @@ export function buildCommand(payload: ExecPayload, cwd: string, isJson: boolean 
         }
 
         localArgs = localArgs.map((a, idx) => {
-          if (idx === patternExprIdx) return a;
-          return convertToWslPath(a);
+          let cleaned = a;
+          if ((cleaned.startsWith('"') && cleaned.endsWith('"') && cleaned.length >= 2) ||
+              (cleaned.startsWith("'") && cleaned.endsWith("'") && cleaned.length >= 2)) {
+            cleaned = cleaned.slice(1, -1);
+          }
+          if (idx === patternExprIdx) return cleaned;
+          return convertToWslPath(cleaned);
         });
 
         if (localCmd.toLowerCase() === 'diff' || localCmd.toLowerCase() === 'diff.exe') {
@@ -342,20 +368,22 @@ export function buildCommand(payload: ExecPayload, cwd: string, isJson: boolean 
             if (localArgs[nonFlagIdx].endsWith('$')) {
               if (localArgs.includes('-E')) {
                 localArgs[localArgs.indexOf('-E')] = '-P';
-                localArgs[nonFlagIdx] = localArgs[nonFlagIdx].replace(/\$$/, '\\r?$');
+                localArgs[nonFlagIdx] = localArgs[nonFlagIdx].replace(/\$$/, () => '\\r?$');
               } else if (!localArgs.includes('-P')) {
                 localArgs.unshift('-P');
                 const newNonFlagIdx = localArgs.findIndex(a => !a.startsWith('-'));
-                localArgs[newNonFlagIdx] = localArgs[newNonFlagIdx].replace(/\$$/, '\\r?$');
+                localArgs[newNonFlagIdx] = localArgs[newNonFlagIdx].replace(/\$$/, () => '\\r?$');
               } else {
-                localArgs[nonFlagIdx] = localArgs[nonFlagIdx].replace(/\$$/, '\\r?$');
+                localArgs[nonFlagIdx] = localArgs[nonFlagIdx].replace(/\$$/, () => '\\r?$');
               }
             }
           }
         }
       }
 
-      const hasShellMeta = /[|&;<>$`{}()]/.test(localCmd) || localCmd.includes(' ') || localArgs.some(a => /[|&;<>$`{}()]/.test(a));
+      const hasCmdMeta = /[|&;<>$`{}()]/.test(localCmd) || localCmd.includes(' ');
+      const hasArgMeta = localArgs.some(a => /[|&;<>]|\$\(|\$\{|`/.test(a));
+      const hasShellMeta = hasCmdMeta || hasArgMeta;
 
       if (BUILT_INS.includes(localCmd.toLowerCase()) || (p.target === 'wsl2' && hasShellMeta)) {
         console.error(`\n   💡 AGENT HINT: '${localCmd}' is a shell built-in or contains shell metacharacters.`);
@@ -433,9 +461,14 @@ export function buildCommand(payload: ExecPayload, cwd: string, isJson: boolean 
       if (!fs.existsSync(scratchDir)) {
         fs.mkdirSync(scratchDir, { recursive: true });
       }
+      let effectiveInterpreter = p.interpreter;
+      if (p.target === 'wsl2' && effectiveInterpreter && (isPwsh(effectiveInterpreter) || isCmd(effectiveInterpreter))) {
+        effectiveInterpreter = 'bash';
+      }
+
       let ext = p.target === 'wsl2' ? '.sh' : '.ts';
-      if (p.interpreter) {
-        const interp = p.interpreter.toLowerCase();
+      if (effectiveInterpreter) {
+        const interp = effectiveInterpreter.toLowerCase();
         ext = match(interp)
           .when(i => i.includes('python'), () => '.py')
           .when(i => i.includes('pwsh') || i.includes('powershell'), () => '.ps1')
@@ -463,7 +496,7 @@ export function buildCommand(payload: ExecPayload, cwd: string, isJson: boolean 
       } catch (err) {
         exitWithError(`Failed to write eval code to temporary file ${tempScriptPath}: ${err instanceof Error ? err.message : String(err)}`);
       }
-      const localCmd = p.interpreter || (p.target === 'wsl2' ? 'bash' : 'bun');
+      const localCmd = effectiveInterpreter || (p.target === 'wsl2' ? 'bash' : 'bun');
       const localArgs = match(localCmd)
         .when(isPwsh, () => [
           '-ExecutionPolicy', 'Bypass', '-NonInteractive', '-NoProfile', '-File', tempScriptPath!.replace(/\\/g, '/'), ...(p.args || [])
@@ -510,7 +543,14 @@ export function buildCommand(payload: ExecPayload, cwd: string, isJson: boolean 
   const cmdBasenameForGlob = path.basename(cmd).toLowerCase().replace(/\.exe$/, '');
   const unixUtilsForGlob = ['grep', 'ls', 'rm', 'cp', 'mv', 'cat', 'rg'];
   if (unixUtilsForGlob.includes(cmdBasenameForGlob)) {
-    const hasGlobs = args.some(a => (a.includes('*') || a.includes('?')) && !a.startsWith('-'));
+    let patternExprIdx = -1;
+    if (['grep', 'grep.exe', 'egrep', 'fgrep', 'rg', 'rg.exe', 'sed', 'sed.exe', 'awk', 'awk.exe'].includes(cmdBasenameForGlob)) {
+      patternExprIdx = args.findIndex(a => !a.startsWith('-'));
+    }
+    const hasGlobs = args.some((a, idx) => {
+      if (idx === patternExprIdx) return false;
+      return (a.includes('*') || a.includes('?')) && !a.startsWith('-');
+    });
     if (hasGlobs) {
        const originalArgs = args.map(a => escapeUnixArg(a, true)).join(' ');
        console.error(`\n   💡 AGENT HINT: Detected Unix utility '${cmdBasenameForGlob}' with glob patterns (* or ?).`);
@@ -539,7 +579,9 @@ export function buildCommand(payload: ExecPayload, cwd: string, isJson: boolean 
   }
 
   // Sync back args and cmd references if modified completely
-  if (ctx.cmdBasename !== path.basename(cmd).toLowerCase()) { cmd = ctx.cmdBasename; }
+  if (ctx.cmdBasename && ctx.cmdBasename !== path.basename(cmd).toLowerCase()) {
+    cmd = ctx.cmdBasename;
+  }
   args = ctx.args;
 
   let strippedQuotes = false;
@@ -566,7 +608,7 @@ export function buildCommand(payload: ExecPayload, cwd: string, isJson: boolean 
   }
 
   if (payload.type === 'command') {
-    const isWinBatch = cmd.toLowerCase().endsWith('.bat') || cmd.toLowerCase().endsWith('.cmd');
+    const isWinBatch = cmd.toLowerCase().endsWith('.bat') || cmd.toLowerCase().endsWith('.cmd') || (process.platform === 'win32' && ['pnpm', 'npm', 'yarn', 'npx'].includes(cmd.toLowerCase()));
     if (isWinBatch && payload.target !== 'wsl2') {
       console.error(`\n   💡 AGENT HINT: Intercepted Windows batch file execution. Routing through pwsh to prevent spawn failures and quote vulnerabilities.`);
       const wrapped = buildPwshWrapper(cmd, args);
@@ -596,7 +638,7 @@ export function buildCommand(payload: ExecPayload, cwd: string, isJson: boolean 
       patternExprIdx = args.findIndex(a => !a.startsWith('-'));
     }
 
-    const wslArgs = args.map((arg, idx) => {
+    let wslArgs = args.map((arg, idx) => {
       if (idx === patternExprIdx) return arg;
       return convertToWslPath(arg);
     });
@@ -606,6 +648,11 @@ export function buildCommand(payload: ExecPayload, cwd: string, isJson: boolean 
       wslCmd = convertToWslPath(wslCmd);
     } else if (wslCmd === 'python') {
       wslCmd = 'python3';
+    } else if (isPwsh(wslCmd) || isCmd(wslCmd)) {
+      wslCmd = 'bash';
+      if (tempScriptPath) {
+        wslArgs = [convertToWslPath(tempScriptPath)];
+      }
     }
 
     // Auto-heal CRLF boundary issues for text-processing tools reading Windows files handled earlier before sh -c wrapper

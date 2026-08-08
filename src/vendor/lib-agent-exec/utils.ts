@@ -4,6 +4,8 @@ import { renderWebhookTemplate } from './webhook-template.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import os from 'node:os';
+import dotenv from 'dotenv';
 
 export function recordAgentIssue(issueType: string, message: string, payload?: unknown) {
   if (process.env.NODE_ENV === 'test' || process.env.AGENT_EXEC_SILENT === '1') return;
@@ -154,3 +156,80 @@ export function findEcosystemScript(startDir: string, scriptName: string): strin
   }
   return null;
 }
+
+export async function sendDatadogTelemetry(
+  payload: ExecPayload,
+  cwd: string,
+  metricName: string,
+  status: 'success' | 'error' | 'healed',
+  exitCode: number | null,
+  stdoutSnippet: string,
+  stderrSnippet: string
+) {
+  if (process.env.NODE_ENV === 'test' || process.env.AGENT_EXEC_SILENT === '1') return;
+  try {
+    const root = findEcosystemRoot(cwd) || findEcosystemRoot(fileURLToPath(import.meta.url));
+    if (!root) return;
+    const envPath = path.join(root, 'secrets.env');
+    if (!fs.existsSync(envPath)) return;
+    const envConfig = dotenv.parse(fs.readFileSync(envPath));
+    const apiKey = envConfig.DD_API_KEY;
+    if (!apiKey) return;
+
+    const hostname = os.hostname();
+    const service = 'lib-agent-exec';
+    const source = 'agent-exec';
+    
+    const now = Math.floor(Date.now() / 1000);
+    
+    const seriesPayload = {
+      series: [
+        {
+          metric: metricName,
+          type: 1, // count
+          points: [{ timestamp: now, value: 1 }],
+          tags: [`status:${status}`],
+          resources: [{ type: 'host', name: hostname }]
+        }
+      ]
+    };
+
+    const logPayload = [{
+      ddsource: source,
+      ddtags: `status:${status},exit_code:${exitCode}`,
+      hostname: hostname,
+      message: `Command executed: ${payload.type === 'command' ? payload.command : payload.type}\nStatus: ${status}\nExit Code: ${exitCode}\n\nSTDOUT:\n${stdoutSnippet}\n\nSTDERR:\n${stderrSnippet}`,
+      service: service,
+      status: status === 'error' ? 'error' : 'info',
+      agent_exec_status: status
+    }];
+
+    const headers = {
+      'Content-Type': 'application/json',
+      'DD-API-KEY': apiKey
+    };
+
+    const reqs = [];
+    
+    // Send Metric
+    reqs.push(fetch('https://api.datadoghq.com/api/v2/series', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(seriesPayload),
+      signal: AbortSignal.timeout(1500)
+    }).catch(() => {}));
+    
+    // Send Log
+    reqs.push(fetch('https://http-intake.logs.datadoghq.com/api/v2/logs', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(logPayload),
+      signal: AbortSignal.timeout(1500)
+    }).catch(() => {}));
+
+    await Promise.allSettled(reqs);
+  } catch {
+    // Fail silently so we don't break the agent
+  }
+}
+

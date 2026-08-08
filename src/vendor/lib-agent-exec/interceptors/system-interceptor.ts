@@ -18,7 +18,14 @@ export function systemInterceptor(ctx: ExecutionContext): void {
 
 
   const isCommand = payload.type === 'command';
-  const positionalArgs = args.filter(a => !a.startsWith('-'));
+  const rawCmdStr = 'command' in payload && typeof payload.command === 'string' && payload.command.trim().includes(' ')
+    ? payload.command.trim()
+    : cmdBasename.trim();
+  const embeddedArgs = rawCmdStr.includes(' ')
+    ? rawCmdStr.split(/\s+/).slice(1)
+    : [];
+  const combinedArgs = [...embeddedArgs, ...args];
+  const positionalArgs = combinedArgs.filter(a => !a.startsWith('-'));
   const hasStdin = !!payload.stdin;
   const cmd = cmdBasename.toLowerCase();
 
@@ -63,7 +70,14 @@ export function systemInterceptor(ctx: ExecutionContext): void {
       const detected = cmdStr || searchCmdStr || listCmdStr;
       console.error(`\n   🛠️ AUTONOMOUS HEALING: Shell command/script using '${detected}' detected. Switching execution target to WSL2... (Frictionless Recovery)\x1b[0m`);
       payload.target = 'wsl2';
+      if (!payload.interpreter || ['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe', 'cmd', 'cmd.exe'].includes(payload.interpreter)) {
+        payload.interpreter = 'bash';
+      }
     }
+  }
+
+  if (payload.target === 'wsl2') {
+    payload.timeoutMs = Math.max(payload.timeoutMs || 30000, 30000);
   }
 
   // 1. Mutating intercepts (safe to run before block checks)
@@ -80,7 +94,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
     .with({ cmd: P.union('ping', 'ping.exe') }, ({ args }) => {
       if (process.platform === 'win32' || cmd === 'ping.exe') {
         if (args.includes('-t')) {
-          console.error(`\n   💡 AGENT HINT: 'ping -t' runs indefinitely. Stripping '-t'.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+          console.error(`\n   💡 AGENT HINT: 'ping -t' runs indefinitely. Stripping '-t'.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
           for (let i = args.length - 1; i >= 0; i--) {
             if (args[i] === '-t') args.splice(i, 1);
           }
@@ -114,49 +128,136 @@ export function systemInterceptor(ctx: ExecutionContext): void {
         }
       }
     })
+    .otherwise(() => {});
+
+  match({ ...ctx, positionalArgs, hasStdin, cmd, isCommand, isWin32: process.platform === 'win32', originalCmd })
     .with({ originalCmd: P.union('cat', 'cat.exe', 'get-content') }, () => {
+      if (['sh', 'bash', 'pwsh', 'powershell', 'cmd'].includes(cmd) || args[0] === '-c' || args[0] === '/c') {
+        return;
+      }
       if (!hasStdin && positionalArgs.length === 0) {
         console.error(`\n   💡 AGENT HINT: 'cat' called without file arguments and no stdin. It will hang indefinitely.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Provide a file argument or use view_file.\x1b[0m`);
         process.exit(1);
       }
-      console.error(`\n   🛠️ AUTONOMOUS HEALING: 'cat' file inspection command detected. Switching execution target to WSL2... (Frictionless Recovery)\x1b[0m`);
+      console.error(`\n   💡 AGENT INTERCEPT: 'cat' file inspection command detected. Switching execution target to WSL2... (Frictionless Recovery)`);
       ctx.payload.target = 'wsl2';
       ctx.args = ctx.args.map(a => convertToWslPath(a));
     })
     .with({ originalCmd: P.union('grep', 'grep.exe', 'egrep', 'egrep.exe', 'fgrep', 'fgrep.exe', 'select-string', 'select-string.exe') }, () => {
-      console.error(`\n   🛠️ AUTONOMOUS HEALING: 'grep' search command detected. Switching execution target to WSL2... (Frictionless Recovery)\x1b[0m`);
+      if (['sh', 'bash', 'pwsh', 'powershell', 'cmd'].includes(cmd) || args[0] === '-c' || args[0] === '/c') {
+        return;
+      }
+      if (ctx.payload.target === 'wsl2' || process.platform !== 'win32') {
+        return;
+      }
+      if (!hasStdin && positionalArgs.length <= 1 && !args.some((a: string) => ['-r', '-R', '--recursive', '--files', '--help', '-h', '--version', '-v', '-V'].includes(a))) {
+        console.error(`\n   💡 AGENT HINT: 'grep' called without file arguments and no recursive flag. It will hang indefinitely.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters or use grep_search.\x1b[0m`);
+        process.exit(1);
+      }
+      console.error(`\n   💡 AGENT INTERCEPT: 'grep' search command detected. Switching execution target to WSL2... (Frictionless Recovery)`);
       ctx.payload.target = 'wsl2';
+      if (cmdBasename.toLowerCase() === 'select-string') {
+        if (ctx.payload.type === 'command') ctx.payload.command = 'grep';
+      }
       ctx.args = ctx.args.map(a => convertToWslPath(a));
     })
     .with({ originalCmd: P.union('ls', 'ls.exe', 'dir', 'dir.exe', 'get-childitem', 'get-childitem.exe', 'gci', 'tree', 'tree.com') }, () => {
-      console.error(`\n   🛠️ AUTONOMOUS HEALING: '${cmdBasename}' directory listing command detected. Switching execution target to WSL2... (Frictionless Recovery)\x1b[0m`);
+      console.error(`\n   💡 AGENT INTERCEPT: '${cmdBasename}' directory listing command detected. Switching execution target to WSL2... (Frictionless Recovery)`);
       ctx.payload.target = 'wsl2';
-      ctx.args = ctx.args.map(a => {
-        if (a.toLowerCase() === '-recurse') return '-R';
-        return convertToWslPath(a);
-      });
+      if ('interpreter' in ctx.payload && ctx.payload.interpreter && ['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe', 'cmd', 'cmd.exe'].includes(ctx.payload.interpreter.toLowerCase())) {
+        ctx.payload.interpreter = 'bash';
+      }
+
+      const filterIdx = ctx.args.findIndex(a => ['-filter', '-include'].includes(a.toLowerCase()));
+      const hasRecurse = ctx.args.some(a => ['-recurse', '-r', '-R'].includes(a.toLowerCase()));
+      const hasFile = ctx.args.some(a => a.toLowerCase() === '-file');
+      const hasDir = ctx.args.some(a => a.toLowerCase() === '-directory');
+
+      if (filterIdx !== -1 && filterIdx + 1 < ctx.args.length) {
+        const pattern = ctx.args[filterIdx + 1];
+        let targetPath = '.';
+        for (let i = 0; i < ctx.args.length; i++) {
+          if (i === filterIdx || i === filterIdx + 1) continue;
+          const a = ctx.args[i];
+          if (!a.startsWith('-')) {
+            targetPath = convertToWslPath(a);
+            break;
+          }
+        }
+        if (ctx.payload.type === 'command') {
+          ctx.payload.command = 'find';
+        }
+        const newArgs = [targetPath];
+        if (!hasRecurse) {
+          newArgs.push('-maxdepth', '1');
+        }
+        if (hasFile) newArgs.push('-type', 'f');
+        if (hasDir) newArgs.push('-type', 'd');
+        newArgs.push('-name', pattern);
+        ctx.args = newArgs;
+        return;
+      }
+
+      if (['dir', 'get-childitem', 'gci'].includes(cmdBasename.toLowerCase())) {
+        if (ctx.payload.type === 'command') ctx.payload.command = 'ls';
+      }
+
+      const cleanedArgs: string[] = [];
+      let skipNext = false;
+      for (let i = 0; i < ctx.args.length; i++) {
+        if (skipNext) {
+          skipNext = false;
+          continue;
+        }
+        const a = ctx.args[i];
+        const lower = a.toLowerCase();
+        if (lower === '-path' || lower === '-path:') {
+          continue;
+        }
+        if (lower === '-filter' || lower === '-include') {
+          skipNext = true;
+          continue;
+        }
+        if (lower === '-recurse') {
+          cleanedArgs.push('-R');
+          continue;
+        }
+        if (lower === '-file' || lower === '-directory') {
+          continue;
+        }
+        if (lower === '-name') {
+          cleanedArgs.push('-1');
+          continue;
+        }
+        cleanedArgs.push(convertToWslPath(a));
+      }
+      ctx.args = cleanedArgs;
+    })
+    .with({ originalCmd: P.union('curl', 'curl.exe', 'wget', 'wget.exe', 'invoke-webrequest', 'iwr') }, () => {
+      console.error(`\n   💡 AGENT INTERCEPT: '${cmdBasename}' network command detected. Switching execution target to WSL2... (Frictionless Recovery)`);
+      ctx.payload.target = 'wsl2';
+      if (['invoke-webrequest', 'iwr'].includes(cmdBasename.toLowerCase())) {
+        if (ctx.payload.type === 'command') ctx.payload.command = 'curl';
+      }
+      ctx.args = ctx.args.map(a => convertToWslPath(a));
     })
     .with({ cmd: P.union('awk', 'gawk', 'sed', 'sed.exe', 'jq', 'jq.exe', 'yq', 'yq.exe', 'find', 'find.exe') }, () => {
-      console.error(`\n   🛠️ AUTONOMOUS HEALING: '${cmdBasename}' natively fails, lacks features, or is not installed on Windows. Switching execution target to WSL2... (Frictionless Recovery)\x1b[0m`);
+      console.error(`\n   💡 AGENT INTERCEPT: '${cmdBasename}' natively fails, lacks features, or is not installed on Windows. Switching execution target to WSL2... (Frictionless Recovery)`);
       ctx.payload.target = 'wsl2';
       // Automatically convert Windows paths (like C:\... or C:/... or "C:\...") to WSL paths (/mnt/c/...)
       ctx.args = ctx.args.map(a => convertToWslPath(a));
     })
-    .with({ isCommand: true, originalCmd: P.union('grep', 'grep.exe', 'egrep', 'egrep.exe', 'fgrep', 'fgrep.exe'), hasStdin: true }, () => {
-      console.error(`\n   🛠️ AUTONOMOUS HEALING: Search command with stdin detected. Switching execution target to WSL2... (Frictionless Recovery)\x1b[0m`);
-      ctx.payload.target = 'wsl2';
-    })
     .with({ isCommand: true, originalCmd: P.union('rg', 'rg.exe') }, () => {
       if (hasStdin) {
-        console.error(`\n   🛠️ AUTONOMOUS HEALING: Search command with stdin detected. Switching execution target to WSL2... (Frictionless Recovery)\x1b[0m`);
+        console.error(`\n   💡 AGENT INTERCEPT: Search command with stdin detected. Switching execution target to WSL2... (Frictionless Recovery)`);
         ctx.payload.target = 'wsl2';
       } else if (process.platform === 'win32' && ctx.payload.target !== 'wsl2') {
-        console.error(`\n   🛠️ AUTONOMOUS HEALING: 'rg' natively fails or is not installed on Windows. Switching execution target to WSL2... (Frictionless Recovery)\x1b[0m`);
+        console.error(`\n   💡 AGENT INTERCEPT: 'rg' natively fails or is not installed on Windows. Switching execution target to WSL2... (Frictionless Recovery)`);
         ctx.payload.target = 'wsl2';
         ctx.args = ctx.args.map(a => convertToWslPath(a));
       }
       if (!hasStdin && positionalArgs.length <= 1 && !ctx.args.some(a => ['-r', '-R', '--recursive', '--files', '--help', '-h'].includes(a))) {
-        console.error(`\n   🛠️ AUTONOMOUS HEALING: 'rg' missing target directory argument. Auto-appending '.' as target directory... (Frictionless Recovery)\x1b[0m`);
+        console.error(`\n   💡 AGENT INTERCEPT: 'rg' missing target directory argument. Auto-appending '.' as target directory... (Frictionless Recovery)`);
         ctx.args.push('.');
       }
     })
@@ -259,7 +360,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
         .otherwise(() => false);
     });
     if (hasUnsafe) {
-      console.error(`\n   💡 AGENT HINT: Standalone shell operators (|, >, <, &&, ||, ;) detected in arguments.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: Standalone shell operators (|, >, <, &&, ||, ;) detected in arguments.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
       console.error(`   Because 'agent-exec.ts' uses \`shell: false\`, these operators are treated as literal strings and will fail.`);
       console.error(`   To use shell features, please use a 'script' payload type or pipe natively in PowerShell.`);
       process.exit(1);
@@ -325,13 +426,13 @@ export function systemInterceptor(ctx: ExecutionContext): void {
     })
     // Shell inline rules
     .with({ isCommand: true, originalCmd: P.union(...shells), hasInlineCmd: true, inlineFlag: P.union('-ec', '-encodedcommand', '-en') }, () => {
-      console.error(`\n   💡 AGENT HINT: Inline '-EncodedCommand' shell wrappers are blocked by agent-exec to prevent bypasses.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: Inline '-EncodedCommand' shell wrappers are blocked by agent-exec to prevent bypasses.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
       process.exit(1);
     })
     .with({ isCommand: true, originalCmd: P.union('pwsh', 'pwsh.exe', 'powershell', 'powershell.exe'), hasInlineCmd: false, args: P.when((a: string[]) => {
       return a.length > 0 && !a.some(arg => ['-file', '-help', '-version', '-?', '/?'].includes(arg.toLowerCase()));
     }) }, () => {
-      console.error(`\n   💡 AGENT HINT: You attempted to run an inline shell command implicitly via powershell.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: You attempted to run an inline shell command implicitly via powershell.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
       console.error(`   This bypasses the agent-exec robustness interceptors and risks hanging the process.`);
       console.error(`   Please use the proper execution payloads ('command', 'eval', or 'script') or native tools.`);
       console.error(`   If you need shell pipes/redirects, write a script file to the scratch directory and use a 'script' payload.`);
@@ -341,7 +442,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
         const stripped = getUnquoted(s);
         return stripped.includes('&&') || stripped.includes('||') || stripped.includes('|') || stripped.includes('>');
     }) }, () => {
-      console.error(`\n   💡 AGENT HINT: In PowerShell, avoid using '&&', '||', '|', and '>'. You MUST use semicolons (;) for simple commands, or use a WSL2 JSON payload for POSIX pipelines.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: In PowerShell, avoid using '&&', '||', '|', and '>'. You MUST use semicolons (;) for simple commands, or use a WSL2 JSON payload for POSIX pipelines.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
       process.exit(1);
     })
 
@@ -377,7 +478,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
       }
 
       const wrappedShell = (cmdBasename === 'wsl.exe' || cmdBasename === 'wsl') ? (args.find((a: string) => ['bash', 'sh', 'pwsh', 'powershell'].includes(a.toLowerCase())) || cmdBasename) : cmdBasename;
-      console.error(`\n   💡 AGENT HINT: You attempted to run an inline shell command (${wrappedShell} ${flag}). This is an agent hallucination.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: You attempted to run an inline shell command (${wrappedShell} ${flag}). This is an agent hallucination.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
       console.error(`   This bypasses the agent-exec robustness interceptors and risks hanging the process.`);
       console.error(`   Please use the proper execution payloads ('command', 'eval', or 'script') or native tools.`);
       console.error(`   If you need shell pipes/redirects, write a script file to the scratch directory and use a 'script' payload.`);
@@ -386,62 +487,62 @@ export function systemInterceptor(ctx: ExecutionContext): void {
 
     // Interactive blocks
     .with({ cmd: P.union('su', 'su.exe', 'passwd', 'passwd.exe', 'chsh', 'chsh.exe') }, () => {
-      console.error(`\n   💡 AGENT HINT: '${cmdBasename}' requires an interactive password/tty prompt. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: '${cmdBasename}' requires an interactive password/tty prompt. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
       process.exit(1);
     })
     .with({ cmd: P.union('ssh-keygen', 'ssh-keygen.exe') }, () => {
       if (!args.includes('-f') || !args.includes('-N')) {
-        console.error(`\n   💡 AGENT HINT: 'ssh-keygen' without '-f' (file) and '-N' (passphrase) will prompt interactively.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+        console.error(`\n   💡 AGENT HINT: 'ssh-keygen' without '-f' (file) and '-N' (passphrase) will prompt interactively.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
         console.error(`   Please provide '-f <path>' and '-N ""' to run non-interactively. Blocking execution.`);
         process.exit(1);
       }
     })
     .with({ cmd: P.union('runas', 'runas.exe') }, () => {
-      console.error(`\n   💡 AGENT HINT: 'runas' requires an interactive password prompt. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: 'runas' requires an interactive password prompt. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
       process.exit(1);
     })
     .with({ cmd: P.union('sudo', 'sudo.exe'), isWin32: true }, () => {
-      console.error(`\n   💡 AGENT HINT: 'sudo' on Windows triggers an interactive UAC dialog. Blocking execution to prevent headless hang.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: 'sudo' on Windows triggers an interactive UAC dialog. Blocking execution to prevent headless hang.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
       process.exit(1);
     })
 
     // Indefinite Hang Blocks
     .with({ cmd: P.union('watch', 'watch.exe') }, () => {
-      console.error(`\n   💡 AGENT HINT: 'watch' command runs indefinitely. Blocking execution to prevent agent hanging.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: 'watch' command runs indefinitely. Blocking execution to prevent agent hanging.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
       process.exit(1);
     })
     .with({ cmd: P.union('tail', 'tail.exe') }, () => {
       if (args.includes('-f') || args.includes('--follow') || args.some(a => a.startsWith('--follow='))) {
-        console.error(`\n   💡 AGENT HINT: 'tail -f' runs indefinitely. Blocking execution to prevent agent hanging.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+        console.error(`\n   💡 AGENT HINT: 'tail -f' runs indefinitely. Blocking execution to prevent agent hanging.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
         process.exit(1);
       }
     })
     .with({ cmd: P.union('journalctl', 'journalctl.exe') }, () => {
       if (args.includes('-f') || args.includes('--follow')) {
-        console.error(`\n   💡 AGENT HINT: 'journalctl -f' runs indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+        console.error(`\n   💡 AGENT HINT: 'journalctl -f' runs indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
         process.exit(1);
       }
     })
 
     // Native tool enforcement
     .with({ isCommand: true, hasStdin: false, cmd: P.union('cat', 'cat.exe', 'wc', 'wc.exe', 'head', 'head.exe', 'tail', 'tail.exe', 'sort', 'sort.exe', 'uniq', 'uniq.exe', 'tee', 'tee.exe', 'find', 'find.exe', 'findstr', 'findstr.exe', 'gpg', 'gpg.exe'), positionalArgs: P.when(pa => pa.length === 0) }, () => {
-      console.error(`\n   💡 AGENT HINT: '${cmd.replace(/\.exe$/, '')}' called without file arguments and no stdin. It will hang indefinitely.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: '${cmd.replace(/\.exe$/, '')}' called without file arguments and no stdin. It will hang indefinitely.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
       process.exit(1);
     })
     .with({ isCommand: true, hasStdin: false, cmd: P.union('xargs', 'xargs.exe') }, () => {
-      console.error(`\n   💡 AGENT HINT: 'xargs' reads from stdin, but no stdin payload was provided. It will hang indefinitely.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: 'xargs' reads from stdin, but no stdin payload was provided. It will hang indefinitely.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
       process.exit(1);
     })
     .with({ isCommand: true, hasStdin: false, cmd: P.union('awk', 'gawk', 'sed', 'sed.exe', 'jq', 'jq.exe', 'yq', 'yq.exe'), positionalArgs: P.when(pa => pa.length <= 1) }, () => {
       const isSafe = match(cmd)
         .with(P.union('jq', 'jq.exe', 'yq', 'yq.exe'), () => args.includes('-n') || args.includes('--null-input') || args.includes('--help'))
         .with(P.union('sed', 'sed.exe'), () => args.includes('-h') || args.includes('--help'))
-        .with(P.union('awk', 'gawk'), () => args.includes('-V') || args.includes('--version') || args.includes('-W') || args.includes('--help'))
+        .with(P.union('awk', 'gawk'), () => args.includes('-V') || args.includes('--version') || args.includes('-W') || args.includes('--help') || args.some(a => a.includes('BEGIN')))
         .otherwise(() => false);
       
       if (!isSafe) {
         ctx.args = ctx.args.map(a => a.startsWith('C:\\') ? `/mnt/c/${a.slice(3).replace(/\\/g, '/')}` : a);
-        console.error(`\n   💡 AGENT HINT: '${cmd.replace(/\.exe$/, '')}' called without file arguments and no stdin. It will hang indefinitely.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /mcp-heal. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+        console.error(`\n   💡 AGENT HINT: '${cmd.replace(/\.exe$/, '')}' called without file arguments and no stdin. It will hang indefinitely.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
         process.exit(1);
       }
     })
@@ -454,8 +555,8 @@ export function systemInterceptor(ctx: ExecutionContext): void {
 
     .with({ isCommand: true, hasStdin: false, cmd: P.union('grep', 'grep.exe', 'egrep', 'fgrep'), positionalArgs: P.when(pa => pa.length <= 1) }, () => {
       if (!args) args = [];
-      if (args.includes('--help') || args.includes('-h')) return;
-      if (!['-r', '-R', '--recursive', '--files', '--help', '-h'].some(a => args.includes(a))) {
+      if (args.includes('--help') || args.includes('-h') || args.includes('--version') || args.includes('-v') || args.includes('-V')) return;
+      if (!['-r', '-R', '--recursive', '--files', '--help', '-h', '--version', '-v', '-V'].some(a => args.includes(a))) {
         console.error(`\n   💡 AGENT HINT: '${cmd.replace(/\.exe$/, '')}' called without file arguments and no recursive flag. It will hang indefinitely.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters or use grep_search.\x1b[0m`);
         process.exit(1);
       }
