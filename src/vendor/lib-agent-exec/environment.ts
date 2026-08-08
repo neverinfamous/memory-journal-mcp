@@ -50,7 +50,6 @@ export const DEFAULT_ENV_VARS: Record<string, string> = {
     NPM_CONFIG_YES: 'true',
     npm_config_yes: 'true',
     NPM_CONFIG_COLOR: 'false',
-    NPM_CONFIG_INTERACTIVE: 'false',
     YARN_NON_INTERACTIVE: '1',
     NPM_CONFIG_AUDIT: 'false',
     GCM_INTERACTIVE: 'false',
@@ -142,6 +141,10 @@ export function buildEnvironment(payloadEnv: ExecPayload['env']) {
     if (key.toUpperCase() === 'GITHUB_TOKEN' && value === 'github_pat_antigravitydummytoken') {
       continue;
     }
+    // Strip deprecated npm interactive config to prevent npm warnings
+    if (key.toUpperCase() === 'NPM_CONFIG_INTERACTIVE') {
+      continue;
+    }
     setEnv(key, value);
   }
 
@@ -154,7 +157,7 @@ export function buildEnvironment(payloadEnv: ExecPayload['env']) {
     'GIT_EDITOR', 'GH_EDITOR', 'EDITOR', 'VISUAL', 'GIT_SEQUENCE_EDITOR',
     'GIT_ASKPASS', 'SSH_ASKPASS', 'GH_PROMPT_DISABLED', 'GH_FORCE_TTY', 'GIT_TERMINAL_PROMPT',
     'CI', 'NO_COLOR', 'PAGER', 'PYTHONUNBUFFERED', 'FORCE_COLOR', 'TERM', 'GPG_TTY',
-    'NPM_CONFIG_INTERACTIVE', 'DEBIAN_FRONTEND', 'TF_IN_AUTOMATION', 'NONINTERACTIVE',
+    'DEBIAN_FRONTEND', 'TF_IN_AUTOMATION', 'NONINTERACTIVE',
     'POETRY_INTERACTIVE', 'PIP_NO_INPUT', 'PYTHON_TEST_NO_INPUT'
   ]);
 
@@ -178,6 +181,12 @@ export function buildEnvironment(payloadEnv: ExecPayload['env']) {
       } else {
         setEnv(actualKey, valStr);
       }
+    }
+  }
+
+  for (const k of Object.keys(env)) {
+    if (k.toUpperCase().includes('NPM_CONFIG_INTERACTIVE')) {
+      delete env[k];
     }
   }
 
