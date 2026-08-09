@@ -47,7 +47,7 @@ Globals: \`createEntry()\`, \`find()\`, \`recent()\`, \`searchEntries()\`, \`del
 Positional: \`createEntry("note")\`, \`searchEntries("performance")\`
 Aliases: Common parameter names are auto-corrected (\`q\`/\`search\`→\`query\`, \`path\`/\`filepath\`→\`output_dir\`, \`keep\`→\`keep_count\`, \`user\`/\`assignee\`→\`target_user\`, \`team\`/\`project\`→\`workspace_id\`).
 Discovery: \`mj.help()\` → \`{groups, totalMethods}\`. \`mj.core.help()\` for group-specific.
-Anti-Hallucination: DO NOT invoke \`mj_execute_code\` with an empty \`code\` payload to "list tools" or pass entry/query objects directly without the \`code\` parameter. You MUST provide valid JavaScript string in \`code\` (e.g. \`code: "return await mj.core.createEntry(context.entry)"\`).
+Anti-Hallucination: Always provide a valid JavaScript string in the \`code\` parameter (e.g. \`code: "return await mj.searchEntries({ query: '...' })"\`). If \`mj_execute_code\` is called with an empty payload \`{}\` or missing \`code\`, Code Mode auto-heals by returning the active sandbox status and available namespaces.
 Sandbox: No network access (\`fetch\` is undefined). Node native modules (\`fs\`, \`path\`, \`child_process\`, \`require()\`) are disabled. Use the \`context\` parameter to pass file contents or external data into Code Mode. \`setTimeout\` and \`sleep(ms)\` are available for minor delays.
 Readonly: Pass \`readonly: true\` to \`mj_execute_code\` to restrict execution to read-only operations.
 Read \`memory://help/codemode\` for full namespace table, examples, and patterns.

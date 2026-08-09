@@ -202,6 +202,39 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                             executionCode = inputContext
                         } else if (typeof paramsContext === 'string' && paramsContext.trim().length > 0) {
                             executionCode = paramsContext
+                        } else if (typeof inputContext === 'object' && inputContext !== null) {
+                            const ctxObj = inputContext as Record<string, unknown>
+                            if (typeof ctxObj['code'] === 'string' && ctxObj['code'].trim().length > 0) {
+                                executionCode = ctxObj['code']
+                            } else if (typeof ctxObj['script'] === 'string' && ctxObj['script'].trim().length > 0) {
+                                executionCode = ctxObj['script']
+                            } else if (typeof ctxObj['query'] === 'string' && ctxObj['query'].trim().length > 0) {
+                                executionCode = `return await mj.searchEntries(${JSON.stringify({ query: ctxObj['query'] })});`
+                            } else if (typeof ctxObj['content'] === 'string' || typeof ctxObj['instructions'] === 'string') {
+                                const titleVal = typeof ctxObj['title'] === 'string' ? ctxObj['title'] : 'Journal Entry'
+                                const contentVal = typeof ctxObj['content'] === 'string' ? ctxObj['content'] : ctxObj['instructions']
+                                const typeVal = typeof ctxObj['type'] === 'string' ? ctxObj['type'] : 'technical_decision'
+                                executionCode = `return await mj.createEntry(${JSON.stringify({ title: titleVal, content: contentVal, entry_type: typeVal })});`
+                            }
+                        } else if (typeof paramsContext === 'object' && paramsContext !== null) {
+                            const ctxObj = paramsContext as Record<string, unknown>
+                            if (typeof ctxObj['code'] === 'string' && ctxObj['code'].trim().length > 0) {
+                                executionCode = ctxObj['code']
+                            } else if (typeof ctxObj['script'] === 'string' && ctxObj['script'].trim().length > 0) {
+                                executionCode = ctxObj['script']
+                            } else if (typeof ctxObj['query'] === 'string' && ctxObj['query'].trim().length > 0) {
+                                executionCode = `return await mj.searchEntries(${JSON.stringify({ query: ctxObj['query'] })});`
+                            } else if (typeof ctxObj['content'] === 'string' || typeof ctxObj['instructions'] === 'string') {
+                                const titleVal = typeof ctxObj['title'] === 'string' ? ctxObj['title'] : 'Journal Entry'
+                                const contentVal = typeof ctxObj['content'] === 'string' ? ctxObj['content'] : ctxObj['instructions']
+                                const typeVal = typeof ctxObj['type'] === 'string' ? ctxObj['type'] : 'technical_decision'
+                                executionCode = `return await mj.createEntry(${JSON.stringify({ title: titleVal, content: contentVal, entry_type: typeVal })});`
+                            }
+                        }
+
+                        // Auto-healing fallback for empty code payload (e.g. mj_execute_code({}))
+                        if (!executionCode || executionCode.trim() === '') {
+                            executionCode = 'return { status: "ready", sandbox: "active", available_namespaces: ["core", "search", "analytics", "relationships", "io", "admin", "github", "git", "backup", "team"], hint: "Code Mode sandbox is active. Pass JavaScript code in the `code` parameter using mj.* APIs (e.g., `return await mj.searchEntries({ query: \\"..." })`)." };'
                         } else {
                             return {
                                 success: false,

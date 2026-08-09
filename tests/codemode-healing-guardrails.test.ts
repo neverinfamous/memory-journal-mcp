@@ -32,4 +32,13 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
             expect(parsed['instructions']).toBe('Write a journal entry')
         })
     })
+
+    describe('Layer 2: Empty Payload Auto-Healing Interceptor', () => {
+        it('should parse empty objects with default values', () => {
+            const parsed = ExecuteCodeSchema.parse({})
+            expect(parsed['auto_version']).toBe(true)
+            expect(parsed['dry_run']).toBe(false)
+            expect(parsed['code']).toBeUndefined()
+        })
+    })
 })
