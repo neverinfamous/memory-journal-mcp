@@ -23,7 +23,7 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
     if (gitIntercept) return gitIntercept;
 
     // Raw string argument normalization for execute_code
-    if ((methodName === 'execute_code' || methodName === 'executeCode' || methodName === 'mj_execute_code' || methodName === 'mjExecuteCode') && args.length === 1 && typeof args[0] === 'string') {
+    if ((methodName === 'execute_code' || methodName === 'executeCode' || methodName === 'mj_execute_code' || methodName === 'mjExecuteCode' || methodName === 'mysql_execute_code' || methodName === 'mysqlExecuteCode') && args.length === 1 && typeof args[0] === 'string') {
         args = [{ code: args[0] }];
     }
 
@@ -151,7 +151,7 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
             }
         }
 
-        if (methodName === 'execute_code' || methodName === 'executeCode' || methodName === 'mj_execute_code' || methodName === 'mjExecuteCode') {
+        if (methodName === 'execute_code' || methodName === 'executeCode' || methodName === 'mj_execute_code' || methodName === 'mjExecuteCode' || methodName === 'mysql_execute_code' || methodName === 'mysqlExecuteCode') {
             if (obj['repo_name'] !== undefined && obj['repo'] === undefined) {
                 obj['repo'] = obj['repo_name'];
                 delete obj['repo_name'];

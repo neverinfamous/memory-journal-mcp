@@ -235,13 +235,6 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                         // Auto-healing fallback for empty code payload (e.g. mj_execute_code({}))
                         if (!executionCode || executionCode.trim() === '') {
                             executionCode = 'return { status: "ready", sandbox: "active", available_namespaces: ["core", "search", "analytics", "relationships", "io", "admin", "github", "git", "backup", "team"], hint: "Code Mode sandbox is active. Pass JavaScript code in the `code` parameter using mj.* APIs (e.g., `return await mj.searchEntries({ query: \\"..." })`)." };'
-                        } else {
-                            return {
-                                success: false,
-                                error: 'Missing required `code` parameter. This tool executes JavaScript in a secure sandbox.\n\nAvailable parameters:\n- code (string, required): The JavaScript code to execute\n- context (any, optional): A JSON object/string to pass variables directly into the sandbox (accessible via `context`)\n- project_number (number, optional): The project ID to operate on\n- repo (string, optional): A GitHub repository to inject (e.g. "neverinfamous/adamic")\n- expected_version (string, optional): The expected journal version for optimistic concurrency\n- dry_run (boolean, optional): If true, simulates the execution without making changes\n\nTo discover available API methods and their schemas, read the `memory://help` resource, or invoke schema introspection directly in your script (e.g., `const schema = await mj.core.create_entry.schema()`).',
-                                project_id: undefined,
-                                executionTimeMs: 0
-                            }
                         }
                     }
 

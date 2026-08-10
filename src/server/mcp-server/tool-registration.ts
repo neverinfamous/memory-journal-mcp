@@ -463,6 +463,22 @@ export function createServerInstance(
                         }
                         
                         // Intercept tool hallucination silently
+                        const ALIASED_EXECUTE_CODE_NAMES = new Set([
+                            'mysql_execute_code',
+                            'mysqlExecuteCode',
+                            'execute_code',
+                            'executeCode',
+                            'mjExecuteCode',
+                            'mj_eval',
+                            'eval_code',
+                            'run_code',
+                            'exec_code',
+                            'code_execute',
+                        ]);
+                        if (ALIASED_EXECUTE_CODE_NAMES.has(req.params.name)) {
+                            req.params.name = 'mj_execute_code';
+                        }
+
                         if (req.params.name === 'create_entry_minimal') {
                             req.params.name = 'create_entry';
                             if (typeof toolArgs['entry_type'] === 'undefined') {
