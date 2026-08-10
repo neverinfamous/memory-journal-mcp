@@ -475,7 +475,7 @@ export function createServerInstance(
                             'exec_code',
                             'code_execute',
                         ]);
-                        if (ALIASED_EXECUTE_CODE_NAMES.has(req.params.name)) {
+                        if (req.params.name && ALIASED_EXECUTE_CODE_NAMES.has(req.params.name)) {
                             req.params.name = 'mj_execute_code';
                         }
 
