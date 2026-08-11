@@ -491,6 +491,7 @@ export function buildCommand(payload: ExecPayload, cwd: string, isJson: boolean 
           codeToExecute = `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8;\n$OutputEncoding = [System.Text.Encoding]::UTF8;\n$ErrorActionPreference = 'Stop';\n$ProgressPreference = 'SilentlyContinue';\n$ConfirmPreference = 'None';\n${codeToExecute}`;
         } else if (p.target === 'wsl2' && ext === '.sh') {
           codeToExecute = codeToExecute.replace(/\r\n/g, '\n');
+          codeToExecute = codeToExecute.replace(/\b([a-zA-Z]):[/\\][^\s"'`;&|)]*/g, (matchStr) => convertToWslPath(matchStr));
         }
         fs.writeFileSync(tempScriptPath, codeToExecute, 'utf-8');
       } catch (err) {

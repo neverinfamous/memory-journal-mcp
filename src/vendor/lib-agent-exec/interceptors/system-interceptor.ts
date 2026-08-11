@@ -169,7 +169,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
       }
 
       const filterIdx = ctx.args.findIndex(a => ['-filter', '-include'].includes(a.toLowerCase()));
-      const hasRecurse = ctx.args.some(a => ['-recurse', '-r', '-R'].includes(a.toLowerCase()));
+      const hasRecurse = ctx.args.some(a => ['-recurse', '-r', '-R', '/s'].includes(a.toLowerCase()));
       const hasFile = ctx.args.some(a => a.toLowerCase() === '-file');
       const hasDir = ctx.args.some(a => a.toLowerCase() === '-directory');
 
@@ -218,8 +218,12 @@ export function systemInterceptor(ctx: ExecutionContext): void {
           skipNext = true;
           continue;
         }
-        if (lower === '-recurse') {
+        if (lower === '-recurse' || lower === '/s') {
           cleanedArgs.push('-R');
+          continue;
+        }
+        if (lower === '/b') {
+          cleanedArgs.push('-1');
           continue;
         }
         if (lower === '-file' || lower === '-directory') {
