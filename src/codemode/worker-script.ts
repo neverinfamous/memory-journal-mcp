@@ -553,7 +553,7 @@ async function executeCode(
             processOperation: (arg: unknown): unknown => {
                 if (typeof arg === 'object' && arg !== null) {
                     const obj = arg as Record<string, unknown>;
-                    const op = obj['operation'] ?? obj['op'] ?? obj['action'] ?? op === 'type';
+                    const op = obj['operation'] ?? obj['op'] ?? obj['action'] ?? obj['type'];
                     if (op === 'add_entry' || op === 'create_entry' || op === 'create' || op === 'add' || op === 'insert') {
                         return (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg);
                     }
