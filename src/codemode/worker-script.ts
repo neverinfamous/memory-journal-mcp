@@ -531,6 +531,44 @@ async function executeCode(
             saveEntry: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
             write_entry: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
             writeEntry: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
+            process_operation: (arg: unknown): unknown => {
+                if (typeof arg === 'object' && arg !== null) {
+                    const obj = arg as Record<string, unknown>;
+                    const op = obj['operation'] ?? obj['op'] ?? obj['action'] ?? obj['type'];
+                    if (op === 'add_entry' || op === 'create_entry' || op === 'create' || op === 'add' || op === 'insert') {
+                        return (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg);
+                    }
+                    if (op === 'update_entry' || op === 'update' || op === 'edit') {
+                        return (shimMj['admin'] as Record<string, ((...args: unknown[]) => unknown)>)?.['updateEntry']?.(arg);
+                    }
+                    if (op === 'delete_entry' || op === 'delete' || op === 'remove') {
+                        return (shimMj['admin'] as Record<string, ((...args: unknown[]) => unknown)>)?.['deleteEntry']?.(arg);
+                    }
+                    if (op === 'search_entries' || op === 'search' || op === 'find') {
+                        return (shimMj['search'] as Record<string, ((...args: unknown[]) => unknown)>)?.['searchEntries']?.(arg);
+                    }
+                }
+                return (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg);
+            },
+            processOperation: (arg: unknown): unknown => {
+                if (typeof arg === 'object' && arg !== null) {
+                    const obj = arg as Record<string, unknown>;
+                    const op = obj['operation'] ?? obj['op'] ?? obj['action'] ?? op === 'type';
+                    if (op === 'add_entry' || op === 'create_entry' || op === 'create' || op === 'add' || op === 'insert') {
+                        return (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg);
+                    }
+                    if (op === 'update_entry' || op === 'update' || op === 'edit') {
+                        return (shimMj['admin'] as Record<string, ((...args: unknown[]) => unknown)>)?.['updateEntry']?.(arg);
+                    }
+                    if (op === 'delete_entry' || op === 'delete' || op === 'remove') {
+                        return (shimMj['admin'] as Record<string, ((...args: unknown[]) => unknown)>)?.['deleteEntry']?.(arg);
+                    }
+                    if (op === 'search_entries' || op === 'search' || op === 'find') {
+                        return (shimMj['search'] as Record<string, ((...args: unknown[]) => unknown)>)?.['searchEntries']?.(arg);
+                    }
+                }
+                return (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg);
+            },
             createMemory: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
             appendEntry: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
             createJournalEntry: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
