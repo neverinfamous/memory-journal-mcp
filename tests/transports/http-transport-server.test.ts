@@ -141,7 +141,6 @@ describe('HttpTransport', () => {
         await transport.start(mockServer as never, null)
 
         expect(mockSetupStateful).toHaveBeenCalled()
-        expect(mockSetupLegacySSE).toHaveBeenCalled()
         expect(mockSetupStateless).not.toHaveBeenCalled()
     })
 
@@ -286,13 +285,11 @@ describe('HttpTransport', () => {
         // Add mock transports
         const mockTransport = { close: vi.fn().mockResolvedValue(undefined) }
         transport.transports.set('session-1', mockTransport as never)
-        transport.sseTransports.set('sse-1', mockTransport as never)
 
         await transport.stop(null)
 
-        expect(mockTransport.close).toHaveBeenCalledTimes(2) // Both streamable and SSE
+        expect(mockTransport.close).toHaveBeenCalledTimes(1)
         expect(transport.transports.size).toBe(0)
-        expect(transport.sseTransports.size).toBe(0)
     })
 
     it('should handle transport close error gracefully during stop', async () => {

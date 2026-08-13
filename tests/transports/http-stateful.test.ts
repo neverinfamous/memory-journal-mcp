@@ -40,13 +40,10 @@ const { mockHandleRequest, MockStreamableHTTPServerTransport } = vi.hoisted(() =
     }
 })
 
-vi.mock('@modelcontextprotocol/sdk/server/streamableHttp.js', () => ({
-    StreamableHTTPServerTransport: MockStreamableHTTPServerTransport,
+vi.mock('@modelcontextprotocol/node', () => ({
+    NodeStreamableHTTPServerTransport: MockStreamableHTTPServerTransport,
 }))
 
-vi.mock('@modelcontextprotocol/sdk/types.js', () => ({
-    isInitializeRequest: vi.fn().mockReturnValue(false),
-}))
 
 vi.mock('../../../src/utils/logger.js', () => ({
     logger: {
@@ -58,8 +55,6 @@ vi.mock('../../../src/utils/logger.js', () => ({
 }))
 
 import { setupStateful, type StatefulContext } from '../../src/transports/http/server/stateful.js'
-import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js'
-
 // ============================================================================
 // Helpers
 // ============================================================================
@@ -67,7 +62,6 @@ import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js'
 function createMockCtx(): StatefulContext {
     return {
         transports: new Map(),
-        sseTransports: new Map(),
         sessionLastActivity: new Map(),
         sessionSubjects: new Map(),
         sessionLocks: new Map(),
@@ -97,6 +91,7 @@ function mockRes(): Record<string, unknown> {
         json: vi.fn(),
         send: vi.fn(),
         end: vi.fn(),
+        writeHead: vi.fn(),
     }
     res['status'] = vi.fn().mockReturnValue(res)
     return res
@@ -209,23 +204,6 @@ describe('setupStateful', () => {
         clearInterval(timer)
     })
 
-    it('should expire idle SSE sessions on sweep', () => {
-        const ctx = createMockCtx()
-        const transport = { close: vi.fn() }
-        ctx.sseTransports.set('sse-session', transport as never)
-        ctx.sessionLastActivity.set('sse-session', Date.now() - 31 * 60 * 1000)
-
-        const app = createMockApp()
-        const server = createMockServer()
-
-        const timer = setupStateful(ctx, app as never, (() => server) as never)
-
-        vi.advanceTimersByTime(5 * 60 * 1000)
-
-        expect(ctx.sseTransports.has('sse-session')).toBe(false)
-
-        clearInterval(timer)
-    })
 
     // ========================================================================
     // POST /mcp
@@ -281,35 +259,6 @@ describe('setupStateful', () => {
         clearInterval(timer)
     })
 
-    it('should reject SSE session IDs on POST /mcp (cross-protocol guard)', async () => {
-        const ctx = createMockCtx()
-        // Session exists in BOTH transports and sseTransports
-        ctx.transports.set('cross-session', {} as never)
-        ctx.sseTransports.set('cross-session', {} as never)
-
-        const app = createMockApp()
-        const server = createMockServer()
-
-        const timer = setupStateful(ctx, app as never, (() => server) as never)
-        const handler = app.routes['post']!['/mcp']!
-
-        const req = mockReq({ headers: { 'mcp-session-id': 'cross-session' } })
-        const res = mockRes()
-        handler(req, res)
-
-        await vi.advanceTimersByTimeAsync(10)
-
-        expect(res['status'] as ReturnType<typeof vi.fn>).toHaveBeenCalledWith(400)
-        expect(res['json'] as ReturnType<typeof vi.fn>).toHaveBeenCalledWith(
-            expect.objectContaining({
-                error: expect.objectContaining({
-                    message: expect.stringContaining('Legacy SSE transport'),
-                }),
-            })
-        )
-
-        clearInterval(timer)
-    })
 
     it('should return 403 if request subject does not match session subject on POST /mcp', async () => {
         const ctx = createMockCtx()
@@ -375,7 +324,6 @@ describe('setupStateful', () => {
     })
 
     it('should enforce MAX_STATEFUL_SESSIONS limit on POST /mcp init', async () => {
-        vi.mocked(isInitializeRequest).mockReturnValue(true)
         const originalEnv = process.env['MAX_STATEFUL_SESSIONS']
         process.env['MAX_STATEFUL_SESSIONS'] = '2'
 
@@ -409,8 +357,6 @@ describe('setupStateful', () => {
     })
 
     it('should create new transport for initialization request', async () => {
-        vi.mocked(isInitializeRequest).mockReturnValue(true)
-
         const ctx = createMockCtx()
         const app = createMockApp()
         const server = createMockServer()

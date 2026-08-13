@@ -523,7 +523,8 @@ describe('createAuthMiddleware', () => {
         await middleware(rawReq as never, res, next)
         expect(next).toHaveBeenCalled()
         expect(rawReq['auth']).toBeDefined()
-        expect((rawReq['auth'] as { sub: string }).sub).toBe('user-42')
+        expect((rawReq['auth'] as any).clientId).toBe('user-42')
+        expect((rawReq['tokenClaims'] as any).sub).toBe('user-42')
     })
 
     it('should return 500 when valid=true but claims is undefined', async () => {

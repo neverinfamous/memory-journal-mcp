@@ -94,7 +94,7 @@ vi.mock('../../src/auth/scope-map.js', () => ({
 // Module mocks
 // ============================================================================
 
-vi.mock('@modelcontextprotocol/sdk/server/mcp.js', () => ({
+vi.mock('@modelcontextprotocol/server', () => ({
     McpServer: function () {
         return {
             registerTool: mockRegisterTool,
@@ -111,14 +111,14 @@ vi.mock('@modelcontextprotocol/sdk/server/mcp.js', () => ({
     },
 }))
 
-vi.mock('@modelcontextprotocol/sdk/server/stdio.js', () => ({
+vi.mock('@modelcontextprotocol/server/stdio', () => ({
     StdioServerTransport: function () {
         return mockStdioTransport
     },
 }))
 
-vi.mock('@modelcontextprotocol/sdk/server/streamableHttp.js', () => ({
-    StreamableHTTPServerTransport: function () {
+vi.mock('@modelcontextprotocol/node', () => ({
+    NodeStreamableHTTPServerTransport: function () {
         return {
             handleRequest: vi.fn().mockResolvedValue(undefined),
             close: vi.fn().mockResolvedValue(undefined),
@@ -126,16 +126,6 @@ vi.mock('@modelcontextprotocol/sdk/server/streamableHttp.js', () => ({
         }
     },
 }))
-
-vi.mock('@modelcontextprotocol/sdk/types.js', async (importOriginal) => {
-    const actual = await importOriginal<any>()
-    return {
-        ...actual,
-        isInitializeRequest: vi.fn().mockReturnValue(false),
-        SubscribeRequestSchema: {},
-        UnsubscribeRequestSchema: {},
-    }
-})
 
 vi.mock('../../src/database/sqlite-adapter/index.js', () => ({
     DatabaseAdapter: function () {
@@ -292,8 +282,11 @@ vi.spyOn(process, 'exit').mockImplementation(function () {} as never)
 // Import after mocks
 // ============================================================================
 
-import { createServer, type ServerOptions } from '../../src/server/mcp-server/index.js'
 import * as toolsModule from '../../src/handlers/tools/index.js'
+import * as resourcesModule from '../../src/handlers/resources/index.js'
+import * as promptsModule from '../../src/handlers/prompts/index.js'
+import { z } from 'zod'
+import { createServer, type ServerOptions } from '../../src/server/mcp-server/index.js'
 
 describe('McpServer', function () {
     beforeEach(function () {
@@ -665,7 +658,7 @@ describe('McpServer', function () {
                 {
                     name: 'fake_boom_tool',
                     description: 'A fake tool',
-                    inputSchema: { shape: {} },
+                    inputSchema: z.object({}),
                     // no outputSchema!
                 } as any,
             ])
@@ -705,7 +698,7 @@ describe('McpServer', function () {
                 {
                     name: 'fake_string_tool',
                     description: 'A fake tool',
-                    inputSchema: { shape: {} },
+                    inputSchema: z.object({}),
                     // no outputSchema!
                 } as any,
             ])
@@ -928,7 +921,7 @@ describe('McpServer', function () {
             expect(postHandler).toBeDefined()
 
             // Missing session ID and not initialization request
-            const mockReq = { headers: {}, body: {} } // isInitializeRequest returns false
+            const mockReq = { headers: {}, body: {} }
             const mockRes = { status: vi.fn().mockReturnThis(), json: vi.fn() }
 
             if (postHandler) {
@@ -1216,10 +1209,6 @@ describe('McpServer', function () {
         })
 
         it('should handle stateful POST /mcp with initialization request', async function () {
-            // Make isInitializeRequest return true for this test
-            const { isInitializeRequest: mockIsInit } =
-                await import('@modelcontextprotocol/sdk/types.js')
-            ;(mockIsInit as any).mockReturnValueOnce(true)
 
             await createServer({
                 transport: 'http',
@@ -1231,7 +1220,7 @@ describe('McpServer', function () {
             const postHandler = mockHandlers.post['/mcp']
             expect(postHandler).toBeDefined()
 
-            // Simulate initialization request (no session ID, isInitializeRequest returns true)
+            // Simulate initialization request (no session ID)
             const mockReq = {
                 headers: {},
                 body: { jsonrpc: '2.0', id: 1, method: 'initialize' },
@@ -1256,8 +1245,8 @@ describe('McpServer', function () {
         it('should handle stateful POST /mcp error with 500 response', async function () {
             // Create a transport mock that throws
             const StreamableTransportMod =
-                await import('@modelcontextprotocol/sdk/server/streamableHttp.js')
-            const OrigConstructor = StreamableTransportMod.StreamableHTTPServerTransport
+                await import('@modelcontextprotocol/node')
+            const OrigConstructor = StreamableTransportMod.NodeStreamableHTTPServerTransport
             const throwingConstructor = vi.fn().mockImplementation(function () {
                 return {
                     handleRequest: vi.fn().mockRejectedValue(new Error('Transport failure')),

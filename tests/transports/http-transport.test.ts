@@ -616,7 +616,7 @@ describe('HttpTransport', () => {
             expect(mockScheduler.stop).toHaveBeenCalled()
         })
 
-        it('should catch errors when closing active transports and SSE transports', async () => {
+        it('should catch errors when closing active transports', async () => {
             const config: HttpTransportConfig = {
                 port: 3000,
                 host: '127.0.0.1',
@@ -629,14 +629,10 @@ describe('HttpTransport', () => {
             transport.transports.set('dummy-1', {
                 close: vi.fn().mockRejectedValue(new Error('dummy close error')),
             } as any)
-            transport.sseTransports.set('dummy-2', {
-                close: vi.fn().mockRejectedValue(new Error('dummy sse close error')),
-            } as any)
 
             // Should gracefully catch and log without throwing
             await transport.stop(null)
             expect(transport.transports.size).toBe(0)
-            expect(transport.sseTransports.size).toBe(0)
         })
     })
 
