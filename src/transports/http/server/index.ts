@@ -109,7 +109,7 @@ export class HttpTransport {
         }
         // Global debug logger
         this.app.use((req: Request, _res: Response, next: NextFunction) => {
-            console.log('--- HTTP REQ ---', req.method, req.path, req.query, req.headers)
+            logger.debug('--- HTTP REQ ---', { method: req.method, path: req.path, query: req.query, headers: req.headers })
             next()
         })
 
@@ -151,7 +151,7 @@ export class HttpTransport {
         const jsonParser = express.json({ limit: maxBody }) as RequestHandler
         this.app.use((req: Request, res: Response, next: NextFunction) => {
             // Enforce max body size manually for stateless /mcp requests since we skip express.json()
-            if (req.method === 'POST' && req.path === '/mcp' && !req.query['sessionId']) {
+            if (req.method === 'POST' && req.path === '/mcp' && req.query['sessionId'] === undefined) {
                 const contentLength = parseInt(req.headers['content-length'] || '0', 10)
                 if (contentLength > maxBody) {
                     res.status(413).json({
@@ -358,7 +358,7 @@ export class HttpTransport {
             return server
         }, { legacy: 'reject' }))
 
-        const createSessionAndHandle = (req: Request, res: Response, next: NextFunction, _sid?: string, isLegacySse: boolean = false): void => {
+        const createSessionAndHandle = (req: Request, res: Response, next: NextFunction, _sid?: string, isLegacySse = false): void => {
             const sid = _sid ?? randomUUID()
             const transport = isLegacySse
                 ? new LegacySSEServerTransport('/messages', sid)
@@ -371,8 +371,10 @@ export class HttpTransport {
             const server = serverFactory()
 
             // Setup auth logging/events
-            const authObj = req.auth as any
-            const authLog = authObj ? ` as ${authObj.subject || authObj.clientId || authObj.client_id || 'unknown'}` : ''
+            const authObj = req.auth as Record<string, unknown> | undefined
+            const rawSubject = authObj ? (authObj.subject ?? authObj.clientId ?? authObj.client_id ?? 'unknown') : ''
+            const authSubject = typeof rawSubject === 'string' || typeof rawSubject === 'number' ? String(rawSubject) : 'unknown'
+            const authLog = authObj ? ` as ${authSubject}` : ''
             logger.info(`New MCP stateful session initialized${authLog}`, {
                 module: 'HTTP',
                 sessionId: sessionId,
@@ -473,7 +475,7 @@ export class HttpTransport {
                     transport.handleRequest(req, res, req.body).catch((err: unknown) => { next(err) })
                 }
             } else {
-                const acceptsSse = req.headers.accept?.includes('text/event-stream') || false
+                const acceptsSse = req.headers.accept?.includes('text/event-stream') ?? false
                 const isLegacyMessages = req.path === '/messages' || req.path === '/messages/'
                 
                 if (isLegacyMessages) {
@@ -509,7 +511,7 @@ export class HttpTransport {
             
             const transport = this.sseTransports.get(sid)
             if (transport) {
-                transport.close()
+                void transport.close()
                 this.sseTransports.delete(sid)
                 globalSubscriptionManager.unregisterServer(sid)
             }
@@ -518,7 +520,7 @@ export class HttpTransport {
 
         // 404 Fallback for unmatched routes
         this.app.use((req: Request, res: Response): void => {
-            console.log('404 Not Found:', req.method, req.path, req.query, req.headers)
+            logger.debug('404 Not Found', { method: req.method, path: req.path, query: req.query, headers: req.headers })
             res.status(404).json({ error: 'Not found' })
         })
 

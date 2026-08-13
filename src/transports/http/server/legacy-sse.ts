@@ -26,7 +26,7 @@ export class LegacySSEServerTransport implements Transport {
         // The transport is "started" implicitly when connected.
     }
 
-    async close(): Promise<void> {
+    close(): Promise<void> {
         if (this.res) {
             this.res.end()
             this.res = null
@@ -34,14 +34,16 @@ export class LegacySSEServerTransport implements Transport {
         const onclose = this.onclose
         this.onclose = undefined
         onclose?.()
+        return Promise.resolve()
     }
 
-    async send(message: JSONRPCMessage): Promise<void> {
+    send(message: JSONRPCMessage): Promise<void> {
         if (!this.res) {
-            throw new Error("Not connected")
+            return Promise.reject(new Error("Not connected"))
         }
         // Send JSON-RPC message as SSE data
         this.res.write(`event: message\ndata: ${JSON.stringify(message)}\n\n`)
+        return Promise.resolve()
     }
 
     /**
@@ -73,7 +75,8 @@ export class LegacySSEServerTransport implements Transport {
      * Handles incoming POST requests containing JSON-RPC messages.
      */
     handlePostMessage(req: Request, res: Response): void {
-        if (!req.body || typeof req.body !== 'object') {
+        const body = req.body as unknown
+        if (body === undefined || body === null || typeof body !== 'object') {
             res.status(400).json({ error: 'Invalid JSON body' })
             return
         }
