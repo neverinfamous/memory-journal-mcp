@@ -90,8 +90,19 @@ export function createServerInstance(
 
         for (const tool of allTools) {
             // Build tool options matching MCP SDK expectations
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const toolOptions: any = {
+            interface McpToolOptions {
+                description?: string
+                title?: string
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                inputSchema?: any
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                outputSchema?: any
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                annotations?: any
+                icons?: { src: string }[]
+            }
+
+            const toolOptions: McpToolOptions = {
                 description: tool.description,
             }
 
@@ -169,7 +180,14 @@ export function createServerInstance(
             // Capture whether this tool has outputSchema for response handling
             const hasOutputSchema = Boolean(tool.outputSchema)
 
-            server.registerTool(tool.name, toolOptions, async (args: any, extra: any): Promise<CallToolResult> => {
+            // Use registerTool since the low-level Server API requires it for our full dynamic objects
+             
+            server.registerTool(
+                tool.name,
+                 
+                toolOptions,
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                async (args: any, extra: any): Promise<CallToolResult> => {
                 try {
                     // Build progress context for progress notifications
                     // Extract progressToken from extra._meta (SDK passes RequestHandlerExtra)
