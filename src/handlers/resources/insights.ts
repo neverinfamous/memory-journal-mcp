@@ -9,7 +9,7 @@
 import { ICON_ANALYTICS } from '../../constants/icons.js'
 import { withPriority, ASSISTANT_FOCUSED } from '../../utils/resource-annotations.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from './shared.js'
-import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js'
+import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server'
 
 // ============================================================================
 // memory://insights/digest
@@ -74,8 +74,7 @@ export const digestInsightsResource: InternalResourceDef = {
             }
         }
 
-        throw new McpError(
-            -32002,
+        throw new ProtocolError(ProtocolErrorCode.InternalError, 
             'No digest available — enable with --digest-interval <minutes> (HTTP transport only)'
         )
     },
@@ -100,7 +99,7 @@ export const teamCollaborationResource: InternalResourceDef = {
         const lastModified = new Date().toISOString()
 
         if (!context.teamDb) {
-            throw new McpError(-32002, 'Team database not configured — set TEAM_DB_PATH to enable.')
+            throw new ProtocolError(ProtocolErrorCode.InternalError,  'Team database not configured — set TEAM_DB_PATH to enable.')
         }
 
         // Compute collaboration matrix live from team DB
@@ -116,7 +115,7 @@ export const teamCollaborationResource: InternalResourceDef = {
                 annotations: { lastModified },
             }
         } catch (error) {
-            throw new McpError(ErrorCode.InternalError, error instanceof Error ? error.message : String(error))
+            throw new ProtocolError(ProtocolErrorCode.InternalError,  error instanceof Error ? error.message : String(error))
         }
     },
 }
@@ -158,7 +157,7 @@ export const reportHistoryResource: InternalResourceDef = {
                 annotations: { lastModified: reports[0]?.computedAt ?? lastModified },
             }
         } catch (error) {
-            throw new McpError(ErrorCode.InternalError, error instanceof Error ? error.message : String(error))
+            throw new ProtocolError(ProtocolErrorCode.InternalError,  error instanceof Error ? error.message : String(error))
         }
     },
 }

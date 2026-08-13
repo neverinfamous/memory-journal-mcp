@@ -9,7 +9,7 @@ import { ICON_GITHUB } from '../../constants/icons.js'
 import { ASSISTANT_FOCUSED } from '../../utils/resource-annotations.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from './shared.js'
 import { resolveGitHubRepo, isResourceError } from './shared.js'
-import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js'
+import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server'
 
 /**
  * Get graph resource definitions
@@ -56,12 +56,12 @@ export function getGraphResourceDefinitions(): InternalResourceDef[] {
                         const tokenEstimate = Math.ceil(JSON.stringify(data).length / 4)
                         return { data: { ...data, _meta: { tokenEstimate } } }
                     } else if (targetRepo) {
-                        throw new McpError(-32002, `Repository not found or GitHub integration unavailable for: ${targetRepo}`)
+                        throw new ProtocolError(ProtocolErrorCode.InternalError,  `Repository not found or GitHub integration unavailable for: ${targetRepo}`)
                     }
                 } catch (error) {
-                    if (error instanceof McpError) throw error;
+                    if (error instanceof ProtocolError) throw error;
                     if (targetRepo) {
-                        throw new McpError(ErrorCode.InternalError, `GitHub integration failed: ${error instanceof Error ? error.message : String(error)}`)
+                        throw new ProtocolError(ProtocolErrorCode.InternalError,  `GitHub integration failed: ${error instanceof Error ? error.message : String(error)}`)
                     }
                     // Fallback to DB if GitHub fails for default case
                 }

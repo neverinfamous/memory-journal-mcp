@@ -15,7 +15,7 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js'
+import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server'
 
 import {
     assertSafeFilePath,
@@ -128,8 +128,7 @@ export const rulesResource: InternalResourceDef = {
     handler: async (_uri: string, context: ResourceContext): Promise<ResourceResult> => {
         const rulesPath = context.briefingConfig?.rulesFilePath ?? process.env['RULES_FILE_PATH']
         if (!rulesPath) {
-            throw new McpError(
-                -32002,
+            throw new ProtocolError(ProtocolErrorCode.InternalError, 
                 'RULES_FILE_PATH is not configured. Set this env var to serve rules content.'
             )
         }
@@ -139,8 +138,7 @@ export const rulesResource: InternalResourceDef = {
             const expandedRoots = [...allowedRoots, path.dirname(rulesPath)]
             assertSafeFilePath(rulesPath, expandedRoots)
         } catch (err) {
-            throw new McpError(
-                ErrorCode.InternalError,
+            throw new ProtocolError(ProtocolErrorCode.InvalidParams, 
                 err instanceof Error ? err.message : String(err)
             )
         }
@@ -192,7 +190,7 @@ export const rulesResource: InternalResourceDef = {
             }
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err)
-            throw new McpError(ErrorCode.InternalError, `Could not read rules file: ${message}`)
+            throw new ProtocolError(ProtocolErrorCode.InternalError, `Could not read rules file: ${message}`)
         }
     },
 }
@@ -213,8 +211,7 @@ export const workflowsResource: InternalResourceDef = {
             context.briefingConfig?.workflowSummary ??
             process.env['MEMORY_JOURNAL_WORKFLOW_SUMMARY']
         if (workflowSummary === undefined || workflowSummary === '') {
-            throw new McpError(
-                -32002,
+            throw new ProtocolError(ProtocolErrorCode.InvalidParams, 
                 'No workflow summary is available. Set MEMORY_JOURNAL_WORKFLOW_SUMMARY env var or use --workflow-summary.'
             )
         }
@@ -320,16 +317,14 @@ export const skillsResource: InternalResourceDef = {
                     throw new Error(`Configured SKILLS_DIR_PATH does not exist: ${userSkillsDir}`)
                 }
             } catch (err) {
-                throw new McpError(
-                    ErrorCode.InternalError,
+                throw new ProtocolError(ProtocolErrorCode.InvalidParams, 
                     err instanceof Error ? err.message : String(err)
                 )
             }
         }
 
         if (!hasAnySource) {
-            throw new McpError(
-                -32002,
+            throw new ProtocolError(ProtocolErrorCode.InvalidParams, 
                 'No skills available. Set SKILLS_DIR_PATH to index user skills.'
             )
         }
@@ -409,7 +404,7 @@ export const skillsResource: InternalResourceDef = {
             }
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err)
-            throw new McpError(ErrorCode.InternalError, `Could not scan skills directory: ${message}`)
+            throw new ProtocolError(ProtocolErrorCode.InternalError, `Could not scan skills directory: ${message}`)
         }
     },
 }

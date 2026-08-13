@@ -13,8 +13,8 @@
  * Config types and constants in ./types.ts.
  */
 
-import type { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
-import type { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js'
+import type { NodeStreamableHTTPServerTransport as StreamableHTTPServerTransport } from '@modelcontextprotocol/node'
+// legacy SSE removed from imports
 
 import type { McpServerFactory } from '../../../server/mcp-server/index.js'
 import express from 'express'
@@ -38,13 +38,9 @@ import {
     SUPPORTED_SCOPES,
 } from '../../../auth/index.js'
 import type { TokenClaims } from '../../../auth/index.js'
-import {
-    hostHeaderValidation,
-    localhostHostValidation,
-} from '@modelcontextprotocol/sdk/server/middleware/hostHeaderValidation.js'
+import { hostHeaderValidation, localhostHostValidation } from '@modelcontextprotocol/express'
 import { setupStateless } from './stateless.js'
 import { setupStateful } from './stateful.js'
-import { setupLegacySSE } from './legacy-sse.js'
 import { runWithAuthContext as propagateCtx } from '../../../auth/auth-context.js'
 import type { ServerRuntime } from '../../../utils/maintenance-lock.js'
 
@@ -59,8 +55,6 @@ export class HttpTransport {
     private readonly app: Express
     private readonly config: HttpTransportConfig
     public readonly transports = new Map<string, StreamableHTTPServerTransport>()
-    // eslint-disable-next-line @typescript-eslint/no-deprecated -- backward compat for MCP 2024-11-05 clients
-    public readonly sseTransports = new Map<string, SSEServerTransport>()
     public readonly sessionLastActivity = new Map<string, number>()
     public readonly sessionSubjects = new Map<string, string>()
     public readonly sessionLocks = new Map<string, number>()
@@ -353,7 +347,6 @@ export class HttpTransport {
             await setupStateless(this.app, serverFactory, hasAuth)
         } else {
             this.sessionSweepTimer = setupStateful(this, this.app, serverFactory)
-            setupLegacySSE(this, this.app, serverFactory)
         }
         // 404 handler — must be after all routes
         this.app.use((_req: Request, res: Response): void => {
@@ -419,24 +412,6 @@ export class HttpTransport {
             }
         }
         this.transports.clear()
-
-        // Close all Legacy SSE transports
-        for (const [sessionId, transport] of this.sseTransports) {
-            try {
-                logger.debug('Closing Legacy SSE transport', {
-                    module: 'HTTP',
-                    sessionId,
-                })
-                await transport.close()
-            } catch (error) {
-                logger.error('Error closing SSE transport', {
-                    module: 'HTTP',
-                    sessionId,
-                    error: error instanceof Error ? error.message : String(error),
-                })
-            }
-        }
-        this.sseTransports.clear()
 
         this.sessionLastActivity.clear()
         this.sessionSubjects.clear()

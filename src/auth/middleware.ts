@@ -7,6 +7,7 @@
 
 import type { Request, Response, NextFunction, RequestHandler } from 'express'
 import type { TokenClaims } from './types.js'
+import type { AuthInfo } from '@modelcontextprotocol/server'
 import type { TokenValidator } from './token-validator.js'
 import type { OAuthResourceServer } from './oauth-resource-server.js'
 import { TokenMissingError, InsufficientScopeError, isOAuthError } from './errors.js'
@@ -26,8 +27,10 @@ declare global {
     // eslint-disable-next-line @typescript-eslint/no-namespace
     namespace Express {
         interface Request {
-            /** Authenticated user claims */
-            auth?: TokenClaims
+            /** MCP standard auth info */
+            auth?: AuthInfo
+            /** Original Token claims */
+            tokenClaims?: TokenClaims
             /** Raw access token */
             accessToken?: string
             /** Request ID for tracing */
@@ -205,7 +208,14 @@ export function createAuthMiddleware(config: AuthMiddlewareConfig): RequestHandl
             res.status(500).json({ error: 'internal_error' })
             return
         }
-        authReq.auth = claims
+        const authInfo: AuthInfo = {
+            token: token,
+            clientId: claims.client_id || claims.sub,
+            scopes: claims.scopes,
+            expiresAt: claims.exp * 1000
+        }
+        authReq.auth = authInfo
+        authReq.tokenClaims = claims
         authReq.accessToken = token
 
         logger.info(`Request authenticated: ${claims.sub}`, {

@@ -1,4 +1,4 @@
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { McpServer } from '@modelcontextprotocol/server'
 import type { z } from 'zod'
 import { getEnabledGroups } from '../../filtering/tool-filter.js'
 import { callTool } from '../../handlers/tools/index.js'
@@ -11,7 +11,7 @@ import { registerResources, registerPrompts } from '../registration.js'
 import type { ResourceDefinition, PromptDefinition } from '../registration.js'
 import { VERSION } from '../../version.js'
 import { globalSubscriptionManager } from '../subscription-manager.js'
-import { SubscribeRequestSchema, UnsubscribeRequestSchema, type CallToolResult } from '@modelcontextprotocol/sdk/types.js'
+import { type CallToolResult } from '@modelcontextprotocol/server'
 import { logAgentIssue } from '../../utils/issue-logger.js'
 import { applyArgInterceptions } from '../../codemode/param-normalizer.js'
 
@@ -90,20 +90,8 @@ export function createServerInstance(
 
         for (const tool of allTools) {
             // Build tool options matching MCP SDK expectations
-            const toolOptions: {
-                description?: string
-                title?: string
-                inputSchema?: z.ZodType
-                outputSchema?: z.ZodType
-                annotations?: {
-                    title?: string
-                    readOnlyHint?: boolean
-                    destructiveHint?: boolean
-                    idempotentHint?: boolean
-                    openWorldHint?: boolean
-                }
-                icons?: unknown
-            } = {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const toolOptions: any = {
                 description: tool.description,
             }
 
@@ -138,12 +126,12 @@ export function createServerInstance(
                         ).partial()
                         toolOptions.inputSchema = (typeof relaxed.passthrough === 'function'
                             ? relaxed.passthrough()
-                            : schema) as unknown as z.ZodType
+                            : schema)
                     } catch {
-                        toolOptions.inputSchema = schema as unknown as z.ZodType
+                        toolOptions.inputSchema = schema
                     }
                 } else {
-                    toolOptions.inputSchema = schema as unknown as z.ZodType
+                    toolOptions.inputSchema = schema
                 }
             }
 
@@ -159,10 +147,10 @@ export function createServerInstance(
                     try {
                         toolOptions.outputSchema = (outSchema as { passthrough: () => z.ZodType }).passthrough()
                     } catch {
-                        toolOptions.outputSchema = outSchema as unknown as z.ZodType
+                        toolOptions.outputSchema = outSchema
                     }
                 } else {
-                    toolOptions.outputSchema = outSchema as unknown as z.ZodType
+                    toolOptions.outputSchema = outSchema
                 }
             }
 
@@ -172,13 +160,16 @@ export function createServerInstance(
 
             // MCP 2025-11-25: Pass icons for visual representation
             if (tool.icons) {
-                toolOptions.icons = tool.icons
+                // Ensure tool.icons is handled correctly since getToolIcon returns a single object
+                toolOptions.icons = [{
+                    src: tool.icons.iconUrl,
+                }]
             }
 
             // Capture whether this tool has outputSchema for response handling
             const hasOutputSchema = Boolean(tool.outputSchema)
 
-            server.registerTool(tool.name, toolOptions, async (args, extra): Promise<CallToolResult> => {
+            server.registerTool(tool.name, toolOptions, async (args: any, extra: any): Promise<CallToolResult> => {
                 try {
                     // Build progress context for progress notifications
                     // Extract progressToken from extra._meta (SDK passes RequestHandlerExtra)
@@ -363,7 +354,7 @@ export function createServerInstance(
         registerResources(server, resources, handleResourceRead, runtime)
 
         // Register subscribe/unsubscribe handlers on the underlying server
-        server.server.setRequestHandler(SubscribeRequestSchema, (request, extra) => {
+        server.server.setRequestHandler('resources/subscribe', (request, extra) => {
             const transportSessionId = (extra as { sessionId?: string })?.sessionId || 'stdio'
             
             // Validate that the current session has authorization to subscribe to this resource
@@ -374,7 +365,7 @@ export function createServerInstance(
             return {}
         })
 
-        server.server.setRequestHandler(UnsubscribeRequestSchema, (request, extra) => {
+        server.server.setRequestHandler('resources/unsubscribe', (request, extra) => {
             const transportSessionId = (extra as { sessionId?: string })?.sessionId || 'stdio'
             globalSubscriptionManager.unsubscribe(request.params.uri, transportSessionId)
             return {}

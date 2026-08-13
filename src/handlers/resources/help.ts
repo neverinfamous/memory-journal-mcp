@@ -15,7 +15,7 @@ import { ASSISTANT_FOCUSED } from '../../utils/resource-annotations.js'
 import { logger } from '../../utils/logger.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from './shared.js'
 import type { getTools } from '../../handlers/tools/index.js'
-import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js'
+import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server'
 
 // ============================================================================
 // Group Metadata
@@ -265,7 +265,7 @@ export function getHelpResourceDefinitions(): InternalResourceDef[] {
                 const groupName = match?.[1]
 
                 if (!groupName) {
-                    throw new McpError(ErrorCode.InvalidParams, 'Invalid group name in URI. Read memory://help for a list of available groups.')
+                    throw new ProtocolError(ProtocolErrorCode.InvalidParams,  'Invalid group name in URI. Read memory://help for a list of available groups.')
                 }
 
                 // Resolve dynamic tool data for this group
@@ -338,8 +338,7 @@ export function getHelpResourceDefinitions(): InternalResourceDef[] {
                 // Not found
                 const availableGroups = [...new Set(tools.map((t) => t.group))].sort()
                 const staticKeys = [...HELP_CONTENT.keys()]
-                throw new McpError(
-                    -32002,
+                throw new ProtocolError(ProtocolErrorCode.InternalError, 
                     `Group "${groupName}" not found. Available groups: ${availableGroups.join(', ')}. Static help: ${staticKeys.join(', ')}.`
                 )
             },

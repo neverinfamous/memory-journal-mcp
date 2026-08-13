@@ -65,7 +65,7 @@ export interface ServerOptions {
     configFilePath?: string
 }
 
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { McpServer } from '@modelcontextprotocol/server'
 export type McpServerFactory = () => McpServer
 
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'

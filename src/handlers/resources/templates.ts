@@ -12,7 +12,7 @@ import type { InternalResourceDef, ResourceContext } from './shared.js'
 import { resolveGitHubRepo, isResourceError } from './shared.js'
 import { parseSessionCommitContext } from '../../types/auto-context.js'
 import { enrichCommits } from '../../github/commit-references/index.js'
-import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js'
+import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server'
 
 /**
  * Get template resource definitions
@@ -31,7 +31,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                 const projectNumber = match?.[1] ? parseInt(match[1], 10) : null
 
                 if (projectNumber === null) {
-                    throw new McpError(ErrorCode.InvalidParams, 'Invalid project number')
+                    throw new ProtocolError(ProtocolErrorCode.InvalidParams,  'Invalid project number')
                 }
 
                 const { entries } = context.db.searchEntries('', { projectNumber, limit: 50 })
@@ -53,7 +53,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                 const issueNumber = match?.[1] ? parseInt(match[1], 10) : null
 
                 if (issueNumber === null) {
-                    throw new McpError(ErrorCode.InvalidParams, 'Invalid issue number')
+                    throw new ProtocolError(ProtocolErrorCode.InvalidParams,  'Invalid issue number')
                 }
 
                 const { entries } = context.db.searchEntries('', { issueNumber, limit: 100 })
@@ -75,7 +75,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                 const prNumber = match?.[1] ? parseInt(match[1], 10) : null
 
                 if (prNumber === null) {
-                    throw new McpError(ErrorCode.InvalidParams, 'Invalid PR number')
+                    throw new ProtocolError(ProtocolErrorCode.InvalidParams,  'Invalid PR number')
                 }
 
                 const { entries } = context.db.searchEntries('', { prNumber, limit: 100 })
@@ -106,7 +106,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                 const prNumber = match?.[1] ? parseInt(match[1], 10) : null
 
                 if (prNumber === null) {
-                    throw new McpError(ErrorCode.InvalidParams, 'Invalid PR number')
+                    throw new ProtocolError(ProtocolErrorCode.InvalidParams,  'Invalid PR number')
                 }
 
                 // Fetch live PR metadata from GitHub if available
@@ -189,7 +189,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                 const projectNumber = match?.[1] ? parseInt(match[1], 10) : null
 
                 if (projectNumber === null) {
-                    throw new McpError(ErrorCode.InvalidParams, 'Invalid project number')
+                    throw new ProtocolError(ProtocolErrorCode.InvalidParams,  'Invalid project number')
                 }
 
                 const { entries } = context.db.searchEntries('', { projectNumber, limit: 200 })
@@ -249,7 +249,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                 const projectNumber = match?.[1] ? parseInt(match[1], 10) : null
 
                 if (projectNumber === null) {
-                    throw new McpError(ErrorCode.InvalidParams, 'Invalid project number')
+                    throw new ProtocolError(ProtocolErrorCode.InvalidParams,  'Invalid project number')
                 }
 
                 const { entries } = context.db.searchEntries('', { projectNumber, limit: 200 })
@@ -326,7 +326,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                 const projectNumber = match?.[1] ? parseInt(match[1], 10) : null
 
                 if (projectNumber === null) {
-                    throw new McpError(ErrorCode.InvalidParams, 'Invalid project number')
+                    throw new ProtocolError(ProtocolErrorCode.InvalidParams,  'Invalid project number')
                 }
 
                 const { entries } = context.db.searchEntries('', { projectNumber, limit: 200 })
@@ -403,7 +403,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                 const projectNumber = match?.[2] ? parseInt(match[2], 10) : null
 
                 if (projectNumber === null) {
-                    throw new McpError(ErrorCode.InvalidParams, 'Invalid project number')
+                    throw new ProtocolError(ProtocolErrorCode.InvalidParams,  'Invalid project number')
                 }
 
                 const resolved = await resolveGitHubRepo(
@@ -417,8 +417,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
 
                 const board = await github.getProjectKanban(owner, projectNumber, repo)
                 if (!board) {
-                    throw new McpError(
-                        -32002,
+                    throw new ProtocolError(ProtocolErrorCode.InternalError, 
                         `Project #${String(projectNumber)} not found or Status field not configured`
                     )
                 }

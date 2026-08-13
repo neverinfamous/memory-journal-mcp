@@ -1,5 +1,4 @@
-import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
-import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js'
+import { NodeStreamableHTTPServerTransport as StreamableHTTPServerTransport } from '@modelcontextprotocol/node'
 import type { McpServerFactory } from '../../../server/mcp-server/index.js'
 import { randomUUID } from 'node:crypto'
 import type { Request, Response, Express } from 'express'
@@ -11,14 +10,12 @@ import {
     JSONRPC_SERVER_ERROR,
     JSONRPC_INTERNAL_ERROR,
 } from '../types.js'
-import type { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js'
+// SSEServerTransport removed
 import { requestContextStorage } from '../../../utils/request-context.js'
 import { globalSubscriptionManager } from '../../../server/subscription-manager.js'
 
 export interface StatefulContext {
     transports: Map<string, StreamableHTTPServerTransport>
-    // eslint-disable-next-line @typescript-eslint/no-deprecated -- backward compat
-    sseTransports: Map<string, SSEServerTransport>
     sessionLastActivity: Map<string, number>
     sessionSubjects: Map<string, string>
     sessionLocks: Map<string, number>
@@ -59,23 +56,6 @@ export function setupStateful(
                 globalSubscriptionManager.unregisterServer(sid)
                 if (ctx.sessionCreatedAt) ctx.sessionCreatedAt.delete(sid)
             }
-
-            // Expire idle Legacy SSE sessions
-            if (ctx.sseTransports.has(sid)) {
-                logger.info('Expiring idle SSE session', {
-                    module: 'HTTP',
-                    sessionId: sid,
-                    idleMinutes: Math.round(idleMs / 60_000),
-                })
-                const t = ctx.sseTransports.get(sid)
-                if (t) {
-                    void t.close()
-                }
-                ctx.sseTransports.delete(sid)
-                ctx.sessionSubjects.delete(sid)
-                ctx.sessionLastActivity.delete(sid)
-                if (ctx.sessionCreatedAt) ctx.sessionCreatedAt.delete(sid)
-            }
         }
     }, SESSION_SWEEP_INTERVAL_MS)
     sessionSweepTimer.unref()
@@ -90,19 +70,6 @@ export function setupStateful(
         void (async () => {
             try {
                 if (sessionId !== undefined) {
-                    // Cross-protocol guard: reject SSE session IDs on /mcp
-                    if (ctx.sseTransports.has(sessionId)) {
-                        res.status(400).json({
-                            jsonrpc: '2.0',
-                            error: {
-                                code: JSONRPC_SERVER_ERROR,
-                                message:
-                                    'Bad Request: Session uses Legacy SSE transport, not Streamable HTTP',
-                            },
-                            id: null,
-                        })
-                        return
-                    }
 
                     if (!ctx.transports.has(sessionId)) {
                         res.status(400).json({
@@ -145,7 +112,7 @@ export function setupStateful(
                     }
 
                     ctx.touchSession(sessionId)
-                } else if (!isInitializeRequest(req.body)) {
+                } else if (!(req.body !== null && typeof req.body === 'object' && 'method' in (req.body as Record<string, unknown>) && (req.body as Record<string, unknown>)['method'] === 'initialize')) {
                     res.status(400).json({
                         jsonrpc: '2.0',
                         error: {
@@ -181,7 +148,7 @@ export function setupStateful(
                         }
                     }
 
-                    if (ctx.transports.size + ctx.sseTransports.size >= maxSessions) {
+                    if (ctx.transports.size >= maxSessions) {
                         res.status(429).json({
                             jsonrpc: '2.0',
                             error: {
