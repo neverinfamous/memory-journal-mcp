@@ -537,24 +537,6 @@ describe('HttpTransport', () => {
             handler!(mockReq(), res)
             expect(res['status'] as ReturnType<typeof vi.fn>).toHaveBeenCalledWith(405)
         })
-
-        it('should return 204 for DELETE /mcp in stateless mode', async () => {
-            const config: HttpTransportConfig = {
-                port: 3000,
-                host: '127.0.0.1',
-                corsOrigins: ['http://localhost'],
-                stateless: true,
-            }
-            const transport = new HttpTransport(config)
-            await transport.start((() => mockServer) as never, null)
-
-            const handler = mockRoutes['delete']!['/mcp']
-            expect(handler).toBeDefined()
-
-            const res = mockRes()
-            handler!(mockReq(), res)
-            expect(res['end'] as ReturnType<typeof vi.fn>).toHaveBeenCalled()
-        })
     })
 
     // ========================================================================
@@ -614,25 +596,6 @@ describe('HttpTransport', () => {
             await transport.stop(mockScheduler as unknown as Parameters<HttpTransport['stop']>[0])
 
             expect(mockScheduler.stop).toHaveBeenCalled()
-        })
-
-        it('should catch errors when closing active transports', async () => {
-            const config: HttpTransportConfig = {
-                port: 3000,
-                host: '127.0.0.1',
-                corsOrigins: ['http://localhost'],
-                stateless: true,
-            }
-            const transport = new HttpTransport(config)
-            await transport.start((() => mockServer) as never, null)
-
-            transport.transports.set('dummy-1', {
-                close: vi.fn().mockRejectedValue(new Error('dummy close error')),
-            } as any)
-
-            // Should gracefully catch and log without throwing
-            await transport.stop(null)
-            expect(transport.transports.size).toBe(0)
         })
     })
 

@@ -7,7 +7,7 @@
  */
 
 import { test, expect } from './test-fixture.js'
-import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import type { Client } from '@modelcontextprotocol/client'
 import { startServer, stopServer, createClient, callToolAndParse } from './helpers.js'
 import { tmpdir } from 'node:os'
 

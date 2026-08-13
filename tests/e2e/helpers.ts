@@ -11,8 +11,7 @@
  * - startServer() / stopServer() — managed child-process server lifecycle
  */
 
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+import { Client, SSEClientTransport } from '@modelcontextprotocol/client'
 import type { TestInfo } from '@playwright/test'
 import { expect } from '@playwright/test'
 import { ChildProcess, spawn } from 'node:child_process'
@@ -56,7 +55,7 @@ export async function createClient(port?: number, authToken?: string): Promise<C
     const transportOptions = authToken
         ? { requestInit: { headers: { Authorization: `Bearer ${authToken}` } } }
         : undefined
-    const transport = new StreamableHTTPClientTransport(
+    const transport = new SSEClientTransport(
         new URL(`http://localhost:${resolvedPort}/mcp`),
         transportOptions
     )

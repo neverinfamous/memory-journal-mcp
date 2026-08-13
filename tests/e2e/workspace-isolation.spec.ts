@@ -1,6 +1,6 @@
 import { test, expect } from './test-fixture.js'
 import { startServer, stopServer, callToolAndParse, createClient } from './helpers.js'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import { Client } from '@modelcontextprotocol/client'
 
 const WS_PORT = 6300 + Number(process.env.TEST_PARALLEL_INDEX || 0)
 

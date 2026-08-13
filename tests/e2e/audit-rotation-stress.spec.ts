@@ -13,7 +13,7 @@ import {
     createClient,
     callToolAndParse,
 } from './helpers.js'
-import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import type { Client } from '@modelcontextprotocol/client'
 
 const AUDIT_PORT_BASE = 5140 + (Number(process.env.TEST_PARALLEL_INDEX || 0) * 100)
 const AUDIT_FILTER = 'core'

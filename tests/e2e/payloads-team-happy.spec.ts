@@ -7,9 +7,9 @@
  */
 
 import { test, expect } from './test-fixture.js'
-import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { Client as McpClient } from '@modelcontextprotocol/sdk/client/index.js'
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+import type { Client } from '@modelcontextprotocol/client'
+import { Client as McpClient } from '@modelcontextprotocol/client'
+import { SSEClientTransport as NodeStreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 import { callToolAndParse, expectSuccess } from './helpers.js'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
@@ -85,7 +85,7 @@ test.describe('Payload Contracts: Team Tools (Happy Path)', () => {
         }
         if (!ready) throw new Error('Team MCP server failed to start within 60 seconds')
 
-        const transport = new StreamableHTTPClientTransport(new URL(`${TEAM_BASE}/mcp`), {
+        const transport = new NodeStreamableHTTPClientTransport(new URL(`${TEAM_BASE}/mcp`), {
             requestInit: { headers: { Authorization: 'Bearer test-token' } },
         })
         client = new McpClient({ name: 'team-happy-test', version: '1.0.0' }, { capabilities: {} })

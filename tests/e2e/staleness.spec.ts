@@ -1,6 +1,6 @@
 import { test, expect } from './test-fixture.js'
 import { createClient } from './helpers.js'
-import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import type { Client } from '@modelcontextprotocol/client'
 
 test.describe('E2E Resource Reads: Staleness', () => {
     let client: Client

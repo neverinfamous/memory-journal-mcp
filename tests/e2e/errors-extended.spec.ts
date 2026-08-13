@@ -302,7 +302,7 @@ test.describe('Errors: Backup', () => {
 
 test.describe('Errors: Team', () => {
     const TEAM_EXT_PORT = 5125 + (Number(process.env.TEST_PARALLEL_INDEX || 0) * 100)
-    let client: import('@modelcontextprotocol/sdk/client/index.js').Client
+    let client: import('@modelcontextprotocol/client').Client
 
     test.beforeAll(async () => {
         await startServer(TEAM_EXT_PORT, ['--auth-token', 'test-token'], 'errors-extended-team', {

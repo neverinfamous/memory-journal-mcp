@@ -1,8 +1,5 @@
 import { test, expect } from './test-fixture.js'
-import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import {
-    CallToolResultSchema,
-} from '@modelcontextprotocol/sdk/types.js'
+import type { Client } from '@modelcontextprotocol/client'
 import { createClient } from './helpers.js'
 
 test.describe.configure({ mode: 'serial' })
@@ -26,7 +23,6 @@ test.describe('Progress Notifications (Transport Layer)', () => {
                 name: 'trigger_progress',
                 arguments: {},
             },
-            CallToolResultSchema,
             {
                 onprogress: (progress) => {
                     notifications.push({

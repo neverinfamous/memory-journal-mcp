@@ -1,7 +1,5 @@
 import { test, expect } from './test-fixture.js'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js'
-import { ResourceUpdatedNotificationSchema } from '@modelcontextprotocol/sdk/types.js'
+import { Client, SSEClientTransport } from '@modelcontextprotocol/client'
 import { startServer, stopServer } from './helpers.js'
 
 const PORT = 5129 + (Number(process.env.TEST_PARALLEL_INDEX || 0) * 100)
@@ -21,9 +19,9 @@ test.describe('E2E MCP Subscriptions', () => {
             { capabilities: {} }
         )
 
-        client.setNotificationHandler(ResourceUpdatedNotificationSchema, (notification) => {
-            if (notification.params.uri) {
-                receivedNotifications.push(notification.params.uri)
+        client.setNotificationHandler('notifications/resources/updated', (notification) => {
+            if (notification.params?.uri) {
+                receivedNotifications.push(notification.params.uri as string)
             }
         })
 

@@ -65,6 +65,9 @@ describe('Backup Manager Edge Cases', () => {
             lockFile,
             JSON.stringify({ pid: 999999, timestamp: Date.now() - 40000, nonce: '123' })
         )
+        
+        // Wait for Windows to fully release the file handle
+        await new Promise((r) => setTimeout(r, 100))
 
         // Should succeed because lock is stale and gets overridden
         const result = await db.restoreFromFile(backup.filename)

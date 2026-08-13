@@ -5,7 +5,7 @@ import {
     createClient,
     callToolAndParse,
 } from './helpers.js'
-import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import type { Client } from '@modelcontextprotocol/client'
 
 const WORKER_PORT = 5128 + (Number(process.env.TEST_PARALLEL_INDEX || 0) * 100)
 

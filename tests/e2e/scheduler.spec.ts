@@ -7,8 +7,8 @@
  */
 
 import { test, expect } from './test-fixture.js'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+import { Client } from '@modelcontextprotocol/client'
+import { SSEClientTransport as NodeStreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 
 import { getServerUrl } from './helpers.js'
 
@@ -16,7 +16,7 @@ test.describe('Scheduler Activation (HTTP Only)', () => {
     let client: Client
 
     test.beforeAll(async () => {
-        const transport = new StreamableHTTPClientTransport(getServerUrl('/mcp'))
+        const transport = new NodeStreamableHTTPClientTransport(getServerUrl('/mcp'))
         client = new Client(
             { name: 'playwright-scheduler-test', version: '1.0.0' },
             { capabilities: {} }

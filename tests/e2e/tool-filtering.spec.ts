@@ -8,8 +8,8 @@
  */
 
 import { test, expect } from './test-fixture.js'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+import { Client } from '@modelcontextprotocol/client'
+import { SSEClientTransport as NodeStreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 import { startServer, stopServer } from './helpers.js'
 
 const FILTER_PORT = 5104 + (Number(process.env.TEST_PARALLEL_INDEX || 0) * 100)
@@ -20,7 +20,7 @@ test.describe('Tool Filtering', () => {
     test.beforeAll(async () => {
         await startServer(FILTER_PORT, ['--tool-filter', 'starter'], 'tool-filter')
 
-        const transport = new StreamableHTTPClientTransport(
+        const transport = new NodeStreamableHTTPClientTransport(
             new URL(`http://localhost:${FILTER_PORT}/mcp`)
         )
         client = new Client({ name: 'tool-filter-test', version: '1.0.0' }, { capabilities: {} })

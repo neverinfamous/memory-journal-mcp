@@ -111,8 +111,8 @@ test.describe('HTTP Transport Protocols', () => {
         test('should complete full SDK client round-trip via Legacy SSE', async ({ request: _ }, testInfo) => {
             // Regression test: server.connect() auto-calls start() on SSEServerTransport,
             // so a redundant start() call would throw "already started!" and break SSE entirely.
-            const { Client } = await import('@modelcontextprotocol/sdk/client/index.js')
-            const { SSEClientTransport } = await import('@modelcontextprotocol/sdk/client/sse.js')
+            const { Client } = await import('@modelcontextprotocol/client')
+            const { SSEClientTransport } = await import('@modelcontextprotocol/client')
 
             const baseURL = getBaseURL(testInfo)
             const transport = new SSEClientTransport(new URL(`${baseURL}/sse`))

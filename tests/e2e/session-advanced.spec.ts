@@ -6,9 +6,9 @@
  */
 
 import { test, expect } from './test-fixture.js'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
-import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js'
+import { Client } from '@modelcontextprotocol/client'
+import { SSEClientTransport as NodeStreamableHTTPClientTransport } from '@modelcontextprotocol/client'
+import { SSEClientTransport } from '@modelcontextprotocol/client'
 
 import { getServerUrl } from './helpers.js'
 
@@ -58,7 +58,7 @@ test.describe('Advanced Session Management', () => {
         const sessionIds: string[] = []
 
         for (let i = 0; i < 3; i++) {
-            const transport = new StreamableHTTPClientTransport(
+            const transport = new NodeStreamableHTTPClientTransport(
                 getServerUrl('/mcp')
             )
             const client = new Client(

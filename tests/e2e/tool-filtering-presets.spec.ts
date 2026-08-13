@@ -12,8 +12,8 @@
  */
 
 import { test, expect } from './test-fixture.js'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+import { Client } from '@modelcontextprotocol/client'
+import { SSEClientTransport as NodeStreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 import { startServer, stopServer } from './helpers.js'
 import { getAllToolNames, TOOL_GROUPS } from '../../src/filtering/tool-filter.js'
 
@@ -35,7 +35,7 @@ test.describe('Tool Filter: essential preset', () => {
     test.beforeAll(async () => {
         await startServer(ESSENTIAL_PORT, ['--tool-filter', 'essential'], 'filter-essential')
 
-        const transport = new StreamableHTTPClientTransport(
+        const transport = new NodeStreamableHTTPClientTransport(
             new URL(`http://localhost:${ESSENTIAL_PORT}/mcp`)
         )
         client = new Client(
@@ -95,7 +95,7 @@ test.describe('Tool Filter: codemode-only preset', () => {
     test.beforeAll(async () => {
         await startServer(CODEMODE_PORT, ['--tool-filter', 'codemode'], 'filter-codemode')
 
-        const transport = new StreamableHTTPClientTransport(
+        const transport = new NodeStreamableHTTPClientTransport(
             new URL(`http://localhost:${CODEMODE_PORT}/mcp`)
         )
         client = new Client(
@@ -153,7 +153,7 @@ test.describe('Tool Filter: -github subtractive filter', () => {
     test.beforeAll(async () => {
         await startServer(MINUS_GITHUB_PORT, ['--tool-filter', '-github'], 'filter-minus-github')
 
-        const transport = new StreamableHTTPClientTransport(
+        const transport = new NodeStreamableHTTPClientTransport(
             new URL(`http://localhost:${MINUS_GITHUB_PORT}/mcp`)
         )
         client = new Client(

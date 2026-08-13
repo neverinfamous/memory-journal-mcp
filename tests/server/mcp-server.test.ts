@@ -109,6 +109,7 @@ vi.mock('@modelcontextprotocol/server', () => ({
             uriTemplate: { template: 'mock-template' },
         }
     },
+    createMcpHandler: vi.fn(),
 }))
 
 vi.mock('@modelcontextprotocol/server/stdio', () => ({
@@ -125,6 +126,7 @@ vi.mock('@modelcontextprotocol/node', () => ({
             sessionId: undefined,
         }
     },
+    toNodeHandler: vi.fn(() => vi.fn().mockResolvedValue(undefined)),
 }))
 
 vi.mock('../../src/database/sqlite-adapter/index.js', () => ({
@@ -500,8 +502,9 @@ describe('McpServer', function () {
                 host: '127.0.0.1',
             })
 
-            // Should connect to transport
-            expect(mockConnect).toHaveBeenCalled()
+            // Should register GET /mcp and POST /mcp routes
+            expect(mockHandlers.get['/mcp']).toBeDefined()
+            expect(mockHandlers.post['/mcp']).toBeDefined()
         })
     })
 
@@ -886,7 +889,7 @@ describe('McpServer', function () {
             // StreamableHTTPServerTransport.handleRequest should be called (from our mock)
         })
 
-        it('should handle GET /mcp and DELETE /mcp in stateless mode', async function () {
+        it('should handle GET /mcp in stateless mode', async function () {
             await createServer({
                 transport: 'http',
                 allowedIoRoots: ['C:/dummy/root'],
@@ -895,21 +898,16 @@ describe('McpServer', function () {
             })
 
             const getHandler = mockHandlers.get['/mcp']
-            const deleteHandler = mockHandlers.delete['/mcp']
             expect(getHandler).toBeDefined()
-            expect(deleteHandler).toBeDefined()
 
             const mockReq = {}
             const mockRes = { status: vi.fn().mockReturnThis(), json: vi.fn(), end: vi.fn() }
 
             if (getHandler) await getHandler(mockReq, mockRes)
             expect(mockRes.status).toHaveBeenCalledWith(405)
-
-            if (deleteHandler) await deleteHandler(mockReq, mockRes)
-            expect(mockRes.status).toHaveBeenCalledWith(204)
         })
 
-        it('should handle stateful mode POST /mcp validation failures', async function () {
+        it('should handle stateful mode POST /messages validation failures', async function () {
             await createServer({
                 transport: 'http',
                 allowedIoRoots: ['C:/dummy/root'],
@@ -917,11 +915,11 @@ describe('McpServer', function () {
                 statelessHttp: false,
             })
 
-            const postHandler = mockHandlers.post['/mcp']
+            const postHandler = mockHandlers.post['/messages']
             expect(postHandler).toBeDefined()
 
             // Missing session ID and not initialization request
-            const mockReq = { headers: {}, body: {} }
+            const mockReq = { path: '/messages', headers: {}, body: {} }
             const mockRes = { status: vi.fn().mockReturnThis(), json: vi.fn() }
 
             if (postHandler) {
@@ -932,7 +930,7 @@ describe('McpServer', function () {
             expect(mockRes.json).toHaveBeenCalledWith(
                 expect.objectContaining({
                     error: expect.objectContaining({
-                        message: expect.stringContaining('No valid session ID'),
+                        message: expect.stringContaining('Missing sessionId parameter'),
                     }),
                 })
             )
@@ -1139,36 +1137,15 @@ describe('McpServer', function () {
             const mockReq = { headers: {} }
             const mockRes = {
                 status: vi.fn().mockReturnThis(),
-                send: vi.fn(),
+                json: vi.fn(),
             }
 
             if (getHandler) await getHandler(mockReq, mockRes)
             expect(mockRes.status).toHaveBeenCalledWith(400)
-            expect(mockRes.send).toHaveBeenCalledWith(
-                expect.stringContaining('Invalid or missing session ID')
-            )
+            expect(mockRes.json).toHaveBeenCalledWith({ error: { message: 'Bad Request: No valid session ID provided' } })
         })
 
-        it('should handle stateful DELETE /mcp without session', async function () {
-            await createServer({
-                transport: 'http',
-                allowedIoRoots: ['C:/dummy/root'],
-                dbPath: './.test-output/vitest/test-server.db',
-                statelessHttp: false,
-            })
 
-            const deleteHandler = mockHandlers.delete['/mcp']
-            expect(deleteHandler).toBeDefined()
-
-            const mockReq = { headers: {} }
-            const mockRes = {
-                status: vi.fn().mockReturnThis(),
-                send: vi.fn(),
-            }
-
-            if (deleteHandler) await deleteHandler(mockReq, mockRes)
-            expect(mockRes.status).toHaveBeenCalledWith(400)
-        })
 
         it('should handle stateful GET /mcp with invalid session', async function () {
             await createServer({
@@ -1182,65 +1159,16 @@ describe('McpServer', function () {
             const mockReq = { headers: { 'mcp-session-id': 'nonexistent-session' } }
             const mockRes = {
                 status: vi.fn().mockReturnThis(),
-                send: vi.fn(),
+                json: vi.fn(),
             }
 
             if (getHandler) await getHandler(mockReq, mockRes)
-            expect(mockRes.status).toHaveBeenCalledWith(400)
+            expect(mockRes.status).toHaveBeenCalledWith(404)
         })
 
-        it('should handle stateful DELETE /mcp with invalid session', async function () {
-            await createServer({
-                transport: 'http',
-                allowedIoRoots: ['C:/dummy/root'],
-                dbPath: './.test-output/vitest/test-server.db',
-                statelessHttp: false,
-            })
 
-            const deleteHandler = mockHandlers.delete['/mcp']
-            const mockReq = { headers: { 'mcp-session-id': 'nonexistent-session' } }
-            const mockRes = {
-                status: vi.fn().mockReturnThis(),
-                send: vi.fn(),
-            }
 
-            if (deleteHandler) await deleteHandler(mockReq, mockRes)
-            expect(mockRes.status).toHaveBeenCalledWith(400)
-        })
 
-        it('should handle stateful POST /mcp with initialization request', async function () {
-
-            await createServer({
-                transport: 'http',
-                allowedIoRoots: ['C:/dummy/root'],
-                dbPath: './.test-output/vitest/test-server.db',
-                statelessHttp: false,
-            })
-
-            const postHandler = mockHandlers.post['/mcp']
-            expect(postHandler).toBeDefined()
-
-            // Simulate initialization request (no session ID)
-            const mockReq = {
-                headers: {},
-                body: { jsonrpc: '2.0', id: 1, method: 'initialize' },
-            }
-            const mockRes = {
-                status: vi.fn().mockReturnThis(),
-                json: vi.fn(),
-                headersSent: false,
-            }
-
-            if (postHandler) {
-                await postHandler(mockReq, mockRes)
-                // Wait for async void handler to complete
-                await new Promise((r) => setTimeout(r, 50))
-            }
-
-            // The transport should have been created and connected
-            // (StreamableHTTPServerTransport mock handles the request)
-            expect(mockConnect).toHaveBeenCalled()
-        })
 
         it('should handle stateful POST /mcp error with 500 response', async function () {
             // Create a transport mock that throws

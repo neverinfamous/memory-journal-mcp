@@ -25,7 +25,7 @@ import {
     callToolRaw,
     callToolAndParse,
 } from './helpers.js'
-import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import type { Client } from '@modelcontextprotocol/client'
 
 test.describe.configure({ mode: 'serial', timeout: 120_000 })
 

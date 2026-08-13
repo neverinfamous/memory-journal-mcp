@@ -6,7 +6,7 @@
  */
 
 import { test, expect } from './test-fixture.js'
-import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import type { Client } from '@modelcontextprotocol/client'
 import { createClient, callToolAndParse, expectSuccess } from './helpers.js'
 import { rm } from 'node:fs/promises'
 import { resolve } from 'node:path'

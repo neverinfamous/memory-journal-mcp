@@ -23,9 +23,9 @@
  */
 
 import { test, expect } from './test-fixture.js'
-import type { ReadResourceResult } from '@modelcontextprotocol/sdk/types.js'
+import type { ReadResourceResult } from '@modelcontextprotocol/types'
 import { createClient, callToolAndParse, expectSuccess } from './helpers.js'
-import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import type { Client } from '@modelcontextprotocol/client'
 
 // ─── Helper ─────────────────────────────────────────────────────────────────
 

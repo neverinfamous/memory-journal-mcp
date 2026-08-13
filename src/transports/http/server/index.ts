@@ -1,20 +1,8 @@
-/**
- * memory-journal-mcp — HTTP Transport Server
- *
- * Dual-protocol HTTP transport:
- * - `/mcp` — Streamable HTTP transport (MCP 2025-03-26)
- * - `/sse` + `/messages` — Legacy SSE transport (MCP 2024-11-05)
- *
- * Modes:
- * - Stateful (default): Multi-session management with SSE streaming
- * - Stateless (opt-in): Lightweight serverless-compatible mode
- *
- * Security utilities and handlers in ./security.ts and ./handlers.ts.
- * Config types and constants in ./types.ts.
- */
-
-import type { NodeStreamableHTTPServerTransport as StreamableHTTPServerTransport } from '@modelcontextprotocol/node'
-// legacy SSE removed from imports
+import { toNodeHandler, NodeStreamableHTTPServerTransport } from '@modelcontextprotocol/node'
+import { createMcpHandler } from '@modelcontextprotocol/server'
+import { randomUUID } from 'node:crypto'
+import { globalSubscriptionManager } from '../../../server/subscription-manager.js'
+import type { McpServer } from '@modelcontextprotocol/server'
 
 import type { McpServerFactory } from '../../../server/mcp-server/index.js'
 import express from 'express'
@@ -39,8 +27,6 @@ import {
 } from '../../../auth/index.js'
 import type { TokenClaims } from '../../../auth/index.js'
 import { hostHeaderValidation, localhostHostValidation } from '@modelcontextprotocol/express'
-import { setupStateless } from './stateless.js'
-import { setupStateful } from './stateful.js'
 import { runWithAuthContext as propagateCtx } from '../../../auth/auth-context.js'
 import type { ServerRuntime } from '../../../utils/maintenance-lock.js'
 
@@ -54,14 +40,11 @@ import type { ServerRuntime } from '../../../utils/maintenance-lock.js'
 export class HttpTransport {
     private readonly app: Express
     private readonly config: HttpTransportConfig
-    public readonly transports = new Map<string, StreamableHTTPServerTransport>()
-    public readonly sessionLastActivity = new Map<string, number>()
-    public readonly sessionSubjects = new Map<string, string>()
-    public readonly sessionLocks = new Map<string, number>()
-    /** Tracks whether server.connect() has been called (close-before-reconnect pattern) */
-    public serverConnected = false
+    public readonly activeServers = new Set<McpServer>()
     private httpServer: ReturnType<Express['listen']> | null = null
-    private sessionSweepTimer: ReturnType<typeof setInterval> | null = null
+    
+    // Map to keep track of stateful SSE transports
+    private readonly sseTransports = new Map<string, NodeStreamableHTTPServerTransport>()
 
     // Rate limiting state
     private readonly rateLimitMap = new Map<string, RateLimitEntry>()
@@ -326,10 +309,6 @@ export class HttpTransport {
 
         /* codeql[js/missing-rate-limiting] */ this.app.use(propagateContextMiddleware)
 
-        // Scope enforcement middleware
-        // REMOVED: Scope validation is now handled comprehensively at the dispatch layer
-        // (Tool execution in index.ts, Resource/Prompt execution in registration.ts).
-
         // Health check endpoint
         this.app.get('/health', handleHealthCheck)
 
@@ -342,12 +321,121 @@ export class HttpTransport {
         // Root info endpoint
         this.app.get('/', handleRootInfo)
 
-        // Set up MCP endpoints based on mode
-        if (this.config.stateless) {
-            await setupStateless(this.app, serverFactory, hasAuth)
-        } else {
-            this.sessionSweepTimer = setupStateful(this, this.app, serverFactory)
+        // Set up standard unified MCP HTTP handler (stateless)
+        const statelessMcpHandler = toNodeHandler(createMcpHandler(() => {
+            const server = serverFactory()
+            this.activeServers.add(server)
+            const originalClose = server.close.bind(server)
+            server.close = async () => {
+                this.activeServers.delete(server)
+                return originalClose()
+            }
+            return server
+        }, { legacy: 'reject' }))
+
+        // Route for creating a NEW session and server
+        const createSessionAndHandle = (req: Request, res: Response, next: NextFunction, sid: string): void => {
+            const transport = new NodeStreamableHTTPServerTransport({
+                sessionIdGenerator: () => sid
+            })
+            const server = serverFactory()
+            
+            this.activeServers.add(server)
+            globalSubscriptionManager.registerServer(sid, server)
+            
+            const originalClose = server.close.bind(server)
+            server.close = async () => {
+                this.activeServers.delete(server)
+                this.sseTransports.delete(sid)
+                globalSubscriptionManager.unregisterServer(sid)
+                return originalClose()
+            }
+            
+            this.sseTransports.set(sid, transport)
+            
+            transport.onclose = () => {
+                server.close().catch((err: unknown) => logger.error('Error closing server on transport close', { error: String(err) }))
+            }
+            
+            server.connect(transport).catch((err: unknown) => logger.error('Error connecting server to transport', { error: String(err) }))
+            
+            // Pass the parsed body if available (for POST initialization)
+            transport.handleRequest(req, res, req.body).catch((err: unknown) => {
+                logger.error('Error handling transport request', { 
+                    error: String(err), 
+                    stack: err instanceof Error ? err.stack : undefined 
+                })
+                next(err)
+            })
         }
+
+        // GET requests (SSE Streams)
+        const handleStatefulGet = (req: Request, res: Response, next: NextFunction): void => {
+            if (this.config.stateless) {
+                res.status(405).json({ error: { message: 'Method Not Allowed' } })
+                return
+            }
+
+            const sid = (req.query?.['sessionId'] ?? req.headers?.['mcp-session-id']) as string | undefined
+            
+            if (sid !== undefined && sid !== '') {
+                // Reconnect or connect to existing session
+                const transport = this.sseTransports.get(sid)
+                if (!transport) {
+                    res.status(404).json({ error: 'Session not found' })
+                    return
+                }
+                transport.handleRequest(req, res).catch((err: unknown) => { next(err) })
+            } else {
+                if (req.path === '/sse' || req.path === '/sse/') {
+                    // Legacy SSE initializes via GET
+                    if (this.config.stateless) {
+                        res.status(405).json({ error: 'Method Not Allowed (Stateful SSE is disabled in stateless mode)' })
+                        return
+                    }
+                    createSessionAndHandle(req, res, next, randomUUID())
+                } else {
+                    // Streamable HTTP requires session ID for GET
+                    res.status(400).json({ error: { message: 'Bad Request: No valid session ID provided' } })
+                }
+            }
+        }
+
+        this.app.get('/mcp', handleStatefulGet)
+        this.app.get('/sse', handleStatefulGet)
+
+        // POST requests (Messages / Initialization)
+        const handlePost = (req: Request, res: Response, next: NextFunction): void => {
+            const sid = (req.query?.['sessionId'] ?? req.headers?.['mcp-session-id']) as string | undefined
+            
+            if (sid !== undefined && sid !== '') {
+                // Message for existing session
+                const transport = this.sseTransports.get(sid)
+                if (!transport) {
+                    res.status(404).json({ error: { message: 'Session not found' } })
+                    return
+                }
+                transport.handleRequest(req, res, req.body).catch((err: unknown) => { next(err) })
+            } else {
+                const acceptsSse = req.headers.accept?.includes('text/event-stream')
+                const isLegacyMessages = req.path === '/messages' || req.path === '/messages/'
+                
+                if (isLegacyMessages) {
+                    // Legacy POST to /messages strictly requires sessionId
+                    res.status(400).json({ error: { message: 'Missing sessionId parameter' } })
+                } else if (acceptsSse && !this.config.stateless) {
+                    // Streamable HTTP initializes via POST /mcp with Accept containing text/event-stream
+                    createSessionAndHandle(req, res, next, randomUUID())
+                } else {
+                    // Stateless request
+                    statelessMcpHandler(req, res, req.body).catch((err: unknown) => { next(err) })
+                }
+            }
+        }
+
+        this.app.post('/mcp', handlePost)
+        this.app.post('/messages', handlePost)
+
         // 404 handler — must be after all routes
         this.app.use((_req: Request, res: Response): void => {
             res.status(404).json({ error: 'Not found' })
@@ -395,30 +483,18 @@ export class HttpTransport {
             this.rateLimitCleanupTimer = null
         }
 
-        // Close all Streamable HTTP transports
-        for (const [sessionId, transport] of this.transports) {
+        // Close all active servers
+        for (const server of this.activeServers) {
             try {
-                logger.debug('Closing Streamable HTTP transport', {
-                    module: 'HTTP',
-                    sessionId,
-                })
-                await transport.close()
+                await server.close()
             } catch (error) {
-                logger.error('Error closing transport', {
+                logger.error('Error closing active server', {
                     module: 'HTTP',
-                    sessionId,
                     error: error instanceof Error ? error.message : String(error),
                 })
             }
         }
-        this.transports.clear()
-
-        this.sessionLastActivity.clear()
-        this.sessionSubjects.clear()
-        this.sessionLocks.clear()
-        if (this.sessionSweepTimer !== null) {
-            clearInterval(this.sessionSweepTimer)
-        }
+        this.activeServers.clear()
 
         if (this.httpServer !== null) {
             this.httpServer.close()
@@ -426,15 +502,4 @@ export class HttpTransport {
 
         logger.info('Shutdown complete', { module: 'HTTP' })
     }
-
-    // =========================================================================
-    // Session  Activity Tracking
-    // =========================================================================
-
-    /** Update the last-activity timestamp for a session */
-    public touchSession(sid: string): void {
-        this.sessionLastActivity.set(sid, Date.now())
-    }
-
-    // =========================================================================
 }
