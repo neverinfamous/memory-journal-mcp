@@ -99,6 +99,7 @@ test.describe('OAuth 2.1 Discovery', () => {
                 headers: {
                     'Content-Type': 'application/json',
                     Accept: 'application/json, text/event-stream',
+                    'mcp-protocol-version': '2024-11-05',
                 },
                 body: JSON.stringify({
                     jsonrpc: '2.0',

@@ -15,6 +15,7 @@ test.describe('HTTP Transport Protocols', () => {
             const response = await request.post(`${baseURL}/mcp`, {
                 headers: {
                     Accept: 'application/json, text/event-stream',
+                    'mcp-protocol-version': '2024-11-05',
                 },
                 data: {
                     jsonrpc: '2.0',
@@ -27,7 +28,7 @@ test.describe('HTTP Transport Protocols', () => {
             const body = await response.json()
             expect(body.error).toHaveProperty(
                 'message',
-                'Bad Request: No valid session ID provided'
+                'Bad Request: Server not initialized'
             )
         })
 
@@ -36,6 +37,7 @@ test.describe('HTTP Transport Protocols', () => {
             const response = await request.post(`${baseURL}/mcp`, {
                 headers: {
                     Accept: 'application/json, text/event-stream',
+                    'mcp-protocol-version': '2024-11-05',
                     'Content-Type': 'application/json',
                 },
                 data: Buffer.from('{"broken": json}'),
@@ -50,6 +52,7 @@ test.describe('HTTP Transport Protocols', () => {
             const response = await request.post(`${baseURL}/mcp`, {
                 headers: {
                     Accept: 'application/json, text/event-stream',
+                    'mcp-protocol-version': '2024-11-05',
                 },
                 data: {
                     jsonrpc: '2.0',

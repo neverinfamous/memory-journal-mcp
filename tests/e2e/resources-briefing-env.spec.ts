@@ -9,7 +9,7 @@
 import { test, expect } from './test-fixture.js'
 import type { Client } from '@modelcontextprotocol/client'
 import { Client as McpClient } from '@modelcontextprotocol/client'
-import { SSEClientTransport as NodeStreamableHTTPClientTransport } from '@modelcontextprotocol/client'
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { setTimeout as delay } from 'node:timers/promises'
 import * as fs from 'node:fs'
@@ -76,7 +76,7 @@ test.describe('Resources: Briefing Environment Configurations', () => {
         }
         if (!ready) throw new Error('Briefing MCP server failed to start within 60 seconds')
 
-        const transport = new NodeStreamableHTTPClientTransport(new URL(`${BRIEFING_BASE}/mcp`), {
+        const transport = new StreamableHTTPClientTransport(new URL(`${BRIEFING_BASE}/mcp`), {
             requestInit: { headers: { Authorization: 'Bearer test-token' } },
         })
         client = new McpClient({ name: 'briefing-test', version: '1.0' }, { capabilities: {} })

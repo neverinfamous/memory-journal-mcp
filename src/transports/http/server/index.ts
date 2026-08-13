@@ -29,6 +29,7 @@ import type { TokenClaims } from '../../../auth/index.js'
 import { hostHeaderValidation, localhostHostValidation } from '@modelcontextprotocol/express'
 import { runWithAuthContext as propagateCtx } from '../../../auth/auth-context.js'
 import type { ServerRuntime } from '../../../utils/maintenance-lock.js'
+import { LegacySSEServerTransport } from './legacy-sse.js'
 
 /**
  * HTTP Transport for Memory Journal MCP Server
@@ -44,7 +45,7 @@ export class HttpTransport {
     private httpServer: ReturnType<Express['listen']> | null = null
     
     // Map to keep track of stateful SSE transports
-    private readonly sseTransports = new Map<string, NodeStreamableHTTPServerTransport>()
+    private readonly sseTransports = new Map<string, NodeStreamableHTTPServerTransport | LegacySSEServerTransport>()
 
     // Rate limiting state
     private readonly rateLimitMap = new Map<string, RateLimitEntry>()
@@ -106,6 +107,11 @@ export class HttpTransport {
                 { module: 'HTTP' }
             )
         }
+        // Global debug logger
+        this.app.use((req: Request, _res: Response, next: NextFunction) => {
+            console.log('--- HTTP REQ ---', req.method, req.path, req.query, req.headers)
+            next()
+        })
 
         // DNS rebinding protection (CVE-2025-66414)
         // Always applied as defense-in-depth, even when auth is active.
@@ -142,8 +148,27 @@ export class HttpTransport {
 
         // JSON body parser with size limit (DoS prevention)
         const maxBody = this.config.maxBodySize ?? DEFAULT_MAX_BODY_BYTES
-        this.app.use(express.json({ limit: maxBody }) as RequestHandler)
-
+        const jsonParser = express.json({ limit: maxBody }) as RequestHandler
+        this.app.use((req: Request, res: Response, next: NextFunction) => {
+            // Enforce max body size manually for stateless /mcp requests since we skip express.json()
+            if (req.method === 'POST' && req.path === '/mcp' && !req.query['sessionId']) {
+                const contentLength = parseInt(req.headers['content-length'] || '0', 10)
+                if (contentLength > maxBody) {
+                    res.status(413).json({
+                        jsonrpc: '2.0',
+                        error: {
+                            code: -32000,
+                            message: 'Payload Too Large: Maximum request body size exceeded',
+                        },
+                        id: null,
+                    })
+                    return
+                }
+                next()
+            } else {
+                jsonParser(req, res, next)
+            }
+        })
         // Structured error handler for payload parsing errors
         this.app.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
             if (err !== null && typeof err === 'object' && 'type' in err) {
@@ -333,25 +358,40 @@ export class HttpTransport {
             return server
         }, { legacy: 'reject' }))
 
-        // Route for creating a NEW session and server
-        const createSessionAndHandle = (req: Request, res: Response, next: NextFunction, sid: string): void => {
-            const transport = new NodeStreamableHTTPServerTransport({
-                sessionIdGenerator: () => sid
-            })
-            const server = serverFactory()
+        const createSessionAndHandle = (req: Request, res: Response, next: NextFunction, _sid?: string, isLegacySse: boolean = false): void => {
+            const sid = _sid ?? randomUUID()
+            const transport = isLegacySse
+                ? new LegacySSEServerTransport('/messages', sid)
+                : new NodeStreamableHTTPServerTransport({
+                    sessionIdGenerator: () => sid
+                })
             
+            const sessionId = sid
+
+            const server = serverFactory()
+
+            // Setup auth logging/events
+            const authObj = req.auth as any
+            const authLog = authObj ? ` as ${authObj.subject || authObj.clientId || authObj.client_id || 'unknown'}` : ''
+            logger.info(`New MCP stateful session initialized${authLog}`, {
+                module: 'HTTP',
+                sessionId: sessionId,
+                ...(req.auth && { auth: req.auth })
+            })
+
+            // Bind handlers
             this.activeServers.add(server)
-            globalSubscriptionManager.registerServer(sid, server)
+            globalSubscriptionManager.registerServer(sessionId, server)
             
             const originalClose = server.close.bind(server)
             server.close = async () => {
                 this.activeServers.delete(server)
-                this.sseTransports.delete(sid)
-                globalSubscriptionManager.unregisterServer(sid)
+                this.sseTransports.delete(sessionId)
+                globalSubscriptionManager.unregisterServer(sessionId)
                 return originalClose()
             }
             
-            this.sseTransports.set(sid, transport)
+            this.sseTransports.set(sessionId, transport)
             
             transport.onclose = () => {
                 server.close().catch((err: unknown) => logger.error('Error closing server on transport close', { error: String(err) }))
@@ -359,20 +399,29 @@ export class HttpTransport {
             
             server.connect(transport).catch((err: unknown) => logger.error('Error connecting server to transport', { error: String(err) }))
             
-            // Pass the parsed body if available (for POST initialization)
-            transport.handleRequest(req, res, req.body).catch((err: unknown) => {
-                logger.error('Error handling transport request', { 
-                    error: String(err), 
-                    stack: err instanceof Error ? err.stack : undefined 
+            if (transport instanceof LegacySSEServerTransport) {
+                transport.handleSseRequest(req, res)
+            } else {
+                // Pass the parsed body if available (for POST initialization)
+                transport.handleRequest(req, res, req.body).catch((err: unknown) => {
+                    logger.error('Error handling transport request', { 
+                        error: String(err), 
+                        stack: err instanceof Error ? err.stack : undefined 
+                    })
+                    next(err)
                 })
-                next(err)
-            })
+            }
         }
 
         // GET requests (SSE Streams)
         const handleStatefulGet = (req: Request, res: Response, next: NextFunction): void => {
             if (this.config.stateless) {
-                res.status(405).json({ error: { message: 'Method Not Allowed' } })
+                if (req.path === '/sse' || req.path === '/sse/') {
+                    // Legacy SSE route should 404 in stateless mode
+                    next() // Pass to 404 handler
+                    return
+                }
+                res.status(405).json({ error: { message: 'SSE streaming not available in stateless mode' } })
                 return
             }
 
@@ -385,19 +434,22 @@ export class HttpTransport {
                     res.status(404).json({ error: 'Session not found' })
                     return
                 }
-                transport.handleRequest(req, res).catch((err: unknown) => { next(err) })
-            } else {
-                if (req.path === '/sse' || req.path === '/sse/') {
-                    // Legacy SSE initializes via GET
-                    if (this.config.stateless) {
-                        res.status(405).json({ error: 'Method Not Allowed (Stateful SSE is disabled in stateless mode)' })
-                        return
-                    }
-                    createSessionAndHandle(req, res, next, randomUUID())
+                if (transport instanceof LegacySSEServerTransport) {
+                    transport.handleSseRequest(req, res)
                 } else {
-                    // Streamable HTTP requires session ID for GET
-                    res.status(400).json({ error: { message: 'Bad Request: No valid session ID provided' } })
+                    transport.handleRequest(req, res).catch((err: unknown) => { next(err) })
                 }
+            } else {
+                if (this.config.stateless) {
+                    res.status(405).json({ error: 'Method Not Allowed (Stateful SSE is disabled in stateless mode)' })
+                    return
+                }
+                if (req.path === '/sse' || req.path === '/sse/') {
+                    createSessionAndHandle(req, res, next, randomUUID(), true)
+                    return
+                }
+                res.status(405).json({ error: 'Method Not Allowed (Streamable HTTP requires POST initialization)' })
+                return
             }
         }
 
@@ -415,30 +467,70 @@ export class HttpTransport {
                     res.status(404).json({ error: { message: 'Session not found' } })
                     return
                 }
-                transport.handleRequest(req, res, req.body).catch((err: unknown) => { next(err) })
+                if (transport instanceof LegacySSEServerTransport) {
+                    transport.handlePostMessage(req, res)
+                } else {
+                    transport.handleRequest(req, res, req.body).catch((err: unknown) => { next(err) })
+                }
             } else {
-                const acceptsSse = req.headers.accept?.includes('text/event-stream')
+                const acceptsSse = req.headers.accept?.includes('text/event-stream') || false
                 const isLegacyMessages = req.path === '/messages' || req.path === '/messages/'
                 
                 if (isLegacyMessages) {
                     // Legacy POST to /messages strictly requires sessionId
                     res.status(400).json({ error: { message: 'Missing sessionId parameter' } })
                 } else if (acceptsSse && !this.config.stateless) {
-                    // Streamable HTTP initializes via POST /mcp with Accept containing text/event-stream
-                    createSessionAndHandle(req, res, next, randomUUID())
+                    // Streamable HTTP initializes via POST /mcp (or /sse) with Accept containing text/event-stream
+                    createSessionAndHandle(req, res, next, randomUUID(), false)
                 } else {
-                    // Stateless request
+                    // Fallback to stateless handler
+                    logger.info('Routing to statelessMcpHandler', { method: req.method, path: req.path, headers: req.headers, body: req.body })
                     statelessMcpHandler(req, res, req.body).catch((err: unknown) => { next(err) })
                 }
             }
         }
 
         this.app.post('/mcp', handlePost)
+        this.app.post('/sse', handlePost)
         this.app.post('/messages', handlePost)
 
-        // 404 handler — must be after all routes
-        this.app.use((_req: Request, res: Response): void => {
+        // DELETE requests (Session termination)
+        this.app.delete('/mcp', (req: Request, res: Response) => {
+            if (this.config.stateless) {
+                res.status(204).end()
+                return
+            }
+            
+            const sid = (req.query?.['sessionId'] ?? req.headers?.['mcp-session-id']) as string | undefined
+            if (!sid) {
+                res.status(400).json({ error: { message: 'Missing sessionId parameter' } })
+                return
+            }
+            
+            const transport = this.sseTransports.get(sid)
+            if (transport) {
+                transport.close()
+                this.sseTransports.delete(sid)
+                globalSubscriptionManager.unregisterServer(sid)
+            }
+            res.status(204).end()
+        })
+
+        // 404 Fallback for unmatched routes
+        this.app.use((req: Request, res: Response): void => {
+            console.log('404 Not Found:', req.method, req.path, req.query, req.headers)
             res.status(404).json({ error: 'Not found' })
+        })
+
+        // Final fallback error handler to log what's actually causing the 500
+        this.app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
+            logger.error('Unhandled Express error', { 
+                error: err instanceof Error ? err.message : String(err),
+                stack: err instanceof Error ? err.stack : undefined,
+                path: req.path,
+                method: req.method
+            })
+            res.status(500).json({ error: 'Internal Server Error' })
         })
 
         // Start HTTP server

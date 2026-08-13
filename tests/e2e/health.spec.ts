@@ -37,6 +37,7 @@ test.describe('Health & Root Info', () => {
         const response = await request.post('/mcp', {
             headers: {
                 Accept: 'application/json, text/event-stream',
+                    'mcp-protocol-version': '2024-11-05',
             },
             data: {
                 jsonrpc: '2.0',

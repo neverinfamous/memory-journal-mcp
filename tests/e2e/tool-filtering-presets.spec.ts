@@ -13,7 +13,7 @@
 
 import { test, expect } from './test-fixture.js'
 import { Client } from '@modelcontextprotocol/client'
-import { SSEClientTransport as NodeStreamableHTTPClientTransport } from '@modelcontextprotocol/client'
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 import { startServer, stopServer } from './helpers.js'
 import { getAllToolNames, TOOL_GROUPS } from '../../src/filtering/tool-filter.js'
 
@@ -35,9 +35,9 @@ test.describe('Tool Filter: essential preset', () => {
     test.beforeAll(async () => {
         await startServer(ESSENTIAL_PORT, ['--tool-filter', 'essential'], 'filter-essential')
 
-        const transport = new NodeStreamableHTTPClientTransport(
+        const transport = new StreamableHTTPClientTransport(
             new URL(`http://localhost:${ESSENTIAL_PORT}/mcp`)
-        )
+        , { protocolVersion: '2024-11-05' })
         client = new Client(
             { name: 'filter-essential-test', version: '1.0.0' },
             { capabilities: {} }
@@ -95,9 +95,9 @@ test.describe('Tool Filter: codemode-only preset', () => {
     test.beforeAll(async () => {
         await startServer(CODEMODE_PORT, ['--tool-filter', 'codemode'], 'filter-codemode')
 
-        const transport = new NodeStreamableHTTPClientTransport(
+        const transport = new StreamableHTTPClientTransport(
             new URL(`http://localhost:${CODEMODE_PORT}/mcp`)
-        )
+        , { protocolVersion: '2024-11-05' })
         client = new Client(
             { name: 'filter-codemode-test', version: '1.0.0' },
             { capabilities: {} }
@@ -153,9 +153,9 @@ test.describe('Tool Filter: -github subtractive filter', () => {
     test.beforeAll(async () => {
         await startServer(MINUS_GITHUB_PORT, ['--tool-filter', '-github'], 'filter-minus-github')
 
-        const transport = new NodeStreamableHTTPClientTransport(
+        const transport = new StreamableHTTPClientTransport(
             new URL(`http://localhost:${MINUS_GITHUB_PORT}/mcp`)
-        )
+        , { protocolVersion: '2024-11-05' })
         client = new Client(
             { name: 'filter-minus-github-test', version: '1.0.0' },
             { capabilities: {} }

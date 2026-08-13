@@ -156,6 +156,7 @@ test.describe('OAuth 2.1 Scope Enforcement E2E', () => {
         const headers = {
             'Content-Type': 'application/json',
             Accept: 'application/json, text/event-stream',
+                    'mcp-protocol-version': '2024-11-05',
             Authorization: `Bearer ${token}`,
         }
 

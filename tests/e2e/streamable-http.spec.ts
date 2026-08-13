@@ -12,7 +12,7 @@
 
 import { test, expect } from './test-fixture.js'
 import { Client } from '@modelcontextprotocol/client'
-import { SSEClientTransport as NodeStreamableHTTPClientTransport } from '@modelcontextprotocol/client'
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 import { startServer, stopServer } from './helpers.js'
 
 test.describe.configure({ mode: 'serial' })
@@ -22,7 +22,9 @@ const STREAM_BASE = `http://localhost:${STREAM_PORT}`
 
 test.describe('Streamable HTTP Transport (MCP 2025-03-26)', () => {
     async function createStreamableClient() {
-        const transport = new NodeStreamableHTTPClientTransport(new URL(`${STREAM_BASE}/mcp`))
+        const transport = new StreamableHTTPClientTransport(new URL(`${STREAM_BASE}/mcp`), {
+            requestInit: { headers: { Authorization: 'Bearer test-token' } }
+        })
         const client = new Client(
             { name: 'playwright-streamable-test', version: '1.0.0' },
             { capabilities: {} }

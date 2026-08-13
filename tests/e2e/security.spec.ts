@@ -26,6 +26,7 @@ test.describe('HTTP Transport Security & Limits', () => {
         const response = await request.post(`${baseURL}/mcp`, {
             headers: {
                 Accept: 'application/json, text/event-stream',
+                    'mcp-protocol-version': '2024-11-05',
             },
             data: {
                 jsonrpc: '2.0',

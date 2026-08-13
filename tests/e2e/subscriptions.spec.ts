@@ -1,5 +1,5 @@
 import { test, expect } from './test-fixture.js'
-import { Client, SSEClientTransport } from '@modelcontextprotocol/client'
+import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 import { startServer, stopServer } from './helpers.js'
 
 const PORT = 5129 + (Number(process.env.TEST_PARALLEL_INDEX || 0) * 100)
@@ -13,7 +13,9 @@ test.describe('E2E MCP Subscriptions', () => {
     test.beforeAll(async () => {
         await startServer(PORT, ['--tool-filter', 'core'], 'subscriptions')
 
-        const transport = new SSEClientTransport(new URL(`http://localhost:${PORT}/sse`))
+        const transport = new StreamableHTTPClientTransport(new URL(`http://localhost:${PORT}/sse`), {
+            protocolVersion: '2024-11-05',
+        })
         client = new Client(
             { name: 'playwright-subscription-test', version: '1.0.0' },
             { capabilities: {} }

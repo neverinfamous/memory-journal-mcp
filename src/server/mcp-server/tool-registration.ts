@@ -79,10 +79,15 @@ export function createServerInstance(
             {
                 capabilities: {
                     logging: {},
+                    prompts: { listChanged: true },
+                    tools: { listChanged: true },
                     resources: {
                         subscribe: true,
                         listChanged: true,
                     },
+                    experimental: {
+                        progress: {},
+                    }
                 },
                 instructions: getInstructions(),
             }
@@ -189,10 +194,9 @@ export function createServerInstance(
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 async (args: any, extra: any): Promise<CallToolResult> => {
                 try {
-                    // Build progress context for progress notifications
-                    // Extract progressToken from extra._meta (SDK passes RequestHandlerExtra)
-                    const extraMeta = extra as { _meta?: { progressToken?: string | number } }
-                    const progressToken = extraMeta?._meta?.progressToken
+                    const extraMeta = extra as { mcpReq?: { _meta?: { progressToken?: string | number } } }
+                    const progressToken = extraMeta?.mcpReq?._meta?.progressToken
+                    
                     const progressContext =
                         progressToken !== undefined
                             ? { server: server.server, progressToken }

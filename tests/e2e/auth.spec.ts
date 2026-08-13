@@ -35,6 +35,7 @@ test.describe('Bearer Token Authentication', () => {
             headers: {
                 'Content-Type': 'application/json',
                 Accept: 'application/json, text/event-stream',
+                    'mcp-protocol-version': '2024-11-05',
             },
             body: JSON.stringify({
                 jsonrpc: '2.0',
@@ -59,6 +60,7 @@ test.describe('Bearer Token Authentication', () => {
             headers: {
                 'Content-Type': 'application/json',
                 Accept: 'application/json, text/event-stream',
+                    'mcp-protocol-version': '2024-11-05',
                 Authorization: 'Bearer wrong-token',
             },
             body: JSON.stringify({
@@ -82,6 +84,7 @@ test.describe('Bearer Token Authentication', () => {
             headers: {
                 'Content-Type': 'application/json',
                 Accept: 'application/json, text/event-stream',
+                    'mcp-protocol-version': '2024-11-05',
                 Authorization: `Bearer ${AUTH_TOKEN}`,
             },
             body: JSON.stringify({

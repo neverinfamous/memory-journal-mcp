@@ -18,7 +18,7 @@
 
 import { test, expect } from './test-fixture.js'
 import { Client } from '@modelcontextprotocol/client'
-import { SSEClientTransport as NodeStreamableHTTPClientTransport } from '@modelcontextprotocol/client'
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 import { startServer, stopServer } from './helpers.js'
 
 const CORE_ONLY_PORT = 5110 + (Number(process.env.TEST_PARALLEL_INDEX || 0) * 100) // --tool-filter core  (no codemode, no github, no search)
@@ -41,9 +41,9 @@ test.describe('memory://instructions: core-only filter gating', () => {
 
     test.beforeAll(async () => {
         await startServer(CORE_ONLY_PORT, ['--tool-filter', 'core'], 'instr-core-only')
-        const transport = new NodeStreamableHTTPClientTransport(
+        const transport = new StreamableHTTPClientTransport(
             new URL(`http://localhost:${CORE_ONLY_PORT}/mcp`)
-        )
+        , { protocolVersion: '2024-11-05' })
         client = new Client(
             { name: 'instr-core-only-test', version: '1.0.0' },
             { capabilities: {} }
@@ -98,9 +98,9 @@ test.describe('memory://instructions: -github filter gating', () => {
 
     test.beforeAll(async () => {
         await startServer(NO_GITHUB_PORT, ['--tool-filter', '-github'], 'instr-no-github')
-        const transport = new NodeStreamableHTTPClientTransport(
+        const transport = new StreamableHTTPClientTransport(
             new URL(`http://localhost:${NO_GITHUB_PORT}/mcp`)
-        )
+        , { protocolVersion: '2024-11-05' })
         client = new Client(
             { name: 'instr-no-github-test', version: '1.0.0' },
             { capabilities: {} }
@@ -145,9 +145,9 @@ test.describe('memory://instructions: codemode-only filter gating', () => {
 
     test.beforeAll(async () => {
         await startServer(CODEMODE_ONLY_PORT, ['--tool-filter', 'codemode'], 'instr-codemode')
-        const transport = new NodeStreamableHTTPClientTransport(
+        const transport = new StreamableHTTPClientTransport(
             new URL(`http://localhost:${CODEMODE_ONLY_PORT}/mcp`)
-        )
+        , { protocolVersion: '2024-11-05' })
         client = new Client(
             { name: 'instr-codemode-test', version: '1.0.0' },
             { capabilities: {} }
