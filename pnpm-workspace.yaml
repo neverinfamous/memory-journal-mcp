@@ -18,5 +18,5 @@ overrides:
   zod: "^4.4.3"
   tmp: "^0.2.5"
   vite: "^8.0.5"
-  ip-address: "10.2.0"
+  ip-address: "10.3.1"
   esbuild: "0.28.1"
