@@ -107,11 +107,6 @@ export class HttpTransport {
                 { module: 'HTTP' }
             )
         }
-        // Global debug logger
-        this.app.use((req: Request, _res: Response, next: NextFunction) => {
-            logger.debug('--- HTTP REQ ---', { method: req.method, path: req.path, query: req.query, headers: req.headers })
-            next()
-        })
 
         // DNS rebinding protection (CVE-2025-66414)
         // Always applied as defense-in-depth, even when auth is active.
@@ -450,7 +445,7 @@ export class HttpTransport {
                     createSessionAndHandle(req, res, next, randomUUID(), true)
                     return
                 }
-                res.status(405).json({ error: 'Method Not Allowed (Streamable HTTP requires POST initialization)' })
+                res.status(400).json({ error: { message: 'Bad Request: No valid session ID provided' } })
                 return
             }
         }
@@ -524,16 +519,6 @@ export class HttpTransport {
             res.status(404).json({ error: 'Not found' })
         })
 
-        // Final fallback error handler to log what's actually causing the 500
-        this.app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
-            logger.error('Unhandled Express error', { 
-                error: err instanceof Error ? err.message : String(err),
-                stack: err instanceof Error ? err.stack : undefined,
-                path: req.path,
-                method: req.method
-            })
-            res.status(500).json({ error: 'Internal Server Error' })
-        })
 
         // Start HTTP server
         this.httpServer = this.app.listen(port, host, () => {
