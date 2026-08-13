@@ -372,7 +372,7 @@ export class HttpTransport {
 
             // Setup auth logging/events
             const authObj = req.auth as Record<string, unknown> | undefined
-            const rawSubject = authObj ? (authObj.subject ?? authObj.clientId ?? authObj.client_id ?? 'unknown') : ''
+            const rawSubject = authObj ? (authObj['subject'] ?? authObj['clientId'] ?? authObj['client_id'] ?? 'unknown') : ''
             const authSubject = typeof rawSubject === 'string' || typeof rawSubject === 'number' ? String(rawSubject) : 'unknown'
             const authLog = authObj ? ` as ${authSubject}` : ''
             logger.info(`New MCP stateful session initialized${authLog}`, {
