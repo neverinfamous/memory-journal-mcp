@@ -106,7 +106,7 @@ test.describe('HTTP Transport Protocols', () => {
                 },
             })
 
-            expect(response.status()).toBe(404)
+            expect(response.status()).toBe(400)
             const body = await response.json()
             expect(body.error).toHaveProperty('message', 'Session not found')
         })

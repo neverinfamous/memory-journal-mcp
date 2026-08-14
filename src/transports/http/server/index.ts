@@ -428,7 +428,7 @@ export class HttpTransport {
                 // Reconnect or connect to existing session
                 const transport = this.sseTransports.get(sid)
                 if (!transport) {
-                    res.status(404).json({ error: 'Session not found' })
+                    res.status(400).json({ error: { message: 'Session not found' } })
                     return
                 }
                 if (transport instanceof LegacySSEServerTransport) {
@@ -445,7 +445,7 @@ export class HttpTransport {
                     createSessionAndHandle(req, res, next, randomUUID(), true)
                     return
                 }
-                res.status(400).json({ error: { message: 'Bad Request: No valid session ID provided' } })
+                res.status(405).json({ error: 'Method Not Allowed (Streamable HTTP requires POST initialization)' })
                 return
             }
         }
@@ -461,7 +461,7 @@ export class HttpTransport {
                 // Message for existing session
                 const transport = this.sseTransports.get(sid)
                 if (!transport) {
-                    res.status(404).json({ error: { message: 'Session not found' } })
+                    res.status(400).json({ error: { message: 'Session not found' } })
                     return
                 }
                 if (transport instanceof LegacySSEServerTransport) {

@@ -1141,8 +1141,8 @@ describe('McpServer', function () {
             }
 
             if (getHandler) await getHandler(mockReq, mockRes)
-            expect(mockRes.status).toHaveBeenCalledWith(400)
-            expect(mockRes.json).toHaveBeenCalledWith({ error: { message: 'Bad Request: No valid session ID provided' } })
+            expect(mockRes.status).toHaveBeenCalledWith(405)
+            expect(mockRes.json).toHaveBeenCalledWith({ error: 'Method Not Allowed (Streamable HTTP requires POST initialization)' })
         })
 
 
