@@ -55,7 +55,24 @@ export const CLI_OPTIONS = {
 
 export function parseArguments(): CliArgs {
   try {
-    const { values } = parseArgs({ args: process.argv.slice(2), options: CLI_OPTIONS, strict: true });
+    const rawArgs = process.argv.slice(2);
+    const args: string[] = [];
+    for (let i = 0; i < rawArgs.length; i++) {
+      const curr = rawArgs[i];
+      const next = rawArgs[i + 1];
+      if (
+        next &&
+        curr.startsWith('--') &&
+        !curr.includes('=') &&
+        /^-?\d+(?:\.\d+)?$/.test(next)
+      ) {
+        args.push(`${curr}=${next}`);
+        i++;
+      } else {
+        args.push(curr);
+      }
+    }
+    const { values } = parseArgs({ args, options: CLI_OPTIONS, strict: true });
     
     // Map before/after aliases
     if (values.before && !values.until) values.until = values.before;
