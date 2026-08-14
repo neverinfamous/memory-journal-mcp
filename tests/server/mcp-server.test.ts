@@ -1163,7 +1163,7 @@ describe('McpServer', function () {
             }
 
             if (getHandler) await getHandler(mockReq, mockRes)
-            expect(mockRes.status).toHaveBeenCalledWith(404)
+            expect(mockRes.status).toHaveBeenCalledWith(400)
         })
 
 
