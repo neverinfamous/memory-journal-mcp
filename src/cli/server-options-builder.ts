@@ -26,20 +26,36 @@ export function buildServerOptions(
     };
 
     const host = catchConfig(() => resolver.resolve<string>('serverHost', 'MCP_HOST') ?? process.env['HOST'] ?? undefined, undefined);
-    const transport = catchConfig(() => resolver.resolve<string>('transport', 'TRANSPORT') ?? 'stdio', 'stdio');
+    const transport = catchConfig(() => {
+        if (resolver.resolveBool('http')) return 'http';
+        if (resolver.resolveBool('stdio')) return 'stdio';
+        return resolver.resolve<string>('transport', 'TRANSPORT') ?? 'stdio';
+    }, 'stdio');
     const stateless = catchConfig(() => resolver.resolveBool('stateless', 'STATELESS') ?? false, false);
-    // Allow 'dbPath' as fallback for 'db' since memory-journal.config.json uses dbPath
+    // Allow 'dbPath' or 'database' as fallback for 'db'
     const configDbPath = catchConfig(() => resolver.resolve<string>('dbPath'), undefined);
+    const cliDatabase = catchConfig(() => resolver.resolve<string>('database'), undefined);
     const rawDb = catchConfig(() => resolver.resolve<string>('db', 'DB_PATH'), defaultDbPath);
-    const db = ((rawDb === defaultDbPath || rawDb === undefined) && configDbPath) ? configDbPath : rawDb;
+    let db = rawDb;
+    if ((db === defaultDbPath || db === undefined) && cliDatabase) {
+        db = cliDatabase;
+    } else if ((db === defaultDbPath || db === undefined) && configDbPath) {
+        db = configDbPath;
+    }
     
     const configTestDbPath = catchConfig(() => resolver.resolve<string>('testDbPath'), undefined);
     const rawTestDb = catchConfig(() => resolver.resolve<string>('testDb', 'TEST_DB_PATH'), undefined);
     const testDb = rawTestDb ?? configTestDbPath;
 
     const configTeamDbPath = catchConfig(() => resolver.resolve<string>('teamDbPath'), undefined);
+    const cliTeamDatabase = catchConfig(() => resolver.resolve<string>('teamDatabase'), undefined);
     const rawTeamDb = catchConfig(() => resolver.resolve<string>('teamDb', 'TEAM_DB_PATH'), defaultTeamDbPath);
-    const teamDb = (rawTeamDb === defaultTeamDbPath && configTeamDbPath) ? configTeamDbPath : rawTeamDb;
+    let teamDb = rawTeamDb;
+    if ((teamDb === defaultTeamDbPath || teamDb === undefined) && cliTeamDatabase) {
+        teamDb = cliTeamDatabase;
+    } else if ((teamDb === defaultTeamDbPath || teamDb === undefined) && configTeamDbPath) {
+        teamDb = configTeamDbPath;
+    }
 
     const configTestTeamDbPath = catchConfig(() => resolver.resolve<string>('testTeamDbPath'), undefined);
     const rawTestTeamDb = catchConfig(() => resolver.resolve<string>('testTeamDb', 'TEST_TEAM_DB_PATH'), undefined);

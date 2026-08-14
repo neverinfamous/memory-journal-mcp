@@ -41,4 +41,33 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
             expect(parsed['code']).toBeUndefined()
         })
     })
+
+    describe('Layer 4: CLI Option Aliases & Schema Guardrails', () => {
+        it('should allow --database and --team-database in databaseOptionsSchema', async () => {
+            const { databaseOptionsSchema, networkOptionsSchema } = await import('../src/cli/schemas.js')
+            const parsedDb = databaseOptionsSchema.parse({ database: './custom.db', teamDatabase: './team.db' })
+            expect(parsedDb.database).toBe('./custom.db')
+            expect(parsedDb.teamDatabase).toBe('./team.db')
+
+            const parsedNet = networkOptionsSchema.parse({ http: true, stdio: false })
+            expect(parsedNet.http).toBe(true)
+            expect(parsedNet.stdio).toBe(false)
+        })
+    })
+
+    describe('Layer 5: Dummy Tool Protocol Resource Healing', () => {
+        it('should have read_resource and mj_read_resource handlers in dummy healing tools', async () => {
+            const { getDummyHealingTools } = await import('../src/handlers/tools/core/dummy-healing.js')
+            const tools = getDummyHealingTools()
+            const readResourceTool = tools.find(t => t.name === 'read_resource')
+            const mjReadResourceTool = tools.find(t => t.name === 'mj_read_resource')
+
+            expect(readResourceTool).toBeDefined()
+            expect(mjReadResourceTool).toBeDefined()
+
+            const res = await readResourceTool!.handler({}) as Record<string, unknown>
+            expect(res['success']).toBe(false)
+            expect(String(res['error'])).toContain('AUTONOMOUS HEALING')
+        })
+    })
 })

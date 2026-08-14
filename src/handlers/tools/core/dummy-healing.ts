@@ -216,41 +216,101 @@ export function getDummyHealingTools(context?: ToolContext): ToolDefinition[] {
         },
         {
             name: 'read_resource',
-            title: 'DO NOT USE',
-            description: 'DO NOT USE. 🛠️ AUTONOMOUS HEALING: This is a protocol-level MCP resource method, not an MCP tool. To read a file, use the native agent tool `read_file`, `read_resource` or the MCP tool `mj_execute_code`.',
+            title: 'Read Resource (Autonomous Fallback)',
+            description: 'Fallback handler for `read_resource` when invoked as an MCP tool instead of a protocol resource read.',
             group: 'core',
             inputSchema: z.any(),
             outputSchema: z.any(),
             annotations: { readOnlyHint: true, openWorldHint: false },
-            handler: (params: unknown) => {
+            handler: async (params: unknown) => {
                 const args = (params ?? {}) as Record<string, unknown>
-                const uri = typeof args['uri'] === 'string' ? args['uri'] : (typeof args['_uri'] === 'string' ? args['_uri'] : undefined)
+                const uri = typeof args['uri'] === 'string' ? args['uri'] : (typeof args['Uri'] === 'string' ? args['Uri'] : (typeof args['_uri'] === 'string' ? args['_uri'] : undefined))
+                if (context && uri) {
+                    try {
+                        const { readResource } = await import('../../resources/index.js')
+                        const res = await readResource(
+                            uri,
+                            context.db,
+                            context.vectorManager,
+                            context.config?.filterConfig,
+                            context.github,
+                            undefined,
+                            context.teamDb,
+                            context.config?.briefingConfig,
+                            context.config?.runtime
+                        )
+                        return {
+                            success: true,
+                            data: res.data,
+                            _healing_note: `🛠️ AUTONOMOUS HEALING: 'read_resource' was called as an MCP tool instead of an MCP resource read. The resource '${uri}' was resolved successfully.`
+                        }
+                    } catch (err) {
+                        return {
+                            success: false,
+                            error: `Failed to read resource '${uri}': ${err instanceof Error ? err.message : String(err)}`,
+                            code: 'RESOURCE_ERROR',
+                            category: 'resource',
+                            recoverable: true
+                        }
+                    }
+                }
                 const hint = uri ? ` Requested URI: ${uri}.` : ''
-                return Promise.resolve({
+                return {
                     success: false,
                     error: `🛠️ AUTONOMOUS HEALING: 'read_resource' is an MCP protocol resource method, not an MCP tool.${hint} Use native agent tool 'read_resource' / 'read_file', or query via 'mj_execute_code'.`,
                     code: 'VALIDATION_ERROR',
                     category: 'validation',
                     recoverable: true
-                })
+                }
             },
         },
         {
             name: 'mj_read_resource',
-            title: 'DO NOT USE',
-            description: 'DO NOT USE. 🛠️ AUTONOMOUS HEALING: Use the native agent tool `read_resource` or `read_file`.',
+            title: 'Read Resource (Autonomous Fallback)',
+            description: 'Fallback handler for `mj_read_resource` when invoked as an MCP tool instead of a protocol resource read.',
             group: 'core',
             inputSchema: z.any(),
             outputSchema: z.any(),
             annotations: { readOnlyHint: true, openWorldHint: false },
-            handler: () => {
-                return Promise.resolve({
+            handler: async (params: unknown) => {
+                const args = (params ?? {}) as Record<string, unknown>
+                const uri = typeof args['uri'] === 'string' ? args['uri'] : (typeof args['Uri'] === 'string' ? args['Uri'] : (typeof args['_uri'] === 'string' ? args['_uri'] : undefined))
+                if (context && uri) {
+                    try {
+                        const { readResource } = await import('../../resources/index.js')
+                        const res = await readResource(
+                            uri,
+                            context.db,
+                            context.vectorManager,
+                            context.config?.filterConfig,
+                            context.github,
+                            undefined,
+                            context.teamDb,
+                            context.config?.briefingConfig,
+                            context.config?.runtime
+                        )
+                        return {
+                            success: true,
+                            data: res.data,
+                            _healing_note: `🛠️ AUTONOMOUS HEALING: 'mj_read_resource' was called as an MCP tool. The resource '${uri}' was resolved successfully.`
+                        }
+                    } catch (err) {
+                        return {
+                            success: false,
+                            error: `Failed to read resource '${uri}': ${err instanceof Error ? err.message : String(err)}`,
+                            code: 'RESOURCE_ERROR',
+                            category: 'resource',
+                            recoverable: true
+                        }
+                    }
+                }
+                return {
                     success: false,
-                    error: '🛠️ AUTONOMOUS HEALING: `mj_read_resource` is not a valid tool. Use the native environment tool `read_resource` or `read_file`.',
+                    error: '🛠️ AUTONOMOUS HEALING: `mj_read_resource` is not a valid standard tool. Pass a `uri` parameter to read a resource directly.',
                     code: 'VALIDATION_ERROR',
                     category: 'validation',
                     recoverable: true
-                })
+                }
             },
         },
         {

@@ -17,7 +17,9 @@ export function addDatabaseOptions(command: Command): Command {
     return withGroup(command, 'Database Options', (cmd) => {
         cmd
             .option('--db <path>', 'Database path (env: DB_PATH)', defaultDbPath)
+            .option('--database <path>', 'Alias for --db (env: DB_PATH)')
             .option('--team-db <path>', 'Team database path (env: TEAM_DB_PATH)', defaultTeamDbPath)
+            .option('--team-database <path>', 'Alias for --team-db (env: TEAM_DB_PATH)')
             .option(
                 '--additional-team-dbs <json>',
                 'Additional team database mappings (label -> path) as JSON for cross-team discovery (env: ADDITIONAL_TEAM_DBS)'
@@ -57,6 +59,8 @@ export function addNetworkOptions(command: Command): Command {
     return withGroup(command, 'Network Options', (cmd) => {
         cmd
             .option('--transport <type>', 'Transport type: stdio or http', 'stdio')
+            .option('--http', 'Start server with HTTP transport (alias for --transport http)')
+            .option('--stdio', 'Start server with stdio transport (alias for --transport stdio)')
             .option('--port <number>', 'HTTP port (for http transport)', '3000')
             .option('--server-host <host>', 'Server bind host for HTTP transport (default: localhost) (env: MCP_HOST)')
             .option('--stateless', 'Use stateless HTTP mode (no session management) (env: STATELESS)')
