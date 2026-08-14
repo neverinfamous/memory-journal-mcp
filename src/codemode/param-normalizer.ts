@@ -168,9 +168,6 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
                             break;
                         }
                     }
-                    if (obj['code'] === undefined) {
-                        obj['code'] = 'return { status: "ready", sandbox: "active" };';
-                    }
                 }
             }
         } else {

@@ -232,9 +232,14 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                             }
                         }
 
-                        // Auto-healing fallback for empty code payload (e.g. mj_execute_code({}))
+                        // Return error for empty code payload (e.g. mj_execute_code({}))
                         if (!executionCode || executionCode.trim() === '') {
-                            executionCode = 'return { status: "ready", sandbox: "active", available_namespaces: ["core", "search", "analytics", "relationships", "io", "admin", "github", "git", "backup", "team"], hint: "Code Mode sandbox is active. Pass JavaScript code in the `code` parameter using mj.* APIs (e.g., `return await mj.searchEntries({ query: \\"..." })`)." };'
+                            return {
+                                success: false,
+                                error: 'Missing code parameter. Please provide JavaScript code in the `code` parameter (e.g. `return await mj.searchEntries({ query: "..." })`).',
+                                project_id: undefined,
+                                executionTimeMs: 0
+                            }
                         }
                     }
 
