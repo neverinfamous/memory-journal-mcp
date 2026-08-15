@@ -3,6 +3,7 @@ import type { z } from 'zod'
 import { getEnabledGroups } from '../../filtering/tool-filter.js'
 import { callTool } from '../../handlers/tools/index.js'
 import { readResource, validateResourceSubscription } from '../../handlers/resources/index.js'
+import { getPrompt } from '../../handlers/prompts/index.js'
 import { generateStandardInstructions, generateCodeModeInstructions } from '../../constants/server-instructions.js'
 import { TOOL_GROUPS } from '../../filtering/tool-constants.js'
 import type { ToolGroup } from '../../types/index.js'
@@ -538,15 +539,121 @@ export function createServerInstance(
 
                         if (req.params?.name && !allToolNames.has(req.params.name)) {
                             const requestedTool = req.params.name;
-                            let suggestion = `Tool '${requestedTool}' does not exist. Use tools/list to see available tools.`;
                             
                             const normalized = requestedTool.replace(/^mj_/, '').replace(/_/g, '-');
-                            const isPrompt = prompts.some((p) => p.name === normalized || p.name === requestedTool || p.name === requestedTool.replace(/^mj_/, ''));
+                            const matchingPrompt = prompts.find((p) => p.name === normalized || p.name === requestedTool || p.name === requestedTool.replace(/^mj_/, ''));
+                            
+                            // Autonomous Prompt Healing Fallback
+                            if (matchingPrompt) {
+                                try {
+                                    const stringArgs: Record<string, string> = {};
+                                    for (const [k, v] of Object.entries(toolArgs)) {
+                                        if (typeof v === 'string') stringArgs[k] = v;
+                                        else if (typeof v === 'number' || typeof v === 'boolean') stringArgs[k] = String(v);
+                                    }
+                                    if ((matchingPrompt.name === 'load-briefing' || matchingPrompt.name === 'briefing') && !stringArgs['projects']) {
+                                        const fallbackProject = stringArgs['project'] ?? stringArgs['name'] ?? stringArgs['target'] ?? stringArgs['repo'] ?? stringArgs['workspace'] ?? '';
+                                        stringArgs['projects'] = fallbackProject;
+                                    }
+                                    const currentConfig = configManager.getConfig();
+                                    const promptResult = await getPrompt(
+                                        matchingPrompt.name,
+                                        stringArgs,
+                                        db,
+                                        teamDb ?? undefined,
+                                        github ?? undefined,
+                                        currentConfig.briefingConfig
+                                    );
+                                    const successPayload = {
+                                        success: true,
+                                        data: promptResult,
+                                        messages: promptResult.messages,
+                                        _healing_note: `🛠️ AUTONOMOUS HEALING: '${requestedTool}' is an MCP Prompt, but was invoked directly as an MCP tool. The prompt was evaluated and returned successfully.`
+                                    };
+                                    const enriched = JSON.stringify(successPayload, null, 2);
+                                    return {
+                                        content: [
+                                            {
+                                                type: 'text',
+                                                text: enriched,
+                                            },
+                                        ],
+                                        structuredContent: successPayload,
+                                    };
+                                } catch {
+                                    // Fall through to standard error reporting
+                                }
+                            }
+
+                            // Autonomous Resource Healing Fallback
+                            const isResource = requestedTool === 'read_resource' || requestedTool === 'readResource' || requestedTool === 'mj_read_resource' || requestedTool === 'get_resource' || requestedTool === 'getResource' || requestedTool.startsWith('memory://');
+                            if (isResource) {
+                                try {
+                                    let uri = typeof toolArgs['uri'] === 'string' ? toolArgs['uri'] : (typeof toolArgs['Uri'] === 'string' ? toolArgs['Uri'] : (typeof toolArgs['_uri'] === 'string' ? toolArgs['_uri'] : undefined));
+                                    if (!uri) {
+                                        for (const key of ['resourceUri', 'resource_uri', 'resource', 'Resource', 'url', 'Url', 'path', 'Path', 'name', 'Name', 'target', 'Target', 'ServerName', 'server_name']) {
+                                            const rawVal = toolArgs[key];
+                                            if (typeof rawVal === 'string' && rawVal.trim()) {
+                                                const val = rawVal.trim();
+                                                if (key === 'ServerName' || key === 'server_name') {
+                                                    if (val === 'memory-journal-mcp' || val === 'memory-journal') continue;
+                                                }
+                                                uri = val;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    if (!uri && requestedTool.startsWith('memory://')) {
+                                        uri = requestedTool;
+                                    }
+                                    if (uri && !uri.includes('://')) {
+                                        if (uri.startsWith('briefing') || uri.startsWith('recent') || uri.startsWith('agent-') || uri.startsWith('statistics') || uri.startsWith('insights') || uri.startsWith('help') || uri.startsWith('team') || uri.startsWith('git') || uri.startsWith('tools')) {
+                                            uri = `memory://${uri}`;
+                                        } else {
+                                            uri = `memory://briefing/${uri}`;
+                                        }
+                                    }
+                                    if (!uri) {
+                                        uri = 'memory://briefing';
+                                    }
+                                    const currentConfig = configManager.getConfig();
+                                    const res = await readResource(
+                                        uri,
+                                        db,
+                                        vectorManager ?? undefined,
+                                        currentConfig.toolFilterConfig,
+                                        github ?? undefined,
+                                        undefined,
+                                        teamDb ?? undefined,
+                                        currentConfig.briefingConfig,
+                                        runtime
+                                    );
+                                    const successPayload = {
+                                        success: true,
+                                        data: res.data,
+                                        _healing_note: `🛠️ AUTONOMOUS HEALING: '${requestedTool}' was called as an MCP tool instead of an MCP resource read. The resource '${uri}' was resolved successfully.`
+                                    };
+                                    const enriched = JSON.stringify(successPayload, null, 2);
+                                    return {
+                                        content: [
+                                            {
+                                                type: 'text',
+                                                text: enriched,
+                                            },
+                                        ],
+                                        structuredContent: successPayload,
+                                    };
+                                } catch {
+                                    // Fall through to standard error reporting
+                                }
+                            }
+
+                            let suggestion = `Tool '${requestedTool}' does not exist. Use tools/list to see available tools.`;
                             const isFilteredTool = Object.values(TOOL_GROUPS).flat().includes(requestedTool);
                             
                             if (isFilteredTool) {
                                 suggestion = `'${requestedTool}' is a valid tool but it is not currently exposed because of your active --tool-filter or codemode restrictions. If you are in Code Mode, invoke it via 'mj_execute_code' (e.g. 'await mj.core.${requestedTool}(...)').`;
-                            } else if (isPrompt) {
+                            } else if (matchingPrompt !== undefined) {
                                 suggestion = `'${requestedTool}' is an MCP Prompt, not an MCP Tool. Please use the 'get_prompt' tool (or your native MCP Prompts integration) to evaluate it, then use 'create_entry' to save the result.`;
                             } else if (requestedTool.startsWith('mj_')) {
                                 suggestion = `'${requestedTool}' is not a valid root tool. If you are trying to use Code Mode, you must invoke the 'mj_execute_code' tool and write javascript (e.g. 'await mj.core.searchEntries(...)').`;

@@ -10,6 +10,7 @@ import { TOOL_GROUPS } from '../filtering/tool-constants.js'
 import { SCOPES, TOOL_GROUP_SCOPES, TOOL_SCOPE_OVERRIDES } from './scopes.js'
 import type { StandardScope } from './scopes.js'
 import type { ToolGroup } from '../types/index.js'
+import { DUMMY_HEALING_TOOL_NAMES } from '../handlers/tools/core/dummy-healing.js'
 
 /**
  * Map from tool name to required minimum scope.
@@ -53,12 +54,7 @@ export function getRequiredScope(toolName: string): StandardScope {
         }
         return SCOPES.READ
     }
-    if (
-        toolName === 'read_resource' ||
-        toolName === 'mj_read_resource' ||
-        toolName === 'load-briefing' ||
-        toolName === 'mj_session_summary'
-    ) {
+    if (DUMMY_HEALING_TOOL_NAMES.has(toolName) || toolName.startsWith('memory://')) {
         return SCOPES.READ
     }
 

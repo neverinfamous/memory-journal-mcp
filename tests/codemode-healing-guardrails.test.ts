@@ -55,7 +55,7 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
         })
     })
 
-    describe('Layer 5: Dummy Tool Protocol Resource Healing', () => {
+    describe('Layer 5: Dummy Tool Protocol Resource & Prompt Healing', () => {
         it('should have read_resource and mj_read_resource handlers in dummy healing tools', async () => {
             const { getDummyHealingTools } = await import('../src/handlers/tools/core/dummy-healing.js')
             const tools = getDummyHealingTools()
@@ -66,6 +66,31 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
             expect(mjReadResourceTool).toBeDefined()
 
             const res = await readResourceTool!.handler({}) as Record<string, unknown>
+            expect(res['success']).toBe(false)
+            expect(String(res['error'])).toContain('AUTONOMOUS HEALING')
+        })
+
+        it('should have load-briefing and mj_session_summary dummy prompt handlers', async () => {
+            const { getDummyHealingTools } = await import('../src/handlers/tools/core/dummy-healing.js')
+            const tools = getDummyHealingTools()
+            const loadBriefingTool = tools.find(t => t.name === 'load-briefing')
+            const sessionSummaryTool = tools.find(t => t.name === 'session-summary')
+
+            expect(loadBriefingTool).toBeDefined()
+            expect(sessionSummaryTool).toBeDefined()
+
+            const res = await loadBriefingTool!.handler({}) as Record<string, unknown>
+            expect(res['success']).toBe(false)
+            expect(String(res['error'])).toContain('AUTONOMOUS HEALING')
+        })
+
+        it('should provide autonomous healing handlers for dotted code mode functions', async () => {
+            const { getDummyHealingTools } = await import('../src/handlers/tools/core/dummy-healing.js')
+            const tools = getDummyHealingTools()
+            const dottedTool = tools.find(t => t.name === 'mj.core.createEntry')
+
+            expect(dottedTool).toBeDefined()
+            const res = await dottedTool!.handler({}) as Record<string, unknown>
             expect(res['success']).toBe(false)
             expect(String(res['error'])).toContain('AUTONOMOUS HEALING')
         })

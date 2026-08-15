@@ -86,7 +86,7 @@ export function getPrompt(
 /**
  * Get all prompt definitions by composing sub-module definitions
  */
-function getAllPromptDefinitions(): InternalPromptDef[] {
+export function getAllPromptDefinitions(): InternalPromptDef[] {
     return [
         ...getWorkflowPromptDefinitions(),
         ...getAnalyticsPromptDefinitions(),
