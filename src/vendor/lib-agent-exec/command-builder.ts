@@ -244,8 +244,11 @@ export function buildCommand(payload: ExecPayload, cwd: string, isJson: boolean 
 
   if (!payload.bypassInterceptors) {
     const initialCmdBasename = payload.type === 'command' ? path.basename(payload.command).toLowerCase() : '';
-    const initialCtx: ExecutionContext = { cmdBasename: initialCmdBasename, args: payload.args || [], envOverrides, payload };
+    const initialCtx: ExecutionContext = { cmdBasename: initialCmdBasename, args: payload.args ? [...payload.args] : [], envOverrides, payload };
     systemInterceptor(initialCtx);
+    if (payload.type === 'command') {
+      payload.args = initialCtx.args;
+    }
   }
 
   if (process.platform === 'win32' && payload.target !== 'wsl2') {

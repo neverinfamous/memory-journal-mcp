@@ -50,8 +50,23 @@ export function systemInterceptor(ctx: ExecutionContext): void {
     }
   }
 
-  // Intercept network, search, and fs list aliases in eval and script payloads
-  if ((payload.type === 'eval' || payload.type === 'script') && (!payload.interpreter || ['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe', 'cmd', 'cmd.exe', 'bash', 'bash.exe', 'sh', 'sh.exe'].includes(payload.interpreter)) && payload.target !== 'wsl2') {
+  // Intercept network, search, and fs list aliases in eval and script payloads (ONLY for shell scripts)
+  const isShellPayload = (() => {
+    if (payload.type === 'eval') {
+      const interp = (payload.interpreter || 'pwsh').toLowerCase();
+      return ['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe', 'cmd', 'cmd.exe', 'bash', 'bash.exe', 'sh', 'sh.exe'].includes(interp);
+    }
+    if (payload.type === 'script' && typeof payload.scriptPath === 'string') {
+      if (payload.interpreter) {
+        return ['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe', 'cmd', 'cmd.exe', 'bash', 'bash.exe', 'sh', 'sh.exe'].includes(payload.interpreter.toLowerCase());
+      }
+      const ext = path.extname(payload.scriptPath).toLowerCase();
+      return ['.ps1', '.bat', '.cmd', '.sh', '.bash'].includes(ext);
+    }
+    return false;
+  })();
+
+  if (isShellPayload && payload.target !== 'wsl2') {
     let scriptContent = '';
     if (payload.type === 'eval') {
       scriptContent = payload.code;
@@ -198,6 +213,35 @@ export function systemInterceptor(ctx: ExecutionContext): void {
         return;
       }
 
+      // Check if this is a recursive search with a file pattern (e.g. dir /s /b pattern.ext or dir /s pattern)
+      const nonFlagArgs = ctx.args.filter(a => !a.startsWith('-') && !a.startsWith('/'));
+      if (hasRecurse && nonFlagArgs.length > 0) {
+        const patternArg = nonFlagArgs[0];
+        let targetPath = '.';
+        let pattern = patternArg;
+        
+        if (patternArg.includes('/') || patternArg.includes('\\')) {
+          const lastSep = Math.max(patternArg.lastIndexOf('/'), patternArg.lastIndexOf('\\'));
+          const dirPart = patternArg.substring(0, lastSep);
+          pattern = patternArg.substring(lastSep + 1);
+          if (dirPart) {
+            targetPath = convertToWslPath(dirPart);
+          }
+        }
+
+        if (pattern && pattern !== '.' && pattern !== '..') {
+          if (ctx.payload.type === 'command') {
+            ctx.payload.command = 'find';
+          }
+          const newArgs = [targetPath];
+          if (hasFile) newArgs.push('-type', 'f');
+          if (hasDir) newArgs.push('-type', 'd');
+          newArgs.push('-name', pattern);
+          ctx.args = newArgs;
+          return;
+        }
+      }
+
       if (['dir', 'get-childitem', 'gci'].includes(cmdBasename.toLowerCase())) {
         if (ctx.payload.type === 'command') ctx.payload.command = 'ls';
       }
@@ -248,6 +292,31 @@ export function systemInterceptor(ctx: ExecutionContext): void {
     .with({ cmd: P.union('awk', 'gawk', 'sed', 'sed.exe', 'jq', 'jq.exe', 'yq', 'yq.exe', 'find', 'find.exe') }, () => {
       console.error(`\n   💡 AGENT INTERCEPT: '${cmdBasename}' natively fails, lacks features, or is not installed on Windows. Switching execution target to WSL2... (Frictionless Recovery)`);
       ctx.payload.target = 'wsl2';
+
+      if (['find', 'find.exe'].includes(cmdBasename.toLowerCase())) {
+        const filterIdx = ctx.args.findIndex(a => ['-filter', '-include'].includes(a.toLowerCase()));
+        if (filterIdx !== -1 && filterIdx + 1 < ctx.args.length) {
+          const pattern = ctx.args[filterIdx + 1];
+          const hasRecurse = ctx.args.some(a => ['-recurse', '-r', '-R', '/s'].includes(a.toLowerCase()));
+          let targetPath = '.';
+          for (let i = 0; i < ctx.args.length; i++) {
+            if (i === filterIdx || i === filterIdx + 1) continue;
+            const a = ctx.args[i];
+            if (!a.startsWith('-') && !a.startsWith('/')) {
+              targetPath = convertToWslPath(a);
+              break;
+            }
+          }
+          const newArgs = [targetPath];
+          if (!hasRecurse) {
+            newArgs.push('-maxdepth', '1');
+          }
+          newArgs.push('-name', pattern);
+          ctx.args = newArgs;
+          return;
+        }
+      }
+
       // Automatically convert Windows paths (like C:\... or C:/... or "C:\...") to WSL paths (/mnt/c/...)
       ctx.args = ctx.args.map(a => convertToWslPath(a));
     })
