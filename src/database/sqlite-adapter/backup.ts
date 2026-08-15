@@ -308,14 +308,27 @@ export class BackupManager {
                     try {
                         fs.renameSync(lockDir, `${lockDir}.${randomUUID()}.stale`)
                     } catch (renameErr) {
-                        // If rename fails, another process likely beat us to it.
-                        throw new Error(
-                            `Another process is currently holding the database lock at ${lockDir}. Backup restore cannot safely proceed.`,
-                            { cause: renameErr }
-                        )
+                        // On Windows or concurrent environments, renaming a directory with files can throw EPERM/EBUSY.
+                        // Fall back to safely removing the stale lock directory.
+                        try {
+                            fs.rmSync(lockDir, {
+                                recursive: true,
+                                force: true,
+                                maxRetries: 5,
+                                retryDelay: 50,
+                            })
+                        } catch {
+                            // If rename and rmSync fail, another process likely beat us to it.
+                            throw new Error(
+                                `Another process is currently holding the database lock at ${lockDir}. Backup restore cannot safely proceed.`,
+                                { cause: renameErr }
+                            )
+                        }
                     }
                     // Retry acquiring the lock
-                    fs.mkdirSync(lockDir)
+                    if (!fs.existsSync(lockDir)) {
+                        fs.mkdirSync(lockDir, { recursive: true })
+                    }
                     fs.writeFileSync(
                         lockFile,
                         JSON.stringify({ pid: process.pid, timestamp: Date.now(), nonce })

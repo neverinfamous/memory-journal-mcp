@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import { wrapResult } from '../src/codemode/worker-result-proxy.js'
 import { ExecuteCodeSchema } from '../src/handlers/tools/codemode/schemas.ts'
+import { databaseOptionsSchema, networkOptionsSchema } from '../src/cli/schemas.js'
+import { getDummyHealingTools } from '../src/handlers/tools/core/dummy-healing.js'
 
 describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
     describe('Layer 3: Worker Result Proxy Failed Result Safety', () => {
@@ -43,8 +45,7 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
     })
 
     describe('Layer 4: CLI Option Aliases & Schema Guardrails', () => {
-        it('should allow --database and --team-database in databaseOptionsSchema', async () => {
-            const { databaseOptionsSchema, networkOptionsSchema } = await import('../src/cli/schemas.js')
+        it('should allow --database and --team-database in databaseOptionsSchema', () => {
             const parsedDb = databaseOptionsSchema.parse({ database: './custom.db', teamDatabase: './team.db' })
             expect(parsedDb.database).toBe('./custom.db')
             expect(parsedDb.teamDatabase).toBe('./team.db')
@@ -56,9 +57,9 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
     })
 
     describe('Layer 5: Dummy Tool Protocol Resource & Prompt Healing', () => {
+        const tools = getDummyHealingTools()
+
         it('should have read_resource and mj_read_resource handlers in dummy healing tools', async () => {
-            const { getDummyHealingTools } = await import('../src/handlers/tools/core/dummy-healing.js')
-            const tools = getDummyHealingTools()
             const readResourceTool = tools.find(t => t.name === 'read_resource')
             const mjReadResourceTool = tools.find(t => t.name === 'mj_read_resource')
 
@@ -71,8 +72,6 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
         })
 
         it('should have load-briefing and mj_session_summary dummy prompt handlers', async () => {
-            const { getDummyHealingTools } = await import('../src/handlers/tools/core/dummy-healing.js')
-            const tools = getDummyHealingTools()
             const loadBriefingTool = tools.find(t => t.name === 'load-briefing')
             const sessionSummaryTool = tools.find(t => t.name === 'session-summary')
 
@@ -85,8 +84,6 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
         })
 
         it('should provide autonomous healing handlers for dotted code mode functions', async () => {
-            const { getDummyHealingTools } = await import('../src/handlers/tools/core/dummy-healing.js')
-            const tools = getDummyHealingTools()
             const dottedTool = tools.find(t => t.name === 'mj.core.createEntry')
 
             expect(dottedTool).toBeDefined()
