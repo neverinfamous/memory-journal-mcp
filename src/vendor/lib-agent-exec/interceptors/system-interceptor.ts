@@ -51,42 +51,44 @@ export function systemInterceptor(ctx: ExecutionContext): void {
   }
 
   // Intercept network, search, and fs list aliases in eval and script payloads (ONLY for shell scripts)
-  const isShellPayload = (() => {
-    if (payload.type === 'eval') {
-      const interp = (payload.interpreter || 'pwsh').toLowerCase();
-      return ['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe', 'cmd', 'cmd.exe', 'bash', 'bash.exe', 'sh', 'sh.exe'].includes(interp);
-    }
-    if (payload.type === 'script' && typeof payload.scriptPath === 'string') {
-      if (payload.interpreter) {
-        return ['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe', 'cmd', 'cmd.exe', 'bash', 'bash.exe', 'sh', 'sh.exe'].includes(payload.interpreter.toLowerCase());
+  if ((payload.type === 'eval' || payload.type === 'script') && payload.target !== 'wsl2') {
+    const isShellPayload = (() => {
+      if (payload.type === 'eval') {
+        const interp = (payload.interpreter || 'pwsh').toLowerCase();
+        return ['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe', 'cmd', 'cmd.exe', 'bash', 'bash.exe', 'sh', 'sh.exe'].includes(interp);
       }
-      const ext = path.extname(payload.scriptPath).toLowerCase();
-      return ['.ps1', '.bat', '.cmd', '.sh', '.bash'].includes(ext);
-    }
-    return false;
-  })();
+      if (payload.type === 'script' && typeof payload.scriptPath === 'string') {
+        if (payload.interpreter) {
+          return ['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe', 'cmd', 'cmd.exe', 'bash', 'bash.exe', 'sh', 'sh.exe'].includes(payload.interpreter.toLowerCase());
+        }
+        const ext = path.extname(payload.scriptPath).toLowerCase();
+        return ['.ps1', '.bat', '.cmd', '.sh', '.bash'].includes(ext);
+      }
+      return false;
+    })();
 
-  if (isShellPayload && payload.target !== 'wsl2') {
-    let scriptContent = '';
-    if (payload.type === 'eval') {
-      scriptContent = payload.code;
-    } else if (payload.type === 'script' && typeof payload.scriptPath === 'string' && fs.existsSync(payload.scriptPath)) {
-      scriptContent = fs.readFileSync(payload.scriptPath, 'utf8');
-    }
-    const tokens = scriptContent.split(/[\s;|{>&<]+/).filter(Boolean).map((t: string) => t.toLowerCase());
-    
-    const cmdStr = tokens.find((t: string) => networkAliases.includes(t));
-    const fsSearchAliases = ['grep', 'grep.exe', 'egrep', 'egrep.exe', 'fgrep', 'fgrep.exe', 'select-string', 'select-string.exe'];
-    const searchCmdStr = tokens.find((t: string) => fsSearchAliases.includes(t));
-    const fsListAliases = ['ls', 'ls.exe', 'dir', 'dir.exe', 'get-childitem', 'get-childitem.exe', 'gci', 'tree', 'tree.com'];
-    const listCmdStr = tokens.find((t: string) => fsListAliases.includes(t));
+    if (isShellPayload) {
+      let scriptContent = '';
+      if (payload.type === 'eval') {
+        scriptContent = payload.code;
+      } else if (payload.type === 'script' && typeof payload.scriptPath === 'string' && fs.existsSync(payload.scriptPath)) {
+        scriptContent = fs.readFileSync(payload.scriptPath, 'utf8');
+      }
+      const tokens = scriptContent.split(/[\s;|{>&<]+/).filter(Boolean).map((t: string) => t.toLowerCase());
+      
+      const cmdStr = tokens.find((t: string) => networkAliases.includes(t));
+      const fsSearchAliases = ['grep', 'grep.exe', 'egrep', 'egrep.exe', 'fgrep', 'fgrep.exe', 'select-string', 'select-string.exe'];
+      const searchCmdStr = tokens.find((t: string) => fsSearchAliases.includes(t));
+      const fsListAliases = ['ls', 'ls.exe', 'dir', 'dir.exe', 'get-childitem', 'get-childitem.exe', 'gci', 'tree', 'tree.com'];
+      const listCmdStr = tokens.find((t: string) => fsListAliases.includes(t));
 
-    if (cmdStr || searchCmdStr || listCmdStr) {
-      const detected = cmdStr || searchCmdStr || listCmdStr;
-      console.error(`\n   🛠️ AUTONOMOUS HEALING: Shell command/script using '${detected}' detected. Switching execution target to WSL2... (Frictionless Recovery)\x1b[0m`);
-      payload.target = 'wsl2';
-      if (!payload.interpreter || ['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe', 'cmd', 'cmd.exe'].includes(payload.interpreter)) {
-        payload.interpreter = 'bash';
+      if (cmdStr || searchCmdStr || listCmdStr) {
+        const detected = cmdStr || searchCmdStr || listCmdStr;
+        console.error(`\n   🛠️ AUTONOMOUS HEALING: Shell command/script using '${detected}' detected. Switching execution target to WSL2... (Frictionless Recovery)\x1b[0m`);
+        payload.target = 'wsl2';
+        if (!payload.interpreter || ['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe', 'cmd', 'cmd.exe'].includes(payload.interpreter)) {
+          payload.interpreter = 'bash';
+        }
       }
     }
   }
