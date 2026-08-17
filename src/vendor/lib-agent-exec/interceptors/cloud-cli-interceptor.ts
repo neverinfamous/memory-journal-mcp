@@ -81,8 +81,8 @@ export function cloudCliInterceptor({ cmdBasename, args, envOverrides, payload }
     match([subCmd1, subCmd2])
       .with(['pr', 'create'], () => {
         const hasFill = args.includes('--fill') || args.includes('--fill-first') || args.includes('--fill-verbose');
-        const hasTitle = args.includes('--title') || args.includes('-t');
-        const hasBody = args.includes('--body') || args.includes('-b') || args.includes('--body-file') || args.includes('-F');
+        const hasTitle = args.includes('--title') || args.includes('-t') || args.some(a => a.startsWith('--title=') || a.startsWith('-t='));
+        const hasBody = args.includes('--body') || args.includes('-b') || args.includes('--body-file') || args.includes('-F') || args.some(a => a.startsWith('--body=') || a.startsWith('-b=') || a.startsWith('--body-file=') || a.startsWith('-F='));
         if (!hasFill && !(hasTitle && hasBody)) {
           console.error(`\n   💡 AGENT HINT: 'gh pr create' is interactive without '--fill', or BOTH '--title' and '--body'. Blocking execution to prevent hanging.\n${AUTONOMOUS_HEALING_MSG}`);
           process.exit(1);
@@ -95,8 +95,8 @@ export function cloudCliInterceptor({ cmdBasename, args, envOverrides, payload }
         }
       })
       .with(['issue', 'create'], () => {
-        const hasTitle = args.includes('--title') || args.includes('-t');
-        const hasBody = args.includes('--body') || args.includes('-b') || args.includes('--body-file') || args.includes('-F');
+        const hasTitle = args.includes('--title') || args.includes('-t') || args.some(a => a.startsWith('--title=') || a.startsWith('-t='));
+        const hasBody = args.includes('--body') || args.includes('-b') || args.includes('--body-file') || args.includes('-F') || args.some(a => a.startsWith('--body=') || a.startsWith('-b=') || a.startsWith('--body-file=') || a.startsWith('-F='));
         if (!(hasTitle && hasBody)) {
           console.error(`\n   💡 AGENT HINT: 'gh issue create' is interactive without BOTH '--title' and '--body'. Blocking execution to prevent hanging.\n${AUTONOMOUS_HEALING_MSG}`);
           process.exit(1);
@@ -124,9 +124,9 @@ export function cloudCliInterceptor({ cmdBasename, args, envOverrides, payload }
         if (args.includes('--log')) {
           console.error(`\n   💡 AGENT HINT: If the job is still in progress, 'gh run view --log' will fail with code 1. Do NOT poll in a tight loop. Instead, use your 'schedule' tool to set a 60-second timer to wait asynchronously.\n`);
           process.exit(1);
-        } else if (!args.includes('--json') && !args.includes('--log-failed')) {
-          console.error(`\n   💡 AGENT HINT: 'gh run view' requires '--json' to output structured data. Blocking execution.\n${AUTONOMOUS_HEALING_MSG}`);
-          process.exit(1);
+        } else if (!args.includes('--json') && !args.includes('--log-failed') && !args.includes('--exit-status') && !args.some(a => a === '-v' || a.startsWith('--verbose'))) {
+          console.error(`\n   🛠️ AUTONOMOUS HEALING: Automatically injecting '--json' into gh run view command to output structured data... (Frictionless Recovery)`);
+          args.push('--json', 'databaseId,name,status,conclusion,url');
         }
       })
       .with(['run', 'watch'], () => {
@@ -134,8 +134,12 @@ export function cloudCliInterceptor({ cmdBasename, args, envOverrides, payload }
         process.exit(1);
       })
       .with(['release', 'create'], () => {
-        if (!args.includes('--title') && !args.includes('--notes') && !args.includes('--generate-notes')) {
-          console.error(`\n   💡 AGENT HINT: 'gh release create' is interactive without release notes flags. Blocking execution.\n${AUTONOMOUS_HEALING_MSG}`);
+        const hasNotesOrTitle = args.some(a => 
+          ['--title', '-t', '--notes', '-n', '--notes-file', '-F', '--generate-notes', '--notes-from-tag'].includes(a) ||
+          a.startsWith('--notes=') || a.startsWith('--title=') || a.startsWith('--notes-file=') || a.startsWith('-n=') || a.startsWith('-t=') || a.startsWith('-F=')
+        );
+        if (!hasNotesOrTitle) {
+          console.error(`\n   💡 AGENT HINT: 'gh release create' is interactive without release notes flags (--title, --notes, --notes-file, -F, -t, -n, --generate-notes, --notes-from-tag). Blocking execution.\n${AUTONOMOUS_HEALING_MSG}`);
           process.exit(1);
         }
       })

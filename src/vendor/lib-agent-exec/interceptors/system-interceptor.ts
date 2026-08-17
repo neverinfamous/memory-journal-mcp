@@ -323,6 +323,15 @@ export function systemInterceptor(ctx: ExecutionContext): void {
       ctx.args = ctx.args.map(a => convertToWslPath(a));
     })
     .with({ isCommand: true, originalCmd: P.union('rg', 'rg.exe') }, () => {
+      ctx.args = ctx.args.map(a => {
+        if (a === '-R' || a === '--recursive') return '';
+        if (a.startsWith('-') && !a.startsWith('--') && a.includes('R')) {
+          const cleaned = a.replace(/R/g, '');
+          return cleaned === '-' ? '' : cleaned;
+        }
+        return a;
+      }).filter(Boolean);
+
       if (hasStdin) {
         console.error(`\n   💡 AGENT INTERCEPT: Search command with stdin detected. Switching execution target to WSL2... (Frictionless Recovery)`);
         ctx.payload.target = 'wsl2';

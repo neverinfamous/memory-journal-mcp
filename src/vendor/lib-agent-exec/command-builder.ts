@@ -398,9 +398,10 @@ export function buildCommand(payload: ExecPayload, cwd: string, isJson: boolean 
           localCmd = wrapped.cmd;
           localArgs = wrapped.args;
         } else {
+          const shellOperators = ['&&', '||', '|', '|&', '>', '>>', '<', '<<', '<<<', ';', '2>', '1>', '2>&1', '&'];
           const originalCmd = [
             /[|&;<>$`{}()]/.test(localCmd) ? localCmd : escapeUnixArg(localCmd, false),
-            ...localArgs.map(a => escapeUnixArg(a, false))
+            ...localArgs.map(a => shellOperators.includes(a.trim()) ? a.trim() : escapeUnixArg(a, false))
           ].join(' ');
           localCmd = 'sh';
           localArgs = ['-c', originalCmd];

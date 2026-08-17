@@ -45,7 +45,27 @@ export function gitInterceptor(ctx: ExecutionContext): void {
       ({ args, ctx }) => {
         const cwd = ctx.payload.cwd || process.cwd();
         const hasWrapper = findEcosystemScript(cwd, 'commit.ts') !== null;
+        
+        let message: string | undefined;
         const mIndex = args.findIndex(a => a === '-m' || a === '--message');
+        if (mIndex !== -1 && mIndex + 1 < args.length) {
+          message = args[mIndex + 1];
+        } else {
+          const amIndex = args.findIndex(a => a === '-am' || a === '-ma');
+          if (amIndex !== -1 && amIndex + 1 < args.length) {
+            message = args[amIndex + 1];
+          } else {
+            const mPrefix = args.find(a => (a.startsWith('-m') || a.startsWith('--message=')) && a.length > 2);
+            if (mPrefix) {
+              message = mPrefix.startsWith('--message=') ? mPrefix.slice(10) : mPrefix.slice(2);
+            } else {
+              const amPrefix = args.find(a => (a.startsWith('-am') || a.startsWith('-ma')) && a.length > 3);
+              if (amPrefix) {
+                message = amPrefix.slice(3);
+              }
+            }
+          }
+        }
         
         if (args.includes('--amend')) {
           if (hasWrapper) {
@@ -55,9 +75,8 @@ export function gitInterceptor(ctx: ExecutionContext): void {
           }
         }
 
-        if (mIndex !== -1 && mIndex + 1 < args.length) {
+        if (message !== undefined) {
           if (hasWrapper) {
-            const message = args[mIndex + 1];
             console.error(`\n   💡 AGENT HINT: 'git commit' is intercepted for safety.`);
             console.error(`   🛠️ AUTONOMOUS HEALING: Transparently rewriting to 'bun .\\.agents\\scripts\\commit.ts' with default scores... (Frictionless Recovery)`);
             ctx.cmdBasename = 'bun';
