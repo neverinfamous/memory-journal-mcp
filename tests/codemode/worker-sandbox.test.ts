@@ -138,6 +138,29 @@ describe('WorkerSandbox', () => {
         expect(res.dbRes.error).toContain('Direct SQLite database access')
     })
 
+    it('should support MemoryJournal.getInstance() and top-level searchEntries invocation', async () => {
+        const sandbox = new WorkerSandbox()
+        const bindings = {
+            search: {
+                search_entries: async (args: any) => ({
+                    success: true,
+                    entries: [{ id: 42, content: `Found query: ${args?.query}` }],
+                }),
+            },
+        }
+        const code = `
+            const journalClient = await MemoryJournal.getInstance();
+            const searchRes = await journalClient.searchEntries({ query: 'project briefing adamic' });
+            const directSearch = await searchEntries({ query: 'direct search test' });
+            return { searchRes, directSearch };
+        `
+        const result = await sandbox.execute(code, bindings)
+        expect(result.success).toBe(true)
+        const res = result.result as any
+        expect(res.searchRes.entries[0].content).toContain('project briefing adamic')
+        expect(res.directSearch.entries[0].content).toContain('direct search test')
+    })
+
     it('should enforce timeout limiting', async () => {
         // Provide a very short timeout
         const sandbox = new WorkerSandbox({ timeoutMs: 50 })

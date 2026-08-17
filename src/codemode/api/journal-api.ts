@@ -501,7 +501,37 @@ export class JournalApi {
             entries: this.core,
             deleteEntry: this.admin['deleteEntry'],
             updateEntry: this.admin['updateEntry'],
-            
+            // Factory & Singleton shims
+            getInstance: () => bindings,
+            get_instance: () => bindings,
+            createInstance: () => bindings,
+            create_instance: () => bindings,
+            getClient: () => bindings,
+            get_client: () => bindings,
+            createClient: () => bindings,
+            create_client: () => bindings,
+            initClient: () => bindings,
+            init_client: () => bindings,
+            getService: () => bindings,
+            get_service: () => bindings,
+            createService: () => bindings,
+            create_service: () => bindings,
+            getJournal: () => bindings,
+            get_journal: () => bindings,
+            createJournal: () => bindings,
+            create_journal: () => bindings,
+            loadJournal: () => bindings,
+            load_journal: () => bindings,
+            loadMemory: () => bindings,
+            load_memory: () => bindings,
+            load: () => bindings,
+            init: () => bindings,
+            initialize: () => bindings,
+            connect: () => bindings,
+            open: () => bindings,
+            start: () => bindings,
+            create: () => bindings,
+
             // Global Hallucinations
             readResource: (uri?: string) => {
                 if (typeof uri === 'string') {

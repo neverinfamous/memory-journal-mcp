@@ -86,7 +86,7 @@ async function executeCode(
         const shimMj: Record<string, unknown> = new Proxy({}, {
             get(_fakeTarget: Record<string, unknown>, prop: string | symbol): unknown {
                 const target = mjApi
-                // Handle infinite chaining
+                // Handle infinite chaining & self-referential properties
                 if (
                     prop === 'mj' ||
                     prop === 'journal' ||
@@ -116,7 +116,8 @@ async function executeCode(
                     prop === 'service' ||
                     prop === 'services' ||
                     prop === 'kernel' ||
-                    prop === 'node'
+                    prop === 'node' ||
+                    prop === 'default'
                 ) return shimMj
                 // Handle `sqlite.mj.executeCode` (from db-mcp parity)
                 if (prop === 'executeCode') {
@@ -286,9 +287,37 @@ async function executeCode(
                     const coreGroup = target['core'] as Record<string, unknown>
                     return coreGroup['delete_entry'] ?? coreGroup['deleteEntry']
                 }
-                // Handle load/init/connect/getJournal shim
-                if (prop === 'load' || prop === 'loadJournal' || prop === 'loadMemory' || prop === 'init' || prop === 'connect' || prop === 'getJournal' || prop === 'get_journal' || prop === 'load_journal') {
-                    return () => Promise.resolve(shimMj)
+                // Handle load/init/connect/getJournal/getInstance factory shim
+                if (
+                    prop === 'load' || prop === 'loadJournal' || prop === 'loadMemory' || prop === 'load_memory' || prop === 'init' || prop === 'initialize' ||
+                    prop === 'connect' || prop === 'getJournal' || prop === 'get_journal' || prop === 'load_journal' ||
+                    prop === 'getInstance' || prop === 'get_instance' || prop === 'createInstance' || prop === 'create_instance' ||
+                    prop === 'initInstance' || prop === 'init_instance' || prop === 'getClient' || prop === 'get_client' ||
+                    prop === 'createClient' || prop === 'create_client' || prop === 'initClient' || prop === 'init_client' ||
+                    prop === 'getService' || prop === 'get_service' || prop === 'createService' || prop === 'create_service' ||
+                    prop === 'createJournal' || prop === 'create_journal' || prop === 'open' || prop === 'start' ||
+                    prop === 'create'
+                ) {
+                    const factoryFn = function(this: unknown, ..._args: unknown[]): unknown {
+                        return shimMj
+                    }
+                    return new Proxy(factoryFn, {
+                        apply(_t, _thisArg, _args): unknown {
+                            return shimMj
+                        },
+                        construct(_t, _args): object {
+                            return shimMj
+                        },
+                        get(_t, p): unknown {
+                            if (p === 'then') return undefined
+                            if (p === 'name') return 'factoryFn'
+                            if (p === 'length') return 0
+                            if (p === 'bind' || p === 'call' || p === 'apply' || p === 'toString') {
+                                return Function.prototype[p].bind(factoryFn)
+                            }
+                            return shimMj[p as string]
+                        }
+                    })
                 }
                 // Handle sdk.projects hallucination
                 if (prop === 'projects') {
@@ -478,15 +507,38 @@ async function executeCode(
         const servicesProxy = new Proxy({}, { get: () => shimMj })
         const kernelProxy = new Proxy({}, { get: () => shimMj })
 
+        const createCallableShim = () => {
+            const callableFn = function(this: unknown, ..._args: unknown[]): unknown {
+                return shimMj
+            }
+            return new Proxy(callableFn, {
+                apply(_t, _thisArg, _args): unknown {
+                    return shimMj
+                },
+                construct(_t, _args): object {
+                    return shimMj
+                },
+                get(_t, p): unknown {
+                    if (p === 'then') return undefined
+                    if (p === 'name') return 'MemoryJournal'
+                    if (p === 'length') return 0
+                    if (p === 'bind' || p === 'call' || p === 'apply' || p === 'toString') {
+                        return Function.prototype[p].bind(callableFn)
+                    }
+                    return shimMj[p as string]
+                }
+            })
+        }
+
         const sandbox: Record<string, unknown> = {
             mj: shimMj,
             core: shimMj,
             journal: shimMj,
             _journal: shimMj,
-            MJ: shimMj,
-            M: shimMj,
-            adapter: shimMj,
-            Entry: shimMj,
+            MJ: createCallableShim(),
+            M: createCallableShim(),
+            adapter: createCallableShim(),
+            Entry: createCallableShim(),
             getJournal: () => Promise.resolve(shimMj),
             services: servicesProxy,
             kernel: kernelProxy,
@@ -498,10 +550,10 @@ async function executeCode(
             memory: shimMj, // Unified with shimMj to catch memory.append and memory.journal
             mcp: shimMj,
             mcpx: shimMj,
-            memoryJournal: shimMj,
-            MemoryJournal: shimMj,
-            memory_journal: shimMj,
-            memory_journal_mcp: shimMj,
+            memoryJournal: createCallableShim(),
+            MemoryJournal: createCallableShim(),
+            memory_journal: createCallableShim(),
+            memory_journal_mcp: createCallableShim(),
             m: shimMj,
             env: shimMj,
             agent: shimMj,
@@ -511,11 +563,33 @@ async function executeCode(
             system: shimMj,
             utils: shimMj,
             sql: shimMj,
+            getInstance: () => shimMj,
+            get_instance: () => shimMj,
+            getClient: () => shimMj,
+            get_client: () => shimMj,
+            createClient: () => shimMj,
+            create_client: () => shimMj,
+            createInstance: () => shimMj,
+            create_instance: () => shimMj,
+            initClient: () => shimMj,
+            init_client: () => shimMj,
             getDb: () => shimMj,
             get_db: () => shimMj,
             getDatabase: () => shimMj,
             get_database: () => shimMj,
             connectToDatabase: () => shimMj,
+            search_entries: (arg: unknown): unknown => (shimMj['search'] as Record<string, ((...args: unknown[]) => unknown)>)?.['searchEntries']?.(arg),
+            searchEntries: (arg: unknown): unknown => (shimMj['search'] as Record<string, ((...args: unknown[]) => unknown)>)?.['searchEntries']?.(arg),
+            get_recent_entries: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['getRecentEntries']?.(arg),
+            getRecentEntries: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['getRecentEntries']?.(arg),
+            get_entry_by_id: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['getEntryById']?.(arg),
+            getEntryById: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['getEntryById']?.(arg),
+            list_projects: (arg: unknown): unknown => (shimMj['admin'] as Record<string, ((...args: unknown[]) => unknown)>)?.['listProjects']?.(arg),
+            listProjects: (arg: unknown): unknown => (shimMj['admin'] as Record<string, ((...args: unknown[]) => unknown)>)?.['listProjects']?.(arg),
+            get_project: (arg: unknown): unknown => (shimMj['admin'] as Record<string, ((...args: unknown[]) => unknown)>)?.['getProject']?.(arg),
+            getProject: (arg: unknown): unknown => (shimMj['admin'] as Record<string, ((...args: unknown[]) => unknown)>)?.['getProject']?.(arg),
+            list_tags: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['listTags']?.(arg),
+            listTags: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['listTags']?.(arg),
             sqlite_journal_add_entry: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
             create_entry: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
             createEntry: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),

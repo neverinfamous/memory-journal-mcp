@@ -155,4 +155,25 @@ describe('Anti-Hallucination Fixes', () => {
             expect((wrapped.map as () => unknown[])()).toEqual([])
         })
     })
+
+    describe('Singleton & Factory Shims', () => {
+        it('should provide getInstance, getClient, and factory shims on sandbox bindings', () => {
+            const tools = [
+                createMockTool('search_entries', 'search', () => Promise.resolve({ success: true, entries: [] })),
+                createMockTool('create_entry', 'core', () => Promise.resolve({ success: true, id: 1 })),
+            ]
+            const api = new JournalApi(tools)
+            const bindings = api.createSandboxBindings() as Record<string, unknown>
+
+            expect(typeof bindings['getInstance']).toBe('function')
+            expect(typeof bindings['getClient']).toBe('function')
+            expect(typeof bindings['createClient']).toBe('function')
+            expect(typeof bindings['getJournal']).toBe('function')
+
+            const instance = (bindings['getInstance'] as () => Record<string, unknown>)()
+            expect(instance).toBe(bindings)
+            expect(typeof instance['searchEntries']).toBe('function')
+            expect(typeof instance['createEntry']).toBe('function')
+        })
+    })
 })

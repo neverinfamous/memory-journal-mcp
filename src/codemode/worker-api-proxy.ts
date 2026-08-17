@@ -311,6 +311,42 @@ export function buildApiProxy(
             if (prop === 'gitApi') return target['git']
             if (prop === 'then') return undefined
 
+            if (
+                prop === 'getInstance' || prop === 'get_instance' ||
+                prop === 'createInstance' || prop === 'create_instance' ||
+                prop === 'getClient' || prop === 'get_client' ||
+                prop === 'createClient' || prop === 'create_client' ||
+                prop === 'initClient' || prop === 'init_client' ||
+                prop === 'initInstance' || prop === 'init_instance' ||
+                prop === 'getJournal' || prop === 'get_journal' ||
+                prop === 'loadJournal' || prop === 'load_journal' ||
+                prop === 'loadMemory' || prop === 'load_memory' ||
+                prop === 'init' || prop === 'initialize' ||
+                prop === 'connect' || prop === 'open' ||
+                prop === 'default'
+            ) {
+                const factoryFn = function(this: unknown, ..._args: unknown[]): unknown {
+                    return api
+                }
+                return new Proxy(factoryFn, {
+                    apply(_t, _thisArg, _args): unknown {
+                        return api
+                    },
+                    construct(_t, _args): object {
+                        return api
+                    },
+                    get(_t, p): unknown {
+                        if (p === 'then') return undefined
+                        if (p === 'name') return 'factoryFn'
+                        if (p === 'length') return 0
+                        if (p === 'bind' || p === 'call' || p === 'apply' || p === 'toString') {
+                            return Function.prototype[p].bind(factoryFn)
+                        }
+                        return api[p as string]
+                    }
+                })
+            }
+
             if (typeof prop === 'string') {
                 const snakeKey = /[A-Z]/.test(prop) ? prop.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`) : prop;
                 
