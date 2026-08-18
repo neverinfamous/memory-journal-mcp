@@ -323,7 +323,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
       ctx.args = ctx.args.map(a => convertToWslPath(a));
     })
     .with({ isCommand: true, originalCmd: P.union('rg', 'rg.exe') }, () => {
-      ctx.args = ctx.args.map(a => {
+      const cleanedArgs = ctx.args.map(a => {
         if (a === '-R' || a === '--recursive') return '';
         if (a.startsWith('-') && !a.startsWith('--') && a.includes('R')) {
           const cleaned = a.replace(/R/g, '');
@@ -331,6 +331,42 @@ export function systemInterceptor(ctx: ExecutionContext): void {
         }
         return a;
       }).filter(Boolean);
+
+      // Auto-heal grep-style flags (--include, --exclude, --exclude-dir) into rg glob flags (-g)
+      const healedArgs: string[] = [];
+      let convertedGrepFlags = false;
+      for (let i = 0; i < cleanedArgs.length; i++) {
+        const a = cleanedArgs[i];
+        if (a === '--include' && i + 1 < cleanedArgs.length) {
+          healedArgs.push('-g', cleanedArgs[++i]);
+          convertedGrepFlags = true;
+        } else if (a.startsWith('--include=')) {
+          healedArgs.push(`-g=${a.slice('--include='.length)}`);
+          convertedGrepFlags = true;
+        } else if (a === '--exclude' && i + 1 < cleanedArgs.length) {
+          const pattern = cleanedArgs[++i];
+          healedArgs.push('-g', pattern.startsWith('!') ? pattern : `!${pattern}`);
+          convertedGrepFlags = true;
+        } else if (a.startsWith('--exclude=')) {
+          const pattern = a.slice('--exclude='.length);
+          healedArgs.push(`-g=${pattern.startsWith('!') ? pattern : `!${pattern}`}`);
+          convertedGrepFlags = true;
+        } else if (a === '--exclude-dir' && i + 1 < cleanedArgs.length) {
+          const dir = cleanedArgs[++i];
+          healedArgs.push('-g', `!${dir}/**`);
+          convertedGrepFlags = true;
+        } else if (a.startsWith('--exclude-dir=')) {
+          const dir = a.slice('--exclude-dir='.length);
+          healedArgs.push(`-g=!${dir}/**`);
+          convertedGrepFlags = true;
+        } else {
+          healedArgs.push(a);
+        }
+      }
+      if (convertedGrepFlags) {
+        console.error(`\n   🛠️ AUTONOMOUS HEALING: 'rg' does not accept grep-style '--include/--exclude'. Normalizing to ripgrep '-g' (glob) flags... (Frictionless Recovery)`);
+      }
+      ctx.args = healedArgs;
 
       if (hasStdin) {
         console.error(`\n   💡 AGENT INTERCEPT: Search command with stdin detected. Switching execution target to WSL2... (Frictionless Recovery)`);
@@ -340,7 +376,8 @@ export function systemInterceptor(ctx: ExecutionContext): void {
         ctx.payload.target = 'wsl2';
         ctx.args = ctx.args.map(a => convertToWslPath(a));
       }
-      if (!hasStdin && positionalArgs.length <= 1 && !ctx.args.some(a => ['-r', '-R', '--recursive', '--files', '--help', '-h'].includes(a))) {
+      const updatedPositional = ctx.args.filter(a => !a.startsWith('-'));
+      if (!hasStdin && updatedPositional.length <= 1 && !ctx.args.some(a => ['-r', '-R', '--recursive', '--files', '--help', '-h'].includes(a))) {
         console.error(`\n   💡 AGENT INTERCEPT: 'rg' missing target directory argument. Auto-appending '.' as target directory... (Frictionless Recovery)`);
         ctx.args.push('.');
       }

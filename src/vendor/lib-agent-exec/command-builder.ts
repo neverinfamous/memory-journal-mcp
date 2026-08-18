@@ -423,7 +423,20 @@ export function buildCommand(payload: ExecPayload, cwd: string, isJson: boolean 
         exitWithError(`The script file '${scriptFile}' does not exist or is not a file.`);
       }
       if (p.interpreter) {
-        localCmd = p.interpreter;
+        const interpLower = p.interpreter.toLowerCase();
+        if (['ts', 'typescript'].includes(interpLower)) {
+          localCmd = 'bun';
+        } else if (['js', 'javascript'].includes(interpLower)) {
+          localCmd = 'node';
+        } else if (interpLower === 'py') {
+          localCmd = 'python';
+        } else if (interpLower === 'ps1') {
+          localCmd = 'pwsh';
+        } else if (interpLower === 'sh') {
+          localCmd = 'bash';
+        } else {
+          localCmd = p.interpreter;
+        }
       } else {
         const ext = path.extname(scriptFile).toLowerCase();
         localCmd = match(ext)
@@ -474,11 +487,12 @@ export function buildCommand(payload: ExecPayload, cwd: string, isJson: boolean 
       if (effectiveInterpreter) {
         const interp = effectiveInterpreter.toLowerCase();
         ext = match(interp)
-          .when(i => i.includes('python'), () => '.py')
-          .when(i => i.includes('pwsh') || i.includes('powershell'), () => '.ps1')
+          .when(i => i.includes('python') || i === 'py', () => '.py')
+          .when(i => i.includes('pwsh') || i.includes('powershell') || i === 'ps1', () => '.ps1')
           .when(i => i.includes('bash') || i.includes('sh') || i.includes('zsh'), () => '.sh')
           .when(i => i.includes('cmd') || i.includes('bat'), () => '.bat')
-          .when(i => i.includes('node'), () => '.js')
+          .when(i => i.includes('node') || i === 'js' || i === 'javascript', () => '.js')
+          .when(i => i.includes('bun') || i === 'ts' || i === 'typescript', () => '.ts')
           .otherwise(() => ext);
       }
       tempScriptPath = path.join(scratchDir, `agent-eval-${uniqueId}${ext}`);
@@ -501,7 +515,19 @@ export function buildCommand(payload: ExecPayload, cwd: string, isJson: boolean 
       } catch (err) {
         exitWithError(`Failed to write eval code to temporary file ${tempScriptPath}: ${err instanceof Error ? err.message : String(err)}`);
       }
-      const localCmd = effectiveInterpreter || (p.target === 'wsl2' ? 'bash' : 'bun');
+      let localCmd = effectiveInterpreter || (p.target === 'wsl2' ? 'bash' : 'bun');
+      const interpLower = localCmd.toLowerCase();
+      if (['ts', 'typescript'].includes(interpLower)) {
+        localCmd = 'bun';
+      } else if (['js', 'javascript'].includes(interpLower)) {
+        localCmd = 'node';
+      } else if (interpLower === 'py') {
+        localCmd = 'python';
+      } else if (interpLower === 'ps1') {
+        localCmd = 'pwsh';
+      } else if (interpLower === 'sh') {
+        localCmd = 'bash';
+      }
       const localArgs = match(localCmd)
         .when(isPwsh, () => [
           '-ExecutionPolicy', 'Bypass', '-NonInteractive', '-NoProfile', '-File', tempScriptPath!.replace(/\\/g, '/'), ...(p.args || [])
