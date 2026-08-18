@@ -507,7 +507,7 @@ async function executeCode(
         const servicesProxy = new Proxy({}, { get: () => shimMj })
         const kernelProxy = new Proxy({}, { get: () => shimMj })
 
-        const createCallableShim = () => {
+        const createCallableShim = (): object => {
             const callableFn = function(this: unknown, ..._args: unknown[]): unknown {
                 return shimMj
             }
