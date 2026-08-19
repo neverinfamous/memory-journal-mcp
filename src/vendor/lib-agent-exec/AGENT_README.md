@@ -1,5 +1,6 @@
 # Agent Execution Bridge (`agent-exec.ts`)
 
+> **[INTENT]**: Provides a hardened execution substrate. **[DEPENDENCY]**: Relies heavily on Zod schemas and ts-pattern routing. **[AGENT-HINT]**: Do not attempt to bypass interceptors natively unless strictly testing proxy behaviors.
 > **🛡️ Adversarial Audit Status: Fully Compliant**
 > This infrastructure module has been exhaustively audited against the `/cli-development` standards. It strictly enforces standard stream routing (all diagnostic output to `stderr`, reserved payload output to `stdout`), validates inputs via `zod`, leverages `ts-pattern` for deterministic routing, and guarantees deterministic execution without hanging processes.
 **Purpose**: This module functions as a **hardened, deterministic execution substrate** for AI agents. It shields you from the inherent unreliability of interactive shell environments (hanging processes, TTY bugs, quoting flaws) by providing a robust, non-interactive execution bridge.

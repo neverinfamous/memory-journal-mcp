@@ -6,11 +6,10 @@ import { ChildProcess } from 'node:child_process';
 import { StringDecoder } from 'node:string_decoder';
 import { StreamManager } from './stream-manager.js';
 import { checkPrompt } from './prompt-detector.js';
-import { ExecPayload, JsonEnvelopeSchema } from './schema.js';
-import { renderWebhookTemplate } from './webhook-template.js';
+import { ExecPayload } from './schema.js';
+import { isEnvelopeObject, extractEnvelope, parseEnvelopeFromTail, createWebhookStream } from './io-utils.js';
 
 const STDIN_CHUNK_SIZE = 64 * 1024;
-const WEBHOOK_FLUSH_INTERVAL_MS = 100;
 const PROMPT_STALL_TIMEOUT_MS = 2000;
 const TAIL_MAX_LENGTH = 2048;
 const TAIL_TRIM_LENGTH = 1024;
@@ -18,10 +17,6 @@ const FLUSH_TIMEOUT_MS = 200;
 const DEFAULT_MAX_BUFFER = 10 * 1024 * 1024;
 const INFINITE_MAX_BUFFER = 1024 * 1024 * 1024;
 const PENDING_STDOUT_LIMIT = 1024 * 1024;
-
-function isEnvelopeObject(obj: unknown): obj is Record<string, unknown> {
-  return JsonEnvelopeSchema.safeParse(obj).success;
-}
 
 export class IOController {
   private stdoutDecoder = new StringDecoder('utf8');
@@ -39,68 +34,14 @@ export class IOController {
   public getParsedEnvelope(): Record<string, unknown> | null {
     if (!this.payload.expectJsonEnvelope) return null;
     
-    const current = this.parseEnvelopeFromTail(this.pendingStdout || this._stdoutTail);
+    const current = parseEnvelopeFromTail(this.pendingStdout || this._stdoutTail);
     if (current) return current;
     
     return this._lastParsedEnvelope;
   }
   
-  private extractEnvelope(tail: string): { parsed: Record<string, unknown>, start: number, end: number } | null {
-    let braceCount = 0;
-    let startIdx = -1;
-    let inString = false;
-    let escape = false;
-    let lastValidEnvelope: { parsed: Record<string, unknown>, start: number, end: number } | null = null;
-
-    for (let i = 0; i < tail.length; i++) {
-      const char = tail[i];
-      if (escape) {
-        escape = false;
-        continue;
-      }
-      if (char === '\\') {
-        escape = true;
-        continue;
-      }
-      if (char === '"') {
-        inString = !inString;
-        continue;
-      }
-      if (!inString) {
-        if (char === '{') {
-          if (braceCount === 0) startIdx = i;
-          braceCount++;
-        } else if (char === '}') {
-          if (braceCount > 0) {
-            braceCount--;
-            if (braceCount === 0 && startIdx !== -1) {
-              try {
-                const candidate = tail.slice(startIdx, i + 1);
-                const parsed: unknown = JSON.parse(candidate);
-                if (isEnvelopeObject(parsed)) {
-                  lastValidEnvelope = { parsed, start: startIdx, end: i + 1 };
-                }
-              } catch {
-                // Ignore parse errors
-              }
-              startIdx = -1;
-            }
-          }
-        }
-      }
-    }
-    return lastValidEnvelope;
-  }
-
-  private parseEnvelopeFromTail(tailStr: string): Record<string, unknown> | null {
-    if (!tailStr) return null;
-    const tail = tailStr.trim();
-    if (tail.length === 0) return null;
-    
-    const result = this.extractEnvelope(tail);
-    return result ? result.parsed : null;
-  }
-  
+  // [INTENT]: Extracts JSON envelope data from the final output chunk without truncating the standard logs. 
+  // [INVARIANT]: The payload must strictly match JsonEnvelopeSchema. Invalid JSON is gracefully printed to stdout instead of crashing.
   private finalizeStdout(decoded: string): string {
     if (!this.payload.expectJsonEnvelope) return decoded;
     this.pendingStdout += decoded;
@@ -118,7 +59,7 @@ export class IOController {
        return res;
     }
     
-    const result = this.extractEnvelope(tail);
+    const result = extractEnvelope(tail);
     if (result) {
        this._lastParsedEnvelope = result.parsed;
        const envString = tail.slice(result.start, result.end);
@@ -181,77 +122,7 @@ export class IOController {
 
     const getStream = (filePath: string) => {
       if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
-        let buffer: Buffer[] = [];
-        let timer: NodeJS.Timeout | null = null;
-        const inFlightReqs: Set<Promise<void>> = new Set();
-        
-        const sendChunk = (data: Buffer) => {
-          const method = this.payload.webhookMethod || 'POST';
-          const headers: Record<string, string> = { ...this.payload.webhookHeaders };
-          let bodyPayload: BodyInit = new Blob([new Uint8Array(data)]);
-
-          if (this.payload.webhookPayloadTemplate) {
-            headers['Content-Type'] = headers['Content-Type'] || 'application/json';
-            const chunkStr = data.toString('utf8');
-            const vars = {
-              stdout: chunkStr,
-              stderr: chunkStr,
-              success: true,
-              code: null,
-              signal: null
-            };
-            bodyPayload = renderWebhookTemplate(
-              this.payload.webhookPayloadTemplate, 
-              'integrationContext' in this.payload ? this.payload.integrationContext : null, 
-              vars
-            );
-          }
-          const fetchOptions: RequestInit = { method, headers };
-          if (method !== 'GET') {
-            fetchOptions.body = bodyPayload;
-          }
-          const timeoutMs = this.payload.webhookTimeoutMs ?? 5000;
-          if (timeoutMs > 0) {
-            fetchOptions.signal = AbortSignal.timeout(timeoutMs);
-          }
-          const req = fetch(filePath, fetchOptions).then(res => res.arrayBuffer()).then(() => {}).catch(() => {});
-          inFlightReqs.add(req);
-          req.finally(() => inFlightReqs.delete(req));
-          return req;
-        };
-
-        return new Writable({
-          write(chunk: Buffer, encoding: string, callback: (error?: Error | null) => void) {
-            buffer.push(chunk);
-            if (!timer) {
-              timer = setTimeout(() => {
-                const data = Buffer.concat(buffer);
-                buffer = [];
-                timer = null;
-                sendChunk(data);
-              }, WEBHOOK_FLUSH_INTERVAL_MS);
-            }
-            callback();
-          },
-          final(callback) {
-            const finish = () => {
-              if (buffer.length > 0) {
-                const data = Buffer.concat(buffer);
-                buffer = [];
-                if (timer) clearTimeout(timer);
-                sendChunk(data).finally(() => callback());
-              } else {
-                callback();
-              }
-            };
-
-            if (inFlightReqs.size > 0) {
-              Promise.all(Array.from(inFlightReqs)).finally(finish);
-            } else {
-              finish();
-            }
-          }
-        });
+        return createWebhookStream(filePath, this.payload);
       }
       const outPath = path.resolve(this.cwd, filePath);
       ensureDir(outPath);
@@ -461,7 +332,7 @@ export class IOController {
     } else {
       this._stdoutTail += decoded;
       if (this.payload.expectJsonEnvelope) {
-         const parsed = this.parseEnvelopeFromTail(this.pendingStdout || this._stdoutTail);
+         const parsed = parseEnvelopeFromTail(this.pendingStdout || this._stdoutTail);
          if (parsed) {
             this._lastParsedEnvelope = parsed;
          }

@@ -1,5 +1,7 @@
 # 🤖 Agent README: lib-git-history
 
+> **[INTENT]**: Serves as the SSoT for Git history extraction. **[INVARIANT]**: Do NOT parse raw git logs or statuses. Always rely on the JSON payloads emitted by this module.
+
 **Purpose**: This module serves as a **structured repository intelligence layer**, elevating raw version control data far beyond a simple changelog parser into an actionable, semantic model. It is the **Single Source of Truth (SSoT)** for Git history extraction within the `adamic` repository.
 
 By pairing this deterministic history model with a deterministic execution bridge (`lib-agent-exec`), we eliminate the two largest sources of friction in agentic workflows: unpredictable command execution and opaque repository state. 

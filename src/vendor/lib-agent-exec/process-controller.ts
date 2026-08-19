@@ -226,6 +226,9 @@ export class ProcessController {
     this.child.on('error', (error) => this.onChildError(error));
   }
 
+  // [INTENT]: Resolves zombie processes where the main shell exits but leaves a background daemon holding stdout/stderr open. 
+  // [SIDE-EFFECT]: Forcibly destroys IO streams and kills the process tree if stalls exceed DAEMON_EXIT_STALL_MS. 
+  // [AGENT-HINT]: Do NOT decrease this timeout, or you will prematurely kill valid background compilation tasks.
   private onChildExit(code: number | null, signal: NodeJS.Signals | null) {
     // IOController already tracks stream activity; read its last-seen timestamp
     // rather than attaching new data listeners after the process has already exited.

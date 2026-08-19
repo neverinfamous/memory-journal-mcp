@@ -3,6 +3,8 @@ import { z } from 'zod';
 
 const INT32_MAX = 2147483647;
 
+// [BOUNDARY]: This Zod schema is the absolute system boundary for payload validation. 
+// [INVARIANT]: All downstream modules MUST trust these sanitized strings. DO NOT write secondary manual validation checks for null bytes or carriage returns in the execution engine.
 const noNullString = z.string().refine(val => !val.includes('\0'), "Must not contain null bytes");
 const safeString = noNullString
   .refine(val => !val.includes('\r'), "Must not contain carriage returns")
