@@ -110,7 +110,7 @@ export class LifecycleOperations {
             return { archivedCount: 0, prunedCount: 0, hardDeletedCount: 0, candidates }
         }
 
-        db.transaction(() => {
+        const runTx = db.transaction(() => {
             if (options.hardDeleteOlderThanDays > 0) {
                 const rows = db.prepare(hardDeleteSelect).all() as { id: number | bigint }[]
                 const ids = rows.map(r => typeof r.id === 'bigint' ? Number(r.id) : r.id)
@@ -129,7 +129,6 @@ export class LifecycleOperations {
             }
 
             if (options.pruneOlderThanDays > 0) {
-
                 const sql = `
                     WITH ${cte}
                     UPDATE memory_journal
@@ -154,7 +153,26 @@ export class LifecycleOperations {
                 const result = db.prepare(sql).run(...params)
                 archivedCount = result.changes
             }
-        })()
+        })
+        
+        try {
+            runTx()
+        } catch (error: any) {
+            if (error.code === 'SQLITE_CORRUPT_VTAB' || (error.message && error.message.includes('malformed'))) {
+                // FTS5 index is out of sync with external content table.
+                // Rebuild it synchronously and retry the transaction.
+                db.prepare("INSERT INTO fts_content(fts_content) VALUES ('rebuild')").run()
+                
+                // Reset counters before retry
+                hardDeletedCount = 0
+                prunedCount = 0
+                archivedCount = 0
+                
+                runTx()
+            } else {
+                throw error
+            }
+        }
 
         return { archivedCount, prunedCount, hardDeletedCount }
     }
