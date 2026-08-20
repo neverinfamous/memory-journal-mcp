@@ -157,8 +157,11 @@ export class LifecycleOperations {
         
         try {
             runTx()
-        } catch (error: any) {
-            if (error.code === 'SQLITE_CORRUPT_VTAB' || (error.message && error.message.includes('malformed'))) {
+        } catch (error: unknown) {
+            const isCorrupt =
+                (error !== null && typeof error === 'object' && 'code' in error && error.code === 'SQLITE_CORRUPT_VTAB') ||
+                (error instanceof Error && error.message.includes('malformed'))
+            if (isCorrupt) {
                 // FTS5 index is out of sync with external content table.
                 // Rebuild it synchronously and retry the transaction.
                 db.prepare("INSERT INTO fts_content(fts_content) VALUES ('rebuild')").run()

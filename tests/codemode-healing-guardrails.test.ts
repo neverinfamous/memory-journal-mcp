@@ -1,10 +1,74 @@
 import { describe, it, expect } from 'vitest'
+import * as vm from 'node:vm'
 import { wrapResult } from '../src/codemode/worker-result-proxy.js'
-import { ExecuteCodeSchema } from '../src/handlers/tools/codemode/schemas.ts'
+import { ExecuteCodeSchema } from '../src/handlers/tools/codemode/schemas.js'
+import { healCodeModeScript, extractAndRecoverEntryCode } from '../src/handlers/tools/codemode/handler.js'
 import { databaseOptionsSchema, networkOptionsSchema } from '../src/cli/schemas.js'
 import { getDummyHealingTools } from '../src/handlers/tools/core/dummy-healing.js'
 
 describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
+    describe('Layer 2: Template Literal Unescaped Backtick Auto-Healing', () => {
+        it('should heal code containing unescaped backticks in template literals (agent-issues.jsonl regression)', () => {
+            const buggyCode = [
+                'return await mj.core.createEntry({',
+                '    entry_type: "retrospective",',
+                '    tags: ["session-summary", "maintenance"],',
+                '    title: "Dependency Updates & Favicon Extraction",',
+                '    content: `## Accomplished',
+                '- Successfully updated \\`pnpm\\` major dev dependencies (\\`vite\\`, \\`@vitejs/plugin-react\\`, \\`@types/node\\`).',
+                '- Evaluated TypeScript 7.0.2 upgrade but identified an ecosystem conflict with \\`typescript-eslint\\`, causing us to intentionally hold back at \\`^6.0.3\\`.',
+                '- Migrated \\`vite.config.ts\\` path resolution from the deprecated \\`__dirname\\` CommonJS global to \\`import.meta.dirname\\` to satisfy Vite 8.',
+                '- Eliminated extraneous \\`npm\\` `.npmrc` configuration warnings by explicitly configuring \\`wrangler.toml\\` to build via \\`pnpm run build\\`.',
+                '- Investigated global \\`wrangler\\` installation failures and diagnosed that \\`pnpm\\` natively blocked it due to a \\`minimum-release-age\\` supply-chain security guardrail.',
+                '- Diagnosed a persistent Content Security Policy (CSP) violation inside the Cloudflare Access UI, identifying it as a known platform-level bug blocking its own inline \\`data:\\` SVG logo.',
+                '- Extracted the application\'s inline favicon to \\`public/favicon.svg\\` to serve as a valid HTTPS endpoint.',
+                '',
+                '## Unfinished / Blocked',
+                '- None',
+                '',
+                '## Context for Next Session',
+                '- The repository is completely up to date, typechecked, linted, and ready for deployment.',
+                '- The next session will focus on deploying the new version.',
+                '- Remember to configure the custom logo URL using \\`https://d1.adamic.tech/favicon.svg\\` once deployed.`,',
+                '    project_number: 1,',
+                '    session_id: "2026-08-19-maintenance"',
+                '})'
+            ].join('\n')
+
+            const healed = healCodeModeScript(buggyCode)
+            expect(healed).toBeDefined()
+
+            // Verify that the healed code is valid JavaScript syntax in a VM context
+            const wrapped = `(async () => {
+                const mj = {
+                    core: {
+                        createEntry: async (entry) => entry
+                    }
+                };
+                ${healed}
+            })()`
+            expect(() => {
+                new vm.Script(wrapped)
+            }).not.toThrow()
+        })
+
+        it('should recover entry creation payload using extractAndRecoverEntryCode on mangled code', () => {
+            const mangledCode = `mj.createEntry({
+                title: "Session Retrospective",
+                entry_type: "retrospective",
+                project_number: 2,
+                session_id: "sess-123",
+                content: \`## Accomplished\n- Did something with \`.npmrc\` and \`pnpm\`\`
+            })`
+
+            const recovered = extractAndRecoverEntryCode(mangledCode)
+            expect(recovered).toBeDefined()
+            expect(recovered).toContain('return await mj.createEntry(')
+            expect(recovered).toContain('"Session Retrospective"')
+            expect(recovered).toContain('## Accomplished')
+        })
+    })
+
     describe('Layer 3: Worker Result Proxy Failed Result Safety', () => {
         it('should safely return empty arrays and 0 length on failed result object without throwing', () => {
             const failedResult = wrapResult({

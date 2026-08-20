@@ -14,6 +14,189 @@ import { ExecuteCodeSchema, ExecuteCodeSchemaMcp, VERSION_AWARE_TOOL_NAMES } fro
 import { collectNonCodeModeTools, getSandboxPool, getSecurityManager } from './singleton-state.js'
 import type { SandboxResult } from '../../../codemode/types.js'
 
+/**
+ * Auto-heals common syntax, template literal, and LLM formatting errors in Code Mode execution payloads.
+ */
+export function healCodeModeScript(code: string): string {
+    let executionCode = code
+
+    // [Layer 2 Dispatcher Healing] Prevent literal placeholder SyntaxErrors
+    executionCode = executionCode.replace(/<CURRENT_PROJECT_NUMBER>/g, 'undefined')
+    executionCode = executionCode.replace(/<CURRENT_PROJECT_ID>/g, 'undefined')
+    executionCode = executionCode.replace(/<PROJECT_NUMBER>/g, 'undefined')
+    executionCode = executionCode.replace(/<PROJECT_ID>/g, 'undefined')
+
+    // Auto-heal export default function / export default async function / export default
+    executionCode = executionCode.replace(/export\s+default\s+async\s+function\s*[\w$]*\s*\(([^)]*)\)\s*\{([\s\S]*)\}/g, (_m: string, param: string, body: string): string => {
+        const p = param.trim()
+        const pClause = p ? `${p} = mj` : ''
+        return `(async (${pClause}) => { ${body} })()`
+    })
+    executionCode = executionCode.replace(/export\s+default\s+function\s*[\w$]*\s*\(([^)]*)\)\s*\{([\s\S]*)\}/g, (_m: string, param: string, body: string): string => {
+        const p = param.trim()
+        const pClause = p ? `${p} = mj` : ''
+        return `(async (${pClause}) => { ${body} })()`
+    })
+    executionCode = executionCode.replace(/export\s+default\s+/g, '')
+
+    // Auto-heal tools.* -> mj.*
+    executionCode = executionCode.replace(/\btools\./g, 'mj.')
+
+    // Auto-heal ES module import and CommonJS require statements
+    executionCode = executionCode.replace(/(?:const|let|var)\s+(\{[^}]*\}|[\w$]+)\s*=\s*require\s*\(\s*['"]([^'"]+)['"]\s*\);?/g, (_m: string, varName: string, modName: string): string => {
+        if (modName.includes('memory-journal') || modName.includes('journal') || modName.includes('mcp')) {
+            if (varName.trim() === 'mj') return `/* auto-healed require */`
+            return `const ${varName} = mj;`
+        }
+        if (['fs', 'node:fs', 'path', 'node:path', 'os', 'node:os', 'util', 'crypto', 'buffer', 'child_process'].includes(modName)) {
+            return `/* auto-healed node module require: ${modName} */`
+        }
+        return `/* auto-healed require: ${modName} */`
+    })
+    executionCode = executionCode.replace(/import\s+(\{[^}]*\}|\*\s+as\s+[\w$]+|[\w$]+)\s+from\s+['"]([^'"]+)['"]\s*;?/g, (_m: string, varName: string, modName: string): string => {
+        if (modName.includes('memory-journal') || modName.includes('journal') || modName.includes('mcp')) {
+            if (varName.trim() === 'mj') return `/* auto-healed import */`
+            return `const ${varName} = mj;`
+        }
+        if (['fs', 'node:fs', 'path', 'node:path', 'os', 'node:os', 'util', 'crypto', 'buffer', 'child_process'].includes(modName)) {
+            return `/* auto-healed node module import: ${modName} */`
+        }
+        return `/* auto-healed import: ${modName} */`
+    })
+
+    // Auto-heal fs.readFileSync / fs.readFile calls before security checks
+    executionCode = executionCode.replace(/(?:fs|fs\.promises)\.readFileSync\s*\([^)]*\)/g, '(typeof context !== "undefined" && context.content ? context.content : "")')
+    executionCode = executionCode.replace(/(?:fs|fs\.promises)\.readFile\s*\([^)]*\)/g, 'Promise.resolve(typeof context !== "undefined" && context.content ? context.content : "")')
+
+    // Auto-heal process.env access in Code Mode scripts before security checks
+    executionCode = executionCode.replace(/process\.env\.([a-zA-Z0-9_]+)/g, () => 'undefined')
+    executionCode = executionCode.replace(/process\.env/g, '{}')
+
+    // Auto-heal unescaped backticks inside template literals on object properties
+    executionCode = executionCode.replace(
+        /(\b(?:content|title|text|description|message|instructions|body|notes|details|resolution_notes|query|script|comment|summary|heading)\s*:\s*)`([\s\S]*?)`(?=\s*(?:,\s*\n\s*[\w$]+\s*:|\s*\n\s*[\w$]+\s*:|\s*\n\s*\}|\s*\n\s*\)|\s*,\s*\}|\s*\}|\s*\)))/g,
+        (_match: string, prefix: string, content: string): string => {
+            const normalized = content.replace(/\\`/g, '`')
+            const escaped = normalized.replace(/`/g, '\\`')
+            return `${prefix}\`${escaped}\``
+        }
+    )
+
+    // Auto-heal unescaped backticks inside positional template arguments to mj.* / createEntry calls
+    executionCode = executionCode.replace(
+        /(\b(?:mj\.)?(?:core\.|team\.|admin\.|search\.|io\.|github\.|git\.|backup\.)?(?:createEntry|teamCreateEntry|appendEntry|updateEntry|teamUpdateEntry|searchEntries|teamSearch)\s*\(\s*)`([\s\S]*?)`(?=\s*(?:,\s*|\)))/g,
+        (_match: string, prefix: string, content: string): string => {
+            const normalized = content.replace(/\\`/g, '`')
+            const escaped = normalized.replace(/`/g, '\\`')
+            return `${prefix}\`${escaped}\``
+        }
+    )
+
+    // Auto-heal unescaped backticks in variable declarations with template literals
+    executionCode = executionCode.replace(
+        /(\b(?:const|let|var)\s+[\w$]+\s*=\s*)`([\s\S]*?)`(?=\s*(?:;|\n\s*(?:const|let|var|return|await|mj\.|function|\/\*|\/\/)))/g,
+        (_match: string, prefix: string, content: string): string => {
+            const normalized = content.replace(/\\`/g, '`')
+            const escaped = normalized.replace(/`/g, '\\`')
+            return `${prefix}\`${escaped}\``
+        }
+    )
+
+    return executionCode
+}
+
+/**
+ * Attempt fuzzy recovery of an entry creation or update call from broken/mangled code
+ */
+export function extractAndRecoverEntryCode(code: string): string | null {
+    if (!code || typeof code !== 'string') return null
+
+    // Check if the code was attempting to create or update an entry
+    const isCreate = /\b(?:createEntry|teamCreateEntry|appendEntry|create_entry|team_create_entry)\b/i.test(code)
+    const isUpdate = /\b(?:updateEntry|teamUpdateEntry|update_entry|team_update_entry)\b/i.test(code)
+    
+    if (!isCreate && !isUpdate) return null
+
+    // Extract content
+    const contentMatch = /\bcontent\s*:\s*[`'"]([\s\S]*?)[`'"]\s*(?:,\s*\n\s*[\w$]+\s*:|\s*\n\s*\}|\s*\n\s*\))/i.exec(code)
+    let content: string | undefined = contentMatch ? contentMatch[1] : undefined
+
+    if (!content) {
+        // Fallback: extract everything between `content:` and `, \n <prop>:`
+        const altMatch = /\bcontent\s*:\s*`([\s\S]*?)`(?=,\s*\n\s*[\w$]+\s*:|\s*\n\s*\})/i.exec(code)
+        if (altMatch) {
+            content = altMatch[1]
+        }
+    }
+
+    if (!content) return null
+
+    // Clean up content
+    content = content.replace(/\\`/g, '`')
+
+    // Extract other standard fields
+    const typeMatch = /\b(?:entry_type|type)\s*:\s*['"]([^'"]+)['"]/i.exec(code)
+    const titleMatch = /\btitle\s*:\s*['"]([^'"]+)['"]/i.exec(code)
+    const projectMatch = /\b(?:project_number|project)\s*:\s*(\d+)/i.exec(code)
+    const sessionMatch = /\bsession_id\s*:\s*['"]([^'"]+)['"]/i.exec(code)
+    const impactMatch = /\bimpact\s*:\s*([0-9.]+)/i.exec(code)
+    const trustMatch = /\btrust\s*:\s*([0-9.]+)/i.exec(code)
+    const validationMatch = /\bvalidation_status\s*:\s*['"]([^'"]+)['"]/i.exec(code)
+    const tagsMatch = /\btags\s*:\s*\[([\s\S]*?)\]/i.exec(code)
+    const autoContextMatch = /\bauto_context\s*:\s*(\{[\s\S]*?\})(?=\s*,\s*\n|\s*\n\s*\})/i.exec(code)
+
+    const entryType = typeMatch?.[1]
+    const payload: Record<string, unknown> = {
+        content,
+        entry_type: entryType ?? 'technical_decision',
+    }
+
+    const title = titleMatch?.[1]
+    if (title) payload['title'] = title
+
+    const projectStr = projectMatch?.[1]
+    if (projectStr) payload['project_number'] = parseInt(projectStr, 10)
+
+    const session = sessionMatch?.[1]
+    if (session) payload['session_id'] = session
+
+    const impactStr = impactMatch?.[1]
+    if (impactStr) payload['impact'] = parseFloat(impactStr)
+
+    const trustStr = trustMatch?.[1]
+    if (trustStr) payload['trust'] = parseFloat(trustStr)
+
+    const validation = validationMatch?.[1]
+    if (validation) payload['validation_status'] = validation
+
+    const rawTags = tagsMatch?.[1]
+    if (rawTags) {
+        try {
+            const parsedTags = rawTags.split(',').map((s: string): string => s.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean)
+            payload['tags'] = parsedTags
+        } catch {
+            // Ignore tag parse error
+        }
+    }
+
+    const rawAutoContext = autoContextMatch?.[1]
+    if (rawAutoContext) {
+        try {
+            payload['auto_context'] = JSON.parse(rawAutoContext)
+        } catch {
+            try {
+                const normalizedJson = rawAutoContext.replace(/([{,]\s*)([a-zA-Z0-9_$]+)\s*:/g, '$1"$2":')
+                payload['auto_context'] = JSON.parse(normalizedJson)
+            } catch {
+                // Ignore auto_context parse error
+            }
+        }
+    }
+
+    const fnName = isUpdate ? 'mj.updateEntry' : 'mj.createEntry'
+    return `return await ${fnName}(${JSON.stringify(payload)});`
+}
+
 export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
     const securityManager = getSecurityManager()
     return [
@@ -70,58 +253,9 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    // [Layer 2 Dispatcher Healing] Prevent literal placeholder SyntaxErrors
+                    // [Layer 2 Dispatcher Healing] Apply full script healing
                     if (executionCode) {
-                        executionCode = executionCode.replace(/<CURRENT_PROJECT_NUMBER>/g, 'undefined')
-                        executionCode = executionCode.replace(/<CURRENT_PROJECT_ID>/g, 'undefined')
-                        executionCode = executionCode.replace(/<PROJECT_NUMBER>/g, 'undefined')
-                        executionCode = executionCode.replace(/<PROJECT_ID>/g, 'undefined')
-
-                        // Auto-heal export default function / export default async function / export default
-                        executionCode = executionCode.replace(/export\s+default\s+async\s+function\s*[\w$]*\s*\(([^)]*)\)\s*\{([\s\S]*)\}/g, (_m: string, param: string, body: string): string => {
-                            const p = param.trim()
-                            const pClause = p ? `${p} = mj` : ''
-                            return `(async (${pClause}) => { ${body} })()`
-                        })
-                        executionCode = executionCode.replace(/export\s+default\s+function\s*[\w$]*\s*\(([^)]*)\)\s*\{([\s\S]*)\}/g, (_m: string, param: string, body: string): string => {
-                            const p = param.trim()
-                            const pClause = p ? `${p} = mj` : ''
-                            return `(async (${pClause}) => { ${body} })()`
-                        })
-                        executionCode = executionCode.replace(/export\s+default\s+/g, '')
-
-                        // Auto-heal tools.* -> mj.*
-                        executionCode = executionCode.replace(/\btools\./g, 'mj.')
-
-                        // Auto-heal ES module import and CommonJS require statements
-                        executionCode = executionCode.replace(/(?:const|let|var)\s+(\{[^}]*\}|[\w$]+)\s*=\s*require\s*\(\s*['"]([^'"]+)['"]\s*\);?/g, (_m: string, varName: string, modName: string): string => {
-                            if (modName.includes('memory-journal') || modName.includes('journal') || modName.includes('mcp')) {
-                                if (varName.trim() === 'mj') return `/* auto-healed require */`
-                                return `const ${varName} = mj;`
-                            }
-                            if (['fs', 'node:fs', 'path', 'node:path', 'os', 'node:os', 'util', 'crypto', 'buffer', 'child_process'].includes(modName)) {
-                                return `/* auto-healed node module require: ${modName} */`
-                            }
-                            return `/* auto-healed require: ${modName} */`
-                        })
-                        executionCode = executionCode.replace(/import\s+(\{[^}]*\}|\*\s+as\s+[\w$]+|[\w$]+)\s+from\s+['"]([^'"]+)['"]\s*;?/g, (_m: string, varName: string, modName: string): string => {
-                            if (modName.includes('memory-journal') || modName.includes('journal') || modName.includes('mcp')) {
-                                if (varName.trim() === 'mj') return `/* auto-healed import */`
-                                return `const ${varName} = mj;`
-                            }
-                            if (['fs', 'node:fs', 'path', 'node:path', 'os', 'node:os', 'util', 'crypto', 'buffer', 'child_process'].includes(modName)) {
-                                return `/* auto-healed node module import: ${modName} */`
-                            }
-                            return `/* auto-healed import: ${modName} */`
-                        })
-
-                        // Auto-heal fs.readFileSync / fs.readFile calls before security checks
-                        executionCode = executionCode.replace(/(?:fs|fs\.promises)\.readFileSync\s*\([^)]*\)/g, '(typeof context !== "undefined" && context.content ? context.content : "")')
-                        executionCode = executionCode.replace(/(?:fs|fs\.promises)\.readFile\s*\([^)]*\)/g, 'Promise.resolve(typeof context !== "undefined" && context.content ? context.content : "")')
-
-                        // Auto-heal process.env access in Code Mode scripts before security checks
-                        executionCode = executionCode.replace(/process\.env\.([a-zA-Z0-9_]+)/g, () => 'undefined')
-                        executionCode = executionCode.replace(/process\.env/g, '{}')
+                        executionCode = healCodeModeScript(executionCode)
 
                         // Anti-Hallucination: Auto-heal raw JSON string passed directly as code parameter
                         const trimmedCode = executionCode.trim()
@@ -651,11 +785,11 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                     const authCtx = getAuthContext()
                     const reqCtx = getRequestContext()
                     
-                    await requestContextStorage.run(reqCtx ?? {}, async () => {
+                    const runSandbox = async (codeToRun: string): Promise<void> => {
                         if (authCtx) {
                             await runWithAuthContext(authCtx, async () => {
                                 execResult = await pool.execute(
-                                    executionCode ?? '',
+                                    codeToRun,
                                     apiBindings,
                                     schemas,
                                     input.timeout ?? input.timeout_ms,
@@ -665,13 +799,35 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                             })
                         } else {
                             execResult = await pool.execute(
-                                    executionCode ?? '',
-                                    apiBindings,
-                                    schemas,
-                                    input.timeout ?? input.timeout_ms,
-                                    userContext,
-                                    input.dry_run
+                                codeToRun,
+                                apiBindings,
+                                schemas,
+                                input.timeout ?? input.timeout_ms,
+                                userContext,
+                                input.dry_run
                             )
+                        }
+                    }
+
+                    await requestContextStorage.run(reqCtx ?? {}, async () => {
+                        await runSandbox(executionCode ?? '')
+
+                        // Autonomous Recovery Retry: If execution failed due to syntax error or TypeError (e.g. tagged template tag or unescaped backtick)
+                        if (execResult && !execResult.success && typeof execResult.error === 'string') {
+                            const errLower = execResult.error.toLowerCase()
+                            if (
+                                errLower.includes('syntax error') ||
+                                errLower.includes('is not a function') ||
+                                errLower.includes('unexpected token') ||
+                                errLower.includes('missing ) after argument list')
+                            ) {
+                                const originalInput = typeof input.code === 'string' ? input.code : (executionCode ?? '')
+                                const recoveredCode = extractAndRecoverEntryCode(originalInput)
+                                if (recoveredCode && recoveredCode !== executionCode) {
+                                    logger.info('CODEMODE_AUTONOMOUS_RECOVERY', { originalError: execResult.error, recoveredCode })
+                                    await runSandbox(recoveredCode)
+                                }
+                            }
                         }
                     })
                     

@@ -72,7 +72,7 @@ export const ExecuteCodeSchemaMcp = z.object({
         .string()
         .optional()
         .describe(
-            'REQUIRED string parameter containing JavaScript code to execute inside the sandbox. Uses the `mj` global object for API access (e.g. `return await mj.core.createEntry(context.entry)`). Anti-Hallucination Hint: DO NOT call with an empty payload `{}` or pass entry/query payloads directly without including the `code` parameter. If invoked with no code, Code Mode auto-heals to return sandbox status and available tools. Node.js native modules (`fs`, `path`, `child_process`, `require()`, `import`) are disabled in the sandbox; pass file content or external data using the `context` parameter instead.'
+            'REQUIRED string parameter containing JavaScript code to execute inside the sandbox. Uses the `mj` global object for API access (e.g. `return await mj.core.createEntry(context.entry)`). Anti-Hallucination Hint: DO NOT call with an empty payload `{}` or pass entry/query payloads directly without including the `code` parameter. When passing markdown or strings with nested backticks (`), pass them safely via the `context` parameter (e.g., `mj.createEntry({ ...context.entry })`) or ensure nested backticks are escaped (\\`) to avoid premature template string termination. Node.js native modules (`fs`, `path`, `child_process`, `require()`, `import`) are disabled in the sandbox; pass file content or external data using the `context` parameter instead.'
         ),
     auto_version: z
         .boolean()
