@@ -219,22 +219,19 @@ Target: ${target}
 If the target is '{target}', determine it from the user's request. If the user hasn't specified a target file or module, ask them for it now.
 
 1. Scan the target for dead code, duplication, type safety (any/as), magic values, complexity, boundary validation, monkey-patching, and global scope pollution (hacks).
-2. **Scan for files exceeding 500 lines using two redundant methods** (to ensure no files are missed):
-   - **Method 1 (PowerShell)**: \`Get-ChildItem -File -Recurse -Exclude node_modules,.git,dist,.agents | Where-Object { $_.Extension -match "\\.(ts|js|tsx|jsx|md|json|py|go|cs|ps1)$" } | ForEach-Object { $lines = (Get-Content $_.FullName | Measure-Object -Line).Lines; if ($lines -gt 500) { [PSCustomObject]@{ Lines = $lines; Path = $_.FullName } } }\`
-   - **Method 2 (WSL)**: Execute via \`bun .\\.agents\\scripts\\agent-exec.ts\` using a PowerShell here-string for the JSON payload:
+2. **Scan for files exceeding 500 lines using two redundant methods** (to ensure no files are missed). If the user asks to exclude tests, exclude them (e.g., \`tests\`, \`test-server\`, \`__tests__\`):
+   - **Method 1 (Git)**: \`git ls-files | Select-String -NotMatch "\\\\.(spec|test)\\\\.", "^tests/", "^test-server/", "\\\\.lockb$", "pnpm-lock\\\\.yaml", "package-lock\\\\.json", "\\\\.(jpg|png|mp4)$" | ForEach-Object { $lines = (Get-Content $_.Line | Measure-Object -Line).Lines; if ($lines -gt 500) { [PSCustomObject]@{ Lines = $lines; Path = $_.Line } } }\`
+   - **Method 2 (Bun Native)**: Execute a fast Node script natively to avoid WSL bridge IO penalties:
      \`\`\`powershell
-     $payload = @'
-     {"type":"eval","code":"find . -type f -not -path \\"*/node_modules/*\\" -not -path \\"*/.git/*\\" -not -path \\"*/dist/*\\" -not -path \\"*/.agents/*\\" -not -name \\"*.lockb\\" -not -name \\"pnpm-lock.yaml\\" -not -name \\"package-lock.json\\" -exec wc -l {} + | awk '$1 > 500 && $2 != \\"total\\" {print}'","interpreter":"bash","target":"wsl2"}
-     '@
-     bun .\\.agents\\scripts\\agent-exec.ts $payload
+     bun -e "import fs from 'fs'; import path from 'path'; function w(d){let r=[];if(!fs.existsSync(d))return r;fs.readdirSync(d).forEach(f=>{f=path.join(d,f);const s=fs.statSync(f);if(s.isDirectory()){if(!f.match(/node_modules|\\\\.git|dist|\\\\.agents|tests|test-server/))r=r.concat(w(f));}else{if(!f.match(/node_modules|\\\\.git|dist|\\\\.agents|tests|test-server/)&&!f.match(/\\\\.(test|spec)\\\\./)){r.push(f);}}});return r;} w('.').forEach(f=>{const c=fs.readFileSync(f,'utf8').split('\\\\n').length;if(c>500)console.log(c, f)});"
      \`\`\`
 
 > [!IMPORTANT]
 > **High Priority — File Size**: Any file exceeding 500 lines is a high-priority finding. Flag all such files in the findings table with severity **High**. Do NOT begin refactoring automatically — present them to the user for approval.
 
 3. Group findings by category and severity (Critical, Moderate, Low).
-4. Run \`gh copilot -- -p "Perform an exhaustive code quality audit on <target>. Focus on dead code, duplication, type safety, magic values, monkey-patching, and anti-patterns." --allow-all\` in NON-INTERACTIVE mode. You MUST wait for it to finish (it may take 10-20 seconds). **CRITICAL**: Do NOT skip this step. If Copilot fails, you MUST alert the user immediately. Note findings.
-5. Present a summary table to the user (incorporating Copilot findings) and await approval.
+4. **(Optional)** If the user has not explicitly skipped Copilot, run \`gh copilot -- -p "Perform an exhaustive code quality audit on <target>. Focus on dead code, duplication, type safety, magic values, monkey-patching, and anti-patterns." --allow-all\` in NON-INTERACTIVE mode. Wait for it to finish. Note findings. If skipped, proceed without it.
+5. Present a summary table to the user (incorporating Copilot findings if applicable) and await approval.
 6. After approval, fix critical issues first, run validation gates (Lint -> Build -> Tests).
 7. Commit using \`bun path/to/commit.ts\`.
 **Rule**: If you don't make changes, do not commit. If you make only minor documentation changes, commit.`
