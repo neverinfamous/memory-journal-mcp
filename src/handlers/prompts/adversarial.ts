@@ -218,12 +218,15 @@ Target: ${target}
 
 If the target is '{target}', determine it from the user's request. If the user hasn't specified a target file or module, ask them for it now.
 
-1. Scan the target for dead code, duplication, type safety (any/as), magic values, complexity, boundary validation, monkey-patching, and global scope pollution (hacks).
+1. Scan the target for dead code, duplication, type safety (any/as, implicit any), magic values, complexity, boundary validation, monkey-patching, unused variables/exports, unhandled promises, and global scope pollution (hacks).
 2. **Scan for files exceeding 500 lines using two redundant methods** (to ensure no files are missed). If the user asks to exclude tests, exclude them (e.g., \`tests\`, \`test-server\`, \`__tests__\`):
-   - **Method 1 (Native MCP Tools)**: Use \`grep_search\` or \`find_by_name\` combined with line counting, or request the system to find large files directly. Do not use raw shell pipes like \`git ls-files | Select-String\`.
-   - **Method 2 (Bun Native)**: Execute a fast Node script natively to avoid WSL bridge IO penalties:
+   - **Method 1 (Native PowerShell)**: Use this snippet to avoid WSL bridge issues and correctly filter out non-source directories (like logs, builds, test-outputs):
      \`\`\`powershell
-     bun -e "import fs from 'fs'; import path from 'path'; function w(d){let r=[];if(!fs.existsSync(d))return r;fs.readdirSync(d).forEach(f=>{f=path.join(d,f);const s=fs.statSync(f);if(s.isDirectory()){if(!f.match(/node_modules|\\\\.git|dist|\\\\.agents|tests|test-server/))r=r.concat(w(f));}else{if(!f.match(/node_modules|\\\\.git|dist|\\\\.agents|tests|test-server/)&&!f.match(/\\\\.(test|spec)\\\\./)){r.push(f);}}});return r;} w('.').forEach(f=>{const c=fs.readFileSync(f,'utf8').split('\\\\n').length;if(c>500)console.log(c, f)});"
+     Get-ChildItem -Path . -Recurse -File | Where-Object { $_.FullName -notmatch '\\\\(node_modules|\\\\.git|dist|\\\\.agents|tests|test-server|__tests__|docs|\\\\.test-output|logs|extensions)\\\\' -and $_.Extension -notmatch '\\\\.(test|spec|md)$' } | ForEach-Object { $lines = (Get-Content $_.FullName | Measure-Object -Line).Lines; if ($lines -gt 500) { [PSCustomObject]@{ Lines = $lines; Path = $_.FullName } } }
+     \`\`\`
+   - **Method 2 (Bun Native)**: Execute a fast Node script natively:
+     \`\`\`powershell
+     bun -e "import fs from 'fs'; import path from 'path'; function w(d){let r=[];if(!fs.existsSync(d))return r;fs.readdirSync(d).forEach(f=>{f=path.join(d,f);const s=fs.statSync(f);if(s.isDirectory()){if(!f.match(/node_modules|\\\\.git|dist|\\\\.agents|tests|test-server|__tests__|docs|\\\\.test-output|logs|extensions/))r=r.concat(w(f));}else{if(!f.match(/node_modules|\\\\.git|dist|\\\\.agents|tests|test-server|__tests__|docs|\\\\.test-output|logs|extensions/)&&!f.match(/\\\\.(test|spec|md)\\\\./)&&!f.endsWith('.md')){r.push(f);}}});return r;} w('.').forEach(f=>{const c=fs.readFileSync(f,'utf8').split('\\\\n').length;if(c>500)console.log(c, f)});"
      \`\`\`
 
 > [!IMPORTANT]
@@ -234,7 +237,7 @@ If the target is '{target}', determine it from the user's request. If the user h
 5. Present a summary table to the user (incorporating Copilot findings if applicable) and await approval.
 6. After approval, fix critical issues first, run validation gates (Lint -> Build -> Tests).
 7. Commit using \`bun path/to/commit.ts\`.
-**Rule**: If you don't make changes, do not commit. If you make only minor documentation changes, commit.`
+**Rule**: If you don't make changes, do not commit. If you make only minor documentation changes, commit.\`
                         }
                     }]
                 }
@@ -252,7 +255,7 @@ If the target is '{target}', determine it from the user's request. If the user h
                         role: 'user',
                         content: {
                             type: 'text',
-                            text: `# Adversarial Security Audit
+                            text: \`# Adversarial Security Audit
 Target: ${target}
 
 If the target is '{target}', determine it from the user's request. If the user hasn't specified a target file or module, ask them for it now.
