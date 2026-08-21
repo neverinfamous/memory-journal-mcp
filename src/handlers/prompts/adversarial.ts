@@ -220,7 +220,7 @@ If the target is '{target}', determine it from the user's request. If the user h
 
 1. Scan the target for dead code, duplication, type safety (any/as), magic values, complexity, boundary validation, monkey-patching, and global scope pollution (hacks).
 2. **Scan for files exceeding 500 lines using two redundant methods** (to ensure no files are missed). If the user asks to exclude tests, exclude them (e.g., \`tests\`, \`test-server\`, \`__tests__\`):
-   - **Method 1 (Git)**: \`git ls-files | Select-String -NotMatch "\\\\.(spec|test)\\\\.", "^tests/", "^test-server/", "\\\\.lockb$", "pnpm-lock\\\\.yaml", "package-lock\\\\.json", "\\\\.(jpg|png|mp4)$" | ForEach-Object { $lines = (Get-Content $_.Line | Measure-Object -Line).Lines; if ($lines -gt 500) { [PSCustomObject]@{ Lines = $lines; Path = $_.Line } } }\`
+   - **Method 1 (Native MCP Tools)**: Use \`grep_search\` or \`find_by_name\` combined with line counting, or request the system to find large files directly. Do not use raw shell pipes like \`git ls-files | Select-String\`.
    - **Method 2 (Bun Native)**: Execute a fast Node script natively to avoid WSL bridge IO penalties:
      \`\`\`powershell
      bun -e "import fs from 'fs'; import path from 'path'; function w(d){let r=[];if(!fs.existsSync(d))return r;fs.readdirSync(d).forEach(f=>{f=path.join(d,f);const s=fs.statSync(f);if(s.isDirectory()){if(!f.match(/node_modules|\\\\.git|dist|\\\\.agents|tests|test-server/))r=r.concat(w(f));}else{if(!f.match(/node_modules|\\\\.git|dist|\\\\.agents|tests|test-server/)&&!f.match(/\\\\.(test|spec)\\\\./)){r.push(f);}}});return r;} w('.').forEach(f=>{const c=fs.readFileSync(f,'utf8').split('\\\\n').length;if(c>500)console.log(c, f)});"
