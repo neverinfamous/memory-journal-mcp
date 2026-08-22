@@ -237,7 +237,7 @@ If the target is '{target}', determine it from the user's request. If the user h
 5. Present a summary table to the user (incorporating Copilot findings if applicable) and await approval. **CRITICAL**: You are strictly forbidden from modifying any project files or running any scripts until the user explicitly approves the implementation plan. Only create the markdown artifact and stop.
 6. After approval, fix critical issues first, run validation gates (Lint -> Build -> Tests).
 7. Commit using \`bun path/to/commit.ts\`.
-**Rule**: If you don't make changes, do not commit. If you make only minor documentation changes, commit.\`
+**Rule**: If you don't make changes, do not commit. If you make only minor documentation changes, commit.`
                         }
                     }]
                 }
@@ -255,7 +255,7 @@ If the target is '{target}', determine it from the user's request. If the user h
                         role: 'user',
                         content: {
                             type: 'text',
-                            text: \`# Adversarial Security Audit
+                            text: `# Adversarial Security Audit
 Target: ${target}
 
 If the target is '{target}', determine it from the user's request. If the user hasn't specified a target file or module, ask them for it now.
@@ -266,7 +266,9 @@ If the target is '{target}', determine it from the user's request. If the user h
    - **External Integrations**: Data exfiltration paths and excessive API permission scopes.
 2. Run \`gh copilot -- -p "Perform a security audit on <target> looking for injection vectors, auth/authz gaps, data boundaries, and agent-specific risks like prompt injection, excessive agency, or tool poisoning." --allow-all\` in NON-INTERACTIVE mode. You MUST wait for it to finish (it may take 10-20 seconds). **CRITICAL**: Do NOT skip this step. If Copilot fails, you MUST alert the user immediately. Note findings.
 3. Present findings table (incorporating Copilot findings).
-4. Await HITL approval before applying fixes. **CRITICAL**: You are strictly forbidden from modifying any project files or running any scripts until the user explicitly approves the implementation plan. Only create the markdown artifact and stop.\n5. Commit fixes using \`bun path/to/commit.ts\`.\n**Rule**: If you do not make changes, do not commit. If you make only minor documentation changes, commit.`
+4. Await HITL approval before applying fixes. **CRITICAL**: You are strictly forbidden from modifying any project files or running any scripts until the user explicitly approves the implementation plan. Only create the markdown artifact and stop.
+5. Commit fixes using \`bun path/to/commit.ts\`
+**Rule**: If you do not make changes, do not commit. If you make only minor documentation changes, commit.`
                         }
                     }]
                 }
