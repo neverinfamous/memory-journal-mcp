@@ -3,8 +3,8 @@ import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { getCoreTools } from './tools.js'
 import { getSearchTools } from '../search/index.js'
 import { getAdminTools } from '../admin/index.js'
-import { getPrompt } from '../../prompts/index.js'
-import { readResource } from '../../resources/index.js'
+import { getPrompt, getPrompts } from '../../prompts/index.js'
+import { readResource, getResources } from '../../resources/index.js'
 
 export const DUMMY_DOTTED_TOOL_NAMES = [
     'mj.core.createEntry',
@@ -59,6 +59,41 @@ export const DUMMY_RESOURCE_TOOL_NAMES = [
     'getResource',
 ]
 
+export const DUMMY_LIST_RESOURCE_TOOL_NAMES = [
+    'list_resources',
+    'listResources',
+    'list-resources',
+    'mj_list_resources',
+    'get_resources',
+    'getResources',
+]
+
+export const DUMMY_LIST_PROMPT_TOOL_NAMES = [
+    'list_prompts',
+    'listPrompts',
+    'list-prompts',
+    'mj_list_prompts',
+    'get_prompts',
+    'getPrompts',
+]
+
+export const DUMMY_LIST_TOOL_NAMES = [
+    'list_tools',
+    'listTools',
+    'list-tools',
+    'mj_list_tools',
+    'get_tools',
+    'getTools',
+]
+
+export const DUMMY_GET_PROMPT_TOOL_NAMES = [
+    'get_prompt',
+    'getPrompt',
+    'mj_get_prompt',
+    'read_prompt',
+    'readPrompt',
+]
+
 export const DUMMY_HEALING_TOOL_NAMES = new Set<string>([
     'create_entry',
     'search_entries',
@@ -67,7 +102,11 @@ export const DUMMY_HEALING_TOOL_NAMES = new Set<string>([
     'update_entry',
     'delete_entry',
     ...DUMMY_RESOURCE_TOOL_NAMES,
+    ...DUMMY_LIST_RESOURCE_TOOL_NAMES,
     ...DUMMY_PROMPT_TOOL_NAMES,
+    ...DUMMY_LIST_PROMPT_TOOL_NAMES,
+    ...DUMMY_LIST_TOOL_NAMES,
+    ...DUMMY_GET_PROMPT_TOOL_NAMES,
     'mj_core_create_entry',
     'mj_core_search_entries',
     'mj_core_get_recent_entries',
@@ -204,6 +243,89 @@ export function getDummyHealingTools(context?: ToolContext): ToolDefinition[] {
         return {
             success: false,
             error: `🛠️ AUTONOMOUS HEALING: '${promptName}' is an MCP Prompt, not an MCP Tool. Please fetch it via the Prompts API or use the 'prompts/list' endpoint.`,
+            code: 'VALIDATION_ERROR',
+            category: 'validation',
+            recoverable: true
+        }
+    }
+
+    const handleListResources = (toolName: string): unknown => {
+        return {
+            success: true,
+            resources: getResources(),
+            _healing_note: `🛠️ AUTONOMOUS HEALING: '${toolName}' was called as an MCP tool instead of an MCP protocol request (resources/list). The available resources were returned successfully.`
+        }
+    }
+
+    const handleListPrompts = (toolName: string): unknown => {
+        return {
+            success: true,
+            prompts: getPrompts(),
+            _healing_note: `🛠️ AUTONOMOUS HEALING: '${toolName}' was called as an MCP tool instead of an MCP protocol request (prompts/list). The available prompts were returned successfully.`
+        }
+    }
+
+    const handleListTools = (toolName: string): unknown => {
+        let toolsList: { name: string; title?: string; description?: string; group?: string }[] = []
+        if (context) {
+            toolsList = [
+                ...getCoreTools(context),
+                ...getSearchTools(context),
+                ...getAdminTools(context),
+            ].map(t => ({
+                name: t.name,
+                title: t.title,
+                description: t.description,
+                group: t.group
+            }))
+        }
+        return {
+            success: true,
+            tools: toolsList,
+            _healing_note: `🛠️ AUTONOMOUS HEALING: '${toolName}' was called as an MCP tool instead of an MCP protocol request (tools/list). The available tools were returned successfully.`
+        }
+    }
+
+    const handleGetPrompt = async (params: unknown, toolName: string): Promise<unknown> => {
+        const rawArgs = (params ?? {}) as Record<string, unknown>
+        const targetPromptName = typeof rawArgs['name'] === 'string' ? rawArgs['name'] : (typeof rawArgs['prompt'] === 'string' ? rawArgs['prompt'] : (typeof rawArgs['prompt_name'] === 'string' ? rawArgs['prompt_name'] : 'load-briefing'))
+        const nestedArgs = (typeof rawArgs['arguments'] === 'object' && rawArgs['arguments'] !== null ? rawArgs['arguments'] : rawArgs) as Record<string, unknown>
+        const stringArgs: Record<string, string> = {}
+        for (const [k, v] of Object.entries(nestedArgs)) {
+            if (k !== 'name' && k !== 'prompt' && k !== 'prompt_name' && k !== 'arguments') {
+                if (typeof v === 'string') stringArgs[k] = v
+                else if (typeof v === 'number' || typeof v === 'boolean') stringArgs[k] = String(v)
+            }
+        }
+        if (context) {
+            try {
+                const result = await getPrompt(
+                    targetPromptName,
+                    stringArgs,
+                    context.db,
+                    context.teamDb,
+                    context.github,
+                    context.config?.briefingConfig
+                )
+                return {
+                    success: true,
+                    data: result,
+                    messages: result.messages,
+                    _healing_note: `🛠️ AUTONOMOUS HEALING: '${toolName}' was called as an MCP tool instead of an MCP protocol request (prompts/get). The prompt '${targetPromptName}' was evaluated successfully.`
+                }
+            } catch (err) {
+                return {
+                    success: false,
+                    error: `Failed to execute prompt '${targetPromptName}': ${err instanceof Error ? err.message : String(err)}`,
+                    code: 'PROMPT_ERROR',
+                    category: 'prompt',
+                    recoverable: true
+                }
+            }
+        }
+        return {
+            success: false,
+            error: `🛠️ AUTONOMOUS HEALING: '${toolName}' is an MCP Prompt protocol method. Context is not initialized.`,
             code: 'VALIDATION_ERROR',
             category: 'validation',
             recoverable: true
@@ -541,6 +663,46 @@ export function getDummyHealingTools(context?: ToolContext): ToolDefinition[] {
                     recoverable: true
                 }
             }
+        })),
+        ...DUMMY_LIST_RESOURCE_TOOL_NAMES.map((name): ToolDefinition => ({
+            name,
+            title: `List Resources Fallback (${name})`,
+            description: `Fallback handler for \`${name}\` when called directly as an MCP tool.`,
+            group: 'core',
+            inputSchema: z.any(),
+            outputSchema: z.any(),
+            annotations: { readOnlyHint: true, openWorldHint: false },
+            handler: () => handleListResources(name),
+        })),
+        ...DUMMY_LIST_PROMPT_TOOL_NAMES.map((name): ToolDefinition => ({
+            name,
+            title: `List Prompts Fallback (${name})`,
+            description: `Fallback handler for \`${name}\` when called directly as an MCP tool.`,
+            group: 'core',
+            inputSchema: z.any(),
+            outputSchema: z.any(),
+            annotations: { readOnlyHint: true, openWorldHint: false },
+            handler: () => handleListPrompts(name),
+        })),
+        ...DUMMY_LIST_TOOL_NAMES.map((name): ToolDefinition => ({
+            name,
+            title: `List Tools Fallback (${name})`,
+            description: `Fallback handler for \`${name}\` when called directly as an MCP tool.`,
+            group: 'core',
+            inputSchema: z.any(),
+            outputSchema: z.any(),
+            annotations: { readOnlyHint: true, openWorldHint: false },
+            handler: () => handleListTools(name),
+        })),
+        ...DUMMY_GET_PROMPT_TOOL_NAMES.map((name): ToolDefinition => ({
+            name,
+            title: `Get Prompt Fallback (${name})`,
+            description: `Fallback handler for \`${name}\` when called directly as an MCP tool.`,
+            group: 'core',
+            inputSchema: z.any(),
+            outputSchema: z.any(),
+            annotations: { readOnlyHint: true, openWorldHint: false },
+            handler: async (params: unknown) => handleGetPrompt(params, name),
         }))
     ]
 }

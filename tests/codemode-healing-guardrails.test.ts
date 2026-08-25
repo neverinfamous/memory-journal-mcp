@@ -135,6 +135,31 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
             expect(String(res['error'])).toContain('AUTONOMOUS HEALING')
         })
 
+        it('should have list_resources and list_prompts dummy tool handlers', async () => {
+            const listResourcesTool = tools.find(t => t.name === 'list_resources')
+            const listPromptsTool = tools.find(t => t.name === 'list_prompts')
+            const listToolsTool = tools.find(t => t.name === 'list_tools')
+
+            expect(listResourcesTool).toBeDefined()
+            expect(listPromptsTool).toBeDefined()
+            expect(listToolsTool).toBeDefined()
+
+            const resResources = await listResourcesTool!.handler({}) as Record<string, unknown>
+            expect(resResources['success']).toBe(true)
+            expect(Array.isArray(resResources['resources'])).toBe(true)
+            expect(String(resResources['_healing_note'])).toContain('AUTONOMOUS HEALING')
+
+            const resPrompts = await listPromptsTool!.handler({}) as Record<string, unknown>
+            expect(resPrompts['success']).toBe(true)
+            expect(Array.isArray(resPrompts['prompts'])).toBe(true)
+            expect(String(resPrompts['_healing_note'])).toContain('AUTONOMOUS HEALING')
+
+            const resTools = await listToolsTool!.handler({}) as Record<string, unknown>
+            expect(resTools['success']).toBe(true)
+            expect(Array.isArray(resTools['tools'])).toBe(true)
+            expect(String(resTools['_healing_note'])).toContain('AUTONOMOUS HEALING')
+        })
+
         it('should have load-briefing and mj_session_summary dummy prompt handlers', async () => {
             const loadBriefingTool = tools.find(t => t.name === 'load-briefing')
             const sessionSummaryTool = tools.find(t => t.name === 'session-summary')

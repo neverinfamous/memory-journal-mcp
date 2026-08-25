@@ -366,13 +366,31 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                             }
                         }
 
-                        // Return error for empty code payload (e.g. mj_execute_code({}))
+                        // Auto-heal empty code payload (e.g. mj_execute_code({}), mj_execute_code({ auto_version: true }))
                         if (!executionCode || executionCode.trim() === '') {
                             return {
-                                success: false,
-                                error: 'Missing code parameter. Please provide JavaScript code in the `code` parameter (e.g. `return await mj.searchEntries({ query: "..." })`).',
+                                success: true,
+                                result: {
+                                    status: 'active',
+                                    message: 'Code Mode sandbox is active. Provide JavaScript code in the `code` parameter to execute.',
+                                    availableNamespaces: [
+                                        'mj.core',
+                                        'mj.search',
+                                        'mj.admin',
+                                        'mj.analytics',
+                                        'mj.relationships',
+                                        'mj.io',
+                                        'mj.git',
+                                        'mj.team',
+                                        'mj.backup',
+                                        'mj.staleness'
+                                    ],
+                                    example: 'return await mj.searchEntries({ query: "example" })',
+                                    discovery: 'Use mj.help() or return await mj.core.searchEntries.schema() to inspect parameters.'
+                                },
+                                _healing_note: '🛠️ AUTONOMOUS HEALING: `mj_execute_code` was called without a `code` parameter or with an empty payload. Returned active sandbox status, available namespaces, and execution examples.',
                                 project_id: undefined,
-                                executionTimeMs: 0
+                                executionTimeMs: Math.round(performance.now() - start)
                             }
                         }
                     }

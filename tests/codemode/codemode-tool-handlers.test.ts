@@ -217,22 +217,28 @@ describe('mj_execute_code Tool Handler', () => {
     // =========================================================================
 
     describe('schema validation', () => {
-        it('should reject missing code parameter', async () => {
+        it('should auto-heal missing code parameter and return active sandbox status', async () => {
             const result = (await callTool('mj_execute_code', {}, db)) as {
                 success: boolean
-                error?: string
+                result?: { status: string; availableNamespaces: string[] }
+                _healing_note?: string
             }
 
-            expect(result.success).toBe(false)
+            expect(result.success).toBe(true)
+            expect(result.result?.status).toBe('active')
+            expect(result._healing_note).toContain('AUTONOMOUS HEALING')
         })
 
-        it('should reject empty string code', async () => {
+        it('should auto-heal empty string code and return active sandbox status', async () => {
             const result = (await callTool('mj_execute_code', { code: '' }, db)) as {
                 success: boolean
-                error?: string
+                result?: { status: string; availableNamespaces: string[] }
+                _healing_note?: string
             }
 
-            expect(result.success).toBe(false)
+            expect(result.success).toBe(true)
+            expect(result.result?.status).toBe('active')
+            expect(result._healing_note).toContain('AUTONOMOUS HEALING')
         })
 
         it('should accept code via alternative keys (query, content, text, etc.) instead of returning missing code error', async () => {

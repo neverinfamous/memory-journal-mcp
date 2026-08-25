@@ -2,8 +2,8 @@ import { McpServer } from '@modelcontextprotocol/server'
 import type { z } from 'zod'
 import { getEnabledGroups } from '../../filtering/tool-filter.js'
 import { callTool } from '../../handlers/tools/index.js'
-import { readResource, validateResourceSubscription } from '../../handlers/resources/index.js'
-import { getPrompt } from '../../handlers/prompts/index.js'
+import { readResource, validateResourceSubscription, getResources } from '../../handlers/resources/index.js'
+import { getPrompt, getPrompts } from '../../handlers/prompts/index.js'
 import { generateStandardInstructions, generateCodeModeInstructions } from '../../constants/server-instructions.js'
 import { TOOL_GROUPS } from '../../filtering/tool-constants.js'
 import type { ToolGroup } from '../../types/index.js'
@@ -632,6 +632,133 @@ export function createServerInstance(
                                         success: true,
                                         data: res.data,
                                         _healing_note: `🛠️ AUTONOMOUS HEALING: '${requestedTool}' was called as an MCP tool instead of an MCP resource read. The resource '${uri}' was resolved successfully.`
+                                    };
+                                    const enriched = JSON.stringify(successPayload, null, 2);
+                                    return {
+                                        content: [
+                                            {
+                                                type: 'text',
+                                                text: enriched,
+                                            },
+                                        ],
+                                        structuredContent: successPayload,
+                                    };
+                                } catch {
+                                    // Fall through to standard error reporting
+                                }
+                            }
+
+                            // Autonomous Resource Listing Fallback
+                            const isListResources = requestedTool === 'list_resources' || requestedTool === 'listResources' || requestedTool === 'list-resources' || requestedTool === 'mj_list_resources' || requestedTool === 'get_resources' || requestedTool === 'getResources';
+                            if (isListResources) {
+                                try {
+                                    const resourceList = getResources();
+                                    const successPayload = {
+                                        success: true,
+                                        resources: resourceList,
+                                        _healing_note: `🛠️ AUTONOMOUS HEALING: '${requestedTool}' was called as an MCP tool instead of an MCP protocol request (resources/list). The available resources were returned successfully.`
+                                    };
+                                    const enriched = JSON.stringify(successPayload, null, 2);
+                                    return {
+                                        content: [
+                                            {
+                                                type: 'text',
+                                                text: enriched,
+                                            },
+                                        ],
+                                        structuredContent: successPayload,
+                                    };
+                                } catch {
+                                    // Fall through to standard error reporting
+                                }
+                            }
+
+                            // Autonomous Prompts Listing Fallback
+                            const isListPrompts = requestedTool === 'list_prompts' || requestedTool === 'listPrompts' || requestedTool === 'list-prompts' || requestedTool === 'mj_list_prompts' || requestedTool === 'get_prompts' || requestedTool === 'getPrompts';
+                            if (isListPrompts) {
+                                try {
+                                    const promptList = getPrompts();
+                                    const successPayload = {
+                                        success: true,
+                                        prompts: promptList,
+                                        _healing_note: `🛠️ AUTONOMOUS HEALING: '${requestedTool}' was called as an MCP tool instead of an MCP protocol request (prompts/list). The available prompts were returned successfully.`
+                                    };
+                                    const enriched = JSON.stringify(successPayload, null, 2);
+                                    return {
+                                        content: [
+                                            {
+                                                type: 'text',
+                                                text: enriched,
+                                            },
+                                        ],
+                                        structuredContent: successPayload,
+                                    };
+                                } catch {
+                                    // Fall through to standard error reporting
+                                }
+                            }
+
+                            // Autonomous Tools Listing Fallback
+                            const isListTools = requestedTool === 'list_tools' || requestedTool === 'listTools' || requestedTool === 'list-tools' || requestedTool === 'mj_list_tools' || requestedTool === 'get_tools' || requestedTool === 'getTools';
+                            if (isListTools) {
+                                try {
+                                    const currentConfig = configManager.getConfig();
+                                    const enabledSet = currentConfig.toolFilterConfig?.enabledTools ?? allToolNames;
+                                    const toolsList = allTools
+                                        .filter((t) => enabledSet.has(t.name))
+                                        .map((t) => ({
+                                            name: t.name,
+                                            title: t.title,
+                                            description: t.description,
+                                            annotations: t.annotations,
+                                        }));
+                                    const successPayload = {
+                                        success: true,
+                                        tools: toolsList,
+                                        _healing_note: `🛠️ AUTONOMOUS HEALING: '${requestedTool}' was called as an MCP tool instead of an MCP protocol request (tools/list). The available tools were returned successfully.`
+                                    };
+                                    const enriched = JSON.stringify(successPayload, null, 2);
+                                    return {
+                                        content: [
+                                            {
+                                                type: 'text',
+                                                text: enriched,
+                                            },
+                                        ],
+                                        structuredContent: successPayload,
+                                    };
+                                } catch {
+                                    // Fall through to standard error reporting
+                                }
+                            }
+
+                            // Autonomous Prompt Fetching Fallback
+                            const isGetPrompt = requestedTool === 'get_prompt' || requestedTool === 'getPrompt' || requestedTool === 'mj_get_prompt' || requestedTool === 'read_prompt' || requestedTool === 'readPrompt';
+                            if (isGetPrompt) {
+                                try {
+                                    const targetPromptName = typeof toolArgs['name'] === 'string' ? toolArgs['name'] : (typeof toolArgs['prompt'] === 'string' ? toolArgs['prompt'] : (typeof toolArgs['prompt_name'] === 'string' ? toolArgs['prompt_name'] : 'load-briefing'));
+                                    const nestedArgs = (typeof toolArgs['arguments'] === 'object' && toolArgs['arguments'] !== null ? toolArgs['arguments'] : toolArgs) as Record<string, unknown>;
+                                    const stringArgs: Record<string, string> = {};
+                                    for (const [k, v] of Object.entries(nestedArgs)) {
+                                        if (k !== 'name' && k !== 'prompt' && k !== 'prompt_name' && k !== 'arguments') {
+                                            if (typeof v === 'string') stringArgs[k] = v;
+                                            else if (typeof v === 'number' || typeof v === 'boolean') stringArgs[k] = String(v);
+                                        }
+                                    }
+                                    const currentConfig = configManager.getConfig();
+                                    const promptResult = await getPrompt(
+                                        targetPromptName,
+                                        stringArgs,
+                                        db,
+                                        teamDb ?? undefined,
+                                        github ?? undefined,
+                                        currentConfig.briefingConfig
+                                    );
+                                    const successPayload = {
+                                        success: true,
+                                        data: promptResult,
+                                        messages: promptResult.messages,
+                                        _healing_note: `🛠️ AUTONOMOUS HEALING: '${requestedTool}' was called as an MCP tool instead of an MCP protocol request (prompts/get). The prompt '${targetPromptName}' was evaluated successfully.`
                                     };
                                     const enriched = JSON.stringify(successPayload, null, 2);
                                     return {
