@@ -20,6 +20,12 @@ import type { SandboxResult } from '../../../codemode/types.js'
 export function healCodeModeScript(code: string): string {
     let executionCode = code
 
+    // [Layer 2 Dispatcher Healing] Auto-heal raw SQL queries passed as code
+    const healedSql = extractAndRecoverSqlCode(executionCode)
+    if (healedSql) {
+        return healedSql
+    }
+
     // [Layer 2 Dispatcher Healing] Prevent literal placeholder SyntaxErrors
     executionCode = executionCode.replace(/<CURRENT_PROJECT_NUMBER>/g, 'undefined')
     executionCode = executionCode.replace(/<CURRENT_PROJECT_ID>/g, 'undefined')
@@ -195,6 +201,134 @@ export function extractAndRecoverEntryCode(code: string): string | null {
 
     const fnName = isUpdate ? 'mj.updateEntry' : 'mj.createEntry'
     return `return await ${fnName}(${JSON.stringify(payload)});`
+}
+
+/**
+ * Auto-heals raw SQL queries passed as code or script in Code Mode,
+ * translating them to corresponding type-safe mj.* Code Mode API calls.
+ */
+export function extractAndRecoverSqlCode(code: string): string | null {
+    if (!code || typeof code !== 'string') return null
+    const trimmed = code.trim()
+
+    // If it contains JavaScript declarations or mj.* calls, it is already a JS script
+    if (/\b(?:const|let|var|function|return|await|mj\.|import|export|\(\s*\)\s*=>)\b/.test(trimmed)) {
+        return null
+    }
+
+    // Strip leading SQL comments: -- comment or /* comment */
+    const cleanSql = trimmed
+        .replace(/^--[^\n]*\n/gm, '')
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .trim()
+
+    const isSql = /^(?:SELECT|INSERT|UPDATE|DELETE|PRAGMA|SHOW|DESCRIBE|EXPLAIN|WITH)\b/i.test(cleanSql)
+    if (!isSql) return null
+
+    // 1. PRAGMA, SHOW, DESCRIBE, EXPLAIN
+    if (/^(?:PRAGMA|SHOW|DESCRIBE|EXPLAIN)\b/i.test(cleanSql)) {
+        return `return await mj.analytics.getStatistics({});`
+    }
+
+    // 2. Extract table name
+    const fromMatch = /\bFROM\s+[`"']?([a-zA-Z0-9_]+)[`"']?/i.exec(cleanSql)
+    const tableName = fromMatch?.[1]?.toLowerCase()
+
+    // 3. Extract LIMIT
+    const limitMatch = /\bLIMIT\s+(\d+)/i.exec(cleanSql)
+    const limitVal = limitMatch?.[1] ? parseInt(limitMatch[1], 10) : undefined
+
+    // 4. Extract ID
+    const idMatch = /\bWHERE\s+[`"']?(?:id|entry_id)[`"']?\s*=\s*(\d+)/i.exec(cleanSql)
+    const idVal = idMatch?.[1] ? parseInt(idMatch[1], 10) : undefined
+
+    // 5. Extract text search query from LIKE / ILIKE / =
+    const likeMatch = /\bWHERE\s+[`"']?(?:[a-zA-Z0-9_]+)[`"']?\s+(?:LIKE|ILIKE|=)\s*['"]%?([^%'"]+)%?['"]/i.exec(cleanSql)
+    const searchQuery = likeMatch?.[1]
+
+    // 6. Check for COUNT(*)
+    const isCount = /\bCOUNT\s*\(/i.test(cleanSql)
+
+    // Table-specific routing
+    if (tableName === 'tags' || tableName === 'entry_tags' || tableName === 'journal_tags') {
+        return `return await mj.core.listTags({});`
+    }
+
+    if (tableName === 'projects' || tableName === 'project_registry') {
+        return `return await mj.admin.listProjects({});`
+    }
+
+    if (tableName === 'relationships' || tableName === 'entry_relationships' || tableName === 'links') {
+        if (idVal !== undefined) {
+            return `return await mj.relationships.visualizeRelationships({ entry_id: ${idVal} });`
+        }
+        return `return await mj.relationships.visualizeRelationships({});`
+    }
+
+    if (tableName === 'team_members' || tableName === 'members') {
+        return `return await mj.team.teamListMembers({});`
+    }
+
+    if (tableName === 'author_aliases' || tableName === 'aliases') {
+        return `return await mj.team.teamListAuthorAliases({});`
+    }
+
+    if (tableName === 'audit_log' || tableName === 'audit' || tableName === 'audit_logs') {
+        return `return await mj.core.searchAuditLog({});`
+    }
+
+    // Default: journal_entries / entries table or general SELECT
+    if (/^SELECT\b/i.test(cleanSql)) {
+        if (isCount) {
+            return `return await mj.analytics.getStatistics({});`
+        }
+        if (idVal !== undefined) {
+            return `return await mj.core.getEntryById({ entry_id: ${idVal} });`
+        }
+        if (searchQuery) {
+            const searchParams: Record<string, unknown> = { query: searchQuery }
+            if (limitVal !== undefined) searchParams['limit'] = limitVal
+            return `return await mj.search.searchEntries(${JSON.stringify(searchParams)});`
+        }
+        // Check for project filter
+        const projectMatch = /\bWHERE\s+[`"']?(?:project_number|project_id)[`"']?\s*=\s*(\d+)/i.exec(cleanSql)
+        const projectVal = projectMatch?.[1] ? parseInt(projectMatch[1], 10) : undefined
+
+        // Check for type filter
+        const typeMatch = /\bWHERE\s+[`"']?(?:type|entry_type)[`"']?\s*=\s*['"]([^'"]+)['"]/i.exec(cleanSql)
+        const typeVal = typeMatch?.[1]
+
+        const params: Record<string, unknown> = {
+            limit: limitVal ?? 10,
+        }
+        if (projectVal !== undefined) params['project_number'] = projectVal
+        if (typeVal !== undefined) params['entry_type'] = typeVal
+
+        return `return await mj.core.getRecentEntries(${JSON.stringify(params)});`
+    }
+
+    // INSERT INTO ...
+    if (/^INSERT\s+INTO\b/i.test(cleanSql)) {
+        const rec = extractAndRecoverEntryCode(cleanSql)
+        if (rec) return rec
+        return `return await mj.createEntry({ content: ${JSON.stringify(cleanSql)} });`
+    }
+
+    // UPDATE ...
+    if (/^UPDATE\b/i.test(cleanSql)) {
+        if (idVal !== undefined) {
+            return `return await mj.core.updateEntry({ entry_id: ${idVal} });`
+        }
+    }
+
+    // DELETE FROM ...
+    if (/^DELETE\s+FROM\b/i.test(cleanSql)) {
+        if (idVal !== undefined) {
+            return `return await mj.core.deleteEntry({ entry_id: ${idVal} });`
+        }
+    }
+
+    return `return await mj.core.getRecentEntries({ limit: ${limitVal ?? 10} });`
 }
 
 export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
@@ -837,10 +971,11 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                                 errLower.includes('syntax error') ||
                                 errLower.includes('is not a function') ||
                                 errLower.includes('unexpected token') ||
+                                errLower.includes('unexpected identifier') ||
                                 errLower.includes('missing ) after argument list')
                             ) {
                                 const originalInput = typeof input.code === 'string' ? input.code : (executionCode ?? '')
-                                const recoveredCode = extractAndRecoverEntryCode(originalInput)
+                                const recoveredCode = extractAndRecoverSqlCode(originalInput) ?? extractAndRecoverEntryCode(originalInput)
                                 if (recoveredCode && recoveredCode !== executionCode) {
                                     logger.info('CODEMODE_AUTONOMOUS_RECOVERY', { originalError: execResult.error, recoveredCode })
                                     await runSandbox(recoveredCode)

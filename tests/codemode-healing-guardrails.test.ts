@@ -180,5 +180,91 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
             expect(res['success']).toBe(false)
             expect(String(res['error'])).toContain('AUTONOMOUS HEALING')
         })
+
+        it('should provide autonomous healing handlers for SQL and database execution dummy tools', async () => {
+            const sqliteCodeTool = tools.find(t => t.name === 'sqlite_execute_code')
+            const execSqlTool = tools.find(t => t.name === 'execute_sql')
+            const sqlQueryTool = tools.find(t => t.name === 'sql_query')
+
+            expect(sqliteCodeTool).toBeDefined()
+            expect(execSqlTool).toBeDefined()
+            expect(sqlQueryTool).toBeDefined()
+
+            const res = await sqliteCodeTool!.handler({}) as Record<string, unknown>
+            expect(res['success']).toBe(false)
+            expect(String(res['error'])).toContain('AUTONOMOUS HEALING')
+        })
+    })
+
+    describe('Layer 2: SQL Query Code Mode Auto-Healing (agent-issues.jsonl regression)', () => {
+        it('should auto-heal raw SELECT queries from agent issues into valid Code Mode calls', () => {
+            const rawSql = 'SELECT id, type, content, metadata FROM journal_entries ORDER BY id DESC LIMIT 10;'
+            const healed = healCodeModeScript(rawSql)
+
+            expect(healed).toBeDefined()
+            expect(healed).toContain('mj.core.getRecentEntries')
+            expect(healed).toContain('"limit":10')
+
+            // Verify healed code compiles and executes in a VM script
+            const wrapped = `(async () => {
+                let calledWith = null;
+                const mj = {
+                    core: {
+                        getRecentEntries: async (params) => {
+                            calledWith = params;
+                            return { success: true, entries: [] };
+                        }
+                    }
+                };
+                ${healed}
+            })()`
+            expect(() => {
+                new vm.Script(wrapped)
+            }).not.toThrow()
+        })
+
+        it('should auto-heal SELECT by ID queries', () => {
+            const rawSql = 'SELECT * FROM journal_entries WHERE id = 42;'
+            const healed = healCodeModeScript(rawSql)
+
+            expect(healed).toBeDefined()
+            expect(healed).toContain('mj.core.getEntryById')
+            expect(healed).toContain('entry_id: 42')
+        })
+
+        it('should auto-heal SELECT queries with LIKE content filters into search calls', () => {
+            const rawSql = "SELECT * FROM entries WHERE content LIKE '%authentication%';"
+            const healed = healCodeModeScript(rawSql)
+
+            expect(healed).toBeDefined()
+            expect(healed).toContain('mj.search.searchEntries')
+            expect(healed).toContain('authentication')
+        })
+
+        it('should auto-heal COUNT(*) queries into analytics statistics calls', () => {
+            const rawSql = 'SELECT count(*) FROM journal_entries;'
+            const healed = healCodeModeScript(rawSql)
+
+            expect(healed).toBeDefined()
+            expect(healed).toContain('mj.analytics.getStatistics')
+        })
+
+        it('should auto-heal queries on tags table into listTags', () => {
+            const rawSql = 'SELECT * FROM tags;'
+            const healed = healCodeModeScript(rawSql)
+
+            expect(healed).toBeDefined()
+            expect(healed).toContain('mj.core.listTags')
+        })
+
+        it('should auto-heal PRAGMA and SHOW commands into getStatistics', () => {
+            const pragmaSql = 'PRAGMA table_info(journal_entries);'
+            const healedPragma = healCodeModeScript(pragmaSql)
+            expect(healedPragma).toContain('mj.analytics.getStatistics')
+
+            const showSql = 'SHOW TABLES;'
+            const healedShow = healCodeModeScript(showSql)
+            expect(healedShow).toContain('mj.analytics.getStatistics')
+        })
     })
 })

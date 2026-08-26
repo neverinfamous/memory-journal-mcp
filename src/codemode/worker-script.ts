@@ -790,7 +790,7 @@ async function executeCode(
             errString.includes('Unexpected identifier') ||
             errString.includes('Cannot use import statement')
         ) {
-            error.message = `🛠️ AUTONOMOUS HEALING: Syntax error in Code Mode execution (${error.message}). Code Mode requires valid JavaScript code (e.g., 'return await mj.createEntry(...)'), not raw Markdown text or invalid syntax.\n\n💡 Tip: When passing long multi-line strings or markdown with embedded quotes/backticks, NEVER use template literals (backticks \`) in the code string as they will prematurely evaluate and cause SyntaxErrors or Tagged Template TypeErrors. ALWAYS pass them safely via the \`context\` parameter and reference them as \`context.myParam\`.`
+            error.message = `🛠️ AUTONOMOUS HEALING: Syntax error in Code Mode execution (${error.message}). Code Mode requires valid JavaScript code (e.g., 'return await mj.core.getRecentEntries({ limit: 10 })' or 'return await mj.core.createEntry(...)'), not raw SQL statements or unquoted text.\n\n💡 Tip: When querying the journal, use Code Mode methods like 'return await mj.core.getRecentEntries({ limit: 10 })' or 'return await mj.search.searchEntries({ query: "..." })'. When passing long multi-line strings or markdown with embedded quotes/backticks, pass them safely via the \`context\` parameter and reference them as \`context.myParam\`.`
         }
 
         return {

@@ -3,6 +3,7 @@ import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { getCoreTools } from './tools.js'
 import { getSearchTools } from '../search/index.js'
 import { getAdminTools } from '../admin/index.js'
+import { getCodeModeTools } from '../codemode/handler.js'
 import { getPrompt, getPrompts } from '../../prompts/index.js'
 import { readResource, getResources } from '../../resources/index.js'
 
@@ -94,6 +95,22 @@ export const DUMMY_GET_PROMPT_TOOL_NAMES = [
     'readPrompt',
 ]
 
+export const DUMMY_SQL_EXECUTION_TOOL_NAMES = [
+    'sqlite_execute_code',
+    'sqlite_execute_query',
+    'sqlite_query',
+    'execute_sql',
+    'sql_query',
+    'query_database',
+    'execute_query',
+    'execute_code',
+    'exec_code',
+    'run_code',
+    'eval_code',
+    'mj_execute_sql',
+    'mj_sqlite_execute_code',
+]
+
 export const DUMMY_HEALING_TOOL_NAMES = new Set<string>([
     'create_entry',
     'search_entries',
@@ -107,6 +124,7 @@ export const DUMMY_HEALING_TOOL_NAMES = new Set<string>([
     ...DUMMY_LIST_PROMPT_TOOL_NAMES,
     ...DUMMY_LIST_TOOL_NAMES,
     ...DUMMY_GET_PROMPT_TOOL_NAMES,
+    ...DUMMY_SQL_EXECUTION_TOOL_NAMES,
     'mj_core_create_entry',
     'mj_core_search_entries',
     'mj_core_get_recent_entries',
@@ -703,6 +721,38 @@ export function getDummyHealingTools(context?: ToolContext): ToolDefinition[] {
             outputSchema: z.any(),
             annotations: { readOnlyHint: true, openWorldHint: false },
             handler: async (params: unknown) => handleGetPrompt(params, name),
+        })),
+        ...DUMMY_SQL_EXECUTION_TOOL_NAMES.map((name): ToolDefinition => ({
+            name,
+            title: `SQL / Code Mode Execution Fallback (${name})`,
+            description: `Fallback handler for \`${name}\` when called directly as an MCP tool. Routes automatically to \`mj_execute_code\`.`,
+            group: 'core',
+            inputSchema: z.any(),
+            outputSchema: z.any(),
+            annotations: { readOnlyHint: false, openWorldHint: false },
+            handler: async (params: unknown) => {
+                if (context) {
+                    const codemodeTools = getCodeModeTools(context)
+                    const codemodeTool = codemodeTools.find((t: ToolDefinition) => t.name === 'mj_execute_code')
+                    if (codemodeTool) {
+                        const res = await Promise.resolve(codemodeTool.handler(params))
+                        if (typeof res === 'object' && res !== null) {
+                            return {
+                                ...(res as Record<string, unknown>),
+                                _healing_note: `🛠️ AUTONOMOUS HEALING: '${name}' was called as an MCP tool. It was automatically translated and executed via Code Mode ('mj_execute_code').`,
+                            }
+                        }
+                        return res
+                    }
+                }
+                return {
+                    success: false,
+                    error: `🛠️ AUTONOMOUS HEALING: '${name}' was called, but direct SQLite execution tools are not active in memory-journal-mcp. Use 'mj_execute_code' with JavaScript (e.g. return await mj.core.getRecentEntries({ limit: 10 })).`,
+                    code: 'VALIDATION_ERROR',
+                    category: 'validation',
+                    recoverable: true,
+                }
+            },
         }))
     ]
 }
