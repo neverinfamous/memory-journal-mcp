@@ -465,13 +465,38 @@ export function buildCommand(payload: ExecPayload, cwd: string, isJson: boolean 
     const wslUuid = crypto.randomUUID();
     wslEnvArgs.push(`AGENT_EXEC_WSL_UUID=${wslUuid}`);
     const payloadEnv = payload.env || {};
+    let hasExplicitPath = false;
     for (const [k, v] of Object.entries(payloadEnv)) {
       if (v !== undefined) {
+        if (k.toUpperCase() === 'PATH') {
+          hasExplicitPath = true;
+        }
         wslEnvArgs.push(`${k}=${convertToWslPath(String(v))}`);
       }
     }
     for (const [k, v] of Object.entries(envOverrides)) {
+      if (k.toUpperCase() === 'PATH') {
+        hasExplicitPath = true;
+      }
       wslEnvArgs.push(`${k}=${convertToWslPath(v)}`);
+    }
+
+    if (!hasExplicitPath) {
+      const defaultWslPaths = [
+        '/home/chris/.bun/bin',
+        '/home/chris/.cargo/bin',
+        '/home/chris/.local/bin',
+        '/root/.bun/bin',
+        '/root/.cargo/bin',
+        '/root/.local/bin',
+        '/usr/local/sbin',
+        '/usr/local/bin',
+        '/usr/sbin',
+        '/usr/bin',
+        '/sbin',
+        '/bin',
+      ].join(':');
+      wslEnvArgs.push(`PATH=${defaultWslPaths}`);
     }
 
     let patternExprIdx = -1;

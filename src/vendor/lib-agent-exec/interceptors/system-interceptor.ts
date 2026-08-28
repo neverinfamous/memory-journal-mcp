@@ -14,7 +14,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
   const { cmdBasename, payload } = ctx;
   const { args } = ctx;
   const exactShellChars = ['|', '>', '<', '&&', '||', ';'];
-  const patternTools = ['grep', 'grep.exe', 'egrep', 'fgrep', 'rg', 'rg.exe', 'jq', 'jq.exe', 'yq', 'yq.exe', 'sed', 'sed.exe', 'awk', 'gawk', 'find', 'find.exe', 'node', 'node.exe', 'python', 'python.exe', 'bun', 'bun.exe'];
+  const patternTools = ['grep', 'grep.exe', 'egrep', 'fgrep', 'rg', 'rg.exe', 'jq', 'jq.exe', 'yq', 'yq.exe', 'sed', 'sed.exe', 'awk', 'gawk', 'find', 'find.exe', 'node', 'node.exe', 'python', 'python.exe', 'bun', 'bun.exe', 'tail', 'tail.exe', 'head', 'head.exe', 'wc', 'wc.exe', 'sort', 'sort.exe', 'uniq', 'uniq.exe', 'tee', 'tee.exe'];
   const shells = ['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe', 'cmd', 'cmd.exe', 'bash', 'bash.exe', 'sh', 'sh.exe', 'wsl', 'wsl.exe'] as const;
   const inlineFlags = ['-c', '-command', '/c', '-ec', '-encodedcommand', '-en', '-e', '--eval', '-execute', '--execute'];
 
@@ -246,7 +246,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
       }
       ctx.args = ctx.args.map(a => convertToWslPath(a));
     })
-    .with({ cmd: P.union('awk', 'gawk', 'sed', 'sed.exe', 'jq', 'jq.exe', 'yq', 'yq.exe', 'find', 'find.exe') }, () => {
+    .with({ cmd: P.union('awk', 'gawk', 'sed', 'sed.exe', 'jq', 'jq.exe', 'yq', 'yq.exe', 'find', 'find.exe', 'tail', 'tail.exe', 'head', 'head.exe', 'wc', 'wc.exe', 'sort', 'sort.exe', 'uniq', 'uniq.exe', 'tee', 'tee.exe') }, () => {
       console.error(`\n   💡 AGENT INTERCEPT: '${cmdBasename}' natively fails, lacks features, or is not installed on Windows. Switching execution target to WSL2... (Frictionless Recovery)`);
       ctx.payload.target = 'wsl2';
 
