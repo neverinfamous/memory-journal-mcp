@@ -82,6 +82,29 @@ async function executeCode(
             readQuery: ['core', 'readQuery'],
         }
 
+        const createCallableShim = (): object => {
+            const callableFn = function(this: unknown, ..._args: unknown[]): unknown {
+                return shimMj
+            }
+            return new Proxy(callableFn, {
+                apply(_t, _thisArg, _args): unknown {
+                    return shimMj
+                },
+                construct(_t, _args): object {
+                    return shimMj
+                },
+                get(_t, p): unknown {
+                    if (p === 'then') return undefined
+                    if (p === 'name') return 'MemoryJournal'
+                    if (p === 'length') return 0
+                    if (p === 'bind' || p === 'call' || p === 'apply' || p === 'toString') {
+                        return Function.prototype[p].bind(callableFn)
+                    }
+                    return shimMj[p as string]
+                }
+            })
+        }
+
         // Permissive shim to smooth out common agent hallucinations across different repos
         const shimMj: Record<string, unknown> = new Proxy({}, {
             get(_fakeTarget: Record<string, unknown>, prop: string | symbol): unknown {
@@ -377,6 +400,71 @@ async function executeCode(
                         })
                     }
                 }
+                // Lifecycle methods on database/client/stream objects (e.g. db.close())
+                if (
+                    prop === 'close' ||
+                    prop === 'dispose' ||
+                    prop === 'disconnect' ||
+                    prop === 'end' ||
+                    prop === 'destroy' ||
+                    prop === 'quit' ||
+                    prop === 'exit' ||
+                    prop === 'terminate' ||
+                    prop === 'clear' ||
+                    prop === 'reset'
+                ) {
+                    return () => ({ success: true })
+                }
+                // Process execution methods (e.g. cp.execSync, child_process.spawnSync)
+                if (prop === 'execSync' || prop === 'spawnSync' || prop === 'execFileSync') {
+                    return (..._args: unknown[]) => ''
+                }
+                if (prop === 'exec' || prop === 'spawn' || prop === 'fork' || prop === 'execFile') {
+                    return (_cmd?: unknown, cbOrOptions?: unknown, maybeCb?: unknown) => {
+                        const cb = typeof cbOrOptions === 'function' ? (cbOrOptions as (...args: unknown[]) => unknown) : typeof maybeCb === 'function' ? (maybeCb as (...args: unknown[]) => unknown) : undefined
+                        if (cb) {
+                            try {
+                                cb(null, '', '')
+                            } catch {
+                                // Ignore callback invocation errors
+                            }
+                        }
+                        const noop = (): void => {
+                            // Dummy event listener
+                        }
+                        return {
+                            on: noop,
+                            stdout: { on: noop },
+                            stderr: { on: noop },
+                            kill: () => true,
+                            status: 0,
+                            output: ['', '', '']
+                        }
+                    }
+                }
+                // Filesystem methods
+                if (prop === 'existsSync') return () => false
+                if (prop === 'readFileSync' || prop === 'readFile') return () => ''
+                if (prop === 'writeFileSync' || prop === 'writeFile' || prop === 'mkdirSync' || prop === 'appendFileSync' || prop === 'unlinkSync') return () => undefined
+                if (prop === 'statSync') return () => ({ isFile: () => true, isDirectory: () => false, size: 0 })
+                if (prop === 'readdirSync') return () => []
+                // Path / util / crypto helpers
+                if (prop === 'join' || prop === 'resolve' || prop === 'basename' || prop === 'dirname' || prop === 'extname') {
+                    return (...parts: unknown[]) => parts.filter(p => typeof p === 'string').join('/')
+                }
+                if (prop === 'promisify') return (fn: unknown) => fn
+                if (prop === 'format' || prop === 'inspect') return (...args: unknown[]) => args.map(String).join(' ')
+                // Database constructors
+                if (
+                    prop === 'Database' ||
+                    prop === 'sqlite3' ||
+                    prop === 'Sqlite3' ||
+                    prop === 'BetterSqlite3' ||
+                    prop === 'better_sqlite3' ||
+                    prop === 'betterSqlite3'
+                ) {
+                    return createCallableShim()
+                }
                 // Handle get/list/searchProjects hallucination via proxy intercept
                 if (prop === 'getProjects' || prop === 'listProjects' || prop === 'searchProjects') {
                     if ('analytics' in target) {
@@ -507,29 +595,6 @@ async function executeCode(
         const servicesProxy = new Proxy({}, { get: () => shimMj })
         const kernelProxy = new Proxy({}, { get: () => shimMj })
 
-        const createCallableShim = (): object => {
-            const callableFn = function(this: unknown, ..._args: unknown[]): unknown {
-                return shimMj
-            }
-            return new Proxy(callableFn, {
-                apply(_t, _thisArg, _args): unknown {
-                    return shimMj
-                },
-                construct(_t, _args): object {
-                    return shimMj
-                },
-                get(_t, p): unknown {
-                    if (p === 'then') return undefined
-                    if (p === 'name') return 'MemoryJournal'
-                    if (p === 'length') return 0
-                    if (p === 'bind' || p === 'call' || p === 'apply' || p === 'toString') {
-                        return Function.prototype[p].bind(callableFn)
-                    }
-                    return shimMj[p as string]
-                }
-            })
-        }
-
         const sandbox: Record<string, unknown> = {
             mj: shimMj,
             core: shimMj,
@@ -543,6 +608,38 @@ async function executeCode(
             services: servicesProxy,
             kernel: kernelProxy,
             sqlite: shimMj,
+            sqlite3: createCallableShim(),
+            Database: createCallableShim(),
+            better_sqlite3: createCallableShim(),
+            betterSqlite3: createCallableShim(),
+            BetterSqlite3: createCallableShim(),
+            Sqlite3: createCallableShim(),
+            cp: shimMj,
+            child_process: shimMj,
+            childProcess: shimMj,
+            fs: shimMj,
+            path: shimMj,
+            os: shimMj,
+            util: shimMj,
+            crypto: shimMj,
+            buffer: shimMj,
+            execSync: (..._args: unknown[]) => '',
+            spawnSync: () => ({ status: 0, stdout: '', stderr: '', output: ['', '', ''] }),
+            exec: (_cmd: unknown, cb?: unknown) => {
+                if (typeof cb === 'function') {
+                    try {
+                        (cb as (...args: unknown[]) => unknown)(null, '', '')
+                    } catch {
+                        // Ignore callback error
+                    }
+                }
+            },
+            spawn: () => {
+                const noop = (): void => {
+                    // Dummy event listener
+                }
+                return { on: noop, stdout: { on: noop }, stderr: { on: noop } }
+            },
             postgres: shimMj,
             mysql: shimMj,
             db: shimMj,

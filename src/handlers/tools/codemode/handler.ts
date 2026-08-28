@@ -50,25 +50,36 @@ export function healCodeModeScript(code: string): string {
 
     // Auto-heal ES module import and CommonJS require statements
     executionCode = executionCode.replace(/(?:const|let|var)\s+(\{[^}]*\}|[\w$]+)\s*=\s*require\s*\(\s*['"]([^'"]+)['"]\s*\);?/g, (_m: string, varName: string, modName: string): string => {
-        if (modName.includes('memory-journal') || modName.includes('journal') || modName.includes('mcp')) {
-            if (varName.trim() === 'mj') return `/* auto-healed require */`
-            return `const ${varName} = mj;`
+        const v = varName.trim()
+        const mod = modName.toLowerCase()
+        if (v === 'mj') return `/* auto-healed require */`
+        if (mod.includes('sqlite') || mod.includes('database') || v.toLowerCase().includes('sqlite') || v.toLowerCase() === 'database') {
+            return `const ${varName} = mj.sqlite3;`
         }
-        if (['fs', 'node:fs', 'path', 'node:path', 'os', 'node:os', 'util', 'crypto', 'buffer', 'child_process'].includes(modName)) {
-            return `/* auto-healed node module require: ${modName} */`
+        if (v === 'child_process' || mod.includes('child_process')) {
+            return `const ${v === 'child_process' ? 'cp' : varName} = mj;`
         }
-        return `/* auto-healed require: ${modName} */`
+        return `const ${varName} = mj;`
     })
+    executionCode = executionCode.replace(/^\s*require\s*\(\s*['"][^'"]+['"]\s*\);?/gm, '/* auto-healed require */')
+
     executionCode = executionCode.replace(/import\s+(\{[^}]*\}|\*\s+as\s+[\w$]+|[\w$]+)\s+from\s+['"]([^'"]+)['"]\s*;?/g, (_m: string, varName: string, modName: string): string => {
-        if (modName.includes('memory-journal') || modName.includes('journal') || modName.includes('mcp')) {
-            if (varName.trim() === 'mj') return `/* auto-healed import */`
-            return `const ${varName} = mj;`
+        const v = varName.trim()
+        const mod = modName.toLowerCase()
+        if (v === 'mj') return `/* auto-healed import */`
+        let targetVar = v
+        if (v.startsWith('* as ')) {
+            targetVar = v.replace(/^\*\s+as\s+/, '')
         }
-        if (['fs', 'node:fs', 'path', 'node:path', 'os', 'node:os', 'util', 'crypto', 'buffer', 'child_process'].includes(modName)) {
-            return `/* auto-healed node module import: ${modName} */`
+        if (mod.includes('sqlite') || mod.includes('database') || targetVar.toLowerCase().includes('sqlite') || targetVar.toLowerCase() === 'database') {
+            return `const ${targetVar} = mj.sqlite3;`
         }
-        return `/* auto-healed import: ${modName} */`
+        if (targetVar === 'child_process' || mod.includes('child_process')) {
+            return `const ${targetVar === 'child_process' ? 'cp' : targetVar} = mj;`
+        }
+        return `const ${targetVar} = mj;`
     })
+    executionCode = executionCode.replace(/^\s*import\s+['"][^'"]+['"]\s*;?/gm, '/* auto-healed import */')
 
     // Auto-heal fs.readFileSync / fs.readFile calls before security checks
     executionCode = executionCode.replace(/(?:fs|fs\.promises)\.readFileSync\s*\([^)]*\)/g, '(typeof context !== "undefined" && context.content ? context.content : "")')

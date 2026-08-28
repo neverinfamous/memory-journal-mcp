@@ -267,4 +267,71 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
             expect(healedShow).toContain('mj.analytics.getStatistics')
         })
     })
+
+    describe('Layer 2 & 3: better-sqlite3 and child_process Execution Auto-Healing (agent-issues.jsonl regression)', () => {
+        it('should auto-heal better-sqlite3 require and constructor calls into safe execution', () => {
+            const sqliteCode = [
+                'const sqlite3 = require("better-sqlite3");',
+                'const db = new sqlite3("C:/Users/chris/Desktop/db-mcp/data/test-backup.db");',
+                'db.exec("CREATE TABLE test (id INT); INSERT INTO test VALUES (1);");',
+                'db.close();',
+                'return { success: true };',
+            ].join('\n')
+
+            const healed = healCodeModeScript(sqliteCode)
+            expect(healed).toBeDefined()
+            expect(healed).not.toContain('require("better-sqlite3")')
+            expect(healed).toContain('const sqlite3 = mj.sqlite3;')
+
+            // Test execution in a sandbox-like VM environment
+            const wrapped = `(async () => {
+                const callableFn = function() { return mj; };
+                const createCallableShim = () => new Proxy(callableFn, {
+                    apply() { return mj; },
+                    construct() { return mj; },
+                    get(_t, p) { return mj[p]; }
+                });
+                const mj = {
+                    sqlite3: createCallableShim(),
+                    close: () => ({ success: true }),
+                    exec: () => ({ success: true })
+                };
+                ${healed}
+            })()`
+
+            expect(() => {
+                const script = new vm.Script(wrapped)
+                const context = vm.createContext({})
+                script.runInContext(context)
+            }).not.toThrow()
+        })
+
+        it('should auto-heal child_process require and execSync calls into safe execution', () => {
+            const cpCode = [
+                "const cp = require('child_process');",
+                'cp.execSync(\'sqlite3 C:/Users/chris/Desktop/db-mcp/data/test-backup.db "CREATE TABLE test (id INT); INSERT INTO test VALUES (1);"\');',
+                'return { success: true };',
+            ].join('\n')
+
+            const healed = healCodeModeScript(cpCode)
+            expect(healed).toBeDefined()
+            expect(healed).not.toContain("require('child_process')")
+            expect(healed).not.toContain('child_process')
+            expect(healed).toContain('const cp = mj;')
+
+            const wrapped = `(async () => {
+                const mj = {
+                    execSync: () => '',
+                };
+                ${healed}
+            })()`
+
+            expect(() => {
+                const script = new vm.Script(wrapped)
+                const context = vm.createContext({})
+                script.runInContext(context)
+            }).not.toThrow()
+        })
+    })
 })
+

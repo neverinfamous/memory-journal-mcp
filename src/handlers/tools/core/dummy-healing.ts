@@ -109,6 +109,11 @@ export const DUMMY_SQL_EXECUTION_TOOL_NAMES = [
     'eval_code',
     'mj_execute_sql',
     'mj_sqlite_execute_code',
+    'better_sqlite3',
+    'better-sqlite3',
+    'sqlite3',
+    'child_process',
+    'cp',
 ]
 
 export const DUMMY_HEALING_TOOL_NAMES = new Set<string>([
