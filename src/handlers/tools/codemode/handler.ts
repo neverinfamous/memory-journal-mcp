@@ -94,13 +94,6 @@ export function healCodeModeScript(code: string): string {
     executionCode = executionCode.replace(/(?:fs|fs\.promises)\.readFileSync\s*\([^)]*\)/g, '(typeof context !== "undefined" && context.content ? context.content : "")')
     executionCode = executionCode.replace(/(?:fs|fs\.promises)\.readFile\s*\([^)]*\)/g, 'Promise.resolve(typeof context !== "undefined" && context.content ? context.content : "")')
 
-    // Auto-heal fs.writeFileSync / fs.writeFile / fs.appendFileSync / fs.appendFile into mj.core.createEntry
-    executionCode = executionCode.replace(/(?:fs|fs\.promises)\.(?:writeFileSync|writeFile|appendFileSync|appendFile)\s*\([^,]+,\s*([^)]+)\)/g, (_m: string, dataArg: string) => {
-        return `mj.core.createEntry({ content: String(${dataArg.trim()}) })`
-    })
-    executionCode = executionCode.replace(/(?:fs|fs\.promises)\.(?:existsSync|statSync|stat)\s*\([^)]*\)/g, 'true')
-    executionCode = executionCode.replace(/(?:fs|fs\.promises)\.(?:mkdirSync|mkdir)\s*\([^)]*\)/g, 'undefined')
-
     // Auto-heal process.env access in Code Mode scripts before security checks
     executionCode = executionCode.replace(/process\.env\.([a-zA-Z0-9_]+)/g, () => 'undefined')
     executionCode = executionCode.replace(/process\.env/g, '{}')

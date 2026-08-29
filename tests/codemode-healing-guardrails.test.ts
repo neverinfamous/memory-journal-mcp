@@ -356,13 +356,6 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
             expect(healed2).toContain('await journal.append({ content: "test" })')
             expect(healed2).not.toContain('__mcp.mj.execute_code')
         })
-
-        it('should auto-heal fs.writeFileSync into mj.core.createEntry call', () => {
-            const fsScript = "fs.writeFileSync('C:/Users/chris/Desktop/log.txt', JSON.stringify({ status: 'done' }));"
-            const healed = healCodeModeScript(fsScript)
-            expect(healed).toContain('mj.core.createEntry')
-            expect(healed).not.toContain('fs.writeFileSync')
-        })
     })
 })
 
