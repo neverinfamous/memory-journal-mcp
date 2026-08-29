@@ -46,7 +46,7 @@ const basePayloadSchema = z.object({
   expectJsonEnvelope: lenientBoolean.optional(),
 }).strict();
 
-export const PayloadSchema = z.discriminatedUnion("type", [
+const rawPayloadUnion = z.discriminatedUnion("type", [
   basePayloadSchema.extend({
     type: z.literal("command"),
     command: safeString.refine(val => val.trim().length > 0, "command must not be empty"),
@@ -63,7 +63,22 @@ export const PayloadSchema = z.discriminatedUnion("type", [
   })
 ]);
 
-export type ExecPayload = z.infer<typeof PayloadSchema>;
+export const PayloadSchema = z.preprocess((val) => {
+  if (typeof val === 'object' && val !== null && !('type' in val)) {
+    if ('command' in val && typeof val.command === 'string') {
+      return { ...val, type: 'command' };
+    }
+    if ('scriptPath' in val && typeof val.scriptPath === 'string') {
+      return { ...val, type: 'script' };
+    }
+    if ('code' in val && typeof val.code === 'string') {
+      return { ...val, type: 'eval' };
+    }
+  }
+  return val;
+}, rawPayloadUnion);
+
+export type ExecPayload = z.infer<typeof rawPayloadUnion>;
 
 export const agentExecCliArgsSchema = z.object({
   interceptors: z.union([z.string().max(1024), z.array(z.string().max(1024)).max(100)]).optional(),
