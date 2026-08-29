@@ -333,5 +333,36 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
             }).not.toThrow()
         })
     })
+
+    describe('Regression Tests: Issue Logs Healing (agent-issues.jsonl)', () => {
+        it('should register add_journal_entry, mj_add_entry, and creation aliases in dummy healing tools', () => {
+            const dummyTools = getDummyHealingTools(undefined)
+            const names = dummyTools.map(t => t.name)
+            expect(names).toContain('add_journal_entry')
+            expect(names).toContain('mj_add_entry')
+            expect(names).toContain('create_journal_entry')
+            expect(names).toContain('log_journal')
+            expect(names).toContain('append_entry')
+        })
+
+        it('should auto-unwrap nested mj_execute_code and __mcp.mj.execute_code calls', () => {
+            const nested1 = 'const res = await mj_execute_code({ code: `await mj.core.createEntry({ content: "test" })` }); return res;'
+            const healed1 = healCodeModeScript(nested1)
+            expect(healed1).toContain('await mj.core.createEntry({ content: "test" })')
+            expect(healed1).not.toContain('mj_execute_code({')
+
+            const nested2 = 'return await __mcp.mj.execute_code(`await journal.append({ content: "test" })`)'
+            const healed2 = healCodeModeScript(nested2)
+            expect(healed2).toContain('await journal.append({ content: "test" })')
+            expect(healed2).not.toContain('__mcp.mj.execute_code')
+        })
+
+        it('should auto-heal fs.writeFileSync into mj.core.createEntry call', () => {
+            const fsScript = "fs.writeFileSync('C:/Users/chris/Desktop/log.txt', JSON.stringify({ status: 'done' }));"
+            const healed = healCodeModeScript(fsScript)
+            expect(healed).toContain('mj.core.createEntry')
+            expect(healed).not.toContain('fs.writeFileSync')
+        })
+    })
 })
 

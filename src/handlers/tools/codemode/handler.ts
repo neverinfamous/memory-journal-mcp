@@ -79,11 +79,27 @@ export function healCodeModeScript(code: string): string {
         }
         return `const ${targetVar} = mj;`
     })
-    executionCode = executionCode.replace(/^\s*import\s+['"][^'"]+['"]\s*;?/gm, '/* auto-healed import */')
+    // Auto-unwrap nested mj_execute_code / execute_code calls
+    const unwrapNested = (src: string): string => {
+        const current = src.trim()
+        const nestedMatch = /^(?:(?:const|let|var)\s+[\w$]+\s*=\s*)?(?:return\s+)?(?:await\s+)?(?:__mcp\.)?(?:mj\.)?(?:mj_)?(?:execute_code|executeCode)\s*\(\s*(?:\{\s*(?:code|script)\s*:\s*)?([`'"])([\s\S]*?)\1\s*\}?\s*\)\s*;?(?:\s*return\s+[\w$]+;?)?$/i.exec(current)
+        if (nestedMatch?.[2]) {
+            return nestedMatch[2].trim()
+        }
+        return current
+    }
+    executionCode = unwrapNested(executionCode)
 
     // Auto-heal fs.readFileSync / fs.readFile calls before security checks
     executionCode = executionCode.replace(/(?:fs|fs\.promises)\.readFileSync\s*\([^)]*\)/g, '(typeof context !== "undefined" && context.content ? context.content : "")')
     executionCode = executionCode.replace(/(?:fs|fs\.promises)\.readFile\s*\([^)]*\)/g, 'Promise.resolve(typeof context !== "undefined" && context.content ? context.content : "")')
+
+    // Auto-heal fs.writeFileSync / fs.writeFile / fs.appendFileSync / fs.appendFile into mj.core.createEntry
+    executionCode = executionCode.replace(/(?:fs|fs\.promises)\.(?:writeFileSync|writeFile|appendFileSync|appendFile)\s*\([^,]+,\s*([^)]+)\)/g, (_m: string, dataArg: string) => {
+        return `mj.core.createEntry({ content: String(${dataArg.trim()}) })`
+    })
+    executionCode = executionCode.replace(/(?:fs|fs\.promises)\.(?:existsSync|statSync|stat)\s*\([^)]*\)/g, 'true')
+    executionCode = executionCode.replace(/(?:fs|fs\.promises)\.(?:mkdirSync|mkdir)\s*\([^)]*\)/g, 'undefined')
 
     // Auto-heal process.env access in Code Mode scripts before security checks
     executionCode = executionCode.replace(/process\.env\.([a-zA-Z0-9_]+)/g, () => 'undefined')
@@ -437,23 +453,42 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                         // Anti-Hallucination: Auto-heal raw Markdown text or natural language prompts passed directly to mj_execute_code
                         const rawObj = (typeof params === 'object' && params !== null ? params : {}) as Record<string, unknown>
                         const entryObj = (typeof rawObj['entry'] === 'object' && rawObj['entry'] !== null ? rawObj['entry'] : rawObj) as Record<string, unknown>
-                        const hasEntryFields = typeof entryObj['type'] === 'string' || typeof entryObj['entry_type'] === 'string' || typeof entryObj['title'] === 'string' || typeof entryObj['category'] === 'string'
+                        const entryKeys = ['type', 'entry_type', 'title', 'category', 'changes', 'component', 'confidence', 'impact', 'trust', 'validation', 'validation_status', 'pr_link', 'pr_url', 'issue_link', 'issue_url', 'summary', 'description', 'details', 'keywords', 'topic', 'action', 'status', 'notes', 'tags', 'auto_context']
+                        const hasEntryFields = entryKeys.some((k) => entryObj[k] !== undefined || rawObj[k] !== undefined)
                         
                         const isNaturalLanguagePrompt = (text: string): boolean => {
                             const trimmed = text.trim()
                             if (/\b(const|let|var|function|return|await|mj\.|import|export|\(\s*\)\s*=>)\b/.test(trimmed)) {
                                 return false // Has JS keywords or mj.* calls
                             }
-                            return /^(write|document|create|include|record|summary|log|add|please|here\s+is|this\s+is|note|task)\b/i.test(trimmed) ||
+                            return /^(write|document|create|include|record|summary|log|add|please|here\s+is|this\s+is|note|task|fix|fixed|implement|implemented|refactor|refactored|update|updated|change|changed|feat|feature|bug|bugfix|chore|perf|test|tests|docs|cleanup|resolved|resolve|remove|removed|hotfix|patch)\b/i.test(trimmed) ||
                                    /^\s*([*#-]\s*\*?|\d+\.\s|[A-Z][a-z0-9_-]+:)/m.test(trimmed)
                         }
 
                         if (hasEntryFields || isNaturalLanguagePrompt(executionCode)) {
-                            const titleVal = typeof entryObj['title'] === 'string' ? entryObj['title'] : typeof rawObj['title'] === 'string' ? rawObj['title'] : 'Journal Entry'
-                            const typeVal = typeof entryObj['type'] === 'string' ? entryObj['type'] : typeof entryObj['entry_type'] === 'string' ? entryObj['entry_type'] : typeof entryObj['category'] === 'string' ? entryObj['category'] : typeof rawObj['type'] === 'string' ? rawObj['type'] : 'technical_decision'
-                            const tagsVal = Array.isArray(entryObj['tags']) ? entryObj['tags'] : Array.isArray(rawObj['tags']) ? rawObj['tags'] : []
-                            const projVal = typeof entryObj['project_number'] === 'number' ? entryObj['project_number'] : typeof rawObj['project_number'] === 'number' ? rawObj['project_number'] : undefined
+                            const titleVal = typeof entryObj['title'] === 'string' ? entryObj['title'] : typeof rawObj['title'] === 'string' ? rawObj['title'] : (typeof entryObj['summary'] === 'string' ? entryObj['summary'] : (typeof rawObj['summary'] === 'string' ? rawObj['summary'] : 'Journal Entry'))
+                            const typeVal = typeof entryObj['type'] === 'string' ? entryObj['type'] : typeof entryObj['entry_type'] === 'string' ? entryObj['entry_type'] : typeof entryObj['category'] === 'string' ? entryObj['category'] : typeof rawObj['type'] === 'string' ? rawObj['type'] : typeof rawObj['entry_type'] === 'string' ? rawObj['entry_type'] : 'technical_decision'
+                            let tagsVal: string[] = Array.isArray(entryObj['tags'])
+                                ? (entryObj['tags'] as unknown[]).filter((t): t is string => typeof t === 'string')
+                                : (Array.isArray(rawObj['tags'])
+                                    ? (rawObj['tags'] as unknown[]).filter((t): t is string => typeof t === 'string')
+                                    : [])
+                            const topicVal = typeof entryObj['topic'] === 'string' ? entryObj['topic'] : typeof rawObj['topic'] === 'string' ? rawObj['topic'] : undefined
+                            if (topicVal !== undefined && !tagsVal.includes(topicVal)) {
+                                tagsVal = [...tagsVal, topicVal]
+                            }
+                            const projVal = typeof entryObj['project_number'] === 'number' ? entryObj['project_number'] : typeof rawObj['project_number'] === 'number' ? rawObj['project_number'] : (typeof entryObj['project'] === 'number' ? entryObj['project'] : typeof rawObj['project'] === 'number' ? rawObj['project'] : undefined)
                             const sessVal = typeof entryObj['session_id'] === 'string' ? entryObj['session_id'] : typeof rawObj['session_id'] === 'string' ? rawObj['session_id'] : undefined
+                            const trustVal = typeof entryObj['trust'] === 'number' ? entryObj['trust'] : typeof rawObj['trust'] === 'number' ? rawObj['trust'] : (typeof entryObj['confidence'] === 'number' ? entryObj['confidence'] : typeof rawObj['confidence'] === 'number' ? rawObj['confidence'] : undefined)
+                            const impactVal = typeof entryObj['impact'] === 'number' ? entryObj['impact'] : typeof rawObj['impact'] === 'number' ? rawObj['impact'] : undefined
+                            const validVal = typeof entryObj['validation_status'] === 'string' ? entryObj['validation_status'] : typeof rawObj['validation_status'] === 'string' ? rawObj['validation_status'] : (typeof entryObj['validation'] === 'string' ? entryObj['validation'] : typeof rawObj['validation'] === 'string' ? rawObj['validation'] : undefined)
+
+                            // Build extra auto_context metadata if component / changes / pr_link are present
+                            const extraContext: Record<string, unknown> = {}
+                            for (const k of ['component', 'changes', 'pr_link', 'pr_url', 'issue_link', 'issue_url', 'details', 'notes']) {
+                                if (entryObj[k] !== undefined) extraContext[k] = entryObj[k]
+                                else if (rawObj[k] !== undefined) extraContext[k] = rawObj[k]
+                            }
 
                             const payload: Record<string, unknown> = {
                                 title: titleVal,
@@ -463,6 +498,12 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                             }
                             if (projVal !== undefined) payload['project_number'] = projVal
                             if (sessVal !== undefined) payload['session_id'] = sessVal
+                            if (trustVal !== undefined) payload['trust'] = trustVal
+                            if (impactVal !== undefined) payload['impact'] = impactVal
+                            if (validVal !== undefined) payload['validation_status'] = validVal
+                            if (Object.keys(extraContext).length > 0) {
+                                payload['auto_context'] = extraContext
+                            }
 
                             executionCode = `return await mj.createEntry(${JSON.stringify(payload)});`
                         }

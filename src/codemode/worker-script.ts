@@ -565,6 +565,47 @@ async function executeCode(
             preventExtensions() { return false }
         })
 
+        const createEmptyFallback = (_name: string): unknown => {
+            const emptyIter = function* (): Generator<never, void, unknown> { /* empty */ }
+            const fallback: Record<string | symbol, unknown> = {
+                values: () => emptyIter(),
+                keys: () => emptyIter(),
+                entries: () => emptyIter(),
+                forEach: () => undefined,
+                get: () => undefined,
+                has: () => false,
+                set: () => fallback,
+                delete: () => false,
+                clear: () => undefined,
+                size: 0,
+                length: 0,
+                [Symbol.iterator]: emptyIter,
+                map: () => [],
+                filter: () => [],
+                reduce: (_fn: unknown, init: unknown) => init ?? [],
+                reduceRight: (_fn: unknown, init: unknown) => init ?? [],
+                slice: () => [],
+                find: () => undefined,
+                findIndex: () => -1,
+                some: () => false,
+                every: () => true,
+                includes: () => false,
+                indexOf: () => -1,
+                join: () => '',
+                concat: () => [],
+                at: () => undefined,
+                flat: () => [],
+                flatMap: () => [],
+            }
+            return new Proxy(fallback, {
+                get(t, p) {
+                    if (p in t) return t[p]
+                    if (typeof p === 'symbol') return undefined
+                    return undefined
+                }
+            })
+        }
+
         const contextProxy = new Proxy(contextObj ?? {}, {
             get(target, prop) {
                 if (typeof prop === 'symbol') return undefined
@@ -578,10 +619,42 @@ async function executeCode(
                         recoverable: true
                     })
                 }
+                if (typeof prop === 'string') {
+                    const collections = [
+                        'entries', 'results', 'projects', 'items', 'rows', 'tables',
+                        'flags', 'groups', 'users', 'capabilities', 'metrics', 'events', 'records',
+                        'logs', 'aliases', 'tags', 'issues', 'pullRequests', 'milestones', 'columns',
+                        'comments', 'files', 'errors', 'backups', 'deleted', 'updated', 'notFound',
+                        'history', 'relationships', 'members', 'data', 'map', 'list'
+                    ]
+                    if (collections.includes(prop)) {
+                        return createEmptyFallback(prop)
+                    }
+                }
                 return target[prop]
             }
         })
         const frozenContext = Object.freeze(contextProxy)
+
+        const vmContextRef: { current?: vm.Context } = {}
+        const executeCodeFn = async (arg: unknown): Promise<unknown> => {
+            let codeToExec = ''
+            if (typeof arg === 'string') {
+                codeToExec = arg
+            } else if (typeof arg === 'object' && arg !== null) {
+                const obj = arg as Record<string, unknown>
+                codeToExec = typeof obj['code'] === 'string' ? obj['code'] : typeof obj['script'] === 'string' ? obj['script'] : ''
+                if (!codeToExec && (typeof obj['content'] === 'string' || typeof obj['text'] === 'string' || typeof obj['description'] === 'string' || typeof obj['title'] === 'string')) {
+                    return (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(obj)
+                }
+            }
+            if (codeToExec && vmContextRef.current) {
+                const transformed = transformAutoReturn(codeToExec)
+                const wrapped = `(async () => {\n${transformed}\n})()`
+                return await vm.runInContext(wrapped, vmContextRef.current)
+            }
+            return { success: true }
+        }
 
         const consoleShim = {
             log: (...args: unknown[]) => args,
@@ -597,6 +670,13 @@ async function executeCode(
 
         const sandbox: Record<string, unknown> = {
             mj: shimMj,
+            __mcp: shimMj,
+            __mcp_server: shimMj,
+            __mcp_client: shimMj,
+            mj_execute_code: executeCodeFn,
+            execute_code: executeCodeFn,
+            executeCode: executeCodeFn,
+            mjExecuteCode: executeCodeFn,
             core: shimMj,
             journal: shimMj,
             _journal: shimMj,
@@ -741,7 +821,23 @@ async function executeCode(
                 return (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg);
             },
             createMemory: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
+            append: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
+            append_entry: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
             appendEntry: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
+            logJournal: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
+            log_journal: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
+            insertJournal: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
+            insert_journal: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
+            addJournal: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
+            add_journal: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
+            recordJournal: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
+            record_journal: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
+            appendJournal: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
+            append_journal: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
+            saveJournalEntry: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
+            save_journal_entry: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
+            addJournalEntry: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
+            add_journal_entry: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
             createJournalEntry: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
             loadJournal: (): Promise<unknown> => Promise.resolve(shimMj),
             saveJournal: (): Promise<unknown> => Promise.resolve({ success: true }),
@@ -819,6 +915,7 @@ async function executeCode(
                 wasm: false,
             },
         })
+        vmContextRef.current = context
 
         // Freeze built-in prototypes inside the sandbox to prevent dynamic
         // constructor chain escapes like:

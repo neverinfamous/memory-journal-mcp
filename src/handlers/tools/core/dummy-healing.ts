@@ -116,8 +116,38 @@ export const DUMMY_SQL_EXECUTION_TOOL_NAMES = [
     'cp',
 ]
 
+export const DUMMY_ENTRY_CREATION_TOOL_NAMES = [
+    'add_journal_entry',
+    'mj_add_journal_entry',
+    'add_entry',
+    'mj_add_entry',
+    'insert_entry',
+    'mj_insert_entry',
+    'create_journal_entry',
+    'mj_create_journal_entry',
+    'log_entry',
+    'mj_log_entry',
+    'log_journal',
+    'mj_log_journal',
+    'save_entry',
+    'mj_save_entry',
+    'append_entry',
+    'mj_append_entry',
+    'add_journal',
+    'mj_add_journal',
+    'create_memory',
+    'mj_create_memory',
+    'write_entry',
+    'mj_write_entry',
+    'new_entry',
+    'mj_new_entry',
+    'record_entry',
+    'mj_record_entry',
+]
+
 export const DUMMY_HEALING_TOOL_NAMES = new Set<string>([
     'create_entry',
+    ...DUMMY_ENTRY_CREATION_TOOL_NAMES,
     'search_entries',
     'get_recent_entries',
     'get_entry_by_id',
@@ -355,40 +385,85 @@ export function getDummyHealingTools(context?: ToolContext): ToolDefinition[] {
         }
     }
 
+    const handleCreateEntry = async (params: unknown, toolName: string): Promise<unknown> => {
+        const rawArgs = (params ?? {}) as Record<string, unknown>
+        const args: Record<string, unknown> = { ...rawArgs }
+
+        // Normalize topic -> tags
+        if (args['topic'] !== undefined && args['tags'] === undefined) {
+            args['tags'] = [args['topic']]
+        } else if (args['topic'] !== undefined && Array.isArray(args['tags'])) {
+            const existingTags = args['tags'] as unknown[]
+            args['tags'] = [...existingTags, args['topic']]
+        }
+
+        // Normalize type -> entry_type
+        if (args['type'] !== undefined && args['entry_type'] === undefined) {
+            args['entry_type'] = args['type']
+        }
+        if (args['category'] !== undefined && args['entry_type'] === undefined) {
+            args['entry_type'] = args['category']
+        }
+
+        // Normalize text / description / message / body / instructions / details -> content
+        if (args['content'] === undefined) {
+            const alt = args['text'] ?? args['description'] ?? args['message'] ?? args['body'] ?? args['instructions'] ?? args['details'] ?? args['notes']
+            if (typeof alt === 'string') {
+                args['content'] = alt
+            }
+        }
+
+        // Normalize project -> project_number
+        if (args['project'] !== undefined && args['project_number'] === undefined) {
+            if (typeof args['project'] === 'number') {
+                args['project_number'] = args['project']
+            }
+        }
+
+        // Normalize confidence -> trust
+        if (args['confidence'] !== undefined && args['trust'] === undefined) {
+            args['trust'] = args['confidence']
+        }
+
+        // Normalize validation -> validation_status
+        if (args['validation'] !== undefined && args['validation_status'] === undefined) {
+            args['validation_status'] = args['validation']
+        }
+
+        if (context) {
+            const coreTools = getCoreTools(context)
+            const createTool = coreTools.find((t: ToolDefinition) => t.name === 'create_entry')
+            if (createTool) {
+                const result = await Promise.resolve(createTool.handler(args))
+                if (typeof result === 'object' && result !== null) {
+                    return {
+                        ...(result as Record<string, unknown>),
+                        _healing_note: `🛠️ AUTONOMOUS HEALING: '${toolName}' was invoked directly as an MCP tool. The entry was created successfully. In Code Mode, prefer using 'mj_execute_code' with 'mj.core.createEntry({ ... })'.`
+                    }
+                }
+                return result
+            }
+        }
+        return {
+            success: false,
+            error: `🛠️ AUTONOMOUS HEALING: '${toolName}' is not directly active in Code Mode. Use 'mj_execute_code' with 'mj.core.createEntry({ ... })'.`,
+            code: 'VALIDATION_ERROR',
+            category: 'validation',
+            recoverable: true
+        }
+    }
+
     return [
-        {
-            name: 'create_entry',
-            title: 'Create Entry (Code Mode Fallback)',
-            description: 'Fallback handler for `create_entry` when called directly in Code Mode.',
+        ...['create_entry', ...DUMMY_ENTRY_CREATION_TOOL_NAMES].map((name): ToolDefinition => ({
+            name,
+            title: `Create Entry (${name} Fallback)`,
+            description: `Fallback handler for \`${name}\` when called directly as an MCP tool.`,
             group: 'core',
             inputSchema: z.any(),
             outputSchema: z.any(),
             annotations: { readOnlyHint: false, openWorldHint: false },
-            handler: async (params: unknown) => {
-                const args = (params ?? {}) as Record<string, unknown>
-                if (context) {
-                    const coreTools = getCoreTools(context)
-                    const createTool = coreTools.find((t: ToolDefinition) => t.name === 'create_entry')
-                    if (createTool) {
-                        const result = await Promise.resolve(createTool.handler(args))
-                        if (typeof result === 'object' && result !== null) {
-                            return {
-                                ...(result as Record<string, unknown>),
-                                _healing_note: '🛠️ AUTONOMOUS HEALING: `create_entry` was invoked directly while in Code Mode. The entry was created successfully. In Code Mode, prefer using `mj_execute_code` with `mj.core.createEntry({ ... })`.'
-                            }
-                        }
-                        return result
-                    }
-                }
-                return {
-                    success: false,
-                    error: '🛠️ AUTONOMOUS HEALING: `create_entry` is not directly active in Code Mode. Use `mj_execute_code` with `mj.core.createEntry({ ... })`.',
-                    code: 'VALIDATION_ERROR',
-                    category: 'validation',
-                    recoverable: true
-                }
-            },
-        },
+            handler: async (params: unknown) => handleCreateEntry(params, name),
+        })),
         {
             name: 'search_entries',
             title: 'Search Entries (Code Mode Fallback)',
