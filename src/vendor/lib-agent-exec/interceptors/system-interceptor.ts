@@ -272,6 +272,21 @@ export function systemInterceptor(ctx: ExecutionContext): void {
           ctx.args = newArgs;
           return;
         }
+
+        // Auto-heal common find -type hallucinations (e.g. -type file -> -type f, -type fts* -> -name fts*)
+        for (let i = 0; i < ctx.args.length; i++) {
+          if (ctx.args[i] === '-type' && i + 1 < ctx.args.length) {
+            const typeVal = ctx.args[i + 1];
+            if (typeVal === 'file') {
+              ctx.args[i + 1] = 'f';
+            } else if (typeVal === 'dir' || typeVal === 'directory') {
+              ctx.args[i + 1] = 'd';
+            } else if (!/^[bcdpflsD]$/.test(typeVal)) {
+              console.error(`\n   🛠️ AUTONOMOUS HEALING: 'find -type ${typeVal}' is invalid. Rewriting to '-name ${typeVal}'... (Frictionless Recovery)\x1b[0m`);
+              ctx.args[i] = '-name';
+            }
+          }
+        }
       }
 
       // Automatically convert Windows paths (like C:\... or C:/... or "C:\...") to WSL paths (/mnt/c/...)
