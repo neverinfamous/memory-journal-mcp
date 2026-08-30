@@ -56,38 +56,101 @@ export function wrapResult(result: unknown): unknown {
             })
         }
 
+        const isDictLike = (obj: Record<string, unknown>): boolean => {
+            const keys = Object.keys(obj).filter((k) => typeof k === 'string' && !k.startsWith('_'))
+            return keys.length > 0 && !keys.includes('error') && !keys.includes('success')
+        }
+
+        const dictToItems = (obj: Record<string, unknown>): unknown[] => {
+            return Object.entries(obj)
+                .filter(([k]) => typeof k === 'string' && !k.startsWith('_'))
+                .map(([key, item]) => {
+                    if (item !== null && typeof item === 'object' && !Array.isArray(item)) {
+                        const itemObj = item as Record<string, unknown>
+                        return {
+                            name: key,
+                            ...itemObj,
+                            project_number: itemObj['project_number'] ?? itemObj['id'] ?? itemObj['projectNumber'],
+                            projectNumber: itemObj['projectNumber'] ?? itemObj['project_number'] ?? itemObj['id'],
+                        }
+                    }
+                    return { name: key, value: item }
+                })
+        }
+
+        if (Array.isArray(result)) {
+            const arr = result as unknown[]
+            return new Proxy(arr, {
+                ownKeys(target) { return Reflect.ownKeys(target) },
+                getOwnPropertyDescriptor(target, prop) { return Reflect.getOwnPropertyDescriptor(target, prop) },
+                get(target, prop, receiver): unknown {
+                    if (prop in target) {
+                        const val: unknown = Reflect.get(target, prop, receiver)
+                        if (typeof val === 'function') {
+                            return (val as (...args: unknown[]) => unknown).bind(target)
+                        }
+                        return val
+                    }
+                    if (prop === 'success') return true
+                    if (
+                        prop === 'projects' ||
+                        prop === 'entries' ||
+                        prop === 'results' ||
+                        prop === 'items' ||
+                        prop === 'data' ||
+                        prop === 'rows' ||
+                        prop === 'relationships' ||
+                        prop === 'members' ||
+                        prop === 'tags' ||
+                        prop === 'history' ||
+                        prop === 'records'
+                    ) {
+                        return receiver as unknown
+                    }
+                    return undefined
+                },
+            })
+        }
+
         if (!Array.isArray(result)) {
             const successResult = result as Record<string | symbol, unknown>
 
-            // §2.4: Inject `hasMore` convenience boolean when pagination cursor is present
-            if ('next_cursor' in successResult && successResult['next_cursor'] !== null && successResult['next_cursor'] !== undefined && successResult['next_cursor'] !== '') {
-                successResult['hasMore'] = true
-            } else if (
-                ('entries' in successResult || 'results' in successResult || 'items' in successResult) &&
-                !('hasMore' in successResult)
-            ) {
-                successResult['hasMore'] = false
-            }
-
-            // §2.5: Heal analytics `statistics` shape hallucination
-            if (
-                !('statistics' in successResult) &&
-                !('stats' in successResult) &&
-                ('totalEntries' in successResult || 'entriesByType' in successResult)
-            ) {
-                successResult['statistics'] = successResult
-                successResult['stats'] = successResult
-            }
             return new Proxy(successResult, {
                 ownKeys(target) { return Reflect.ownKeys(target) },
                 getOwnPropertyDescriptor(target, prop) { return Reflect.getOwnPropertyDescriptor(target, prop) },
                 get(target, prop, receiver) {
-                    if (prop in target) return target[prop]
+                    if (prop in target) {
+                        const val = target[prop]
+                        if (val !== null && typeof val === 'object' && !Array.isArray(val)) {
+                            return wrapResult(val)
+                        }
+                        return val
+                    }
                     
                     const targetRecord = target as Record<string, unknown>
                     // Helper to safely check and cast arrays
                     const isObject = (val: unknown): val is Record<string, unknown> => typeof val === 'object' && val !== null;
                     const hasNumberId = (val: unknown): val is { id: number } => isObject(val) && typeof val['id'] === 'number';
+
+                    // §2.4: Inject `hasMore` convenience boolean when pagination cursor is present
+                    if (prop === 'hasMore') {
+                        if ('next_cursor' in targetRecord && targetRecord['next_cursor'] !== null && targetRecord['next_cursor'] !== undefined && targetRecord['next_cursor'] !== '') {
+                            return true
+                        }
+                        if ('entries' in targetRecord || 'results' in targetRecord || 'items' in targetRecord) {
+                            return false
+                        }
+                    }
+
+                    // §2.5: Heal analytics `statistics` shape hallucination
+                    if (
+                        (prop === 'statistics' || prop === 'stats') &&
+                        !('statistics' in targetRecord) &&
+                        !('stats' in targetRecord) &&
+                        ('totalEntries' in targetRecord || 'entriesByType' in targetRecord)
+                    ) {
+                        return receiver as unknown
+                    }
 
                     // Hallucination Intercept: Single entry creation returns { success: true, entry: { id: 42 } }.
                     // Allow accessing result.id or result.entryId directly on the success result wrapper.
@@ -154,6 +217,18 @@ export function wrapResult(result: unknown): unknown {
                                 yield* (targetRecord[targetKey] as unknown[])
                             }
                         }
+                        if ('projects' in targetRecord && targetRecord['projects'] !== null && typeof targetRecord['projects'] === 'object' && !Array.isArray(targetRecord['projects'])) {
+                            const items = dictToItems(targetRecord['projects'] as Record<string, unknown>)
+                            return function* () {
+                                yield* items
+                            }
+                        }
+                        if (isDictLike(targetRecord)) {
+                            const items = dictToItems(targetRecord)
+                            return function* () {
+                                yield* items
+                            }
+                        }
                     }
 
                     // Property aliases for primary array or result object
@@ -183,6 +258,12 @@ export function wrapResult(result: unknown): unknown {
                         if (targetKey !== undefined) {
                             return (targetRecord[targetKey] as unknown[]).length
                         }
+                        if ('projects' in targetRecord && targetRecord['projects'] !== null && typeof targetRecord['projects'] === 'object' && !Array.isArray(targetRecord['projects'])) {
+                            return Object.keys(targetRecord['projects']).length
+                        }
+                        if (isDictLike(targetRecord)) {
+                            return Object.keys(targetRecord).length
+                        }
                     }
 
                     if (typeof prop === 'string' && /^\d+$/.test(prop)) {
@@ -195,6 +276,14 @@ export function wrapResult(result: unknown): unknown {
                         }
                         if (targetKey !== undefined) {
                             return (targetRecord[targetKey] as unknown[])[idx]
+                        }
+                        if ('projects' in targetRecord && targetRecord['projects'] !== null && typeof targetRecord['projects'] === 'object' && !Array.isArray(targetRecord['projects'])) {
+                            const items = dictToItems(targetRecord['projects'] as Record<string, unknown>)
+                            return items[idx]
+                        }
+                        if (isDictLike(targetRecord)) {
+                            const items = dictToItems(targetRecord)
+                            return items[idx]
                         }
                     }
 
@@ -220,6 +309,29 @@ export function wrapResult(result: unknown): unknown {
                                 return (...args: unknown[]) => {
                                     const fn = method as (...a: unknown[]) => unknown
                                     return fn.apply(arr, args)
+                                }
+                            }
+                        }
+
+                        if ('projects' in targetRecord && targetRecord['projects'] !== null && typeof targetRecord['projects'] === 'object' && !Array.isArray(targetRecord['projects'])) {
+                            const dict = targetRecord['projects'] as Record<string, unknown>
+                            const items = dictToItems(dict)
+                            const method = (items as unknown as Record<string, unknown>)[prop]
+                            if (typeof method === 'function') {
+                                return (...args: unknown[]) => {
+                                    const fn = method as (...a: unknown[]) => unknown
+                                    return fn.apply(items, args)
+                                }
+                            }
+                        }
+
+                        if (isDictLike(targetRecord)) {
+                            const items = dictToItems(targetRecord)
+                            const method = (items as unknown as Record<string, unknown>)[prop]
+                            if (typeof method === 'function') {
+                                return (...args: unknown[]) => {
+                                    const fn = method as (...a: unknown[]) => unknown
+                                    return fn.apply(items, args)
                                 }
                             }
                         }

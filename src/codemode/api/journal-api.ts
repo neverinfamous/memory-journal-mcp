@@ -355,16 +355,39 @@ export class JournalApi {
         const listProjectsFn = async (): Promise<unknown> => {
             try {
                 const registry = parseProjectRegistry()
-                if (registry !== undefined) return registry
+                if (registry !== undefined && registry.length > 0) return registry
             } catch {
-                // Ignore parse errors and fallback to analytics
+                // Ignore parse errors and fallback to admin / analytics
             }
-            const statsFn = this.analytics['getStatistics']
-            if (!statsFn) return Promise.reject(new Error('getStatistics is not available'))
 
-            const stats = await statsFn({ group_by: 'month', project_breakdown: true })
-            if (isRecord(stats) && 'projectBreakdown' in stats) {
-                return stats['projectBreakdown']
+            try {
+                const configPath = process.env['MEMORY_JOURNAL_CONFIG'] ?? path.resolve(os.homedir(), '.gemini', 'config', 'memory-journal.config.json')
+                if (fs.existsSync(configPath)) {
+                    const config = JSON.parse(fs.readFileSync(configPath, 'utf-8')) as Record<string, unknown>
+                    const reg = config['projectRegistry'] as Record<string, Record<string, unknown>> | undefined
+                    if (reg !== undefined && reg !== null && typeof reg === 'object') {
+                        return Object.entries(reg).map(([name, val]) => ({
+                            name,
+                            projectNumber: val?.['project_number'] ?? val?.['id'],
+                            project_number: val?.['project_number'] ?? val?.['id'],
+                            ...(typeof val === 'object' && val !== null ? val : {}),
+                        }))
+                    }
+                }
+            } catch {
+                // Fallback to analytics
+            }
+
+            const statsFn = this.analytics['getStatistics']
+            if (typeof statsFn === 'function') {
+                try {
+                    const stats = await statsFn({ group_by: 'month', project_breakdown: true })
+                    if (isRecord(stats) && 'projectBreakdown' in stats && Array.isArray(stats['projectBreakdown'])) {
+                        return stats['projectBreakdown']
+                    }
+                } catch {
+                    // Ignore error
+                }
             }
             return []
         }

@@ -180,6 +180,10 @@ export function extractAndRecoverEntryCode(code: string): string | null {
     const title = titleMatch?.[1]
     if (title) payload['title'] = title
 
+    const entryIdMatch = /\b(?:entry_id|id)\s*:\s*(\d+)/i.exec(code)
+    const entryIdStr = entryIdMatch?.[1]
+    if (entryIdStr) payload['entry_id'] = parseInt(entryIdStr, 10)
+
     const projectStr = projectMatch?.[1]
     if (projectStr) payload['project_number'] = parseInt(projectStr, 10)
 
@@ -446,20 +450,61 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                         // Anti-Hallucination: Auto-heal raw Markdown text or natural language prompts passed directly to mj_execute_code
                         const rawObj = (typeof params === 'object' && params !== null ? params : {}) as Record<string, unknown>
                         const entryObj = (typeof rawObj['entry'] === 'object' && rawObj['entry'] !== null ? rawObj['entry'] : rawObj) as Record<string, unknown>
-                        const entryKeys = ['type', 'entry_type', 'title', 'category', 'changes', 'component', 'confidence', 'impact', 'trust', 'validation', 'validation_status', 'pr_link', 'pr_url', 'issue_link', 'issue_url', 'summary', 'description', 'details', 'keywords', 'topic', 'action', 'status', 'notes', 'tags', 'auto_context']
+                        const entryKeys = [
+                            'type', 'entry_type', 'title', 'category', 'changes', 'component',
+                            'confidence', 'impact', 'trust', 'validation', 'validation_status',
+                            'pr_link', 'pr_url', 'issue_link', 'issue_url', 'summary',
+                            'description', 'details', 'keywords', 'topic', 'action', 'status',
+                            'notes', 'tags', 'auto_context', 'content', 'body', 'text', 'message',
+                            'entry_id', 'id', 'project_number', 'session_id', 'entry'
+                        ]
                         const hasEntryFields = entryKeys.some((k) => entryObj[k] !== undefined || rawObj[k] !== undefined)
                         
                         const isNaturalLanguagePrompt = (text: string): boolean => {
                             const trimmed = text.trim()
+                            if (!trimmed) return false
                             if (/\b(const|let|var|function|return|await|mj\.|import|export|\(\s*\)\s*=>)\b/.test(trimmed)) {
                                 return false // Has JS keywords or mj.* calls
                             }
-                            return /^(write|document|create|include|record|summary|log|add|please|here\s+is|this\s+is|note|task|fix|fixed|implement|implemented|refactor|refactored|update|updated|change|changed|feat|feature|bug|bugfix|chore|perf|test|tests|docs|cleanup|resolved|resolve|remove|removed|hotfix|patch)\b/i.test(trimmed) ||
-                                   /^\s*([*#-]\s*\*?|\d+\.\s|[A-Z][a-z0-9_-]+:)/m.test(trimmed)
+                            if (/^(?:SELECT|INSERT|UPDATE|DELETE|PRAGMA|SHOW|DESCRIBE|EXPLAIN|WITH)\b/i.test(trimmed)) {
+                                return false // Handled by extractAndRecoverSqlCode
+                            }
+                            const naturalVerbPattern = /^(write|document|create|include|record|summary|log|add|added|please|here\s+is|this\s+is|note|task|fix|fixed|implement|implemented|refactor|refactored|update|updated|change|changed|feat|feature|bug|bugfix|chore|perf|test|tests|tested|docs|cleanup|resolved|resolve|remove|removed|hotfix|patch|replace|replaced|migrate|migrated|upgrade|upgraded|enhance|enhanced|improve|improved|delete|deleted|extract|extracted|prevent|prevented|handle|handled|verify|verified|configure|configured|switch|switched|align|aligned|adjust|adjusted|simplify|simplified|rewrite|rewrote|optimize|optimized|investigate|investigated|evaluate|evaluated|eliminate|eliminated|diagnose|diagnosed)\b/i
+                            if (naturalVerbPattern.test(trimmed)) return true
+                            if (/^\s*([*#-]\s*\*?|\d+\.\s|[A-Z][a-z0-9_-]+:)/m.test(trimmed)) return true
+                            
+                            const words = trimmed.split(/\s+/)
+                            if (words.length >= 3 && !/[;{}=]/.test(trimmed)) {
+                                return true
+                            }
+                            return false
                         }
 
                         if (hasEntryFields || isNaturalLanguagePrompt(executionCode)) {
-                            const titleVal = typeof entryObj['title'] === 'string' ? entryObj['title'] : typeof rawObj['title'] === 'string' ? rawObj['title'] : (typeof entryObj['summary'] === 'string' ? entryObj['summary'] : (typeof rawObj['summary'] === 'string' ? rawObj['summary'] : 'Journal Entry'))
+                            const rawContent = typeof entryObj['content'] === 'string' && entryObj['content'].trim().length > 0
+                                ? entryObj['content']
+                                : typeof rawObj['content'] === 'string' && rawObj['content'].trim().length > 0
+                                    ? rawObj['content']
+                                    : (typeof entryObj['body'] === 'string' && entryObj['body'].trim().length > 0
+                                        ? entryObj['body']
+                                        : (typeof rawObj['body'] === 'string' && rawObj['body'].trim().length > 0
+                                            ? rawObj['body']
+                                            : executionCode))
+
+                            const titleVal = typeof entryObj['title'] === 'string'
+                                ? entryObj['title']
+                                : typeof rawObj['title'] === 'string'
+                                    ? rawObj['title']
+                                    : (typeof entryObj['summary'] === 'string'
+                                        ? entryObj['summary']
+                                        : (typeof rawObj['summary'] === 'string'
+                                            ? rawObj['summary']
+                                            : (typeof entryObj['entry_id'] === 'string' && Number.isNaN(Number(entryObj['entry_id']))
+                                                ? entryObj['entry_id']
+                                                : (typeof rawObj['entry_id'] === 'string' && Number.isNaN(Number(rawObj['entry_id']))
+                                                    ? rawObj['entry_id']
+                                                    : 'Journal Entry'))))
+
                             const typeVal = typeof entryObj['type'] === 'string' ? entryObj['type'] : typeof entryObj['entry_type'] === 'string' ? entryObj['entry_type'] : typeof entryObj['category'] === 'string' ? entryObj['category'] : typeof rawObj['type'] === 'string' ? rawObj['type'] : typeof rawObj['entry_type'] === 'string' ? rawObj['entry_type'] : 'technical_decision'
                             let tagsVal: string[] = Array.isArray(entryObj['tags'])
                                 ? (entryObj['tags'] as unknown[]).filter((t): t is string => typeof t === 'string')
@@ -476,6 +521,9 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                             const impactVal = typeof entryObj['impact'] === 'number' ? entryObj['impact'] : typeof rawObj['impact'] === 'number' ? rawObj['impact'] : undefined
                             const validVal = typeof entryObj['validation_status'] === 'string' ? entryObj['validation_status'] : typeof rawObj['validation_status'] === 'string' ? rawObj['validation_status'] : (typeof entryObj['validation'] === 'string' ? entryObj['validation'] : typeof rawObj['validation'] === 'string' ? rawObj['validation'] : undefined)
 
+                            const rawEntryId = entryObj['entry_id'] ?? rawObj['entry_id'] ?? entryObj['id'] ?? rawObj['id']
+                            const numericEntryId = typeof rawEntryId === 'number' ? rawEntryId : (typeof rawEntryId === 'string' && !Number.isNaN(Number(rawEntryId)) ? Number(rawEntryId) : undefined)
+
                             // Build extra auto_context metadata if component / changes / pr_link are present
                             const extraContext: Record<string, unknown> = {}
                             for (const k of ['component', 'changes', 'pr_link', 'pr_url', 'issue_link', 'issue_url', 'details', 'notes']) {
@@ -485,10 +533,11 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
 
                             const payload: Record<string, unknown> = {
                                 title: titleVal,
-                                content: executionCode,
+                                content: rawContent,
                                 entry_type: typeVal,
                                 tags: tagsVal
                             }
+                            if (numericEntryId !== undefined) payload['entry_id'] = numericEntryId
                             if (projVal !== undefined) payload['project_number'] = projVal
                             if (sessVal !== undefined) payload['session_id'] = sessVal
                             if (trustVal !== undefined) payload['trust'] = trustVal
@@ -498,7 +547,8 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                                 payload['auto_context'] = extraContext
                             }
 
-                            executionCode = `return await mj.createEntry(${JSON.stringify(payload)});`
+                            const fnName = numericEntryId !== undefined ? 'mj.updateEntry' : 'mj.createEntry'
+                            executionCode = `return await ${fnName}(${JSON.stringify(payload)});`
                         }
                     }
 

@@ -356,6 +356,92 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
             expect(healed2).toContain('await journal.append({ content: "test" })')
             expect(healed2).not.toContain('__mcp.mj.execute_code')
         })
+
+        it('should auto-proxy array results to support .projects, .entries, and direct array methods', () => {
+            const rawArray = [
+                { name: 'db-mcp', project_number: 1, path: '/path/db-mcp' },
+                { name: 'memory-journal', project_number: 2, path: '/path/mj' },
+            ]
+            const wrapped = wrapResult(rawArray) as Record<string, unknown>
+
+            expect(wrapped['success']).toBe(true)
+            // Accessing .projects on an array returns the array itself
+            const projectsProp = wrapped['projects'] as unknown[]
+            expect(Array.isArray(projectsProp)).toBe(true)
+            expect(projectsProp.length).toBe(2)
+
+            // Finding element on projects property
+            const foundOnProp = (projectsProp as { name: string; project_number: number }[]).find((p) => p.name === 'db-mcp')
+            expect(foundOnProp).toBeDefined()
+            expect(foundOnProp?.project_number).toBe(1)
+
+            // Finding element directly on wrapped array
+            const foundDirect = (wrapped as unknown as { name: string; project_number: number }[]).find((p) => p.name === 'memory-journal')
+            expect(foundDirect).toBeDefined()
+            expect(foundDirect?.project_number).toBe(2)
+        })
+
+        it('should auto-proxy dictionary project objects to allow array methods like .find and .map', () => {
+            const dictResult = {
+                success: true,
+                projects: {
+                    'db-mcp': { path: 'C:/Users/chris/Desktop/db-mcp', project_number: 1 },
+                    'memory-journal-mcp': { path: 'C:/Users/chris/Desktop/memory-journal-mcp', project_number: 2 },
+                },
+            }
+            const wrapped = wrapResult(dictResult) as Record<string, unknown>
+
+            // Accessing projects sub-object directly allows .find()
+            const projects = wrapped['projects'] as Record<string, unknown>
+            const foundProject = (projects as unknown as { find: (predicate: (p: { name: string; project_number: number }) => boolean) => { name: string; project_number: number } | undefined }).find(
+                (p) => p.name === 'db-mcp'
+            )
+            expect(foundProject).toBeDefined()
+            expect(foundProject?.project_number).toBe(1)
+            expect(foundProject?.name).toBe('db-mcp')
+
+            // Direct dictionary lookup still works seamlessly
+            const directLookup = projects['db-mcp'] as { project_number: number; path: string }
+            expect(directLookup).toBeDefined()
+            expect(directLookup.project_number).toBe(1)
+
+            // Iteration on wrapped dictionary works
+            const iterated: unknown[] = []
+            for (const item of projects as unknown as Iterable<unknown>) {
+                iterated.push(item)
+            }
+            expect(iterated.length).toBe(2)
+
+            // Array methods directly on success result wrapper delegating to projects dictionary
+            const foundFromRoot = (wrapped as unknown as { find: (predicate: (p: { name: string; project_number: number }) => boolean) => { name: string; project_number: number } | undefined }).find(
+                (p) => p.name === 'memory-journal-mcp'
+            )
+            expect(foundFromRoot).toBeDefined()
+            expect(foundFromRoot?.project_number).toBe(2)
+        })
+
+        it('should auto-heal unquoted prose script with entry_id and content (Issue 1 regression)', () => {
+            const proseCode = 'Replaced naive Math.sqrt vector normalization with numerically stable hypot fallback.'
+            const healedUpdate = extractAndRecoverEntryCode(`updateEntry({
+                title: "Vector Normalization Fix",
+                entry_id: 105,
+                content: \`${proseCode}\`,
+                type: "bugfix"
+            })`)
+            expect(healedUpdate).toBeDefined()
+            expect(healedUpdate).toContain('mj.updateEntry')
+            expect(healedUpdate).toContain('Vector Normalization Fix')
+            expect(healedUpdate).toContain('"entry_id":105')
+
+            const healedCreate = extractAndRecoverEntryCode(`createEntry({
+                title: "Vector Normalization Fix",
+                content: \`${proseCode}\`,
+                type: "bugfix"
+            })`)
+            expect(healedCreate).toBeDefined()
+            expect(healedCreate).toContain('mj.createEntry')
+            expect(healedCreate).toContain('Vector Normalization Fix')
+        })
     })
 })
 
