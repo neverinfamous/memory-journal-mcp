@@ -210,15 +210,14 @@ export function healAgentHallucinations(val: unknown): unknown {
         // Coerce project_number from string
         if ('project_number' in obj && obj['project_number'] !== undefined && obj['project_number'] !== null) {
             if (typeof obj['project_number'] === 'string') {
-                const cleaned = (obj['project_number'] as string).trim()
+                const cleaned = obj['project_number'].trim()
                 const num = Number(cleaned)
                 if (!Number.isNaN(num) && cleaned !== '') {
                     obj['project_number'] = num
                     modified = true
                 } else {
-                    if (!obj['workspace_id'] || obj['workspace_id'] === 'default') {
+                    if (obj['workspace_id'] === undefined || obj['workspace_id'] === null || obj['workspace_id'] === 'default') {
                         obj['workspace_id'] = cleaned
-                        modified = true
                     }
                     delete obj['project_number']
                     modified = true
@@ -232,20 +231,20 @@ export function healAgentHallucinations(val: unknown): unknown {
         const contentStr = typeof obj['content'] === 'string' ? obj['content'] : undefined
         const tagsArr = Array.isArray(obj['tags']) ? obj['tags'].filter((t): t is string => typeof t === 'string') : undefined
 
-        if (!wsId || wsId === '' || wsId === 'default' || projNum === undefined) {
+        if (wsId === undefined || wsId === '' || wsId === 'default' || projNum === undefined) {
             const resolved = resolveProjectContext({
                 workspace_id: wsId,
                 project_number: projNum,
                 content: contentStr,
                 tags: tagsArr
             })
-            if (resolved.workspaceId && resolved.workspaceId !== 'default' && (!wsId || wsId === 'default')) {
+            if (resolved.workspaceId !== undefined && resolved.workspaceId !== 'default' && (wsId === undefined || wsId === 'default')) {
                 obj['workspace_id'] = resolved.workspaceId
                 modified = true
-            } else if (process.env['MCP_WORKSPACE_ID'] && (!wsId || wsId === 'default')) {
+            } else if (process.env['MCP_WORKSPACE_ID'] !== undefined && (wsId === undefined || wsId === 'default')) {
                 obj['workspace_id'] = process.env['MCP_WORKSPACE_ID']
                 modified = true
-            } else if (!wsId) {
+            } else if (wsId === undefined) {
                 obj['workspace_id'] = 'default'
                 modified = true
             }
