@@ -442,6 +442,69 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
             expect(healedCreate).toContain('mj.createEntry')
             expect(healedCreate).toContain('Vector Normalization Fix')
         })
+
+        it('should auto-heal confidence, impact, trust, and validation in CreateEntrySchema (agent-issues.jsonl Record 3 regression)', async () => {
+            const { CreateEntrySchema } = await import('../src/handlers/tools/core/schemas.js')
+            const rawPayload = {
+                confidence: 0.95,
+                content: 'Comprehensive test suite for StatsSampleSchema and output validation.',
+                impact: 0.7,
+                tags: ['stats', 'testing', 'schema', 'sqlite'],
+                title: 'Test Suite Enhancement: StatsSampleSchema & Output Tests',
+                trust: 0.95,
+                type: 'code_change',
+                validation: 'passed',
+                project_number: 15
+            }
+
+            const parsed = CreateEntrySchema.parse(rawPayload)
+            expect(parsed.trust_score).toBe(0.95)
+            expect(parsed.impact_score).toBe(0.7)
+            expect(parsed.validation_status).toBe('passed')
+            expect(parsed.content).toContain('Test Suite Enhancement: StatsSampleSchema & Output Tests')
+            expect(parsed.content).toContain('Comprehensive test suite')
+            expect(parsed.entry_type).toBe('other')
+        })
+
+        it('should auto-resolve db-mcp project_number from sqlite keywords in tags or content (agent-issues.jsonl Records 1, 2, 4 regression)', async () => {
+            const { resolveProjectContext } = await import('../src/utils/workspace-resolver.js')
+            const mockConfig = {
+                projectRegistry: {
+                    'db-mcp': {
+                        path: 'C:/Users/chris/Desktop/db-mcp',
+                        project_number: 15
+                    },
+                    'memory-journal-mcp': {
+                        path: 'C:/Users/chris/Desktop/memory-journal-mcp',
+                        project_number: 5
+                    }
+                }
+            }
+
+            // Record 1: tags containing sqlite.json.diff and content mentioning SQLite
+            const res1 = resolveProjectContext({
+                tags: ['sqlite.json.diff', 'json', 'sqlite3.45'],
+                content: "Added error mapping for 'bad json path' in src/utils/errors/suggestions.ts to correctly map SQLite 3.45 JSON path execution errors"
+            }, mockConfig as unknown as import('../src/types/index.js').ToolHandlerConfig)
+            expect(res1.workspaceId).toBe('db-mcp')
+            expect(res1.projectNumber).toBe(15)
+
+            // Record 2: tags containing sqlite.stats and content mentioning sqlite.stats.statsHypothesis
+            const res2 = resolveProjectContext({
+                tags: ['sqlite.stats', 'testing'],
+                content: '# Test statsHypothesis and windowRowNumber\n\n- Tested sqlite.stats.statsHypothesis with code mode'
+            }, mockConfig as unknown as import('../src/types/index.js').ToolHandlerConfig)
+            expect(res2.workspaceId).toBe('db-mcp')
+            expect(res2.projectNumber).toBe(15)
+
+            // Record 4: tags containing sqlite.admin and content mentioning sqlite.admin.pragmaSettings
+            const res4 = resolveProjectContext({
+                tags: ['sqlite.admin', 'documentation', 'error-handling'],
+                content: 'Updated sqlite.admin.pragmaSettings tool in src/adapters/sqlite/tools/admin/pragma.ts'
+            }, mockConfig as unknown as import('../src/types/index.js').ToolHandlerConfig)
+            expect(res4.workspaceId).toBe('db-mcp')
+            expect(res4.projectNumber).toBe(15)
+        })
     })
 })
 

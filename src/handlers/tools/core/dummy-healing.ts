@@ -413,21 +413,101 @@ export function getDummyHealingTools(context?: ToolContext): ToolDefinition[] {
             }
         }
 
-        // Normalize project -> project_number
-        if (args['project'] !== undefined && args['project_number'] === undefined) {
-            if (typeof args['project'] === 'number') {
-                args['project_number'] = args['project']
+        // Normalize project -> project_number / workspace_id
+        if (args['project'] !== undefined) {
+            if (args['project_number'] === undefined) {
+                if (typeof args['project'] === 'number') {
+                    args['project_number'] = args['project']
+                } else if (typeof args['project'] === 'string') {
+                    const parsedNum = Number(args['project'])
+                    if (!Number.isNaN(parsedNum) && args['project'].trim() !== '') {
+                        args['project_number'] = parsedNum
+                    } else if (args['workspace_id'] === undefined || args['workspace_id'] === 'default') {
+                        args['workspace_id'] = args['project']
+                    }
+                }
             }
+            delete args['project']
+        }
+        if (args['project_id'] !== undefined) {
+            if (args['project_number'] === undefined && typeof args['project_id'] === 'number') {
+                args['project_number'] = args['project_id']
+            }
+            delete args['project_id']
+        }
+        if (args['projectId'] !== undefined) {
+            if (args['project_number'] === undefined && typeof args['projectId'] === 'number') {
+                args['project_number'] = args['projectId']
+            }
+            delete args['projectId']
         }
 
-        // Normalize confidence -> trust
-        if (args['confidence'] !== undefined && args['trust'] === undefined) {
-            args['trust'] = args['confidence']
+        // Normalize confidence / trust -> trust_score
+        if (args['confidence'] !== undefined) {
+            if (args['trust_score'] === undefined) {
+                args['trust_score'] = typeof args['confidence'] === 'string' ? Number(args['confidence']) : args['confidence']
+            }
+            delete args['confidence']
+        }
+        if (args['trust'] !== undefined) {
+            if (args['trust_score'] === undefined) {
+                args['trust_score'] = typeof args['trust'] === 'string' ? Number(args['trust']) : args['trust']
+            }
+            delete args['trust']
+        }
+        if (args['trustScore'] !== undefined) {
+            if (args['trust_score'] === undefined) {
+                args['trust_score'] = typeof args['trustScore'] === 'string' ? Number(args['trustScore']) : args['trustScore']
+            }
+            delete args['trustScore']
         }
 
-        // Normalize validation -> validation_status
-        if (args['validation'] !== undefined && args['validation_status'] === undefined) {
-            args['validation_status'] = args['validation']
+        // Normalize impact / impactScore -> impact_score
+        if (args['impact'] !== undefined) {
+            if (args['impact_score'] === undefined) {
+                args['impact_score'] = typeof args['impact'] === 'string' ? Number(args['impact']) : args['impact']
+            }
+            delete args['impact']
+        }
+        if (args['impactScore'] !== undefined) {
+            if (args['impact_score'] === undefined) {
+                args['impact_score'] = typeof args['impactScore'] === 'string' ? Number(args['impactScore']) : args['impactScore']
+            }
+            delete args['impactScore']
+        }
+
+        // Normalize validation / validationStatus -> validation_status
+        if (args['validation'] !== undefined) {
+            if (args['validation_status'] === undefined) {
+                args['validation_status'] = args['validation']
+            }
+            delete args['validation']
+        }
+        if (args['validationStatus'] !== undefined) {
+            if (args['validation_status'] === undefined) {
+                args['validation_status'] = args['validationStatus']
+            }
+            delete args['validationStatus']
+        }
+
+        // Normalize workspace aliases
+        if (args['workspace'] !== undefined) {
+            if (args['workspace_id'] === undefined) {
+                args['workspace_id'] = args['workspace']
+            }
+            delete args['workspace']
+        }
+        if (args['repo'] !== undefined) {
+            if (args['workspace_id'] === undefined) {
+                args['workspace_id'] = args['repo']
+            }
+            delete args['repo']
+        }
+        if (args['repository'] !== undefined) {
+            if (args['workspace_id'] === undefined) {
+                args['workspace_id'] = args['repository']
+            }
+            delete args['repository']
         }
 
         if (context) {

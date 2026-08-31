@@ -103,14 +103,25 @@ export function healAgentHallucinations(val: unknown): unknown {
             project_id: 'project_number',
             projectId: 'project_number',
             projectNumber: 'project_number',
+            project: 'project_number',
             workspaceId: 'workspace_id',
+            workspace: 'workspace_id',
+            repo: 'workspace_id',
+            repository: 'workspace_id',
+            repo_name: 'workspace_id',
             isPersonal: 'is_personal',
+            personal: 'is_personal',
             entryType: 'entry_type',
             significanceType: 'significance_type',
+            significance: 'significance_type',
             autoContext: 'auto_context',
             impactScore: 'impact_score',
+            impact: 'impact_score',
             trustScore: 'trust_score',
+            trust: 'trust_score',
+            confidence: 'trust_score',
             validationStatus: 'validation_status',
+            validation: 'validation_status',
             workflowRunId: 'workflow_run_id',
             workflowName: 'workflow_name',
             workflowStatus: 'workflow_status',
@@ -121,12 +132,22 @@ export function healAgentHallucinations(val: unknown): unknown {
             issueUrl: 'issue_url',
             projectOwner: 'project_owner',
             shareWithTeam: 'share_with_team',
+            share_team: 'share_with_team',
+            team: 'share_with_team',
             anchorPath: 'anchor_path',
             anchorType: 'anchor_type',
+            session: 'session_id',
+            sessionId: 'session_id',
+            conversation_id: 'session_id',
+            conversationId: 'session_id',
+            thread_id: 'session_id',
+            threadId: 'session_id',
         }
         for (const [badKey, goodKey] of Object.entries(keyMap)) {
-            if (badKey in obj && !(goodKey in obj)) {
-                obj[goodKey] = obj[badKey]
+            if (badKey in obj) {
+                if (!(goodKey in obj) && obj[badKey] !== undefined) {
+                    obj[goodKey] = obj[badKey]
+                }
                 Reflect.deleteProperty(obj, badKey)
                 modified = true
             }
@@ -147,27 +168,89 @@ export function healAgentHallucinations(val: unknown): unknown {
             modified = true
         }
 
-        // Auto-resolve workspace_id from project_number, tags, content, or registry if missing, null, empty, or 'default'
+        // Coerce trust_score from string/number
+        if ('trust_score' in obj && obj['trust_score'] !== undefined && obj['trust_score'] !== null) {
+            if (typeof obj['trust_score'] === 'string') {
+                const n = Number(obj['trust_score'])
+                if (!Number.isNaN(n)) {
+                    obj['trust_score'] = n
+                    modified = true
+                }
+            }
+        }
+
+        // Coerce impact_score from string/number
+        if ('impact_score' in obj && obj['impact_score'] !== undefined && obj['impact_score'] !== null) {
+            if (typeof obj['impact_score'] === 'string') {
+                const n = Number(obj['impact_score'])
+                if (!Number.isNaN(n)) {
+                    obj['impact_score'] = n
+                    modified = true
+                }
+            }
+        }
+
+        // Coerce validation_status from boolean / aliases
+        if ('validation_status' in obj && obj['validation_status'] !== undefined && obj['validation_status'] !== null) {
+            const vs = obj['validation_status']
+            if (vs === true || vs === 'pass' || vs === 'success' || vs === 'ok' || vs === 'passed') {
+                obj['validation_status'] = 'passed'
+                modified = true
+            } else if (vs === false || vs === 'fail' || vs === 'failed' || vs === 'error') {
+                obj['validation_status'] = 'failed'
+                modified = true
+            } else if (vs === 'none') {
+                obj['validation_status'] = 'none'
+            } else if (typeof vs === 'string' && !['passed', 'none', 'failed'].includes(vs)) {
+                obj['validation_status'] = 'none'
+                modified = true
+            }
+        }
+
+        // Coerce project_number from string
+        if ('project_number' in obj && obj['project_number'] !== undefined && obj['project_number'] !== null) {
+            if (typeof obj['project_number'] === 'string') {
+                const cleaned = (obj['project_number'] as string).trim()
+                const num = Number(cleaned)
+                if (!Number.isNaN(num) && cleaned !== '') {
+                    obj['project_number'] = num
+                    modified = true
+                } else {
+                    if (!obj['workspace_id'] || obj['workspace_id'] === 'default') {
+                        obj['workspace_id'] = cleaned
+                        modified = true
+                    }
+                    delete obj['project_number']
+                    modified = true
+                }
+            }
+        }
+
+        // Auto-resolve workspace_id and project_number from tags, content, or registry if missing, null, empty, or 'default'
         const wsId = typeof obj['workspace_id'] === 'string' ? obj['workspace_id'] : undefined
         const projNum = typeof obj['project_number'] === 'number' && !Number.isNaN(obj['project_number']) ? obj['project_number'] : undefined
         const contentStr = typeof obj['content'] === 'string' ? obj['content'] : undefined
         const tagsArr = Array.isArray(obj['tags']) ? obj['tags'].filter((t): t is string => typeof t === 'string') : undefined
 
-        if (!wsId || wsId === '' || wsId === 'default') {
+        if (!wsId || wsId === '' || wsId === 'default' || projNum === undefined) {
             const resolved = resolveProjectContext({
                 workspace_id: wsId,
                 project_number: projNum,
                 content: contentStr,
                 tags: tagsArr
             })
-            if (resolved.workspaceId && resolved.workspaceId !== 'default') {
+            if (resolved.workspaceId && resolved.workspaceId !== 'default' && (!wsId || wsId === 'default')) {
                 obj['workspace_id'] = resolved.workspaceId
                 modified = true
-            } else if (process.env['MCP_WORKSPACE_ID']) {
+            } else if (process.env['MCP_WORKSPACE_ID'] && (!wsId || wsId === 'default')) {
                 obj['workspace_id'] = process.env['MCP_WORKSPACE_ID']
                 modified = true
             } else if (!wsId) {
                 obj['workspace_id'] = 'default'
+                modified = true
+            }
+            if (obj['project_number'] === undefined && resolved.projectNumber !== undefined) {
+                obj['project_number'] = resolved.projectNumber
                 modified = true
             }
         }

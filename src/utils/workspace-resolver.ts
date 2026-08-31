@@ -37,6 +37,44 @@ export function loadProjectRegistryFromConfig(): Record<string, RegistryEntry> |
     }
 }
 
+export const PROJECT_KEYWORD_ALIASES: Record<string, string[]> = {
+    'db-mcp': ['sqlite', 'sqlite3', 'sqlite-mcp', 'sqlite_mcp', 'better-sqlite3', 'better_sqlite3', 'db-mcp', 'db_mcp', 'lib-db', 'db-mcp-wasm'],
+    'mysql-mcp': ['mysql', 'mysql-mcp', 'mysql_mcp', 'mariadb', 'mysqlsh', 'proxysql', 'mysql-router', 'mysqlrouter', 'innodb'],
+    'postgres-mcp': ['postgres', 'postgresql', 'postgres-mcp', 'postgres_mcp', 'pg', 'psql', 'pgvector'],
+    'memory-journal-mcp': ['memory-journal', 'memory-journal-mcp', 'memory_journal', 'memory_journal_mcp', 'memoryjournal', 'journal', 'mj'],
+    'kv-manager': ['kv', 'kv-manager', 'kv_manager', 'cloudflare-kv', 'workers-kv'],
+    'R2-Manager-Worker': ['r2', 'r2-manager', 'r2_manager', 'r2-manager-worker', 'r2_manager_worker', 'cloudflare-r2'],
+    'd1-manager': ['d1', 'd1-manager', 'd1_manager', 'cloudflare-d1'],
+    'do-manager': ['do', 'do-manager', 'do_manager', 'durable-object', 'durable-objects', 'durable_object', 'durable_objects'],
+    'do-manager-admin-hooks': ['do-manager-admin-hooks', 'do_manager_admin_hooks', 'admin-hooks', 'admin_hooks'],
+    'adamic': ['adamic'],
+    'adamic-blog': ['adamic-blog', 'adamic_blog', 'blog'],
+    'wiki-search-worker': ['wiki', 'wiki-search', 'wiki_search', 'wiki-search-worker', 'wiki_search_worker'],
+    'do-test-worker': ['do-test-worker', 'do_test_worker']
+}
+
+function findCanonicalRegistryKey(aliasOrKey: string, registry?: Record<string, RegistryEntry>): string | undefined {
+    const lower = aliasOrKey.toLowerCase().trim()
+    if (!registry) return undefined
+    
+    // Direct match (case-insensitive)
+    for (const key of Object.keys(registry)) {
+        if (key.toLowerCase() === lower) return key
+    }
+    
+    // Alias lookup
+    for (const [canonicalKey, aliases] of Object.entries(PROJECT_KEYWORD_ALIASES)) {
+        if (aliases.map((a) => a.toLowerCase()).includes(lower)) {
+            for (const key of Object.keys(registry)) {
+                if (key.toLowerCase() === canonicalKey.toLowerCase()) {
+                    return key
+                }
+            }
+        }
+    }
+    return undefined
+}
+
 /**
  * Resolves full workspace and project context from available inputs.
  * Priority:
@@ -59,8 +97,12 @@ export function resolveProjectContext(
         input.workspace_id !== null &&
         input.workspace_id !== 'default'
     ) {
-        const wsId = input.workspace_id
-        let projNum = input.project_number ?? (registry?.[wsId]?.project_number)
+        let wsId = input.workspace_id
+        const canonicalKey = findCanonicalRegistryKey(wsId, registry)
+        if (canonicalKey) {
+            wsId = canonicalKey
+        }
+        let projNum = input.project_number ?? (canonicalKey ? registry?.[canonicalKey]?.project_number : registry?.[wsId]?.project_number)
         projNum ??= resolveProjectNumberFromPath(process.cwd())
         return {
             workspaceId: wsId,
@@ -90,39 +132,35 @@ export function resolveProjectContext(
 
     // 3. Content / Tags keyword matching against projectRegistry
     if (registry) {
-        const TAG_ALIASES: Record<string, string> = {
-            mysql: 'mysql-mcp',
-            postgres: 'postgres-mcp',
-            postgresql: 'postgres-mcp',
-            kv: 'kv-manager',
-            r2: 'R2-Manager-Worker',
-            d1: 'd1-manager',
-            do: 'do-manager',
-            adamic: 'adamic'
-        }
-
         const tagSet = new Set((input.tags ?? []).map((t) => t.toLowerCase().trim()))
-        
-        // Expand aliases in tagSet
-        for (const tag of Array.from(tagSet)) {
-            const aliasKey = TAG_ALIASES[tag]
-            if (aliasKey) {
-                tagSet.add(aliasKey.toLowerCase())
-            }
-        }
-
         const contentLower = (input.content ?? '').toLowerCase()
 
         for (const [key, entry] of Object.entries(registry)) {
             const keyLower = key.toLowerCase()
-            let matched = tagSet.has(keyLower)
+            if (['default', 'test'].includes(keyLower)) continue
 
+            // Collect all aliases for this registry key
+            const directAliases = PROJECT_KEYWORD_ALIASES[key] ?? []
+            let matchedAliases = [keyLower, ...directAliases.map((a) => a.toLowerCase())]
+            for (const [canonicalKey, aliases] of Object.entries(PROJECT_KEYWORD_ALIASES)) {
+                if (canonicalKey.toLowerCase() === keyLower) {
+                    matchedAliases = Array.from(new Set([...matchedAliases, ...aliases.map((a) => a.toLowerCase())]))
+                }
+            }
+
+            // Check if any tag matches
+            let matched = matchedAliases.some((a) => tagSet.has(a))
+
+            // Check if content matches any alias or key
             if (!matched && contentLower.length > 0) {
-                if (keyLower.length > 3 && !['default', 'test'].includes(keyLower)) {
-                    const escapedKey = keyLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-                    const regex = new RegExp(`\\b${escapedKey}\\b`, 'i')
-                    if (regex.test(contentLower)) {
-                        matched = true
+                for (const alias of matchedAliases) {
+                    if (alias.length >= 2) {
+                        const escapedAlias = alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+                        const regex = new RegExp(`(?:^|[^a-zA-Z0-9_-])${escapedAlias}(?:$|[^a-zA-Z0-9_-])`, 'i')
+                        if (regex.test(contentLower)) {
+                            matched = true
+                            break
+                        }
                     }
                 }
             }

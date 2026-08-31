@@ -95,6 +95,35 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
         if (obj['sortBy'] !== undefined && obj['sort_by'] === undefined) { obj['sort_by'] = obj['sortBy']; delete obj['sortBy']; }
         if (obj['orderBy'] !== undefined && obj['sort_by'] === undefined) { obj['sort_by'] = obj['orderBy']; delete obj['orderBy']; }
         if (obj['order_by'] !== undefined && obj['sort_by'] === undefined) { obj['sort_by'] = obj['order_by']; delete obj['order_by']; }
+
+        if (obj['confidence'] !== undefined) {
+            if (obj['trust_score'] === undefined) obj['trust_score'] = typeof obj['confidence'] === 'string' ? Number(obj['confidence']) : obj['confidence'];
+            delete obj['confidence'];
+        }
+        if (obj['trust'] !== undefined) {
+            if (obj['trust_score'] === undefined) obj['trust_score'] = typeof obj['trust'] === 'string' ? Number(obj['trust']) : obj['trust'];
+            delete obj['trust'];
+        }
+        if (obj['trustScore'] !== undefined) {
+            if (obj['trust_score'] === undefined) obj['trust_score'] = typeof obj['trustScore'] === 'string' ? Number(obj['trustScore']) : obj['trustScore'];
+            delete obj['trustScore'];
+        }
+        if (obj['impact'] !== undefined) {
+            if (obj['impact_score'] === undefined) obj['impact_score'] = typeof obj['impact'] === 'string' ? Number(obj['impact']) : obj['impact'];
+            delete obj['impact'];
+        }
+        if (obj['impactScore'] !== undefined) {
+            if (obj['impact_score'] === undefined) obj['impact_score'] = typeof obj['impactScore'] === 'string' ? Number(obj['impactScore']) : obj['impactScore'];
+            delete obj['impactScore'];
+        }
+        if (obj['validation'] !== undefined) {
+            if (obj['validation_status'] === undefined) obj['validation_status'] = obj['validation'];
+            delete obj['validation'];
+        }
+        if (obj['validationStatus'] !== undefined) {
+            if (obj['validation_status'] === undefined) obj['validation_status'] = obj['validationStatus'];
+            delete obj['validationStatus'];
+        }
         
         if (obj['project_name'] !== undefined) {
             if (obj['project_number'] === undefined) {
