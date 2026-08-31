@@ -40,16 +40,16 @@ export function loadProjectRegistryFromConfig(): Record<string, RegistryEntry> |
 export const PROJECT_KEYWORD_ALIASES: Record<string, string[]> = {
     'db-mcp': ['sqlite', 'sqlite3', 'sqlite-mcp', 'sqlite_mcp', 'better-sqlite3', 'better_sqlite3', 'db-mcp', 'db_mcp', 'lib-db', 'db-mcp-wasm'],
     'mysql-mcp': ['mysql', 'mysql-mcp', 'mysql_mcp', 'mariadb', 'mysqlsh', 'proxysql', 'mysql-router', 'mysqlrouter', 'innodb'],
-    'postgres-mcp': ['postgres', 'postgresql', 'postgres-mcp', 'postgres_mcp', 'pg', 'psql', 'pgvector'],
-    'memory-journal-mcp': ['memory-journal', 'memory-journal-mcp', 'memory_journal', 'memory_journal_mcp', 'memoryjournal', 'journal', 'mj'],
-    'kv-manager': ['kv', 'kv-manager', 'kv_manager', 'cloudflare-kv', 'workers-kv'],
-    'R2-Manager-Worker': ['r2', 'r2-manager', 'r2_manager', 'r2-manager-worker', 'r2_manager_worker', 'cloudflare-r2'],
-    'd1-manager': ['d1', 'd1-manager', 'd1_manager', 'cloudflare-d1'],
-    'do-manager': ['do', 'do-manager', 'do_manager', 'durable-object', 'durable-objects', 'durable_object', 'durable_objects'],
+    'postgres-mcp': ['postgres', 'postgresql', 'postgres-mcp', 'postgres_mcp', 'pgvector'],
+    'memory-journal-mcp': ['memory-journal', 'memory-journal-mcp', 'memory_journal', 'memory_journal_mcp', 'memoryjournal'],
+    'kv-manager': ['kv-manager', 'kv_manager', 'cloudflare-kv', 'workers-kv'],
+    'R2-Manager-Worker': ['r2-manager', 'r2_manager', 'r2-manager-worker', 'r2_manager_worker', 'cloudflare-r2'],
+    'd1-manager': ['d1-manager', 'd1_manager', 'cloudflare-d1'],
+    'do-manager': ['do-manager', 'do_manager', 'durable-objects', 'durable_objects'],
     'do-manager-admin-hooks': ['do-manager-admin-hooks', 'do_manager_admin_hooks', 'admin-hooks', 'admin_hooks'],
     'adamic': ['adamic'],
-    'adamic-blog': ['adamic-blog', 'adamic_blog', 'blog'],
-    'wiki-search-worker': ['wiki', 'wiki-search', 'wiki_search', 'wiki-search-worker', 'wiki_search_worker'],
+    'adamic-blog': ['adamic-blog', 'adamic_blog'],
+    'wiki-search-worker': ['wiki-search', 'wiki_search', 'wiki-search-worker', 'wiki_search_worker'],
     'do-test-worker': ['do-test-worker', 'do_test_worker']
 }
 
