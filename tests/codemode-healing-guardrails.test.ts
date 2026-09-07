@@ -505,6 +505,56 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
             expect(res4.workspaceId).toBe('db-mcp')
             expect(res4.projectNumber).toBe(15)
         })
+
+        it('should support mj.search.queryEntries and aliases via METHOD_ALIASES (agent-issues.jsonl Record 1 regression)', async () => {
+            const { METHOD_ALIASES } = await import('../src/codemode/api-constants.js')
+            expect(METHOD_ALIASES['search']?.['queryEntries']).toBe('searchEntries')
+            expect(METHOD_ALIASES['search']?.['query_entries']).toBe('searchEntries')
+            expect(METHOD_ALIASES['search']?.['find_entries']).toBe('searchEntries')
+            expect(METHOD_ALIASES['search']?.['list_entries']).toBe('searchEntries')
+            expect(METHOD_ALIASES['core']?.['queryEntries']).toBe('searchEntries')
+            expect(METHOD_ALIASES['core']?.['query_entries']).toBe('searchEntries')
+        })
+
+        it('should expose total and totalCount on search and entries results via wrapResult (agent-issues.jsonl Record 1 regression)', () => {
+            const mockSearchResult = wrapResult({ success: true, count: 42, entries: [{ id: 1 }, { id: 2 }] }) as Record<string, unknown>
+            expect(mockSearchResult['total']).toBe(42)
+            expect(mockSearchResult['totalCount']).toBe(42)
+            expect(mockSearchResult['total_entries']).toBe(42)
+            expect(mockSearchResult['totalEntries']).toBe(42)
+
+            const mockListResult = wrapResult({ success: true, entries: [{ id: 1 }, { id: 2 }, { id: 3 }] }) as Record<string, unknown>
+            expect(mockListResult['total']).toBe(3)
+            expect(mockListResult['totalCount']).toBe(3)
+            expect(mockListResult['total_entries']).toBe(3)
+            expect(mockListResult['totalEntries']).toBe(3)
+        })
+
+        it('should accept offset in GetRecentEntriesSchema and GetRecentEntriesSchemaMcp (agent-issues.jsonl Record 2 regression)', async () => {
+            const { GetRecentEntriesSchema, GetRecentEntriesSchemaMcp } = await import('../src/handlers/tools/core/schemas.js')
+            const parsedCore = GetRecentEntriesSchema.parse({ limit: 50, offset: 100, workspace_id: '*' })
+            expect(parsedCore.offset).toBe(100)
+            expect(parsedCore.limit).toBe(50)
+
+            const parsedMcp = GetRecentEntriesSchemaMcp.parse({ limit: '25', offset: '50' })
+            expect(parsedMcp.offset).toBe('50')
+            expect(parsedMcp.limit).toBe('25')
+
+            const parsedMcpNum = GetRecentEntriesSchemaMcp.parse({ limit: 25, offset: 50 })
+            expect(parsedMcpNum.offset).toBe(50)
+            expect(parsedMcpNum.limit).toBe(25)
+        })
+
+        it('should coerce numeric string offset and limit in param-normalizer (agent-issues.jsonl Record 2 regression)', async () => {
+            const { applyArgInterceptions } = await import('../src/codemode/param-normalizer.js')
+            const result = applyArgInterceptions('getRecentEntries', [{ offset: '100', limit: '25' }])
+            expect('args' in result).toBe(true)
+            if ('args' in result) {
+                const normalized = result.args[0] as Record<string, unknown>
+                expect(normalized['offset']).toBe(100)
+                expect(normalized['limit']).toBe(25)
+            }
+        })
     })
 })
 

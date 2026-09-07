@@ -74,7 +74,7 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
         }
 
         // Global coercion of numeric strings for integer ID parameters
-        for (const key of ['entry_id', 'entryId', 'id', 'from_entry_id', 'fromEntryId', 'to_entry_id', 'toEntryId', 'project_number', 'projectNumber', 'issue_number', 'issueNumber', 'pr_number', 'prNumber', 'milestone_number', 'milestoneNumber']) {
+        for (const key of ['entry_id', 'entryId', 'id', 'from_entry_id', 'fromEntryId', 'to_entry_id', 'toEntryId', 'project_number', 'projectNumber', 'issue_number', 'issueNumber', 'pr_number', 'prNumber', 'milestone_number', 'milestoneNumber', 'offset', 'limit']) {
             const val = obj[key];
             if (typeof val === 'string') {
                 const strVal = val.trim();

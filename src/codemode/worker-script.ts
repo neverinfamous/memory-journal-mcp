@@ -483,10 +483,20 @@ async function executeCode(
                         Object.assign(callableSearch, searchGroup, {
                             search: searchFunc,
                             query: searchFunc,
+                            queryEntries: searchFunc,
+                            query_entries: searchFunc,
                             searchEntries: searchFunc,
                             search_entries: searchFunc,
+                            find: searchFunc,
+                            findEntries: searchFunc,
+                            find_entries: searchFunc,
                         })
-                        return callableSearch
+                        return new Proxy(callableSearch, {
+                            get(targetFn, p, receiver) {
+                                if (p in targetFn) return (targetFn as unknown as Record<string | symbol, unknown>)[p]
+                                return Reflect.get(searchGroup, p, receiver) as unknown
+                            },
+                        })
                     }
                     return searchGroup
                 }
@@ -757,6 +767,8 @@ async function executeCode(
             connectToDatabase: () => shimMj,
             search_entries: (arg: unknown): unknown => (shimMj['search'] as Record<string, ((...args: unknown[]) => unknown)>)?.['searchEntries']?.(arg),
             searchEntries: (arg: unknown): unknown => (shimMj['search'] as Record<string, ((...args: unknown[]) => unknown)>)?.['searchEntries']?.(arg),
+            query_entries: (arg: unknown): unknown => (shimMj['search'] as Record<string, ((...args: unknown[]) => unknown)>)?.['searchEntries']?.(arg),
+            queryEntries: (arg: unknown): unknown => (shimMj['search'] as Record<string, ((...args: unknown[]) => unknown)>)?.['searchEntries']?.(arg),
             get_recent_entries: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['getRecentEntries']?.(arg),
             getRecentEntries: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['getRecentEntries']?.(arg),
             get_entry_by_id: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['getEntryById']?.(arg),

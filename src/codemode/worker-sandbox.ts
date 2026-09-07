@@ -116,7 +116,7 @@ export class WorkerSandbox {
                 process.exit(actualExitCode)
             } else if (exitCode !== 0) {
                 this.handleWorkerDeath(
-                    `🛠️ AUTONOMOUS HEALING: Worker execution timed out or ran out of memory. Avoid executing hundreds of sequential RPC calls (e.g. inside a loop calling getEntryById). Reduce batch/sample size or filter results server-side. (Worker exit code ${String(exitCode)})`
+                    `🛠️ AUTONOMOUS HEALING: Worker execution timed out or ran out of memory. Avoid executing hundreds of sequential RPC calls (e.g. inside a loop calling getEntryById) or unbounded loops without keyset/offset pagination. For project counts and aggregates, use 'mj.analytics.getStatistics({ projectBreakdown: true })' or 'mj.admin.listProjects()' instead of iterating entries. Reduce batch/sample size or filter results server-side. (Worker exit code ${String(exitCode)})`
                 )
             }
         })

@@ -200,6 +200,14 @@ describe('DatabaseAdapter', () => {
             expect(personal.every((e) => e.isPersonal)).toBe(true)
             expect(nonPersonal.every((e) => !e.isPersonal)).toBe(true)
         })
+
+        it('should support offset pagination', () => {
+            const { entries: all } = db.getRecentEntries(5)
+            if (all.length >= 2) {
+                const { entries: offsetEntries } = db.getRecentEntries(2, undefined, 'timestamp', undefined, false, undefined, undefined, 1)
+                expect(offsetEntries[0]?.id).toBe(all[1]?.id)
+            }
+        })
     })
 
     describe('getEntriesPage / getActiveEntryCount', () => {

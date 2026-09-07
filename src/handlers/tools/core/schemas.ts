@@ -202,6 +202,7 @@ export const GetRecentEntriesSchema = z.object({
         .default('timestamp')
         .describe('Sort results by timestamp (default) or importance score'),
     cursor: z.string().optional(),
+    offset: z.number().int().min(0).optional().default(0),
     include_archived: z.boolean().optional().default(false),
 })
 
@@ -219,6 +220,7 @@ export const GetRecentEntriesSchemaMcp = z.object({
         .default('timestamp')
         .describe('Sort results by timestamp (default) or importance score'),
     cursor: z.string().optional(),
+    offset: relaxedNumber().optional().default(0).describe('Zero-based offset for pagination (used when cursor is not provided)'),
     include_archived: z.boolean().optional().default(false),
 })
 

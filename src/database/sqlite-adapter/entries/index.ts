@@ -143,11 +143,11 @@ export class EntriesManager {
         return deleteEntries(this.sharedContext, ids, permanent)
     }
 
-    getRecentEntries(limit = 10, isPersonal?: boolean, sortBy?: SortBy, cursor?: string, includeArchived?: boolean, workspaceId?: string, projectNumber?: number): { entries: JournalEntry[]; nextCursor?: string } {
+    getRecentEntries(limit = 10, isPersonal?: boolean, sortBy?: SortBy, cursor?: string, includeArchived?: boolean, workspaceId?: string, projectNumber?: number, offset?: number): { entries: JournalEntry[]; nextCursor?: string } {
         if (isPersonal !== undefined) {
-            return searchEntries(this.sharedContext, '', { limit, isPersonal, sortBy, cursor, includeArchived, workspaceId, projectNumber })
+            return searchEntries(this.sharedContext, '', { limit, isPersonal, sortBy, cursor, includeArchived, workspaceId, projectNumber, offset })
         }
-        return getRecentEntriesQuery(this.sharedContext, limit, sortBy, cursor, includeArchived, workspaceId, projectNumber)
+        return getRecentEntriesQuery(this.sharedContext, limit, sortBy, cursor, includeArchived, workspaceId, projectNumber, offset)
     }
 
     getEntriesPage(offset: number, limit: number, order: 'asc' | 'desc' = 'desc'): { entries: JournalEntry[]; nextCursor?: string } {
@@ -171,6 +171,7 @@ export class EntriesManager {
             fuzzy_match?: boolean
             auto_correct?: boolean
             workspaceId?: string
+            offset?: number
         }
     ): { entries: JournalEntry[]; nextCursor?: string; degraded?: boolean; highlights?: { id: number; snippet: string }[]; suggestions?: string[]; correctedQuery?: string } {
         return searchEntries(this.sharedContext, queryStr, options)

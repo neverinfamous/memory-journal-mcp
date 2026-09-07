@@ -152,6 +152,24 @@ export function wrapResult(result: unknown): unknown {
                         return receiver as unknown
                     }
 
+                    // Hallucination Intercept: result.total / result.totalCount / result.total_entries / result.totalEntries
+                    if (prop === 'total' || prop === 'totalCount' || prop === 'total_entries' || prop === 'totalEntries') {
+                        if ('count' in targetRecord && typeof targetRecord['count'] === 'number') {
+                            return targetRecord['count']
+                        }
+                        if ('totalEntries' in targetRecord && typeof targetRecord['totalEntries'] === 'number') {
+                            return targetRecord['totalEntries']
+                        }
+                        if ('total' in targetRecord && typeof targetRecord['total'] === 'number') {
+                            return targetRecord['total']
+                        }
+                        const arrayKeys = Object.keys(targetRecord).filter(k => Array.isArray(targetRecord[k]))
+                        const targetKey = arrayKeys.find(k => ['entries', 'results', 'projects', 'items', 'rows', 'records'].includes(k))
+                        if (targetKey !== undefined) {
+                            return (targetRecord[targetKey] as unknown[]).length
+                        }
+                    }
+
                     // Hallucination Intercept: Single entry creation returns { success: true, entry: { id: 42 } }.
                     // Allow accessing result.id or result.entryId directly on the success result wrapper.
                     const entryObj = targetRecord['entry']

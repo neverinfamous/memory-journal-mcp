@@ -272,7 +272,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                 try {
                     const input = GetRecentEntriesSchema.parse(params)
                     const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
-                    const result = db.getRecentEntries(input.limit, input.is_personal, input.sort_by, input.cursor, input.include_archived, wsId, input.project_number)
+                    const result = db.getRecentEntries(input.limit, input.is_personal, input.sort_by, input.cursor, input.include_archived, wsId, input.project_number, input.offset)
                     return {
                         success: true,
                         entries: result.entries,

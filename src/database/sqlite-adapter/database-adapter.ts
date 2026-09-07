@@ -110,9 +110,10 @@ export class DatabaseAdapter implements IDatabaseAdapter {
         cursor?: string,
         includeArchived?: boolean,
         workspaceId?: string,
-        projectNumber?: number
+        projectNumber?: number,
+        offset?: number
     ): { entries: JournalEntry[]; nextCursor?: string } {
-        return this.entriesMgr.getRecentEntries(limit ?? 10, isPersonal, sortBy, cursor, includeArchived, workspaceId, projectNumber)
+        return this.entriesMgr.getRecentEntries(limit ?? 10, isPersonal, sortBy, cursor, includeArchived, workspaceId, projectNumber, offset)
     }
 
     getEntriesPage(offset: number, limit: number): { entries: JournalEntry[]; nextCursor?: string } {

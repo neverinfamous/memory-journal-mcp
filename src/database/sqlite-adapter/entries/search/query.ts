@@ -23,15 +23,16 @@ export function getRecentEntries(
     cursor?: string,
     includeArchived = false,
     workspaceId = 'default',
-    projectNumber?: number
+    projectNumber?: number,
+    offset = 0
 ): { entries: JournalEntry[]; nextCursor?: string } {
     const { db, tagsMgr } = context
 
     if (sortBy === 'importance') {
-        let offset = 0
+        let actualOffset = offset
         if (cursor) {
             const decoded = decodeCursor(cursor)
-            if (decoded && 'offset' in decoded) offset = decoded.offset
+            if (decoded && 'offset' in decoded) actualOffset = decoded.offset
         }
         const importanceExpr = buildImportanceSqlExpression()
         const cte = buildImportanceCte()
@@ -39,7 +40,7 @@ export function getRecentEntries(
         const params: unknown[] = []
         if (workspaceId !== '*') params.push(workspaceId)
         if (projectNumber !== undefined) params.push(projectNumber)
-        params.push(limit, offset)
+        params.push(limit, actualOffset)
 
         const stmt = db.prepare(`
             WITH ${cte}
@@ -55,7 +56,7 @@ export function getRecentEntries(
         
         let nextCursor: string | undefined
         if (entries.length === limit && limit > 0) {
-            nextCursor = encodeCursor({ offset: offset + limit })
+            nextCursor = encodeCursor({ offset: actualOffset + limit })
         }
         return { entries, nextCursor }
     }
@@ -81,20 +82,32 @@ export function getRecentEntries(
         }
     }
 
+    let offsetClause = ''
+    if (!cursor && offset > 0) {
+        offsetClause = ' OFFSET ?'
+    }
+
     const stmt = db.prepare(`
         SELECT ${ENTRY_COLUMNS} FROM memory_journal 
         WHERE deleted_at IS NULL ${!includeArchived ? 'AND is_archived = 0' : ''} ${workspaceId !== '*' ? 'AND workspace_id = ?' : ''} ${projectCondition} ${cursorCondition}
-        ORDER BY timestamp DESC, id DESC LIMIT ?
+        ORDER BY timestamp DESC, id DESC LIMIT ?${offsetClause}
     `)
     params.push(limit)
+    if (offsetClause !== '') {
+        params.push(offset)
+    }
     const rows = stmt.all(params)
     const entries = rowsToEntries(tagsMgr, rows)
 
     let nextCursor: string | undefined
     if (entries.length === limit && limit > 0) {
-        const last = entries[entries.length - 1]
-        if (last) {
-            nextCursor = encodeCursor({ t: last.timestamp, id: last.id })
+        if (!cursor && offset > 0) {
+            nextCursor = encodeCursor({ offset: offset + limit })
+        } else {
+            const last = entries[entries.length - 1]
+            if (last) {
+                nextCursor = encodeCursor({ t: last.timestamp, id: last.id })
+            }
         }
     }
 
@@ -150,6 +163,7 @@ export function searchEntries(
         fuzzy_match?: boolean
         auto_correct?: boolean
         workspaceId?: string
+        offset?: number
     }
 ): { entries: JournalEntry[]; nextCursor?: string; degraded?: boolean; highlights?: { id: number; snippet: string }[]; suggestions?: string[]; correctedQuery?: string } {
     const { db, tagsMgr } = context
@@ -160,7 +174,7 @@ export function searchEntries(
         )
     }
 
-    let offset = 0
+    let offset = options?.offset ?? 0
     let keysetT = ''
     let keysetId = 0
     let hasKeyset = false

@@ -121,7 +121,8 @@ export interface IDatabaseAdapter {
         cursor?: string,
         includeArchived?: boolean,
         workspaceId?: string,
-        projectNumber?: number
+        projectNumber?: number,
+        offset?: number
     ): { entries: JournalEntry[]; nextCursor?: string }
     getEntriesPage(offset: number, limit: number): { entries: JournalEntry[]; nextCursor?: string }
     getActiveEntryCount(workspaceId?: string): number
