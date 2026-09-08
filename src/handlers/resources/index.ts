@@ -17,12 +17,11 @@ import { enforceAccessBoundary } from '../../auth/validation.js'
 // Re-export shared types
 export type { ResourceContext, ResourceResult, InternalResourceDef } from './shared.js'
 
-// Import sub-module definitions
 import { getCoreResourceDefinitions } from './core/index.js'
 import { getDynamicGraphResourceDefinitions } from './graph.js'
 import { getGitHubResourceDefinitions } from './github.js'
 import { getTemplateResourceDefinitions } from './templates.js'
-import { getAgentContextResource } from './core/agent-context.js'
+import { getAgentContextResource, getAgentIdResource } from './core/agent-context.js'
 import { getTeamResourceDefinitions } from './team.js'
 import { getHelpResourceDefinitions } from './help.js'
 import { getInsightResourceDefinitions } from './insights.js'
@@ -189,8 +188,22 @@ const RESOURCE_URI_ALIASES: Record<string, string> = {
 function generateResourceAliases(resources: InternalResourceDef[]): InternalResourceDef[] {
     const aliases: InternalResourceDef[] = []
     for (const [aliasUri, canonicalUri] of Object.entries(RESOURCE_URI_ALIASES)) {
-        const canonical = resources.find((r) => r.uri === canonicalUri)
-        if (canonical) {
+        const canonical = resources.find((r) => {
+            if (r.uri === canonicalUri) return true
+            if (r.uri.includes('{')) {
+                const escapedUri = r.uri.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+                const pattern = escapedUri.replace(
+                    /\\{([^}]+)\\}/g,
+                    (_match: string, paramName: string) => {
+                        const cleanParam = paramName.replace(/^\\?\+/, '')
+                        return cleanParam === 'repo' ? '(.+)' : '([^/]+)'
+                    }
+                )
+                return new RegExp(`^${pattern}$`).test(canonicalUri)
+            }
+            return false
+        })
+        if (canonical !== undefined) {
             aliases.push({
                 ...canonical,
                 uri: aliasUri,
@@ -213,6 +226,7 @@ function getAllResourceDefinitions(runtime?: ServerRuntime): InternalResourceDef
         ...getGitHubResourceDefinitions(),
         ...getTemplateResourceDefinitions(),
         getAgentContextResource(),
+        getAgentIdResource(),
         ...getTeamResourceDefinitions(),
         ...getHelpResourceDefinitions(),
         ...getInsightResourceDefinitions(),

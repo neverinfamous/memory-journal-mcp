@@ -1,5 +1,5 @@
-import { resolveWorkspaceId, resolveProjectNumberFromPath } from '../../../utils/workspace-resolver.js'
-import type { InternalResourceDef, ResourceContext } from '../shared.js'
+import { resolveProjectContext, resolveProjectNumberFromPath } from '../../../utils/workspace-resolver.js'
+import type { InternalResourceDef, ResourceContext, ResourceResult } from '../shared.js'
 import { withPriority, ASSISTANT_FOCUSED } from '../../../utils/resource-annotations.js'
 
 export function getAgentContextResource(): InternalResourceDef {
@@ -10,58 +10,47 @@ export function getAgentContextResource(): InternalResourceDef {
         description: 'Lightweight context for mid-thread agent reorientation. Returns project number, workspace ID, and session rules.',
         mimeType: 'text/yaml',
         annotations: withPriority(1.0, ASSISTANT_FOCUSED),
-        handler: (uri: string, context: ResourceContext) => {
+        handler: (uri: string, context: ResourceContext): ResourceResult => {
             const config = context?.briefingConfig
-            const registry = config?.projectRegistry ?? {}
             const defaultProjectNumber = config?.defaultProjectNumber
 
-            const match = /^memory:\/\/(?:agent-context\/|agent-id$)(.+)?$/.exec(uri)
-            const repo = match?.[1] ?? 'default'
+            const match = /^memory:\/\/(?:agent-context|agent-id)(?:\/(.+))?$/.exec(uri)
+            const rawRepo = match?.[1] !== undefined ? decodeURIComponent(match[1]) : undefined
+            const repo = rawRepo === 'default' ? undefined : rawRepo
 
-            let projectNumber = defaultProjectNumber ?? -1
+            const resolved = resolveProjectContext(
+                repo !== undefined ? { workspace_id: repo } : {},
+                config
+            )
 
-            if (Object.keys(registry).length > 0) {
-                // Allow looking up by key first
-                const exactMatch = registry[repo]
-                if (exactMatch) {
-                    projectNumber = exactMatch.project_number ?? projectNumber
-                } else {
-                    // Try to match by path basename or cwd
-                    const entries = Object.entries(registry)
-                    const found = entries.find(([_, entry]) => {
-                        return entry.path.endsWith(`/${repo}`) || entry.path.endsWith(`\\${repo}`)
-                    })
-                    if (found) {
-                        projectNumber = found[1].project_number ?? projectNumber
-                    }
-                }
-            }
+            let projectNumber = resolved.projectNumber ?? defaultProjectNumber ?? -1
+            const workspaceId = resolved.workspaceId
 
             if (projectNumber === -1) {
                 projectNumber = resolveProjectNumberFromPath(process.cwd()) ?? -1
             }
 
-            // resolveWorkspaceId takes explicitWorkspaceId first. We don't have an explicit one, 
-            // we want it to resolve based on projectNumber and registry.
-            // By passing config, we allow it to find the registry key just like tool handlers do.
-            const finalWorkspaceId = resolveWorkspaceId(undefined, projectNumber, config)
+            const projectName = repo ?? (workspaceId !== 'default' ? workspaceId : 'default')
 
             const content = [
-                `Project: ${repo}`,
+                `Project: ${projectName}`,
                 `Project Number: ${projectNumber}`,
-                `Workspace ID: ${finalWorkspaceId}`,
+                `Workspace ID: ${workspaceId}`,
                 `Instructions: Use your Conversation ID as the session_id for all tool calls.`,
             ].join('\n')
 
             return {
-                contents: [
-                    {
-                        uri,
-                        mimeType: 'text/yaml',
-                        text: content,
-                    },
-                ],
+                data: content,
             }
         },
+    }
+}
+
+export function getAgentIdResource(): InternalResourceDef {
+    const base = getAgentContextResource()
+    return {
+        ...base,
+        uri: 'memory://agent-id/{+repo}',
+        name: 'Agent ID Context (alias)',
     }
 }

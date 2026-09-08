@@ -98,6 +98,16 @@ describe('Resource Handlers', () => {
             expect(uris).toContain('memory://issues/{issue_number}/entries')
             expect(uris).toContain('memory://prs/{pr_number}/entries')
         })
+
+        it('should include agent-id and agent-context resources and aliases', () => {
+            const resources = getResources()
+            const uris = resources.map((r) => (r as { uri: string }).uri)
+
+            expect(uris).toContain('memory://agent-id')
+            expect(uris).toContain('memory://agent-context')
+            expect(uris).toContain('memory://agent-context/{+repo}')
+            expect(uris).toContain('memory://agent-id/{+repo}')
+        })
     })
 
     // ========================================================================
@@ -308,5 +318,27 @@ describe('Resource Handlers', () => {
             expect(data.projectNumber).toBe(42)
         })
 
+        it('should read memory://agent-id and memory://agent-context with project context', async () => {
+            const agentIdRes = await readResource('memory://agent-id', db)
+            expect(typeof agentIdRes.data).toBe('string')
+            expect(agentIdRes.data).toContain('Project:')
+            expect(agentIdRes.data).toContain('Project Number:')
+            expect(agentIdRes.data).toContain('Workspace ID:')
+            expect(agentIdRes.data).toContain('Instructions:')
+
+            const agentContextRes = await readResource('memory://agent-context', db)
+            expect(typeof agentContextRes.data).toBe('string')
+            expect(agentContextRes.data).toContain('Project:')
+        })
+
+        it('should read repo-specific memory://agent-context and memory://agent-id templates', async () => {
+            const agentContextRepo = await readResource('memory://agent-context/db-mcp', db)
+            expect(typeof agentContextRepo.data).toBe('string')
+            expect(agentContextRepo.data).toContain('Project: db-mcp')
+
+            const agentIdRepo = await readResource('memory://agent-id/db-mcp', db)
+            expect(typeof agentIdRepo.data).toBe('string')
+            expect(agentIdRepo.data).toContain('Project: db-mcp')
+        })
     })
 })

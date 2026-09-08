@@ -346,7 +346,10 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 | --- | ---- |
 | `memory://actions/recent` | Recent Actions |
 | `memory://actions/recent/{+repo}` | Recent Actions (Dynamic) |
+| `memory://agent-context` | Agent Context (alias) |
 | `memory://agent-context/{+repo}` | Agent Context |
+| `memory://agent-id` | Agent Context (alias) |
+| `memory://agent-id/{+repo}` | Agent ID Context (alias) |
 | `memory://audit` | Audit Log |
 | `memory://briefing` | Initial Briefing |
 | `memory://briefing/{+repo}` | Dynamic Briefing |
