@@ -4,6 +4,7 @@ import { getCoreTools } from './tools.js'
 import { getSearchTools } from '../search/index.js'
 import { getAdminTools } from '../admin/index.js'
 import { getCodeModeTools } from '../codemode/handler.js'
+import { safeString } from '../schemas.js'
 import { getPrompt, getPrompts } from '../../prompts/index.js'
 import { readResource, getResources } from '../../resources/index.js'
 
@@ -411,6 +412,32 @@ export function getDummyHealingTools(context?: ToolContext): ToolDefinition[] {
             if (typeof alt === 'string') {
                 args['content'] = alt
             }
+        }
+        delete args['text']
+        delete args['description']
+        delete args['message']
+        delete args['body']
+        delete args['instructions']
+        delete args['details']
+        delete args['notes']
+
+        // Normalize title / heading / subject / name -> content or title
+        const rawTitle = args['title'] ?? args['heading'] ?? args['subject'] ?? args['name']
+        if (rawTitle !== undefined && rawTitle !== null) {
+            const titleStr = safeString(rawTitle).trim()
+            if (titleStr !== '') {
+                const cleanTitle = titleStr.replace(/^#+\s*/, '')
+                const currentContent = safeString(args['content']).trim()
+                if (args['content'] === undefined || args['content'] === null || currentContent === '') {
+                    args['content'] = `# ${cleanTitle}`
+                } else if (!currentContent.startsWith(`# ${cleanTitle}`)) {
+                    args['content'] = `# ${cleanTitle}\n\n${currentContent}`
+                }
+            }
+            delete args['title']
+            delete args['heading']
+            delete args['subject']
+            delete args['name']
         }
 
         // Normalize project -> project_number / workspace_id

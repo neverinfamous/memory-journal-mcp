@@ -223,7 +223,7 @@ export function convertKeysToSnakeCase(obj: Record<string, unknown>, methodName?
         }
 
         // Context-aware 'content' hallucination
-        if (snakeKey === 'message' || snakeKey === 'msg' || snakeKey === 'name' || snakeKey === 'description' || snakeKey === 'content' || snakeKey === 'comment') {
+        if (snakeKey === 'message' || snakeKey === 'msg' || snakeKey === 'name' || snakeKey === 'heading' || snakeKey === 'subject' || snakeKey === 'description' || snakeKey === 'content' || snakeKey === 'comment') {
             const isGithubTool = Boolean(methodName && (
                 methodName.toLowerCase().includes('github') || 
                 methodName.toLowerCase().includes('issue') || 
@@ -253,6 +253,8 @@ export function convertKeysToSnakeCase(obj: Record<string, unknown>, methodName?
             } else if (methodName && (methodName.includes('create') || methodName.includes('update') || methodName.includes('Entry')) && !methodName.toLowerCase().includes('link')) {
                 if (!('content' in obj) && !('content' in result)) {
                     snakeKey = 'content'
+                } else if (snakeKey === 'name' || snakeKey === 'heading' || snakeKey === 'subject') {
+                    snakeKey = 'title'
                 }
             }
         }

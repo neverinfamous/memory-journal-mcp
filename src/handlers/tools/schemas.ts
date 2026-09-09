@@ -86,6 +86,19 @@ export function coerceSignificanceAlias(params: unknown): void {
     }
 }
 
+export function safeString(val: unknown): string {
+    if (typeof val === 'string') return val
+    if (typeof val === 'number' || typeof val === 'boolean' || typeof val === 'bigint') return String(val)
+    if (typeof val === 'object' && val !== null) {
+        try {
+            return JSON.stringify(val)
+        } catch {
+            return ''
+        }
+    }
+    return ''
+}
+
 /**
  * Shared preprocessor to heal common LLM hallucinations in payloads before Zod validation.
  * Addresses `tag` vs `tags`, stringified array elements, invalid `entry_type` / `significance_type`,
@@ -267,13 +280,26 @@ export function healAgentHallucinations(val: unknown): unknown {
                 modified = true
             }
         }
-        if ('title' in obj) {
-            if (!('content' in obj)) {
-                obj['content'] = obj['title']
-            } else {
-                obj['content'] = `# ${String(obj['title'])}\n\n${String(obj['content'])}`
+        if ('title' in obj || 'heading' in obj || 'subject' in obj || 'name' in obj) {
+            const rawTitle = obj['title'] ?? obj['heading'] ?? obj['subject'] ?? obj['name']
+            if (rawTitle !== undefined && rawTitle !== null) {
+                const titleStr = safeString(rawTitle).trim()
+                if (titleStr !== '') {
+                    const cleanTitle = titleStr.replace(/^#+\s*/, '')
+                    const currentContent = safeString(obj['content']).trim()
+                    if (!('content' in obj) || obj['content'] === undefined || obj['content'] === null || currentContent === '') {
+                        if (!('query' in obj)) {
+                            obj['content'] = `# ${cleanTitle}`
+                        }
+                    } else if (!currentContent.startsWith(`# ${cleanTitle}`)) {
+                        obj['content'] = `# ${cleanTitle}\n\n${currentContent}`
+                    }
+                }
             }
             delete obj['title']
+            delete obj['heading']
+            delete obj['subject']
+            delete obj['name']
             modified = true
         }
 

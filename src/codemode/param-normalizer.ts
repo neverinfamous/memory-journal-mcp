@@ -227,11 +227,11 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
         if (isEntryMutation) {
             const contentParts: string[] = [];
 
-            const title = obj['title'] ?? obj['heading'] ?? obj['subject'];
+            const title = obj['title'] ?? obj['heading'] ?? obj['subject'] ?? obj['name'];
             if (title !== undefined) {
                 const titleStr = safeString(title);
                 if (titleStr !== '') contentParts.push(`# ${titleStr}`);
-                delete obj['title']; delete obj['heading']; delete obj['subject'];
+                delete obj['title']; delete obj['heading']; delete obj['subject']; delete obj['name'];
             }
 
             const desc = obj['description'] ?? obj['details'] ?? obj['summary'] ?? obj['notes'] ?? obj['text'] ?? obj['message'];

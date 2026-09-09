@@ -555,6 +555,38 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
                 expect(normalized['limit']).toBe(25)
             }
         })
+
+        it('should auto-heal name and type in CreateEntrySchema (agent-issues.jsonl Record 5 regression)', async () => {
+            const { CreateEntrySchema } = await import('../src/handlers/tools/core/schemas.js')
+            const rawPayload = {
+                content: 'Fix duplicate error message in `sqlite.json.validatePath` tool handler.\n- Removed redundant `!path.startsWith("$")` check in `C:\\Users\\chris\\Desktop\\db-mcp\\src\\adapters\\sqlite\\tools\\json-helpers\\read.ts` since `validateJsonPath` already performs this validation and throws an appropriate `ValidationError` containing the exact same message.',
+                name: 'db-mcp_json_validatePath_duplicate_error_fix',
+                type: 'concept'
+            }
+
+            const parsed = CreateEntrySchema.parse(rawPayload)
+            expect(parsed.content).toContain('# db-mcp_json_validatePath_duplicate_error_fix')
+            expect(parsed.content).toContain('Fix duplicate error message')
+            expect(parsed.entry_type).toBe('other')
+            expect(parsed.tags).toContain('concept')
+            expect((parsed as Record<string, unknown>)['name']).toBeUndefined()
+        })
+
+        it('should auto-heal name in entry mutations via param-normalizer (agent-issues.jsonl Record 5 regression)', async () => {
+            const { applyArgInterceptions } = await import('../src/codemode/param-normalizer.js')
+            const result = applyArgInterceptions('createEntry', [{
+                content: 'Some fix implementation details.',
+                name: 'duplicate_error_fix',
+                type: 'bugfix'
+            }])
+            expect('args' in result).toBe(true)
+            if ('args' in result) {
+                const normalized = result.args[0] as Record<string, unknown>
+                expect(normalized['content']).toContain('# duplicate_error_fix')
+                expect(normalized['content']).toContain('Some fix implementation details.')
+                expect(normalized['name']).toBeUndefined()
+            }
+        })
     })
 })
 

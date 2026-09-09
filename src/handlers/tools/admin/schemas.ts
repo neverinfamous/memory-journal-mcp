@@ -7,6 +7,7 @@ import {
     MAX_BATCH_SIZE,
     BatchResultOutputSchema,
     healAgentHallucinations,
+    safeString,
 } from '../schemas.js'
 import { ErrorFieldsMixin } from '../error-fields-mixin.js'
 import { CreateEntrySchema, CreateEntrySchemaMcp } from '../core/index.js'
@@ -31,13 +32,24 @@ export const UpdateEntrySchema = z.preprocess(
                 delete obj['text'];
                 modified = true;
             }
-            if ('title' in obj) {
-                if (!('content' in obj)) {
-                    obj['content'] = obj['title'];
-                } else {
-                    obj['content'] = `# ${String(obj['title'])}\n\n${String(obj['content'])}`;
+            if ('title' in obj || 'heading' in obj || 'subject' in obj || 'name' in obj) {
+                const rawTitle = obj['title'] ?? obj['heading'] ?? obj['subject'] ?? obj['name'];
+                if (rawTitle !== undefined && rawTitle !== null) {
+                    const titleStr = safeString(rawTitle).trim();
+                    if (titleStr !== '') {
+                        const cleanTitle = titleStr.replace(/^#+\s*/, '');
+                        const currentContent = safeString(obj['content']).trim();
+                        if (!('content' in obj) || obj['content'] === undefined || obj['content'] === null || currentContent === '') {
+                            obj['content'] = `# ${cleanTitle}`;
+                        } else if (!currentContent.startsWith(`# ${cleanTitle}`)) {
+                            obj['content'] = `# ${cleanTitle}\n\n${currentContent}`;
+                        }
+                    }
                 }
                 delete obj['title'];
+                delete obj['heading'];
+                delete obj['subject'];
+                delete obj['name'];
                 modified = true;
             }
             return modified ? obj : healedVal;
@@ -99,13 +111,24 @@ export const UpdateEntrySchemaMcp = z.preprocess(
                 delete obj['text'];
                 modified = true;
             }
-            if ('title' in obj) {
-                if (!('content' in obj)) {
-                    obj['content'] = obj['title'];
-                } else {
-                    obj['content'] = `# ${String(obj['title'])}\n\n${String(obj['content'])}`;
+            if ('title' in obj || 'heading' in obj || 'subject' in obj || 'name' in obj) {
+                const rawTitle = obj['title'] ?? obj['heading'] ?? obj['subject'] ?? obj['name'];
+                if (rawTitle !== undefined && rawTitle !== null) {
+                    const titleStr = safeString(rawTitle).trim();
+                    if (titleStr !== '') {
+                        const cleanTitle = titleStr.replace(/^#+\s*/, '');
+                        const currentContent = safeString(obj['content']).trim();
+                        if (!('content' in obj) || obj['content'] === undefined || obj['content'] === null || currentContent === '') {
+                            obj['content'] = `# ${cleanTitle}`;
+                        } else if (!currentContent.startsWith(`# ${cleanTitle}`)) {
+                            obj['content'] = `# ${cleanTitle}\n\n${currentContent}`;
+                        }
+                    }
                 }
                 delete obj['title'];
+                delete obj['heading'];
+                delete obj['subject'];
+                delete obj['name'];
                 modified = true;
             }
             return modified ? obj : healedVal;
