@@ -12,6 +12,7 @@ In Code Mode (\`mj_execute_code\`), you do NOT have native MCP tool schemas. You
 - **Async/Await:** Do NOT access \`Promise\` objects synchronously. Always \`await\` async operations. Missing \`await\` statements will be intercepted and return an actionable \`VALIDATION_ERROR\`.
 - **SQL Translation & Auto-Healing:** Code Mode executes JavaScript code via \`mj.*\` API. If raw SQL statements are passed (e.g., \`SELECT * FROM journal_entries LIMIT 10\`), the server automatically translates them to type-safe \`mj.core.getRecentEntries({ limit: 10 })\` or \`mj.search.searchEntries({ query: "..." })\` calls.
 - **Template Literals & Backticks:** When passing multi-line strings or markdown with embedded backticks (e.g. inline code blocks like \`\` \`.npmrc\` \`\`), avoid raw unescaped backticks inside a template literal. Either escape them (\`\\\`\`\`) or pass the string safely via the \`context\` parameter and access it as \`context.myContent\`.
+- **Quotes & Escaping:** When passing strings with single quotes, double quotes, or backticks in Code Mode, avoid double-escaping backslashes (e.g. \`\\\\'\` or \`\\\\"\`), which prematurely terminates string literals in JavaScript. Pass complex content safely via \`context.content\`.
 
 ## API Namespace Map
 

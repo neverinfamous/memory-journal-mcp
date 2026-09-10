@@ -276,6 +276,10 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
             } else if (contentParts.length > 0) {
                 obj['content'] = contentParts.join('\n\n');
             }
+
+            if (typeof obj['content'] === 'string') {
+                obj['content'] = obj['content'].replace(/\\+'/g, "'").replace(/\\+"/g, '"');
+            }
         }
 
         if (obj['search'] !== undefined && obj['query'] === undefined) { obj['query'] = obj['search']; delete obj['search']; }

@@ -587,6 +587,59 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
                 expect(normalized['name']).toBeUndefined()
             }
         })
+
+        it('should auto-heal double-escaped single quotes in single-line createEntry calls (agent-issues.jsonl SyntaxError regression)', async () => {
+            const rawCode = `return await mj.core.createEntry({ project_number: 15, title: 'Fixed SQL NULL bug in JSON operations', content: 'In test-advanced-json-part7, found that json_type and json_extract returned \\\\'invalid\\\\' for SQL NULL values due to improper handling in the json_error_position wrapper. Added explicit IS NULL check in the CASE statement.', tags: ['json', 'bugfix'] });`
+            const healed = healCodeModeScript(rawCode)
+
+            expect(healed).toContain(`returned \\'invalid\\' for SQL NULL values`)
+            expect(() => {
+                new vm.Script(`(async () => { const mj = { core: { createEntry: async (p) => p } }; ${healed} })()`)
+            }).not.toThrow()
+        })
+
+        it('should auto-heal double-escaped double quotes in object properties and positional arguments', () => {
+            const rawCode = `mj.core.createEntry({ title: "Fix \\\\"quoted\\\\" issue", content: "Details with \\\\"escaped\\\\" text", tags: ["quotes"] });`
+            const healed = healCodeModeScript(rawCode)
+
+            expect(healed).toContain(`\\"quoted\\"`)
+            expect(healed).toContain(`\\"escaped\\"`)
+            expect(() => {
+                new vm.Script(`(async () => { const mj = { core: { createEntry: async (p) => p } }; ${healed} })()`)
+            }).not.toThrow()
+
+            const positionalCode = `mj.core.createEntry('Note with \\\\'nested\\\\' single quotes')`
+            const healedPositional = healCodeModeScript(positionalCode)
+            expect(healedPositional).toContain(`\\'nested\\'`)
+            expect(() => {
+                new vm.Script(`(async () => { const mj = { core: { createEntry: async (p) => p } }; ${healedPositional} })()`)
+            }).not.toThrow()
+        })
+
+        it('should recover single-line entry creation with double-escaped quotes using extractAndRecoverEntryCode', () => {
+            const mangledCode = `return await mj.core.createEntry({ project_number: 15, title: 'Fixed SQL NULL bug in JSON operations', content: 'In test-advanced-json-part7, found that json_type and json_extract returned \\\\'invalid\\\\' for SQL NULL values due to improper handling in the json_error_position wrapper. Added explicit IS NULL check in the CASE statement.', tags: ['json', 'bugfix'] });`
+            const recovered = extractAndRecoverEntryCode(mangledCode)
+
+            expect(recovered).toBeDefined()
+            expect(recovered).toContain('return await mj.createEntry(')
+            expect(recovered).toContain('"Fixed SQL NULL bug in JSON operations"')
+            expect(recovered).toContain('invalid')
+            expect(recovered).toContain('"project_number":15')
+            expect(recovered).toContain('"json"')
+        })
+
+        it('should sanitize double-escaped quotes in param-normalizer entry mutations', async () => {
+            const { applyArgInterceptions } = await import('../src/codemode/param-normalizer.js')
+            const result = applyArgInterceptions('createEntry', [{
+                content: "Returned \\'invalid\\' result with \\\"double\\\" quotes",
+                title: 'Escaped quote test'
+            }])
+            expect('args' in result).toBe(true)
+            if ('args' in result) {
+                const normalized = result.args[0] as Record<string, unknown>
+                expect(normalized['content']).toContain("Returned 'invalid' result with \"double\" quotes")
+            }
+        })
     })
 })
 

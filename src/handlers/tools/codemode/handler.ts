@@ -100,11 +100,37 @@ export function healCodeModeScript(code: string): string {
 
     // Auto-heal unescaped backticks inside template literals on object properties
     executionCode = executionCode.replace(
-        /(\b(?:content|title|text|description|message|instructions|body|notes|details|resolution_notes|query|script|comment|summary|heading)\s*:\s*)`([\s\S]*?)`(?=\s*(?:,\s*\n\s*[\w$]+\s*:|\s*\n\s*[\w$]+\s*:|\s*\n\s*\}|\s*\n\s*\)|\s*,\s*\}|\s*\}|\s*\)))/g,
+        /(\b(?:content|title|text|description|message|instructions|body|notes|details|resolution_notes|query|script|comment|summary|heading)\s*:\s*)`([\s\S]*?)`(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\)))/g,
         (_match: string, prefix: string, content: string): string => {
             const normalized = content.replace(/\\`/g, '`')
             const escaped = normalized.replace(/`/g, '\\`')
             return `${prefix}\`${escaped}\``
+        }
+    )
+
+    // Auto-heal double-escaped quotes and unescaped quotes in single-quoted object properties
+    executionCode = executionCode.replace(
+        /(\b(?:content|title|text|description|message|instructions|body|notes|details|resolution_notes|query|script|comment|summary|heading)\s*:\s*)'([\s\S]*?)'(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\)))/g,
+        (_match: string, prefix: string, content: string): string => {
+            if (content.includes('\n')) {
+                const normalized = content.replace(/\\`/g, '`').replace(/`/g, '\\`')
+                return `${prefix}\`${normalized}\``
+            }
+            const normalized = content.replace(/\\+'/g, "'").replace(/'/g, "\\'")
+            return `${prefix}'${normalized}'`
+        }
+    )
+
+    // Auto-heal double-escaped quotes and unescaped quotes in double-quoted object properties
+    executionCode = executionCode.replace(
+        /(\b(?:content|title|text|description|message|instructions|body|notes|details|resolution_notes|query|script|comment|summary|heading)\s*:\s*)"([\s\S]*?)"(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\)))/g,
+        (_match: string, prefix: string, content: string): string => {
+            if (content.includes('\n')) {
+                const normalized = content.replace(/\\`/g, '`').replace(/`/g, '\\`')
+                return `${prefix}\`${normalized}\``
+            }
+            const normalized = content.replace(/\\+"/g, '"').replace(/"/g, '\\"')
+            return `${prefix}"${normalized}"`
         }
     )
 
@@ -115,6 +141,30 @@ export function healCodeModeScript(code: string): string {
             const normalized = content.replace(/\\`/g, '`')
             const escaped = normalized.replace(/`/g, '\\`')
             return `${prefix}\`${escaped}\``
+        }
+    )
+
+    // Auto-heal double-escaped quotes inside positional string arguments
+    executionCode = executionCode.replace(
+        /(\b(?:mj\.)?(?:core\.|team\.|admin\.|search\.|io\.|github\.|git\.|backup\.)?(?:createEntry|teamCreateEntry|appendEntry|updateEntry|teamUpdateEntry|searchEntries|teamSearch)\s*\(\s*)'([\s\S]*?)'(?=\s*(?:,\s*|\)))/g,
+        (_match: string, prefix: string, content: string): string => {
+            if (content.includes('\n')) {
+                const normalized = content.replace(/\\`/g, '`').replace(/`/g, '\\`')
+                return `${prefix}\`${normalized}\``
+            }
+            const normalized = content.replace(/\\+'/g, "'").replace(/'/g, "\\'")
+            return `${prefix}'${normalized}'`
+        }
+    )
+    executionCode = executionCode.replace(
+        /(\b(?:mj\.)?(?:core\.|team\.|admin\.|search\.|io\.|github\.|git\.|backup\.)?(?:createEntry|teamCreateEntry|appendEntry|updateEntry|teamUpdateEntry|searchEntries|teamSearch)\s*\(\s*)"([\s\S]*?)"(?=\s*(?:,\s*|\)))/g,
+        (_match: string, prefix: string, content: string): string => {
+            if (content.includes('\n')) {
+                const normalized = content.replace(/\\`/g, '`').replace(/`/g, '\\`')
+                return `${prefix}\`${normalized}\``
+            }
+            const normalized = content.replace(/\\+"/g, '"').replace(/"/g, '\\"')
+            return `${prefix}"${normalized}"`
         }
     )
 
@@ -144,12 +194,16 @@ export function extractAndRecoverEntryCode(code: string): string | null {
     if (!isCreate && !isUpdate) return null
 
     // Extract content
-    const contentMatch = /\bcontent\s*:\s*[`'"]([\s\S]*?)[`'"]\s*(?:,\s*\n\s*[\w$]+\s*:|\s*\n\s*\}|\s*\n\s*\))/i.exec(code)
-    let content: string | undefined = contentMatch ? contentMatch[1] : undefined
+    const backtickMatch = /\bcontent\s*:\s*`([\s\S]*?)`(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\)))/i.exec(code)
+    const singleMatch = /\bcontent\s*:\s*'([\s\S]*?)'(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\)))/i.exec(code)
+    const doubleMatch = /\bcontent\s*:\s*"([\s\S]*?)"(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\)))/i.exec(code)
+    const fallbackMatch = /\bcontent\s*:\s*[`'"]([\s\S]*?)(?:[`'"]\s*)?(?=,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\))/i.exec(code)
+
+    let content: string | undefined = backtickMatch?.[1] ?? singleMatch?.[1] ?? doubleMatch?.[1] ?? fallbackMatch?.[1]
 
     if (!content) {
         // Fallback: extract everything between `content:` and `, \n <prop>:`
-        const altMatch = /\bcontent\s*:\s*`([\s\S]*?)`(?=,\s*\n\s*[\w$]+\s*:|\s*\n\s*\})/i.exec(code)
+        const altMatch = /\bcontent\s*:\s*`([\s\S]*?)`(?=,\s*[\w$]+\s*:|\s*\})/i.exec(code)
         if (altMatch) {
             content = altMatch[1]
         }
@@ -158,11 +212,11 @@ export function extractAndRecoverEntryCode(code: string): string | null {
     if (!content) return null
 
     // Clean up content
-    content = content.replace(/\\`/g, '`')
+    content = content.replace(/\\+'/g, "'").replace(/\\+"/g, '"').replace(/\\`/g, '`')
 
     // Extract other standard fields
     const typeMatch = /\b(?:entry_type|type)\s*:\s*['"]([^'"]+)['"]/i.exec(code)
-    const titleMatch = /\btitle\s*:\s*['"]([^'"]+)['"]/i.exec(code)
+    const titleMatch = /\btitle\s*:\s*[`'"]([\s\S]*?)`['"](?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\)))/i.exec(code) ?? /\btitle\s*:\s*['"]([^'"]+)['"]/i.exec(code)
     const projectMatch = /\b(?:project_number|project)\s*:\s*(\d+)/i.exec(code)
     const sessionMatch = /\bsession_id\s*:\s*['"]([^'"]+)['"]/i.exec(code)
     const impactMatch = /\bimpact\s*:\s*([0-9.]+)/i.exec(code)
@@ -177,7 +231,7 @@ export function extractAndRecoverEntryCode(code: string): string | null {
         entry_type: entryType ?? 'technical_decision',
     }
 
-    const title = titleMatch?.[1]
+    const title = titleMatch?.[1]?.replace(/\\+'/g, "'").replace(/\\+"/g, '"').replace(/\\`/g, '`')
     if (title) payload['title'] = title
 
     const entryIdMatch = /\b(?:entry_id|id)\s*:\s*(\d+)/i.exec(code)
