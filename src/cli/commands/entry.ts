@@ -245,8 +245,24 @@ function buildEntryPayload(options: z.infer<typeof createEntrySchema>, metadata:
     const impactRaw = options.impactScore ?? options.impact_score ?? metadata['impact'] ?? metadata['impactScore'] ?? metadata['impact_score']
     const impactScore = impactRaw !== undefined ? Number(impactRaw) : undefined
 
-    const valStatusRaw = options.validationStatus ?? metadata['validation_status'] ?? metadata['validationStatus']
-    const validationStatus = valStatusRaw as 'passed' | 'failed' | 'none' | undefined
+    const valStatusRaw = options.validationStatus ?? options.validation_status ?? options.validation ?? metadata['validation_status'] ?? metadata['validationStatus'] ?? metadata['validation']
+    let validationStatus: 'passed' | 'failed' | 'none' | undefined = undefined
+    if (valStatusRaw !== undefined && valStatusRaw !== null) {
+        if (typeof valStatusRaw === 'boolean') {
+            validationStatus = valStatusRaw ? 'passed' : 'failed'
+        } else {
+            const lower = String(valStatusRaw).trim().toLowerCase()
+            if (['passed', 'pass', 'success', 'ok', 'validated', 'valid', 'verified', 'true', '1'].includes(lower)) {
+                validationStatus = 'passed'
+            } else if (['failed', 'fail', 'error', 'failing', 'false', '0'].includes(lower)) {
+                validationStatus = 'failed'
+            } else if (['none', 'null', 'undefined', 'skip', 'skipped', 'unknown', 'pending'].includes(lower)) {
+                validationStatus = 'none'
+            } else {
+                validationStatus = 'none'
+            }
+        }
+    }
 
     const sessionIdRaw = options.sessionId ?? options.session_id ?? metadata['session_id'] ?? metadata['sessionId']
     const sessionId = sessionIdRaw as string | undefined
@@ -298,6 +314,7 @@ export async function createEntryAction(...args: unknown[]): Promise<void> {
     if (options.contentFile !== undefined && options.file === undefined) options.file = options.contentFile;
     if (options.body !== undefined && options.content === undefined) options.content = options.body;
     if (options.validation !== undefined && options.validationStatus === undefined) options.validationStatus = options.validation;
+    if (options.validation_status !== undefined && options.validationStatus === undefined) options.validationStatus = options.validation_status;
     if (options.workspace !== undefined && options.workspaceId === undefined) options.workspaceId = options.workspace;
     if (options.summary !== undefined && options.title === undefined) options.title = options.summary;
 
@@ -404,6 +421,7 @@ export async function updateEntryAction(...args: unknown[]): Promise<void> {
     if (options.contentFile !== undefined && options.file === undefined) options.file = options.contentFile;
     if (options.body !== undefined && options.content === undefined) options.content = options.body;
     if (options.validation !== undefined && options.validationStatus === undefined) options.validationStatus = options.validation;
+    if (options.validation_status !== undefined && options.validationStatus === undefined) options.validationStatus = options.validation_status;
     if (options.workspace !== undefined && options.workspaceId === undefined) options.workspaceId = options.workspace;
 
     // Handle `[args...]` rest arguments for content

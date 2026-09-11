@@ -205,14 +205,14 @@ export function healAgentHallucinations(val: unknown): unknown {
 
         // Coerce validation_status from boolean / aliases
         if ('validation_status' in obj && obj['validation_status'] !== undefined && obj['validation_status'] !== null) {
-            const vs = obj['validation_status']
-            if (vs === true || vs === 'pass' || vs === 'success' || vs === 'ok' || vs === 'passed') {
+            const vs = typeof obj['validation_status'] === 'string' ? obj['validation_status'].trim().toLowerCase() : obj['validation_status']
+            if (vs === true || vs === 'pass' || vs === 'success' || vs === 'ok' || vs === 'passed' || vs === 'validated' || vs === 'valid' || vs === 'verified' || vs === 'true' || vs === '1') {
                 obj['validation_status'] = 'passed'
                 modified = true
-            } else if (vs === false || vs === 'fail' || vs === 'failed' || vs === 'error') {
+            } else if (vs === false || vs === 'fail' || vs === 'failed' || vs === 'error' || vs === 'failing' || vs === 'false' || vs === '0') {
                 obj['validation_status'] = 'failed'
                 modified = true
-            } else if (vs === 'none') {
+            } else if (vs === 'none' || vs === 'null' || vs === 'undefined' || vs === 'skip' || vs === 'skipped' || vs === 'unknown' || vs === 'pending') {
                 obj['validation_status'] = 'none'
             } else if (typeof vs === 'string' && !['passed', 'none', 'failed'].includes(vs)) {
                 obj['validation_status'] = 'none'

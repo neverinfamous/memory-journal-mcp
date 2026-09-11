@@ -124,6 +124,18 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
             if (obj['validation_status'] === undefined) obj['validation_status'] = obj['validationStatus'];
             delete obj['validationStatus'];
         }
+        if (obj['validation_status'] !== undefined && obj['validation_status'] !== null) {
+            const vs = typeof obj['validation_status'] === 'string' ? obj['validation_status'].trim().toLowerCase() : obj['validation_status'];
+            if (vs === true || vs === 'pass' || vs === 'success' || vs === 'ok' || vs === 'passed' || vs === 'validated' || vs === 'valid' || vs === 'verified' || vs === 'true' || vs === '1') {
+                obj['validation_status'] = 'passed';
+            } else if (vs === false || vs === 'fail' || vs === 'failed' || vs === 'error' || vs === 'failing' || vs === 'false' || vs === '0') {
+                obj['validation_status'] = 'failed';
+            } else if (vs === 'none' || vs === 'null' || vs === 'undefined' || vs === 'skip' || vs === 'skipped' || vs === 'unknown' || vs === 'pending') {
+                obj['validation_status'] = 'none';
+            } else if (typeof vs === 'string' && !['passed', 'none', 'failed'].includes(vs)) {
+                obj['validation_status'] = 'none';
+            }
+        }
         
         if (obj['project_name'] !== undefined) {
             if (obj['project_number'] === undefined) {

@@ -300,11 +300,11 @@ export function extractAndRecoverSqlCode(code: string): string | null {
         .replace(/\/\*[\s\S]*?\*\//g, '')
         .trim()
 
-    const isSql = /^(?:SELECT|INSERT|UPDATE|DELETE|PRAGMA|SHOW|DESCRIBE|EXPLAIN|WITH)\b/i.test(cleanSql)
+    const isSql = /^(?:SELECT|INSERT|UPDATE|DELETE|PRAGMA|SHOW|DESCRIBE|EXPLAIN|WITH|SCHEMA|TABLES)\b/i.test(cleanSql) || /^(?:\.schema|\.tables|\\d|\\dt)/i.test(cleanSql)
     if (!isSql) return null
 
-    // 1. PRAGMA, SHOW, DESCRIBE, EXPLAIN
-    if (/^(?:PRAGMA|SHOW|DESCRIBE|EXPLAIN)\b/i.test(cleanSql)) {
+    // 1. PRAGMA, SHOW, DESCRIBE, EXPLAIN, SCHEMA, TABLES
+    if (/^(?:PRAGMA|SHOW|DESCRIBE|EXPLAIN|SCHEMA|TABLES)\b/i.test(cleanSql) || /^(?:\.schema|\.tables|\\d|\\dt)/i.test(cleanSql)) {
         return `return await mj.analytics.getStatistics({});`
     }
 
@@ -507,10 +507,14 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                         const entryKeys = [
                             'type', 'entry_type', 'title', 'category', 'changes', 'component',
                             'confidence', 'impact', 'trust', 'validation', 'validation_status',
+                            'validationStatus', 'trustScore', 'trust_score', 'impactScore', 'impact_score',
                             'pr_link', 'pr_url', 'issue_link', 'issue_url', 'summary',
                             'description', 'details', 'keywords', 'topic', 'action', 'status',
                             'notes', 'tags', 'auto_context', 'content', 'body', 'text', 'message',
-                            'entry_id', 'id', 'project_number', 'session_id', 'entry'
+                            'entry_id', 'id', 'project_number', 'session_id', 'entry',
+                            'learned_context', 'learnedContext', 'group_name', 'groupName',
+                            'lesson', 'learning', 'insight', 'rule', 'takeaway', 'knowledge',
+                            'finding', 'discovery'
                         ]
                         const hasEntryFields = entryKeys.some((k) => entryObj[k] !== undefined || rawObj[k] !== undefined)
                         
@@ -520,7 +524,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                             if (/\b(const|let|var|function|return|await|mj\.|import|export|\(\s*\)\s*=>)\b/.test(trimmed)) {
                                 return false // Has JS keywords or mj.* calls
                             }
-                            if (/^(?:SELECT|INSERT|UPDATE|DELETE|PRAGMA|SHOW|DESCRIBE|EXPLAIN|WITH)\b/i.test(trimmed)) {
+                            if (/^(?:SELECT|INSERT|UPDATE|DELETE|PRAGMA|SHOW|DESCRIBE|EXPLAIN|WITH|SCHEMA|TABLES)\b/i.test(trimmed) || /^(?:\.schema|\.tables|\\d|\\dt)/i.test(trimmed)) {
                                 return false // Handled by extractAndRecoverSqlCode
                             }
                             const naturalVerbPattern = /^(write|document|create|include|record|summary|log|add|added|please|here\s+is|this\s+is|note|task|fix|fixed|implement|implemented|refactor|refactored|update|updated|change|changed|feat|feature|bug|bugfix|chore|perf|test|tests|tested|docs|cleanup|resolved|resolve|remove|removed|hotfix|patch|replace|replaced|migrate|migrated|upgrade|upgraded|enhance|enhanced|improve|improved|delete|deleted|extract|extracted|prevent|prevented|handle|handled|verify|verified|configure|configured|switch|switched|align|aligned|adjust|adjusted|simplify|simplified|rewrite|rewrote|optimize|optimized|investigate|investigated|evaluate|evaluated|eliminate|eliminated|diagnose|diagnosed)\b/i
@@ -535,6 +539,38 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                         }
 
                         if (hasEntryFields || isNaturalLanguagePrompt(executionCode)) {
+                            const learnedVal = typeof entryObj['learned_context'] === 'string' && entryObj['learned_context'].trim().length > 0
+                                ? entryObj['learned_context']
+                                : typeof rawObj['learned_context'] === 'string' && rawObj['learned_context'].trim().length > 0
+                                    ? rawObj['learned_context']
+                                    : typeof entryObj['learnedContext'] === 'string' && entryObj['learnedContext'].trim().length > 0
+                                        ? entryObj['learnedContext']
+                                        : typeof rawObj['learnedContext'] === 'string' && rawObj['learnedContext'].trim().length > 0
+                                            ? rawObj['learnedContext']
+                                            : typeof entryObj['lesson'] === 'string' && entryObj['lesson'].trim().length > 0
+                                                ? entryObj['lesson']
+                                                : typeof rawObj['lesson'] === 'string' && rawObj['lesson'].trim().length > 0
+                                                    ? rawObj['lesson']
+                                                    : typeof entryObj['insight'] === 'string' && entryObj['insight'].trim().length > 0
+                                                        ? entryObj['insight']
+                                                        : typeof rawObj['insight'] === 'string' && rawObj['insight'].trim().length > 0
+                                                            ? rawObj['insight']
+                                                            : typeof entryObj['knowledge'] === 'string' && entryObj['knowledge'].trim().length > 0
+                                                                ? entryObj['knowledge']
+                                                                : typeof rawObj['knowledge'] === 'string' && rawObj['knowledge'].trim().length > 0
+                                                                    ? rawObj['knowledge']
+                                                                    : undefined
+
+                            const groupNameVal = typeof entryObj['group_name'] === 'string' && entryObj['group_name'].trim().length > 0
+                                ? entryObj['group_name']
+                                : typeof rawObj['group_name'] === 'string' && rawObj['group_name'].trim().length > 0
+                                    ? rawObj['group_name']
+                                    : typeof entryObj['groupName'] === 'string' && entryObj['groupName'].trim().length > 0
+                                        ? entryObj['groupName']
+                                        : typeof rawObj['groupName'] === 'string' && rawObj['groupName'].trim().length > 0
+                                            ? rawObj['groupName']
+                                            : undefined
+
                             const rawContent = typeof entryObj['content'] === 'string' && entryObj['content'].trim().length > 0
                                 ? entryObj['content']
                                 : typeof rawObj['content'] === 'string' && rawObj['content'].trim().length > 0
@@ -543,23 +579,36 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                                         ? entryObj['body']
                                         : (typeof rawObj['body'] === 'string' && rawObj['body'].trim().length > 0
                                             ? rawObj['body']
-                                            : executionCode))
+                                            : (learnedVal ?? executionCode)))
 
-                            const titleVal = typeof entryObj['title'] === 'string'
+                            const titleVal = typeof entryObj['title'] === 'string' && entryObj['title'].trim().length > 0
                                 ? entryObj['title']
-                                : typeof rawObj['title'] === 'string'
+                                : typeof rawObj['title'] === 'string' && rawObj['title'].trim().length > 0
                                     ? rawObj['title']
-                                    : (typeof entryObj['summary'] === 'string'
+                                    : (typeof entryObj['summary'] === 'string' && entryObj['summary'].trim().length > 0
                                         ? entryObj['summary']
-                                        : (typeof rawObj['summary'] === 'string'
+                                        : (typeof rawObj['summary'] === 'string' && rawObj['summary'].trim().length > 0
                                             ? rawObj['summary']
-                                            : (typeof entryObj['entry_id'] === 'string' && Number.isNaN(Number(entryObj['entry_id']))
-                                                ? entryObj['entry_id']
-                                                : (typeof rawObj['entry_id'] === 'string' && Number.isNaN(Number(rawObj['entry_id']))
-                                                    ? rawObj['entry_id']
-                                                    : 'Journal Entry'))))
+                                            : (groupNameVal !== undefined
+                                                ? (groupNameVal.charAt(0).toUpperCase() + groupNameVal.slice(1))
+                                                : (typeof entryObj['entry_id'] === 'string' && Number.isNaN(Number(entryObj['entry_id']))
+                                                    ? entryObj['entry_id']
+                                                    : (typeof rawObj['entry_id'] === 'string' && Number.isNaN(Number(rawObj['entry_id']))
+                                                        ? rawObj['entry_id']
+                                                        : (learnedVal !== undefined ? 'Learned Context' : 'Journal Entry'))))))
 
-                            const typeVal = typeof entryObj['type'] === 'string' ? entryObj['type'] : typeof entryObj['entry_type'] === 'string' ? entryObj['entry_type'] : typeof entryObj['category'] === 'string' ? entryObj['category'] : typeof rawObj['type'] === 'string' ? rawObj['type'] : typeof rawObj['entry_type'] === 'string' ? rawObj['entry_type'] : 'technical_decision'
+                            const typeVal = typeof entryObj['type'] === 'string'
+                                ? entryObj['type']
+                                : typeof entryObj['entry_type'] === 'string'
+                                    ? entryObj['entry_type']
+                                    : typeof entryObj['category'] === 'string'
+                                        ? entryObj['category']
+                                        : typeof rawObj['type'] === 'string'
+                                            ? rawObj['type']
+                                            : typeof rawObj['entry_type'] === 'string'
+                                                ? rawObj['entry_type']
+                                                : (learnedVal !== undefined ? 'personal_reflection' : 'technical_decision')
+
                             let tagsVal: string[] = Array.isArray(entryObj['tags'])
                                 ? (entryObj['tags'] as unknown[]).filter((t): t is string => typeof t === 'string')
                                 : (Array.isArray(rawObj['tags'])
@@ -569,18 +618,79 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                             if (topicVal !== undefined && !tagsVal.includes(topicVal)) {
                                 tagsVal = [...tagsVal, topicVal]
                             }
-                            const projVal = typeof entryObj['project_number'] === 'number' ? entryObj['project_number'] : typeof rawObj['project_number'] === 'number' ? rawObj['project_number'] : (typeof entryObj['project'] === 'number' ? entryObj['project'] : typeof rawObj['project'] === 'number' ? rawObj['project'] : undefined)
-                            const sessVal = typeof entryObj['session_id'] === 'string' ? entryObj['session_id'] : typeof rawObj['session_id'] === 'string' ? rawObj['session_id'] : undefined
-                            const trustVal = typeof entryObj['trust'] === 'number' ? entryObj['trust'] : typeof rawObj['trust'] === 'number' ? rawObj['trust'] : (typeof entryObj['confidence'] === 'number' ? entryObj['confidence'] : typeof rawObj['confidence'] === 'number' ? rawObj['confidence'] : undefined)
-                            const impactVal = typeof entryObj['impact'] === 'number' ? entryObj['impact'] : typeof rawObj['impact'] === 'number' ? rawObj['impact'] : undefined
-                            const validVal = typeof entryObj['validation_status'] === 'string' ? entryObj['validation_status'] : typeof rawObj['validation_status'] === 'string' ? rawObj['validation_status'] : (typeof entryObj['validation'] === 'string' ? entryObj['validation'] : typeof rawObj['validation'] === 'string' ? rawObj['validation'] : undefined)
+                            if (groupNameVal !== undefined && !tagsVal.includes(groupNameVal)) {
+                                tagsVal = [...tagsVal, groupNameVal]
+                            }
+                            if (learnedVal !== undefined && !tagsVal.includes('learned-context') && !tagsVal.includes('learning')) {
+                                tagsVal = [...tagsVal, 'learned-context']
+                            }
+
+                            const projVal = typeof entryObj['project_number'] === 'number'
+                                ? entryObj['project_number']
+                                : typeof rawObj['project_number'] === 'number'
+                                    ? rawObj['project_number']
+                                    : (typeof entryObj['project'] === 'number'
+                                        ? entryObj['project']
+                                        : typeof rawObj['project'] === 'number'
+                                            ? rawObj['project']
+                                            : undefined)
+
+                            const sessVal = typeof entryObj['session_id'] === 'string'
+                                ? entryObj['session_id']
+                                : typeof rawObj['session_id'] === 'string'
+                                    ? rawObj['session_id']
+                                    : undefined
+
+                            const rawTrust = entryObj['trust'] ?? rawObj['trust'] ?? entryObj['trust_score'] ?? rawObj['trust_score'] ?? entryObj['trustScore'] ?? rawObj['trustScore'] ?? entryObj['confidence'] ?? rawObj['confidence']
+                            let trustVal: number | undefined = undefined
+                            if (rawTrust !== undefined && rawTrust !== null) {
+                                const n = Number(rawTrust)
+                                if (!Number.isNaN(n)) {
+                                    trustVal = n > 1 && n <= 10 ? n / 10 : Math.min(1, Math.max(0, n))
+                                }
+                            }
+
+                            const rawImpact = entryObj['impact'] ?? rawObj['impact'] ?? entryObj['impact_score'] ?? rawObj['impact_score'] ?? entryObj['impactScore'] ?? rawObj['impactScore']
+                            let impactVal: number | undefined = undefined
+                            if (rawImpact !== undefined && rawImpact !== null) {
+                                const n = Number(rawImpact)
+                                if (!Number.isNaN(n)) {
+                                    impactVal = n > 1 && n <= 10 ? n / 10 : Math.min(1, Math.max(0, n))
+                                }
+                            }
+
+                            const rawValStatus = typeof entryObj['validation_status'] === 'string'
+                                ? entryObj['validation_status']
+                                : typeof rawObj['validation_status'] === 'string'
+                                    ? rawObj['validation_status']
+                                    : (typeof entryObj['validation'] === 'string'
+                                        ? entryObj['validation']
+                                        : typeof rawObj['validation'] === 'string'
+                                            ? rawObj['validation']
+                                            : (typeof entryObj['validationStatus'] === 'string'
+                                                ? entryObj['validationStatus']
+                                                : typeof rawObj['validationStatus'] === 'string'
+                                                    ? rawObj['validationStatus']
+                                                    : undefined))
+
+                            let validVal: 'passed' | 'failed' | 'none' | undefined = undefined
+                            if (rawValStatus !== undefined && rawValStatus !== null) {
+                                const lower = String(rawValStatus).trim().toLowerCase()
+                                if (['passed', 'pass', 'success', 'ok', 'validated', 'valid', 'verified', 'true', '1'].includes(lower)) {
+                                    validVal = 'passed'
+                                } else if (['failed', 'fail', 'error', 'failing', 'false', '0'].includes(lower)) {
+                                    validVal = 'failed'
+                                } else {
+                                    validVal = 'none'
+                                }
+                            }
 
                             const rawEntryId = entryObj['entry_id'] ?? rawObj['entry_id'] ?? entryObj['id'] ?? rawObj['id']
                             const numericEntryId = typeof rawEntryId === 'number' ? rawEntryId : (typeof rawEntryId === 'string' && !Number.isNaN(Number(rawEntryId)) ? Number(rawEntryId) : undefined)
 
-                            // Build extra auto_context metadata if component / changes / pr_link are present
+                            // Build extra auto_context metadata if component / changes / pr_link / learned_context are present
                             const extraContext: Record<string, unknown> = {}
-                            for (const k of ['component', 'changes', 'pr_link', 'pr_url', 'issue_link', 'issue_url', 'details', 'notes']) {
+                            for (const k of ['component', 'changes', 'pr_link', 'pr_url', 'issue_link', 'issue_url', 'details', 'notes', 'learned_context', 'group_name']) {
                                 if (entryObj[k] !== undefined) extraContext[k] = entryObj[k]
                                 else if (rawObj[k] !== undefined) extraContext[k] = rawObj[k]
                             }

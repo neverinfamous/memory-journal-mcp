@@ -516,6 +516,18 @@ export function getDummyHealingTools(context?: ToolContext): ToolDefinition[] {
             }
             delete args['validationStatus']
         }
+        if (args['validation_status'] !== undefined && args['validation_status'] !== null) {
+            const vs = typeof args['validation_status'] === 'string' ? args['validation_status'].trim().toLowerCase() : args['validation_status']
+            if (vs === true || vs === 'pass' || vs === 'success' || vs === 'ok' || vs === 'passed' || vs === 'validated' || vs === 'valid' || vs === 'verified' || vs === 'true' || vs === '1') {
+                args['validation_status'] = 'passed'
+            } else if (vs === false || vs === 'fail' || vs === 'failed' || vs === 'error' || vs === 'failing' || vs === 'false' || vs === '0') {
+                args['validation_status'] = 'failed'
+            } else if (vs === 'none' || vs === 'null' || vs === 'undefined' || vs === 'skip' || vs === 'skipped' || vs === 'unknown' || vs === 'pending') {
+                args['validation_status'] = 'none'
+            } else if (typeof vs === 'string' && !['passed', 'none', 'failed'].includes(vs)) {
+                args['validation_status'] = 'none'
+            }
+        }
 
         // Normalize workspace aliases
         if (args['workspace'] !== undefined) {

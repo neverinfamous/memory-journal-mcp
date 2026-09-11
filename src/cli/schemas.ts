@@ -6,6 +6,26 @@ export const safeCoerceNumber = z.preprocess((val) => {
     return isNaN(num) ? undefined : num
 }, z.number().optional())
 
+export const safeCoerceValidationStatus = z.preprocess((val) => {
+    if (val === undefined || val === null || val === '') return undefined
+    if (typeof val === 'boolean') {
+        return val ? 'passed' : 'failed'
+    }
+    if (typeof val === 'string') {
+        const lower = val.trim().toLowerCase()
+        if (['passed', 'pass', 'success', 'ok', 'validated', 'valid', 'verified', 'true', '1'].includes(lower)) {
+            return 'passed'
+        }
+        if (['failed', 'fail', 'error', 'failing', 'false', '0'].includes(lower)) {
+            return 'failed'
+        }
+        if (['none', 'null', 'undefined', 'skip', 'skipped', 'unknown', 'pending'].includes(lower)) {
+            return 'none'
+        }
+    }
+    return 'none'
+}, z.enum(['passed', 'failed', 'none']).optional())
+
 export const coreOptionsSchema = z.object({
     config: z.string().optional(),
     dumpConfig: z.boolean().optional(),
@@ -187,8 +207,9 @@ export const baseEntryOptionsSchema = z.object({
     confidence: safeCoerceNumber,
     impactScore: safeCoerceNumber,
     impact_score: safeCoerceNumber,
-    validationStatus: z.enum(['passed', 'failed', 'none']).optional(),
-    validation: z.enum(['passed', 'failed', 'none']).optional(),
+    validationStatus: safeCoerceValidationStatus,
+    validation_status: safeCoerceValidationStatus,
+    validation: safeCoerceValidationStatus,
     workspace: z.string().optional(),
     workspaceId: z.string().optional(),
     workspace_id: z.string().optional(),

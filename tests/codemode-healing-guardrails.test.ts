@@ -640,6 +640,78 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
                 expect(normalized['content']).toContain("Returned 'invalid' result with \"double\" quotes")
             }
         })
+
+        it('should heal schema, .schema, tables, and \\d inspection commands to getStatistics', async () => {
+            const { extractAndRecoverSqlCode } = await import('../src/handlers/tools/codemode/handler.js')
+            expect(extractAndRecoverSqlCode('schema')).toBe('return await mj.analytics.getStatistics({});')
+            expect(extractAndRecoverSqlCode('SCHEMA')).toBe('return await mj.analytics.getStatistics({});')
+            expect(extractAndRecoverSqlCode('.schema')).toBe('return await mj.analytics.getStatistics({});')
+            expect(extractAndRecoverSqlCode('tables')).toBe('return await mj.analytics.getStatistics({});')
+            expect(extractAndRecoverSqlCode('.tables')).toBe('return await mj.analytics.getStatistics({});')
+            expect(extractAndRecoverSqlCode('\\d')).toBe('return await mj.analytics.getStatistics({});')
+        })
+
+        it('should alias schema in METHOD_ALIASES for analytics and core', async () => {
+            const { METHOD_ALIASES } = await import('../src/codemode/api-constants.js')
+            expect(METHOD_ALIASES.analytics?.schema).toBe('getStatistics')
+            expect(METHOD_ALIASES.analytics?.tables).toBe('getStatistics')
+            expect(METHOD_ALIASES.core?.schema).toBe('getStatistics')
+        })
+
+        it('should parse learned_context and group_name in ExecuteCodeSchema', async () => {
+            const { ExecuteCodeSchema } = await import('../src/handlers/tools/codemode/schemas.js')
+            const parsed = ExecuteCodeSchema.safeParse({
+                code: 'schema',
+                auto_version: true,
+                dry_run: false,
+                group_name: 'schema',
+                learned_context: 'In SQLite MCP tools, using sanitizeIdentifier for dropping views...'
+            })
+            expect(parsed.success).toBe(true)
+            if (parsed.success) {
+                expect(parsed.data.group_name).toBe('schema')
+                expect(parsed.data.learned_context).toContain('sanitizeIdentifier')
+            }
+        })
+
+        it('should coerce validationStatus aliases (validated, valid, pass, etc.) in CLI schemas', async () => {
+            const { safeCoerceValidationStatus, baseEntryOptionsSchema } = await import('../src/cli/schemas.js')
+            expect(safeCoerceValidationStatus.parse('validated')).toBe('passed')
+            expect(safeCoerceValidationStatus.parse('valid')).toBe('passed')
+            expect(safeCoerceValidationStatus.parse('verified')).toBe('passed')
+            expect(safeCoerceValidationStatus.parse('passed')).toBe('passed')
+            expect(safeCoerceValidationStatus.parse(true)).toBe('passed')
+            expect(safeCoerceValidationStatus.parse('failed')).toBe('failed')
+            expect(safeCoerceValidationStatus.parse('error')).toBe('failed')
+            expect(safeCoerceValidationStatus.parse(false)).toBe('failed')
+            expect(safeCoerceValidationStatus.parse('none')).toBe('none')
+            expect(safeCoerceValidationStatus.parse('other_string')).toBe('none')
+
+            const schemaRes = baseEntryOptionsSchema.safeParse({
+                validationStatus: 'validated',
+                trustScore: '9',
+                impactScore: '3'
+            })
+            expect(schemaRes.success).toBe(true)
+            if (schemaRes.success) {
+                expect(schemaRes.data.validationStatus).toBe('passed')
+                expect(schemaRes.data.trustScore).toBe(9)
+                expect(schemaRes.data.impactScore).toBe(3)
+            }
+        })
+
+        it('should normalize validationStatus and validation aliases in param-normalizer', async () => {
+            const { applyArgInterceptions } = await import('../src/codemode/param-normalizer.js')
+            const res = applyArgInterceptions('createEntry', [{
+                content: 'Test content',
+                validationStatus: 'validated'
+            }])
+            expect('args' in res).toBe(true)
+            if ('args' in res) {
+                const normalized = res.args[0] as Record<string, unknown>
+                expect(normalized['validation_status']).toBe('passed')
+            }
+        })
     })
 })
 
