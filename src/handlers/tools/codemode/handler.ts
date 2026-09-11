@@ -675,7 +675,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
 
                             let validVal: 'passed' | 'failed' | 'none' | undefined = undefined
                             if (rawValStatus !== undefined && rawValStatus !== null) {
-                                const lower = String(rawValStatus).trim().toLowerCase()
+                                const lower = rawValStatus.trim().toLowerCase()
                                 if (['passed', 'pass', 'success', 'ok', 'validated', 'valid', 'verified', 'true', '1'].includes(lower)) {
                                     validVal = 'passed'
                                 } else if (['failed', 'fail', 'error', 'failing', 'false', '0'].includes(lower)) {

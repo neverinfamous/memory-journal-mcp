@@ -250,17 +250,17 @@ function buildEntryPayload(options: z.infer<typeof createEntrySchema>, metadata:
     if (valStatusRaw !== undefined && valStatusRaw !== null) {
         if (typeof valStatusRaw === 'boolean') {
             validationStatus = valStatusRaw ? 'passed' : 'failed'
-        } else {
-            const lower = String(valStatusRaw).trim().toLowerCase()
+        } else if (typeof valStatusRaw === 'string') {
+            const lower = valStatusRaw.trim().toLowerCase()
             if (['passed', 'pass', 'success', 'ok', 'validated', 'valid', 'verified', 'true', '1'].includes(lower)) {
                 validationStatus = 'passed'
             } else if (['failed', 'fail', 'error', 'failing', 'false', '0'].includes(lower)) {
                 validationStatus = 'failed'
-            } else if (['none', 'null', 'undefined', 'skip', 'skipped', 'unknown', 'pending'].includes(lower)) {
-                validationStatus = 'none'
             } else {
                 validationStatus = 'none'
             }
+        } else if (typeof valStatusRaw === 'number') {
+            validationStatus = valStatusRaw === 1 ? 'passed' : valStatusRaw === 0 ? 'failed' : 'none'
         }
     }
 
