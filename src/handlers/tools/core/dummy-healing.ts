@@ -388,10 +388,7 @@ export function getDummyHealingTools(context?: ToolContext): ToolDefinition[] {
             }
         }
 
-        let dbHealth = healthData
-        if (dbHealth === undefined && context !== null && context !== undefined) {
-            dbHealth = context.db.getHealthStatus()
-        }
+        const dbHealth = healthData ?? context?.db.getHealthStatus()
 
         return {
             success: true,

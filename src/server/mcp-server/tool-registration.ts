@@ -820,10 +820,7 @@ export function createServerInstance(
                                         // Fallback to db health if readResource fails
                                     }
 
-                                    let dbHealth = healthData;
-                                    if (dbHealth === undefined) {
-                                        dbHealth = db.getHealthStatus();
-                                    }
+                                    const dbHealth = healthData ?? db.getHealthStatus();
                                     const successPayload = {
                                         success: true,
                                         status: 'healthy',
