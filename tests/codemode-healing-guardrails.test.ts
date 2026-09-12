@@ -713,5 +713,62 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
             }
         })
     })
+
+    describe('Layer 1 & Layer 2: Server Info & Health Diagnostics Healing Guardrails', () => {
+        it('should include server_info and server_health in DUMMY_HEALING_TOOL_NAMES', async () => {
+            const { DUMMY_HEALING_TOOL_NAMES, DUMMY_SERVER_INFO_TOOL_NAMES } = await import(
+                '../src/handlers/tools/core/dummy-healing.js'
+            )
+            expect(DUMMY_SERVER_INFO_TOOL_NAMES).toContain('server_info')
+            expect(DUMMY_SERVER_INFO_TOOL_NAMES).toContain('server_health')
+            expect(DUMMY_HEALING_TOOL_NAMES.has('server_info')).toBe(true)
+            expect(DUMMY_HEALING_TOOL_NAMES.has('server_health')).toBe(true)
+            expect(DUMMY_HEALING_TOOL_NAMES.has('serverInfo')).toBe(true)
+            expect(DUMMY_HEALING_TOOL_NAMES.has('serverHealth')).toBe(true)
+            expect(DUMMY_HEALING_TOOL_NAMES.has('health')).toBe(true)
+            expect(DUMMY_HEALING_TOOL_NAMES.has('status')).toBe(true)
+        })
+
+        it('should return server diagnostics and healing note when server_info is called as a dummy tool', async () => {
+            const { getDummyHealingTools } = await import('../src/handlers/tools/core/dummy-healing.js')
+            const tools = getDummyHealingTools()
+            const serverInfoTool = tools.find((t) => t.name === 'server_info')
+            expect(serverInfoTool).toBeDefined()
+            if (serverInfoTool) {
+                const result = (await serverInfoTool.handler({})) as Record<string, unknown>
+                expect(result['success']).toBe(true)
+                expect(result['status']).toBe('healthy')
+                expect(result['server']).toBeDefined()
+                const serverObj = result['server'] as Record<string, unknown>
+                expect(serverObj['name']).toBe('memory-journal-mcp')
+                expect(serverObj['version']).toBeDefined()
+                expect(result['runtime']).toBeDefined()
+                expect(result['_healing_note']).toContain('🛠️ AUTONOMOUS HEALING')
+            }
+        })
+
+        it('should return health status and healing note when server_health is called as a dummy tool', async () => {
+            const { getDummyHealingTools } = await import('../src/handlers/tools/core/dummy-healing.js')
+            const tools = getDummyHealingTools()
+            const serverHealthTool = tools.find((t) => t.name === 'server_health')
+            expect(serverHealthTool).toBeDefined()
+            if (serverHealthTool) {
+                const result = (await serverHealthTool.handler({})) as Record<string, unknown>
+                expect(result['success']).toBe(true)
+                expect(result['status']).toBe('healthy')
+                expect(result['_healing_note']).toContain('🛠️ AUTONOMOUS HEALING')
+            }
+        })
+
+        it('should map server_info and server_health in METHOD_ALIASES for core, analytics, and admin', async () => {
+            const { METHOD_ALIASES } = await import('../src/codemode/api-constants.js')
+            expect(METHOD_ALIASES.core?.server_info).toBe('getStatistics')
+            expect(METHOD_ALIASES.core?.server_health).toBe('getStatistics')
+            expect(METHOD_ALIASES.analytics?.server_info).toBe('getStatistics')
+            expect(METHOD_ALIASES.analytics?.server_health).toBe('getStatistics')
+            expect(METHOD_ALIASES.admin?.server_info).toBe('getStatistics')
+            expect(METHOD_ALIASES.admin?.server_health).toBe('getStatistics')
+        })
+    })
 })
 

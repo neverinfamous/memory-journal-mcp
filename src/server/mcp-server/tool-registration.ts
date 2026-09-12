@@ -607,7 +607,7 @@ export function createServerInstance(
                                         uri = requestedTool;
                                     }
                                     if (uri && !uri.includes('://')) {
-                                        if (uri.startsWith('briefing') || uri.startsWith('recent') || uri.startsWith('agent-') || uri.startsWith('statistics') || uri.startsWith('insights') || uri.startsWith('help') || uri.startsWith('team') || uri.startsWith('git') || uri.startsWith('tools')) {
+                                        if (uri.startsWith('briefing') || uri.startsWith('recent') || uri.startsWith('agent-') || uri.startsWith('statistics') || uri.startsWith('insights') || uri.startsWith('help') || uri.startsWith('health') || uri.startsWith('team') || uri.startsWith('git') || uri.startsWith('tools')) {
                                             uri = `memory://${uri}`;
                                         } else {
                                             uri = `memory://briefing/${uri}`;
@@ -759,6 +759,93 @@ export function createServerInstance(
                                         data: promptResult,
                                         messages: promptResult.messages,
                                         _healing_note: `🛠️ AUTONOMOUS HEALING: '${requestedTool}' was called as an MCP tool instead of an MCP protocol request (prompts/get). The prompt '${targetPromptName}' was evaluated successfully.`
+                                    };
+                                    const enriched = JSON.stringify(successPayload, null, 2);
+                                    return {
+                                        content: [
+                                            {
+                                                type: 'text',
+                                                text: enriched,
+                                            },
+                                        ],
+                                        structuredContent: successPayload,
+                                    };
+                                } catch {
+                                    // Fall through to standard error reporting
+                                }
+                            }
+
+                            // Autonomous Server Info & Health Diagnostics Fallback
+                            const isServerInfo = [
+                                'server_info',
+                                'serverInfo',
+                                'server-info',
+                                'mj_server_info',
+                                'get_server_info',
+                                'getServerInfo',
+                                'server_health',
+                                'serverHealth',
+                                'server-health',
+                                'mj_server_health',
+                                'get_server_health',
+                                'getServerHealth',
+                                'health_check',
+                                'healthCheck',
+                                'health-check',
+                                'server_status',
+                                'serverStatus',
+                                'server-status',
+                                'status',
+                                'health',
+                            ].includes(requestedTool);
+                            if (isServerInfo) {
+                                try {
+                                    let healthData: Record<string, unknown> | undefined;
+                                    try {
+                                        const res = await readResource(
+                                            'memory://health',
+                                            db,
+                                            vectorManager ?? undefined,
+                                            configManager.getConfig().toolFilterConfig ?? undefined,
+                                            github ?? undefined,
+                                            undefined,
+                                            teamDb ?? undefined,
+                                            configManager.getConfig().briefingConfig,
+                                            runtime
+                                        );
+                                        if (typeof res.data === 'object' && res.data !== null) {
+                                            healthData = res.data as Record<string, unknown>;
+                                        }
+                                    } catch {
+                                        // Fallback to db health if readResource fails
+                                    }
+
+                                    let dbHealth = healthData;
+                                    if (dbHealth === undefined) {
+                                        dbHealth = db.getHealthStatus();
+                                    }
+                                    const successPayload = {
+                                        success: true,
+                                        status: 'healthy',
+                                        server: {
+                                            name: 'memory-journal-mcp',
+                                            version: VERSION,
+                                            description: 'Memory Journal MCP Server with Code Mode & Semantic Search',
+                                        },
+                                        runtime: {
+                                            nodeVersion: process.version,
+                                            platform: process.platform,
+                                            uptimeSeconds: Math.floor(process.uptime()),
+                                        },
+                                        ...(healthData !== undefined ? { health: healthData } : {}),
+                                        ...(dbHealth !== undefined ? { database: dbHealth } : {}),
+                                        capabilities: {
+                                            codemode: true,
+                                            resources: true,
+                                            prompts: true,
+                                            tools: true,
+                                        },
+                                        _healing_note: `🛠️ AUTONOMOUS HEALING: '${requestedTool}' was called as an MCP tool. Returned server diagnostic information and health status successfully.`,
                                     };
                                     const enriched = JSON.stringify(successPayload, null, 2);
                                     return {

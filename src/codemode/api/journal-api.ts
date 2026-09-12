@@ -206,6 +206,14 @@ export class JournalApi {
             this.core['listTables'] = statsFn
             this.core['describeTable'] = statsFn
             this.admin['analyze'] = statsFn
+            this.core['serverInfo'] = statsFn
+            this.core['serverHealth'] = statsFn
+            this.core['health'] = statsFn
+            this.core['status'] = statsFn
+            this.admin['serverInfo'] = statsFn
+            this.admin['serverHealth'] = statsFn
+            this.admin['health'] = statsFn
+            this.admin['status'] = statsFn
         }
         const getByIdFn = this.core['getEntryById']
         if (getByIdFn) this.core['exists'] = getByIdFn
@@ -511,6 +519,10 @@ export class JournalApi {
             getRecentEntries: this.core['getRecentEntries'],
             searchEntries: this.search['searchEntries'],
             getStatistics: this.analytics['getStatistics'],
+            serverInfo: this.analytics['getStatistics'],
+            serverHealth: this.analytics['getStatistics'],
+            getServerInfo: this.analytics['getStatistics'],
+            getServerHealth: this.analytics['getStatistics'],
             listProjects: this.core['listProjects'],
             searchProjects: this.core['listProjects'],
             getProjects: this.core['listProjects'],

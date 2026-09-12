@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
+import { VERSION } from '../../../version.js'
 import { getCoreTools } from './tools.js'
 import { getSearchTools } from '../search/index.js'
 import { getAdminTools } from '../admin/index.js'
@@ -146,6 +147,29 @@ export const DUMMY_ENTRY_CREATION_TOOL_NAMES = [
     'mj_record_entry',
 ]
 
+export const DUMMY_SERVER_INFO_TOOL_NAMES = [
+    'server_info',
+    'serverInfo',
+    'server-info',
+    'mj_server_info',
+    'get_server_info',
+    'getServerInfo',
+    'server_health',
+    'serverHealth',
+    'server-health',
+    'mj_server_health',
+    'get_server_health',
+    'getServerHealth',
+    'health_check',
+    'healthCheck',
+    'health-check',
+    'server_status',
+    'serverStatus',
+    'server-status',
+    'status',
+    'health',
+]
+
 export const DUMMY_HEALING_TOOL_NAMES = new Set<string>([
     'create_entry',
     ...DUMMY_ENTRY_CREATION_TOOL_NAMES,
@@ -161,6 +185,7 @@ export const DUMMY_HEALING_TOOL_NAMES = new Set<string>([
     ...DUMMY_LIST_TOOL_NAMES,
     ...DUMMY_GET_PROMPT_TOOL_NAMES,
     ...DUMMY_SQL_EXECUTION_TOOL_NAMES,
+    ...DUMMY_SERVER_INFO_TOOL_NAMES,
     'mj_core_create_entry',
     'mj_core_search_entries',
     'mj_core_get_recent_entries',
@@ -190,7 +215,7 @@ function extractUriFromArgs(args: Record<string, unknown>): string | undefined {
         }
     }
     if (uri && !uri.includes('://')) {
-        if (uri.startsWith('briefing') || uri.startsWith('recent') || uri.startsWith('agent-') || uri.startsWith('statistics') || uri.startsWith('insights') || uri.startsWith('help') || uri.startsWith('team') || uri.startsWith('git') || uri.startsWith('tools')) {
+        if (uri.startsWith('briefing') || uri.startsWith('recent') || uri.startsWith('agent-') || uri.startsWith('statistics') || uri.startsWith('insights') || uri.startsWith('help') || uri.startsWith('health') || uri.startsWith('team') || uri.startsWith('git') || uri.startsWith('tools')) {
             uri = `memory://${uri}`
         } else {
             uri = `memory://briefing/${uri}`
@@ -337,6 +362,59 @@ export function getDummyHealingTools(context?: ToolContext): ToolDefinition[] {
             success: true,
             tools: toolsList,
             _healing_note: `🛠️ AUTONOMOUS HEALING: '${toolName}' was called as an MCP tool instead of an MCP protocol request (tools/list). The available tools were returned successfully.`
+        }
+    }
+
+    const handleServerInfo = async (_params: unknown, toolName: string): Promise<unknown> => {
+        let healthData: Record<string, unknown> | undefined
+        if (context) {
+            try {
+                const res = await readResource(
+                    'memory://health',
+                    context.db,
+                    context.vectorManager,
+                    context.config?.filterConfig,
+                    context.github,
+                    undefined,
+                    context.teamDb,
+                    context.config?.briefingConfig,
+                    context.config?.runtime
+                )
+                if (typeof res.data === 'object' && res.data !== null) {
+                    healthData = res.data as Record<string, unknown>
+                }
+            } catch {
+                // Fallback to manual db status if readResource fails
+            }
+        }
+
+        let dbHealth = healthData
+        if (dbHealth === undefined && context !== null && context !== undefined) {
+            dbHealth = context.db.getHealthStatus()
+        }
+
+        return {
+            success: true,
+            status: 'healthy',
+            server: {
+                name: 'memory-journal-mcp',
+                version: VERSION,
+                description: 'Memory Journal MCP Server with Code Mode & Semantic Search',
+            },
+            runtime: {
+                nodeVersion: process.version,
+                platform: process.platform,
+                uptimeSeconds: Math.floor(process.uptime()),
+            },
+            ...(healthData !== undefined ? { health: healthData } : {}),
+            ...(dbHealth !== undefined ? { database: dbHealth } : {}),
+            capabilities: {
+                codemode: true,
+                resources: true,
+                prompts: true,
+                tools: true,
+            },
+            _healing_note: `🛠️ AUTONOMOUS HEALING: '${toolName}' was called as an MCP tool. Returned server diagnostic information and health status successfully.`,
         }
     }
 
@@ -952,6 +1030,16 @@ export function getDummyHealingTools(context?: ToolContext): ToolDefinition[] {
                     recoverable: true,
                 }
             },
+        })),
+        ...DUMMY_SERVER_INFO_TOOL_NAMES.map((name): ToolDefinition => ({
+            name,
+            title: `Server Info & Health Diagnostics Fallback (${name})`,
+            description: `Fallback handler for \`${name}\` when called directly as an MCP tool. Returns server metadata, runtime status, and diagnostics.`,
+            group: 'core',
+            inputSchema: z.any(),
+            outputSchema: z.any(),
+            annotations: { readOnlyHint: true, openWorldHint: false },
+            handler: async (params: unknown) => handleServerInfo(params, name),
         }))
     ]
 }
