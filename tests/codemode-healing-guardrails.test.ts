@@ -770,5 +770,67 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
             expect(METHOD_ALIASES.admin?.server_health).toBe('getStatistics')
         })
     })
+
+    describe('Layer 7: JSON.parse(context) and memory_read_resource Healing', () => {
+        it('should auto-heal JSON.parse(context) expressions in healCodeModeScript', async () => {
+            const { healCodeModeScript } = await import('../src/handlers/tools/codemode/handler.js')
+
+            const rawScript1 = 'const data = JSON.parse(context);\nreturn await mj.core.createEntry(data);'
+            const healed1 = healCodeModeScript(rawScript1)
+            expect(healed1).toContain('(typeof context === "string" ? JSON.parse(context) : context)')
+
+            const rawScript2 = 'const data = JSON.parse(context || "{}");'
+            const healed2 = healCodeModeScript(rawScript2)
+            expect(healed2).toContain('(typeof context === "string" ? JSON.parse(context) : context)')
+
+            const rawScript3 = 'const payload = JSON.parse(context.data);'
+            const healed3 = healCodeModeScript(rawScript3)
+            expect(healed3).toContain('(typeof context.data === "string" ? JSON.parse(context.data) : context.data)')
+        })
+
+        it('should normalize _uri to uri in applyArgInterceptions for memory_read_resource and read_resource', async () => {
+            const { applyArgInterceptions } = await import('../src/codemode/param-normalizer.js')
+
+            const result1 = applyArgInterceptions('memory_read_resource', [{ _uri: 'memory://agent-id' }])
+            expect('args' in result1).toBe(true)
+            if ('args' in result1) {
+                const normalized = result1.args[0] as Record<string, unknown>
+                expect(normalized.uri).toBe('memory://agent-id')
+                expect(normalized._uri).toBeUndefined()
+            }
+
+            const result2 = applyArgInterceptions('read_resource', [{ _uri: 'memory://briefing' }])
+            expect('args' in result2).toBe(true)
+            if ('args' in result2) {
+                const normalized = result2.args[0] as Record<string, unknown>
+                expect(normalized.uri).toBe('memory://briefing')
+                expect(normalized._uri).toBeUndefined()
+            }
+        })
+
+        it('should include memory_read_resource in dummy healing tools and resolve _uri', async () => {
+            const { getDummyHealingTools, DUMMY_HEALING_TOOL_NAMES } = await import('../src/handlers/tools/core/dummy-healing.js')
+
+            expect(DUMMY_HEALING_TOOL_NAMES.has('memory_read_resource')).toBe(true)
+            expect(DUMMY_HEALING_TOOL_NAMES.has('memory_list_resources')).toBe(true)
+
+            const tools = getDummyHealingTools()
+            const memoryReadTool = tools.find((t) => t.name === 'memory_read_resource')
+            expect(memoryReadTool).toBeDefined()
+            if (memoryReadTool) {
+                const res = (await memoryReadTool.handler({ _uri: 'memory://agent-id' })) as Record<string, unknown>
+                expect(res['success']).toBe(false)
+                expect(String(res['error'])).toContain('memory://agent-id')
+                expect(String(res['error'])).toContain('AUTONOMOUS HEALING')
+            }
+        })
+
+        it('should map memory_read_resource and read_resource in METHOD_ALIASES for core', async () => {
+            const { METHOD_ALIASES } = await import('../src/codemode/api-constants.js')
+            expect(METHOD_ALIASES.core?.memory_read_resource).toBe('readResource')
+            expect(METHOD_ALIASES.core?.read_resource).toBe('readResource')
+            expect(METHOD_ALIASES.core?.memoryReadResource).toBe('readResource')
+        })
+    })
 })
 

@@ -56,10 +56,19 @@ export const DUMMY_PROMPT_TOOL_NAMES = [
 export const DUMMY_RESOURCE_TOOL_NAMES = [
     'read_resource',
     'mj_read_resource',
+    'memory_read_resource',
+    'memoryReadResource',
+    'memory_journal_read_resource',
     'readResource',
     'read-resource',
     'get_resource',
     'getResource',
+    'get-resource',
+    'memory_get_resource',
+    'memoryGetResource',
+    'mj_get_resource',
+    'mjGetResource',
+    'read_memory_resource',
 ]
 
 export const DUMMY_LIST_RESOURCE_TOOL_NAMES = [
@@ -67,8 +76,15 @@ export const DUMMY_LIST_RESOURCE_TOOL_NAMES = [
     'listResources',
     'list-resources',
     'mj_list_resources',
+    'mjListResources',
+    'memory_list_resources',
+    'memoryListResources',
+    'memory_journal_list_resources',
     'get_resources',
     'getResources',
+    'get-resources',
+    'memory_get_resources',
+    'memoryGetResources',
 ]
 
 export const DUMMY_LIST_PROMPT_TOOL_NAMES = [
@@ -76,6 +92,10 @@ export const DUMMY_LIST_PROMPT_TOOL_NAMES = [
     'listPrompts',
     'list-prompts',
     'mj_list_prompts',
+    'mjListPrompts',
+    'memory_list_prompts',
+    'memoryListPrompts',
+    'memory_journal_list_prompts',
     'get_prompts',
     'getPrompts',
 ]
@@ -85,6 +105,10 @@ export const DUMMY_LIST_TOOL_NAMES = [
     'listTools',
     'list-tools',
     'mj_list_tools',
+    'mjListTools',
+    'memory_list_tools',
+    'memoryListTools',
+    'memory_journal_list_tools',
     'get_tools',
     'getTools',
 ]
@@ -93,6 +117,10 @@ export const DUMMY_GET_PROMPT_TOOL_NAMES = [
     'get_prompt',
     'getPrompt',
     'mj_get_prompt',
+    'mjGetPrompt',
+    'memory_get_prompt',
+    'memoryGetPrompt',
+    'memory_journal_get_prompt',
     'read_prompt',
     'readPrompt',
 ]

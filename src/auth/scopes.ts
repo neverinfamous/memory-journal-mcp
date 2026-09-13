@@ -86,6 +86,7 @@ export const TOOL_SCOPE_OVERRIDES: Record<string, StandardScope> = {
     // Synthetic & healing fallback tools
     read_resource: SCOPES.READ,
     mj_read_resource: SCOPES.READ,
+    memory_read_resource: SCOPES.READ,
     'load-briefing': SCOPES.READ,
     mj_session_summary: SCOPES.READ,
 

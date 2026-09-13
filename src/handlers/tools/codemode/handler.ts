@@ -178,6 +178,12 @@ export function healCodeModeScript(code: string): string {
         }
     )
 
+    // Auto-heal JSON.parse(context) / JSON.parse(context.<prop>) when context is already an object
+    executionCode = executionCode.replace(/\bJSON\.parse\s*\(\s*context\s*\)/g, '(typeof context === "string" ? JSON.parse(context) : context)')
+    executionCode = executionCode.replace(/\bJSON\.parse\s*\(\s*context\s*\|\|\s*['"][^'"]*['"]\s*\)/g, '(typeof context === "string" ? JSON.parse(context) : context)')
+    executionCode = executionCode.replace(/\bJSON\.parse\s*\(\s*context\s*\?\?\s*['"][^'"]*['"]\s*\)/g, '(typeof context === "string" ? JSON.parse(context) : context)')
+    executionCode = executionCode.replace(/\bJSON\.parse\s*\(\s*(context\.[a-zA-Z0-9_$]+)\s*\)/g, '(typeof $1 === "string" ? JSON.parse($1) : $1)')
+
     return executionCode
 }
 
@@ -1183,8 +1189,33 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                     const pool = getSandboxPool()
                     
                     // Prepare sandbox payload
-                    // We no longer cast it, and pass it cleanly.
-                    const userContext = (input.context !== undefined && input.context !== null && typeof input.context === 'object' ? input.context : {}) as Record<string, unknown>
+                    let userContext: Record<string, unknown> = {}
+                    if (input.context !== undefined && input.context !== null) {
+                        if (typeof input.context === 'object' && !Array.isArray(input.context)) {
+                            userContext = input.context as Record<string, unknown>
+                        } else if (typeof input.context === 'string') {
+                            const trimmed = input.context.trim()
+                            if (
+                                (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+                                (trimmed.startsWith('[') && trimmed.endsWith(']'))
+                            ) {
+                                try {
+                                    const parsed: unknown = JSON.parse(trimmed)
+                                    if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+                                        userContext = parsed as Record<string, unknown>
+                                    } else {
+                                        userContext = { value: parsed, raw: input.context, text: input.context, content: input.context }
+                                    }
+                                } catch {
+                                    userContext = { content: input.context, text: input.context, raw: input.context }
+                                }
+                            } else {
+                                userContext = { content: input.context, text: input.context, raw: input.context }
+                            }
+                        } else {
+                            userContext = { value: input.context, raw: input.context }
+                        }
+                    }
                     
                     // IMPORTANT: The worker relies on capturing the AuthContext from AsyncLocalStorage.
                     // We must run the execution wrapped in the current context so the worker thread
@@ -1231,7 +1262,9 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                                 errLower.includes('is not a function') ||
                                 errLower.includes('unexpected token') ||
                                 errLower.includes('unexpected identifier') ||
-                                errLower.includes('missing ) after argument list')
+                                errLower.includes('missing ) after argument list') ||
+                                errLower.includes('is not valid json') ||
+                                errLower.includes('[object object]')
                             ) {
                                 const originalInput = typeof input.code === 'string' ? input.code : (executionCode ?? '')
                                 const recoveredCode = extractAndRecoverSqlCode(originalInput) ?? extractAndRecoverEntryCode(originalInput)

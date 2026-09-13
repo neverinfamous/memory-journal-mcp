@@ -24,6 +24,7 @@ export const TOOL_GROUPS = {
         'mark_anchors_stale',
         'read_resource',
         'mj_read_resource',
+        'memory_read_resource',
         'load-briefing',
         'mj_session_summary',
     ],

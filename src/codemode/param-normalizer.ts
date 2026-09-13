@@ -49,6 +49,14 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
             if (obj['uri'] === undefined && obj['Uri'] === undefined) obj['uri'] = obj['_u_r_i'];
             delete obj['_u_r_i'];
         }
+        if (obj['_uri'] !== undefined) {
+            if (obj['uri'] === undefined && obj['Uri'] === undefined) obj['uri'] = obj['_uri'];
+            delete obj['_uri'];
+        }
+        if (obj['_url'] !== undefined) {
+            if (obj['url'] === undefined && obj['Url'] === undefined) obj['url'] = obj['_url'];
+            delete obj['_url'];
+        }
         delete obj['_server_name'];
         delete obj['_tool_name'];
         delete obj['_meta'];

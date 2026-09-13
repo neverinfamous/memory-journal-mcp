@@ -586,7 +586,26 @@ export function createServerInstance(
                             }
 
                             // Autonomous Resource Healing Fallback
-                            const isResource = requestedTool === 'read_resource' || requestedTool === 'readResource' || requestedTool === 'mj_read_resource' || requestedTool === 'get_resource' || requestedTool === 'getResource' || requestedTool.startsWith('memory://');
+                            const isResource =
+                                requestedTool === 'read_resource' ||
+                                requestedTool === 'readResource' ||
+                                requestedTool === 'read-resource' ||
+                                requestedTool === 'mj_read_resource' ||
+                                requestedTool === 'mjReadResource' ||
+                                requestedTool === 'memory_read_resource' ||
+                                requestedTool === 'memoryReadResource' ||
+                                requestedTool === 'memory_journal_read_resource' ||
+                                requestedTool === 'get_resource' ||
+                                requestedTool === 'getResource' ||
+                                requestedTool === 'get-resource' ||
+                                requestedTool === 'memory_get_resource' ||
+                                requestedTool === 'memoryGetResource' ||
+                                requestedTool === 'mj_get_resource' ||
+                                requestedTool === 'mjGetResource' ||
+                                requestedTool === 'read_memory_resource' ||
+                                requestedTool.endsWith('_read_resource') ||
+                                requestedTool.endsWith('ReadResource') ||
+                                requestedTool.startsWith('memory://');
                             if (isResource) {
                                 try {
                                     let uri = typeof toolArgs['uri'] === 'string' ? toolArgs['uri'] : (typeof toolArgs['Uri'] === 'string' ? toolArgs['Uri'] : (typeof toolArgs['_uri'] === 'string' ? toolArgs['_uri'] : undefined));
@@ -649,7 +668,22 @@ export function createServerInstance(
                             }
 
                             // Autonomous Resource Listing Fallback
-                            const isListResources = requestedTool === 'list_resources' || requestedTool === 'listResources' || requestedTool === 'list-resources' || requestedTool === 'mj_list_resources' || requestedTool === 'get_resources' || requestedTool === 'getResources';
+                            const isListResources =
+                                requestedTool === 'list_resources' ||
+                                requestedTool === 'listResources' ||
+                                requestedTool === 'list-resources' ||
+                                requestedTool === 'mj_list_resources' ||
+                                requestedTool === 'mjListResources' ||
+                                requestedTool === 'memory_list_resources' ||
+                                requestedTool === 'memoryListResources' ||
+                                requestedTool === 'memory_journal_list_resources' ||
+                                requestedTool === 'get_resources' ||
+                                requestedTool === 'getResources' ||
+                                requestedTool === 'get-resources' ||
+                                requestedTool === 'memory_get_resources' ||
+                                requestedTool === 'memoryGetResources' ||
+                                requestedTool.endsWith('_list_resources') ||
+                                requestedTool.endsWith('ListResources');
                             if (isListResources) {
                                 try {
                                     const resourceList = getResources();
@@ -674,7 +708,19 @@ export function createServerInstance(
                             }
 
                             // Autonomous Prompts Listing Fallback
-                            const isListPrompts = requestedTool === 'list_prompts' || requestedTool === 'listPrompts' || requestedTool === 'list-prompts' || requestedTool === 'mj_list_prompts' || requestedTool === 'get_prompts' || requestedTool === 'getPrompts';
+                            const isListPrompts =
+                                requestedTool === 'list_prompts' ||
+                                requestedTool === 'listPrompts' ||
+                                requestedTool === 'list-prompts' ||
+                                requestedTool === 'mj_list_prompts' ||
+                                requestedTool === 'mjListPrompts' ||
+                                requestedTool === 'memory_list_prompts' ||
+                                requestedTool === 'memoryListPrompts' ||
+                                requestedTool === 'memory_journal_list_prompts' ||
+                                requestedTool === 'get_prompts' ||
+                                requestedTool === 'getPrompts' ||
+                                requestedTool.endsWith('_list_prompts') ||
+                                requestedTool.endsWith('ListPrompts');
                             if (isListPrompts) {
                                 try {
                                     const promptList = getPrompts();
@@ -699,7 +745,19 @@ export function createServerInstance(
                             }
 
                             // Autonomous Tools Listing Fallback
-                            const isListTools = requestedTool === 'list_tools' || requestedTool === 'listTools' || requestedTool === 'list-tools' || requestedTool === 'mj_list_tools' || requestedTool === 'get_tools' || requestedTool === 'getTools';
+                            const isListTools =
+                                requestedTool === 'list_tools' ||
+                                requestedTool === 'listTools' ||
+                                requestedTool === 'list-tools' ||
+                                requestedTool === 'mj_list_tools' ||
+                                requestedTool === 'mjListTools' ||
+                                requestedTool === 'memory_list_tools' ||
+                                requestedTool === 'memoryListTools' ||
+                                requestedTool === 'memory_journal_list_tools' ||
+                                requestedTool === 'get_tools' ||
+                                requestedTool === 'getTools' ||
+                                requestedTool.endsWith('_list_tools') ||
+                                requestedTool.endsWith('ListTools');
                             if (isListTools) {
                                 try {
                                     const currentConfig = configManager.getConfig();
@@ -733,7 +791,18 @@ export function createServerInstance(
                             }
 
                             // Autonomous Prompt Fetching Fallback
-                            const isGetPrompt = requestedTool === 'get_prompt' || requestedTool === 'getPrompt' || requestedTool === 'mj_get_prompt' || requestedTool === 'read_prompt' || requestedTool === 'readPrompt';
+                            const isGetPrompt =
+                                requestedTool === 'get_prompt' ||
+                                requestedTool === 'getPrompt' ||
+                                requestedTool === 'mj_get_prompt' ||
+                                requestedTool === 'mjGetPrompt' ||
+                                requestedTool === 'memory_get_prompt' ||
+                                requestedTool === 'memoryGetPrompt' ||
+                                requestedTool === 'memory_journal_get_prompt' ||
+                                requestedTool === 'read_prompt' ||
+                                requestedTool === 'readPrompt' ||
+                                requestedTool.endsWith('_get_prompt') ||
+                                requestedTool.endsWith('GetPrompt');
                             if (isGetPrompt) {
                                 try {
                                     const targetPromptName = typeof toolArgs['name'] === 'string' ? toolArgs['name'] : (typeof toolArgs['prompt'] === 'string' ? toolArgs['prompt'] : (typeof toolArgs['prompt_name'] === 'string' ? toolArgs['prompt_name'] : 'load-briefing'));

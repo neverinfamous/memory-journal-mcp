@@ -157,9 +157,17 @@ async function executeCode(
                             recoverable: true
                         })
                 }
-                if (prop === 'readResource') {
+                if (
+                    prop === 'readResource' ||
+                    prop === 'read_resource' ||
+                    prop === 'memory_read_resource' ||
+                    prop === 'memoryReadResource' ||
+                    prop === 'getResource' ||
+                    prop === 'get_resource'
+                ) {
                     return (uri?: string) => {
                         const suggestions: Record<string, string> = {
+                            'memory://agent-id': 'mj.core.getStatistics() or mj.core.listProjects()',
                             'memory://recent': 'mj.core.getRecentEntries()',
                             'memory://statistics': 'mj.analytics.getStatistics()',
                             'memory://tags': 'mj.core.listTags()',
@@ -618,7 +626,31 @@ async function executeCode(
 
         const contextProxy = new Proxy(contextObj ?? {}, {
             get(target, prop) {
-                if (typeof prop === 'symbol') return undefined
+                if (typeof prop === 'symbol') {
+                    if (prop === Symbol.toPrimitive) {
+                        return (hint: string) => {
+                            if (hint === 'number') return NaN
+                            try {
+                                return JSON.stringify(target)
+                            } catch {
+                                return '[object Object]'
+                            }
+                        }
+                    }
+                    return undefined
+                }
+                if (prop === 'toString') {
+                    return () => {
+                        try {
+                            return JSON.stringify(target)
+                        } catch {
+                            return '[object Object]'
+                        }
+                    }
+                }
+                if (prop === 'toJSON') {
+                    return () => target
+                }
                 if (prop in target) return target[prop]
                 if (prop === 'executeSystemPrompt' || prop === 'getPrompt' || prop === 'executePrompt') {
                     return (_promptName?: string) => Promise.resolve({

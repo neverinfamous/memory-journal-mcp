@@ -497,6 +497,50 @@ export class JournalApi {
      * Includes group namespaces + top-level aliases for common operations.
      */
     createSandboxBindings(progressCtx?: ProgressContext): Record<string, unknown> {
+        const handleReadResource = (uri?: string): unknown => {
+            if (typeof uri === 'string') {
+                if (uri.startsWith('memory://briefing') && typeof this.core['getBriefing'] === 'function') {
+                    return (this.core['getBriefing'] as () => unknown)()
+                }
+                if ((uri.startsWith('memory://agent-id') || uri.startsWith('memory://config')) && typeof this.core['getConfig'] === 'function') {
+                    return (this.core['getConfig'] as () => unknown)()
+                }
+                if (uri.startsWith('memory://recent') && typeof this.core['getRecentEntries'] === 'function') {
+                    return (this.core['getRecentEntries'] as () => unknown)()
+                }
+                if (uri.startsWith('memory://statistics') && typeof this.analytics['getStatistics'] === 'function') {
+                    return (this.analytics['getStatistics'] as () => unknown)()
+                }
+                if (uri.startsWith('memory://tags') && typeof this.core['listTags'] === 'function') {
+                    return (this.core['listTags'] as () => unknown)()
+                }
+                if (uri.startsWith('memory://flags') && typeof this.team['teamListFlags'] === 'function') {
+                    return (this.team['teamListFlags'] as (args: unknown) => unknown)({ status: 'active' })
+                }
+                if (uri.startsWith('memory://insights') && typeof this.analytics['getCrossProjectInsights'] === 'function') {
+                    return (this.analytics['getCrossProjectInsights'] as () => unknown)()
+                }
+            }
+            const suggestions: Record<string, string> = {
+                'memory://recent': 'mj.core.getRecentEntries()',
+                'memory://statistics': 'mj.analytics.getStatistics()',
+                'memory://tags': 'mj.core.listTags()',
+                'memory://flags': 'mj.team.teamListFlags({ status: "active" })',
+                'memory://significant': 'mj.search.searchEntries({ sort_by: "importance" })',
+                'memory://insights': 'mj.analytics.getCrossProjectInsights()',
+            }
+            let hint = ''
+            if (typeof uri === 'string') {
+                const match = Object.entries(suggestions).find(([k]) => uri.startsWith(k))
+                if (match !== undefined) {
+                    hint = ` Try: ${match[1]}`
+                }
+            }
+            return Promise.reject(new Error(
+                `Code Mode cannot directly read MCP resources (e.g., memory://briefing) using readResource().${hint} Use the appropriate mj.* tools to query data, or read the resource via standard MCP client requests outside of Code Mode.`
+            ))
+        }
+
         const bindings: Record<string, unknown> = {
             // Group namespaces
             core: this.core,
@@ -585,49 +629,7 @@ export class JournalApi {
             create: () => bindings,
 
             // Global Hallucinations
-            readResource: (uri?: string) => {
-                if (typeof uri === 'string') {
-                    if (uri.startsWith('memory://briefing') && typeof this.core['getBriefing'] === 'function') {
-                        return this.core['getBriefing']()
-                    }
-                    if ((uri.startsWith('memory://agent-id') || uri.startsWith('memory://config')) && typeof this.core['getConfig'] === 'function') {
-                        return this.core['getConfig']()
-                    }
-                    if (uri.startsWith('memory://recent') && typeof this.core['getRecentEntries'] === 'function') {
-                        return this.core['getRecentEntries']()
-                    }
-                    if (uri.startsWith('memory://statistics') && typeof this.analytics['getStatistics'] === 'function') {
-                        return this.analytics['getStatistics']()
-                    }
-                    if (uri.startsWith('memory://tags') && typeof this.core['listTags'] === 'function') {
-                        return this.core['listTags']()
-                    }
-                    if (uri.startsWith('memory://flags') && typeof this.team['teamListFlags'] === 'function') {
-                        return this.team['teamListFlags']({ status: 'active' })
-                    }
-                    if (uri.startsWith('memory://insights') && typeof this.analytics['getCrossProjectInsights'] === 'function') {
-                        return this.analytics['getCrossProjectInsights']()
-                    }
-                }
-                const suggestions: Record<string, string> = {
-                    'memory://recent': 'mj.core.getRecentEntries()',
-                    'memory://statistics': 'mj.analytics.getStatistics()',
-                    'memory://tags': 'mj.core.listTags()',
-                    'memory://flags': 'mj.team.teamListFlags({ status: "active" })',
-                    'memory://significant': 'mj.search.searchEntries({ sort_by: "importance" })',
-                    'memory://insights': 'mj.analytics.getCrossProjectInsights()',
-                }
-                let hint = ''
-                if (typeof uri === 'string') {
-                    const match = Object.entries(suggestions).find(([k]) => uri.startsWith(k))
-                    if (match !== undefined) {
-                        hint = ` Try: ${match[1]}`
-                    }
-                }
-                return Promise.reject(new Error(
-                    `Code Mode cannot directly read MCP resources (e.g., memory://briefing) using readResource().${hint} Use the appropriate mj.* tools to query data, or read the resource via standard MCP client requests outside of Code Mode.`
-                ))
-            },
+            readResource: handleReadResource,
 
             // Extended top-level convenience aliases for common hallucinations
             find: this.search['searchEntries'],
@@ -650,6 +652,9 @@ export class JournalApi {
             get_entry_by_id: this.core['getEntryById'],
             update_entry: this.admin['updateEntry'],
             delete_entry: this.admin['deleteEntry'],
+            read_resource: handleReadResource,
+            memory_read_resource: handleReadResource,
+            memoryReadResource: handleReadResource,
 
             // Anti-Hallucination: Agent shell execution interceptor
             Agent: {
