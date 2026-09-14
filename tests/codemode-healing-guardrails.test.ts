@@ -832,5 +832,104 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
             expect(METHOD_ALIASES.core?.memoryReadResource).toBe('readResource')
         })
     })
+
+    describe('Layer 8: Raw JSON Payloads, updateMemory Aliases, and Method Help Introspection', () => {
+        it('should map updateMemory, createMemory, addMemory, recordMemory, and setMemory in METHOD_ALIASES', async () => {
+            const { METHOD_ALIASES } = await import('../src/codemode/api-constants.js')
+            expect(METHOD_ALIASES.core?.updateMemory).toBe('createEntry')
+            expect(METHOD_ALIASES.core?.update_memory).toBe('createEntry')
+            expect(METHOD_ALIASES.core?.createMemory).toBe('createEntry')
+            expect(METHOD_ALIASES.core?.addMemory).toBe('createEntry')
+            expect(METHOD_ALIASES.core?.recordMemory).toBe('createEntry')
+            expect(METHOD_ALIASES.core?.setMemory).toBe('createEntry')
+
+            expect(METHOD_ALIASES.admin?.updateMemory).toBe('updateEntry')
+            expect(METHOD_ALIASES.admin?.update_memory).toBe('updateEntry')
+            expect(METHOD_ALIASES.admin?.setMemory).toBe('updateEntry')
+            expect(METHOD_ALIASES.admin?.saveMemory).toBe('updateEntry')
+        })
+
+        it('should attach help() and describe() on worker-api-proxy methods, group proxies, and top level', async () => {
+            const { buildApiProxy } = await import('../src/codemode/worker-api-proxy.js')
+            const mockCallTool = vi.fn().mockResolvedValue({ success: true })
+            const methods = {
+                core: ['create_entry', 'createEntry'],
+            }
+            const schemas = {
+                core: {
+                    create_entry: JSON.stringify({ type: 'object', properties: { content: { type: 'string' } } }),
+                    createEntry: JSON.stringify({ type: 'object', properties: { content: { type: 'string' } } }),
+                },
+            }
+
+            const api = buildApiProxy(mockCallTool, methods, schemas)
+            const journalGroup = api['journal'] as Record<string, unknown> | undefined
+            expect(journalGroup).toBeDefined()
+
+            // Group help and describe
+            expect(typeof (journalGroup as Record<string, unknown>)?.['help']).toBe('function')
+            expect(typeof (journalGroup as Record<string, unknown>)?.['describe']).toBe('function')
+            const groupDesc = await (journalGroup as Record<string, () => Promise<{ group: string }>>)['describe']()
+            expect(groupDesc.group).toBe('core')
+
+            // Method help and describe
+            const createEntryFn = (journalGroup as Record<string, unknown>)?.['createEntry'] as {
+                help?: () => Promise<{ name: string; group: string; description: string }>
+                describe?: () => Promise<{ name: string; group: string; description: string }>
+                schema?: () => Promise<unknown>
+            }
+            expect(typeof createEntryFn?.help).toBe('function')
+            expect(typeof createEntryFn?.describe).toBe('function')
+            expect(typeof createEntryFn?.schema).toBe('function')
+
+            const methodHelp = await createEntryFn.help?.()
+            expect(methodHelp?.name).toBe('createEntry')
+            expect(methodHelp?.group).toBe('core')
+        })
+
+        it('should normalize findings and project string in applyArgInterceptions', async () => {
+            const { applyArgInterceptions } = await import('../src/codemode/param-normalizer.js')
+            const result = applyArgInterceptions('createEntry', [
+                {
+                    category: 'code',
+                    summary: 'Fixed unexpected token in db-mcp parameter normalizer',
+                    findings: [
+                        'Identified missing syntax validation in parameter normalizer',
+                        'Added regression tests for JSON code payloads'
+                    ],
+                    project: 'db-mcp',
+                },
+            ])
+
+            expect('args' in result).toBe(true)
+            if ('args' in result) {
+                const normalized = result.args[0] as Record<string, unknown>
+                expect(normalized.content).toContain('**Findings:**\n- Identified missing syntax validation')
+                expect(normalized.content).toContain('- Added regression tests for JSON code payloads')
+                expect(normalized.project).toBeUndefined()
+                expect(normalized.tags).toContain('db-mcp')
+            }
+        })
+
+        it('should map code and coding to technical_note in healAgentHallucinations', async () => {
+            const { healAgentHallucinations } = await import('../src/handlers/tools/schemas.js')
+            const healed1 = healAgentHallucinations({ entry_type: 'code' }) as Record<string, unknown>
+            expect(healed1['entry_type']).toBe('technical_note')
+
+            const healed2 = healAgentHallucinations({ entry_type: 'coding' }) as Record<string, unknown>
+            expect(healed2['entry_type']).toBe('technical_note')
+        })
+
+        it('should recover code with extractAndRecoverEntryCode when updateMemory or description/summary is used', async () => {
+            const { extractAndRecoverEntryCode } = await import('../src/handlers/tools/codemode/handler.js')
+
+            const brokenCode = `await updateMemory({ title: "Fix bug", description: "Resolved issue", tags: ["core"] })`
+            const recovered = extractAndRecoverEntryCode(brokenCode)
+            expect(recovered).toBeDefined()
+            expect(recovered).toContain('mj.createEntry')
+            expect(recovered).toContain('Resolved issue')
+            expect(recovered).toContain('Fix bug')
+        })
+    })
 })
 

@@ -194,8 +194,8 @@ export function extractAndRecoverEntryCode(code: string): string | null {
     if (!code || typeof code !== 'string') return null
 
     // Check if the code was attempting to create or update an entry
-    const isCreate = /\b(?:createEntry|teamCreateEntry|appendEntry|create_entry|team_create_entry)\b/i.test(code)
-    const isUpdate = /\b(?:updateEntry|teamUpdateEntry|update_entry|team_update_entry)\b/i.test(code)
+    const isCreate = /\b(?:createEntry|teamCreateEntry|appendEntry|create_entry|team_create_entry|addMemory|createMemory|saveMemory)\b/i.test(code)
+    const isUpdate = /\b(?:updateEntry|teamUpdateEntry|update_entry|team_update_entry|updateMemory)\b/i.test(code)
     
     if (!isCreate && !isUpdate) return null
 
@@ -212,6 +212,13 @@ export function extractAndRecoverEntryCode(code: string): string | null {
         const altMatch = /\bcontent\s*:\s*`([\s\S]*?)`(?=,\s*[\w$]+\s*:|\s*\})/i.exec(code)
         if (altMatch) {
             content = altMatch[1]
+        }
+    }
+
+    if (!content) {
+        const descMatch = /\b(?:description|summary)\s*:\s*[`'"]([\s\S]*?)[`'"](?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\)))/i.exec(code)
+        if (descMatch) {
+            content = descMatch[1]
         }
     }
 
@@ -283,7 +290,7 @@ export function extractAndRecoverEntryCode(code: string): string | null {
         }
     }
 
-    const fnName = isUpdate ? 'mj.updateEntry' : 'mj.createEntry'
+    const fnName = (isUpdate && payload['entry_id'] !== undefined) ? 'mj.updateEntry' : 'mj.createEntry'
     return `return await ${fnName}(${JSON.stringify(payload)});`
 }
 
@@ -481,26 +488,75 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                             try {
                                 const parsedJson = JSON.parse(trimmedCode) as Record<string, unknown>
                                 const hasContent = typeof parsedJson['content'] === 'string' && parsedJson['content'].length > 0
-                                const hasOp = parsedJson['op'] === 'create_entry'
-                                const hasType = typeof parsedJson['type'] === 'string' || typeof parsedJson['entry_type'] === 'string'
+                                const op = typeof parsedJson['operation'] === 'string' ? parsedJson['operation'] : typeof parsedJson['op'] === 'string' ? parsedJson['op'] : ''
+                                const hasOp = op === 'create_entry' || op === 'add_entry' || op === 'create' || op === 'update_entry' || op === 'update'
+                                const hasType = typeof parsedJson['type'] === 'string' || typeof parsedJson['entry_type'] === 'string' || typeof parsedJson['category'] === 'string'
+                                const hasSummaryOrFindings = typeof parsedJson['summary'] === 'string' || parsedJson['findings'] !== undefined || typeof parsedJson['description'] === 'string'
 
-                                if (hasContent || hasOp || hasType) {
-                                    const rawContent = parsedJson['content']
-                                    const contentStr = typeof rawContent === 'string'
-                                        ? rawContent
-                                        : typeof rawContent === 'number' || typeof rawContent === 'boolean'
-                                            ? String(rawContent)
+                                if (hasContent || hasOp || hasType || hasSummaryOrFindings) {
+                                    const contentParts: string[] = []
+                                    if (typeof parsedJson['summary'] === 'string' && parsedJson['summary'].trim().length > 0) {
+                                        contentParts.push(parsedJson['summary'].trim())
+                                    }
+                                    if (typeof parsedJson['description'] === 'string' && parsedJson['description'].trim().length > 0) {
+                                        contentParts.push(parsedJson['description'].trim())
+                                    }
+                                    if (Array.isArray(parsedJson['findings']) && parsedJson['findings'].length > 0) {
+                                        const findingsList = parsedJson['findings'].map(f => `- ${String(f)}`).join('\n')
+                                        contentParts.push(`**Findings:**\n${findingsList}`)
+                                    } else if (typeof parsedJson['findings'] === 'string' && parsedJson['findings'].trim().length > 0) {
+                                        contentParts.push(`**Findings:**\n${parsedJson['findings'].trim()}`)
+                                    }
+
+                                    let contentStr = typeof parsedJson['content'] === 'string'
+                                        ? parsedJson['content']
+                                        : typeof parsedJson['content'] === 'number' || typeof parsedJson['content'] === 'boolean'
+                                            ? String(parsedJson['content'])
                                             : ''
-                                    const entryParams = {
-                                        title: typeof parsedJson['title'] === 'string' ? parsedJson['title'] : undefined,
+                                    if (contentParts.length > 0) {
+                                        contentStr = contentStr.length > 0 ? `${contentStr}\n\n${contentParts.join('\n\n')}` : contentParts.join('\n\n')
+                                    }
+
+                                    const rawType = parsedJson['entry_type'] ?? parsedJson['type'] ?? parsedJson['category']
+                                    let entryType = 'technical_decision'
+                                    if (typeof rawType === 'string') {
+                                        const low = rawType.toLowerCase()
+                                        if (low === 'code' || low === 'coding' || low === 'technical' || low === 'task') {
+                                            entryType = 'technical_decision'
+                                        } else {
+                                            entryType = low
+                                        }
+                                    }
+
+                                    const tags: string[] = Array.isArray(parsedJson['tags']) ? parsedJson['tags'].map(String) : []
+                                    if (typeof parsedJson['project'] === 'string' && parsedJson['project'].trim().length > 0 && !tags.includes(parsedJson['project'].trim())) {
+                                        tags.push(parsedJson['project'].trim())
+                                    }
+
+                                    const title = typeof parsedJson['title'] === 'string'
+                                        ? parsedJson['title']
+                                        : typeof parsedJson['summary'] === 'string'
+                                            ? parsedJson['summary'].slice(0, 80)
+                                            : undefined
+
+                                    const entryParams: Record<string, unknown> = {
+                                        title,
                                         content: contentStr,
-                                        entry_type: typeof parsedJson['entry_type'] === 'string' ? parsedJson['entry_type'] : typeof parsedJson['type'] === 'string' ? parsedJson['type'] : 'technical_decision',
-                                        tags: Array.isArray(parsedJson['tags']) ? parsedJson['tags'].map(String) : [],
+                                        entry_type: entryType,
+                                        tags,
                                         workspace_id: typeof parsedJson['workspace_id'] === 'string' ? parsedJson['workspace_id'] : undefined,
                                         session_id: typeof parsedJson['session_id'] === 'string' ? parsedJson['session_id'] : undefined,
                                         project_number: typeof parsedJson['project_number'] === 'number' ? parsedJson['project_number'] : undefined,
                                     }
-                                    executionCode = `return await mj.createEntry(${JSON.stringify(entryParams)});`
+
+                                    const isUpdate = op === 'update_entry' || op === 'update' || parsedJson['entry_id'] !== undefined || parsedJson['id'] !== undefined
+                                    if (isUpdate) {
+                                        if (parsedJson['entry_id'] !== undefined) entryParams['entry_id'] = parsedJson['entry_id']
+                                        if (parsedJson['id'] !== undefined) entryParams['id'] = parsedJson['id']
+                                        executionCode = `return await mj.admin.updateEntry(${JSON.stringify(entryParams)});`
+                                    } else {
+                                        executionCode = `return await mj.createEntry(${JSON.stringify(entryParams)});`
+                                    }
                                 }
                             } catch {
                                 // Not valid JSON, continue normal execution

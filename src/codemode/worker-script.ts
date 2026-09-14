@@ -105,6 +105,58 @@ async function executeCode(
             })
         }
 
+        const updateMemoryFn = (arg: unknown): unknown => {
+            if (typeof arg === 'object' && arg !== null) {
+                const obj = arg as Record<string, unknown>
+                const entryId = obj['entry_id'] ?? obj['id'] ?? obj['entryId']
+                if (entryId !== undefined && entryId !== null) {
+                    const adminGroup = shimMj['admin'] as Record<string, ((...args: unknown[]) => unknown)> | undefined
+                    const fn = adminGroup?.['updateEntry'] ?? adminGroup?.['update_entry'] ?? (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['updateEntry']
+                    if (typeof fn === 'function') {
+                        return fn(arg)
+                    }
+                }
+            }
+            return (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg)
+        }
+
+        Object.assign(updateMemoryFn, {
+            help: (): Promise<unknown> =>
+                Promise.resolve({
+                    name: 'updateMemory',
+                    group: 'core',
+                    description: 'Record or update an entry in the memory journal. Pass { title, content, tags, ... } to create an entry, or include entry_id to update an existing entry.',
+                }),
+            describe: (): Promise<unknown> =>
+                Promise.resolve({
+                    name: 'updateMemory',
+                    group: 'core',
+                    description: 'Record or update an entry in the memory journal. Pass { title, content, tags, ... } to create an entry, or include entry_id to update an existing entry.',
+                }),
+            schema: (): Promise<unknown> => {
+                const coreGroup = shimMj['core'] as Record<string, { schema?: () => Promise<unknown> }> | undefined
+                return coreGroup?.['createEntry']?.schema?.() ?? Promise.resolve('unknown')
+            },
+        })
+
+        const wrapDelegatingTool = (
+            fn: (...args: unknown[]) => unknown,
+            targetFnGetter: () => unknown
+        ): unknown => {
+            return new Proxy(fn, {
+                get(target, prop, receiver) {
+                    const real = targetFnGetter()
+                    if (typeof real === 'object' && real !== null && prop in real) {
+                        return (real as Record<string, unknown>)[prop as string]
+                    }
+                    if (typeof real === 'function' && prop in real) {
+                        return (real as unknown as Record<string, unknown>)[prop as string]
+                    }
+                    return Reflect.get(target, prop, receiver) as unknown
+                }
+            })
+        }
+
         // Permissive shim to smooth out common agent hallucinations across different repos
         const shimMj: Record<string, unknown> = new Proxy({}, {
             get(_fakeTarget: Record<string, unknown>, prop: string | symbol): unknown {
@@ -274,10 +326,19 @@ async function executeCode(
                         })
                     }
                 }
+                if ((prop === 'journal' || prop === 'memory') && 'core' in target) {
+                    return target['core']
+                }
                 // Handle `memory.journal.addEntry` or `Entry.create` / `mj.add` / `mj.log` / `insertEntry` natural hallucination
-                if ((prop === 'addEntry' || prop === 'create_entry' || prop === 'createEntry' || prop === 'create' || prop === 'add' || prop === 'log' || prop === 'insertEntry' || prop === 'insert_entry' || prop === 'insert' || prop === 'add_entry' || prop === 'newEntry' || prop === 'new_entry' || prop === 'logEntry' || prop === 'log_entry' || prop === 'saveEntry' || prop === 'save_entry' || prop === 'writeEntry' || prop === 'write_entry' || prop === 'appendEntry' || prop === 'append_entry') && 'core' in target) {
+                if ((prop === 'addEntry' || prop === 'create_entry' || prop === 'createEntry' || prop === 'create' || prop === 'add' || prop === 'log' || prop === 'insertEntry' || prop === 'insert_entry' || prop === 'insert' || prop === 'add_entry' || prop === 'newEntry' || prop === 'new_entry' || prop === 'logEntry' || prop === 'log_entry' || prop === 'saveEntry' || prop === 'save_entry' || prop === 'writeEntry' || prop === 'write_entry' || prop === 'appendEntry' || prop === 'append_entry' || prop === 'createMemory' || prop === 'create_memory' || prop === 'addMemory' || prop === 'add_memory' || prop === 'recordMemory' || prop === 'record_memory') && 'core' in target) {
                     const coreGroup = target['core'] as Record<string, unknown>
                     return coreGroup['create_entry'] ?? coreGroup['createEntry']
+                }
+                if (prop === 'updateMemory' || prop === 'update_memory' || prop === 'setMemory' || prop === 'set_memory') {
+                    return updateMemoryFn
+                }
+                if (prop === 'saveMemory' || prop === 'save_memory') {
+                    return (arg?: unknown): unknown => (arg !== undefined && arg !== null ? updateMemoryFn(arg) : Promise.resolve({ success: true }))
                 }
                 if ((prop === 'get' || prop === 'read' || prop === 'find' || prop === 'fetch') && 'core' in target && 'search' in target) {
                     const coreGroup = target['core'] as Record<string, unknown>
@@ -803,35 +864,138 @@ async function executeCode(
             getDatabase: () => shimMj,
             get_database: () => shimMj,
             connectToDatabase: () => shimMj,
-            search_entries: (arg: unknown): unknown => (shimMj['search'] as Record<string, ((...args: unknown[]) => unknown)>)?.['searchEntries']?.(arg),
-            searchEntries: (arg: unknown): unknown => (shimMj['search'] as Record<string, ((...args: unknown[]) => unknown)>)?.['searchEntries']?.(arg),
-            query_entries: (arg: unknown): unknown => (shimMj['search'] as Record<string, ((...args: unknown[]) => unknown)>)?.['searchEntries']?.(arg),
-            queryEntries: (arg: unknown): unknown => (shimMj['search'] as Record<string, ((...args: unknown[]) => unknown)>)?.['searchEntries']?.(arg),
-            get_recent_entries: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['getRecentEntries']?.(arg),
-            getRecentEntries: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['getRecentEntries']?.(arg),
-            get_entry_by_id: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['getEntryById']?.(arg),
-            getEntryById: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['getEntryById']?.(arg),
-            list_projects: (arg: unknown): unknown => (shimMj['admin'] as Record<string, ((...args: unknown[]) => unknown)>)?.['listProjects']?.(arg),
-            listProjects: (arg: unknown): unknown => (shimMj['admin'] as Record<string, ((...args: unknown[]) => unknown)>)?.['listProjects']?.(arg),
-            get_project: (arg: unknown): unknown => (shimMj['admin'] as Record<string, ((...args: unknown[]) => unknown)>)?.['getProject']?.(arg),
-            getProject: (arg: unknown): unknown => (shimMj['admin'] as Record<string, ((...args: unknown[]) => unknown)>)?.['getProject']?.(arg),
-            list_tags: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['listTags']?.(arg),
-            listTags: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['listTags']?.(arg),
-            sqlite_journal_add_entry: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
-            create_entry: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
-            createEntry: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
-            insert_entry: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
-            insertEntry: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
-            add_entry: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
-            addEntry: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
-            new_entry: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
-            newEntry: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
-            log_entry: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
-            logEntry: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
-            save_entry: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
-            saveEntry: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
-            write_entry: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
-            writeEntry: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
+            search_entries: wrapDelegatingTool(
+                (arg: unknown): unknown => (shimMj['search'] as Record<string, ((...args: unknown[]) => unknown)>)?.['searchEntries']?.(arg),
+                () => (shimMj['search'] as Record<string, unknown>)?.['searchEntries']
+            ),
+            searchEntries: wrapDelegatingTool(
+                (arg: unknown): unknown => (shimMj['search'] as Record<string, ((...args: unknown[]) => unknown)>)?.['searchEntries']?.(arg),
+                () => (shimMj['search'] as Record<string, unknown>)?.['searchEntries']
+            ),
+            query_entries: wrapDelegatingTool(
+                (arg: unknown): unknown => (shimMj['search'] as Record<string, ((...args: unknown[]) => unknown)>)?.['searchEntries']?.(arg),
+                () => (shimMj['search'] as Record<string, unknown>)?.['searchEntries']
+            ),
+            queryEntries: wrapDelegatingTool(
+                (arg: unknown): unknown => (shimMj['search'] as Record<string, ((...args: unknown[]) => unknown)>)?.['searchEntries']?.(arg),
+                () => (shimMj['search'] as Record<string, unknown>)?.['searchEntries']
+            ),
+            get_recent_entries: wrapDelegatingTool(
+                (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['getRecentEntries']?.(arg),
+                () => (shimMj['core'] as Record<string, unknown>)?.['getRecentEntries']
+            ),
+            getRecentEntries: wrapDelegatingTool(
+                (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['getRecentEntries']?.(arg),
+                () => (shimMj['core'] as Record<string, unknown>)?.['getRecentEntries']
+            ),
+            get_entry_by_id: wrapDelegatingTool(
+                (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['getEntryById']?.(arg),
+                () => (shimMj['core'] as Record<string, unknown>)?.['getEntryById']
+            ),
+            getEntryById: wrapDelegatingTool(
+                (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['getEntryById']?.(arg),
+                () => (shimMj['core'] as Record<string, unknown>)?.['getEntryById']
+            ),
+            list_projects: wrapDelegatingTool(
+                (arg: unknown): unknown => (shimMj['admin'] as Record<string, ((...args: unknown[]) => unknown)>)?.['listProjects']?.(arg),
+                () => (shimMj['admin'] as Record<string, unknown>)?.['listProjects']
+            ),
+            listProjects: wrapDelegatingTool(
+                (arg: unknown): unknown => (shimMj['admin'] as Record<string, ((...args: unknown[]) => unknown)>)?.['listProjects']?.(arg),
+                () => (shimMj['admin'] as Record<string, unknown>)?.['listProjects']
+            ),
+            get_project: wrapDelegatingTool(
+                (arg: unknown): unknown => (shimMj['admin'] as Record<string, ((...args: unknown[]) => unknown)>)?.['getProject']?.(arg),
+                () => (shimMj['admin'] as Record<string, unknown>)?.['getProject']
+            ),
+            getProject: wrapDelegatingTool(
+                (arg: unknown): unknown => (shimMj['admin'] as Record<string, ((...args: unknown[]) => unknown)>)?.['getProject']?.(arg),
+                () => (shimMj['admin'] as Record<string, unknown>)?.['getProject']
+            ),
+            list_tags: wrapDelegatingTool(
+                (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['listTags']?.(arg),
+                () => (shimMj['core'] as Record<string, unknown>)?.['listTags']
+            ),
+            listTags: wrapDelegatingTool(
+                (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['listTags']?.(arg),
+                () => (shimMj['core'] as Record<string, unknown>)?.['listTags']
+            ),
+            sqlite_journal_add_entry: wrapDelegatingTool(
+                (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
+                () => (shimMj['core'] as Record<string, unknown>)?.['createEntry']
+            ),
+            create_entry: wrapDelegatingTool(
+                (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
+                () => (shimMj['core'] as Record<string, unknown>)?.['createEntry']
+            ),
+            createEntry: wrapDelegatingTool(
+                (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
+                () => (shimMj['core'] as Record<string, unknown>)?.['createEntry']
+            ),
+            insert_entry: wrapDelegatingTool(
+                (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
+                () => (shimMj['core'] as Record<string, unknown>)?.['createEntry']
+            ),
+            insertEntry: wrapDelegatingTool(
+                (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
+                () => (shimMj['core'] as Record<string, unknown>)?.['createEntry']
+            ),
+            add_entry: wrapDelegatingTool(
+                (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
+                () => (shimMj['core'] as Record<string, unknown>)?.['createEntry']
+            ),
+            addEntry: wrapDelegatingTool(
+                (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
+                () => (shimMj['core'] as Record<string, unknown>)?.['createEntry']
+            ),
+            new_entry: wrapDelegatingTool(
+                (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
+                () => (shimMj['core'] as Record<string, unknown>)?.['createEntry']
+            ),
+            newEntry: wrapDelegatingTool(
+                (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
+                () => (shimMj['core'] as Record<string, unknown>)?.['createEntry']
+            ),
+            log_entry: wrapDelegatingTool(
+                (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
+                () => (shimMj['core'] as Record<string, unknown>)?.['createEntry']
+            ),
+            logEntry: wrapDelegatingTool(
+                (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
+                () => (shimMj['core'] as Record<string, unknown>)?.['createEntry']
+            ),
+            save_entry: wrapDelegatingTool(
+                (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
+                () => (shimMj['core'] as Record<string, unknown>)?.['createEntry']
+            ),
+            saveEntry: wrapDelegatingTool(
+                (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
+                () => (shimMj['core'] as Record<string, unknown>)?.['createEntry']
+            ),
+            write_entry: wrapDelegatingTool(
+                (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
+                () => (shimMj['core'] as Record<string, unknown>)?.['createEntry']
+            ),
+            writeEntry: wrapDelegatingTool(
+                (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
+                () => (shimMj['core'] as Record<string, unknown>)?.['createEntry']
+            ),
+            update_entry: wrapDelegatingTool(
+                (arg: unknown): unknown => (shimMj['admin'] as Record<string, ((...args: unknown[]) => unknown)>)?.['updateEntry']?.(arg),
+                () => (shimMj['admin'] as Record<string, unknown>)?.['updateEntry']
+            ),
+            updateEntry: wrapDelegatingTool(
+                (arg: unknown): unknown => (shimMj['admin'] as Record<string, ((...args: unknown[]) => unknown)>)?.['updateEntry']?.(arg),
+                () => (shimMj['admin'] as Record<string, unknown>)?.['updateEntry']
+            ),
+            delete_entry: wrapDelegatingTool(
+                (arg: unknown): unknown => (shimMj['admin'] as Record<string, ((...args: unknown[]) => unknown)>)?.['deleteEntry']?.(arg),
+                () => (shimMj['admin'] as Record<string, unknown>)?.['deleteEntry']
+            ),
+            deleteEntry: wrapDelegatingTool(
+                (arg: unknown): unknown => (shimMj['admin'] as Record<string, ((...args: unknown[]) => unknown)>)?.['deleteEntry']?.(arg),
+                () => (shimMj['admin'] as Record<string, unknown>)?.['deleteEntry']
+            ),
             process_operation: (arg: unknown): unknown => {
                 if (typeof arg === 'object' && arg !== null) {
                     const obj = arg as Record<string, unknown>;
@@ -870,7 +1034,16 @@ async function executeCode(
                 }
                 return (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg);
             },
-            createMemory: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
+            updateMemory: updateMemoryFn,
+            update_memory: updateMemoryFn,
+            setMemory: updateMemoryFn,
+            set_memory: updateMemoryFn,
+            addMemory: updateMemoryFn,
+            add_memory: updateMemoryFn,
+            recordMemory: updateMemoryFn,
+            record_memory: updateMemoryFn,
+            createMemory: updateMemoryFn,
+            create_memory: updateMemoryFn,
             append: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
             append_entry: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
             appendEntry: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
@@ -894,7 +1067,8 @@ async function executeCode(
             readJournal: (): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['getRecentEntries']?.({ limit: 50 }),
             writeJournal: (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
             loadMemory: (): Promise<unknown> => Promise.resolve(shimMj),
-            saveMemory: (): Promise<unknown> => Promise.resolve({ success: true }),
+            saveMemory: (arg?: unknown): unknown => (arg !== undefined && arg !== null ? updateMemoryFn(arg) : Promise.resolve({ success: true })),
+            save_memory: (arg?: unknown): unknown => (arg !== undefined && arg !== null ? updateMemoryFn(arg) : Promise.resolve({ success: true })),
             update_configuration: (arg: unknown): unknown => {
                 const adminGroup = shimMj['admin'] as Record<string, ((...args: unknown[]) => unknown)> | undefined
                 const fn = adminGroup?.['update_configuration'] ?? adminGroup?.['updateConfiguration']

@@ -53,7 +53,35 @@ export function buildApiProxy(
         })
     }
 
+    function attachMethodIntrospection(
+        targetFn: (...args: unknown[]) => unknown,
+        group: string,
+        methodName: string,
+        getSchema: () => string,
+        customDescription?: string
+    ): void {
+        const description = customDescription ?? `Code Mode tool mj.${group}.${methodName}. Use mj.${group}.${methodName}.schema() to view parameter schema.`
+        Object.assign(targetFn, {
+            schema: (): Promise<string> => Promise.resolve(getSchema()),
+            help: (): Promise<unknown> =>
+                Promise.resolve({
+                    name: methodName,
+                    group,
+                    schema: getSchema(),
+                    description,
+                }),
+            describe: (): Promise<unknown> =>
+                Promise.resolve({
+                    name: methodName,
+                    group,
+                    schema: getSchema(),
+                    description,
+                }),
+        })
+    }
+
     for (const [group, methodNames] of Object.entries(methods)) {
+        if (!Array.isArray(methodNames)) continue
         if (group === '_topLevel') {
             for (const methodName of methodNames) {
                 const proxyFn = (...args: unknown[]): Promise<unknown> => {
@@ -64,10 +92,7 @@ export function buildApiProxy(
                     const resultPromise = safeRpcCall('_topLevel', methodName, intercept.args).then(wrapResult)
                     return wrapPromise(resultPromise, methodName)
                 }
-                Object.assign(proxyFn, {
-                    schema: (): Promise<string> =>
-                        Promise.resolve(schemas?.['_topLevel']?.[methodName] ?? 'unknown'),
-                })
+                attachMethodIntrospection(proxyFn, '_topLevel', methodName, () => schemas?.['_topLevel']?.[methodName] ?? 'unknown')
                 api[methodName] = proxyFn
             }
             continue
@@ -84,10 +109,7 @@ export function buildApiProxy(
                 const resultPromise = safeRpcCall(group, methodName, intercept.args).then(wrapResult)
                 return wrapPromise(resultPromise, methodName)
             }
-            Object.assign(proxyFn, {
-                schema: (): Promise<string> =>
-                    Promise.resolve(schemas?.[group]?.[methodName] ?? 'unknown'),
-            })
+            attachMethodIntrospection(proxyFn, group, methodName, () => schemas?.[group]?.[methodName] ?? 'unknown')
             groupProxy[methodName] = proxyFn
         }
 
@@ -96,6 +118,7 @@ export function buildApiProxy(
                 group,
                 methods: methodNames,
             })
+        groupProxy['describe'] = groupProxy['help']
 
         const groupCallable = function (): void {
             // Callable group namespace target shim
@@ -234,10 +257,7 @@ export function buildApiProxy(
                             const resultPromise = safeRpcCall(teamGroup, teamSnakeKey, intercept.args).then(wrapResult);
                             return wrapPromise(resultPromise, teamSnakeKey);
                         }
-                        Object.assign(teamFn, {
-                            schema: (): Promise<string> =>
-                                Promise.resolve(schemas?.[teamGroup]?.[teamSnakeKey] ?? 'unknown'),
-                        })
+                        attachMethodIntrospection(teamFn, teamGroup, teamSnakeKey, () => schemas?.[teamGroup]?.[teamSnakeKey] ?? 'unknown')
                         return teamFn
                     }
 
@@ -252,10 +272,7 @@ export function buildApiProxy(
                             const resultPromise = safeRpcCall(foundGroup, snakeKey, intercept.args).then(wrapResult);
                             return wrapPromise(resultPromise, snakeKey);
                         }
-                        Object.assign(crossFn, {
-                            schema: (): Promise<string> =>
-                                Promise.resolve(schemas?.[foundGroup]?.[snakeKey] ?? schemas?.[foundGroup]?.[resolvedKey] ?? 'unknown'),
-                        })
+                        attachMethodIntrospection(crossFn, foundGroup, snakeKey, () => schemas?.[foundGroup]?.[snakeKey] ?? schemas?.[foundGroup]?.[resolvedKey] ?? 'unknown')
                         return crossFn
                     }
                 }
@@ -275,9 +292,7 @@ export function buildApiProxy(
                         recoverable: true
                     })), key)
                 }
-                Object.assign(fallbackFn, {
-                    schema: (): Promise<string> => Promise.resolve('unknown'),
-                })
+                attachMethodIntrospection(fallbackFn, group, key, () => 'unknown', reason)
                 return fallbackFn
             },
             set(): boolean { return false },
@@ -303,12 +318,14 @@ export function buildApiProxy(
             usage: 'Use mj.<group>.help() for group details. Use mj.<group>.<method>.schema() for parameter details.',
         })
     }
+    api['describe'] = api['help']
 
     return new Proxy(api, {
         get(target, prop) {
             if (typeof prop === 'symbol') return undefined
             if (prop in target) return target[prop]
             if (prop === 'gitApi') return target['git']
+            if (prop === 'journal' || prop === 'memory') return target['core'] ?? target
             if (prop === 'then') return undefined
 
             if (

@@ -165,6 +165,20 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
             }
             delete obj['projectName'];
         }
+        if (obj['project'] !== undefined) {
+            if (obj['project_number'] === undefined) {
+                const num = Number(obj['project']);
+                const strVal = typeof obj['project'] === 'string' || typeof obj['project'] === 'number' ? String(obj['project']) : '';
+                if (!Number.isNaN(num) && strVal.trim() !== '') {
+                    obj['project_number'] = num;
+                } else if (typeof obj['project'] === 'string' && obj['project'].trim() !== '') {
+                    const projStr = obj['project'].trim();
+                    const existingTags = Array.isArray(obj['tags']) ? (obj['tags'] as unknown[]).filter((t): t is string => typeof t === 'string') : [];
+                    obj['tags'] = [...existingTags, projStr];
+                }
+            }
+            delete obj['project'];
+        }
         if ((methodName === 'create_entry' || methodName === 'createEntry' || methodName === 'team_create_entry' || methodName === 'teamCreateEntry')) {
             const projNum = typeof obj['project_number'] === 'number' ? obj['project_number'] : undefined;
             const content = typeof obj['content'] === 'string' ? obj['content'] : undefined;
@@ -286,6 +300,13 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
                 const artStr = Array.isArray(artifacts) ? artifacts.map(safeString).join(', ') : safeString(artifacts);
                 if (artStr !== '') contentParts.push(`**Artifacts:** ${artStr}`);
                 delete obj['artifacts']; delete obj['files']; delete obj['changes']; delete obj['modified_files'];
+            }
+
+            const findings = obj['findings'] ?? obj['results'] ?? obj['key_findings'] ?? obj['discoveries'];
+            if (findings !== undefined) {
+                const findingsStr = Array.isArray(findings) ? findings.map((f) => `- ${safeString(f)}`).join('\n') : safeString(findings);
+                if (findingsStr !== '') contentParts.push(`**Findings:**\n${findingsStr}`);
+                delete obj['findings']; delete obj['results']; delete obj['key_findings']; delete obj['discoveries'];
             }
 
             if (obj['content'] !== undefined) {
