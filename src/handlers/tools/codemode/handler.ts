@@ -48,28 +48,67 @@ export function healCodeModeScript(code: string): string {
     // Auto-heal tools.* -> mj.*
     executionCode = executionCode.replace(/\btools\./g, 'mj.')
 
-    // Auto-heal ES module import and CommonJS require statements
-    executionCode = executionCode.replace(/(?:const|let|var)\s+(\{[^}]*\}|[\w$]+)\s*=\s*require\s*\(\s*['"]([^'"]+)['"]\s*\);?/g, (_m: string, varName: string, modName: string): string => {
+    // Auto-heal dynamic import() expressions: const x = await import('...') or import('...')
+    executionCode = executionCode.replace(/(?:const|let|var)\s+(\{[^}]*\}|[\w$]+)\s*=\s*(?:await\s+)?import\s*\(\s*['"]([^'"]+)['"]\s*\);?/g, (m: string, varName: string, modName: string): string => {
         const v = varName.trim()
-        const mod = modName.toLowerCase()
-        if (v === 'mj') return `/* auto-healed require */`
+        const mod = modName.toLowerCase().replace(/^node:/, '')
+        if (v === 'mj') return `/* auto-healed dynamic import */`
+        if (mod === 'fs' || v === 'fs') {
+            return `const __safeFs = (typeof __safeFs !== 'undefined' ? __safeFs : mj);`
+        }
+        if (mod === 'path' || v === 'path') {
+            return `const path = (typeof path !== 'undefined' ? path : mj);`
+        }
         if (mod.includes('sqlite') || mod.includes('database') || v.toLowerCase().includes('sqlite') || v.toLowerCase() === 'database') {
             return `const ${varName} = mj.sqlite3;`
         }
         if (v === 'child_process' || mod.includes('child_process')) {
             return `const ${v === 'child_process' ? 'cp' : varName} = mj;`
         }
-        return `const ${varName} = mj;`
+        if (mod.includes('memory') || mod.includes('journal')) {
+            return `const ${varName} = mj;`
+        }
+        return m
     })
-    executionCode = executionCode.replace(/^\s*require\s*\(\s*['"][^'"]+['"]\s*\);?/gm, '/* auto-healed require */')
+    executionCode = executionCode.replace(/(?:await\s+)?import\s*\(\s*['"](?:fs|node:fs|path|node:path|memory-journal(?:-mcp)?|sqlite-journal)['"]\s*\);?/g, '/* auto-healed dynamic import */')
 
-    executionCode = executionCode.replace(/import\s+(\{[^}]*\}|\*\s+as\s+[\w$]+|[\w$]+)\s+from\s+['"]([^'"]+)['"]\s*;?/g, (_m: string, varName: string, modName: string): string => {
+    // Auto-heal ES module import and CommonJS require statements
+    executionCode = executionCode.replace(/(?:const|let|var)\s+(\{[^}]*\}|[\w$]+)\s*=\s*require\s*\(\s*['"]([^'"]+)['"]\s*\);?/g, (m: string, varName: string, modName: string): string => {
         const v = varName.trim()
-        const mod = modName.toLowerCase()
+        const mod = modName.toLowerCase().replace(/^node:/, '')
+        if (v === 'mj') return `/* auto-healed require */`
+        if (mod === 'fs' || v === 'fs') {
+            return `const __safeFs = (typeof __safeFs !== 'undefined' ? __safeFs : mj);`
+        }
+        if (mod === 'path' || v === 'path') {
+            return `const path = (typeof path !== 'undefined' ? path : mj);`
+        }
+        if (mod.includes('sqlite') || mod.includes('database') || v.toLowerCase().includes('sqlite') || v.toLowerCase() === 'database') {
+            return `const ${varName} = mj.sqlite3;`
+        }
+        if (v === 'child_process' || mod.includes('child_process')) {
+            return `const ${v === 'child_process' ? 'cp' : varName} = mj;`
+        }
+        if (mod.includes('memory') || mod.includes('journal')) {
+            return `const ${varName} = mj;`
+        }
+        return m
+    })
+    executionCode = executionCode.replace(/^\s*require\s*\(\s*['"](?:fs|node:fs|path|node:path|memory-journal(?:-mcp)?|sqlite-journal)['"]\s*\);?/gm, '/* auto-healed require */')
+
+    executionCode = executionCode.replace(/import\s+(\{[^}]*\}|\*\s+as\s+[\w$]+|[\w$]+)\s+from\s+['"]([^'"]+)['"]\s*;?/g, (m: string, varName: string, modName: string): string => {
+        const v = varName.trim()
+        const mod = modName.toLowerCase().replace(/^node:/, '')
         if (v === 'mj') return `/* auto-healed import */`
         let targetVar = v
         if (v.startsWith('* as ')) {
             targetVar = v.replace(/^\*\s+as\s+/, '')
+        }
+        if (mod === 'fs' || targetVar === 'fs') {
+            return `const __safeFs = (typeof __safeFs !== 'undefined' ? __safeFs : mj);`
+        }
+        if (mod === 'path' || targetVar === 'path') {
+            return `const path = (typeof path !== 'undefined' ? path : mj);`
         }
         if (mod.includes('sqlite') || mod.includes('database') || targetVar.toLowerCase().includes('sqlite') || targetVar.toLowerCase() === 'database') {
             return `const ${targetVar} = mj.sqlite3;`
@@ -77,7 +116,10 @@ export function healCodeModeScript(code: string): string {
         if (targetVar === 'child_process' || mod.includes('child_process')) {
             return `const ${targetVar === 'child_process' ? 'cp' : targetVar} = mj;`
         }
-        return `const ${targetVar} = mj;`
+        if (mod.includes('memory') || mod.includes('journal')) {
+            return `const ${targetVar} = mj;`
+        }
+        return m
     })
     // Auto-unwrap nested mj_execute_code / execute_code calls
     const unwrapNested = (src: string): string => {
@@ -93,6 +135,9 @@ export function healCodeModeScript(code: string): string {
     // Auto-heal fs.readFileSync / fs.readFile calls before security checks
     executionCode = executionCode.replace(/(?:fs|fs\.promises)\.readFileSync\s*\([^)]*\)/g, '(typeof context !== "undefined" && context.content ? context.content : "")')
     executionCode = executionCode.replace(/(?:fs|fs\.promises)\.readFile\s*\([^)]*\)/g, 'Promise.resolve(typeof context !== "undefined" && context.content ? context.content : "")')
+
+    // Auto-heal safe read-only fs inspections (existsSync, statSync, stat, lstatSync)
+    executionCode = executionCode.replace(/\bfs\.(existsSync|statSync|stat|lstatSync)\s*\(/g, '__safeFs.$1(')
 
     // Auto-heal process.env access in Code Mode scripts before security checks
     executionCode = executionCode.replace(/process\.env\.([a-zA-Z0-9_]+)/g, () => 'undefined')

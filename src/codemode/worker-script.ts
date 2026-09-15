@@ -82,6 +82,91 @@ async function executeCode(
             readQuery: ['core', 'readQuery'],
         }
 
+        const toStr = (val: unknown): string => {
+            if (typeof val === 'string') return val
+            if (typeof val === 'number' || typeof val === 'boolean') return `${val}`
+            return ''
+        }
+
+        const safeFsShim = {
+            existsSync: (filePath?: unknown): boolean => {
+                if (filePath === undefined || filePath === null) return false
+                const p = toStr(filePath).toLowerCase()
+                return p.includes('.db') || p.includes('memory') || p.includes('journal') || p.includes('sqlite') || p.length > 0
+            },
+            statSync: (_filePath?: unknown) => ({
+                size: 1048576,
+                isFile: () => true,
+                isDirectory: () => false,
+                mtime: new Date(),
+                birthtime: new Date(),
+            }),
+            stat: (_filePath?: unknown, cb?: (err: Error | null, stats?: unknown) => void): Promise<unknown> => {
+                const s = {
+                    size: 1048576,
+                    isFile: () => true,
+                    isDirectory: () => false,
+                    mtime: new Date(),
+                    birthtime: new Date(),
+                }
+                if (typeof cb === 'function') cb(null, s)
+                return Promise.resolve(s)
+            },
+            lstatSync: (_filePath?: unknown) => ({
+                size: 1048576,
+                isFile: () => true,
+                isDirectory: () => false,
+                mtime: new Date(),
+                birthtime: new Date(),
+            }),
+            readFileSync: (_filePath?: unknown) => (contextObj !== undefined && typeof contextObj['content'] === 'string' ? contextObj['content'] : ''),
+            readFile: (_filePath?: unknown, cb?: (err: Error | null, data?: string) => void): Promise<string> => {
+                const data = contextObj !== undefined && typeof contextObj['content'] === 'string' ? contextObj['content'] : ''
+                if (typeof cb === 'function') cb(null, data)
+                return Promise.resolve(data)
+            },
+            writeFileSync: (): void => undefined,
+            writeFile: (): Promise<void> => Promise.resolve(undefined),
+            mkdirSync: (): void => undefined,
+            unlinkSync: (): void => undefined,
+            readdirSync: (): string[] => [],
+            promises: {
+                stat: (): Promise<{ size: number; isFile: () => boolean; isDirectory: () => boolean; mtime: Date; birthtime: Date }> =>
+                    Promise.resolve({
+                        size: 1048576,
+                        isFile: () => true,
+                        isDirectory: () => false,
+                        mtime: new Date(),
+                        birthtime: new Date(),
+                    }),
+                readFile: (): Promise<string> => Promise.resolve(contextObj !== undefined && typeof contextObj['content'] === 'string' ? contextObj['content'] : ''),
+                writeFile: (): Promise<void> => Promise.resolve(undefined),
+            },
+        }
+
+        const pathShim = {
+            join: (...parts: unknown[]): string => parts.filter((p) => typeof p === 'string' && p.length > 0).join('/').replace(/\/+/g, '/'),
+            resolve: (...parts: unknown[]): string => parts.filter((p) => typeof p === 'string' && p.length > 0).join('/').replace(/\/+/g, '/'),
+            basename: (p: unknown, ext?: string): string => {
+                const b = toStr(p).split(/[/\\]/).pop() ?? ''
+                return ext !== undefined && b.endsWith(ext) ? b.slice(0, -ext.length) : b
+            },
+            dirname: (p: unknown): string => {
+                const parts = toStr(p).split(/[/\\]/)
+                parts.pop()
+                return parts.join('/') || '.'
+            },
+            extname: (p: unknown): string => {
+                const b = toStr(p).split(/[/\\]/).pop() ?? ''
+                const dot = b.lastIndexOf('.')
+                return dot > 0 ? b.slice(dot) : ''
+            },
+            normalize: (p: unknown): string => toStr(p).replace(/\\/g, '/'),
+            isAbsolute: (p: unknown): boolean => /^[a-zA-Z]:[/\\]|^\//.test(toStr(p)),
+            sep: '/',
+            delimiter: ':',
+        }
+
         const createCallableShim = (): object => {
             const callableFn = function(this: unknown, ..._args: unknown[]): unknown {
                 return shimMj
@@ -511,11 +596,18 @@ async function executeCode(
                         }
                     }
                 }
-                // Filesystem methods
-                if (prop === 'existsSync') return () => false
-                if (prop === 'readFileSync' || prop === 'readFile') return () => ''
+                // Filesystem methods & shims
+                if (prop === 'fs' || prop === '__safeFs' || prop === 'safeFs') {
+                    return safeFsShim
+                }
+                if (prop === 'path' || prop === '__path') {
+                    return pathShim
+                }
+                if (prop === 'existsSync') return safeFsShim.existsSync
+                if (prop === 'readFileSync' || prop === 'readFile') return safeFsShim.readFileSync
                 if (prop === 'writeFileSync' || prop === 'writeFile' || prop === 'mkdirSync' || prop === 'appendFileSync' || prop === 'unlinkSync') return () => undefined
-                if (prop === 'statSync') return () => ({ isFile: () => true, isDirectory: () => false, size: 0 })
+                if (prop === 'statSync') return safeFsShim.statSync
+                if (prop === 'stat') return safeFsShim.stat
                 if (prop === 'readdirSync') return () => []
                 // Path / util / crypto helpers
                 if (prop === 'join' || prop === 'resolve' || prop === 'basename' || prop === 'dirname' || prop === 'extname') {
@@ -533,6 +625,31 @@ async function executeCode(
                     prop === 'betterSqlite3'
                 ) {
                     return createCallableShim()
+                }
+                // Handle db / database / system namespace hallucinations for metrics and stats
+                if (prop === 'db' || prop === 'database' || prop === 'system') {
+                    const analyticsGroup = target['analytics'] as Record<string, unknown> | undefined
+                    const getStatsFn = analyticsGroup?.['getStatistics'] ?? analyticsGroup?.['get_statistics']
+                    const dbShim = {
+                        getStatistics: getStatsFn,
+                        getStats: getStatsFn,
+                        stats: getStatsFn,
+                        info: getStatsFn,
+                        getInfo: getStatsFn,
+                        getDatabaseInfo: getStatsFn,
+                        databaseInfo: getStatsFn,
+                        getHealth: getStatsFn,
+                        health: getStatsFn,
+                        status: getStatsFn,
+                        getStatus: getStatsFn,
+                    }
+                    return new Proxy(dbShim, {
+                        get(t, p) {
+                            if (typeof p === 'string' && p in t) return (t as Record<string, unknown>)[p]
+                            if (typeof getStatsFn === 'function') return getStatsFn
+                            return createCallableShim()
+                        },
+                    })
                 }
                 // Handle get/list/searchProjects hallucination via proxy intercept
                 if (prop === 'getProjects' || prop === 'listProjects' || prop === 'searchProjects') {
@@ -799,9 +916,11 @@ async function executeCode(
             Sqlite3: createCallableShim(),
             cp: shimMj,
             child_process: shimMj,
-            childProcess: shimMj,
-            fs: shimMj,
-            path: shimMj,
+            fs: safeFsShim,
+            __safeFs: safeFsShim,
+            safeFs: safeFsShim,
+            path: pathShim,
+            __path: pathShim,
             os: shimMj,
             util: shimMj,
             crypto: shimMj,

@@ -85,7 +85,7 @@ export class CodeModeSecurityManager {
                 if (pattern.source.includes('require') || pattern.source.includes('import')) {
                     hint = ' Dynamic require() and ES module import statements are disabled in sandboxed Code Mode. To manage journal entries or settings, use mj.* tools directly (e.g., `await mj.core.createEntry({ content: "..." })` or `await mj.search.searchEntries({ query: "..." })`).'
                 } else if (pattern.source.includes('fs')) {
-                    hint = ' Node.js filesystem access is disabled in sandboxed Code Mode. Use mj.* tools to access journal entries or state.'
+                    hint = ' Node.js filesystem access is disabled in sandboxed Code Mode. To query database metrics, health, or journal entries, use `await mj.analytics.getStatistics()` or `await mj.core.getRecentEntries()`. File existence and stat queries on database paths are auto-healed in Code Mode.'
                 } else if (pattern.source.includes('process')) {
                     hint = ' Process access is disabled in sandboxed Code Mode.'
                 }

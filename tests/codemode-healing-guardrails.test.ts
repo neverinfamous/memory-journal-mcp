@@ -930,6 +930,47 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
             expect(recovered).toContain('Resolved issue')
             expect(recovered).toContain('Fix bug')
         })
+
+        it('should auto-heal dynamic imports of fs and path and statSync checks from agent issues log', async () => {
+            const { healCodeModeScript } = await import('../src/handlers/tools/codemode/handler.js')
+            const { CodeModeSecurityManager } = await import('../src/codemode/security.js')
+
+            const rawAgentCode = `const fs = await import('fs');
+const path = await import('path');
+const dbPath = 'C:\\\\Users\\\\chris\\\\Desktop\\\\memory-journal-mcp\\\\memory.db';
+let stat = null;
+if (fs.existsSync(dbPath)) {
+  stat = fs.statSync(dbPath);
+}
+return {
+  exists: fs.existsSync(dbPath),
+  size: stat ? stat.size : null,
+  sizeMb: stat ? (stat.size / (1024 * 1024)).toFixed(2) : null
+};`
+
+            const healed = healCodeModeScript(rawAgentCode)
+
+            // Ensure dynamic import and fs. are transformed
+            expect(healed).not.toContain("import('fs')")
+            expect(healed).not.toContain("import('path')")
+            expect(healed).not.toContain('fs.existsSync')
+            expect(healed).not.toContain('fs.statSync')
+            expect(healed).toContain('__safeFs')
+
+            // Ensure security validation passes on healed code
+            const security = new CodeModeSecurityManager()
+            const valResult = security.validateCode(healed)
+            expect(valResult.valid).toBe(true)
+            expect(valResult.errors).toHaveLength(0)
+        })
+
+        it('should route db and database aliases to analytics.getStatistics', async () => {
+            const { METHOD_ALIASES } = await import('../src/codemode/api-constants.js')
+            expect(METHOD_ALIASES.analytics['databaseInfo']).toBe('getStatistics')
+            expect(METHOD_ALIASES.analytics['getDatabaseInfo']).toBe('getStatistics')
+            expect(METHOD_ALIASES.analytics['dbStats']).toBe('getStatistics')
+            expect(METHOD_ALIASES.analytics['getDbStats']).toBe('getStatistics')
+        })
     })
 })
 
