@@ -138,6 +138,66 @@ describe('WorkerSandbox', () => {
         expect(res.dbRes.error).toContain('Direct SQLite database access')
     })
 
+    it('should support sqlite.schema.help() and schema introspection shims (agent-issues regression)', async () => {
+        const sandbox = new WorkerSandbox()
+        const bindings = {
+            analytics: {
+                get_statistics: async () => ({
+                    success: true,
+                    totalEntries: 100,
+                    databaseSize: '1.2MB',
+                }),
+            },
+            core: {
+                create_entry: async () => ({ success: true, id: 1 }),
+            },
+        }
+
+        // Test 1: Exact failing code from logs/agent-issues.jsonl
+        const r1 = await sandbox.execute('return sqlite.schema.help();', bindings)
+        expect(r1.success).toBe(true)
+        expect((r1.result as any).group).toBe('schema')
+        expect((r1.result as any).tables).toContain('entries')
+
+        // Test 2: Global schema.help()
+        const r2 = await sandbox.execute('return schema.help();', bindings)
+        expect(r2.success).toBe(true)
+        expect((r2.result as any).tables).toContain('entries')
+
+        // Test 3: mj.schema.help()
+        const r3 = await sandbox.execute('return mj.schema.help();', bindings)
+        expect(r3.success).toBe(true)
+        expect((r3.result as any).tables).toContain('entries')
+
+        // Test 4: db.schema.help()
+        const r4 = await sandbox.execute('return db.schema.help();', bindings)
+        expect(r4.success).toBe(true)
+        expect((r4.result as any).tables).toContain('entries')
+
+        // Test 5: sqlite.schema() calls getStatistics
+        const r5 = await sandbox.execute('return await sqlite.schema();', bindings)
+        expect(r5.success).toBe(true)
+        expect((r5.result as any).totalEntries).toBe(100)
+
+        // Test 6: sqlite.schema.listTables()
+        const r6 = await sandbox.execute('return await sqlite.schema.listTables();', bindings)
+        expect(r6.success).toBe(true)
+        expect((r6.result as any).tables).toContain('entries')
+
+        // Test 7: sqlite.schema.describeTable('entries')
+        const r7 = await sandbox.execute("return await sqlite.schema.describeTable('entries');", bindings)
+        expect(r7.success).toBe(true)
+        expect((r7.result as any).tables).toContain('entries')
+
+        // Test 8: sqlite.help()
+        const r8 = await sandbox.execute('return sqlite.help();', bindings)
+        expect(r8.success).toBe(true)
+
+        // Test 9: db.help()
+        const r9 = await sandbox.execute('return db.help();', bindings)
+        expect(r9.success).toBe(true)
+    })
+
     it('should support MemoryJournal.getInstance() and top-level searchEntries invocation', async () => {
         const sandbox = new WorkerSandbox()
         const bindings = {

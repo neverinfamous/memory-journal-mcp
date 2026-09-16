@@ -541,6 +541,56 @@ export class JournalApi {
             ))
         }
 
+        const schemaHelpFn = (): Promise<unknown> =>
+            Promise.resolve({
+                group: 'schema',
+                description:
+                    'Memory Journal Schema: Embedded SQLite database storing entries, tags, entry tags, relationships, and projects.',
+                tables: ['entries', 'tags', 'entry_tags', 'relationships', 'projects'],
+                entrySchema: {
+                    id: 'number (auto-increment primary key)',
+                    title: 'string (required, entry title)',
+                    content: 'string (markdown body)',
+                    entry_type: "'journal' | 'retrospective' | 'decision' | 'note' | 'runbook'",
+                    tags: 'string[] (optional array of tags)',
+                    project_number: 'number (optional project number)',
+                    session_id: 'string (optional session tracking id)',
+                    metadata: 'Record<string, unknown> (optional JSON metadata)',
+                },
+                methods: ['help', 'describe', 'listTables', 'describeTable', 'getSchema'],
+                usage: 'Call mj.core.createEntry.schema() for parameter validation details, or mj.analytics.getStatistics() for database statistics.',
+            })
+
+        const schemaCallable = Object.assign(
+            async (...args: unknown[]): Promise<unknown> => {
+                const stats = this.analytics['getStatistics']
+                if (typeof stats === 'function') {
+                    return stats(...args)
+                }
+                return schemaHelpFn()
+            },
+            {
+                help: schemaHelpFn,
+                describe: schemaHelpFn,
+                listTables: (): Promise<{ success: boolean; tables: string[] }> =>
+                    Promise.resolve({
+                        success: true,
+                        tables: ['entries', 'tags', 'entry_tags', 'relationships', 'projects'],
+                    }),
+                describeTable: (tableName?: string): Promise<unknown> => {
+                    const table = typeof tableName === 'string' ? tableName.toLowerCase() : 'entries'
+                    if (table === 'entries' || table === 'journal' || table === 'memory') {
+                        return schemaHelpFn()
+                    }
+                    return Promise.resolve({
+                        table,
+                        description: `Table '${table}' in Memory Journal SQLite database.`,
+                    })
+                },
+                getSchema: schemaHelpFn,
+            }
+        )
+
         const bindings: Record<string, unknown> = {
             // Group namespaces
             core: this.core,
@@ -557,6 +607,9 @@ export class JournalApi {
             git: this.git,
             gitApi: this.git,
             memory: this.memory,
+            schema: schemaCallable,
+            getSchema: schemaCallable,
+            get_schema: schemaCallable,
 
             // Top-level convenience aliases
             createEntry: this.core['createEntry'],

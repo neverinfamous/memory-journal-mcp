@@ -971,6 +971,42 @@ return {
             expect(METHOD_ALIASES.analytics['dbStats']).toBe('getStatistics')
             expect(METHOD_ALIASES.analytics['getDbStats']).toBe('getStatistics')
         })
+
+        it('should support schema property and introspection on buildApiProxy (agent-issues regression)', async () => {
+            const { buildApiProxy } = await import('../src/codemode/worker-api-proxy.js')
+            const mockPostMessage = () => {}
+            const methods = {
+                analytics: ['get_statistics'],
+                core: ['create_entry', 'get_recent_entries'],
+            }
+            const proxy = buildApiProxy(mockPostMessage, methods)
+
+            // Direct schema object
+            const schema = (proxy as Record<string, any>)['schema']
+            expect(typeof schema).toBe('function')
+            expect(typeof schema.help).toBe('function')
+            expect(typeof schema.describe).toBe('function')
+            expect(typeof schema.listTables).toBe('function')
+            expect(typeof schema.describeTable).toBe('function')
+            expect(typeof schema.getSchema).toBe('function')
+
+            const helpResult = await schema.help()
+            expect(helpResult.group).toBe('schema')
+            expect(helpResult.tables).toContain('entries')
+
+            const tablesResult = await schema.listTables()
+            expect(tablesResult.tables).toContain('entries')
+
+            // Method introspection attached on alias methods (METHOD_ALIASES)
+            const schemaAlias = (proxy as Record<string, any>)['schema']
+            expect(typeof schemaAlias.help).toBe('function')
+
+            // sqlite and db top-level fallback
+            const sqlite = (proxy as Record<string, any>)['sqlite']
+            expect(sqlite).toBeDefined()
+            const db = (proxy as Record<string, any>)['db']
+            expect(db).toBeDefined()
+        })
     })
 })
 

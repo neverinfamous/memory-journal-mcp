@@ -242,6 +242,67 @@ async function executeCode(
             })
         }
 
+        const schemaHelpFn = (): Promise<unknown> =>
+            Promise.resolve({
+                group: 'schema',
+                description:
+                    'Memory Journal Schema: Embedded SQLite database storing entries, tags, entry tags, relationships, and projects.',
+                tables: ['entries', 'tags', 'entry_tags', 'relationships', 'projects'],
+                entrySchema: {
+                    id: 'number (auto-increment primary key)',
+                    title: 'string (required, entry title)',
+                    content: 'string (markdown body)',
+                    entry_type: "'journal' | 'retrospective' | 'decision' | 'note' | 'runbook'",
+                    tags: 'string[] (optional array of tags)',
+                    project_number: 'number (optional project number)',
+                    session_id: 'string (optional session tracking id)',
+                    metadata: 'Record<string, unknown> (optional JSON metadata)',
+                },
+                methods: ['help', 'describe', 'listTables', 'describeTable', 'getSchema'],
+                usage: 'Call mj.core.createEntry.schema() for entry parameter details, or mj.analytics.getStatistics() for database statistics.',
+            })
+
+        const createSchemaShim = (): object => {
+            const schemaCallable = function (..._args: unknown[]): unknown {
+                const analyticsGroup = shimMj['analytics'] as Record<string, ((...args: unknown[]) => unknown)> | undefined
+                if (typeof analyticsGroup?.['getStatistics'] === 'function') {
+                    return analyticsGroup['getStatistics'](..._args)
+                }
+                return schemaHelpFn()
+            }
+            return new Proxy(schemaCallable, {
+                apply(_t, _thisArg, args: unknown[]): unknown {
+                    const analyticsGroup = shimMj['analytics'] as Record<string, ((...args: unknown[]) => unknown)> | undefined
+                    if (typeof analyticsGroup?.['getStatistics'] === 'function') {
+                        return Reflect.apply(analyticsGroup['getStatistics'], undefined, args)
+                    }
+                    return schemaHelpFn()
+                },
+                get(_t, p: string | symbol): unknown {
+                    if (p === 'then') return undefined
+                    if (p === 'help' || p === 'describe') return schemaHelpFn
+                    if (p === 'listTables') {
+                        return (): Promise<unknown> =>
+                            Promise.resolve({
+                                success: true,
+                                tables: ['entries', 'tags', 'entry_tags', 'relationships', 'projects'],
+                            })
+                    }
+                    if (p === 'describeTable' || p === 'getSchema') return schemaHelpFn
+                    if (p === 'schema') return createSchemaShim()
+                    if (p === 'tables') return ['entries', 'tags', 'entry_tags', 'relationships', 'projects']
+                    if (p === 'entries' || p === 'journal' || p === 'memory') {
+                        const coreGroup = shimMj['core'] as Record<string, { schema?: () => Promise<unknown> }> | undefined
+                        return coreGroup?.['createEntry']?.schema?.() ?? schemaHelpFn()
+                    }
+                    if (typeof p === 'string' && p in Function.prototype) {
+                        return Reflect.get(Function.prototype, p)
+                    }
+                    return Reflect.get(shimMj, p)
+                },
+            })
+        }
+
         // Permissive shim to smooth out common agent hallucinations across different repos
         const shimMj: Record<string, unknown> = new Proxy({}, {
             get(_fakeTarget: Record<string, unknown>, prop: string | symbol): unknown {
@@ -256,6 +317,8 @@ async function executeCode(
                     prop === 'memory' ||
                     prop === 'memory_journal' ||
                     prop === 'memory_journal_mcp' ||
+                    prop === 'sqlite' ||
+                    prop === 'sqlite3' ||
                     prop === 'm' ||
                     prop === 'env' ||
                     prop === 'agent' ||
@@ -279,6 +342,9 @@ async function executeCode(
                     prop === 'node' ||
                     prop === 'default'
                 ) return shimMj
+                if (prop === 'schema') {
+                    return createSchemaShim()
+                }
                 // Handle `sqlite.mj.executeCode` (from db-mcp parity)
                 if (prop === 'executeCode') {
                     if ('codemode' in target) {
@@ -524,6 +590,10 @@ async function executeCode(
                 if (prop === 'db' && 'core' in target) {
                     return new Proxy({}, {
                         get(_t, dbProp) {
+                            if (dbProp === 'schema') return createSchemaShim()
+                            if (dbProp === 'help' || dbProp === 'describe') {
+                                return () => (target as Record<string, () => unknown>)['help']?.()
+                            }
                             return (..._args: unknown[]) => Promise.resolve({
                                 success: false,
                                 error: `Direct SQLite database access 'mj.db.${String(dbProp)}()' is not available in Code Mode sandbox. Use high-level API methods instead: mj.core.createEntry({ ... }), mj.core.getRecentEntries({ ... }), or mj.search.searchEntries({ ... }).`,
@@ -962,12 +1032,14 @@ async function executeCode(
             system: shimMj,
             utils: shimMj,
             sql: shimMj,
-            schema: shimMj,
+            schema: createSchemaShim(),
             Schema: createCallableShim(),
-            getSchema: () => shimMj,
-            get_schema: () => shimMj,
-            tables: shimMj,
+            getSchema: createSchemaShim,
+            get_schema: createSchemaShim,
+            tables: createSchemaShim(),
             Tables: createCallableShim(),
+            getTables: createSchemaShim,
+            get_tables: createSchemaShim,
             getInstance: () => shimMj,
             get_instance: () => shimMj,
             getClient: () => shimMj,

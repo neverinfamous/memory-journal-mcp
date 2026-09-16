@@ -304,6 +304,55 @@ export function buildApiProxy(
         api[group] = groupProxyWrapped
     }
 
+    const schemaHelp = (): Promise<unknown> =>
+        Promise.resolve({
+            group: 'schema',
+            description:
+                'Memory Journal Schema: Embedded SQLite database storing entries, tags, entry tags, relationships, and projects.',
+            tables: ['entries', 'tags', 'entry_tags', 'relationships', 'projects'],
+            entrySchema: {
+                id: 'number (auto-increment primary key)',
+                title: 'string (required, entry title)',
+                content: 'string (markdown body)',
+                entry_type: "'journal' | 'retrospective' | 'decision' | 'note' | 'runbook'",
+                tags: 'string[] (optional array of tags)',
+                project_number: 'number (optional project number)',
+                session_id: 'string (optional session tracking id)',
+                metadata: 'Record<string, unknown> (optional JSON metadata)',
+            },
+            methods: ['help', 'describe', 'listTables', 'describeTable', 'getSchema'],
+            usage: 'Use mj.core.createEntry.schema() for entry parameter details, or mj.analytics.getStatistics() for database statistics.',
+        })
+
+    const schemaCallable = function (..._args: unknown[]): Promise<unknown> {
+        return safeRpcCall('analytics', 'get_statistics', []).then(wrapResult)
+    }
+
+    const schemaProxy = new Proxy(schemaCallable, {
+        apply(_t, _thisArg, args) {
+            return safeRpcCall('analytics', 'get_statistics', args).then(wrapResult)
+        },
+        get(_t, p) {
+            if (typeof p === 'symbol' || p === 'then') return undefined
+            if (p === 'help' || p === 'describe') return schemaHelp
+            if (p === 'listTables') {
+                return (): Promise<unknown> =>
+                    Promise.resolve({
+                        success: true,
+                        tables: ['entries', 'tags', 'entry_tags', 'relationships', 'projects'],
+                    })
+            }
+            if (p === 'describeTable' || p === 'getSchema') return schemaHelp
+            if (p === 'tables') return ['entries', 'tags', 'entry_tags', 'relationships', 'projects']
+            if (p in Function.prototype) {
+                return Reflect.get(Function.prototype, p) as unknown
+            }
+            return undefined
+        },
+    })
+
+    api['schema'] = schemaProxy
+
     api['help'] = () => {
         const groups = Object.keys(methods).filter(
             (g) => g !== '_topLevel' && g !== 'memory' && g !== 'entries'
@@ -326,6 +375,8 @@ export function buildApiProxy(
             if (prop in target) return target[prop]
             if (prop === 'gitApi') return target['git']
             if (prop === 'journal' || prop === 'memory') return target['core'] ?? target
+            if (prop === 'schema') return target['schema']
+            if (prop === 'sqlite' || prop === 'sqlite3' || prop === 'db') return target
             if (prop === 'then') return undefined
 
             if (
@@ -373,14 +424,16 @@ export function buildApiProxy(
                         const canonicalCamel = groupAliases[prop];
                         const canonicalSnake = canonicalCamel.replace(/[A-Z]/g, (l) => `_${l.toLowerCase()}`);
                         if (methods[g]?.includes(canonicalSnake)) {
-                            return (...args: unknown[]): Promise<unknown> => {
+                            const proxyFn = (...args: unknown[]): Promise<unknown> => {
                                 const intercept = applyArgInterceptions(canonicalSnake, args);
                                 if ('error' in intercept) {
                                     return wrapPromise(Promise.resolve(wrapResult(intercept.error)), canonicalSnake);
                                 }
                                 const resultPromise = safeRpcCall(g, canonicalSnake, intercept.args).then(wrapResult);
                                 return wrapPromise(resultPromise, canonicalSnake);
-                            }
+                            };
+                            attachMethodIntrospection(proxyFn, g, canonicalSnake, () => schemas?.[g]?.[canonicalSnake] ?? 'unknown');
+                            return proxyFn;
                         }
                     }
                 }
@@ -389,27 +442,31 @@ export function buildApiProxy(
                 const teamSnakeKey = `team_${snakeKey}`;
                 const teamGroup = Object.keys(methods).find(g => methods[g]?.includes(teamSnakeKey));
                 if (teamGroup && !Object.keys(methods).some(g => methods[g]?.includes(snakeKey))) {
-                    return (...args: unknown[]): Promise<unknown> => {
+                    const proxyFn = (...args: unknown[]): Promise<unknown> => {
                         const intercept = applyArgInterceptions(teamSnakeKey, args);
                         if ('error' in intercept) {
                             return wrapPromise(Promise.resolve(wrapResult(intercept.error)), teamSnakeKey);
                         }
                         const resultPromise = safeRpcCall(teamGroup, teamSnakeKey, intercept.args).then(wrapResult);
                         return wrapPromise(resultPromise, teamSnakeKey);
-                    }
+                    };
+                    attachMethodIntrospection(proxyFn, teamGroup, teamSnakeKey, () => schemas?.[teamGroup]?.[teamSnakeKey] ?? 'unknown');
+                    return proxyFn;
                 }
 
                 // 3. Check for cross-group hallucination (e.g. mj.update_configuration -> mj.admin.update_configuration)
                 const foundGroup = Object.keys(methods).find(g => methods[g]?.includes(snakeKey));
                 if (foundGroup) {
-                    return (...args: unknown[]): Promise<unknown> => {
+                    const proxyFn = (...args: unknown[]): Promise<unknown> => {
                         const intercept = applyArgInterceptions(snakeKey, args);
                         if ('error' in intercept) {
                             return wrapPromise(Promise.resolve(wrapResult(intercept.error)), snakeKey);
                         }
                         const resultPromise = safeRpcCall(foundGroup, snakeKey, intercept.args).then(wrapResult);
                         return wrapPromise(resultPromise, snakeKey);
-                    }
+                    };
+                    attachMethodIntrospection(proxyFn, foundGroup, snakeKey, () => schemas?.[foundGroup]?.[snakeKey] ?? 'unknown');
+                    return proxyFn;
                 }
             }
 
