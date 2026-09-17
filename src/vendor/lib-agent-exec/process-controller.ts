@@ -30,9 +30,11 @@ function analyzeExitCode1(payload: ExecPayload, code: number, stdout: string, st
       const origCmd = path.basename(payload.command).toLowerCase();
       const isWrapper = ['wsl', 'wsl.exe', 'bash', 'bash.exe', 'sh', 'sh.exe', 'cmd', 'cmd.exe', 'pwsh', 'pwsh.exe', 'powershell', 'powershell.exe'].includes(origCmd);
       const allArgsStr = payload.args ? payload.args.join(' ').toLowerCase() : '';
-      const commandBoundaryRegex = /(?:^|[|;&\n]\s*|\b(?:time|xargs|sudo|nohup|wsl)\s+|(?:^|\s)(?:-c|\/c|-command)\s+)(?:[a-zA-Z0-9_\-/.]*\/)?/;
+      const commandBoundaryRegex = /(?:^|[|;&\n]\s*|\b(?:time|xargs|sudo|nohup|wsl|-exec|-execdir)\s+|(?:^|\s)(?:-c|\/c|-command)\s+)(?:[a-zA-Z0-9_\-/.]*\/)?/;
       
       if (['grep', 'grep.exe', 'egrep', 'egrep.exe', 'fgrep', 'fgrep.exe', 'rg', 'rg.exe'].includes(origCmd)) {
+          isGrepNoMatch = true;
+      } else if (['find', 'find.exe'].includes(origCmd) && /(?:-exec|-execdir)\s+(?:[a-zA-Z0-9_\-/.]*\/)?(grep|egrep|fgrep|rg)\b/.test(allArgsStr)) {
           isGrepNoMatch = true;
       } else if (isWrapper && new RegExp(commandBoundaryRegex.source + '(grep|egrep|fgrep|rg)\\b').test(allArgsStr)) {
           isGrepNoMatch = true;

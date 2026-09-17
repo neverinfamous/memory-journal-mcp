@@ -6,3 +6,4 @@ export * from './package-manager-interceptor.js';
 export * from './cloud-cli-interceptor.js';
 export * from './repl-tui-interceptor.js';
 export * from './system-interceptor.js';
+export * from './search-interceptor.js';

@@ -65,6 +65,26 @@ export function cloudCliInterceptor({ cmdBasename, args, envOverrides, payload }
       process.exit(1);
     }
 
+    // Heal --json argument with spaces or comma-space delimiters (e.g. "files title" -> "files,title")
+    for (let i = 0; i < args.length; i++) {
+      const currentArg = args[i];
+      if (currentArg === '--json' && i + 1 < args.length) {
+        const jsonArg = args[i + 1];
+        if (jsonArg !== undefined && (jsonArg.includes(' ') || jsonArg.includes(', '))) {
+          const normalized = jsonArg.trim().split(/[\s,]+/).filter(Boolean).join(',');
+          console.error(`\n   🛠️ AUTONOMOUS HEALING: Normalizing gh --json fields from '${jsonArg}' to '${normalized}'... (Frictionless Recovery)`);
+          args[i + 1] = normalized;
+        }
+      } else if (currentArg !== undefined && currentArg.startsWith('--json=')) {
+        const jsonVal = currentArg.slice('--json='.length);
+        if (jsonVal.includes(' ') || jsonVal.includes(', ')) {
+          const normalized = jsonVal.trim().split(/[\s,]+/).filter(Boolean).join(',');
+          console.error(`\n   🛠️ AUTONOMOUS HEALING: Normalizing gh --json fields from '${jsonVal}' to '${normalized}'... (Frictionless Recovery)`);
+          args[i] = `--json=${normalized}`;
+        }
+      }
+    }
+
     const posArgs = [];
     for (let i = 0; i < args.length; i++) {
       if (args[i].startsWith('-')) {
@@ -219,7 +239,8 @@ export function cloudCliInterceptor({ cmdBasename, args, envOverrides, payload }
         }
       })
       .with([P.union('pr', 'issue', 'repo', 'run', 'release'), P.union('list', 'status', 'view')], () => {
-        if (!args.includes('--json')) {
+        const hasJson = args.some(a => a === '--json' || a.startsWith('--json='));
+        if (!hasJson) {
           console.error(`\n   🛠️ AUTONOMOUS HEALING: Automatically injecting '--json' into gh command to output structured data... (Frictionless Recovery)`);
           let jsonFields = 'url';
           if (subCmd1 === 'pr' || subCmd1 === 'issue') jsonFields = 'number,title,state,url';
@@ -230,7 +251,8 @@ export function cloudCliInterceptor({ cmdBasename, args, envOverrides, payload }
         }
       })
       .with(['search', P._], () => {
-        if (!args.includes('--json')) {
+        const hasJson = args.some(a => a === '--json' || a.startsWith('--json='));
+        if (!hasJson) {
           console.error(`\n   💡 AGENT HINT: 'gh search' requires '--json' to output structured data. Blocking execution.\n${AUTONOMOUS_HEALING_MSG}`);
           process.exit(1);
         }

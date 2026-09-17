@@ -4,17 +4,56 @@ import { match, P } from 'ts-pattern';
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
-import { convertToWslPath } from '../command-utils.js';
+import { convertToWslPath, getPositionalArgs, healFragmentedQuotes } from '../command-utils.js';
 import { getUnquoted } from './utils.js';
 import { runMutatingInterceptors } from './mutating-interceptors.js';
 import { runStructuralInterceptors } from './structural-interceptors.js';
+import { healPathHallucinations, healEvalCodePathHallucinations } from '../path-healer.js';
+import { handleFindInterception, handleRipgrepInterception, handleGrepInterception } from './search-interceptor.js';
+const INTERPRETER_INLINE_FLAGS: Record<string, readonly string[]> = {
+  node: ['-e', '--eval', '-p', '--print'],
+  bun: ['-e', '--eval', '-p', '--print'],
+  tsx: ['-e', '--eval', '-p', '--print'],
+  'ts-node': ['-e', '--eval', '-p', '--print'],
+  python: ['-c', '--command'],
+  python3: ['-c', '--command'],
+};
 
+function getInlineScriptDetails(interpreter: string, args: string[]): { flagIdx: number; isPrint: boolean; scriptContent: string } | null {
+  const allowed = INTERPRETER_INLINE_FLAGS[interpreter.toLowerCase()];
+  if (!allowed || args.length === 0) return null;
+
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (allowed.includes(arg)) {
+      if (i + 1 < args.length) {
+        return {
+          flagIdx: i,
+          isPrint: ['-p', '--print'].includes(arg),
+          scriptContent: args[i + 1],
+        };
+      }
+      return null;
+    }
+    // If we encounter an argument before any inline flag that is NOT an interpreter option,
+    // then it's a subcommand or a script path, so any subsequent flags belong to that script/subcommand!
+    if (!arg.startsWith('-')) {
+      return null;
+    }
+    // If it looks like a script file or relative/absolute path, it's not an interpreter option
+    if (arg.startsWith('./') || arg.startsWith('.\\') || /\\.(?:ts|js|mjs|cjs|py)$/i.test(arg)) {
+      return null;
+    }
+  }
+  return null;
+}
 
 export function systemInterceptor(ctx: ExecutionContext): void {
+  ctx.args = healFragmentedQuotes(ctx.args);
   const { cmdBasename, payload } = ctx;
   const { args } = ctx;
   const exactShellChars = ['|', '>', '<', '&&', '||', ';'];
-  const patternTools = ['grep', 'grep.exe', 'egrep', 'fgrep', 'rg', 'rg.exe', 'jq', 'jq.exe', 'yq', 'yq.exe', 'sed', 'sed.exe', 'awk', 'gawk', 'find', 'find.exe', 'node', 'node.exe', 'python', 'python.exe', 'bun', 'bun.exe', 'tail', 'tail.exe', 'head', 'head.exe', 'wc', 'wc.exe', 'sort', 'sort.exe', 'uniq', 'uniq.exe', 'tee', 'tee.exe'];
+  const patternTools = ['grep', 'grep.exe', 'egrep', 'fgrep', 'rg', 'rg.exe', 'jq', 'jq.exe', 'yq', 'yq.exe', 'sed', 'sed.exe', 'awk', 'gawk', 'find', 'find.exe', 'fd', 'fd.exe', 'fdfind', 'fdfind.exe', 'node', 'node.exe', 'python', 'python.exe', 'bun', 'bun.exe', 'tail', 'tail.exe', 'head', 'head.exe', 'wc', 'wc.exe', 'sort', 'sort.exe', 'uniq', 'uniq.exe', 'tee', 'tee.exe'];
   const shells = ['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe', 'cmd', 'cmd.exe', 'bash', 'bash.exe', 'sh', 'sh.exe', 'wsl', 'wsl.exe'] as const;
   const inlineFlags = ['-c', '-command', '/c', '-ec', '-encodedcommand', '-en', '-e', '--eval', '-execute', '--execute'];
 
@@ -27,7 +66,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
     ? rawCmdStr.split(/\s+/).slice(1)
     : [];
   const combinedArgs = [...embeddedArgs, ...args];
-  const positionalArgs = combinedArgs.filter(a => !a.startsWith('-'));
+  const positionalArgs = getPositionalArgs(cmdBasename, combinedArgs);
   const hasStdin = !!payload.stdin;
   const cmd = cmdBasename.toLowerCase();
 
@@ -99,15 +138,21 @@ export function systemInterceptor(ctx: ExecutionContext): void {
     payload.timeoutMs = Math.max(payload.timeoutMs || 30000, 30000);
   }
 
-  // 1. Mutating intercepts (safe to run before block checks)
+  // 1. Generic Path Hallucination Intercepts (runs before tool matching so healed paths are matched)
+  healPathHallucinations(ctx);
+
+  // 1.1. Mutating intercepts (safe to run before block checks)
   runMutatingInterceptors(ctx, { cmd, cmdBasename, args });
 
-  match({ ...ctx, positionalArgs, hasStdin, cmd, isCommand, isWin32: process.platform === 'win32', originalCmd })
+  const activeCombinedArgs = [...embeddedArgs, ...ctx.args];
+  const activePositionalArgs = getPositionalArgs(cmdBasename, activeCombinedArgs);
+
+  match({ ...ctx, positionalArgs: activePositionalArgs, hasStdin, cmd, isCommand, isWin32: process.platform === 'win32', originalCmd })
     .with({ originalCmd: P.union('cat', 'cat.exe', 'get-content') }, () => {
-      if (['sh', 'bash', 'pwsh', 'powershell', 'cmd'].includes(cmd) || args[0] === '-c' || args[0] === '/c') {
+      if (['sh', 'bash', 'pwsh', 'powershell', 'cmd'].includes(cmd)) {
         return;
       }
-      if (!hasStdin && positionalArgs.length === 0) {
+      if (!hasStdin && activePositionalArgs.length === 0) {
         console.error(`\n   💡 AGENT HINT: 'cat' called without file arguments and no stdin. It will hang indefinitely.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Provide a file argument or use view_file.\x1b[0m`);
         process.exit(1);
       }
@@ -116,24 +161,27 @@ export function systemInterceptor(ctx: ExecutionContext): void {
       ctx.args = ctx.args.map(a => convertToWslPath(a));
     })
     .with({ originalCmd: P.union('grep', 'grep.exe', 'egrep', 'egrep.exe', 'fgrep', 'fgrep.exe', 'select-string', 'select-string.exe') }, () => {
-      if (['sh', 'bash', 'pwsh', 'powershell', 'cmd'].includes(cmd) || args[0] === '-c' || args[0] === '/c') {
+      if (['sh', 'bash', 'pwsh', 'powershell', 'cmd'].includes(cmd)) {
         return;
       }
-      if (ctx.payload.target === 'wsl2' || process.platform !== 'win32') {
-        return;
+      if (embeddedArgs.length > 0 && ctx.args.length === 0) {
+        ctx.args = [...embeddedArgs];
+        ctx.cmdBasename = originalCmd;
+        if (ctx.payload.type === 'command') {
+          ctx.payload.command = originalCmd;
+          ctx.payload.args = ctx.args;
+        }
       }
-      if (!hasStdin && positionalArgs.length <= 1 && !args.some((a: string) => ['-r', '-R', '--recursive', '--files', '--help', '-h', '--version', '-v', '-V'].includes(a))) {
-        console.error(`\n   💡 AGENT HINT: 'grep' called without file arguments and no recursive flag. It will hang indefinitely.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters or use grep_search.\x1b[0m`);
-        process.exit(1);
-      }
-      console.error(`\n   💡 AGENT INTERCEPT: 'grep' search command detected. Switching execution target to WSL2... (Frictionless Recovery)`);
-      ctx.payload.target = 'wsl2';
-      if (cmdBasename.toLowerCase() === 'select-string') {
+      if (cmdBasename.toLowerCase().startsWith('select-string')) {
         if (ctx.payload.type === 'command') ctx.payload.command = 'grep';
+        ctx.cmdBasename = 'grep';
       }
-      ctx.args = ctx.args.map(a => convertToWslPath(a));
+      handleGrepInterception(ctx, hasStdin);
     })
     .with({ originalCmd: P.union('ls', 'ls.exe', 'dir', 'dir.exe', 'get-childitem', 'get-childitem.exe', 'gci', 'tree', 'tree.com') }, () => {
+      if (['sh', 'bash', 'pwsh', 'powershell', 'cmd'].includes(cmd)) {
+        return;
+      }
       console.error(`\n   💡 AGENT INTERCEPT: '${cmdBasename}' directory listing command detected. Switching execution target to WSL2... (Frictionless Recovery)`);
       ctx.payload.target = 'wsl2';
       if ('interpreter' in ctx.payload && ctx.payload.interpreter && ['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe', 'cmd', 'cmd.exe'].includes(ctx.payload.interpreter.toLowerCase())) {
@@ -251,106 +299,17 @@ export function systemInterceptor(ctx: ExecutionContext): void {
       ctx.payload.target = 'wsl2';
 
       if (['find', 'find.exe'].includes(cmdBasename.toLowerCase())) {
-        const filterIdx = ctx.args.findIndex(a => ['-filter', '-include'].includes(a.toLowerCase()));
-        if (filterIdx !== -1 && filterIdx + 1 < ctx.args.length) {
-          const pattern = ctx.args[filterIdx + 1];
-          const hasRecurse = ctx.args.some(a => ['-recurse', '-r', '-R', '/s'].includes(a.toLowerCase()));
-          let targetPath = '.';
-          for (let i = 0; i < ctx.args.length; i++) {
-            if (i === filterIdx || i === filterIdx + 1) continue;
-            const a = ctx.args[i];
-            if (!a.startsWith('-') && !a.startsWith('/')) {
-              targetPath = convertToWslPath(a);
-              break;
-            }
-          }
-          const newArgs = [targetPath];
-          if (!hasRecurse) {
-            newArgs.push('-maxdepth', '1');
-          }
-          newArgs.push('-name', pattern);
-          ctx.args = newArgs;
-          return;
-        }
-
-        // Auto-heal common find -type hallucinations (e.g. -type file -> -type f, -type fts* -> -name fts*)
-        for (let i = 0; i < ctx.args.length; i++) {
-          if (ctx.args[i] === '-type' && i + 1 < ctx.args.length) {
-            const typeVal = ctx.args[i + 1];
-            if (typeVal === 'file') {
-              ctx.args[i + 1] = 'f';
-            } else if (typeVal === 'dir' || typeVal === 'directory') {
-              ctx.args[i + 1] = 'd';
-            } else if (!/^[bcdpflsD]$/.test(typeVal)) {
-              console.error(`\n   🛠️ AUTONOMOUS HEALING: 'find -type ${typeVal}' is invalid. Rewriting to '-name ${typeVal}'... (Frictionless Recovery)\x1b[0m`);
-              ctx.args[i] = '-name';
-            }
-          }
-        }
+        handleFindInterception(ctx);
       }
 
       // Automatically convert Windows paths (like C:\... or C:/... or "C:\...") to WSL paths (/mnt/c/...)
       ctx.args = ctx.args.map(a => convertToWslPath(a));
     })
     .with({ isCommand: true, originalCmd: P.union('rg', 'rg.exe') }, () => {
-      const cleanedArgs = ctx.args.map(a => {
-        if (a === '-R' || a === '--recursive') return '';
-        if (a.startsWith('-') && !a.startsWith('--') && a.includes('R')) {
-          const cleaned = a.replace(/R/g, '');
-          return cleaned === '-' ? '' : cleaned;
-        }
-        return a;
-      }).filter(Boolean);
-
-      // Auto-heal grep-style flags (--include, --exclude, --exclude-dir) into rg glob flags (-g)
-      const healedArgs: string[] = [];
-      let convertedGrepFlags = false;
-      for (let i = 0; i < cleanedArgs.length; i++) {
-        const a = cleanedArgs[i];
-        if (a === '--include' && i + 1 < cleanedArgs.length) {
-          healedArgs.push('-g', cleanedArgs[++i]);
-          convertedGrepFlags = true;
-        } else if (a.startsWith('--include=')) {
-          healedArgs.push(`-g=${a.slice('--include='.length)}`);
-          convertedGrepFlags = true;
-        } else if (a === '--exclude' && i + 1 < cleanedArgs.length) {
-          const pattern = cleanedArgs[++i];
-          healedArgs.push('-g', pattern.startsWith('!') ? pattern : `!${pattern}`);
-          convertedGrepFlags = true;
-        } else if (a.startsWith('--exclude=')) {
-          const pattern = a.slice('--exclude='.length);
-          healedArgs.push(`-g=${pattern.startsWith('!') ? pattern : `!${pattern}`}`);
-          convertedGrepFlags = true;
-        } else if (a === '--exclude-dir' && i + 1 < cleanedArgs.length) {
-          const dir = cleanedArgs[++i];
-          healedArgs.push('-g', `!${dir}/**`);
-          convertedGrepFlags = true;
-        } else if (a.startsWith('--exclude-dir=')) {
-          const dir = a.slice('--exclude-dir='.length);
-          healedArgs.push(`-g=!${dir}/**`);
-          convertedGrepFlags = true;
-        } else {
-          healedArgs.push(a);
-        }
+      if (['sh', 'bash', 'pwsh', 'powershell', 'cmd'].includes(cmd)) {
+        return;
       }
-      if (convertedGrepFlags) {
-        console.error(`\n   🛠️ AUTONOMOUS HEALING: 'rg' does not accept grep-style '--include/--exclude'. Normalizing to ripgrep '-g' (glob) flags... (Frictionless Recovery)`);
-      }
-      ctx.args = healedArgs;
-
-      if (hasStdin) {
-        console.error(`\n   💡 AGENT INTERCEPT: Search command with stdin detected. Switching execution target to WSL2... (Frictionless Recovery)`);
-        ctx.payload.target = 'wsl2';
-      } else if (process.platform === 'win32' && ctx.payload.target !== 'wsl2') {
-        console.error(`\n   💡 AGENT INTERCEPT: 'rg' natively fails or is not installed on Windows. Switching execution target to WSL2... (Frictionless Recovery)`);
-        ctx.payload.target = 'wsl2';
-        ctx.args = ctx.args.map(a => convertToWslPath(a));
-      }
-      const updatedPositional = ctx.args.filter(a => !a.startsWith('-'));
-      if (!hasStdin && updatedPositional.length <= 1 && !ctx.args.some(a => ['-r', '-R', '--recursive', '--files', '--help', '-h'].includes(a))) {
-        console.error(`\n   💡 AGENT INTERCEPT: 'rg' missing target directory argument. Auto-appending '.' as target directory... (Frictionless Recovery)`);
-        ctx.args.push('.');
-      }
+      handleRipgrepInterception(ctx, hasStdin);
     })
     .with({ cmd: P.union('gh', 'gh.exe', 'pnpm', 'npm', 'docker', 'docker.exe') }, ({ args }) => {
       const isLogin = args.some(a => a === 'login' || a === 'auth');
@@ -374,19 +333,16 @@ export function systemInterceptor(ctx: ExecutionContext): void {
     })
     .otherwise(() => {});
 
-  // 1.5. Generic Path Hallucination Intercepts
-  for (let i = 0; i < args.length; i++) {
-    // memory-journal-mcp backups path hallucination
-    if (args[i].includes('memory-journal-mcp\\backups') || args[i].includes('memory-journal-mcp/backups')) {
-      console.error(`\n   💡 AGENT HINT: 'backups' directory is located at 'data/backups', not the repository root.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-correcting path to data/backups.\x1b[0m`);
-      args[i] = args[i].replace(/memory-journal-mcp[\\/]backups/g, 'memory-journal-mcp\\data\\backups');
-    }
-  }
 
   // 2. Unsafe Pipes Detection
+  const cmdLower = cmdBasename.toLowerCase();
+  const isPkgMgr = ['npm', 'npm.cmd', 'pnpm', 'pnpm.cmd', 'yarn', 'yarn.cmd', 'bun', 'bun.exe', 'npx', 'npx.cmd'].includes(cmdLower);
+  const pkgSubcommand = isPkgMgr ? args.find(a => !a.startsWith('-'))?.toLowerCase() : undefined;
+  const isInvokingPatternTool = pkgSubcommand !== undefined && patternTools.includes(pkgSubcommand);
+
   const shouldCheckPipes = match(payload)
     .with({ type: 'command', target: 'wsl2' }, () => false)
-    .with({ type: 'command' }, () => !patternTools.includes(cmd))
+    .with({ type: 'command' }, () => !patternTools.includes(cmd) && !isInvokingPatternTool)
     .otherwise(() => false);
 
   if (shouldCheckPipes) {
@@ -419,19 +375,20 @@ export function systemInterceptor(ctx: ExecutionContext): void {
                 if (!checkStr.includes(op)) return false;
                 
                 const hasSpacesAround = checkStr.includes(` ${op} `) || checkStr.startsWith(`${op} `) || checkStr.endsWith(` ${op}`);
-                const isShell = ['pwsh', 'powershell', 'bash', 'sh', 'cmd', 'pwsh.exe', 'powershell.exe', 'cmd.exe'].includes(cmdBasename.toLowerCase());
-                const isPackageManager = ['npm', 'npm.cmd', 'pnpm', 'pnpm.cmd', 'yarn', 'yarn.cmd', 'bun', 'bun.exe'].includes(cmdBasename.toLowerCase());
+                const isShell = ['pwsh', 'powershell', 'bash', 'sh', 'cmd', 'pwsh.exe', 'powershell.exe', 'cmd.exe'].includes(cmdLower);
                 
                 if (checkStr.trim() === op) return true;
                 if (isShell) return true;
-                if (isPackageManager) return true;
+                
+                if (checkStr.includes('{') || checkStr.includes('[')) return false;
                 
                 if (!hasSpacesAround) {
-                    if (checkStr.includes('{') || checkStr.includes('[')) return false;
-                    if (/[a-zA-Z0-9]/.test(checkStr)) return true;
+                    if (op === '|') return false; // Single | without spaces is regex alternation or union type
+                    if (op === '&&' || op === '||') return true; // Chained commands without spaces
                     return false;
                 }
                 
+                if (isPkgMgr) return true;
                 return false;
             });
         }), () => true)
@@ -456,38 +413,46 @@ export function systemInterceptor(ctx: ExecutionContext): void {
   // 3. Centralized structural blocking using ts-pattern
   runStructuralInterceptors(ctx, { cmd, cmdBasename, originalCmd, args, isCommand, hasInlineCmd, inlineFlag, innerCmdStr, positionalArgs, hasStdin, shells });
 
-  match({ cmd, originalCmd, isCommand, hasInlineCmd, inlineFlag, innerCmdStr, positionalArgs, args, hasStdin, isWin32: process.platform === 'win32', payload })
-    .with({ isCommand: true, originalCmd: P.union('node', 'node.exe', 'python', 'python.exe', 'python3', 'python3.exe', 'bun', 'bun.exe'), args: P.when((a: string[]) => a.some(arg => ['-e', '--eval', '-p', '--print', '-c', '--command'].includes(arg))) }, ({ originalCmd }) => {
-      const interpreter = originalCmd.replace(/\.exe$/, '');
-      const flagIdx = ctx.args.findIndex(a => ['-e', '--eval', '-p', '--print', '-c', '--command'].includes(a));
-      const scriptContent = ctx.args[flagIdx + 1];
-      
-      if (scriptContent) {
-        console.error(`\n   🛠️ AUTONOMOUS HEALING: Transparently rewriting inline ${interpreter} script to a temporary file execution to avoid quoting bugs... (Frictionless Recovery)\x1b[0m`);
-        const ext = interpreter.startsWith('python') ? 'py' : (interpreter === 'bun' ? 'ts' : 'js');
-        
-        const outDir = os.tmpdir();
-        
-        const tmpFile = path.join(outDir, `.agent_inline_script_${Date.now()}.${ext}`);
-        fs.writeFileSync(tmpFile, scriptContent);
-        
-        process.on('exit', () => {
-          try {
-            if (fs.existsSync(tmpFile)) {
-              fs.unlinkSync(tmpFile);
-            }
-          } catch {
-            // ignore
+  const interpreterName = originalCmd.replace(/\.exe$/i, '').toLowerCase();
+  const inlineDetails = isCommand && ['node', 'bun', 'python', 'python3', 'tsx', 'ts-node'].includes(interpreterName)
+    ? getInlineScriptDetails(interpreterName, ctx.args)
+    : null;
 
-          }
-        });
-        ctx.cmdBasename = interpreter;
-        ctx.args.splice(flagIdx, 2, tmpFile);
-        if ('command' in ctx.payload) {
-          ctx.payload.command = interpreter;
-          ctx.payload.args = ctx.args;
+  if (inlineDetails) {
+    const { flagIdx, isPrint, scriptContent } = inlineDetails;
+    console.error(`\n   🛠️ AUTONOMOUS HEALING: Transparently rewriting inline ${interpreterName} script to a temporary file execution to avoid quoting bugs... (Frictionless Recovery)\x1b[0m`);
+    const ext = interpreterName.startsWith('python') ? 'py' : (['bun', 'tsx', 'ts-node'].includes(interpreterName) ? 'ts' : 'js');
+    const outDir = os.tmpdir();
+    const tmpFile = path.join(outDir, `.agent_inline_script_${Date.now()}.${ext}`);
+
+    const cwd = ctx.payload.cwd !== undefined && ctx.payload.cwd.length > 0
+      ? path.resolve(ctx.payload.cwd)
+      : process.cwd();
+
+    let fileContent = interpreterName.startsWith('python')
+      ? `import sys; sys.path.insert(0, '')\n${scriptContent}`
+      : healEvalCodePathHallucinations(scriptContent, cwd, ctx.payload.target);
+
+    if (isPrint) {
+      fileContent = `try {\n  const __res = eval(${JSON.stringify(fileContent)});\n  if (__res !== undefined) console.log(__res);\n} catch {\n  ${fileContent}\n}\n`;
+    }
+
+    fs.writeFileSync(tmpFile, fileContent);
+    process.on('exit', () => {
+      try {
+        if (fs.existsSync(tmpFile)) {
+          fs.unlinkSync(tmpFile);
         }
+      } catch {
+        // ignore
       }
-    })
-    .otherwise(() => {});
+    });
+
+    ctx.cmdBasename = interpreterName;
+    ctx.args.splice(flagIdx, 2, tmpFile);
+    if ('command' in ctx.payload) {
+      ctx.payload.command = interpreterName;
+      ctx.payload.args = ctx.args;
+    }
+  }
 }

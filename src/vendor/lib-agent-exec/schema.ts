@@ -85,8 +85,12 @@ export const agentExecCliArgsSchema = z.object({
   plugin: z.string().max(1024).optional(),
   help: z.boolean().optional(),
   json: z.boolean().optional(),
+  payload: z.string().optional(),
   payloadPath: z.string().max(1024).optional(),
   target: z.string().max(1024).optional(),
+  cwd: z.string().max(1024).optional(),
+  timeout: z.union([z.string(), z.number()]).optional(),
+  timeoutMs: z.union([z.string(), z.number()]).optional(),
 });
 
 export type AgentExecCliArgs = z.infer<typeof agentExecCliArgsSchema>;

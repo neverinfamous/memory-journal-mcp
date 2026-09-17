@@ -1,12 +1,39 @@
 // @ts-nocheck
+import path from 'node:path';
+import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { AUTONOMOUS_HEALING_MSG, findEcosystemScript } from '../utils.js';
 import { match, P } from 'ts-pattern';
 import { ExecutionContext } from './types.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export function gitInterceptor(ctx: ExecutionContext): void {
   const { cmdBasename, args, payload } = ctx;
   const gitCmds = ['git', 'git.exe'];
   if (!gitCmds.includes(cmdBasename) || payload.type !== 'command') return;
+
+  const rawCwd = ctx.payload.cwd ? path.resolve(ctx.payload.cwd) : process.cwd();
+  let targetCwd = rawCwd;
+  let explicitCwd: string | undefined;
+
+  const cIndex = args.indexOf('-C');
+  if (cIndex !== -1 && cIndex + 1 < args.length) {
+    explicitCwd = args[cIndex + 1];
+    args.splice(cIndex, 2);
+  } else {
+    const cPrefixIndex = args.findIndex(a => a.startsWith('-C') && a.length > 2);
+    if (cPrefixIndex !== -1) {
+      explicitCwd = args[cPrefixIndex].slice(2);
+      args.splice(cPrefixIndex, 1);
+    }
+  }
+
+  if (explicitCwd !== undefined) {
+    targetCwd = path.isAbsolute(explicitCwd) ? explicitCwd : path.resolve(rawCwd, explicitCwd);
+    ctx.payload.cwd = targetCwd;
+  }
 
   if (!args.includes('--no-pager')) {
     args.unshift('--no-pager');
@@ -99,59 +126,223 @@ export function gitInterceptor(ctx: ExecutionContext): void {
       }
     )
     .with(
-      { cmd: P.union('log', 'shortlog', 'show') },
+      { cmd: P.union('log', 'shortlog', 'show', 'diff', 'status') },
       ({ ctx, args, cmd }) => {
         const cwd = ctx.payload.cwd || process.cwd();
-        if (findEcosystemScript(cwd, 'get-git-history-json.ts') !== null) {
-          console.error(`\n   🛠️ AUTONOMOUS HEALING: Transparently rewriting 'git ${cmd}' to 'bun .\\.agents\\scripts\\get-git-history-json.ts' to prevent text dumps... (Frictionless Recovery)`);
+        const fallbackScript = path.resolve(__dirname, '../../get-git-history-json.ts');
+        const scriptCandidate = findEcosystemScript(targetCwd, 'get-git-history-json.ts') || findEcosystemScript(cwd, 'get-git-history-json.ts') || (fs.existsSync(fallbackScript) ? fallbackScript : null);
+        if (scriptCandidate !== null) {
+          if (cmd === 'show') {
+            const isBlobInspection = args.some(a => !a.startsWith('-') && a !== 'show' && a !== '--no-pager' && a.includes(':') && !/^[a-zA-Z]:[\\/]/.test(a));
+            if (isBlobInspection) {
+              return;
+            }
+          }
+          const isTargetDifferent = path.resolve(targetCwd) !== path.resolve(process.cwd());
+          const scriptToInvoke = isTargetDifferent ? scriptCandidate : '.\\.agents\\scripts\\get-git-history-json.ts';
+
+          if (cmd === 'status') {
+            console.error(`\n   🛠️ AUTONOMOUS HEALING: Transparently rewriting 'git status' to '${scriptToInvoke} --uncommitted --stats'... (Frictionless Recovery)`);
+            ctx.cmdBasename = 'bun';
+            ctx.args = [scriptToInvoke, '--uncommitted', '--stats'];
+            if (isTargetDifferent) {
+              ctx.args.push('--cwd', targetCwd);
+            }
+            return;
+          }
+
+          console.error(`\n   🛠️ AUTONOMOUS HEALING: Transparently rewriting 'git ${cmd}' to '${scriptToInvoke}' to prevent text dumps... (Frictionless Recovery)`);
           ctx.cmdBasename = 'bun';
-          ctx.args = ['.\\.agents\\scripts\\get-git-history-json.ts'];
+          ctx.args = [scriptToInvoke];
+          if (isTargetDifferent) {
+            ctx.args.push('--cwd', targetCwd);
+          }
           if (cmd === 'show') {
             ctx.args.push('--stats');
           }
+          if (cmd === 'diff') {
+            ctx.args.push('--stats', '--include-patch');
+          }
 
           let limit = '10';
+          let hasExplicitLimit = false;
           const nIndex = args.indexOf('-n');
           if (nIndex !== -1 && nIndex + 1 < args.length) {
             limit = args[nIndex + 1];
+            hasExplicitLimit = true;
           }
           
           // Check for numeric flags like -1, -5
           for (let i = 0; i < args.length; i++) {
             if (/^-\d+$/.test(args[i])) {
               limit = args[i].substring(1);
+              hasExplicitLimit = true;
             }
           }
           
-          ctx.args.push('--limit', limit);
-
-          if (args.includes('-p') || args.includes('--patch')) {
-            ctx.args.push('--include-patch');
+          if (cmd !== 'diff' || hasExplicitLimit) {
+            ctx.args.push('--limit', limit);
           }
 
-          const valueFlags = ['-n', '--max-count', '--skip', '--author', '--committer', '--grep', '--since', '--after', '--until', '--before'];
+          if (args.includes('-p') || args.includes('--patch')) {
+            if (!ctx.args.includes('--include-patch')) {
+              ctx.args.push('--include-patch');
+            }
+          }
+
+          const valueFlags = [
+            '-n', '--max-count', '--skip',
+            '--author', '-a', '--committer',
+            '--grep', '-g',
+            '--since', '--after', '--until', '--before',
+            '-S', '--pickaxe',
+            '-G', '--patch-search',
+            '-L', '--format', '--pretty',
+            '-U', '--diff-context',
+            '--diff-filter'
+          ];
           let rangeArg: string | undefined;
           let pathArg: string | undefined;
 
-          // Simple heuristic: if it contains a slash, ends in extension, or exists on disk, it's a path.
-          // Otherwise, if it has '..', it's a range.
+          // Extract known options to forward to get-git-history-json.ts and separate range/path
           for (let i = 0; i < args.length; i++) {
-            if (valueFlags.includes(args[i])) {
+            const arg = args[i];
+            const nextArg = args[i + 1];
+
+            if (arg === '--') {
+              const remaining = args.slice(i + 1).filter(a => a !== '--');
+              if (remaining.length > 0) {
+                pathArg = remaining.join(' ');
+              }
+              break;
+            }
+
+            if (arg === '-S' && nextArg !== undefined) {
+              ctx.args.push('--pickaxe', nextArg);
               i++;
               continue;
             }
-            if (!args[i].startsWith('-') && args[i] !== cmd && args[i] !== '--no-pager') {
-              const arg = args[i];
-              if (arg === '--') continue; // separator
-              
+            if (arg.startsWith('-S') && arg.length > 2) {
+              ctx.args.push('--pickaxe', arg.substring(2));
+              continue;
+            }
+
+            if (arg === '-G' && nextArg !== undefined) {
+              ctx.args.push('--patch-search', nextArg);
+              i++;
+              continue;
+            }
+            if (arg.startsWith('-G') && arg.length > 2) {
+              ctx.args.push('--patch-search', arg.substring(2));
+              continue;
+            }
+
+            if ((arg === '--grep' || arg === '-g') && nextArg !== undefined) {
+              ctx.args.push('--grep', nextArg);
+              i++;
+              continue;
+            }
+            if (arg.startsWith('--grep=')) {
+              ctx.args.push('--grep', arg.slice(7));
+              continue;
+            }
+
+            if ((arg === '--author' || arg === '-a') && nextArg !== undefined) {
+              ctx.args.push('--author', nextArg);
+              i++;
+              continue;
+            }
+            if (arg.startsWith('--author=')) {
+              ctx.args.push('--author', arg.slice(9));
+              continue;
+            }
+
+            if (arg === '--since' && nextArg !== undefined) {
+              ctx.args.push('--since', nextArg);
+              i++;
+              continue;
+            }
+            if (arg.startsWith('--since=')) {
+              ctx.args.push('--since', arg.slice(8));
+              continue;
+            }
+
+            if (arg === '--after' && nextArg !== undefined) {
+              ctx.args.push('--since', nextArg);
+              i++;
+              continue;
+            }
+            if (arg.startsWith('--after=')) {
+              ctx.args.push('--since', arg.slice(8));
+              continue;
+            }
+
+            if (arg === '--until' && nextArg !== undefined) {
+              ctx.args.push('--until', nextArg);
+              i++;
+              continue;
+            }
+            if (arg.startsWith('--until=')) {
+              ctx.args.push('--until', arg.slice(8));
+              continue;
+            }
+
+            if (arg === '--before' && nextArg !== undefined) {
+              ctx.args.push('--until', nextArg);
+              i++;
+              continue;
+            }
+            if (arg.startsWith('--before=')) {
+              ctx.args.push('--until', arg.slice(9));
+              continue;
+            }
+
+            if (arg === '--diff-filter' && nextArg !== undefined) {
+              ctx.args.push('--diff-filter', nextArg);
+              i++;
+              continue;
+            }
+            if (arg.startsWith('--diff-filter=')) {
+              ctx.args.push('--diff-filter', arg.slice(14));
+              continue;
+            }
+
+            if ((arg === '-U' || arg === '--diff-context') && nextArg !== undefined) {
+              ctx.args.push('--diff-context', nextArg);
+              i++;
+              continue;
+            }
+            if (arg.startsWith('-U') && arg.length > 2) {
+              ctx.args.push('--diff-context', arg.substring(2));
+              continue;
+            }
+
+            if (arg === '--first-parent') {
+              ctx.args.push('--first-parent');
+              continue;
+            }
+
+            if (arg === '--all') {
+              ctx.args.push('--all');
+              continue;
+            }
+
+            if (arg === '--reverse') {
+              ctx.args.push('--reverse');
+              continue;
+            }
+
+            if (valueFlags.includes(arg)) {
+              i++;
+              continue;
+            }
+
+            if (!arg.startsWith('-') && arg !== cmd && arg !== '--no-pager') {
               if (arg.includes('..')) {
                 rangeArg = arg;
               } else if (arg.includes('/') || arg.includes('\\') || arg.includes('.')) {
                 pathArg = arg;
               } else {
-                // If it's a single commit SHA or branch name without '..', we treat it as a range (e.g., git log main)
-                // But it could be a file like 'README.md'.
-                // If we already have a range, subsequent non-flags are likely paths.
                 if (rangeArg) {
                   pathArg = arg;
                 } else {
@@ -161,6 +352,9 @@ export function gitInterceptor(ctx: ExecutionContext): void {
             }
           }
 
+          if (cmd === 'diff' && !rangeArg) {
+            ctx.args.push('--uncommitted');
+          }
           if (rangeArg) {
             ctx.args.push('--range', rangeArg);
           }
@@ -170,6 +364,19 @@ export function gitInterceptor(ctx: ExecutionContext): void {
           return;
         }
         // Fallback to native (with --no-pager already injected)
+        if (cmd === 'diff' && !ctx.args.includes('--')) {
+          const nonFlagArgs = ctx.args.filter(a => !a.startsWith('-') && a !== 'diff' && a !== '--no-pager');
+          if (nonFlagArgs.length >= 2) {
+            const lastArg = nonFlagArgs[nonFlagArgs.length - 1];
+            if (lastArg.includes('/') || lastArg.includes('\\') || /\.[a-zA-Z0-9]+$/.test(lastArg)) {
+              const lastIdx = ctx.args.lastIndexOf(lastArg);
+              if (lastIdx !== -1) {
+                console.error(`\n   🛠️ AUTONOMOUS HEALING: Auto-injecting '--' before file path in 'git diff' to prevent ambiguous argument error... (Frictionless Recovery)`);
+                ctx.args.splice(lastIdx, 0, '--');
+              }
+            }
+          }
+        }
         return;
       }
     )
@@ -213,17 +420,38 @@ export function gitInterceptor(ctx: ExecutionContext): void {
       }
     )
     .with(
-      { cmd: 'rebase', args: P.when((a: string[]) => a.includes('-i') || a.includes('--interactive')) },
-      () => {
-        console.error(`\n   💡 AGENT HINT: 'git rebase -i' requires an interactive editor and will hang indefinitely.\n${AUTONOMOUS_HEALING_MSG}`);
-        console.error(`   Because 'agent-exec.ts' is non-interactive, this is blocked. Use regular rebase or specific commands.`);
+      {
+        cmd: P.union('rebase', 'pull'),
+        args: P.when((a: string[]) => a.includes('-i') || a.includes('--interactive') || a.some(arg => arg.startsWith('--rebase=interactive')))
+      },
+      ({ cmd }) => {
+        console.error(`\n   💡 AGENT HINT: 'git ${cmd}' with interactive mode requires an interactive editor and will hang indefinitely.\n${AUTONOMOUS_HEALING_MSG}`);
+        console.error(`   Because 'agent-exec.ts' is non-interactive, this is blocked. Use non-interactive ${cmd} or specific commands.`);
         process.exit(1);
       }
     )
     .with(
-      { cmd: P.union('merge', 'pull'), args: P.when((a: string[]) => !a.includes('--no-edit') && !a.includes('-m') && !a.includes('--message') && !a.includes('--abort') && !a.includes('--continue') && !a.includes('--quit')) },
-      ({ cmd }) => {
-        console.error(`\n   💡 AGENT HINT: 'git ${cmd}' may open an interactive editor for merge commits. Automatically injecting '--no-edit'.\n${AUTONOMOUS_HEALING_MSG}`);
+      {
+        cmd: P.union('merge', 'pull'),
+        args: P.when((a: string[]) => {
+          if (a.includes('--no-edit') || a.includes('--abort') || a.includes('--continue') || a.includes('--quit')) {
+            return false;
+          }
+          if (a.some(arg => arg === '-m' || arg.startsWith('-m') || arg === '--message' || arg.startsWith('--message='))) {
+            return false;
+          }
+          return true;
+        })
+      },
+      ({ cmd, args }) => {
+        if (cmd === 'pull') {
+          const isRebase = args.some(arg => arg === '-r' || arg === '--rebase' || (arg.startsWith('--rebase=') && arg !== '--rebase=false'));
+          if (isRebase) {
+            // Rebase pulls do not create merge commits; injecting --no-edit fails with 'fatal: --no-edit is not possible with --rebase'.
+            return;
+          }
+        }
+        console.error(`\n   🛠️ AUTONOMOUS HEALING: Automatically injecting '--no-edit' into 'git ${cmd}' to prevent interactive editor prompt... (Frictionless Recovery)`);
         args.push('--no-edit');
       }
     )

@@ -1,5 +1,6 @@
 // @ts-nocheck
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import { AUTONOMOUS_HEALING_MSG } from '../utils.js';
 import { ExecutionContext } from './types.js';
@@ -168,6 +169,25 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
          ctx.payload.command = ctx.cmdBasename;
       }
       args.unshift('exec');
+      const evalIdx = args.findIndex(a => ['-e', '--eval'].includes(a));
+      if (evalIdx !== -1 && evalIdx + 1 < args.length) {
+        console.error(`\n   🛠️ AUTONOMOUS HEALING: Transparently rewriting inline tsx script to a temporary file execution to avoid quoting bugs... (Frictionless Recovery)\x1b[0m`);
+        const scriptContent = args[evalIdx + 1];
+        const outDir = os.tmpdir();
+        const tmpFile = path.join(outDir, `.agent_inline_script_${Date.now()}.ts`);
+        fs.writeFileSync(tmpFile, scriptContent);
+        process.on('exit', () => {
+          try {
+            if (fs.existsSync(tmpFile)) fs.unlinkSync(tmpFile);
+          } catch {
+            // ignore
+          }
+        });
+        args.splice(evalIdx, 2, tmpFile);
+        if ('command' in ctx.payload) {
+          ctx.payload.args = ctx.args;
+        }
+      }
     } else {
       envOverrides['CI'] = '1';
       if (!args.includes('-y') && !args.includes('--yes')) {

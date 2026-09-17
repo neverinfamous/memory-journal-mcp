@@ -16,6 +16,8 @@ import {
 } from './interceptors/index.js';
 import { replaceIntegrationContext, BUILT_INS, recordAgentIssue } from './utils.js';
 import { DEFAULT_ENV_VARS } from './environment.js';
+import { resolveEvalExecutionTarget, hasTopLevelReturn, wrapCodeInAsyncIife } from './eval-healer.js';
+import { healEvalCodePathHallucinations } from './path-healer.js';
 import {
   isPwsh,
   isCmd,
@@ -26,12 +28,15 @@ import {
   escapeUnixArg,
   sanitizeWslRegex,
   tokenizeArgs,
-  resolveWindowsCommand
+  resolveWindowsCommand,
+  findPatternExprIndex,
+  buildWslEnvArgs,
+  handleWindowsUnixCommandWrappers
 } from './command-utils.js';
 
 export const customInterceptors: Array<(ctx: ExecutionContext) => void> = [];
 
-export function buildCommand(payload: ExecPayload, cwd: string, isJson: boolean = false): { cmd: string; args: string[]; tempScriptPath: string | null; envOverrides: Record<string, string> } {
+export function buildCommand(payload: ExecPayload, cwd: string, isJson: boolean = false): { cmd: string; args: string[]; tempScriptPath: string | null; envOverrides: Record<string, string>; resolvedCwd?: string } {
   const exitWithError = (message: string) => {
     recordAgentIssue('FATAL_EXECUTION_ERROR', message);
     if (isJson) {
@@ -155,12 +160,11 @@ export function buildCommand(payload: ExecPayload, cwd: string, isJson: boolean 
         // [INTENT]: Detects specific Unix utilities that require Regex or Glob escaping before passing to WSL/sh. 
         // [DEPENDENCY]: Relies on specific tool names. 
         // [AGENT-HINT]: If you are adding a new POSIX text-processing tool, you MUST add its basename to this whitelist array, otherwise WSL will fail to parse its unescaped regex/glob arguments.
-        let patternExprIdx = -1;
-        if (['grep', 'grep.exe', 'egrep', 'fgrep', 'rg', 'rg.exe', 'jq', 'jq.exe', 'yq', 'yq.exe', 'sed', 'sed.exe', 'awk', 'awk.exe', 'gawk', 'gawk.exe'].includes(localCmd.toLowerCase())) {
-          patternExprIdx = localArgs.findIndex(a => !a.startsWith('-'));
-        }
+        const patternExprIdx = findPatternExprIndex(localCmd, localArgs);
 
+        const isShellC = ['sh', 'bash'].includes(path.basename(localCmd).toLowerCase()) && localArgs[0] === '-c';
         localArgs = localArgs.map((a, idx) => {
+          if (isShellC && idx === 1) return a;
           let cleaned = a;
           if ((cleaned.startsWith('"') && cleaned.endsWith('"') && cleaned.length >= 2) ||
               (cleaned.startsWith("'") && cleaned.endsWith("'") && cleaned.length >= 2)) {
@@ -175,27 +179,36 @@ export function buildCommand(payload: ExecPayload, cwd: string, isJson: boolean 
             localArgs.unshift('--strip-trailing-cr');
           }
         } else if (['grep', 'grep.exe', 'egrep', 'fgrep', 'rg', 'rg.exe'].includes(localCmd.toLowerCase())) {
-          const nonFlagIdx = localArgs.findIndex(a => !a.startsWith('-'));
-          if (nonFlagIdx !== -1) {
-            localArgs[nonFlagIdx] = sanitizeWslRegex(localArgs[nonFlagIdx]);
-            if (localArgs[nonFlagIdx].endsWith('$')) {
+          if (patternExprIdx !== -1 && !localArgs.includes('-F') && localCmd.toLowerCase() !== 'fgrep') {
+            const originalPattern = localArgs[patternExprIdx];
+            localArgs[patternExprIdx] = sanitizeWslRegex(originalPattern);
+            if (localArgs[patternExprIdx] !== originalPattern && ['grep', 'grep.exe'].includes(localCmd.toLowerCase()) && !localArgs.includes('-E') && !localArgs.includes('-P')) {
+              localArgs.unshift('-E');
+            }
+            if (localArgs[patternExprIdx].endsWith('$')) {
               if (localArgs.includes('-E')) {
                 localArgs[localArgs.indexOf('-E')] = '-P';
-                localArgs[nonFlagIdx] = localArgs[nonFlagIdx].replace(/\$$/, () => '\\r?$');
+                localArgs[patternExprIdx] = localArgs[patternExprIdx].replace(/\$$/, () => '\\r?$');
               } else if (!localArgs.includes('-P')) {
                 localArgs.unshift('-P');
-                const newNonFlagIdx = localArgs.findIndex(a => !a.startsWith('-'));
-                localArgs[newNonFlagIdx] = localArgs[newNonFlagIdx].replace(/\$$/, () => '\\r?$');
+                const newPatternIdx = findPatternExprIndex(localCmd, localArgs);
+                if (newPatternIdx !== -1) {
+                  localArgs[newPatternIdx] = localArgs[newPatternIdx].replace(/\$$/, () => '\\r?$');
+                }
               } else {
-                localArgs[nonFlagIdx] = localArgs[nonFlagIdx].replace(/\$$/, () => '\\r?$');
+                localArgs[patternExprIdx] = localArgs[patternExprIdx].replace(/\$$/, () => '\\r?$');
               }
             }
           }
         }
       }
 
+      const patternExprIdx = findPatternExprIndex(localCmd, localArgs);
       const hasCmdMeta = /[|&;<>$`{}()]/.test(localCmd) || localCmd.includes(' ');
-      const hasArgMeta = localArgs.some(a => /[|&;<>]|\$\(|\$\{|`/.test(a));
+      const hasArgMeta = localArgs.some((a, idx) => {
+        if (idx === patternExprIdx) return false;
+        return /[|&;<>]|\$\(|\$\{|`/.test(a);
+      });
       const hasShellMeta = hasCmdMeta || hasArgMeta;
 
       if (BUILT_INS.includes(localCmd.toLowerCase()) || (p.target === 'wsl2' && hasShellMeta)) {
@@ -288,23 +301,7 @@ export function buildCommand(payload: ExecPayload, cwd: string, isJson: boolean 
       if (!fs.existsSync(scratchDir)) {
         fs.mkdirSync(scratchDir, { recursive: true });
       }
-      let effectiveInterpreter = p.interpreter;
-      if (p.target === 'wsl2' && effectiveInterpreter && (isPwsh(effectiveInterpreter) || isCmd(effectiveInterpreter))) {
-        effectiveInterpreter = 'bash';
-      }
-
-      let ext = p.target === 'wsl2' ? '.sh' : '.ts';
-      if (effectiveInterpreter) {
-        const interp = effectiveInterpreter.toLowerCase();
-        ext = match(interp)
-          .when(i => i.includes('python') || i === 'py', () => '.py')
-          .when(i => i.includes('pwsh') || i.includes('powershell') || i === 'ps1', () => '.ps1')
-          .when(i => i.includes('bash') || i.includes('sh') || i.includes('zsh'), () => '.sh')
-          .when(i => i.includes('cmd') || i.includes('bat'), () => '.bat')
-          .when(i => i.includes('node') || i === 'js' || i === 'javascript', () => '.js')
-          .when(i => i.includes('bun') || i === 'ts' || i === 'typescript', () => '.ts')
-          .otherwise(() => ext);
-      }
+      const { effectiveInterpreter, ext } = resolveEvalExecutionTarget(p);
       tempScriptPath = path.join(scratchDir, `agent-eval-${uniqueId}${ext}`);
       try {
         let codeToExecute = p.code;
@@ -315,17 +312,23 @@ export function buildCommand(payload: ExecPayload, cwd: string, isJson: boolean 
             codeToExecute = `${p.templateOverride}\n${p.code}`;
           }
         }
+        codeToExecute = healEvalCodePathHallucinations(codeToExecute, cwd, p.target);
         if (ext === '.ps1') {
           codeToExecute = `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8;\n$OutputEncoding = [System.Text.Encoding]::UTF8;\n$ErrorActionPreference = 'Stop';\n$ProgressPreference = 'SilentlyContinue';\n$ConfirmPreference = 'None';\n${codeToExecute}`;
-        } else if (p.target === 'wsl2' && ext === '.sh') {
+        } else if (p.target === 'wsl2') {
           codeToExecute = codeToExecute.replace(/\r\n/g, '\n');
-          codeToExecute = codeToExecute.replace(/\b([a-zA-Z]):[/\\][^\s"'`;&|)]*/g, (matchStr) => convertToWslPath(matchStr));
+          codeToExecute = codeToExecute.replace(/\b([a-zA-Z]):[/\\]+[^\s"'`;&|)]*/g, (matchStr) => convertToWslPath(matchStr));
+        }
+        if (['.js', '.ts'].includes(ext) && hasTopLevelReturn(codeToExecute)) {
+          console.error(`\n   💡 AGENT HINT: Code Mode style top-level 'return' detected in eval payload.`);
+          console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-wrapping code in async IIFE to capture returned output... (Frictionless Recovery)\x1b[0m`);
+          codeToExecute = wrapCodeInAsyncIife(codeToExecute);
         }
         fs.writeFileSync(tempScriptPath, codeToExecute, 'utf-8');
       } catch (err) {
         exitWithError(`Failed to write eval code to temporary file ${tempScriptPath}: ${err instanceof Error ? err.message : String(err)}`);
       }
-      let localCmd = effectiveInterpreter || (p.target === 'wsl2' ? 'bash' : 'bun');
+      let localCmd = effectiveInterpreter;
       const interpLower = localCmd.toLowerCase();
       if (['ts', 'typescript'].includes(interpLower)) {
         localCmd = 'bun';
@@ -370,36 +373,9 @@ export function buildCommand(payload: ExecPayload, cwd: string, isJson: boolean 
 
   Object.assign(envOverrides, DEFAULT_ENV_VARS);
 
-  if (cmd === 'find' || cmd === 'find.exe') {
-    const isUnixFind = args.some(a => a.startsWith('-name') || a.startsWith('-type') || a.startsWith('-exec') || a.startsWith('-mtime') || a === '.' || a === '..');
-    if (isUnixFind) {
-       const originalArgs = args.map(a => escapeUnixArg(a, false)).join(' ');
-       console.error(`\n   💡 AGENT HINT: Detected Unix-style 'find' command. Forwarding to 'sh -c' to bypass Windows find.exe limits.`);
-       cmd = 'sh';
-       args = ['-c', `find ${originalArgs}`];
-    }
-  }
-
-  // Handle glob expansion for Unix utilities running on Windows without a shell
-  const cmdBasenameForGlob = path.basename(cmd).toLowerCase().replace(/\.exe$/, '');
-  const unixUtilsForGlob = ['grep', 'ls', 'rm', 'cp', 'mv', 'cat', 'rg'];
-  if (unixUtilsForGlob.includes(cmdBasenameForGlob)) {
-    let patternExprIdx = -1;
-    if (['grep', 'grep.exe', 'egrep', 'fgrep', 'rg', 'rg.exe', 'sed', 'sed.exe', 'awk', 'awk.exe'].includes(cmdBasenameForGlob)) {
-      patternExprIdx = args.findIndex(a => !a.startsWith('-'));
-    }
-    const hasGlobs = args.some((a, idx) => {
-      if (idx === patternExprIdx) return false;
-      return (a.includes('*') || a.includes('?')) && !a.startsWith('-');
-    });
-    if (hasGlobs) {
-       const originalArgs = args.map(a => escapeUnixArg(a, true)).join(' ');
-       console.error(`\n   💡 AGENT HINT: Detected Unix utility '${cmdBasenameForGlob}' with glob patterns (* or ?).`);
-       console.error(`   🛠️ AUTONOMOUS HEALING: Because 'shell: false' is used, globs are not expanded automatically. Routing through 'sh -c' to expand globs...`);
-       cmd = 'sh';
-       args = ['-c', `${cmdBasenameForGlob} ${originalArgs}`];
-    }
-  }
+  const wrapped = handleWindowsUnixCommandWrappers(cmd, args, payload);
+  cmd = wrapped.cmd;
+  args = wrapped.args;
 
   // integrationContext processed at the start of buildCommand
 
@@ -460,54 +436,18 @@ export function buildCommand(payload: ExecPayload, cwd: string, isJson: boolean 
 
   if (payload.target === 'wsl2') {
     const wslCwd = convertToWslPath(cwd);
-    
-    const wslEnvArgs: string[] = [];
-    const wslUuid = crypto.randomUUID();
-    wslEnvArgs.push(`AGENT_EXEC_WSL_UUID=${wslUuid}`);
-    const payloadEnv = payload.env || {};
-    let hasExplicitPath = false;
-    for (const [k, v] of Object.entries(payloadEnv)) {
-      if (v !== undefined) {
-        if (k.toUpperCase() === 'PATH') {
-          hasExplicitPath = true;
-        }
-        wslEnvArgs.push(`${k}=${convertToWslPath(String(v))}`);
-      }
-    }
-    for (const [k, v] of Object.entries(envOverrides)) {
-      if (k.toUpperCase() === 'PATH') {
-        hasExplicitPath = true;
-      }
-      wslEnvArgs.push(`${k}=${convertToWslPath(v)}`);
-    }
+    const wslEnvArgs = buildWslEnvArgs(payload.env, envOverrides);
+    const patternExprIdx = findPatternExprIndex(path.basename(cmd), args);
 
-    if (!hasExplicitPath) {
-      const defaultWslPaths = [
-        '/home/chris/.bun/bin',
-        '/home/chris/.cargo/bin',
-        '/home/chris/.local/bin',
-        '/root/.bun/bin',
-        '/root/.cargo/bin',
-        '/root/.local/bin',
-        '/usr/local/sbin',
-        '/usr/local/bin',
-        '/usr/sbin',
-        '/usr/bin',
-        '/sbin',
-        '/bin',
-      ].join(':');
-      wslEnvArgs.push(`PATH=${defaultWslPaths}`);
+    let wslArgs: string[];
+    if (['sh', 'bash'].includes(path.basename(cmd).toLowerCase()) && args[0] === '-c') {
+      wslArgs = [args[0], args[1], ...args.slice(2).map(a => convertToWslPath(a))];
+    } else {
+      wslArgs = args.map((arg, idx) => {
+        if (idx === patternExprIdx) return arg;
+        return convertToWslPath(arg);
+      });
     }
-
-    let patternExprIdx = -1;
-    if (['grep', 'grep.exe', 'egrep', 'fgrep', 'rg', 'rg.exe', 'jq', 'jq.exe', 'yq', 'yq.exe', 'sed', 'sed.exe', 'awk', 'awk.exe', 'gawk', 'gawk.exe'].includes(path.basename(cmd).toLowerCase())) {
-      patternExprIdx = args.findIndex(a => !a.startsWith('-'));
-    }
-
-    let wslArgs = args.map((arg, idx) => {
-      if (idx === patternExprIdx) return arg;
-      return convertToWslPath(arg);
-    });
 
     let wslCmd = cmd;
     if (/[a-zA-Z]:[/\\]/.test(wslCmd)) {
@@ -527,5 +467,5 @@ export function buildCommand(payload: ExecPayload, cwd: string, isJson: boolean 
     cmd = 'wsl.exe';
   }
 
-  return { cmd, args, tempScriptPath, envOverrides };
+  return { cmd, args, tempScriptPath, envOverrides, resolvedCwd: payload.cwd ? path.resolve(payload.cwd) : cwd };
 }

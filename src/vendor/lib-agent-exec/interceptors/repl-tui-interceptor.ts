@@ -30,12 +30,15 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
       const newArgs = [];
       const usesPosixShortFlags = !['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe', 'cmd', 'cmd.exe'].includes(cmdBasename);
       
+      const isContainerOrSsh = ['ssh', 'ssh.exe', 'sftp', 'sftp.exe', 'docker', 'docker.exe', 'podman', 'podman.exe', 'kubectl', 'kubectl.exe'].includes(cmdBasename.toLowerCase());
+      const isInteractiveTarget = isContainerOrSsh || ['bash', 'bash.exe', 'sh', 'sh.exe', 'zsh', 'zsh.exe', 'python', 'python.exe', 'python.cmd', 'python3', 'python3.exe'].includes(cmdBasename.toLowerCase());
+      
       for (const arg of args) {
         if (arg === '-i' || arg === '--interactive' || (cmdBasename === 'php' && arg === '-a')) {
           wasInteractiveStripped = true;
           continue;
         }
-        if (usesPosixShortFlags && /^-([a-zA-Z]*[ti][a-zA-Z]*)$/.test(arg)) {
+        if (isInteractiveTarget && usesPosixShortFlags && /^-([a-zA-Z]*[ti][a-zA-Z]*)$/.test(arg)) {
           const newArg = arg.replace(/[ti]/g, '');
           if (newArg !== '-') {
             newArgs.push(newArg);
@@ -47,8 +50,7 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
       }
       
       if (wasInteractiveStripped) {
-        console.error(`\n   💡 AGENT HINT: Stripping interactive/TTY flags from ${cmdBasename} to prevent hanging.`);
-        console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+        console.error(`\n   💡 AGENT HINT: Stripping interactive/TTY flags from ${cmdBasename} to prevent hanging... (Frictionless Recovery)`);
         args.length = 0;
         args.push(...newArgs);
       }

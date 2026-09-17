@@ -80,10 +80,12 @@ export function showHelp(asJson: boolean): never {
   console.error(`  bun agent-exec.ts [options] <payload.json>\n`);
 
   console.error(pc.bold('Options:'));
-  console.error(`  --interceptors <path>    Path to a custom interceptor module`);
-  console.error(`  --payloadPath <path>     Explicit path to the payload JSON file`);
-  console.error(`  -h, --help               Show this manual`);
-  console.error(`  --json                   Output this manual as structured JSON\n`);
+  console.error(`  -p, --payload <json|file> Payload JSON string or path to JSON file`);
+  console.error(`  -t, --target <wsl2|win>   Target runtime environment (windows, wsl2)`);
+  console.error(`  --interceptors <path>     Path to a custom interceptor module`);
+  console.error(`  --payloadPath <path>      Explicit path to the payload JSON file`);
+  console.error(`  -h, --help                Show this manual`);
+  console.error(`  --json                    Output this manual as structured JSON\n`);
 
   console.error(pc.bold(pc.yellow('⚠️ The `&&` Pipeline Chaining Rule')));
   console.error(manualData.rules.pipeline + '\n');
