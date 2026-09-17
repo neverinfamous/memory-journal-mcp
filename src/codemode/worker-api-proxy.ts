@@ -369,6 +369,197 @@ export function buildApiProxy(
     }
     api['describe'] = api['help']
 
+    const invokeRpc = (g: string, m: string, args: unknown[]): Promise<unknown> => {
+        const intercept = applyArgInterceptions(m, args);
+        if ('error' in intercept) {
+            return wrapPromise(Promise.resolve(wrapResult(intercept.error)), m);
+        }
+        const resultPromise = safeRpcCall(g, m, intercept.args).then(wrapResult);
+        return wrapPromise(resultPromise, m);
+    };
+
+    // Projects namespace proxy & shims
+    const adminListProjects = methods['admin']?.includes('list_projects')
+        ? (...args: unknown[]): Promise<unknown> => invokeRpc('admin', 'list_projects', args)
+        : methods['analytics']?.includes('get_cross_project_insights')
+        ? (...args: unknown[]): Promise<unknown> => invokeRpc('analytics', 'get_cross_project_insights', args)
+        : (): Promise<unknown> => wrapPromise(Promise.resolve(wrapResult({ success: true, projects: [] })), 'list_projects');
+
+    const adminGetProject = methods['admin']?.includes('get_project')
+        ? (nameOrParams: unknown): Promise<unknown> => {
+            const params = typeof nameOrParams === 'string' || typeof nameOrParams === 'number'
+                ? [{ name: String(nameOrParams) }]
+                : [nameOrParams ?? {}];
+            return invokeRpc('admin', 'get_project', params);
+        }
+        : (): Promise<unknown> => wrapPromise(Promise.resolve(wrapResult({ success: true })), 'get_project');
+
+    const adminRegisterProject = methods['admin']?.includes('register_project')
+        ? (...args: unknown[]): Promise<unknown> => invokeRpc('admin', 'register_project', args)
+        : (): Promise<unknown> => wrapPromise(Promise.resolve(wrapResult({ success: true })), 'register_project');
+
+    const adminUpdateProject = methods['admin']?.includes('update_project')
+        ? (...args: unknown[]): Promise<unknown> => invokeRpc('admin', 'update_project', args)
+        : (): Promise<unknown> => wrapPromise(Promise.resolve(wrapResult({ success: true })), 'update_project');
+
+    const adminDeleteProject = methods['admin']?.includes('delete_project')
+        ? (...args: unknown[]): Promise<unknown> => invokeRpc('admin', 'delete_project', args)
+        : (): Promise<unknown> => wrapPromise(Promise.resolve(wrapResult({ success: true })), 'delete_project');
+
+    const projectsCallable = function(this: unknown, ...args: unknown[]): Promise<unknown> {
+        return adminListProjects(...args);
+    };
+    const projectsObj: Record<string, unknown> = {
+        list: adminListProjects,
+        listProjects: adminListProjects,
+        list_projects: adminListProjects,
+        getProjects: adminListProjects,
+        get_projects: adminListProjects,
+        getAll: adminListProjects,
+        all: adminListProjects,
+        get: adminGetProject,
+        getProject: adminGetProject,
+        get_project: adminGetProject,
+        register: adminRegisterProject,
+        registerProject: adminRegisterProject,
+        register_project: adminRegisterProject,
+        create: adminRegisterProject,
+        createProject: adminRegisterProject,
+        update: adminUpdateProject,
+        updateProject: adminUpdateProject,
+        update_project: adminUpdateProject,
+        delete: adminDeleteProject,
+        deleteProject: adminDeleteProject,
+        delete_project: adminDeleteProject,
+        remove: adminDeleteProject,
+        removeProject: adminDeleteProject,
+    };
+    Object.assign(projectsCallable, projectsObj);
+    const projectsProxy = new Proxy(projectsCallable, {
+        apply(_t, _thisArg, args: unknown[]): Promise<unknown> {
+            return adminListProjects(...args);
+        },
+        get(t, p): unknown {
+            if (typeof p === 'symbol' || p === 'then') return undefined;
+            if (p in t) return (Reflect.get(t, p) as unknown);
+            if (typeof p === 'string') {
+                const low = p.toLowerCase();
+                if (low.includes('list') || low.includes('all') || (low.includes('get') && low.endsWith('s'))) {
+                    return adminListProjects;
+                }
+                if (low.includes('get') || low.includes('find')) {
+                    return adminGetProject;
+                }
+                if (low.includes('create') || low.includes('register') || low.includes('add')) {
+                    return adminRegisterProject;
+                }
+                if (low.includes('update') || low.includes('edit')) {
+                    return adminUpdateProject;
+                }
+                if (low.includes('delete') || low.includes('remove')) {
+                    return adminDeleteProject;
+                }
+            }
+            return adminListProjects;
+        }
+    });
+    api['projects'] = projectsProxy;
+    api['project'] = projectsProxy;
+
+    // Tags namespace proxy & shims
+    const coreListTags = methods['core']?.includes('list_tags')
+        ? (...args: unknown[]): Promise<unknown> => invokeRpc('core', 'list_tags', args)
+        : (): Promise<unknown> => wrapPromise(Promise.resolve(wrapResult({ success: true, tags: [], count: 0 })), 'list_tags');
+
+    const adminMergeTags = methods['admin']?.includes('merge_tags')
+        ? (...args: unknown[]): Promise<unknown> => invokeRpc('admin', 'merge_tags', args)
+        : (): Promise<unknown> => wrapPromise(Promise.resolve(wrapResult({ success: true })), 'merge_tags');
+
+    const tagsCallable = function(this: unknown, ...args: unknown[]): Promise<unknown> {
+        return coreListTags(...args);
+    };
+    const tagsObj: Record<string, unknown> = {
+        list: coreListTags,
+        listTags: coreListTags,
+        list_tags: coreListTags,
+        get: coreListTags,
+        getTags: coreListTags,
+        get_tags: coreListTags,
+        getAll: coreListTags,
+        all: coreListTags,
+        merge: adminMergeTags,
+        mergeTags: adminMergeTags,
+        merge_tags: adminMergeTags,
+    };
+    Object.assign(tagsCallable, tagsObj);
+    const tagsProxy = new Proxy(tagsCallable, {
+        apply(_t, _thisArg, args: unknown[]): Promise<unknown> {
+            return coreListTags(...args);
+        },
+        get(t, p): unknown {
+            if (typeof p === 'symbol' || p === 'then') return undefined;
+            if (p in t) return (Reflect.get(t, p) as unknown);
+            if (typeof p === 'string') {
+                const low = p.toLowerCase();
+                if (low.includes('merge')) {
+                    return adminMergeTags;
+                }
+                if (low.includes('list') || low.includes('get') || low.includes('all') || low.includes('find') || low.includes('search')) {
+                    return coreListTags;
+                }
+            }
+            return coreListTags;
+        }
+    });
+    api['tags'] = tagsProxy;
+    api['tag'] = tagsProxy;
+
+    // System namespace proxy & shims
+    const getStats = methods['analytics']?.includes('get_statistics')
+        ? (...args: unknown[]): Promise<unknown> => invokeRpc('analytics', 'get_statistics', args)
+        : (): Promise<unknown> => wrapPromise(Promise.resolve(wrapResult({ success: true })), 'get_statistics');
+
+    const systemCallable = function(this: unknown, ...args: unknown[]): Promise<unknown> {
+        return getStats(...args);
+    };
+    const systemObj: Record<string, unknown> = {
+        getStatistics: getStats,
+        getStats: getStats,
+        stats: getStats,
+        serverInfo: getStats,
+        server_info: getStats,
+        serverHealth: getStats,
+        server_health: getStats,
+        serverStatus: getStats,
+        server_status: getStats,
+        healthCheck: getStats,
+        health_check: getStats,
+        diagnostics: getStats,
+        getDiagnostics: getStats,
+        systemInfo: getStats,
+        system_info: getStats,
+        info: getStats,
+        getInfo: getStats,
+        health: getStats,
+        getHealth: getStats,
+        status: getStats,
+        getStatus: getStats,
+        ping: (): Promise<unknown> => wrapPromise(Promise.resolve(wrapResult({ success: true, status: 'pong' })), 'ping'),
+        version: (): Promise<unknown> => wrapPromise(Promise.resolve(wrapResult({ success: true, version: '1.0.0', name: 'memory-journal-mcp' })), 'version'),
+    };
+    Object.assign(systemCallable, systemObj);
+    const systemProxy = new Proxy(systemCallable, {
+        apply(_t, _thisArg, args: unknown[]): Promise<unknown> {
+            return getStats(...args);
+        },
+        get(t, p): unknown {
+            if (typeof p === 'symbol' || p === 'then') return undefined;
+            if (p in t) return (Reflect.get(t, p) as unknown);
+            return getStats;
+        }
+    });
+    api['system'] = systemProxy;
+
     return new Proxy(api, {
         get(target, prop) {
             if (typeof prop === 'symbol') return undefined
@@ -376,6 +567,9 @@ export function buildApiProxy(
             if (prop === 'gitApi') return target['git']
             if (prop === 'journal' || prop === 'memory') return target['core'] ?? target
             if (prop === 'schema') return target['schema']
+            if (prop === 'projects' || prop === 'project') return target['projects']
+            if (prop === 'tags' || prop === 'tag') return target['tags']
+            if (prop === 'system') return target['system']
             if (prop === 'sqlite' || prop === 'sqlite3' || prop === 'db') return target
             if (prop === 'then') return undefined
 

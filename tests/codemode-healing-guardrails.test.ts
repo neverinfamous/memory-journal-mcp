@@ -1007,6 +1007,135 @@ return {
             const db = (proxy as Record<string, any>)['db']
             expect(db).toBeDefined()
         })
+
+        it('should execute scripts ending in single-line comments without syntax errors (agent-issues regression)', async () => {
+            const { WorkerSandbox } = await import('../src/codemode/worker-sandbox.js')
+            const sandbox = new WorkerSandbox()
+            const bindings = {
+                core: {
+                    get_recent_entries: async () => ({
+                        success: true,
+                        entries: [
+                            { id: 1, title: 'First', category: 'note', tags: ['a'], created_at: '2026-01-01' },
+                            { id: 2, title: 'Second', category: 'note', tags: ['b'], created_at: '2026-01-02' },
+                        ],
+                    }),
+                },
+            }
+
+            const scriptFromLog = `
+return (await mj.core.getRecentEntries({
+  project_number: 1,
+  limit: 10
+})).entries.map(e => ({
+  id: e.id,
+  title: e.title,
+  category: e.category,
+  tags: e.tags,
+  created_at: e.created_at
+})).reverse(); // chronological order`
+
+            const res = await sandbox.execute(scriptFromLog, bindings)
+            expect(res.success).toBe(true)
+            expect(Array.isArray(res.result)).toBe(true)
+            expect((res.result as Array<{ id: number }>)[0].id).toBe(2)
+        })
+
+        it('should support mj.projects.listProjects and mj.projects.list (agent-issues regression)', async () => {
+            const { WorkerSandbox } = await import('../src/codemode/worker-sandbox.js')
+            const sandbox = new WorkerSandbox()
+            const bindings = {
+                admin: {
+                    list_projects: async () => ({ success: true, projects: [{ name: 'proj-1' }] }),
+                },
+            }
+
+            const code = `
+const p1 = await mj.projects.listProjects();
+const p2 = await mj.projects.list();
+const p3 = await mj.projects();
+return { p1, p2, p3 };`
+
+            const res = await sandbox.execute(code, bindings)
+            expect(res.success).toBe(true)
+            const r = res.result as Record<string, { success: boolean }>
+            expect(r.p1.success).toBe(true)
+            expect(r.p2.success).toBe(true)
+            expect(r.p3.success).toBe(true)
+        })
+
+        it('should support mj.tags.list and mj.tags.listTags in sandbox', async () => {
+            const { WorkerSandbox } = await import('../src/codemode/worker-sandbox.js')
+            const sandbox = new WorkerSandbox()
+            const bindings = {
+                core: {
+                    list_tags: async () => ({ success: true, tags: ['core', 'infra'], count: 2 }),
+                },
+            }
+
+            const code = `
+const t1 = await mj.tags.list();
+const t2 = await mj.tags.listTags();
+const t3 = await mj.tags();
+return { t1, t2, t3 };`
+
+            const res = await sandbox.execute(code, bindings)
+            expect(res.success).toBe(true)
+            const r = res.result as Record<string, { success: boolean; tags: string[] }>
+            expect(r.t1.success).toBe(true)
+            expect(r.t1.tags).toEqual(['core', 'infra'])
+            expect(r.t2.tags).toEqual(['core', 'infra'])
+            expect(r.t3.tags).toEqual(['core', 'infra'])
+        })
+
+        it('should support mj.system.serverInfo and mj.system.serverHealth in sandbox', async () => {
+            const { WorkerSandbox } = await import('../src/codemode/worker-sandbox.js')
+            const sandbox = new WorkerSandbox()
+            const bindings = {
+                analytics: {
+                    get_statistics: async () => ({ success: true, stats: { total_entries: 42 } }),
+                },
+            }
+
+            const code = `
+const s1 = await mj.system.serverInfo();
+const s2 = await mj.system.serverHealth();
+const s3 = await mj.system.getStatistics();
+return { s1, s2, s3 };`
+
+            const res = await sandbox.execute(code, bindings)
+            expect(res.success).toBe(true)
+            const r = res.result as Record<string, { success: boolean }>
+            expect(r.s1.success).toBe(true)
+            expect(r.s2.success).toBe(true)
+            expect(r.s3.success).toBe(true)
+        })
+
+        it('should expose projects, tags, and system namespaces on buildApiProxy', async () => {
+            const { buildApiProxy } = await import('../src/codemode/worker-api-proxy.js')
+            const mockPostMessage = () => {}
+            const methods = {
+                admin: ['list_projects', 'get_project', 'merge_tags'],
+                core: ['list_tags'],
+                analytics: ['get_statistics'],
+            }
+            const proxy = buildApiProxy(mockPostMessage, methods)
+
+            const projects = (proxy as Record<string, any>)['projects']
+            expect(typeof projects).toBe('function')
+            expect(typeof projects.listProjects).toBe('function')
+            expect(typeof projects.list).toBe('function')
+
+            const tags = (proxy as Record<string, any>)['tags']
+            expect(typeof tags).toBe('function')
+            expect(typeof tags.listTags).toBe('function')
+            expect(typeof tags.list).toBe('function')
+
+            const system = (proxy as Record<string, any>)['system']
+            expect(typeof system).toBe('function')
+            expect(typeof system.serverInfo).toBe('function')
+            expect(typeof system.serverHealth).toBe('function')
+        })
     })
 })
 

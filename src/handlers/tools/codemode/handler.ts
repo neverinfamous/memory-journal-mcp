@@ -229,6 +229,14 @@ export function healCodeModeScript(code: string): string {
     executionCode = executionCode.replace(/\bJSON\.parse\s*\(\s*context\s*\?\?\s*['"][^'"]*['"]\s*\)/g, '(typeof context === "string" ? JSON.parse(context) : context)')
     executionCode = executionCode.replace(/\bJSON\.parse\s*\(\s*(context\.[a-zA-Z0-9_$]+)\s*\)/g, '(typeof $1 === "string" ? JSON.parse($1) : $1)')
 
+    // Auto-heal trailing single-line comments or missing terminal newlines
+    // If the script ends with a single-line comment (e.g., `// chronological order`),
+    // wrapping it in `(async () => { ${code} })()` without a newline causes the closing
+    // `})()` to be commented out, leading to "SyntaxError: Unexpected end of input".
+    if (!executionCode.endsWith('\n')) {
+        executionCode += '\n'
+    }
+
     return executionCode
 }
 

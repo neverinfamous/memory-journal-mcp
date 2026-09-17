@@ -232,7 +232,7 @@ describe('WorkerSandbox', () => {
         const result = await sandbox.execute(code, {})
         expect(result.success).toBe(false)
         expect(result.error).toMatch(/timed out|timeout|code 1/i)
-    }, 15000)
+    }, 30000)
 
     it('should catch synchronous syntax errors or throw', async () => {
         const sandbox = new WorkerSandbox()

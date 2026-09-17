@@ -89,6 +89,10 @@ export const METHOD_ALIASES: Record<string, Record<string, string>> = {
         findProject: 'getProject',
         find_project: 'getProject',
         listProjects: 'listProjects',
+        list_projects: 'listProjects',
+        projects: 'listProjects',
+        getTags: 'listTags',
+        get_tags: 'listTags',
     
         create_entry: 'createEntry',
         get_entry_by_id: 'getEntryById',
@@ -174,6 +178,7 @@ export const METHOD_ALIASES: Record<string, Record<string, string>> = {
         getInsights: 'getCrossProjectInsights',
         getProjects: 'getCrossProjectInsights',
         listProjects: 'getCrossProjectInsights',
+        list_projects: 'getCrossProjectInsights',
         projects: 'getCrossProjectInsights',
         databaseInfo: 'getStatistics',
         getDatabaseInfo: 'getStatistics',

@@ -414,8 +414,8 @@ async function executeCode(
                         const callableEntries = function(this: unknown, ...args: unknown[]): unknown {
                             return (listFunc as (...args: unknown[]) => unknown).apply(this, args)
                         }
-                        const adminGroup = target['admin'] as Record<string, unknown> | undefined
-                        const searchGroup = target['search'] as Record<string, unknown> | undefined
+                        const adminGroup = 'admin' in target ? (target['admin'] as Record<string, unknown>) : undefined
+                        const searchGroup = 'search' in target ? (target['search'] as Record<string, unknown>) : undefined
                         Object.assign(callableEntries, {
                             create: coreGroup['create_entry'] ?? coreGroup['createEntry'],
                             createEntry: coreGroup['create_entry'] ?? coreGroup['createEntry'],
@@ -563,12 +563,34 @@ async function executeCode(
                     })
                 }
                 // Handle sdk.projects hallucination
-                if (prop === 'projects') {
-                    const coreGroup = target['core'] as Record<string, unknown> | undefined
-                    const analyticsGroup = target['analytics'] as Record<string, unknown> | undefined
-                    const adminGroup = target['admin'] as Record<string, unknown> | undefined
+                if (prop === 'projects' || prop === 'project') {
+                    const coreGroup = 'core' in target ? (target['core'] as Record<string, unknown>) : undefined
+                    const analyticsGroup = 'analytics' in target ? (target['analytics'] as Record<string, unknown>) : undefined
+                    const adminGroup = 'admin' in target ? (target['admin'] as Record<string, unknown>) : undefined
                     const createFn = coreGroup?.['create_entry'] ?? coreGroup?.['createEntry']
-                    const listFn = analyticsGroup?.['get_cross_project_insights'] ?? analyticsGroup?.['getCrossProjectInsights'] ?? adminGroup?.['list_projects'] ?? adminGroup?.['listProjects']
+                    const listFn = adminGroup?.['list_projects'] ?? adminGroup?.['listProjects'] ?? analyticsGroup?.['get_cross_project_insights'] ?? analyticsGroup?.['getCrossProjectInsights']
+                    const getFn = (nameOrParams: unknown): unknown => {
+                        const getProj = adminGroup?.['get_project'] ?? adminGroup?.['getProject']
+                        const params = typeof nameOrParams === 'string' || typeof nameOrParams === 'number'
+                            ? { name: String(nameOrParams) }
+                            : (nameOrParams ?? {})
+                        return (getProj as ((...a: unknown[]) => unknown) | undefined)?.(params)
+                    }
+                    const registerFn = (data: unknown): unknown => {
+                        const regProj = adminGroup?.['register_project'] ?? adminGroup?.['registerProject']
+                        return (regProj as ((...a: unknown[]) => unknown) | undefined)?.(data)
+                    }
+                    const updateFn = (data: unknown): unknown => {
+                        const updProj = adminGroup?.['update_project'] ?? adminGroup?.['updateProject']
+                        return (updProj as ((...a: unknown[]) => unknown) | undefined)?.(data)
+                    }
+                    const deleteFn = (nameOrParams: unknown): unknown => {
+                        const delProj = adminGroup?.['delete_project'] ?? adminGroup?.['deleteProject']
+                        const params = typeof nameOrParams === 'string' || typeof nameOrParams === 'number'
+                            ? { name: String(nameOrParams) }
+                            : (nameOrParams ?? {})
+                        return (delProj as ((...a: unknown[]) => unknown) | undefined)?.(params)
+                    }
                     
                     const projectsFn = function(this: unknown, ...args: unknown[]): Promise<unknown> {
                         if (typeof listFn === 'function') {
@@ -576,15 +598,73 @@ async function executeCode(
                         }
                         return Promise.resolve({ success: true, projects: [] })
                     }
-                    Object.assign(projectsFn, {
-                        list: () => (listFn as ((...args: unknown[]) => unknown) | undefined)?.(),
-                        get: (name: unknown) => (adminGroup?.['get_project'] as ((...args: unknown[]) => unknown) | undefined)?.(typeof name === 'string' || typeof name === 'number' ? { name: String(name) } : name),
+                    const projectsObj: Record<string, unknown> = {
+                        list: (...args: unknown[]) => (listFn as ((...a: unknown[]) => unknown) | undefined)?.(...args),
+                        listProjects: (...args: unknown[]) => (listFn as ((...a: unknown[]) => unknown) | undefined)?.(...args),
+                        list_projects: (...args: unknown[]) => (listFn as ((...a: unknown[]) => unknown) | undefined)?.(...args),
+                        getProjects: (...args: unknown[]) => (listFn as ((...a: unknown[]) => unknown) | undefined)?.(...args),
+                        get_projects: (...args: unknown[]) => (listFn as ((...a: unknown[]) => unknown) | undefined)?.(...args),
+                        getAll: (...args: unknown[]) => (listFn as ((...a: unknown[]) => unknown) | undefined)?.(...args),
+                        all: (...args: unknown[]) => (listFn as ((...a: unknown[]) => unknown) | undefined)?.(...args),
+                        get: getFn,
+                        getProject: getFn,
+                        get_project: getFn,
+                        register: registerFn,
+                        registerProject: registerFn,
+                        register_project: registerFn,
+                        create: registerFn,
+                        createProject: registerFn,
+                        update: updateFn,
+                        updateProject: updateFn,
+                        update_project: updateFn,
+                        delete: deleteFn,
+                        deleteProject: deleteFn,
+                        delete_project: deleteFn,
+                        remove: deleteFn,
+                        removeProject: deleteFn,
+                        insights: (...args: unknown[]): unknown => {
+                            const fn = (analyticsGroup?.['get_cross_project_insights'] ?? analyticsGroup?.['getCrossProjectInsights']) as ((...a: unknown[]) => unknown) | undefined
+                            return fn?.(...args)
+                        },
                         entries: {
                             create: createFn,
                             add: createFn
                         }
+                    }
+                    Object.assign(projectsFn, projectsObj)
+                    return new Proxy(projectsFn, {
+                        get(t, p): unknown {
+                            if (typeof p === 'symbol') return undefined
+                            if (p === 'then') return undefined
+                            if (p in t) return Reflect.get(t, p) as unknown
+                            if (typeof p === 'string') {
+                                const low = p.toLowerCase()
+                                if (low.includes('list') || low.includes('all') || (low.includes('get') && low.endsWith('s'))) {
+                                    return projectsObj['list']
+                                }
+                                if (low.includes('get') || low.includes('find')) {
+                                    return getFn
+                                }
+                                if (low.includes('create') || low.includes('register') || low.includes('add')) {
+                                    return registerFn
+                                }
+                                if (low.includes('update') || low.includes('edit')) {
+                                    return updateFn
+                                }
+                                if (low.includes('delete') || low.includes('remove')) {
+                                    return deleteFn
+                                }
+                            }
+                            if (typeof listFn === 'function') return listFn
+                            return createCallableShim()
+                        },
+                        apply(_t, thisArg, args) {
+                            if (typeof listFn === 'function') {
+                                return (listFn as (...a: unknown[]) => unknown).apply(thisArg, args)
+                            }
+                            return Promise.resolve({ success: true, projects: [] })
+                        }
                     })
-                    return projectsFn
                 }
                 // Handle direct SQL execution shim (e.g. db.execute)
                 if (prop === 'db' && 'core' in target) {
@@ -698,7 +778,7 @@ async function executeCode(
                 }
                 // Handle db / database / system namespace hallucinations for metrics and stats
                 if (prop === 'db' || prop === 'database' || prop === 'system') {
-                    const analyticsGroup = target['analytics'] as Record<string, unknown> | undefined
+                    const analyticsGroup = 'analytics' in target ? (target['analytics'] as Record<string, unknown>) : undefined
                     const getStatsFn = analyticsGroup?.['getStatistics'] ?? analyticsGroup?.['get_statistics']
                     const dbShim = {
                         getStatistics: getStatsFn,
@@ -712,13 +792,79 @@ async function executeCode(
                         health: getStatsFn,
                         status: getStatsFn,
                         getStatus: getStatsFn,
+                        serverInfo: getStatsFn,
+                        server_info: getStatsFn,
+                        serverHealth: getStatsFn,
+                        server_health: getStatsFn,
+                        serverStatus: getStatsFn,
+                        server_status: getStatsFn,
+                        healthCheck: getStatsFn,
+                        health_check: getStatsFn,
+                        diagnostics: getStatsFn,
+                        getDiagnostics: getStatsFn,
+                        systemInfo: getStatsFn,
+                        system_info: getStatsFn,
+                        ping: () => Promise.resolve({ success: true, status: 'pong' }),
+                        version: () => Promise.resolve({ success: true, version: '1.0.0', name: 'memory-journal-mcp' }),
                     }
                     return new Proxy(dbShim, {
                         get(t, p) {
+                            if (typeof p === 'symbol' || p === 'then') return undefined
                             if (typeof p === 'string' && p in t) return (t as Record<string, unknown>)[p]
                             if (typeof getStatsFn === 'function') return getStatsFn
                             return createCallableShim()
                         },
+                    })
+                }
+                // Handle sdk.tags hallucination
+                if (prop === 'tags' || prop === 'tag') {
+                    const coreGroup = 'core' in target ? (target['core'] as Record<string, unknown>) : undefined
+                    const adminGroup = 'admin' in target ? (target['admin'] as Record<string, unknown>) : undefined
+                    const listTagsFn = coreGroup?.['list_tags'] ?? coreGroup?.['listTags']
+                    const mergeTagsFn = adminGroup?.['merge_tags'] ?? adminGroup?.['mergeTags']
+
+                    const tagsCallable = function(this: unknown, ...args: unknown[]): Promise<unknown> {
+                        if (typeof listTagsFn === 'function') {
+                            return (listTagsFn as (...a: unknown[]) => Promise<unknown>).apply(this, args)
+                        }
+                        return Promise.resolve({ success: true, tags: [], count: 0 })
+                    }
+                    const tagsObj: Record<string, unknown> = {
+                        list: (...args: unknown[]) => (listTagsFn as ((...a: unknown[]) => unknown) | undefined)?.(...args),
+                        listTags: (...args: unknown[]) => (listTagsFn as ((...a: unknown[]) => unknown) | undefined)?.(...args),
+                        list_tags: (...args: unknown[]) => (listTagsFn as ((...a: unknown[]) => unknown) | undefined)?.(...args),
+                        get: (...args: unknown[]) => (listTagsFn as ((...a: unknown[]) => unknown) | undefined)?.(...args),
+                        getTags: (...args: unknown[]) => (listTagsFn as ((...a: unknown[]) => unknown) | undefined)?.(...args),
+                        get_tags: (...args: unknown[]) => (listTagsFn as ((...a: unknown[]) => unknown) | undefined)?.(...args),
+                        getAll: (...args: unknown[]) => (listTagsFn as ((...a: unknown[]) => unknown) | undefined)?.(...args),
+                        all: (...args: unknown[]) => (listTagsFn as ((...a: unknown[]) => unknown) | undefined)?.(...args),
+                        merge: (...args: unknown[]) => (mergeTagsFn as ((...a: unknown[]) => unknown) | undefined)?.(...args),
+                        mergeTags: (...args: unknown[]) => (mergeTagsFn as ((...a: unknown[]) => unknown) | undefined)?.(...args),
+                        merge_tags: (...args: unknown[]) => (mergeTagsFn as ((...a: unknown[]) => unknown) | undefined)?.(...args),
+                    }
+                    Object.assign(tagsCallable, tagsObj)
+                    return new Proxy(tagsCallable, {
+                        get(t, p): unknown {
+                            if (typeof p === 'symbol' || p === 'then') return undefined
+                            if (p in t) return Reflect.get(t, p) as unknown
+                            if (typeof p === 'string') {
+                                const low = p.toLowerCase()
+                                if (low.includes('merge')) {
+                                    return mergeTagsFn
+                                }
+                                if (low.includes('list') || low.includes('get') || low.includes('all') || low.includes('find') || low.includes('search')) {
+                                    return listTagsFn
+                                }
+                            }
+                            if (typeof listTagsFn === 'function') return listTagsFn
+                            return createCallableShim()
+                        },
+                        apply(_t, thisArg, args) {
+                            if (typeof listTagsFn === 'function') {
+                                return (listTagsFn as (...a: unknown[]) => unknown).apply(thisArg, args)
+                            }
+                            return Promise.resolve({ success: true, tags: [], count: 0 })
+                        }
                     })
                 }
                 // Handle get/list/searchProjects hallucination via proxy intercept
@@ -1030,6 +1176,8 @@ async function executeCode(
             sdk: shimMj,
             client: shimMj,
             system: shimMj,
+            projects: shimMj['projects'],
+            tags: shimMj['tags'],
             utils: shimMj,
             sql: shimMj,
             schema: createSchemaShim(),
@@ -1363,7 +1511,8 @@ async function executeCode(
             context
         )
 
-        const wrappedCode = `(async () => { ${transformAutoReturn(code)} })()`
+        const transformed = transformAutoReturn(code)
+        const wrappedCode = `(async () => {\n${transformed}\n})()`
         const script = new vm.Script(wrappedCode, {
             filename: 'codemode-execution.js',
         })
