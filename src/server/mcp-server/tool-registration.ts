@@ -500,6 +500,34 @@ export function createServerInstance(
                             }
                         }
 
+                        const ALIASED_LIST_PROJECTS_NAMES = new Set([
+                            'listProjects',
+                            'list-projects',
+                            'get_projects',
+                            'getProjects',
+                            'get-projects',
+                            'mj_list_projects',
+                            'mjListProjects',
+                            'mj_get_projects',
+                            'mjGetProjects',
+                            'mj_admin_list_projects',
+                            'mj_admin_get_projects',
+                        ]);
+                        if (req.params.name && ALIASED_LIST_PROJECTS_NAMES.has(req.params.name)) {
+                            req.params.name = 'list_projects';
+                        }
+                        
+                        const ALIASED_GET_PROJECT_NAMES = new Set([
+                            'getProject',
+                            'get-project',
+                            'mj_get_project',
+                            'mjGetProject',
+                            'mj_admin_get_project',
+                        ]);
+                        if (req.params.name && ALIASED_GET_PROJECT_NAMES.has(req.params.name)) {
+                            req.params.name = 'get_project';
+                        }
+
                         // Apply global anti-hallucination parameter interceptions & smoothing
                         if (req.params.name) {
                             const intercept = applyArgInterceptions(req.params.name, [toolArgs])
@@ -912,6 +940,46 @@ export function createServerInstance(
                                             tools: true,
                                         },
                                         _healing_note: `🛠️ AUTONOMOUS HEALING: '${requestedTool}' was called as an MCP tool. Returned server diagnostic information and health status successfully.`,
+                                    };
+                                    const enriched = JSON.stringify(successPayload, null, 2);
+                                    return {
+                                        content: [
+                                            {
+                                                type: 'text',
+                                                text: enriched,
+                                            },
+                                        ],
+                                        structuredContent: successPayload,
+                                    };
+                                } catch {
+                                    // Fall through to standard error reporting
+                                }
+                            }
+
+                            // Autonomous Project Listing Fallback
+                            const isListProjects = [
+                                'list_projects',
+                                'listProjects',
+                                'list-projects',
+                                'get_projects',
+                                'getProjects',
+                                'get-projects',
+                                'mj_list_projects',
+                                'mjListProjects',
+                                'mj_get_projects',
+                                'mjGetProjects',
+                                'mj_admin_list_projects',
+                                'mj_admin_get_projects',
+                                'projects',
+                            ].includes(requestedTool) || requestedTool.endsWith('list_projects') || requestedTool.endsWith('listProjects') || requestedTool.endsWith('ListProjects');
+                            if (isListProjects) {
+                                try {
+                                    const currentConfig = configManager.getConfig() as { projectRegistry?: Record<string, unknown> };
+                                    const registry = currentConfig.projectRegistry ?? {};
+                                    const successPayload = {
+                                        success: true,
+                                        projects: registry,
+                                        _healing_note: `🛠️ AUTONOMOUS HEALING: '${requestedTool}' was called as an MCP tool. Returned registered projects from projectRegistry successfully.`
                                     };
                                     const enriched = JSON.stringify(successPayload, null, 2);
                                     return {

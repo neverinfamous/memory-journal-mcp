@@ -22,8 +22,22 @@ export const DUMMY_DOTTED_TOOL_NAMES = [
     'mj.core.update_entry',
     'mj.core.deleteEntry',
     'mj.core.delete_entry',
+    'mj.core.listProjects',
+    'mj.core.list_projects',
+    'mj.core.getProjects',
+    'mj.core.get_projects',
+    'mj.core.getProject',
+    'mj.core.get_project',
+    'mj.admin.listProjects',
+    'mj.admin.list_projects',
+    'mj.admin.getProjects',
+    'mj.admin.get_projects',
     'mj.admin.getProject',
     'mj.admin.get_project',
+    'mj.projects.listProjects',
+    'mj.projects.list_projects',
+    'mj.projects.list',
+    'mj.projects',
     'mj.admin.listProjects',
     'mj.admin.list_projects',
 ]
@@ -197,6 +211,26 @@ export const DUMMY_SERVER_INFO_TOOL_NAMES = [
     'status',
     'health',
 ]
+export const DUMMY_PROJECT_TOOL_NAMES = [
+    'list_projects',
+    'listProjects',
+    'list-projects',
+    'get_projects',
+    'getProjects',
+    'get-projects',
+    'mj_list_projects',
+    'mjListProjects',
+    'mj_get_projects',
+    'mjGetProjects',
+    'mj_admin_list_projects',
+    'mj_admin_get_projects',
+    'get_project',
+    'getProject',
+    'get-project',
+    'mj_get_project',
+    'mjGetProject',
+    'mj_admin_get_project',
+]
 
 export const DUMMY_HEALING_TOOL_NAMES = new Set<string>([
     'create_entry',
@@ -214,6 +248,7 @@ export const DUMMY_HEALING_TOOL_NAMES = new Set<string>([
     ...DUMMY_GET_PROMPT_TOOL_NAMES,
     ...DUMMY_SQL_EXECUTION_TOOL_NAMES,
     ...DUMMY_SERVER_INFO_TOOL_NAMES,
+    ...DUMMY_PROJECT_TOOL_NAMES,
     'mj_core_create_entry',
     'mj_core_search_entries',
     'mj_core_get_recent_entries',
@@ -1065,6 +1100,35 @@ export function getDummyHealingTools(context?: ToolContext): ToolDefinition[] {
             outputSchema: z.any(),
             annotations: { readOnlyHint: true, openWorldHint: false },
             handler: async (params: unknown) => handleServerInfo(params, name),
+        })),
+        ...DUMMY_PROJECT_TOOL_NAMES.map((name): ToolDefinition => ({
+            name,
+            title: `Project Tool Fallback (${name})`,
+            description: `Fallback handler for \`${name}\` when called directly as an MCP tool. Returns project registry info.`,
+            group: 'admin',
+            inputSchema: z.any(),
+            outputSchema: z.any(),
+            annotations: { readOnlyHint: true, openWorldHint: false },
+            handler: async (params: unknown) => {
+                const args = (params ?? {}) as Record<string, unknown>;
+                const isGetter = name.toLowerCase().includes('get_project') || name.toLowerCase().includes('getproject') && !name.toLowerCase().includes('projects');
+                const targetTool = isGetter ? 'get_project' : 'list_projects';
+                
+                if (context) {
+                    const tool = getAdminTools(context).find(t => t.name === targetTool);
+                    if (tool) {
+                        const res = await Promise.resolve(tool.handler(args));
+                        return typeof res === 'object' && res !== null ? { ...(res as Record<string, unknown>), _healing_note: `🛠️ AUTONOMOUS HEALING: '${name}' was routed to '${targetTool}' and executed successfully.` } : res;
+                    }
+                }
+                return {
+                    success: false,
+                    error: `🛠️ AUTONOMOUS HEALING: '${name}' failed because admin tools are not available.`,
+                    code: 'VALIDATION_ERROR',
+                    category: 'validation',
+                    recoverable: true
+                };
+            }
         }))
     ]
 }

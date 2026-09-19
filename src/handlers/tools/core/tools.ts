@@ -75,7 +75,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                             error: 'Missing or unresolvable project_number. Entry creation blocked because no valid project could be determined for this entry.',
                             code: 'VALIDATION_ERROR',
                             category: 'validation',
-                            suggestion: 'To find your project_number, read the memory://agent-id resource via read_resource (e.g. read_resource("memory-journal-mcp", "memory://agent-id")), call mj.core.listProjects(), or inspect memory://briefing/<project-name>. Then pass project_number explicitly in your request.',
+                            suggestion: 'To find your project_number, call list_projects (or mj.core.listProjects()), read the memory://agent-id resource via read_resource (e.g. read_resource("memory-journal-mcp", "memory://agent-id")), or inspect memory://briefing/<project-name>. Then pass project_number explicitly in your request.',
                             recoverable: true,
                         }
                     }

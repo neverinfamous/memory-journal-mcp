@@ -506,6 +506,55 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
             expect(res4.projectNumber).toBe(15)
         })
 
+        it('should auto-resolve project_number from snake_case keywords and tokenized tags (Issue 1 regression)', async () => {
+            const { resolveProjectContext } = await import('../src/utils/workspace-resolver.js')
+            const mockConfig = {
+                projectRegistry: {
+                    'db-mcp': {
+                        path: 'C:/Users/chris/Desktop/db-mcp',
+                        project_number: 15
+                    },
+                    'adamic': {
+                        path: 'C:/Users/chris/Desktop/adamic',
+                        project_number: 16
+                    },
+                    'adamic-blog': {
+                        path: 'C:/Users/chris/Desktop/adamic-blog',
+                        project_number: 22
+                    }
+                }
+            }
+
+            // Issue 1: snake_case identifier in content should match alias
+            const res1 = resolveProjectContext({
+                content: "Add ifNotExists support to sqlite_create_view tool in Schema group. Verified tool schemas and execution. Validated logic with typecheck and linting.\n\n# schema-create-view-if-not-exists"
+            }, mockConfig as unknown as import('../src/types/index.js').ToolHandlerConfig)
+            expect(res1.workspaceId).toBe('db-mcp')
+            expect(res1.projectNumber).toBe(15)
+
+            // Tag tokenization should extract sqlite from composite tag
+            const res2 = resolveProjectContext({
+                tags: ['sqlite_create_view'],
+                content: "No other mention"
+            }, mockConfig as unknown as import('../src/types/index.js').ToolHandlerConfig)
+            expect(res2.workspaceId).toBe('db-mcp')
+            expect(res2.projectNumber).toBe(15)
+
+            // Compound project names should be evaluated by length descending
+            const res3 = resolveProjectContext({
+                content: "Updated adamic-blog to latest version"
+            }, mockConfig as unknown as import('../src/types/index.js').ToolHandlerConfig)
+            expect(res3.workspaceId).toBe('adamic-blog')
+            expect(res3.projectNumber).toBe(22)
+            
+            // Shorter project name should still match if only it is present
+            const res4 = resolveProjectContext({
+                content: "Updated adamic to latest version"
+            }, mockConfig as unknown as import('../src/types/index.js').ToolHandlerConfig)
+            expect(res4.workspaceId).toBe('adamic')
+            expect(res4.projectNumber).toBe(16)
+        })
+
         it('should support mj.search.queryEntries and aliases via METHOD_ALIASES (agent-issues.jsonl Record 1 regression)', async () => {
             const { METHOD_ALIASES } = await import('../src/codemode/api-constants.js')
             expect(METHOD_ALIASES['search']?.['queryEntries']).toBe('searchEntries')
@@ -918,6 +967,20 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
 
             const healed2 = healAgentHallucinations({ entry_type: 'coding' }) as Record<string, unknown>
             expect(healed2['entry_type']).toBe('technical_note')
+        })
+
+        it('should route list_projects and get_project tool fallbacks correctly (Issue 2 regression)', async () => {
+            const { getDummyHealingTools } = await import('../src/handlers/tools/core/dummy-healing.js')
+            const { getAdminTools } = await import('../src/handlers/tools/admin/index.js')
+            
+            const context = { config: { projectRegistry: {} }, db: {}, runtime: {}, github: {}, teamDb: {}, vectorManager: {} } as any
+            const dummyTools = getDummyHealingTools(context)
+            
+            const listProjectsTool = dummyTools.find(t => t.name === 'list_projects')
+            expect(listProjectsTool).toBeDefined()
+            
+            const getProjectTool = dummyTools.find(t => t.name === 'mj.admin.getProject')
+            expect(getProjectTool).toBeDefined()
         })
 
         it('should recover code with extractAndRecoverEntryCode when updateMemory or description/summary is used', async () => {

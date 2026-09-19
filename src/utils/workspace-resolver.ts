@@ -72,6 +72,21 @@ function findCanonicalRegistryKey(aliasOrKey: string, registry?: Record<string, 
             }
         }
     }
+    
+    // Prefix / token alias lookup
+    for (const token of lower.split(/[-_:.]+/)) {
+        if (token.length >= 3) {
+            for (const [canonicalKey, aliases] of Object.entries(PROJECT_KEYWORD_ALIASES)) {
+                if (aliases.map((a) => a.toLowerCase()).includes(token)) {
+                    for (const key of Object.keys(registry)) {
+                        if (key.toLowerCase() === canonicalKey.toLowerCase()) {
+                            return key
+                        }
+                    }
+                }
+            }
+        }
+    }
     return undefined
 }
 
@@ -133,11 +148,22 @@ export function resolveProjectContext(
     // 3. Content / Tags keyword matching against projectRegistry
     if (registry) {
         const tagSet = new Set((input.tags ?? []).map((t) => t.toLowerCase().trim()))
+        const tagTokens = new Set<string>()
+        for (const tag of tagSet) {
+            tagTokens.add(tag)
+            for (const part of tag.split(/[-_:.]+/)) {
+                if (part.length >= 2) tagTokens.add(part)
+            }
+        }
         const contentLower = (input.content ?? '').toLowerCase()
 
-        for (const [key, entry] of Object.entries(registry)) {
+        // Sort registry entries by key length descending to prioritize more specific/composite projects
+        const sortedEntries = Object.entries(registry)
+            .filter(([k]) => !['default', 'test'].includes(k.toLowerCase()))
+            .sort(([a], [b]) => b.length - a.length)
+
+        for (const [key, entry] of sortedEntries) {
             const keyLower = key.toLowerCase()
-            if (['default', 'test'].includes(keyLower)) continue
 
             // Collect all aliases for this registry key
             const directAliases = PROJECT_KEYWORD_ALIASES[key] ?? []
@@ -148,15 +174,19 @@ export function resolveProjectContext(
                 }
             }
 
+            // Sort aliases by length descending so longer/more specific aliases match first
+            matchedAliases.sort((a, b) => b.length - a.length)
+
             // Check if any tag matches
-            let matched = matchedAliases.some((a) => tagSet.has(a))
+            let matched = matchedAliases.some((a) => tagTokens.has(a))
 
             // Check if content matches any alias or key
             if (!matched && contentLower.length > 0) {
                 for (const alias of matchedAliases) {
                     if (alias.length >= 2) {
                         const escapedAlias = alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-                        const regex = new RegExp(`(?:^|[^a-zA-Z0-9_-])${escapedAlias}(?:$|[^a-zA-Z0-9_-])`, 'i')
+                        // Use [^a-zA-Z0-9] boundary to allow matching snake_case or kebab-case delimiters in content
+                        const regex = new RegExp(`(?:^|[^a-zA-Z0-9])${escapedAlias}(?:$|[^a-zA-Z0-9])`, 'i')
                         if (regex.test(contentLower)) {
                             matched = true
                             break

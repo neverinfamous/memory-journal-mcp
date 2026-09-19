@@ -103,18 +103,30 @@ export const TOOL_SCOPE_OVERRIDES: Record<string, StandardScope> = {
     'mj.core.update_entry': SCOPES.ADMIN,
     'mj.core.deleteEntry': SCOPES.ADMIN,
     'mj.core.delete_entry': SCOPES.ADMIN,
-    'mj.admin.getProject': SCOPES.ADMIN,
-    'mj.admin.get_project': SCOPES.ADMIN,
-    'mj.admin.listProjects': SCOPES.ADMIN,
-    'mj.admin.list_projects': SCOPES.ADMIN,
+    'mj.core.listProjects': SCOPES.READ,
+    'mj.core.list_projects': SCOPES.READ,
+    'mj.admin.getProject': SCOPES.READ,
+    'mj.admin.get_project': SCOPES.READ,
+    'mj.admin.listProjects': SCOPES.READ,
+    'mj.admin.list_projects': SCOPES.READ,
+    'mj.projects.listProjects': SCOPES.READ,
+    'mj.projects.list_projects': SCOPES.READ,
 
     // Prefixed Code Mode fallback tools
     mj_core_create_entry: SCOPES.WRITE,
     mj_core_search_entries: SCOPES.READ,
     mj_core_get_recent_entries: SCOPES.READ,
     mj_core_get_entry_by_id: SCOPES.READ,
-    mj_admin_get_project: SCOPES.ADMIN,
-    mj_admin_list_projects: SCOPES.ADMIN,
+    mj_admin_get_project: SCOPES.READ,
+    mj_admin_list_projects: SCOPES.READ,
+    
+    // Project tool fallbacks
+    list_projects: SCOPES.READ,
+    listProjects: SCOPES.READ,
+    get_projects: SCOPES.READ,
+    getProjects: SCOPES.READ,
+    get_project: SCOPES.READ,
+    getProject: SCOPES.READ,
 }
 
 /**
