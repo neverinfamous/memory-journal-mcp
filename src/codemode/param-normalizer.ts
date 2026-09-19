@@ -180,7 +180,20 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
             delete obj['project'];
         }
         if ((methodName === 'create_entry' || methodName === 'createEntry' || methodName === 'team_create_entry' || methodName === 'teamCreateEntry')) {
-            const projNum = typeof obj['project_number'] === 'number' ? obj['project_number'] : undefined;
+            let projNum = typeof obj['project_number'] === 'number' ? obj['project_number'] : undefined;
+            if (typeof obj['project_number'] === 'string') {
+                const cleaned = obj['project_number'].trim();
+                const parsedNum = Number(cleaned);
+                if (!Number.isNaN(parsedNum) && cleaned !== '') {
+                    projNum = parsedNum;
+                    obj['project_number'] = parsedNum;
+                } else {
+                    if (obj['workspace_id'] === undefined || obj['workspace_id'] === null || obj['workspace_id'] === '' || obj['workspace_id'] === 'default') {
+                        obj['workspace_id'] = cleaned;
+                    }
+                    delete obj['project_number'];
+                }
+            }
             const content = typeof obj['content'] === 'string' ? obj['content'] : undefined;
             const tags = Array.isArray(obj['tags']) ? obj['tags'].filter((t): t is string => typeof t === 'string') : undefined;
             const resolved = resolveProjectContext({

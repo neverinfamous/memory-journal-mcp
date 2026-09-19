@@ -181,7 +181,7 @@ export function healCodeModeScript(code: string): string {
 
     // Auto-heal unescaped backticks inside positional template arguments to mj.* / createEntry calls
     executionCode = executionCode.replace(
-        /(\b(?:mj\.)?(?:core\.|team\.|admin\.|search\.|io\.|github\.|git\.|backup\.)?(?:createEntry|teamCreateEntry|appendEntry|updateEntry|teamUpdateEntry|searchEntries|teamSearch)\s*\(\s*)`([\s\S]*?)`(?=\s*(?:,\s*|\)))/g,
+        /(\b(?:mj\.)?(?:core\.|team\.|admin\.|search\.|io\.|github\.|git\.|backup\.)?(?:createEntry|teamCreateEntry|appendEntry|updateEntry|teamUpdateEntry|searchEntries|teamSearch|mj_create_entry|mjCreateEntry|mj_update_entry|mjUpdateEntry|mj_search_entries|mjSearchEntries)\s*\(\s*)`([\s\S]*?)`(?=\s*(?:,\s*|\)))/g,
         (_match: string, prefix: string, content: string): string => {
             const normalized = content.replace(/\\`/g, '`')
             const escaped = normalized.replace(/`/g, '\\`')

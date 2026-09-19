@@ -1263,6 +1263,78 @@ async function executeCode(
                 (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
                 () => (shimMj['core'] as Record<string, unknown>)?.['createEntry']
             ),
+                        mj_search_entries: wrapDelegatingTool(
+                (arg: unknown): unknown => (shimMj['search'] as Record<string, ((...args: unknown[]) => unknown)>)?.['searchEntries']?.(arg),
+                () => (shimMj['search'] as Record<string, unknown>)?.['searchEntries']
+            ),
+            mjSearchEntries: wrapDelegatingTool(
+                (arg: unknown): unknown => (shimMj['search'] as Record<string, ((...args: unknown[]) => unknown)>)?.['searchEntries']?.(arg),
+                () => (shimMj['search'] as Record<string, unknown>)?.['searchEntries']
+            ),
+            mj_get_recent_entries: wrapDelegatingTool(
+                (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['getRecentEntries']?.(arg),
+                () => (shimMj['core'] as Record<string, unknown>)?.['getRecentEntries']
+            ),
+            mjGetRecentEntries: wrapDelegatingTool(
+                (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['getRecentEntries']?.(arg),
+                () => (shimMj['core'] as Record<string, unknown>)?.['getRecentEntries']
+            ),
+            mj_get_entry_by_id: wrapDelegatingTool(
+                (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['getEntryById']?.(arg),
+                () => (shimMj['core'] as Record<string, unknown>)?.['getEntryById']
+            ),
+            mjGetEntryById: wrapDelegatingTool(
+                (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['getEntryById']?.(arg),
+                () => (shimMj['core'] as Record<string, unknown>)?.['getEntryById']
+            ),
+            mj_list_projects: wrapDelegatingTool(
+                (arg: unknown): unknown => (shimMj['admin'] as Record<string, ((...args: unknown[]) => unknown)>)?.['listProjects']?.(arg),
+                () => (shimMj['admin'] as Record<string, unknown>)?.['listProjects']
+            ),
+            mjListProjects: wrapDelegatingTool(
+                (arg: unknown): unknown => (shimMj['admin'] as Record<string, ((...args: unknown[]) => unknown)>)?.['listProjects']?.(arg),
+                () => (shimMj['admin'] as Record<string, unknown>)?.['listProjects']
+            ),
+            mj_get_project: wrapDelegatingTool(
+                (arg: unknown): unknown => (shimMj['admin'] as Record<string, ((...args: unknown[]) => unknown)>)?.['getProject']?.(arg),
+                () => (shimMj['admin'] as Record<string, unknown>)?.['getProject']
+            ),
+            mjGetProject: wrapDelegatingTool(
+                (arg: unknown): unknown => (shimMj['admin'] as Record<string, ((...args: unknown[]) => unknown)>)?.['getProject']?.(arg),
+                () => (shimMj['admin'] as Record<string, unknown>)?.['getProject']
+            ),
+            mj_list_tags: wrapDelegatingTool(
+                (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['listTags']?.(arg),
+                () => (shimMj['core'] as Record<string, unknown>)?.['listTags']
+            ),
+            mjListTags: wrapDelegatingTool(
+                (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['listTags']?.(arg),
+                () => (shimMj['core'] as Record<string, unknown>)?.['listTags']
+            ),
+            mj_create_entry: wrapDelegatingTool(
+                (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
+                () => (shimMj['core'] as Record<string, unknown>)?.['createEntry']
+            ),
+            mjCreateEntry: wrapDelegatingTool(
+                (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
+                () => (shimMj['core'] as Record<string, unknown>)?.['createEntry']
+            ),
+            mj_update_entry: wrapDelegatingTool(
+                (arg: unknown): unknown => (shimMj['admin'] as Record<string, ((...args: unknown[]) => unknown)>)?.['updateEntry']?.(arg),
+                () => (shimMj['admin'] as Record<string, unknown>)?.['updateEntry']
+            ),
+            mjUpdateEntry: wrapDelegatingTool(
+                (arg: unknown): unknown => (shimMj['admin'] as Record<string, ((...args: unknown[]) => unknown)>)?.['updateEntry']?.(arg),
+                () => (shimMj['admin'] as Record<string, unknown>)?.['updateEntry']
+            ),
+            mj_delete_entry: wrapDelegatingTool(
+                (arg: unknown): unknown => (shimMj['admin'] as Record<string, ((...args: unknown[]) => unknown)>)?.['deleteEntry']?.(arg),
+                () => (shimMj['admin'] as Record<string, unknown>)?.['deleteEntry']
+            ),
+            mjDeleteEntry: wrapDelegatingTool(
+                (arg: unknown): unknown => (shimMj['admin'] as Record<string, ((...args: unknown[]) => unknown)>)?.['deleteEntry']?.(arg),
+                () => (shimMj['admin'] as Record<string, unknown>)?.['deleteEntry']
+            ),
             create_entry: wrapDelegatingTool(
                 (arg: unknown): unknown => (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(arg),
                 () => (shimMj['core'] as Record<string, unknown>)?.['createEntry']

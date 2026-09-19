@@ -38,7 +38,7 @@ export function loadProjectRegistryFromConfig(): Record<string, RegistryEntry> |
 }
 
 export const PROJECT_KEYWORD_ALIASES: Record<string, string[]> = {
-    'db-mcp': ['sqlite', 'sqlite3', 'sqlite-mcp', 'sqlite_mcp', 'better-sqlite3', 'better_sqlite3', 'db-mcp', 'db_mcp', 'lib-db', 'db-mcp-wasm'],
+    'db-mcp': ['sqlite', 'sqlite3', 'sqlite-mcp', 'sqlite_mcp', 'better-sqlite3', 'better_sqlite3', 'db-mcp', 'db_mcp', 'lib-db', 'db-mcp-wasm', 'sqlite_create_view', 'sqlite_query', 'sqlite_exec', 'sqlite_execute_code'],
     'mysql-mcp': ['mysql', 'mysql-mcp', 'mysql_mcp', 'mariadb', 'mysqlsh', 'proxysql', 'mysql-router', 'mysqlrouter', 'innodb'],
     'postgres-mcp': ['postgres', 'postgresql', 'postgres-mcp', 'postgres_mcp', 'pgvector'],
     'memory-journal-mcp': ['memory-journal', 'memory-journal-mcp', 'memory_journal', 'memory_journal_mcp', 'memoryjournal'],
@@ -182,11 +182,14 @@ export function resolveProjectContext(
 
             // Check if content matches any alias or key
             if (!matched && contentLower.length > 0) {
-                for (const alias of matchedAliases) {
+                // Sort aliases by length descending so longer, more specific phrases match first
+                const sortedAliases = [...matchedAliases].sort((a, b) => b.length - a.length)
+                for (const alias of sortedAliases) {
                     if (alias.length >= 2) {
                         const escapedAlias = alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-                        // Use [^a-zA-Z0-9] boundary to allow matching snake_case or kebab-case delimiters in content
-                        const regex = new RegExp(`(?:^|[^a-zA-Z0-9])${escapedAlias}(?:$|[^a-zA-Z0-9])`, 'i')
+                        const postBoundary = alias.includes('_') ? '(?:$|[^a-zA-Z0-9_-])' : '(?:$|[^a-zA-Z0-9-])'
+                        const preBoundary = alias.includes('_') ? '(?:^|[^a-zA-Z0-9_-])' : '(?:^|[^a-zA-Z0-9-])'
+                        const regex = new RegExp(`${preBoundary}${escapedAlias}${postBoundary}`, 'i')
                         if (regex.test(contentLower)) {
                             matched = true
                             break

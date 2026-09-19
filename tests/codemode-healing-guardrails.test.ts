@@ -1199,6 +1199,13 @@ return { s1, s2, s3 };`
             expect(typeof system.serverInfo).toBe('function')
             expect(typeof system.serverHealth).toBe('function')
         })
+
+        it('should heal mj_create_entry backticks correctly', async () => {
+            const { healCodeModeScript } = await import('../src/handlers/tools/codemode/handler.js');
+            const input = "await mj_create_entry(`some unescaped \" and ` backtick`)";
+            const healed = healCodeModeScript(input);
+            expect(healed).toContain('await mj_create_entry(`some unescaped " and \\` backtick`)');
+        });
     })
 })
 

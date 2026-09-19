@@ -386,7 +386,7 @@ export async function callTool(
                 `${name}. Code Mode cannot directly call read_resource as an MCP tool. Use mj_execute_code or query tools directly.`
             )
         }
-        if (['create_entry', 'createEntry', 'insert_entry', 'insertEntry', 'add_entry', 'addEntry', 'search_entries', 'searchEntries', 'get_recent_entries', 'getRecentEntries'].includes(name)) {
+        if (['create_entry', 'createEntry', 'insert_entry', 'insertEntry', 'add_entry', 'addEntry', 'search_entries', 'searchEntries', 'get_recent_entries', 'getRecentEntries', 'list_projects', 'listProjects', 'get_project', 'getProject'].includes(name)) {
             throw new ResourceNotFoundError(
                 'Tool',
                 `${name}. memory-journal-mcp uses Code Mode: use 'mj_execute_code' with JavaScript (e.g. return await mj.core.${name}(...)).`

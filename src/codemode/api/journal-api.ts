@@ -99,19 +99,37 @@ export class JournalApi {
             // Auto-resolve workspaceId from projectNumber, content, tags, or registry if omitted by the script
             const wrappedCreateEntryFn = async (...args: unknown[]): Promise<unknown> => {
                 const params = args[0]
-                if (isRecord(params) && (params['workspace_id'] === undefined || params['workspace_id'] === 'default') && (params['workspaceId'] === undefined || params['workspaceId'] === 'default')) {
-                    const projNum = typeof params['project_number'] === 'number' ? params['project_number'] : (typeof params['projectNumber'] === 'number' ? params['projectNumber'] : undefined)
-                    const contentStr = typeof params['content'] === 'string' ? params['content'] : undefined
-                    const tagsArr = Array.isArray(params['tags']) ? params['tags'].filter((t): t is string => typeof t === 'string') : undefined
-                    
-                    const resolved = resolveProjectContext({
-                        project_number: projNum,
-                        content: contentStr,
-                        tags: tagsArr
-                    })
-                    if (resolved.workspaceId && resolved.workspaceId !== 'default') {
-                        params['workspace_id'] = resolved.workspaceId
-                        params['workspaceId'] = resolved.workspaceId
+                if (isRecord(params)) {
+                    if (typeof params['project_number'] === 'string') {
+                        const cleaned = params['project_number'].trim()
+                        const num = Number(cleaned)
+                        if (!Number.isNaN(num) && cleaned !== '') {
+                            params['project_number'] = num
+                        } else {
+                            if (params['workspace_id'] === undefined || params['workspace_id'] === 'default') {
+                                params['workspace_id'] = cleaned
+                            }
+                            delete params['project_number']
+                        }
+                    }
+                    if ((params['workspace_id'] === undefined || params['workspace_id'] === 'default') && (params['workspaceId'] === undefined || params['workspaceId'] === 'default')) {
+                        const projNum = typeof params['project_number'] === 'number' ? params['project_number'] : (typeof params['projectNumber'] === 'number' ? params['projectNumber'] : undefined)
+                        const contentStr = typeof params['content'] === 'string' ? params['content'] : undefined
+                        const tagsArr = Array.isArray(params['tags']) ? params['tags'].filter((t): t is string => typeof t === 'string') : undefined
+                        
+                        const resolved = resolveProjectContext({
+                            workspace_id: typeof params['workspace_id'] === 'string' ? params['workspace_id'] : undefined,
+                            project_number: projNum,
+                            content: contentStr,
+                            tags: tagsArr
+                        })
+                        if (resolved.workspaceId && resolved.workspaceId !== 'default') {
+                            params['workspace_id'] = resolved.workspaceId
+                            params['workspaceId'] = resolved.workspaceId
+                        }
+                        if (params['project_number'] === undefined && resolved.projectNumber !== undefined) {
+                            params['project_number'] = resolved.projectNumber
+                        }
                     }
                 }
                 return await _createEntryFn(...args)
@@ -124,6 +142,10 @@ export class JournalApi {
                 }
             }
             this.core['upsert'] = wrappedCreateEntryFn
+
+            // Map common admin tools to core so they are accessible as globals
+            if (this.admin['listProjects']) this.core['listProjects'] = this.admin['listProjects']
+            if (this.admin['getProject']) this.core['getProject'] = this.admin['getProject']
         }
 
         // Cross-group: admin operations commonly attempted on core
