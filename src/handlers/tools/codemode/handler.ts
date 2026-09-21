@@ -49,7 +49,7 @@ export function healCodeModeScript(code: string): string {
     executionCode = executionCode.replace(/\btools\./g, 'mj.')
 
     // Auto-heal dynamic import() expressions: const x = await import('...') or import('...')
-    executionCode = executionCode.replace(/(?:const|let|var)\s+(\{[^}]*\}|[\w$]+)\s*=\s*(?:await\s+)?import\s*\(\s*['"]([^'"]+)['"]\s*\);?/g, (m: string, varName: string, modName: string): string => {
+    executionCode = executionCode.replace(/(?:const|let|var)\s+(\{[^}]*\}|[\w$]+)\s*=\s*(?:await\s+)?import\s*\(\s*['"]([^'"]+)['"]\s*\);?/g, (_m: string, varName: string, modName: string): string => {
         const v = varName.trim()
         const mod = modName.toLowerCase().replace(/^node:/, '')
         if (v === 'mj') return `/* auto-healed dynamic import */`
@@ -68,12 +68,15 @@ export function healCodeModeScript(code: string): string {
         if (mod.includes('memory') || mod.includes('journal')) {
             return `const ${varName} = mj;`
         }
-        return m
+        if (mod === 'mcp' || mod.includes('mcp') || v.toLowerCase() === 'mcp' || v === '__mcp' || mod.includes('modelcontextprotocol')) {
+            return `const ${varName} = mj;`
+        }
+        return `const ${varName} = mj;`
     })
-    executionCode = executionCode.replace(/(?:await\s+)?import\s*\(\s*['"](?:fs|node:fs|path|node:path|memory-journal(?:-mcp)?|sqlite-journal)['"]\s*\);?/g, '/* auto-healed dynamic import */')
+    executionCode = executionCode.replace(/(?:await\s+)?import\s*\(\s*['"](?:fs|node:fs|path|node:path|memory-journal(?:-mcp)?|sqlite-journal|mcp|@modelcontextprotocol\/[^'"]+)['"]\s*\);?/g, '/* auto-healed dynamic import */')
 
     // Auto-heal ES module import and CommonJS require statements
-    executionCode = executionCode.replace(/(?:const|let|var)\s+(\{[^}]*\}|[\w$]+)\s*=\s*require\s*\(\s*['"]([^'"]+)['"]\s*\);?/g, (m: string, varName: string, modName: string): string => {
+    executionCode = executionCode.replace(/(?:const|let|var)\s+(\{[^}]*\}|[\w$]+)\s*=\s*require\s*\(\s*['"]([^'"]+)['"]\s*\);?/g, (_m: string, varName: string, modName: string): string => {
         const v = varName.trim()
         const mod = modName.toLowerCase().replace(/^node:/, '')
         if (v === 'mj') return `/* auto-healed require */`
@@ -92,11 +95,14 @@ export function healCodeModeScript(code: string): string {
         if (mod.includes('memory') || mod.includes('journal')) {
             return `const ${varName} = mj;`
         }
-        return m
+        if (mod === 'mcp' || mod.includes('mcp') || v.toLowerCase() === 'mcp' || v === '__mcp' || mod.includes('modelcontextprotocol')) {
+            return `const ${varName} = mj;`
+        }
+        return `const ${varName} = mj;`
     })
-    executionCode = executionCode.replace(/^\s*require\s*\(\s*['"](?:fs|node:fs|path|node:path|memory-journal(?:-mcp)?|sqlite-journal)['"]\s*\);?/gm, '/* auto-healed require */')
+    executionCode = executionCode.replace(/^\s*require\s*\(\s*['"](?:fs|node:fs|path|node:path|memory-journal(?:-mcp)?|sqlite-journal|mcp|@modelcontextprotocol\/[^'"]+)['"]\s*\);?/gm, '/* auto-healed require */')
 
-    executionCode = executionCode.replace(/import\s+(\{[^}]*\}|\*\s+as\s+[\w$]+|[\w$]+)\s+from\s+['"]([^'"]+)['"]\s*;?/g, (m: string, varName: string, modName: string): string => {
+    executionCode = executionCode.replace(/import\s+(\{[^}]*\}|\*\s+as\s+[\w$]+|[\w$]+)\s+from\s+['"]([^'"]+)['"]\s*;?/g, (_m: string, varName: string, modName: string): string => {
         const v = varName.trim()
         const mod = modName.toLowerCase().replace(/^node:/, '')
         if (v === 'mj') return `/* auto-healed import */`
@@ -119,14 +125,26 @@ export function healCodeModeScript(code: string): string {
         if (mod.includes('memory') || mod.includes('journal')) {
             return `const ${targetVar} = mj;`
         }
-        return m
+        if (mod === 'mcp' || mod.includes('mcp') || targetVar.toLowerCase() === 'mcp' || targetVar === '__mcp' || mod.includes('modelcontextprotocol')) {
+            return `const ${targetVar} = mj;`
+        }
+        return `const ${targetVar} = mj;`
     })
-    // Auto-unwrap nested mj_execute_code / execute_code calls
+    // Auto-unwrap nested mj_execute_code / execute_code / mcp.execute calls
     const unwrapNested = (src: string): string => {
         const current = src.trim()
-        const nestedMatch = /^(?:(?:const|let|var)\s+[\w$]+\s*=\s*)?(?:return\s+)?(?:await\s+)?(?:__mcp\.)?(?:mj\.)?(?:mj_)?(?:execute_code|executeCode)\s*\(\s*(?:\{\s*(?:code|script)\s*:\s*)?([`'"])([\s\S]*?)\1\s*\}?\s*\)\s*;?(?:\s*return\s+[\w$]+;?)?$/i.exec(current)
+        const stripped = current.replace(/^(?:\/\*[\s\S]*?\*\/|\/\/[^\n]*\n|\s*(?:const|let|var)\s+[\w$]+\s*=\s*(?:mj|__safeFs|path|await\s+import\([^)]+\)|require\([^)]+\)|import\([^)]+\)|await\s+mcp|mcp);?\s*)+/i, '').trim()
+        const nestedMatch = /^(?:(?:const|let|var)\s+[\w$]+\s*=\s*)?(?:return\s+)?(?:await\s+)?(?:(?:__mcp|mcp|mj|tools)\.)*(?:mj_)?(?:execute_code|executeCode|execute)\s*\(\s*(?:\{\s*(?:code|script)\s*:\s*)?([`'"])([\s\S]*?)\1\s*\}?\s*\)\s*;?(?:\s*return\s+[\w$]+;?)?$/i.exec(stripped)
         if (nestedMatch?.[2]) {
-            return nestedMatch[2].trim()
+            const inner = nestedMatch[2].trim()
+            const isNatural = /^(?:write|document|create|include|record|summary|log|add|added|note|task|fix|implement)\b/i.test(inner) &&
+                !/\b(const|let|var|function|return|await|import|export|mj\.)\b/.test(inner)
+            if (isNatural || /^(?:create|add|new|record|log)?\s*entry\b/i.test(inner)) {
+                const firstLine = (inner.split('\n')[0] ?? '').replace(/^(?:create|add|new|record|log|insert)?\s*entry\s*(?:for|:)?\s*/i, '').replace(/[:.]+$/, '').trim()
+                const title = (firstLine.length > 0 && firstLine.length < 80) ? firstLine : 'Journal Entry'
+                return `return await mj.core.createEntry({\n  title: ${JSON.stringify(title)},\n  content: ${JSON.stringify(inner)},\n  entry_type: "technical_decision"\n});`
+            }
+            return inner
         }
         return current
     }
@@ -482,7 +500,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
             name: 'mj_execute_code',
             title: 'Execute JS Code (Sandbox)',
             description:
-                'Run arbitrary JavaScript to automate tasks in a secure sandbox. IMPORTANT: You MUST use the `mj` object (NOT `api` or `journal`) to access tools. Available tools are mapped directly from MCP tool names, converted to camelCase (e.g., `create_entry` -> `mj.createEntry()`, `search_entries` -> `mj.searchEntries()`). Anti-Hallucination Hint: DO NOT GUESS parameter keys (e.g., passing `repo` instead of `repo_name` will fail). ALWAYS inspect the schema first if unsure: `return await mj.createEntry.schema()`. Execution limit: 30s. Network access (`fetch`) disabled. Example: `return await mj.searchEntries({ query: "PowerShell" })`',
+                'Run arbitrary JavaScript to automate tasks in a secure sandbox. IMPORTANT: You MUST use the `mj` object (NOT `api`, `journal`, or `mcp`) to access tools. DO NOT use import() or require(); the `mj` tools are globally available in the sandbox. Available tools are mapped directly from MCP tool names, converted to camelCase (e.g., `create_entry` -> `mj.createEntry()`, `search_entries` -> `mj.searchEntries()`). Anti-Hallucination Hint: DO NOT GUESS parameter keys (e.g., passing `repo` instead of `repo_name` will fail). ALWAYS inspect the schema first if unsure: `return await mj.createEntry.schema()`. Execution limit: 30s. Network access (`fetch`) disabled. Example: `return await mj.searchEntries({ query: "PowerShell" })`',
             group: 'codemode',
             inputSchema: ExecuteCodeSchemaMcp,
             outputSchema: undefined,
@@ -710,7 +728,12 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                                                     ? entryObj['entry_id']
                                                     : (typeof rawObj['entry_id'] === 'string' && Number.isNaN(Number(rawObj['entry_id']))
                                                         ? rawObj['entry_id']
-                                                        : (learnedVal !== undefined ? 'Learned Context' : 'Journal Entry'))))))
+                                                        : (learnedVal !== undefined
+                                                            ? 'Learned Context'
+                                                            : (() => {
+                                                                const firstLine = (executionCode.trim().split('\n')[0] ?? '').replace(/^(?:create|add|new|record|log|insert)?\s*entry\s*(?:for|:)?\s*/i, '').replace(/[:.]+$/, '').trim()
+                                                                return (firstLine.length > 0 && firstLine.length < 80) ? firstLine : 'Journal Entry'
+                                                            })()))))))
 
                             const typeVal = typeof entryObj['type'] === 'string'
                                 ? entryObj['type']

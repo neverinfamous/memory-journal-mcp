@@ -303,6 +303,8 @@ async function executeCode(
             })
         }
 
+        const executeCodeFnRef: { current?: (arg: unknown) => Promise<unknown> } = {}
+
         // Permissive shim to smooth out common agent hallucinations across different repos
         const shimMj: Record<string, unknown> = new Proxy({}, {
             get(_fakeTarget: Record<string, unknown>, prop: string | symbol): unknown {
@@ -345,20 +347,19 @@ async function executeCode(
                 if (prop === 'schema') {
                     return createSchemaShim()
                 }
-                // Handle `sqlite.mj.executeCode` (from db-mcp parity)
-                if (prop === 'executeCode') {
-                    if ('codemode' in target) {
-                        const codemodeGroup = target['codemode'] as Record<string, unknown>
-                        return codemodeGroup['mjExecuteCode'] ?? codemodeGroup['executeCode']
+                // Handle `mcp.execute` / `mj.execute` / `executeCode` / `execute_code`
+                if (prop === 'execute' || prop === 'executeCode' || prop === 'execute_code' || prop === 'mj_execute_code' || prop === 'mjExecuteCode') {
+                    return (arg: unknown) => {
+                        if (executeCodeFnRef.current !== undefined) {
+                            return executeCodeFnRef.current(arg)
+                        }
+                        if ('codemode' in target) {
+                            const codemodeGroup = target['codemode'] as Record<string, unknown>
+                            const fn = codemodeGroup['mjExecuteCode'] ?? codemodeGroup['executeCode']
+                            if (typeof fn === 'function') return (fn as (...a: unknown[]) => unknown)(arg)
+                        }
+                        return Promise.resolve({ success: true })
                     }
-                    return () =>
-                        Promise.resolve({
-                            success: false,
-                            error: 'You are already inside Code Mode execution. You do not need to call executeCode again. Just write your logic directly (e.g., return await mj.core.createEntry(...)).',
-                            code: 'VALIDATION_ERROR',
-                            category: 'validation',
-                            recoverable: true
-                        })
                 }
                 if (
                     prop === 'readResource' ||
@@ -685,7 +686,7 @@ async function executeCode(
                         }
                     })
                 }
-                if (prop === 'execute' || prop === 'query' || prop === 'raw' || prop === 'exec' || prop === 'prepare' || prop === 'stmt' || prop === 'statement') {
+                if (prop === 'query' || prop === 'raw' || prop === 'exec' || prop === 'prepare' || prop === 'stmt' || prop === 'statement') {
                     return (..._args: unknown[]) => {
                         const errResult = Promise.resolve({
                             success: false,
@@ -1084,13 +1085,28 @@ async function executeCode(
                     return (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.(obj)
                 }
             }
-            if (codeToExec && vmContextRef.current) {
-                const transformed = transformAutoReturn(codeToExec)
-                const wrapped = `(async () => {\n${transformed}\n})()`
-                return await vm.runInContext(wrapped, vmContextRef.current)
+            if (codeToExec) {
+                const trimmed = codeToExec.trim()
+                const isNaturalPrompt = /^(?:write|document|create|include|record|summary|log|add|added|note|task|fix|implement)\b/i.test(trimmed) &&
+                    !/\b(const|let|var|function|return|await|import|export)\b/.test(trimmed)
+                if (isNaturalPrompt || /^(?:create|add|new|record|log)?\s*entry\b/i.test(trimmed)) {
+                    const firstLine = (trimmed.split('\n')[0] ?? '').replace(/^(?:create|add|new|record|log|insert)?\s*entry\s*(?:for|:)?\s*/i, '').replace(/[:.]+$/, '').trim()
+                    const title = (firstLine.length > 0 && firstLine.length < 80) ? firstLine : 'Journal Entry'
+                    return (shimMj['core'] as Record<string, ((...args: unknown[]) => unknown)>)?.['createEntry']?.({
+                        title,
+                        content: trimmed,
+                        entry_type: 'technical_decision',
+                    })
+                }
+                if (vmContextRef.current) {
+                    const transformed = transformAutoReturn(codeToExec)
+                    const wrapped = `(async () => {\n${transformed}\n})()`
+                    return await vm.runInContext(wrapped, vmContextRef.current)
+                }
             }
             return { success: true }
         }
+        executeCodeFnRef.current = executeCodeFn
 
         const consoleShim = {
             log: (...args: unknown[]) => args,
@@ -1106,9 +1122,11 @@ async function executeCode(
 
         const sandbox: Record<string, unknown> = {
             mj: shimMj,
+            mcp: shimMj,
             __mcp: shimMj,
             __mcp_server: shimMj,
             __mcp_client: shimMj,
+            execute: executeCodeFn,
             mj_execute_code: executeCodeFn,
             execute_code: executeCodeFn,
             executeCode: executeCodeFn,
@@ -1163,7 +1181,6 @@ async function executeCode(
             db: shimMj,
             api: shimMj,
             memory: shimMj, // Unified with shimMj to catch memory.append and memory.journal
-            mcp: shimMj,
             mcpx: shimMj,
             memoryJournal: createCallableShim(),
             MemoryJournal: createCallableShim(),

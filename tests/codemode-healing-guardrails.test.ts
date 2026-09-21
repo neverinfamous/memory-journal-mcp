@@ -1206,6 +1206,66 @@ return { s1, s2, s3 };`
             const healed = healCodeModeScript(input);
             expect(healed).toContain('await mj_create_entry(`some unescaped " and \\` backtick`)');
         });
+
+        it('should auto-heal dynamic import of mcp and unwrap mcp.execute prompt from agent issues log', async () => {
+            const { healCodeModeScript } = await import('../src/handlers/tools/codemode/handler.js');
+            const { CodeModeSecurityManager } = await import('../src/codemode/security.js');
+
+            const rawAgentCode = `const mcp = await import("mcp");
+return await mcp.execute(\`
+  create entry for db-mcp schema tests part 4:
+  - Added 'index' to resolveAliases for CreateIndexSchema and DropIndexSchema.
+  - Added 'trigger' to resolveAliases for CreateTriggerSchema and DropTriggerSchema.
+  - Validated edge cases for schema prefixes, nonexistent items, and SQL injection prevention in index and trigger commands.
+\`);`;
+
+            const healed = healCodeModeScript(rawAgentCode);
+
+            // Dynamic import statement must not remain
+            expect(healed).not.toContain('import("mcp")');
+            expect(healed).not.toContain('import(');
+
+            // Must pass security validation cleanly
+            const security = new CodeModeSecurityManager();
+            const valResult = security.validateCode(healed);
+            expect(valResult.valid).toBe(true);
+            expect(valResult.errors).toHaveLength(0);
+
+            // Unwrapped to entry creation
+            expect(healed).toContain('mj.core.createEntry');
+            expect(healed).toContain('db-mcp schema tests part 4');
+        });
+
+        it('should support sandbox mcp.execute and execute globals', async () => {
+            const { WorkerSandbox } = await import('../src/codemode/worker-sandbox.js');
+            const sandbox = new WorkerSandbox();
+
+            let createdEntry: unknown = null;
+            const bindings = {
+                core: {
+                    create_entry: async (args: unknown) => {
+                        createdEntry = args;
+                        return { success: true, entry_id: 999 };
+                    },
+                },
+            };
+
+            const code = `
+            const mcp = await import("mcp");
+            return await mcp.execute(\`
+              create entry for db-mcp schema tests part 4:
+              - Added 'index' to resolveAliases for CreateIndexSchema and DropIndexSchema.
+            \`);`;
+
+            const { healCodeModeScript } = await import('../src/handlers/tools/codemode/handler.js');
+            const healed = healCodeModeScript(code);
+
+            const res = await sandbox.execute(healed, bindings);
+            expect(res.success).toBe(true);
+            expect(createdEntry).not.toBeNull();
+            const entry = createdEntry as Record<string, unknown>;
+            expect(entry['title'] ?? entry['content']).toContain('db-mcp schema tests part 4');
+        });
     })
 })
 

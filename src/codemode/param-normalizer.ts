@@ -23,8 +23,13 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
     if (gitIntercept) return gitIntercept;
 
     // Raw string argument normalization for execute_code
-    if ((methodName === 'execute_code' || methodName === 'executeCode' || methodName === 'mj_execute_code' || methodName === 'mjExecuteCode' || methodName === 'mysql_execute_code' || methodName === 'mysqlExecuteCode') && args.length === 1 && typeof args[0] === 'string') {
+    if ((methodName === 'execute' || methodName === 'execute_code' || methodName === 'executeCode' || methodName === 'mj_execute_code' || methodName === 'mjExecuteCode' || methodName === 'mysql_execute_code' || methodName === 'mysqlExecuteCode') && args.length === 1 && typeof args[0] === 'string') {
         args = [{ code: args[0] }];
+    }
+
+    // Raw string argument normalization for create_entry
+    if ((methodName === 'create_entry' || methodName === 'createEntry' || methodName === 'team_create_entry' || methodName === 'teamCreateEntry') && args.length === 1 && typeof args[0] === 'string') {
+        args = [{ content: args[0] }];
     }
 
     // Positional Argument Normalization (e.g. MemoryJournal.appendEntry('workspace-id', { ... }))
@@ -227,7 +232,7 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
             }
         }
 
-        if (methodName === 'execute_code' || methodName === 'executeCode' || methodName === 'mj_execute_code' || methodName === 'mjExecuteCode' || methodName === 'mysql_execute_code' || methodName === 'mysqlExecuteCode') {
+        if (methodName === 'execute' || methodName === 'execute_code' || methodName === 'executeCode' || methodName === 'mj_execute_code' || methodName === 'mjExecuteCode' || methodName === 'mysql_execute_code' || methodName === 'mysqlExecuteCode') {
             if (obj['repo_name'] !== undefined && obj['repo'] === undefined) {
                 obj['repo'] = obj['repo_name'];
                 delete obj['repo_name'];
