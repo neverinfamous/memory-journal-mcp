@@ -474,6 +474,9 @@ export function healAgentHallucinations(val: unknown): unknown {
                     obj['tags'].push('session-summary')
                 }
                 modified = true
+            } else if (['progress', 'status', 'development'].includes(etLower)) {
+                obj['entry_type'] = 'development_note'
+                modified = true
             } else if (['task', 'chore', 'refactor', 'fix', 'update', 'technical', 'note', 'documentation', 'code', 'coding'].includes(etLower)) {
                 obj['entry_type'] = 'technical_note'
                 obj['tags'] ??= []

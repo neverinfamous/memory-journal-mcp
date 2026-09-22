@@ -1266,6 +1266,75 @@ return await mcp.execute(\`
             const entry = createdEntry as Record<string, unknown>;
             expect(entry['title'] ?? entry['content']).toContain('db-mcp schema tests part 4');
         });
+
+        it('should auto-heal require("fs") and require("path") without TDZ ReferenceError', async () => {
+            const { healCodeModeScript } = await import('../src/handlers/tools/codemode/handler.js');
+            const { CodeModeSecurityManager } = await import('../src/codemode/security.js');
+            const { WorkerSandbox } = await import('../src/codemode/worker-sandbox.js');
+
+            const agentCode = `
+const fs = require('fs');
+const path = require('path');
+return mj.createEntry({
+  type: "progress",
+  title: "db-mcp Code Mode Testing - Core Tools Part 2",
+  content: "Completed rigorous testing of sqlite.core.upsert and sqlite.core.batchInsert.",
+  project_number: "db-mcp"
+});
+`;
+
+            const healed = healCodeModeScript(agentCode);
+
+            // Verify require expressions were healed and safeFs is referenced
+            expect(healed).not.toContain("require('fs')");
+            expect(healed).not.toContain("require('path')");
+            expect(healed).toContain('__safeFs');
+
+            // Security check must pass
+            const security = new CodeModeSecurityManager();
+            const valResult = security.validateCode(healed);
+            expect(valResult.valid).toBe(true);
+            expect(valResult.errors).toHaveLength(0);
+
+            // Execute in WorkerSandbox without TDZ ReferenceError
+            const sandbox = new WorkerSandbox();
+            let createdEntry: unknown = null;
+            const bindings = {
+                core: {
+                    create_entry: async (args: unknown) => {
+                        createdEntry = args;
+                        return { success: true, entry_id: 1234 };
+                    },
+                },
+            };
+
+            const result = await sandbox.execute(healed, bindings);
+            expect(result.success).toBe(true);
+            expect(createdEntry).not.toBeNull();
+            const entry = createdEntry as Record<string, unknown>;
+            expect(entry['title'] ?? entry['content']).toContain('db-mcp Code Mode Testing - Core Tools Part 2');
+            expect(entry['type'] === 'progress' || entry['entry_type'] === 'development_note').toBe(true);
+        });
+
+        it('should auto-heal ES module import and dynamic import of fs and path without TDZ error', async () => {
+            const { healCodeModeScript } = await import('../src/handlers/tools/codemode/handler.js');
+            const { WorkerSandbox } = await import('../src/codemode/worker-sandbox.js');
+
+            const esmCode = `
+import fs from 'fs';
+import path from 'path';
+const exists = fs.existsSync('/dummy/path');
+return { exists };
+`;
+            const healedEsm = healCodeModeScript(esmCode);
+            expect(healedEsm).not.toContain("import fs from 'fs'");
+            expect(healedEsm).not.toContain("import path from 'path'");
+
+            const sandbox = new WorkerSandbox();
+            const result = await sandbox.execute(healedEsm, {});
+            expect(result.success).toBe(true);
+            expect(result.result).toEqual({ exists: true });
+        });
     })
 })
 

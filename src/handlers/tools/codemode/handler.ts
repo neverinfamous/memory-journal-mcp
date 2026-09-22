@@ -53,11 +53,15 @@ export function healCodeModeScript(code: string): string {
         const v = varName.trim()
         const mod = modName.toLowerCase().replace(/^node:/, '')
         if (v === 'mj') return `/* auto-healed dynamic import */`
-        if (mod === 'fs' || v === 'fs') {
-            return `const __safeFs = (typeof __safeFs !== 'undefined' ? __safeFs : mj);`
+        if (mod === 'fs' || v === 'fs' || v === '__safeFs') {
+            const fsVal = `(typeof mj !== 'undefined' ? (mj.fs || mj) : undefined)`
+            return v === '__safeFs'
+                ? `var __safeFs = ${fsVal};`
+                : `const ${varName} = ${fsVal}; var __safeFs = ${fsVal};`
         }
         if (mod === 'path' || v === 'path') {
-            return `const path = (typeof path !== 'undefined' ? path : mj);`
+            const pathVal = `(typeof mj !== 'undefined' ? (mj.path || mj) : undefined)`
+            return `const ${varName} = ${pathVal};`
         }
         if (mod.includes('sqlite') || mod.includes('database') || v.toLowerCase().includes('sqlite') || v.toLowerCase() === 'database') {
             return `const ${varName} = mj.sqlite3;`
@@ -80,11 +84,15 @@ export function healCodeModeScript(code: string): string {
         const v = varName.trim()
         const mod = modName.toLowerCase().replace(/^node:/, '')
         if (v === 'mj') return `/* auto-healed require */`
-        if (mod === 'fs' || v === 'fs') {
-            return `const __safeFs = (typeof __safeFs !== 'undefined' ? __safeFs : mj);`
+        if (mod === 'fs' || v === 'fs' || v === '__safeFs') {
+            const fsVal = `(typeof mj !== 'undefined' ? (mj.fs || mj) : undefined)`
+            return v === '__safeFs'
+                ? `var __safeFs = ${fsVal};`
+                : `const ${varName} = ${fsVal}; var __safeFs = ${fsVal};`
         }
         if (mod === 'path' || v === 'path') {
-            return `const path = (typeof path !== 'undefined' ? path : mj);`
+            const pathVal = `(typeof mj !== 'undefined' ? (mj.path || mj) : undefined)`
+            return `const ${varName} = ${pathVal};`
         }
         if (mod.includes('sqlite') || mod.includes('database') || v.toLowerCase().includes('sqlite') || v.toLowerCase() === 'database') {
             return `const ${varName} = mj.sqlite3;`
@@ -110,11 +118,15 @@ export function healCodeModeScript(code: string): string {
         if (v.startsWith('* as ')) {
             targetVar = v.replace(/^\*\s+as\s+/, '')
         }
-        if (mod === 'fs' || targetVar === 'fs') {
-            return `const __safeFs = (typeof __safeFs !== 'undefined' ? __safeFs : mj);`
+        if (mod === 'fs' || targetVar === 'fs' || targetVar === '__safeFs') {
+            const fsVal = `(typeof mj !== 'undefined' ? (mj.fs || mj) : undefined)`
+            return targetVar === '__safeFs'
+                ? `var __safeFs = ${fsVal};`
+                : `const ${targetVar} = ${fsVal}; var __safeFs = ${fsVal};`
         }
         if (mod === 'path' || targetVar === 'path') {
-            return `const path = (typeof path !== 'undefined' ? path : mj);`
+            const pathVal = `(typeof mj !== 'undefined' ? (mj.path || mj) : undefined)`
+            return `const ${targetVar} = ${pathVal};`
         }
         if (mod.includes('sqlite') || mod.includes('database') || targetVar.toLowerCase().includes('sqlite') || targetVar.toLowerCase() === 'database') {
             return `const ${targetVar} = mj.sqlite3;`
@@ -133,7 +145,7 @@ export function healCodeModeScript(code: string): string {
     // Auto-unwrap nested mj_execute_code / execute_code / mcp.execute calls
     const unwrapNested = (src: string): string => {
         const current = src.trim()
-        const stripped = current.replace(/^(?:\/\*[\s\S]*?\*\/|\/\/[^\n]*\n|\s*(?:const|let|var)\s+[\w$]+\s*=\s*(?:mj|__safeFs|path|await\s+import\([^)]+\)|require\([^)]+\)|import\([^)]+\)|await\s+mcp|mcp);?\s*)+/i, '').trim()
+        const stripped = current.replace(/^(?:\/\*[\s\S]*?\*\/|\/\/[^\n]*\n|\s*(?:const|let|var)\s+(?:\{[^}]*\}|[\w$]+)\s*=\s*(?:mj(?:\.[\w$]+)?|__safeFs|path|\(?typeof\s+mj[^\n;]*|await\s+import\([^)]+\)|require\([^)]+\)|import\([^)]+\)|await\s+mcp|mcp);?\s*)+/i, '').trim()
         const nestedMatch = /^(?:(?:const|let|var)\s+[\w$]+\s*=\s*)?(?:return\s+)?(?:await\s+)?(?:(?:__mcp|mcp|mj|tools)\.)*(?:mj_)?(?:execute_code|executeCode|execute)\s*\(\s*(?:\{\s*(?:code|script)\s*:\s*)?([`'"])([\s\S]*?)\1\s*\}?\s*\)\s*;?(?:\s*return\s+[\w$]+;?)?$/i.exec(stripped)
         if (nestedMatch?.[2]) {
             const inner = nestedMatch[2].trim()

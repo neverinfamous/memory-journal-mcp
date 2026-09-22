@@ -90,6 +90,12 @@ const ENTRY_TYPE_ALIASES: Record<string, string> = {
     'review': 'code_review',
     'code': 'technical_note',
     'coding': 'technical_note',
+    'progress': 'development_note',
+    'status': 'development_note',
+    'update': 'development_note',
+    'test': 'system_integration_test',
+    'testing': 'system_integration_test',
+    'task': 'technical_note',
 }
 
 /**
