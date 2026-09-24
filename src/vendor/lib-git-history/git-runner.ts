@@ -88,7 +88,9 @@ export function setupGitProcessLifecycle(proc: ReturnType<typeof spawn>, ac: Abo
     proc.on('error', err => {
       if (!resolved) {
         resolved = true;
-        if (isErrnoException(err) && err.code === 'ENOENT') {
+        if (ac.signal.aborted || (err instanceof Error && err.name === 'AbortError')) {
+          streamError = new Error(`Git process timed out after ${Math.round(GIT_IDLE_TIMEOUT_MS / 1000)}s of inactivity and was aborted: ${errChunks.join('')}`);
+        } else if (isErrnoException(err) && err.code === 'ENOENT') {
           streamError = new Error(JSON.stringify({ error: 'GitExecutableNotFound', message: 'The git binary is missing from the environment PATH.' }), { cause: err });
         } else {
           streamError = err;
@@ -154,10 +156,10 @@ export function buildGitBaseArgs(args: CliArgs, targetRange: string | undefined)
     gitArgs.push('--fixed-strings');
   }
   if (args.grep) gitArgs.push(`--grep=${args.grep}`);
-  if (args.author || args.search || args.grep || args['patch-search']) {
+  if (args.author || args.search || args.grep || args['patch-search'] || args.pickaxe) {
     if (!gitArgs.includes('-i')) gitArgs.push('-i');
   }
-  if (args.grep || args['patch-search']) {
+  if (args.grep || args['patch-search'] || args.pickaxe) {
     if (!gitArgs.includes('-E')) gitArgs.push('-E');
   }
   if (args.since) gitArgs.push(`--since=${args.since}`);
@@ -165,6 +167,10 @@ export function buildGitBaseArgs(args: CliArgs, targetRange: string | undefined)
   if (args['first-parent']) gitArgs.push('--first-parent');
   if (args['patch-search']) {
     gitArgs.push(`-G${args['patch-search']}`);
+    if (!gitArgs.includes('--pickaxe-all')) gitArgs.push('--pickaxe-all');
+  }
+  if (args.pickaxe) {
+    gitArgs.push(`-S${args.pickaxe}`);
     if (!gitArgs.includes('--pickaxe-all')) gitArgs.push('--pickaxe-all');
   }
   if (args['diff-filter']) {
@@ -176,7 +182,7 @@ export function buildGitBaseArgs(args: CliArgs, targetRange: string | undefined)
   if (args['diff-context'] !== undefined) gitArgs.push(`-U${args['diff-context']}`);
 
   const hasTsFilters = args.category || args.type || args.breaking || args['changelog-only'] || args.impact || args.confidence;
-  const hasNativeFilters = args.author || args.search || args.grep || args['patch-search'] || args.path || args.since || args.until || args['diff-filter'];
+  const hasNativeFilters = args.author || args.search || args.grep || args['patch-search'] || args.pickaxe || args.path || args.since || args.until || args['diff-filter'];
 
   if (args.all) {
     gitArgs.push('--all');
@@ -288,9 +294,15 @@ export async function* streamGitRecords(args: string[], cwd: string = process.cw
   }
 }
 
-export async function* spawnGitBinaryStream(args: string[], boundaryStr: string, stdinShas?: string, maxBufferLimit: number = GIT_STREAM_BUFFER_DEFAULT): AsyncGenerator<Buffer, void, unknown> {
+export async function* spawnGitBinaryStream(
+  args: string[],
+  boundaryStr: string,
+  stdinShas?: string,
+  maxBufferLimit: number = GIT_STREAM_BUFFER_DEFAULT,
+  cwd: string = process.cwd()
+): AsyncGenerator<Buffer, void, unknown> {
   const ac = new AbortController();
-  const proc = spawn('git', args, { signal: ac.signal, windowsHide: true });
+  const proc = spawn('git', args, { cwd, signal: ac.signal, windowsHide: true });
   activeProcesses.add(proc);
 
   if (!proc.stdout || !proc.stderr || !proc.stdin) {

@@ -71,7 +71,9 @@ export function gitInterceptor(ctx: ExecutionContext): void {
       { cmd: 'commit' },
       ({ args, ctx }) => {
         const cwd = ctx.payload.cwd || process.cwd();
-        const hasWrapper = findEcosystemScript(cwd, 'commit.ts') !== null;
+        const fallbackCommitScript = path.resolve(__dirname, '../../commit.ts');
+        const commitScriptCandidate = findEcosystemScript(targetCwd, 'commit.ts') || findEcosystemScript(cwd, 'commit.ts') || (fs.existsSync(fallbackCommitScript) ? fallbackCommitScript : null);
+        const hasWrapper = commitScriptCandidate !== null;
         
         let message: string | undefined;
         const mIndex = args.findIndex(a => a === '-m' || a === '--message');
@@ -103,20 +105,23 @@ export function gitInterceptor(ctx: ExecutionContext): void {
         }
 
         if (message !== undefined) {
-          if (hasWrapper) {
+          if (hasWrapper && commitScriptCandidate) {
             console.error(`\n   💡 AGENT HINT: 'git commit' is intercepted for safety.`);
-            console.error(`   🛠️ AUTONOMOUS HEALING: Transparently rewriting to 'bun .\\.agents\\scripts\\commit.ts' with default scores... (Frictionless Recovery)`);
+            console.error(`   🛠️ AUTONOMOUS HEALING: Transparently rewriting to '${commitScriptCandidate}' with default scores... (Frictionless Recovery)`);
             ctx.cmdBasename = 'bun';
-            ctx.args = ['.\\.agents\\scripts\\commit.ts', '--msg', message, '--impact', '0.5', '--confidence', '0.5', '--validation', 'passed'];
+            ctx.args = [commitScriptCandidate, '--msg', message, '--impact', '0.5', '--confidence', '0.5', '--validation', 'passed'];
+            if (path.resolve(targetCwd) !== path.resolve(process.cwd())) {
+              ctx.args.push('--cwd', targetCwd);
+            }
             return;
           } else {
             return; // No wrapper, allow native non-interactive commit
           }
         }
         
-        if (hasWrapper) {
+        if (hasWrapper && commitScriptCandidate) {
           console.error(`\n   💡 AGENT HINT: 'git commit' is strictly forbidden via the shell.\n${AUTONOMOUS_HEALING_MSG}`);
-          console.error(`   You must use the designated wrapper instead: bun .\\.agents\\scripts\\commit.ts`);
+          console.error(`   You must use the designated wrapper instead: bun ${commitScriptCandidate}`);
           process.exit(1);
         } else {
           console.error(`\n   💡 AGENT HINT: 'git commit' without '-m' will open an interactive editor and hang.\n${AUTONOMOUS_HEALING_MSG}`);
@@ -139,7 +144,7 @@ export function gitInterceptor(ctx: ExecutionContext): void {
             }
           }
           const isTargetDifferent = path.resolve(targetCwd) !== path.resolve(process.cwd());
-          const scriptToInvoke = isTargetDifferent ? scriptCandidate : '.\\.agents\\scripts\\get-git-history-json.ts';
+          const scriptToInvoke = scriptCandidate;
 
           if (cmd === 'status') {
             console.error(`\n   🛠️ AUTONOMOUS HEALING: Transparently rewriting 'git status' to '${scriptToInvoke} --uncommitted --stats'... (Frictionless Recovery)`);

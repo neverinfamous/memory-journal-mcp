@@ -2,10 +2,10 @@
 
 import { spawnGitBinaryStream, PATCH_BOUNDARY_STR } from './git-runner.js';
 import type { CliArgs } from './cli.js';
-import { DEFAULT_MAX_PATCH_LEN, GIT_EXCLUDE_PATTERNS } from './constants.js';
+import { DEFAULT_MAX_PATCH_LEN, GIT_EXCLUDE_PATTERNS, GIT_STREAM_BUFFER_DEFAULT } from './constants.js';
 import { extractShaFromBuffer } from './parser-utils.js';
 
-export async function getPatchMap(lockedArgs: string[], args: CliArgs, stdinShas?: string) {
+export async function getPatchMap(lockedArgs: string[], args: CliArgs, stdinShas?: string, cwd: string = process.cwd()) {
   if (!args['include-patch'] && args['diff-context'] === undefined) return new Map();
   const patchBaseArgs = [...lockedArgs];
   const excludes = GIT_EXCLUDE_PATTERNS;
@@ -22,7 +22,7 @@ export async function getPatchMap(lockedArgs: string[], args: CliArgs, stdinShas
   const parsedMaxPatchLen = args['max-patch-length'];
   const maxPatchLen = (parsedMaxPatchLen !== undefined && !Number.isNaN(parsedMaxPatchLen) && parsedMaxPatchLen >= 0) ? parsedMaxPatchLen : DEFAULT_MAX_PATCH_LEN;
 
-  for await (const recordBuf of spawnGitBinaryStream(patchArgs, PATCH_BOUNDARY_STR, stdinShas)) {
+  for await (const recordBuf of spawnGitBinaryStream(patchArgs, PATCH_BOUNDARY_STR, stdinShas, GIT_STREAM_BUFFER_DEFAULT, cwd)) {
     const { sha: hash, shaEnd: hashEnd } = extractShaFromBuffer(recordBuf);
     if (hash) {
       const patchByteLen = recordBuf.length - (hashEnd + 1);

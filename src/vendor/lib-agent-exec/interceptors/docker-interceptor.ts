@@ -21,6 +21,23 @@ export function dockerInterceptor({ cmdBasename, args, payload }: ExecutionConte
           if (args[i] === '-f' || args[i] === '--follow') args.splice(i, 1);
         }
       }
+
+      const hasTailOrLimit = args.some(a =>
+        a === '--tail' ||
+        a.startsWith('--tail=') ||
+        a === '--since' ||
+        a.startsWith('--since=')
+      );
+
+      if (!hasTailOrLimit) {
+        console.error(`\n   🛠️ AUTONOMOUS HEALING: 'kubectl logs' called without a limit. Automatically appending '--tail 1000' to prevent output from exceeding maxBuffer... (Frictionless Recovery)`);
+        const logsIdx = args.indexOf('logs');
+        if (logsIdx !== -1) {
+          args.splice(logsIdx + 1, 0, '--tail', '1000');
+        } else {
+          args.push('--tail', '1000');
+        }
+      }
     }
   }
 
@@ -120,6 +137,27 @@ export function dockerInterceptor({ cmdBasename, args, payload }: ExecutionConte
       console.error(`\n   🛠️ AUTONOMOUS HEALING: '${cmdBasename} logs -f' runs indefinitely and will cause a timeout. Automatically stripping '-f / --follow' flag... (Frictionless Recovery)`);
       for (let i = args.length - 1; i >= 0; i--) {
         if (args[i] === '-f' || args[i] === '--follow' || args[i].startsWith('--follow=')) args.splice(i, 1);
+      }
+    }
+
+    const hasTailOrLimit = args.some(a =>
+      a === '--tail' ||
+      a.startsWith('--tail=') ||
+      a === '-n' ||
+      a.startsWith('-n=') ||
+      a === '--since' ||
+      a.startsWith('--since=') ||
+      a === '--until' ||
+      a.startsWith('--until=')
+    );
+
+    if (!hasTailOrLimit) {
+      console.error(`\n   🛠️ AUTONOMOUS HEALING: '${cmdBasename} logs' called without a limit. Automatically appending '--tail 1000' to prevent output from exceeding maxBuffer... (Frictionless Recovery)\x1b[0m`);
+      const logsIdx = args.indexOf('logs');
+      if (logsIdx !== -1) {
+        args.splice(logsIdx + 1, 0, '--tail', '1000');
+      } else {
+        args.push('--tail', '1000');
       }
     }
   }
@@ -256,9 +294,23 @@ export function dockerInterceptor({ cmdBasename, args, payload }: ExecutionConte
     // Container Shell/REPL Detection: Block headless hangs when docker exec/run
     // targets a known interactive shell or REPL without execution flags.
     const containerShells = ['bash', 'sh', 'zsh', 'ash', 'dash', 'fish', 'csh', 'tcsh', 'ksh'];
-    const containerRepls = ['python', 'python3', 'node', 'ruby', 'irb', 'perl', 'lua', 'php', 'ghci', 'erl', 'iex', 'scala', 'clojure', 'r', 'R'];
+    const containerJsRuntimes = ['node', 'bun', 'deno', 'tsx', 'ts-node'];
+    const containerPython = ['python', 'python3', 'pypy', 'pypy3'];
+    const containerRuby = ['ruby', 'irb'];
+    const containerPerl = ['perl'];
+    const containerPhp = ['php'];
+    const containerOtherRepls = ['ghci', 'erl', 'iex', 'scala', 'clojure', 'r', 'R', 'lua'];
     const containerDbRepls = ['psql', 'mysql', 'sqlite3', 'mongo', 'mongosh', 'redis-cli'];
-    const allContainerRepls = [...containerShells, ...containerRepls, ...containerDbRepls];
+    const allContainerRepls = [
+      ...containerShells,
+      ...containerJsRuntimes,
+      ...containerPython,
+      ...containerRuby,
+      ...containerPerl,
+      ...containerPhp,
+      ...containerOtherRepls,
+      ...containerDbRepls,
+    ];
 
     let foundRunExec = false;
     let skipNextValue = false;
@@ -286,24 +338,48 @@ export function dockerInterceptor({ cmdBasename, args, payload }: ExecutionConte
     }
 
     if (containerCmd && allContainerRepls.includes(containerCmd)) {
-      const shellExecFlags = ['-c', '--command'];
-      const dbExecFlags = ['-c', '--command', '-e', '--execute', '--eval', '-f', '--file'];
-      let hasExecFlag = containerDbRepls.includes(containerCmd)
-        ? containerCmdArgs.some(a => dbExecFlags.includes(a))
-        : containerCmdArgs.some(a => shellExecFlags.includes(a));
-
-      // Exception for sqlite3 which can take a query directly without flags
-      if (containerCmd === 'sqlite3') {
-        const nonFlags = containerCmdArgs.filter(a => !a.startsWith('-'));
-        if (nonFlags.length >= 2) {
-          hasExecFlag = true;
+      const isNonInteractive = (() => {
+        if (payload.stdin) return true;
+        if (containerCmdArgs.length === 0) return false;
+        if (containerShells.includes(containerCmd)) {
+          return containerCmdArgs.some(a => ['-c', '--command'].includes(a)) ||
+            containerCmdArgs.some(a => !a.startsWith('-'));
         }
-      }
+        if (containerJsRuntimes.includes(containerCmd)) {
+          return containerCmdArgs.some(a => ['-e', '--eval', '--print', '-p', '-v', '--version', '-h', '--help'].includes(a)) ||
+            containerCmdArgs.some(a => !a.startsWith('-'));
+        }
+        if (containerPython.includes(containerCmd)) {
+          return containerCmdArgs.some(a => ['-c', '-m', '-v', '--version', '-h', '--help'].includes(a)) ||
+            containerCmdArgs.some(a => !a.startsWith('-'));
+        }
+        if (containerRuby.includes(containerCmd)) {
+          return containerCmdArgs.some(a => ['-e', '-v', '--version', '-h', '--help'].includes(a)) ||
+            containerCmdArgs.some(a => !a.startsWith('-'));
+        }
+        if (containerPerl.includes(containerCmd)) {
+          return containerCmdArgs.some(a => ['-e', '-E', '-v', '--version', '-h', '--help'].includes(a)) ||
+            containerCmdArgs.some(a => !a.startsWith('-'));
+        }
+        if (containerPhp.includes(containerCmd)) {
+          return containerCmdArgs.some(a => ['-r', '-v', '--version', '-h', '--help'].includes(a)) ||
+            containerCmdArgs.some(a => !a.startsWith('-'));
+        }
+        if (containerDbRepls.includes(containerCmd)) {
+          const dbExecFlags = ['-c', '--command', '-e', '--execute', '--eval', '-f', '--file', '-v', '--version', '-h', '--help'];
+          if (containerCmdArgs.some(a => dbExecFlags.includes(a))) return true;
+          if (containerCmd === 'sqlite3' && containerCmdArgs.filter(a => !a.startsWith('-')).length >= 2) return true;
+          if (containerCmd === 'redis-cli' && containerCmdArgs.filter(a => !a.startsWith('-')).length >= 1) return true;
+          return false;
+        }
+        return containerCmdArgs.some(a => ['-e', '-v', '--version', '-h', '--help'].includes(a)) ||
+          containerCmdArgs.some(a => !a.startsWith('-'));
+      })();
 
-      if (!hasExecFlag && !payload.stdin) {
+      if (!isNonInteractive) {
         console.error(`\n   💡 AGENT HINT: 'docker ... ${containerCmd}' targets an interactive shell/REPL inside the container.\n${AUTONOMOUS_HEALING_MSG}`);
-        console.error(`   Without execution flags (e.g., -c 'command') or stdin, it will hang indefinitely.`);
-        console.error(`   Please provide a command to execute: e.g., docker exec <container> ${containerCmd} -c 'your command'`);
+        console.error(`   Without execution flags (e.g., -c 'command') or a script file or stdin, it will hang indefinitely.`);
+        console.error(`   Please provide a command or script to execute: e.g., docker exec <container> ${containerCmd} -c 'your command'`);
         process.exit(1);
       }
     }

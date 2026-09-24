@@ -98,6 +98,7 @@ export const cliArgsSchema = z.object({
   stats: z.boolean().optional(),
   all: z.boolean().optional(),
   'patch-search': z.string().optional(),
+  pickaxe: z.string().optional(),
   'diff-filter': z.string().optional(),
   reverse: z.boolean().optional(),
   'no-body': z.boolean().optional(),
@@ -109,6 +110,7 @@ export const cliArgsSchema = z.object({
   'package-version': z.boolean().optional(),
   'stream-to-file': z.string().optional(),
   uncommitted: z.boolean().optional(),
+  cwd: z.string().optional(),
 });
 
 export type CliArgs = z.infer<typeof cliArgsSchema>;

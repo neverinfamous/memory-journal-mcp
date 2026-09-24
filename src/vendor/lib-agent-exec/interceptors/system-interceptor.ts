@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { ExecutionContext } from './types.js';
+import { ExecutionContext, AGENT_NATIVE_TOOLS, ECOSYSTEM_MCP_TOOLS } from './types.js';
 import { match, P } from 'ts-pattern';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -49,14 +49,28 @@ function getInlineScriptDetails(interpreter: string, args: string[]): { flagIdx:
 }
 
 export function systemInterceptor(ctx: ExecutionContext): void {
+  const originalArgs = ctx.args;
   ctx.args = healFragmentedQuotes(ctx.args);
+  if (ctx.args.length !== originalArgs.length || ctx.args.some((a, idx) => a !== originalArgs[idx])) {
+    console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected fragmented quotes from PowerShell tokenization. Reassembling arguments... (Frictionless Recovery)\x1b[0m`);
+  }
   const { cmdBasename, payload } = ctx;
   const { args } = ctx;
   const exactShellChars = ['|', '>', '<', '&&', '||', ';'];
   const patternTools = ['grep', 'grep.exe', 'egrep', 'fgrep', 'rg', 'rg.exe', 'jq', 'jq.exe', 'yq', 'yq.exe', 'sed', 'sed.exe', 'awk', 'gawk', 'find', 'find.exe', 'fd', 'fd.exe', 'fdfind', 'fdfind.exe', 'node', 'node.exe', 'python', 'python.exe', 'bun', 'bun.exe', 'tail', 'tail.exe', 'head', 'head.exe', 'wc', 'wc.exe', 'sort', 'sort.exe', 'uniq', 'uniq.exe', 'tee', 'tee.exe'];
   const shells = ['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe', 'cmd', 'cmd.exe', 'bash', 'bash.exe', 'sh', 'sh.exe', 'wsl', 'wsl.exe'] as const;
   const inlineFlags = ['-c', '-command', '/c', '-ec', '-encodedcommand', '-en', '-e', '--eval', '-execute', '--execute'];
-
+  if (payload.type === 'eval' && typeof payload.code === 'string') {
+    const trimmedCode = payload.code.trim();
+    if ((AGENT_NATIVE_TOOLS as readonly string[]).includes(trimmedCode)) {
+      console.error(`\n   💡 AGENT HINT: '${trimmedCode}' is an agent-native tool, NOT executable code or a shell script. Please invoke the '${trimmedCode}' tool directly.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+      process.exit(1);
+    }
+    if ((ECOSYSTEM_MCP_TOOLS as readonly string[]).includes(trimmedCode)) {
+      console.error(`\n   💡 AGENT HINT: '${trimmedCode}' is an MCP tool, NOT executable code or a shell script. Please call the '${trimmedCode}' MCP tool via call_mcp_tool.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Call MCP tool. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+      process.exit(1);
+    }
+  }
 
   const isCommand = payload.type === 'command';
   const rawCmdStr = 'command' in payload && typeof payload.command === 'string' && payload.command.trim().includes(' ')
@@ -135,7 +149,20 @@ export function systemInterceptor(ctx: ExecutionContext): void {
   }
 
   if (payload.target === 'wsl2') {
-    payload.timeoutMs = Math.max(payload.timeoutMs || 30000, 30000);
+    let defaultWslTimeout = 30000;
+    if (payload.type === 'eval' || payload.type === 'script') {
+      const codeOrScript = payload.type === 'eval' ? payload.code : '';
+      const hasQualityCheck = codeOrScript && /(?:typecheck|tsc|lint|check|build)/i.test(codeOrScript);
+      const hasMountedSearch = codeOrScript && /(?:find|grep|rg)\s+.*\/mnt\/[c-z]/i.test(codeOrScript);
+      if (hasQualityCheck) {
+        defaultWslTimeout = 90000;
+        console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected quality check in WSL2 eval payload. Auto-extending timeout to 90s... (Frictionless Recovery)`);
+      } else if (hasMountedSearch) {
+        defaultWslTimeout = 90000;
+        console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected file search across mounted filesystem in WSL2 eval payload. Auto-extending timeout to 90s... (Frictionless Recovery)`);
+      }
+    }
+    payload.timeoutMs = Math.max(payload.timeoutMs || defaultWslTimeout, defaultWslTimeout);
   }
 
   // 1. Generic Path Hallucination Intercepts (runs before tool matching so healed paths are matched)

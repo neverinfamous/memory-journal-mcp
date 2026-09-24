@@ -9,7 +9,19 @@ import path from 'node:path';
 
 const WSL_LOCK_DIR = path.join(os.tmpdir(), 'agent-exec-wsl-lock');
 
-async function acquireWslLock(maxConcurrent = 4, timeoutMs = 30000): Promise<string> {
+function isPidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err: unknown) {
+    if (typeof err === 'object' && err !== null && 'code' in err) {
+      return (err as { code?: string }).code === 'EPERM';
+    }
+    return false;
+  }
+}
+
+export async function acquireWslLock(maxConcurrent = 4, timeoutMs = 30000): Promise<string> {
   if (!fs.existsSync(WSL_LOCK_DIR)) {
     try { fs.mkdirSync(WSL_LOCK_DIR, { recursive: true }); } catch { /* ignore */ }
   }
@@ -48,7 +60,15 @@ async function acquireWslLock(maxConcurrent = 4, timeoutMs = 30000): Promise<str
         const lPath = path.join(WSL_LOCK_DIR, l);
         try {
           const stats = fs.statSync(lPath);
-          if (Date.now() - stats.mtimeMs > 60000) {
+          let isStale = Date.now() - stats.mtimeMs > 60000;
+          if (!isStale) {
+            const content = fs.readFileSync(lPath, 'utf8').trim();
+            const lockPid = parseInt(content, 10);
+            if (!Number.isNaN(lockPid) && lockPid > 0) {
+              isStale = !isPidAlive(lockPid);
+            }
+          }
+          if (isStale) {
             fs.unlinkSync(lPath);
           } else {
             activeLockCount++;

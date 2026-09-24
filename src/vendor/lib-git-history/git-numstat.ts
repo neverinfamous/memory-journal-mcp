@@ -2,16 +2,16 @@
 
 import { spawnGitBinaryStream, NUMSTAT_BOUNDARY_STR } from './git-runner.js';
 import { extractShaFromBuffer } from './parser-utils.js';
-import { CHAR_NEWLINE, CHAR_NULL } from './constants.js';
+import { CHAR_NEWLINE, CHAR_NULL, GIT_STREAM_BUFFER_DEFAULT } from './constants.js';
 
-export async function getNumstatMap(lockedArgs: string[], stdinShas?: string) {
+export async function getNumstatMap(lockedArgs: string[], stdinShas?: string, cwd: string = process.cwd()) {
   const numstatArgs = ['--no-pager', '-c', 'core.quotePath=false', 'log', '--numstat', '-z', `--pretty=format:${NUMSTAT_BOUNDARY_STR}%H`];
   if (stdinShas) numstatArgs.push('--stdin', '--no-walk');
   numstatArgs.push(...lockedArgs);
 
   const map = new Map<string, Map<string, { insertions: number; deletions: number; path: string; isBinary?: boolean }>>();
   
-  for await (const recordBuf of spawnGitBinaryStream(numstatArgs, NUMSTAT_BOUNDARY_STR, stdinShas)) {
+  for await (const recordBuf of spawnGitBinaryStream(numstatArgs, NUMSTAT_BOUNDARY_STR, stdinShas, GIT_STREAM_BUFFER_DEFAULT, cwd)) {
       const { sha: currentSha, shaEnd } = extractShaFromBuffer(recordBuf);
       if (!currentSha) continue;
 

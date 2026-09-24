@@ -3,7 +3,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { AUTONOMOUS_HEALING_MSG } from '../utils.js';
-import { ExecutionContext } from './types.js';
+import { ExecutionContext, AGENT_NATIVE_TOOLS, ECOSYSTEM_MCP_TOOLS } from './types.js';
 
 export function packageManagerInterceptor(ctx: ExecutionContext): void {
   let { cmdBasename } = ctx;
@@ -131,6 +131,14 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
       }
     }
     const subCmd = args.filter(a => !a.startsWith('-'))[0];
+    if (subCmd && (AGENT_NATIVE_TOOLS as readonly string[]).includes(subCmd)) {
+      console.error(`\n   💡 AGENT HINT: '${subCmd}' is an agent-native tool, NOT a package manager script or CLI binary. Please invoke the '${subCmd}' tool directly instead of executing '${cmdBasename} ${subCmd}'.\n${AUTONOMOUS_HEALING_MSG}`);
+      process.exit(1);
+    }
+    if (subCmd && (ECOSYSTEM_MCP_TOOLS as readonly string[]).includes(subCmd)) {
+      console.error(`\n   💡 AGENT HINT: '${subCmd}' is an MCP tool, NOT a package manager script or CLI binary. Please call the '${subCmd}' MCP tool via call_mcp_tool instead of executing '${cmdBasename} ${subCmd}'.\n${AUTONOMOUS_HEALING_MSG}`);
+      process.exit(1);
+    }
     if (subCmd === 'upgrade-interactive') {
       console.error(`\n   💡 AGENT HINT: 'yarn upgrade-interactive' is a TUI tool and will hang. Use 'yarn upgrade' instead.\n${AUTONOMOUS_HEALING_MSG}`);
       process.exit(1);
@@ -147,9 +155,19 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
       if (!args.includes('--no-fund') && cmdBasename.startsWith('npm')) args.push('--no-fund');
       if (!args.includes('--no-audit') && cmdBasename.startsWith('npm')) args.push('--no-audit');
     }
-    if (subCmd && subCmd.startsWith('test')) {
-      console.error(`\n   🛠️ AUTONOMOUS HEALING: Disabling stall interceptors for test command to prevent false positives from coverage/progress output.... (Frictionless Recovery)`);
+    const isLongRunningQualityCheck = subCmd && (
+      subCmd.startsWith('test') ||
+      ['lint', 'typecheck', 'check', 'build'].includes(subCmd) ||
+      subCmd.includes('test') ||
+      subCmd.includes('lint') ||
+      subCmd.includes('typecheck')
+    );
+    if (isLongRunningQualityCheck) {
+      console.error(`\n   🛠️ AUTONOMOUS HEALING: Disabling stall interceptors and extending timeout for quality command to prevent false positive aborts.... (Frictionless Recovery)`);
       ctx.payload.bypassInterceptors = true;
+      if (ctx.payload.timeoutMs === undefined || ctx.payload.timeoutMs <= 30000) {
+        ctx.payload.timeoutMs = ctx.payload.target === 'wsl2' ? 90000 : 60000;
+      }
     }
     if (['login', 'adduser', 'publish'].includes(subCmd)) {
       if (subCmd === 'publish' && process.env.NPM_TOKEN) {

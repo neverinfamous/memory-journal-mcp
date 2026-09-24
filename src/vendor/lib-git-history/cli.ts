@@ -40,6 +40,7 @@ export const CLI_OPTIONS = {
     stats: { type: 'boolean' },
     all: { type: 'boolean' },
     'patch-search': { type: 'string', short: 'G' },
+    pickaxe: { type: 'string', short: 'S' },
     'diff-filter': { type: 'string' },
     reverse: { type: 'boolean' },
     'no-body': { type: 'boolean' },
@@ -51,6 +52,7 @@ export const CLI_OPTIONS = {
     'package-version': { type: 'boolean' },
     'stream-to-file': { type: 'string' },
     uncommitted: { type: 'boolean' },
+    cwd: { type: 'string' },
   } as const;
 
 export function parseArguments(): CliArgs {
@@ -125,6 +127,7 @@ ${pc.bold('Search Options:')}
   -s, --search <query>     Search within commit messages
   -g, --grep <query>       Regex search within commit messages
   -G, --patch-search <q>   Search within the actual patch diffs (git log -G)
+  -S, --pickaxe <query>    Search for diffs changing occurrences of string (git log -S)
 
 ${pc.bold('Content & Formatting Options:')}
   --uncommitted            Output the current uncommitted working tree state instead of history

@@ -174,8 +174,9 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
   const cmdPauseRegex = /pause\\b/i;
   const pwshNoExitRegex = /pwsh(?:\.exe)?\s+.*-noexit/i;
   const pwshUiRegex = /(?:Get-Credential|Show-Command|Out-GridView|Read-Host|PromptForChoice)/i;
-  const inlineShellRegex = /(?:^|\s)(?:pwsh(?:\.exe)?|powershell(?:\.exe)?|bash(?:\.exe)?|sh(?:\.exe)?|wsl(?:\.exe)?|cmd(?:\.exe)?)\s+(?:-c|-command|\/c|-ec|-encodedcommand|-en)\b/i;
-  const implicitPwshRegex = /(?:^|\s)(?:pwsh(?:\.exe)?|powershell(?:\.exe)?)\s+(?!-(?:file|help|version|\?|\/?)\b)\S+/i;
+  const cmdPrefix = `(?:^|;|&&|\\|\\||\\||\\{|&|\\n)\\s*(?:(?:sudo|env|su|doas|time|timeout|stdbuf)\\s+)*`;
+  const inlineShellRegex = new RegExp(`${cmdPrefix}(?:[^\\s;\\|&'"]*[\\\\\\/])?(?:pwsh(?:\\.exe)?|powershell(?:\\.exe)?|bash(?:\\.exe)?|sh(?:\\.exe)?|wsl(?:\\.exe)?|cmd(?:\\.exe)?)(?:['"]|\\b)\\s+(?:-c|-command|\\/c|-ec|-encodedcommand|-en)\\b`, 'i');
+  const implicitPwshRegex = new RegExp(`${cmdPrefix}(?:[^\\s;\\|&'"]*[\\\\\\/])?(?:pwsh(?:\\.exe)?|powershell(?:\\.exe)?)(?:['"]|\\b)\\s+(?!-(?:file|help|version|\\?|\\/?)\\b)\\S+`, 'i');
 
   const extractScriptBody = (type: string, cmd: string, cmdArgs: string[], code?: string, scriptPath?: string): string | null => {
     return match({ type, cmd: cmd.toLowerCase(), cmdArgs, code, scriptPath })
@@ -381,32 +382,32 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
        console.error(`\n   💡 AGENT HINT: 'pause' in cmd waits for a keypress and will hang indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
        process.exit(1);
     })
-    .with({ scriptBody: P.when(body => typeof body === 'string' && (pwshNoExitRegex.test(body) || pwshUiRegex.test(body))) }, () => {
+    .with({ scriptBody: P.when(body => typeof body === 'string' && payload.target !== 'wsl2' && (pwshNoExitRegex.test(body) || pwshUiRegex.test(body))) }, () => {
        console.error(`\n   💡 AGENT HINT: PowerShell -NoExit or UI cmdlets will hang headlessly. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
        process.exit(1);
     })
-    .with({ type: 'eval', code: P.when(c => typeof c === 'string' && (pwshNoExitRegex.test(c) || pwshUiRegex.test(c))) }, () => {
+    .with({ type: 'eval', code: P.when(c => typeof c === 'string' && payload.target !== 'wsl2' && (pwshNoExitRegex.test(c) || pwshUiRegex.test(c))) }, () => {
        console.error(`\n   💡 AGENT HINT: PowerShell -NoExit or UI cmdlets will hang headlessly. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
        process.exit(1);
     })
-    .with({ scriptBody: P.when(body => typeof body === 'string' && inlineShellRegex.test(body)) }, () => {
+    .with({ scriptBody: P.when(body => typeof body === 'string' && payload.target !== 'wsl2' && inlineShellRegex.test(body)) }, () => {
        console.error(`\n   💡 AGENT HINT: You attempted to run an inline shell command inside an eval/script payload. This is an agent hallucination.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
        console.error(`   Please use the proper execution payloads ('command', 'eval', or 'script') or native tools (like list_dir, view_file).`);
        process.exit(1);
     })
-    .with({ type: 'eval', code: P.when(c => typeof c === 'string' && inlineShellRegex.test(c)) }, () => {
+    .with({ type: 'eval', code: P.when(c => typeof c === 'string' && payload.target !== 'wsl2' && inlineShellRegex.test(c)) }, () => {
        console.error(`\n   💡 AGENT HINT: You attempted to run an inline shell command inside an eval/script payload. This is an agent hallucination.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
        console.error(`   Please use the proper execution payloads ('command', 'eval', or 'script') or native tools (like list_dir, view_file).`);
        process.exit(1);
     })
-    .with({ scriptBody: P.when(body => typeof body === 'string' && implicitPwshRegex.test(body)) }, () => {
+    .with({ scriptBody: P.when(body => typeof body === 'string' && payload.target !== 'wsl2' && implicitPwshRegex.test(body)) }, () => {
        console.error(`\n   💡 AGENT HINT: You attempted to run an inline shell command implicitly via powershell.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
        console.error(`   This bypasses the agent-exec robustness interceptors and risks hanging the process.`);
        console.error(`   Please use the proper execution payloads ('command', 'eval', or 'script') or native tools.`);
        console.error(`   If you need shell pipes/redirects, write a script file to the scratch directory and use a 'script' payload.`);
        process.exit(1);
     })
-    .with({ type: 'eval', code: P.when(c => typeof c === 'string' && implicitPwshRegex.test(c)) }, () => {
+    .with({ type: 'eval', code: P.when(c => typeof c === 'string' && payload.target !== 'wsl2' && implicitPwshRegex.test(c)) }, () => {
        console.error(`\n   💡 AGENT HINT: You attempted to run an inline shell command implicitly via powershell.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
        console.error(`   This bypasses the agent-exec robustness interceptors and risks hanging the process.`);
        console.error(`   Please use the proper execution payloads ('command', 'eval', or 'script') or native tools.`);

@@ -83,7 +83,8 @@ function truncateBodyWithContext(body: string, maxBodyLen: number): string {
 export async function processBatch(
   batch: RawCommitBatchItem[],
   args: CliArgs,
-  formattingFlags: string[]
+  formattingFlags: string[],
+  cwd: string = process.cwd()
 ): Promise<CommitEntry[]> {
   if (batch.length === 0) return [];
   const shas = batch.map(b => b.sha).join('\n') + '\n';
@@ -92,11 +93,11 @@ export async function processBatch(
   const patchMap = new Map<string, { patch: string; truncated: boolean }>();
   
   const [nMap, pMapResult] = await Promise.all([
-    (args.summary) ? Promise.resolve(new Map()) : getNumstatMap(formattingFlags, shas).catch((err) => {
+    (args.summary) ? Promise.resolve(new Map()) : getNumstatMap(formattingFlags, shas, cwd).catch((err) => {
       console.warn('Warning: Failed to get numstat map (This may cause missing file stats for this batch):', err instanceof Error ? err.message : String(err));
       return new Map();
     }),
-    ((args['include-patch'] || args['diff-context'] !== undefined) && !args.summary) ? getPatchMap(formattingFlags, args, shas).catch((err) => {
+    ((args['include-patch'] || args['diff-context'] !== undefined) && !args.summary) ? getPatchMap(formattingFlags, args, shas, cwd).catch((err) => {
       console.warn('Warning: Failed to get patch map (This may cause missing patches for this batch):', err instanceof Error ? err.message : String(err));
       return undefined;
     }) : Promise.resolve(undefined)
