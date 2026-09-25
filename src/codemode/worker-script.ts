@@ -486,7 +486,7 @@ async function executeCode(
                     const coreGroup = target['core'] as Record<string, unknown>
                     return coreGroup['create_entry'] ?? coreGroup['createEntry']
                 }
-                if (prop === 'updateMemory' || prop === 'update_memory' || prop === 'setMemory' || prop === 'set_memory') {
+                if (prop === 'updateMemory' || prop === 'update_memory' || prop === 'setMemory' || prop === 'set_memory' || prop === 'updateJournal' || prop === 'update_journal') {
                     return updateMemoryFn
                 }
                 if (prop === 'saveMemory' || prop === 'save_memory') {
@@ -1466,6 +1466,8 @@ async function executeCode(
             update_memory: updateMemoryFn,
             setMemory: updateMemoryFn,
             set_memory: updateMemoryFn,
+            updateJournal: updateMemoryFn,
+            update_journal: updateMemoryFn,
             addMemory: updateMemoryFn,
             add_memory: updateMemoryFn,
             recordMemory: updateMemoryFn,
