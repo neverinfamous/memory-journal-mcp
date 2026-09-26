@@ -150,10 +150,12 @@ export function systemInterceptor(ctx: ExecutionContext): void {
 
   if (payload.target === 'wsl2') {
     let defaultWslTimeout = 30000;
+    
     if (payload.type === 'eval' || payload.type === 'script') {
       const codeOrScript = payload.type === 'eval' ? payload.code : '';
       const hasQualityCheck = codeOrScript && /(?:typecheck|tsc|lint|check|build)/i.test(codeOrScript);
-      const hasMountedSearch = codeOrScript && /(?:find|grep|rg)\s+.*\/mnt\/[c-z]/i.test(codeOrScript);
+      const hasMountedSearch = codeOrScript && /(?:find|grep|rg|ls|tree)\b/i.test(codeOrScript);
+      
       if (hasQualityCheck) {
         defaultWslTimeout = 90000;
         console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected quality check in WSL2 eval payload. Auto-extending timeout to 90s... (Frictionless Recovery)`);
@@ -161,7 +163,17 @@ export function systemInterceptor(ctx: ExecutionContext): void {
         defaultWslTimeout = 90000;
         console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected file search across mounted filesystem in WSL2 eval payload. Auto-extending timeout to 90s... (Frictionless Recovery)`);
       }
+    } else if (payload.type === 'command') {
+      const isQuality = /(?:typecheck|tsc|lint|check|build)/i.test(cmdBasename);
+      const isSearch = /(?:find|grep|rg|ls|tree)\b/i.test(cmdBasename);
+      
+      if (isQuality) {
+        defaultWslTimeout = 90000;
+      } else if (isSearch) {
+        defaultWslTimeout = 90000;
+      }
     }
+    
     payload.timeoutMs = Math.max(payload.timeoutMs || defaultWslTimeout, defaultWslTimeout);
   }
 

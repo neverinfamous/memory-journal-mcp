@@ -319,6 +319,9 @@ export function buildCommand(payload: ExecPayload, cwd: string, isJson: boolean 
           codeToExecute = codeToExecute.replace(/\r\n/g, '\n');
           codeToExecute = codeToExecute.replace(/\b([a-zA-Z]):[/\\]+[^\s"'`;&|)]*/g, (matchStr) => convertToWslPath(matchStr));
           codeToExecute = codeToExecute.replace(/(^|[\s"'`=])(?:\.{1,2}|[a-zA-Z0-9_.-]+)\\[a-zA-Z0-9_.\-\\/]+/g, (matchStr) => matchStr.replace(/\\/g, '/'));
+          if (ext === '.sh') {
+            codeToExecute = codeToExecute.replace(/(^|\n)\s*\/\/\s*(.*)/g, '$1# $2');
+          }
         }
         if (['.js', '.ts'].includes(ext) && hasTopLevelReturn(codeToExecute)) {
           console.error(`\n   💡 AGENT HINT: Code Mode style top-level 'return' detected in eval payload.`);

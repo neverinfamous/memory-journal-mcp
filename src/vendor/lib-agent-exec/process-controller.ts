@@ -57,8 +57,11 @@ function analyzeExitCode1(payload: ExecPayload, code: number, stdout: string, st
       } else if (['git', 'git.exe'].includes(origCmd)) {
           const origArgs = payload.args || [];
           const diffIndex = origArgs.indexOf('diff');
+          const grepIndex = origArgs.indexOf('grep');
           if (diffIndex === 0 || (diffIndex === 1 && origArgs[0].startsWith('-'))) {
               isDiffFound = true;
+          } else if (grepIndex === 0 || (grepIndex === 1 && origArgs[0].startsWith('-'))) {
+              isGrepNoMatch = true;
           }
       }
     } else if (payload.type === 'eval') {
@@ -90,7 +93,7 @@ function analyzeExitCode1(payload: ExecPayload, code: number, stdout: string, st
   if (isOutdatedInfo && (stderr.includes('ERR_PNPM') || stderr.includes('npm ERR!') || stderr.includes('error:') || stderr.includes('Error:'))) {
     isOutdatedInfo = false;
   }
-  if (isGrepNoMatch && (stderr.includes('No such file or directory') || stderr.includes('grep:'))) {
+  if (isGrepNoMatch && (stderr.includes('No such file or directory') || stderr.includes('grep:') || stderr.includes('fatal:'))) {
     isGrepNoMatch = false;
   }
   if (isDiffFound && (stderr.includes('No such file or directory') || stderr.includes('diff:'))) {
