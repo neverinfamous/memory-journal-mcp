@@ -1,4 +1,5 @@
 import * as path from 'node:path'
+import * as vm from 'node:vm'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { logger } from '../../../utils/logger.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
@@ -13,6 +14,38 @@ import { ConfigurationError } from '../../../types/errors.js'
 import { ExecuteCodeSchema, ExecuteCodeSchemaMcp, VERSION_AWARE_TOOL_NAMES } from './schemas.js'
 import { collectNonCodeModeTools, getSandboxPool, getSecurityManager } from './singleton-state.js'
 import type { SandboxResult } from '../../../codemode/types.js'
+
+function isInsideStringLiteral(code: string, offset: number): boolean {
+    let inString: string | null = null
+    let isEscaped = false
+    for (let i = 0; i < offset; i++) {
+        const ch = code[i]
+        if (inString !== null) {
+            if (ch === '\\') {
+                isEscaped = !isEscaped
+            } else {
+                if (ch === inString && !isEscaped) {
+                    inString = null
+                }
+                isEscaped = false
+            }
+        } else {
+            if (ch === "'" || ch === '"' || ch === '`') {
+                inString = ch
+            }
+        }
+    }
+    return inString !== null
+}
+
+function isValidJsScript(src: string): boolean {
+    try {
+        new vm.Script(`(async () => {\n${src}\n})()`)
+        return true
+    } catch {
+        return false
+    }
+}
 
 /**
  * Auto-heals common syntax, template literal, and LLM formatting errors in Code Mode execution payloads.
@@ -173,85 +206,98 @@ export function healCodeModeScript(code: string): string {
     executionCode = executionCode.replace(/process\.env\.([a-zA-Z0-9_]+)/g, () => 'undefined')
     executionCode = executionCode.replace(/process\.env/g, '{}')
 
-    // Auto-heal unescaped backticks inside template literals on object properties
-    executionCode = executionCode.replace(
-        /(\b(?:content|title|text|description|message|instructions|body|notes|details|resolution_notes|query|script|comment|summary|heading)\s*:\s*)`([\s\S]*?)`(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\)))/g,
-        (_match: string, prefix: string, content: string): string => {
-            const normalized = content.replace(/\\`/g, '`')
-            const escaped = normalized.replace(/`/g, '\\`')
-            return `${prefix}\`${escaped}\``
-        }
-    )
+    // Auto-heal unescaped quotes and backticks in object properties and template arguments.
+    // If the code is already syntactically valid JavaScript, skip template/quote mutations to prevent mangling valid code.
+    if (!isValidJsScript(executionCode)) {
+        const statementKeywordsOrBraces = /(?:;\s*\n|\b(?:const|let|var|return|if|for|while|function|switch|class|export|import)\b|\{|\})/
 
-    // Auto-heal double-escaped quotes and unescaped quotes in single-quoted object properties
-    executionCode = executionCode.replace(
-        /(\b(?:content|title|text|description|message|instructions|body|notes|details|resolution_notes|query|script|comment|summary|heading)\s*:\s*)'([\s\S]*?)'(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\)))/g,
-        (_match: string, prefix: string, content: string): string => {
-            if (content.includes('\n')) {
-                const normalized = content.replace(/\\`/g, '`').replace(/`/g, '\\`')
-                return `${prefix}\`${normalized}\``
+        // Auto-heal unescaped backticks inside template literals on object properties
+        executionCode = executionCode.replace(
+            /(\b(?:content|title|text|description|message|instructions|body|notes|details|resolution_notes|query|script|comment|summary|heading)\s*:\s*)`([\s\S]*?)`(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\)))/g,
+            (match: string, prefix: string, content: string, offset: number): string => {
+                if (isInsideStringLiteral(executionCode, offset)) return match
+                const normalized = content.replace(/\\`/g, '`')
+                const escaped = normalized.replace(/`/g, '\\`')
+                return `${prefix}\`${escaped}\``
             }
-            const normalized = content.replace(/\\+'/g, "'").replace(/'/g, "\\'")
-            return `${prefix}'${normalized}'`
-        }
-    )
+        )
 
-    // Auto-heal double-escaped quotes and unescaped quotes in double-quoted object properties
-    executionCode = executionCode.replace(
-        /(\b(?:content|title|text|description|message|instructions|body|notes|details|resolution_notes|query|script|comment|summary|heading)\s*:\s*)"([\s\S]*?)"(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\)))/g,
-        (_match: string, prefix: string, content: string): string => {
-            if (content.includes('\n')) {
-                const normalized = content.replace(/\\`/g, '`').replace(/`/g, '\\`')
-                return `${prefix}\`${normalized}\``
+        // Auto-heal double-escaped quotes and unescaped quotes in single-quoted object properties
+        executionCode = executionCode.replace(
+            /(\b(?:content|title|text|description|message|instructions|body|notes|details|resolution_notes|query|script|comment|summary|heading)\s*:\s*)'([\s\S]*?)'(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\)))/g,
+            (match: string, prefix: string, content: string, offset: number): string => {
+                if (isInsideStringLiteral(executionCode, offset)) return match
+                if (content.includes('\n')) {
+                    const normalized = content.replace(/\\`/g, '`').replace(/`/g, '\\`')
+                    return `${prefix}\`${normalized}\``
+                }
+                const normalized = content.replace(/\\+'/g, "'").replace(/'/g, "\\'")
+                return `${prefix}'${normalized}'`
             }
-            const normalized = content.replace(/\\+"/g, '"').replace(/"/g, '\\"')
-            return `${prefix}"${normalized}"`
-        }
-    )
+        )
 
-    // Auto-heal unescaped backticks inside positional template arguments to mj.* / createEntry calls
-    executionCode = executionCode.replace(
-        /(\b(?:mj\.)?(?:core\.|team\.|admin\.|search\.|io\.|github\.|git\.|backup\.)?(?:createEntry|teamCreateEntry|appendEntry|updateEntry|teamUpdateEntry|searchEntries|teamSearch|mj_create_entry|mjCreateEntry|mj_update_entry|mjUpdateEntry|mj_search_entries|mjSearchEntries)\s*\(\s*)`([\s\S]*?)`(?=\s*(?:,\s*|\)))/g,
-        (_match: string, prefix: string, content: string): string => {
-            const normalized = content.replace(/\\`/g, '`')
-            const escaped = normalized.replace(/`/g, '\\`')
-            return `${prefix}\`${escaped}\``
-        }
-    )
-
-    // Auto-heal double-escaped quotes inside positional string arguments
-    executionCode = executionCode.replace(
-        /(\b(?:mj\.)?(?:core\.|team\.|admin\.|search\.|io\.|github\.|git\.|backup\.)?(?:createEntry|teamCreateEntry|appendEntry|updateEntry|teamUpdateEntry|searchEntries|teamSearch)\s*\(\s*)'([\s\S]*?)'(?=\s*(?:,\s*|\)))/g,
-        (_match: string, prefix: string, content: string): string => {
-            if (content.includes('\n')) {
-                const normalized = content.replace(/\\`/g, '`').replace(/`/g, '\\`')
-                return `${prefix}\`${normalized}\``
+        // Auto-heal double-escaped quotes and unescaped quotes in double-quoted object properties
+        executionCode = executionCode.replace(
+            /(\b(?:content|title|text|description|message|instructions|body|notes|details|resolution_notes|query|script|comment|summary|heading)\s*:\s*)"([\s\S]*?)"(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\)))/g,
+            (match: string, prefix: string, content: string, offset: number): string => {
+                if (isInsideStringLiteral(executionCode, offset)) return match
+                if (content.includes('\n')) {
+                    const normalized = content.replace(/\\`/g, '`').replace(/`/g, '\\`')
+                    return `${prefix}\`${normalized}\``
+                }
+                const normalized = content.replace(/\\+"/g, '"').replace(/"/g, '\\"')
+                return `${prefix}"${normalized}"`
             }
-            const normalized = content.replace(/\\+'/g, "'").replace(/'/g, "\\'")
-            return `${prefix}'${normalized}'`
-        }
-    )
-    executionCode = executionCode.replace(
-        /(\b(?:mj\.)?(?:core\.|team\.|admin\.|search\.|io\.|github\.|git\.|backup\.)?(?:createEntry|teamCreateEntry|appendEntry|updateEntry|teamUpdateEntry|searchEntries|teamSearch)\s*\(\s*)"([\s\S]*?)"(?=\s*(?:,\s*|\)))/g,
-        (_match: string, prefix: string, content: string): string => {
-            if (content.includes('\n')) {
-                const normalized = content.replace(/\\`/g, '`').replace(/`/g, '\\`')
-                return `${prefix}\`${normalized}\``
-            }
-            const normalized = content.replace(/\\+"/g, '"').replace(/"/g, '\\"')
-            return `${prefix}"${normalized}"`
-        }
-    )
+        )
 
-    // Auto-heal unescaped backticks in variable declarations with template literals
-    executionCode = executionCode.replace(
-        /(\b(?:const|let|var)\s+[\w$]+\s*=\s*)`([\s\S]*?)`(?=\s*(?:;|\n\s*(?:const|let|var|return|await|mj\.|function|\/\*|\/\/)))/g,
-        (_match: string, prefix: string, content: string): string => {
-            const normalized = content.replace(/\\`/g, '`')
-            const escaped = normalized.replace(/`/g, '\\`')
-            return `${prefix}\`${escaped}\``
-        }
-    )
+        // Auto-heal unescaped backticks inside positional template arguments to mj.* / createEntry calls
+        executionCode = executionCode.replace(
+            /(\b(?:mj\.)?(?:core\.|team\.|admin\.|search\.|io\.|github\.|git\.|backup\.)?(?:createEntry|teamCreateEntry|appendEntry|updateEntry|teamUpdateEntry|searchEntries|teamSearch|mj_create_entry|mjCreateEntry|mj_update_entry|mjUpdateEntry|mj_search_entries|mjSearchEntries)\s*\(\s*)`([\s\S]*?)`(?=\s*(?:,\s*|\)))/g,
+            (match: string, prefix: string, content: string, offset: number): string => {
+                if (isInsideStringLiteral(executionCode, offset) || statementKeywordsOrBraces.test(content)) return match
+                const normalized = content.replace(/\\`/g, '`')
+                const escaped = normalized.replace(/`/g, '\\`')
+                return `${prefix}\`${escaped}\``
+            }
+        )
+
+        // Auto-heal double-escaped quotes inside positional string arguments
+        executionCode = executionCode.replace(
+            /(\b(?:mj\.)?(?:core\.|team\.|admin\.|search\.|io\.|github\.|git\.|backup\.)?(?:createEntry|teamCreateEntry|appendEntry|updateEntry|teamUpdateEntry|searchEntries|teamSearch)\s*\(\s*)'([\s\S]*?)'(?=\s*(?:,\s*|\)))/g,
+            (match: string, prefix: string, content: string, offset: number): string => {
+                if (isInsideStringLiteral(executionCode, offset) || statementKeywordsOrBraces.test(content)) return match
+                if (content.includes('\n')) {
+                    const normalized = content.replace(/\\`/g, '`').replace(/`/g, '\\`')
+                    return `${prefix}\`${normalized}\``
+                }
+                const normalized = content.replace(/\\+'/g, "'").replace(/'/g, "\\'")
+                return `${prefix}'${normalized}'`
+            }
+        )
+        executionCode = executionCode.replace(
+            /(\b(?:mj\.)?(?:core\.|team\.|admin\.|search\.|io\.|github\.|git\.|backup\.)?(?:createEntry|teamCreateEntry|appendEntry|updateEntry|teamUpdateEntry|searchEntries|teamSearch)\s*\(\s*)"([\s\S]*?)"(?=\s*(?:,\s*|\)))/g,
+            (match: string, prefix: string, content: string, offset: number): string => {
+                if (isInsideStringLiteral(executionCode, offset) || statementKeywordsOrBraces.test(content)) return match
+                if (content.includes('\n')) {
+                    const normalized = content.replace(/\\`/g, '`').replace(/`/g, '\\`')
+                    return `${prefix}\`${normalized}\``
+                }
+                const normalized = content.replace(/\\+"/g, '"').replace(/"/g, '\\"')
+                return `${prefix}"${normalized}"`
+            }
+        )
+
+        // Auto-heal unescaped backticks in variable declarations with template literals
+        executionCode = executionCode.replace(
+            /(\b(?:const|let|var)\s+[\w$]+\s*=\s*)`([\s\S]*?)`(?=\s*(?:;|\n\s*(?:const|let|var|return|await|mj\.|function|\/\*|\/\/)))/g,
+            (match: string, prefix: string, content: string, offset: number): string => {
+                if (isInsideStringLiteral(executionCode, offset)) return match
+                const normalized = content.replace(/\\`/g, '`')
+                const escaped = normalized.replace(/`/g, '\\`')
+                return `${prefix}\`${escaped}\``
+            }
+        )
+    }
 
     // Auto-heal JSON.parse(context) / JSON.parse(context.<prop>) when context is already an object
     executionCode = executionCode.replace(/\bJSON\.parse\s*\(\s*context\s*\)/g, '(typeof context === "string" ? JSON.parse(context) : context)')

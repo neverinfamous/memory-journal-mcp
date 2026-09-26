@@ -565,7 +565,7 @@ export function buildApiProxy(
             if (typeof prop === 'symbol') return undefined
             if (prop in target) return target[prop]
             if (prop === 'gitApi') return target['git']
-            if (prop === 'journal' || prop === 'memory') return target['core'] ?? target
+            if (prop === 'journal' || prop === 'memory' || prop === 'entries' || prop === 'entry') return target['core'] ?? target
             if (prop === 'schema') return target['schema']
             if (prop === 'projects' || prop === 'project') return target['projects']
             if (prop === 'tags' || prop === 'tag') return target['tags']

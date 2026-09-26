@@ -1335,6 +1335,67 @@ return { exists };
             expect(result.success).toBe(true);
             expect(result.result).toEqual({ exists: true });
         });
+
+        it('should preserve valid JS containing string literals with embedded createEntry calls without syntax corruption', async () => {
+            const { healCodeModeScript } = await import('../src/handlers/tools/codemode/handler.js');
+            const { WorkerSandbox } = await import('../src/codemode/worker-sandbox.js');
+
+            const codeWithEmbeddedString = `
+const entriesRes = await mj.entries.search({ workspaceId: 'db-mcp', limit: 20 });
+const updates = [];
+const deleted = [];
+
+for (const entry of entriesRes.entries) {
+  if (entry.content.includes("return await mj.createEntry(")) {
+    await mj.admin.deleteEntry({ id: entry.id });
+    deleted.push(entry.id);
+    continue;
+  }
+  if (!entry.significanceType) {
+    if (entry.content.toLowerCase().includes("fix") || entry.content.toLowerCase().includes("bug")) {
+      updates.push(entry.id);
+    }
+  }
+}
+
+return { deleted, updated: updates };
+`;
+
+            const healed = healCodeModeScript(codeWithEmbeddedString);
+            expect(healed).toContain('entry.content.includes("return await mj.createEntry(")');
+            expect(healed).toContain('.includes("fix")');
+
+            // Verify VM script parsing
+            const wrapped = `(async () => {\n${healed}\n})()`;
+            expect(() => new vm.Script(wrapped)).not.toThrow();
+
+            // Execute in WorkerSandbox
+            const sandbox = new WorkerSandbox();
+            const bindings = {
+                core: {
+                    create_entry: async () => ({ success: true, entry_id: 1 }),
+                    get_recent_entries: async () => ({ success: true, entries: [] }),
+                    get_entry_by_id: async () => ({ success: true, entry: { id: 1 } }),
+                },
+                search: {
+                    search_entries: async () => ({
+                        success: true,
+                        entries: [
+                            { id: 10, content: 'return await mj.createEntry({ title: "test" })' },
+                            { id: 11, content: 'fixing bug in search', tags: [] },
+                        ],
+                    }),
+                },
+                admin: {
+                    delete_entry: async () => ({ success: true }),
+                    update_entry: async () => ({ success: true }),
+                },
+            };
+            const result = await sandbox.execute(healed, bindings);
+            expect(result.success).toBe(true);
+            expect(result.result).toEqual({ deleted: [10], updated: [11] });
+        });
     })
 })
+
 
