@@ -30,7 +30,7 @@ function analyzeExitCode1(payload: ExecPayload, code: number, stdout: string, st
       const origCmd = path.basename(payload.command).toLowerCase();
       const isWrapper = ['wsl', 'wsl.exe', 'bash', 'bash.exe', 'sh', 'sh.exe', 'cmd', 'cmd.exe', 'pwsh', 'pwsh.exe', 'powershell', 'powershell.exe'].includes(origCmd);
       const allArgsStr = payload.args ? payload.args.join(' ').toLowerCase() : '';
-      const commandBoundaryRegex = /(?:^|[|;&\n]\s*|\b(?:time|xargs|sudo|nohup|wsl|-exec|-execdir)\s+|(?:^|\s)(?:-c|\/c|-command)\s+)(?:[a-zA-Z0-9_\-/.]*\/)?/;
+      const commandBoundaryRegex = /(?:^|[|;&\n]\s*|\b(?:time|xargs|sudo|nohup|wsl|-exec|-execdir|exec|(?:bun|npm|pnpm|yarn|npx|bunx)(?:\s+(?:run|exec|x|dlx))?)\s+|(?:^|\s)(?:-c|\/c|-command)\s+)(?:[a-zA-Z0-9_\-/.]*\/)?/;
       
       if (['grep', 'grep.exe', 'egrep', 'egrep.exe', 'fgrep', 'fgrep.exe', 'rg', 'rg.exe'].includes(origCmd)) {
           isGrepNoMatch = true;
@@ -46,11 +46,17 @@ function analyzeExitCode1(payload: ExecPayload, code: number, stdout: string, st
           isDiffFound = true;
       }
 
-      if (['npm', 'npm.cmd', 'npm.exe', 'pnpm', 'pnpm.cmd', 'pnpm.exe', 'yarn', 'yarn.cmd', 'yarn.exe', 'bun', 'bun.cmd', 'bun.exe'].includes(origCmd)) {
+      const pkgMgrs = ['npm', 'npm.cmd', 'npm.exe', 'pnpm', 'pnpm.cmd', 'pnpm.exe', 'yarn', 'yarn.cmd', 'yarn.exe', 'bun', 'bun.cmd', 'bun.exe', 'npx', 'npx.cmd', 'npx.exe', 'bunx', 'bunx.cmd', 'bunx.exe'];
+      if (pkgMgrs.includes(origCmd)) {
           const origArgs = payload.args || [];
-          const firstNonFlag = origArgs.find(a => !a.startsWith('-'));
-          if (firstNonFlag && firstNonFlag.toLowerCase() === 'outdated') {
+          const nonFlagArgs = origArgs.filter(a => !a.startsWith('-')).map(a => a.toLowerCase());
+          const subCmd = nonFlagArgs.find(a => !['run', 'exec', 'x', 'dlx'].includes(a));
+          if (subCmd === 'outdated') {
               isOutdatedInfo = true;
+          } else if (subCmd && ['grep', 'egrep', 'fgrep', 'rg'].includes(subCmd)) {
+              isGrepNoMatch = true;
+          } else if (subCmd && ['diff', 'cmp'].includes(subCmd)) {
+              isDiffFound = true;
           }
       } else if (isWrapper && new RegExp(commandBoundaryRegex.source + '(npm|pnpm|yarn|bun)\\s+(?:--?\\w+\\s+)*outdated\\b').test(allArgsStr)) {
           isOutdatedInfo = true;
@@ -75,7 +81,7 @@ function analyzeExitCode1(payload: ExecPayload, code: number, stdout: string, st
     }
 
     if (scriptContent) {
-      const commandBoundaryRegex = /(?:^|[|;&\n]\s*|\b(?:time|xargs|sudo|nohup|wsl)\s+)(?:[a-zA-Z0-9_\-/.]*\/)?/;
+      const commandBoundaryRegex = /(?:^|[|;&\n]\s*|\b(?:time|xargs|sudo|nohup|wsl|exec|(?:bun|npm|pnpm|yarn|npx|bunx)(?:\s+(?:run|exec|x|dlx))?)\s+)(?:[a-zA-Z0-9_\-/.]*\/)?/;
       
       if (new RegExp(commandBoundaryRegex.source + '(grep|egrep|fgrep|rg)\\b').test(scriptContent)) {
         isGrepNoMatch = true;

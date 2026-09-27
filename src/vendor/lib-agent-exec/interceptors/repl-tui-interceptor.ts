@@ -150,15 +150,19 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
     .otherwise(() => {});
 
   const pathPrefix = `(?:[^\\s;\\|&'"]*[\\\\\\/])?`;
-  const tuiRegex = new RegExp(`(^|;|&&|\\|\\||\\||\\{|&|\\n|['"])\\s*(?:(?:sudo|env|su|doas|time|timeout|stdbuf)\\s+)*(${pathPrefix})(${[...tuiCommands, 'journalctl', 'journalctl.exe'].join('|')})\\b`, 'i');
-  const replRegex = new RegExp(`(^|;|&&|\\|\\||\\{|&|\\n|['"])\\s*(?:(?:sudo|env|su|doas|time|timeout|stdbuf)\\s+)*(${pathPrefix})(${replCommands.join('|')})(?=\\s*['"]?\\s*(?:$|;|&&|\\|\\||\\||&|\\n))`, 'i');
-  const interactiveFlagRegex = new RegExp(`(^|;|&&|\\|\\||\\||\\{|&|\\n|['"])\\s*(?:(?:sudo|env|su|doas|time|timeout|stdbuf)\\s+)*(${pathPrefix})(${replCommands.join('|')})\\s+(?:[^;\\n|&]*\\s)?(?:-(?!-)[a-zA-Z0-9]{0,3}i[a-zA-Z0-9]{0,3}\\b|--interactive\\b|inspect\\b|--inspect\\b|-m\\s+pdb\\b)`, 'i');
+  const shellWrapperPrefix = `(?:(?:pwsh|powershell|bash|sh|zsh|cmd|wsl)(?:\\.exe)?\\s+(?:-c|-command|\\/c)\\s+)?`;
+  const cmdPrefix = `(?:^|[;\\n&|{(\`]|\\$\\()\\s*(?:['"])?\\s*${shellWrapperPrefix}(?:(?:sudo|env|su|doas|time|timeout|stdbuf|nohup|exec)\\s+)*(?:['"])?\\s*`;
+  const tuiRegex = new RegExp(`(${cmdPrefix})(${pathPrefix})(${[...tuiCommands, 'journalctl', 'journalctl.exe'].join('|')})\\b`, 'i');
+  const replRegex = new RegExp(`(${cmdPrefix})(${pathPrefix})(${replCommands.join('|')})(?=\\s*['"]?\\s*(?:$|[;\\n&|)]))`, 'i');
+  const interactiveFlagRegex = new RegExp(`(${cmdPrefix})(${pathPrefix})(${replCommands.join('|')})\\s+(?:[^;\\n|&]*\\s)?(?:-(?!-)[a-zA-Z0-9]{0,3}i[a-zA-Z0-9]{0,3}\\b|--interactive\\b|inspect\\b|--inspect\\b|-m\\s+pdb\\b)`, 'i');
   
   const isBlockedRepl = (body: string) => {
     if (interactiveFlagRegex.test(body)) return true;
     const match = replRegex.exec(body);
     if (!match) return false;
-    const before = body.slice(0, match.index + match[1].length);
+    const delimiter = match[1].trim();
+    if (delimiter.startsWith('|') || delimiter.startsWith('<')) return false;
+    const before = body.slice(0, match.index);
     if (before.trim().endsWith('|') || before.trim().endsWith('<')) return false;
     return true;
   };
@@ -174,7 +178,6 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
   const cmdPauseRegex = /pause\\b/i;
   const pwshNoExitRegex = /pwsh(?:\.exe)?\s+.*-noexit/i;
   const pwshUiRegex = /(?:Get-Credential|Show-Command|Out-GridView|Read-Host|PromptForChoice)/i;
-  const cmdPrefix = `(?:^|;|&&|\\|\\||\\||\\{|&|\\n)\\s*(?:(?:sudo|env|su|doas|time|timeout|stdbuf)\\s+)*`;
   const inlineShellRegex = new RegExp(`${cmdPrefix}(?:[^\\s;\\|&'"]*[\\\\\\/])?(?:pwsh(?:\\.exe)?|powershell(?:\\.exe)?|bash(?:\\.exe)?|sh(?:\\.exe)?|wsl(?:\\.exe)?|cmd(?:\\.exe)?)(?:['"]|\\b)\\s+(?:-c|-command|\\/c|-ec|-encodedcommand|-en)\\b`, 'i');
   const implicitPwshRegex = new RegExp(`${cmdPrefix}(?:[^\\s;\\|&'"]*[\\\\\\/])?(?:pwsh(?:\\.exe)?|powershell(?:\\.exe)?)(?:['"]|\\b)\\s+(?!-(?:file|help|version|\\?|\\/?)\\b)\\S+`, 'i');
 
