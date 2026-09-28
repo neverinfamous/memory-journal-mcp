@@ -544,13 +544,25 @@ export function getDummyHealingTools(context?: ToolContext): ToolDefinition[] {
             args['entry_type'] = args['category']
         }
 
-        // Normalize text / description / message / body / instructions / details -> content
+        // Unwrap nested 'entry' object if provided
+        if (typeof args['entry'] === 'object' && args['entry'] !== null && !Array.isArray(args['entry'])) {
+            const nested = args['entry'] as Record<string, unknown>
+            delete args['entry']
+            for (const [k, v] of Object.entries(nested)) {
+                if (args[k] === undefined && v !== undefined) {
+                    args[k] = v
+                }
+            }
+        }
+
+        // Normalize text / description / message / body / instructions / details / entry -> content
         if (args['content'] === undefined) {
-            const alt = args['text'] ?? args['description'] ?? args['message'] ?? args['body'] ?? args['instructions'] ?? args['details'] ?? args['notes']
+            const alt = args['entry'] ?? args['text'] ?? args['description'] ?? args['message'] ?? args['body'] ?? args['instructions'] ?? args['details'] ?? args['notes'] ?? args['summary'] ?? args['markdown'] ?? args['post'] ?? args['journal_entry'] ?? args['journalEntry'] ?? args['entry_text'] ?? args['entryText']
             if (typeof alt === 'string') {
                 args['content'] = alt
             }
         }
+        delete args['entry']
         delete args['text']
         delete args['description']
         delete args['message']
@@ -558,6 +570,13 @@ export function getDummyHealingTools(context?: ToolContext): ToolDefinition[] {
         delete args['instructions']
         delete args['details']
         delete args['notes']
+        delete args['summary']
+        delete args['markdown']
+        delete args['post']
+        delete args['journal_entry']
+        delete args['journalEntry']
+        delete args['entry_text']
+        delete args['entryText']
 
         // Normalize title / heading / subject / name -> content or title
         const rawTitle = args['title'] ?? args['heading'] ?? args['subject'] ?? args['name']

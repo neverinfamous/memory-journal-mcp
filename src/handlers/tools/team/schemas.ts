@@ -127,7 +127,7 @@ export const TeamCreateEntrySchemaMcp = z.preprocess(
     z.object({
         content: z.string().optional().describe(
             'Markdown-formatted entry content. Use ## section headers to organize content. ' +
-            'Note: The primary text is stored in the `content` property (not `title` or `message`). ' +
+            'Note: The primary text is stored in the `content` property (not `entry`, `title`, `message`, `name`, `description`, or `text`). ' +
             'For session summaries (entry_type: "retrospective", tagged "session-summary"), ' +
             'MUST use EXACTLY: ## Accomplished, ## Unfinished / Blocked, ## Context for Next Session, ## Commits. ' +
             'Do NOT invent extra top-level sections for session summaries.'

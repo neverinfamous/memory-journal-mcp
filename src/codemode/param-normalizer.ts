@@ -1254,22 +1254,43 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
         }
     }
 
-    // team_create_entry hallucination: text/message/description
-    const createMethods = ['create_entry', 'createEntry', 'team_create_entry', 'teamCreateEntry'];
+    // team_create_entry / create_entry hallucination: entry/text/message/description/body
+    const createMethods = [
+        'create_entry',
+        'createEntry',
+        'team_create_entry',
+        'teamCreateEntry',
+        'add_entry',
+        'addEntry',
+        'mj_add_entry',
+        'mjAddEntry',
+        'create_journal_entry',
+        'createJournalEntry',
+        'insert_entry',
+        'insertEntry',
+    ];
     if (createMethods.includes(methodName) && args.length === 1 && isRecord(args[0])) {
         const obj = { ...args[0] };
         args[0] = obj; // We clone it below
-        if (obj['text'] !== undefined && obj['content'] === undefined) {
-            obj['content'] = obj['text'];
-            delete obj['text'];
+
+        // Unwrap nested 'entry' object if provided
+        if (typeof obj['entry'] === 'object' && obj['entry'] !== null && !Array.isArray(obj['entry'])) {
+            const nested = obj['entry'] as Record<string, unknown>;
+            delete obj['entry'];
+            for (const [k, v] of Object.entries(nested)) {
+                if (obj[k] === undefined && v !== undefined) {
+                    obj[k] = v;
+                }
+            }
         }
-        if (obj['message'] !== undefined && obj['content'] === undefined) {
-            obj['content'] = obj['message'];
-            delete obj['message'];
-        }
-        if (obj['description'] !== undefined && obj['content'] === undefined) {
-            obj['content'] = obj['description'];
-            delete obj['description'];
+
+        for (const aliasKey of ['entry', 'text', 'message', 'description', 'body', 'instructions', 'details', 'notes', 'summary', 'markdown', 'post', 'journal_entry', 'journalEntry', 'entry_text', 'entryText']) {
+            if (obj[aliasKey] !== undefined) {
+                if (obj['content'] === undefined && typeof obj[aliasKey] === 'string') {
+                    obj['content'] = obj[aliasKey];
+                }
+                Reflect.deleteProperty(obj, aliasKey);
+            }
         }
         // auto_context: objects are silently stringified (agents may pass a plain object);
         // valid JSON strings pass through unchanged; other types are rejected with an actionable error.

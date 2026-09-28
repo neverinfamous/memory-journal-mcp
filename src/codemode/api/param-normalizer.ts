@@ -115,6 +115,19 @@ const TAG_ALIASES: Record<string, string> = {
  * Convert camelCase object keys to snake_case
  */
 export function convertKeysToSnakeCase(obj: Record<string, unknown>, methodName?: string): Record<string, unknown> {
+    // Unwrap nested 'entry' object if provided
+    if ('entry' in obj && typeof obj['entry'] === 'object' && obj['entry'] !== null && !Array.isArray(obj['entry'])) {
+        const nested = obj['entry'] as Record<string, unknown>
+        const cloned = { ...obj }
+        delete cloned['entry']
+        for (const [k, v] of Object.entries(nested)) {
+            if (!(k in cloned) && v !== undefined) {
+                cloned[k] = v
+            }
+        }
+        obj = cloned
+    }
+
     const result: Record<string, unknown> = {}
     for (const [key, value] of Object.entries(obj)) {
         let snakeKey = key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
@@ -164,6 +177,16 @@ export function convertKeysToSnakeCase(obj: Record<string, unknown>, methodName?
         // Remap known parameter aliases (only when canonical name is absent)
         const alias = PARAM_ALIASES[snakeKey]
         let useAlias = alias !== undefined && !(alias in obj) && !(alias in result)
+
+        // Context-aware protection for 'entry'
+        if (useAlias && snakeKey === 'entry') {
+            if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+                useAlias = false
+            } else if (typeof value === 'string' && (!/^\d+$/.test(value.trim()) || (methodName !== undefined && /create|add|log|insert/i.test(methodName)))) {
+                useAlias = false
+                snakeKey = 'content'
+            }
+        }
 
         // Context-aware protection for 'title' and 'body' in GitHub tools
         if (useAlias && (snakeKey === 'title' || snakeKey === 'body')) {

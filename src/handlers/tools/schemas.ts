@@ -267,8 +267,32 @@ export function healAgentHallucinations(val: unknown): unknown {
             }
         }
 
-        // 2. Heal 'text', 'message', 'description', 'title', 'summary', 'notes' -> 'content'
-        for (const key of ['text', 'message', 'description', 'summary', 'notes']) {
+        // Unwrap nested 'entry' object if provided
+        if ('entry' in obj && typeof obj['entry'] === 'object' && obj['entry'] !== null && !Array.isArray(obj['entry'])) {
+            const nested = obj['entry'] as Record<string, unknown>
+            Reflect.deleteProperty(obj, 'entry')
+            for (const [k, v] of Object.entries(nested)) {
+                if (!(k in obj) && v !== undefined) {
+                    obj[k] = v
+                }
+            }
+            modified = true
+        }
+
+        // Handle numeric 'entry' parameter remapped to 'entry_id' when no content/tags/title are present
+        if ('entry' in obj) {
+            const entryVal = obj['entry']
+            if (typeof entryVal === 'number' || (typeof entryVal === 'string' && /^\d+$/.test(entryVal.trim()) && !('tags' in obj) && !('entry_type' in obj) && !('title' in obj))) {
+                if (!('entry_id' in obj)) {
+                    obj['entry_id'] = typeof entryVal === 'number' ? entryVal : Number(entryVal.trim())
+                    modified = true
+                }
+                Reflect.deleteProperty(obj, 'entry')
+            }
+        }
+
+        // 2. Heal 'entry', 'text', 'message', 'description', 'title', 'summary', 'notes', etc. -> 'content'
+        for (const key of ['entry', 'text', 'message', 'description', 'summary', 'notes', 'body', 'instructions', 'details', 'markdown', 'post', 'journal_entry', 'journalEntry', 'entry_text', 'entryText']) {
             if (key in obj && !('content' in obj)) {
                 obj['content'] = obj[key]
                 Reflect.deleteProperty(obj, key)

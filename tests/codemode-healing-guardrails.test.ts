@@ -761,6 +761,90 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
                 expect(normalized['validation_status']).toBe('passed')
             }
         })
+
+        it('should auto-heal entry parameter in CreateEntrySchema and CreateEntrySchemaMcp (agent-issues.jsonl mj_add_entry regression)', async () => {
+            const { CreateEntrySchema, CreateEntrySchemaMcp } = await import('../src/handlers/tools/core/schemas.js')
+            const rawPayload = {
+                entry: '[admin] test-advanced-admin-part9.md: Fixed error formatting in CSV tools (analyze-csv.ts, csv.ts) to correctly return structured errors (ValidationError) for unsupported relative paths instead of raw objects. Replaced sanitizeIdentifier with quoteIdentifier in createCsvTable to properly support table names with spaces. Fixed scope of tempName in analyze-csv.ts to ensure virtual table is dropped properly.',
+                tags: ['admin', 'csv', 'error-handling', 'schema'],
+                title: 'Fix CSV Admin tools error handling & edge cases',
+                project_number: 1,
+                workspace_id: 'default'
+            }
+
+            const parsed = CreateEntrySchema.parse(rawPayload)
+            expect(parsed.content).toContain('# Fix CSV Admin tools error handling & edge cases')
+            expect(parsed.content).toContain('Fixed error formatting in CSV tools')
+            expect((parsed as Record<string, unknown>)['entry']).toBeUndefined()
+            expect((parsed as Record<string, unknown>)['title']).toBeUndefined()
+
+            const parsedMcp = CreateEntrySchemaMcp.parse(rawPayload)
+            expect(parsedMcp.content).toContain('# Fix CSV Admin tools error handling & edge cases')
+            expect((parsedMcp as Record<string, unknown>)['entry']).toBeUndefined()
+        })
+
+        it('should auto-unwrap nested entry object in CreateEntrySchema', async () => {
+            const { CreateEntrySchema } = await import('../src/handlers/tools/core/schemas.js')
+            const rawPayload = {
+                entry: {
+                    content: 'Nested entry content payload.',
+                    tags: ['nested', 'test'],
+                    project_number: 1,
+                    workspace_id: 'default'
+                }
+            }
+
+            const parsed = CreateEntrySchema.parse(rawPayload)
+            expect(parsed.content).toBe('Nested entry content payload.')
+            expect(parsed.tags).toContain('nested')
+            expect((parsed as Record<string, unknown>)['entry']).toBeUndefined()
+        })
+
+        it('should auto-heal mj_add_entry dummy tool with entry and title payload', async () => {
+            const { getDummyHealingTools } = await import('../src/handlers/tools/core/dummy-healing.js')
+            const mockDb = {
+                createEntry: (entry: Record<string, unknown>) => ({ id: 999, ...entry }),
+                getEntryById: () => undefined,
+                getHealthStatus: () => ({ status: 'ok' })
+            }
+            const mockContext = {
+                db: mockDb,
+                config: {
+                    defaultWorkspace: 'default',
+                    projectRegistry: { default: { project_number: 1, path: '/dummy' } }
+                }
+            }
+
+            const dummyTools = getDummyHealingTools(mockContext as unknown as import('../src/types/index.js').ToolContext)
+            const addEntryTool = dummyTools.find(t => t.name === 'mj_add_entry')
+            expect(addEntryTool).toBeDefined()
+
+            const result = await addEntryTool?.handler({
+                entry: 'Test entry body content from agent issue log.',
+                tags: ['admin', 'csv'],
+                title: 'Test Title For CSV',
+                project_number: 1,
+                workspace_id: 'default'
+            }) as Record<string, unknown>
+
+            expect(result).toBeDefined()
+            expect(result.id).toBe(999)
+            expect(result._healing_note).toContain('mj_add_entry')
+        })
+
+        it('should normalize entry parameter in codemode param-normalizer', async () => {
+            const { applyArgInterceptions } = await import('../src/codemode/param-normalizer.js')
+            const res = applyArgInterceptions('createEntry', [{
+                entry: 'Entry content passed under entry key',
+                tags: ['test']
+            }])
+            expect('args' in res).toBe(true)
+            if ('args' in res) {
+                const normalized = res.args[0] as Record<string, unknown>
+                expect(normalized['content']).toBe('Entry content passed under entry key')
+                expect(normalized['entry']).toBeUndefined()
+            }
+        })
     })
 
     describe('Layer 1 & Layer 2: Server Info & Health Diagnostics Healing Guardrails', () => {
