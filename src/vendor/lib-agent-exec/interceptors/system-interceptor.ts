@@ -4,7 +4,7 @@ import { match, P } from 'ts-pattern';
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
-import { convertToWslPath, getPositionalArgs, healFragmentedQuotes } from '../command-utils.js';
+import { convertToWslPath, getPositionalArgs, healFragmentedQuotes, escapeUnixArg } from '../command-utils.js';
 import { getUnquoted } from './utils.js';
 import { runMutatingInterceptors } from './mutating-interceptors.js';
 import { runStructuralInterceptors } from './structural-interceptors.js';
@@ -62,12 +62,52 @@ export function systemInterceptor(ctx: ExecutionContext): void {
   const inlineFlags = ['-c', '-command', '/c', '-ec', '-encodedcommand', '-en', '-e', '--eval', '-execute', '--execute'];
   if (payload.type === 'eval' && typeof payload.code === 'string') {
     const trimmedCode = payload.code.trim();
+
+    // Frictionless Recovery: detect grep_search invocation in eval code
+    if (/^grep_search\s*\(/i.test(trimmedCode)) {
+      const patternMatch = trimmedCode.match(/SearchPattern\s*:\s*["'`]([^"'`]+)["'`]/i);
+      const pathMatch = trimmedCode.match(/SearchPath\s*:\s*["'`]([^"'`]+)["'`]/i);
+      const caseMatch = trimmedCode.match(/CaseInsensitive\s*:\s*(true|false)/i);
+      const regexMatch = trimmedCode.match(/IsRegex\s*:\s*(true|false)/i);
+
+      if (patternMatch !== null && patternMatch[1] !== undefined) {
+        const pattern = patternMatch[1];
+        const searchPath = (pathMatch !== null && pathMatch[1] !== undefined) ? pathMatch[1] : '.';
+        const isCaseInsensitive = caseMatch !== null && caseMatch[1] !== undefined ? caseMatch[1].toLowerCase() === 'true' : false;
+        const isRegex = regexMatch !== null && regexMatch[1] !== undefined ? regexMatch[1].toLowerCase() === 'true' : false;
+
+        console.error(`\n   💡 AGENT HINT: 'grep_search' called as a function inside eval code.`);
+        console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-translating grep_search function call to ripgrep (rg) command... (Frictionless Recovery)\x1b[0m`);
+
+        const flags = ['-n'];
+        if (isCaseInsensitive) flags.push('-i');
+        if (!isRegex) flags.push('-F');
+        payload.code = `rg ${flags.join(' ')} ${escapeUnixArg(pattern, false)} ${escapeUnixArg(searchPath, false)}`;
+      }
+    } else {
+      const pkgGrepMatch = trimmedCode.match(/^(?:bun|npm|pnpm|yarn|npx)\s+(?:run\s+)?grep_search\b\s*(.*)$/i);
+      if (pkgGrepMatch !== null) {
+        const rest = pkgGrepMatch[1] ?? '';
+        const sMatch = rest.match(/(?:-s|--symbol|--pattern)\s+["'`]([^"'`]+)["'`]|(?:-s|--symbol|--pattern)\s+([^\s]+)/i);
+        const pMatch = rest.match(/(?:-p|--path)\s+["'`]([^"'`]+)["'`]|(?:-p|--path)\s+([^\s]+)/i);
+        const pattern = (sMatch !== null ? (sMatch[1] ?? sMatch[2]) : undefined) ?? '';
+        const searchPath = (pMatch !== null ? (pMatch[1] ?? pMatch[2]) : undefined) ?? '.';
+
+        if (pattern.length > 0) {
+          console.error(`\n   💡 AGENT HINT: 'grep_search' executed via package manager in eval code.`);
+          console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-translating 'bun run grep_search' to ripgrep (rg)... (Frictionless Recovery)\x1b[0m`);
+          payload.code = `rg -n -F ${escapeUnixArg(pattern, false)} ${escapeUnixArg(searchPath, false)}`;
+        }
+      }
+    }
+
     if ((AGENT_NATIVE_TOOLS as readonly string[]).includes(trimmedCode)) {
       console.error(`\n   💡 AGENT HINT: '${trimmedCode}' is an agent-native tool, NOT executable code or a shell script. Please invoke the '${trimmedCode}' tool directly.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
       process.exit(1);
     }
-    if ((ECOSYSTEM_MCP_TOOLS as readonly string[]).includes(trimmedCode)) {
-      console.error(`\n   💡 AGENT HINT: '${trimmedCode}' is an MCP tool, NOT executable code or a shell script. Please call the '${trimmedCode}' MCP tool via call_mcp_tool.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Call MCP tool. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+    const matchedMcpTool = (ECOSYSTEM_MCP_TOOLS as readonly string[]).find(t => trimmedCode === t || trimmedCode.startsWith(`${t}(`) || trimmedCode.startsWith(`${t} `));
+    if (matchedMcpTool !== undefined) {
+      console.error(`\n   💡 AGENT HINT: '${matchedMcpTool}' is an MCP tool, NOT executable code or a shell script. Please call the '${matchedMcpTool}' MCP tool via call_mcp_tool.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Call MCP tool. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
       process.exit(1);
     }
   }
@@ -321,21 +361,32 @@ export function systemInterceptor(ctx: ExecutionContext): void {
           cleanedArgs.push('-1');
           continue;
         }
+        if (lower === '-force' || lower === '-hidden') {
+          cleanedArgs.push('-a');
+          continue;
+        }
+        if (lower === '-readonly') {
+          continue;
+        }
         cleanedArgs.push(convertToWslPath(a));
       }
       ctx.args = cleanedArgs;
     })
     .with({ originalCmd: P.union('curl', 'curl.exe', 'wget', 'wget.exe', 'invoke-webrequest', 'iwr') }, () => {
-      console.error(`\n   💡 AGENT INTERCEPT: '${cmdBasename}' network command detected. Switching execution target to WSL2... (Frictionless Recovery)`);
-      ctx.payload.target = 'wsl2';
+      if (ctx.payload.target !== 'wsl2') {
+        console.error(`\n   💡 AGENT INTERCEPT: '${cmdBasename}' network command detected. Switching execution target to WSL2... (Frictionless Recovery)`);
+        ctx.payload.target = 'wsl2';
+      }
       if (['invoke-webrequest', 'iwr'].includes(cmdBasename.toLowerCase())) {
         if (ctx.payload.type === 'command') ctx.payload.command = 'curl';
       }
       ctx.args = ctx.args.map(a => convertToWslPath(a));
     })
     .with({ cmd: P.union('awk', 'gawk', 'sed', 'sed.exe', 'jq', 'jq.exe', 'yq', 'yq.exe', 'find', 'find.exe', 'tail', 'tail.exe', 'head', 'head.exe', 'wc', 'wc.exe', 'sort', 'sort.exe', 'uniq', 'uniq.exe', 'tee', 'tee.exe') }, () => {
-      console.error(`\n   💡 AGENT INTERCEPT: '${cmdBasename}' natively fails, lacks features, or is not installed on Windows. Switching execution target to WSL2... (Frictionless Recovery)`);
-      ctx.payload.target = 'wsl2';
+      if (ctx.payload.target !== 'wsl2') {
+        console.error(`\n   💡 AGENT INTERCEPT: '${cmdBasename}' natively fails, lacks features, or is not installed on Windows. Switching execution target to WSL2... (Frictionless Recovery)`);
+        ctx.payload.target = 'wsl2';
+      }
 
       if (['find', 'find.exe'].includes(cmdBasename.toLowerCase())) {
         handleFindInterception(ctx);

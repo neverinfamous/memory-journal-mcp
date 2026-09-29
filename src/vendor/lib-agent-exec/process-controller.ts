@@ -23,7 +23,7 @@ function analyzeExitCode1(payload: ExecPayload, code: number, stdout: string, st
   let isDiffFound = false;
   let isOutdatedInfo = false;
   
-  if (code === 1) {
+  if (code === 1 || code === 123) {
     let scriptContent = '';
     
     if (payload.type === 'command') {
@@ -32,43 +32,53 @@ function analyzeExitCode1(payload: ExecPayload, code: number, stdout: string, st
       const allArgsStr = payload.args ? payload.args.join(' ').toLowerCase() : '';
       const commandBoundaryRegex = /(?:^|[|;&\n]\s*|\b(?:time|xargs|sudo|nohup|wsl|-exec|-execdir|exec|(?:bun|npm|pnpm|yarn|npx|bunx)(?:\s+(?:run|exec|x|dlx))?)\s+|(?:^|\s)(?:-c|\/c|-command)\s+)(?:[a-zA-Z0-9_\-/.]*\/)?/;
       
-      if (['grep', 'grep.exe', 'egrep', 'egrep.exe', 'fgrep', 'fgrep.exe', 'rg', 'rg.exe'].includes(origCmd)) {
-          isGrepNoMatch = true;
-      } else if (['find', 'find.exe'].includes(origCmd) && /(?:-exec|-execdir)\s+(?:[a-zA-Z0-9_\-/.]*\/)?(grep|egrep|fgrep|rg)\b/.test(allArgsStr)) {
-          isGrepNoMatch = true;
-      } else if (isWrapper && new RegExp(commandBoundaryRegex.source + '(grep|egrep|fgrep|rg)\\b').test(allArgsStr)) {
-          isGrepNoMatch = true;
-      }
-
-      if (['diff', 'diff.exe', 'cmp', 'cmp.exe'].includes(origCmd)) {
-          isDiffFound = true;
-      } else if (isWrapper && new RegExp(commandBoundaryRegex.source + '(diff|cmp)\\b').test(allArgsStr)) {
-          isDiffFound = true;
-      }
-
-      const pkgMgrs = ['npm', 'npm.cmd', 'npm.exe', 'pnpm', 'pnpm.cmd', 'pnpm.exe', 'yarn', 'yarn.cmd', 'yarn.exe', 'bun', 'bun.cmd', 'bun.exe', 'npx', 'npx.cmd', 'npx.exe', 'bunx', 'bunx.cmd', 'bunx.exe'];
-      if (pkgMgrs.includes(origCmd)) {
-          const origArgs = payload.args || [];
-          const nonFlagArgs = origArgs.filter(a => !a.startsWith('-')).map(a => a.toLowerCase());
-          const subCmd = nonFlagArgs.find(a => !['run', 'exec', 'x', 'dlx'].includes(a));
-          if (subCmd === 'outdated') {
-              isOutdatedInfo = true;
-          } else if (subCmd && ['grep', 'egrep', 'fgrep', 'rg'].includes(subCmd)) {
-              isGrepNoMatch = true;
-          } else if (subCmd && ['diff', 'cmp'].includes(subCmd)) {
-              isDiffFound = true;
+      if (code === 123) {
+        if (origCmd === 'xargs' || (isWrapper && allArgsStr.includes('xargs'))) {
+          if (/(?:xargs(?:\s+-[^\s]+)*\s+)(?:[a-zA-Z0-9_\-/.]*\/)?(grep|egrep|fgrep|rg)\b/.test(allArgsStr)) {
+            isGrepNoMatch = true;
+          } else if (/(?:xargs(?:\s+-[^\s]+)*\s+)(?:[a-zA-Z0-9_\-/.]*\/)?(diff|cmp)\b/.test(allArgsStr)) {
+            isDiffFound = true;
           }
-      } else if (isWrapper && new RegExp(commandBoundaryRegex.source + '(npm|pnpm|yarn|bun)\\s+(?:--?\\w+\\s+)*outdated\\b').test(allArgsStr)) {
-          isOutdatedInfo = true;
-      } else if (['git', 'git.exe'].includes(origCmd)) {
-          const origArgs = payload.args || [];
-          const diffIndex = origArgs.indexOf('diff');
-          const grepIndex = origArgs.indexOf('grep');
-          if (diffIndex === 0 || (diffIndex === 1 && origArgs[0].startsWith('-'))) {
-              isDiffFound = true;
-          } else if (grepIndex === 0 || (grepIndex === 1 && origArgs[0].startsWith('-'))) {
-              isGrepNoMatch = true;
-          }
+        }
+      } else {
+        if (['grep', 'grep.exe', 'egrep', 'egrep.exe', 'fgrep', 'fgrep.exe', 'rg', 'rg.exe'].includes(origCmd)) {
+            isGrepNoMatch = true;
+        } else if (['find', 'find.exe'].includes(origCmd) && /(?:-exec|-execdir)\s+(?:[a-zA-Z0-9_\-/.]*\/)?(grep|egrep|fgrep|rg)\b/.test(allArgsStr)) {
+            isGrepNoMatch = true;
+        } else if (isWrapper && new RegExp(commandBoundaryRegex.source + '(grep|egrep|fgrep|rg)\\b').test(allArgsStr)) {
+            isGrepNoMatch = true;
+        }
+
+        if (['diff', 'diff.exe', 'cmp', 'cmp.exe'].includes(origCmd)) {
+            isDiffFound = true;
+        } else if (isWrapper && new RegExp(commandBoundaryRegex.source + '(diff|cmp)\\b').test(allArgsStr)) {
+            isDiffFound = true;
+        }
+
+        const pkgMgrs = ['npm', 'npm.cmd', 'npm.exe', 'pnpm', 'pnpm.cmd', 'pnpm.exe', 'yarn', 'yarn.cmd', 'yarn.exe', 'bun', 'bun.cmd', 'bun.exe', 'npx', 'npx.cmd', 'npx.exe', 'bunx', 'bunx.cmd', 'bunx.exe'];
+        if (pkgMgrs.includes(origCmd)) {
+            const origArgs = payload.args || [];
+            const nonFlagArgs = origArgs.filter(a => !a.startsWith('-')).map(a => a.toLowerCase());
+            const subCmd = nonFlagArgs.find(a => !['run', 'exec', 'x', 'dlx'].includes(a));
+            if (subCmd === 'outdated') {
+                isOutdatedInfo = true;
+            } else if (subCmd && ['grep', 'egrep', 'fgrep', 'rg'].includes(subCmd)) {
+                isGrepNoMatch = true;
+            } else if (subCmd && ['diff', 'cmp'].includes(subCmd)) {
+                isDiffFound = true;
+            }
+        } else if (isWrapper && new RegExp(commandBoundaryRegex.source + '(npm|pnpm|yarn|bun)\\s+(?:--?\\w+\\s+)*outdated\\b').test(allArgsStr)) {
+            isOutdatedInfo = true;
+        } else if (['git', 'git.exe'].includes(origCmd)) {
+            const origArgs = payload.args || [];
+            const diffIndex = origArgs.indexOf('diff');
+            const grepIndex = origArgs.indexOf('grep');
+            if (diffIndex === 0 || (diffIndex === 1 && origArgs[0].startsWith('-'))) {
+                isDiffFound = true;
+            } else if (grepIndex === 0 || (grepIndex === 1 && origArgs[0].startsWith('-'))) {
+                isGrepNoMatch = true;
+            }
+        }
       }
     } else if (payload.type === 'eval') {
       scriptContent = payload.code.toLowerCase();
@@ -83,14 +93,22 @@ function analyzeExitCode1(payload: ExecPayload, code: number, stdout: string, st
     if (scriptContent) {
       const commandBoundaryRegex = /(?:^|[|;&\n]\s*|\b(?:time|xargs|sudo|nohup|wsl|exec|(?:bun|npm|pnpm|yarn|npx|bunx)(?:\s+(?:run|exec|x|dlx))?)\s+)(?:[a-zA-Z0-9_\-/.]*\/)?/;
       
-      if (new RegExp(commandBoundaryRegex.source + '(grep|egrep|fgrep|rg)\\b').test(scriptContent)) {
-        isGrepNoMatch = true;
-      }
-      if (new RegExp(commandBoundaryRegex.source + '(diff|cmp)\\b').test(scriptContent)) {
-        isDiffFound = true;
-      }
-      if (new RegExp(commandBoundaryRegex.source + '(npm|pnpm|yarn|bun)\\s+(?:--?\\w+\\s+)*outdated\\b').test(scriptContent)) {
-        isOutdatedInfo = true;
+      if (code === 123) {
+        if (scriptContent.includes('xargs') && /(?:xargs(?:\s+-[^\s]+)*\s+)(?:[a-zA-Z0-9_\-/.]*\/)?(grep|egrep|fgrep|rg)\b/.test(scriptContent)) {
+          isGrepNoMatch = true;
+        } else if (scriptContent.includes('xargs') && /(?:xargs(?:\s+-[^\s]+)*\s+)(?:[a-zA-Z0-9_\-/.]*\/)?(diff|cmp)\b/.test(scriptContent)) {
+          isDiffFound = true;
+        }
+      } else {
+        if (new RegExp(commandBoundaryRegex.source + '(grep|egrep|fgrep|rg)\\b').test(scriptContent)) {
+          isGrepNoMatch = true;
+        }
+        if (new RegExp(commandBoundaryRegex.source + '(diff|cmp)\\b').test(scriptContent)) {
+          isDiffFound = true;
+        }
+        if (new RegExp(commandBoundaryRegex.source + '(npm|pnpm|yarn|bun)\\s+(?:--?\\w+\\s+)*outdated\\b').test(scriptContent)) {
+          isOutdatedInfo = true;
+        }
       }
     }
   }
@@ -431,11 +449,11 @@ export class ProcessController {
         } else if (code !== null) {
           const { isGrepNoMatch, isDiffFound, isOutdatedInfo } = analyzeExitCode1(this.payload, code, this.ioController?.stdoutTail || '', this.ioController?.stderrTail || '');
           
-          if (isGrepNoMatch) { if (!this.isJson) console.error(`\nℹ️  No matches found (exit code 1).`);
+          if (isGrepNoMatch) { if (!this.isJson) console.error(`\nℹ️  No matches found (exit code ${code}).`);
             process.exit(0);
-          } else if (isDiffFound) { if (!this.isJson) console.error(`\nℹ️  Differences found (exit code 1).`);
+          } else if (isDiffFound) { if (!this.isJson) console.error(`\nℹ️  Differences found (exit code ${code}).`);
             process.exit(0);
-          } else if (isOutdatedInfo) { if (!this.isJson) console.error(`\nℹ️  Outdated packages found (exit code 1).`);
+          } else if (isOutdatedInfo) { if (!this.isJson) console.error(`\nℹ️  Outdated packages found (exit code ${code}).`);
             process.exit(0);
           } else {
             let suppressRedundantExit = false;
