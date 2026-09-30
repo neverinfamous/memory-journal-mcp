@@ -28,6 +28,7 @@ export function wrapResult(result: unknown): unknown {
                     }
                     if (prop in target) return target[prop]
                     if (prop === 'length') return 0
+                    if (typeof prop === 'string' && /^\d+$/.test(prop)) return undefined
                     if (prop === Symbol.iterator) return function* () { yield* [] }
                     if (
                         typeof prop === 'string' &&
@@ -235,6 +236,11 @@ export function wrapResult(result: unknown): unknown {
                                 yield* (targetRecord[targetKey] as unknown[])
                             }
                         }
+                        if ('project' in targetRecord && isObject(targetRecord['project']) && !Array.isArray(targetRecord['project'])) {
+                            return function* () {
+                                yield targetRecord['project']
+                            }
+                        }
                         if ('projects' in targetRecord && targetRecord['projects'] !== null && typeof targetRecord['projects'] === 'object' && !Array.isArray(targetRecord['projects'])) {
                             const items = dictToItems(targetRecord['projects'] as Record<string, unknown>)
                             return function* () {
@@ -276,6 +282,9 @@ export function wrapResult(result: unknown): unknown {
                         if (targetKey !== undefined) {
                             return (targetRecord[targetKey] as unknown[]).length
                         }
+                        if ('project' in targetRecord && isObject(targetRecord['project']) && !Array.isArray(targetRecord['project'])) {
+                            return 1
+                        }
                         if ('projects' in targetRecord && targetRecord['projects'] !== null && typeof targetRecord['projects'] === 'object' && !Array.isArray(targetRecord['projects'])) {
                             return Object.keys(targetRecord['projects']).length
                         }
@@ -287,6 +296,9 @@ export function wrapResult(result: unknown): unknown {
                     if (typeof prop === 'string' && /^\d+$/.test(prop)) {
                         const idx = parseInt(prop, 10)
                         const targetRecord = target as Record<string, unknown>
+                        if ('project' in targetRecord && isObject(targetRecord['project']) && !Array.isArray(targetRecord['project'])) {
+                            if (idx === 0) return targetRecord['project']
+                        }
                         const arrayKeys = Object.keys(targetRecord).filter(k => Array.isArray(targetRecord[k]))
                         let targetKey = arrayKeys.find(k => ['entries', 'results', 'projects', 'items', 'rows', 'tables', 'flags', 'groups', 'users', 'capabilities', 'metrics', 'events', 'records', 'logs', 'aliases', 'tags', 'issues', 'pullRequests', 'milestones', 'columns', 'comments', 'files', 'errors', 'backups', 'deleted', 'updated', 'notFound', 'history', 'relationships', 'members'].includes(k))
                         if (targetKey === undefined && arrayKeys.length === 1) {
@@ -327,6 +339,17 @@ export function wrapResult(result: unknown): unknown {
                                 return (...args: unknown[]) => {
                                     const fn = method as (...a: unknown[]) => unknown
                                     return fn.apply(arr, args)
+                                }
+                            }
+                        }
+
+                        if ('project' in targetRecord && isObject(targetRecord['project']) && !Array.isArray(targetRecord['project'])) {
+                            const items = [targetRecord['project']]
+                            const method = (items as unknown as Record<string, unknown>)[prop]
+                            if (typeof method === 'function') {
+                                return (...args: unknown[]) => {
+                                    const fn = method as (...a: unknown[]) => unknown
+                                    return fn.apply(items, args)
                                 }
                             }
                         }

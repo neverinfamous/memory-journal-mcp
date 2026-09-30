@@ -224,7 +224,10 @@ export function healAgentHallucinations(val: unknown): unknown {
         if ('project_number' in obj && obj['project_number'] !== undefined && obj['project_number'] !== null) {
             if (typeof obj['project_number'] === 'string') {
                 const cleaned = obj['project_number'].trim()
-                const num = Number(cleaned)
+                let num = Number(cleaned)
+                if (Number.isNaN(num) && /^p-?\d+$/i.test(cleaned)) {
+                    num = Number(cleaned.replace(/^p-?/i, ''))
+                }
                 if (!Number.isNaN(num) && cleaned !== '') {
                     obj['project_number'] = num
                     modified = true
@@ -508,7 +511,7 @@ export function healAgentHallucinations(val: unknown): unknown {
                     obj['tags'].push(etLower)
                 }
                 modified = true
-            } else if (etLower === 'bug') {
+            } else if (['bug', 'bugfix', 'bug_fix', 'bug-fix', 'hotfix', 'defect'].includes(etLower)) {
                 obj['entry_type'] = 'bug_fix'
                 modified = true
             } else if (etLower === 'feature') {

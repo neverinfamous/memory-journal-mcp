@@ -12,6 +12,7 @@ import type { MessagePort } from 'node:worker_threads'
 import type { RpcRequest, RpcResponse, SandboxResult, ExecutionMetrics } from './types.js'
 import { transformAutoReturn } from './auto-return.js'
 import { buildApiProxy } from './worker-api-proxy.js'
+import { wrapResult } from './worker-result-proxy.js'
 
 // =============================================================================
 // Execution State
@@ -58,7 +59,7 @@ async function executeCode(
     const startTime = performance.now()
 
     try {
-        const mjApi = buildApiProxy(rpcCall, methodList, schemaList, readonlyMode)
+        const mjApi = buildApiProxy(rpcCall, methodList, schemaList, readonlyMode, contextObj)
 
         // Freeze each group namespace in the API to prevent prototype pollution
         for (const key of Object.keys(mjApi)) {
@@ -344,6 +345,12 @@ async function executeCode(
                     prop === 'node' ||
                     prop === 'default'
                 ) return shimMj
+                if (prop === 'context') {
+                    return mjApi['context']
+                }
+                if (prop === 'getContext' || prop === 'get_context') {
+                    return mjApi['getContext']
+                }
                 if (prop === 'schema') {
                     return createSchemaShim()
                 }
@@ -610,6 +617,9 @@ async function executeCode(
                         get: getFn,
                         getProject: getFn,
                         get_project: getFn,
+                        find: getFn,
+                        findProject: getFn,
+                        find_project: getFn,
                         register: registerFn,
                         registerProject: registerFn,
                         register_project: registerFn,
@@ -1045,6 +1055,9 @@ async function executeCode(
                 }
                 if (prop === 'toJSON') {
                     return () => target
+                }
+                if (prop === 'get' || prop === 'getContext' || prop === 'get_context') {
+                    return (key?: string) => Promise.resolve(wrapResult(typeof key === 'string' && key in target ? target[key] : { success: true, ...target }))
                 }
                 if (prop in target) return target[prop]
                 if (prop === 'executeSystemPrompt' || prop === 'getPrompt' || prop === 'executePrompt') {

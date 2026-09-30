@@ -1479,7 +1479,93 @@ return { deleted, updated: updates };
             expect(result.success).toBe(true);
             expect(result.result).toEqual({ deleted: [10], updated: [11] });
         });
+
+        it('should support mj.context.get() and projects.find() in sandbox (agent-issues.jsonl regression)', async () => {
+            const { WorkerSandbox } = await import('../src/codemode/worker-sandbox.js');
+            const sandbox = new WorkerSandbox();
+
+            let createdEntry: unknown = null;
+            const bindings = {
+                core: {
+                    create_entry: async (args: unknown) => {
+                        createdEntry = args;
+                        return { success: true, entry_id: 101 };
+                    },
+                },
+                admin: {
+                    get_project: async (args: unknown) => {
+                        return {
+                            success: true,
+                            project: {
+                                name: (args as Record<string, unknown>)['name'] ?? 'db-mcp',
+                                id: 42,
+                                project_number: 42,
+                            },
+                        };
+                    },
+                },
+            };
+
+            const agentCode = `
+const currentContext = await mj.context.get();
+const project = await mj.projects.find({ name: "db-mcp" });
+const projectId = project?.[0]?.id || "unknown";
+
+await mj.entries.create({
+  title: "Fixed directory edge case in admin backup tools",
+  content: "Added fs.statSync(resolvedPath).isFile() validation in verify.ts and restore.ts",
+  type: "bugfix",
+  project_number: currentContext.project_number || "P001",
+  session_id: currentContext.session_id || "S001"
+});
+return { success: true, projectId };
+`;
+
+            const result = await sandbox.execute(agentCode, bindings, undefined, undefined, {
+                project_number: 1,
+                session_id: 'session-test-123',
+            });
+
+            expect(result.success).toBe(true);
+            expect((result.result as Record<string, unknown>)['success']).toBe(true);
+            expect((result.result as Record<string, unknown>)['projectId']).toBe(42);
+            expect(createdEntry).not.toBeNull();
+            const entry = createdEntry as Record<string, unknown>;
+            expect(entry['project_number']).toBe(1);
+            expect(entry['session_id']).toBe('session-test-123');
+            expect(entry['entry_type']).toBe('bug_fix');
+        });
+
+        it('should expose context proxy with get, getContext, and properties on buildApiProxy', async () => {
+            const { buildApiProxy } = await import('../src/codemode/worker-api-proxy.js');
+            const mockRpc = () => Promise.resolve({ success: true });
+            const methods = {
+                admin: ['list_projects', 'get_project'],
+                core: ['create_entry'],
+            };
+            const proxy = buildApiProxy(mockRpc, methods, undefined, false, {
+                project_number: 7,
+                session_id: 'sess-abc',
+                workspace_id: 'ws-xyz',
+            }) as Record<string, any>;
+
+            expect(proxy.context).toBeDefined();
+            expect(typeof proxy.context.get).toBe('function');
+            expect(typeof proxy.getContext).toBe('function');
+
+            const ctx = await proxy.context.get();
+            expect(ctx.project_number).toBe(7);
+            expect(ctx.session_id).toBe('sess-abc');
+            expect(ctx.workspace_id).toBe('ws-xyz');
+
+            const directCtx = await proxy.context();
+            expect(directCtx.project_number).toBe(7);
+
+            expect(proxy.context.project_number).toBe(7);
+            expect(proxy.context.session_id).toBe('sess-abc');
+        });
     })
 })
+
 
 

@@ -94,6 +94,9 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
                 if (/^-?\d+$/.test(strVal)) {
                     const parsed = parseInt(strVal, 10);
                     if (!isNaN(parsed)) obj[key] = parsed;
+                } else if ((key === 'project_number' || key === 'projectNumber') && /^p-?\d+$/i.test(strVal)) {
+                    const parsed = parseInt(strVal.replace(/^p-?/i, ''), 10);
+                    if (!isNaN(parsed)) obj[key] = parsed;
                 } else if (key === 'project_number' || key === 'projectNumber') {
                     // Delete non-numeric string representations (e.g. 'N/A', 'none', 'unknown')
                     Reflect.deleteProperty(obj, key);
@@ -188,7 +191,10 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
             let projNum = typeof obj['project_number'] === 'number' ? obj['project_number'] : undefined;
             if (typeof obj['project_number'] === 'string') {
                 const cleaned = obj['project_number'].trim();
-                const parsedNum = Number(cleaned);
+                let parsedNum = Number(cleaned);
+                if (Number.isNaN(parsedNum) && /^p-?\d+$/i.test(cleaned)) {
+                    parsedNum = Number(cleaned.replace(/^p-?/i, ''));
+                }
                 if (!Number.isNaN(parsedNum) && cleaned !== '') {
                     projNum = parsedNum;
                     obj['project_number'] = parsedNum;
@@ -277,6 +283,26 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
 
         const isEntryMutation = methodName === 'create_entry' || methodName === 'createEntry' || methodName === 'update_entry' || methodName === 'updateEntry' || methodName === 'team_create_entry' || methodName === 'teamCreateEntry';
         if (isEntryMutation) {
+            if (obj['type'] !== undefined && obj['entry_type'] === undefined) {
+                obj['entry_type'] = obj['type'];
+                delete obj['type'];
+            }
+            if (typeof obj['entry_type'] === 'string') {
+                const etLower = obj['entry_type'].toLowerCase().trim();
+                if (['bug', 'bugfix', 'bug_fix', 'bug-fix', 'hotfix', 'defect'].includes(etLower)) {
+                    obj['entry_type'] = 'bug_fix';
+                } else if (['progress', 'status', 'development'].includes(etLower)) {
+                    obj['entry_type'] = 'development_note';
+                } else if (etLower === 'feature') {
+                    obj['entry_type'] = 'feature_implementation';
+                } else if (etLower === 'meeting') {
+                    obj['entry_type'] = 'meeting_notes';
+                } else if (['task', 'chore', 'refactor', 'fix', 'update', 'technical', 'note', 'documentation', 'code', 'coding'].includes(etLower)) {
+                    obj['entry_type'] = 'technical_note';
+                } else if (['session-summary', 'session_summary', 'team-session-summary', 'team_session_summary', 'team session summary'].includes(etLower)) {
+                    obj['entry_type'] = 'retrospective';
+                }
+            }
             const contentParts: string[] = [];
 
             const title = obj['title'] ?? obj['heading'] ?? obj['subject'] ?? obj['name'];

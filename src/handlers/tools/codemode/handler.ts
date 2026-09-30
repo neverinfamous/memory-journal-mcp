@@ -1406,6 +1406,24 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                             userContext = { value: input.context, raw: input.context }
                         }
                     }
+
+                    const resolvedProjectNumber = numericProjectId ?? (typeof projectId === 'number' ? projectId : (sessionContext.config?.defaultProjectNumber ?? 1));
+                    const sessionFromUser = typeof userContext['session_id'] === 'string'
+                        ? userContext['session_id']
+                        : (typeof userContext['sessionId'] === 'string' ? userContext['sessionId'] : undefined);
+                    const resolvedSessionId = (typeof input['session_id'] === 'string' && input['session_id'].length > 0)
+                        ? input['session_id']
+                        : (sessionFromUser ?? getRequestContext()?.sessionId ?? 'session-default');
+                    const resolvedWorkspaceId = workspaceId ?? (sessionContext.config?.defaultWorkspaceId ?? 'default');
+
+                    if (userContext['project_number'] === undefined) userContext['project_number'] = resolvedProjectNumber;
+                    if (userContext['projectNumber'] === undefined) userContext['projectNumber'] = resolvedProjectNumber;
+                    if (userContext['session_id'] === undefined) userContext['session_id'] = resolvedSessionId;
+                    if (userContext['sessionId'] === undefined) userContext['sessionId'] = resolvedSessionId;
+                    if (userContext['workspace_id'] === undefined) userContext['workspace_id'] = resolvedWorkspaceId;
+                    if (userContext['workspaceId'] === undefined) userContext['workspaceId'] = resolvedWorkspaceId;
+                    if (userContext['project_id'] === undefined) userContext['project_id'] = resolvedProjectNumber;
+                    if (userContext['projectId'] === undefined) userContext['projectId'] = resolvedProjectNumber;
                     
                     // IMPORTANT: The worker relies on capturing the AuthContext from AsyncLocalStorage.
                     // We must run the execution wrapped in the current context so the worker thread

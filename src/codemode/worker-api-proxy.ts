@@ -22,7 +22,8 @@ export function buildApiProxy(
     rpcCall: (group: string, method: string, args: unknown[]) => Promise<unknown>,
     methods: Record<string, string[]>,
     schemas?: Record<string, Record<string, string>>,
-    readonlyMode?: boolean
+    readonlyMode?: boolean,
+    contextObj?: Record<string, unknown>
 ): Record<string, unknown> {
     // Freeze note: Group namespaces are Proxy objects and cannot be frozen
     // via Object.freeze(). Schema descriptors are function closures attached
@@ -420,6 +421,9 @@ export function buildApiProxy(
         get: adminGetProject,
         getProject: adminGetProject,
         get_project: adminGetProject,
+        find: adminGetProject,
+        findProject: adminGetProject,
+        find_project: adminGetProject,
         register: adminRegisterProject,
         registerProject: adminRegisterProject,
         register_project: adminRegisterProject,
@@ -560,6 +564,64 @@ export function buildApiProxy(
     });
     api['system'] = systemProxy;
 
+    // Context namespace proxy & shims
+    const contextData: Record<string, unknown> = {
+        success: true,
+        project_number: contextObj?.['project_number'] ?? contextObj?.['projectNumber'] ?? 1,
+        projectNumber: contextObj?.['projectNumber'] ?? contextObj?.['project_number'] ?? 1,
+        session_id: contextObj?.['session_id'] ?? contextObj?.['sessionId'] ?? 'session-default',
+        sessionId: contextObj?.['sessionId'] ?? contextObj?.['session_id'] ?? 'session-default',
+        workspace_id: contextObj?.['workspace_id'] ?? contextObj?.['workspaceId'] ?? 'default',
+        workspaceId: contextObj?.['workspaceId'] ?? contextObj?.['workspace_id'] ?? 'default',
+        project_id: contextObj?.['project_id'] ?? contextObj?.['projectId'] ?? contextObj?.['project_number'] ?? 1,
+        projectId: contextObj?.['projectId'] ?? contextObj?.['project_id'] ?? contextObj?.['project_number'] ?? 1,
+        ...(contextObj ?? {}),
+    };
+
+    const getContextRpc = (keyOrObj?: unknown): Promise<unknown> => {
+        if (typeof keyOrObj === 'string' && keyOrObj in contextData) {
+            return wrapPromise(Promise.resolve(wrapResult(contextData[keyOrObj])), 'get_context');
+        }
+        return wrapPromise(Promise.resolve(wrapResult(contextData)), 'get_context');
+    };
+
+    const contextCallable = function(this: unknown, ...args: unknown[]): Promise<unknown> {
+        return getContextRpc(args[0]);
+    };
+
+    const contextObjProxy: Record<string, unknown> = {
+        get: getContextRpc,
+        getContext: getContextRpc,
+        get_context: getContextRpc,
+        find: getContextRpc,
+        list: getContextRpc,
+        ...contextData,
+    };
+    Object.assign(contextCallable, contextObjProxy);
+
+    const contextProxy = new Proxy(contextCallable, {
+        apply(_t, _thisArg, args: unknown[]): Promise<unknown> {
+            return getContextRpc(args[0]);
+        },
+        get(t, p): unknown {
+            if (typeof p === 'symbol' || p === 'then') return undefined;
+            if (p in t) return Reflect.get(t, p);
+            if (typeof p === 'string') {
+                if (p === 'get' || p === 'getContext' || p === 'get_context' || p === 'find' || p === 'list') {
+                    return getContextRpc;
+                }
+                if (p in contextData) {
+                    return contextData[p];
+                }
+            }
+            return Reflect.get(t, p);
+        },
+    });
+
+    api['context'] = contextProxy;
+    api['getContext'] = getContextRpc;
+    api['get_context'] = getContextRpc;
+
     return new Proxy(api, {
         get(target, prop) {
             if (typeof prop === 'symbol') return undefined
@@ -570,6 +632,8 @@ export function buildApiProxy(
             if (prop === 'projects' || prop === 'project') return target['projects']
             if (prop === 'tags' || prop === 'tag') return target['tags']
             if (prop === 'system') return target['system']
+            if (prop === 'context') return target['context']
+            if (prop === 'getContext' || prop === 'get_context') return target['getContext']
             if (prop === 'sqlite' || prop === 'sqlite3' || prop === 'db') return target
             if (prop === 'then') return undefined
 
