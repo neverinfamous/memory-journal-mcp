@@ -232,6 +232,18 @@ export const DUMMY_PROJECT_TOOL_NAMES = [
     'mj_admin_get_project',
 ]
 
+export const DUMMY_ADAPTER_TOOL_NAMES = [
+    'list_adapters',
+    'listAdapters',
+    'list-adapters',
+    'mj_list_adapters',
+    'mjListAdapters',
+    'get_adapters',
+    'getAdapters',
+    'get-adapters',
+    'adapters',
+]
+
 export const DUMMY_HEALING_TOOL_NAMES = new Set<string>([
     'create_entry',
     ...DUMMY_ENTRY_CREATION_TOOL_NAMES,
@@ -249,6 +261,7 @@ export const DUMMY_HEALING_TOOL_NAMES = new Set<string>([
     ...DUMMY_SQL_EXECUTION_TOOL_NAMES,
     ...DUMMY_SERVER_INFO_TOOL_NAMES,
     ...DUMMY_PROJECT_TOOL_NAMES,
+    ...DUMMY_ADAPTER_TOOL_NAMES,
     'mj_core_create_entry',
     'mj_core_search_entries',
     'mj_core_get_recent_entries',
@@ -475,6 +488,47 @@ export function getDummyHealingTools(context?: ToolContext): ToolDefinition[] {
                 tools: true,
             },
             _healing_note: `🛠️ AUTONOMOUS HEALING: '${toolName}' was called as an MCP tool. Returned server diagnostic information and health status successfully.`,
+        }
+    }
+
+    const handleListAdapters = (toolName: string): unknown => {
+        const adapters = [
+            {
+                name: 'sqlite',
+                type: 'database',
+                driver: 'better-sqlite3',
+                status: 'connected',
+                primary: true,
+                description: 'Primary SQLite storage engine for journal entries, tags, and relationships',
+            },
+            {
+                name: 'sqlite-vec',
+                type: 'vector',
+                driver: 'sqlite-vec',
+                status: context?.vectorManager !== undefined && context.vectorManager !== null ? 'connected' : 'ready',
+                description: 'Native vector embeddings and semantic search engine',
+            },
+            {
+                name: 'team',
+                type: 'database',
+                driver: 'better-sqlite3',
+                status: context?.teamDb !== undefined && context.teamDb !== null ? 'connected' : 'disabled',
+                description: 'Collaborative team journal database adapter',
+            },
+            {
+                name: 'github',
+                type: 'integration',
+                driver: 'octokit / gh',
+                status: context?.github !== undefined && context.github !== null ? 'connected' : 'disabled',
+                description: 'GitHub synchronization and issue tracking adapter',
+            },
+        ]
+
+        return {
+            success: true,
+            adapters,
+            default_adapter: 'sqlite',
+            _healing_note: `🛠️ AUTONOMOUS HEALING: '${toolName}' was called as an MCP tool. Returned registered database and service adapters successfully.`,
         }
     }
 
@@ -1148,6 +1202,16 @@ export function getDummyHealingTools(context?: ToolContext): ToolDefinition[] {
                     recoverable: true
                 };
             }
+        })),
+        ...DUMMY_ADAPTER_TOOL_NAMES.map((name): ToolDefinition => ({
+            name,
+            title: `List Adapters Fallback (${name})`,
+            description: `Fallback handler for \`${name}\` when called directly as an MCP tool. Returns available database and service adapters.`,
+            group: 'core',
+            inputSchema: z.any(),
+            outputSchema: z.any(),
+            annotations: { readOnlyHint: true, openWorldHint: false },
+            handler: () => handleListAdapters(name),
         }))
     ]
 }

@@ -904,6 +904,46 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
         })
     })
 
+    describe('Layer 1 & Layer 2: Database Adapter Listing (list_adapters) Healing Guardrails', () => {
+        it('should include list_adapters in DUMMY_HEALING_TOOL_NAMES and DUMMY_ADAPTER_TOOL_NAMES', async () => {
+            const { DUMMY_HEALING_TOOL_NAMES, DUMMY_ADAPTER_TOOL_NAMES } = await import(
+                '../src/handlers/tools/core/dummy-healing.js'
+            )
+            expect(DUMMY_ADAPTER_TOOL_NAMES).toContain('list_adapters')
+            expect(DUMMY_ADAPTER_TOOL_NAMES).toContain('listAdapters')
+            expect(DUMMY_ADAPTER_TOOL_NAMES).toContain('adapters')
+            expect(DUMMY_HEALING_TOOL_NAMES.has('list_adapters')).toBe(true)
+            expect(DUMMY_HEALING_TOOL_NAMES.has('listAdapters')).toBe(true)
+            expect(DUMMY_HEALING_TOOL_NAMES.has('adapters')).toBe(true)
+        })
+
+        it('should return adapter listing and healing note when list_adapters is called as a dummy tool', async () => {
+            const { getDummyHealingTools } = await import('../src/handlers/tools/core/dummy-healing.js')
+            const tools = getDummyHealingTools()
+            const listAdaptersTool = tools.find((t) => t.name === 'list_adapters')
+            expect(listAdaptersTool).toBeDefined()
+            if (listAdaptersTool) {
+                const result = (await listAdaptersTool.handler({})) as Record<string, unknown>
+                expect(result['success']).toBe(true)
+                expect(Array.isArray(result['adapters'])).toBe(true)
+                const adapters = result['adapters'] as { name: string; driver: string }[]
+                expect(adapters.some((a) => a.name === 'sqlite')).toBe(true)
+                expect(result['default_adapter']).toBe('sqlite')
+                expect(result['_healing_note']).toContain('🛠️ AUTONOMOUS HEALING')
+            }
+        })
+
+        it('should map list_adapters in METHOD_ALIASES for core, analytics, and admin', async () => {
+            const { METHOD_ALIASES } = await import('../src/codemode/api-constants.js')
+            expect(METHOD_ALIASES.core?.list_adapters).toBe('getStatistics')
+            expect(METHOD_ALIASES.core?.adapters).toBe('getStatistics')
+            expect(METHOD_ALIASES.analytics?.list_adapters).toBe('getStatistics')
+            expect(METHOD_ALIASES.analytics?.adapters).toBe('getStatistics')
+            expect(METHOD_ALIASES.admin?.list_adapters).toBe('getStatistics')
+            expect(METHOD_ALIASES.admin?.adapters).toBe('getStatistics')
+        })
+    })
+
     describe('Layer 7: JSON.parse(context) and memory_read_resource Healing', () => {
         it('should auto-heal JSON.parse(context) expressions in healCodeModeScript', async () => {
             const { healCodeModeScript } = await import('../src/handlers/tools/codemode/handler.js')

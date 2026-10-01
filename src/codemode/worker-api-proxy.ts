@@ -548,6 +548,11 @@ export function buildApiProxy(
         getHealth: getStats,
         status: getStats,
         getStatus: getStats,
+        adapters: getStats,
+        listAdapters: getStats,
+        list_adapters: getStats,
+        getAdapters: getStats,
+        get_adapters: getStats,
         ping: (): Promise<unknown> => wrapPromise(Promise.resolve(wrapResult({ success: true, status: 'pong' })), 'ping'),
         version: (): Promise<unknown> => wrapPromise(Promise.resolve(wrapResult({ success: true, version: '1.0.0', name: 'memory-journal-mcp' })), 'version'),
     };
@@ -563,6 +568,7 @@ export function buildApiProxy(
         }
     });
     api['system'] = systemProxy;
+    api['adapters'] = systemProxy;
 
     // Context namespace proxy & shims
     const contextData: Record<string, unknown> = {

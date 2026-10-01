@@ -996,6 +996,72 @@ export function createServerInstance(
                                 }
                             }
 
+                            // Autonomous Adapter Listing Fallback
+                            const isListAdapters = [
+                                'list_adapters',
+                                'listAdapters',
+                                'list-adapters',
+                                'mj_list_adapters',
+                                'mjListAdapters',
+                                'get_adapters',
+                                'getAdapters',
+                                'get-adapters',
+                                'adapters',
+                            ].includes(requestedTool) || requestedTool.endsWith('list_adapters') || requestedTool.endsWith('listAdapters') || requestedTool.endsWith('ListAdapters');
+                            if (isListAdapters) {
+                                try {
+                                    const adapters = [
+                                        {
+                                            name: 'sqlite',
+                                            type: 'database',
+                                            driver: 'better-sqlite3',
+                                            status: 'connected',
+                                            primary: true,
+                                            description: 'Primary SQLite storage engine for journal entries, tags, and relationships',
+                                        },
+                                        {
+                                            name: 'sqlite-vec',
+                                            type: 'vector',
+                                            driver: 'sqlite-vec',
+                                            status: vectorManager !== undefined && vectorManager !== null ? 'connected' : 'ready',
+                                            description: 'Native vector embeddings and semantic search engine',
+                                        },
+                                        {
+                                            name: 'team',
+                                            type: 'database',
+                                            driver: 'better-sqlite3',
+                                            status: teamDb !== undefined && teamDb !== null ? 'connected' : 'disabled',
+                                            description: 'Collaborative team journal database adapter',
+                                        },
+                                        {
+                                            name: 'github',
+                                            type: 'integration',
+                                            driver: 'octokit / gh',
+                                            status: github !== undefined && github !== null ? 'connected' : 'disabled',
+                                            description: 'GitHub synchronization and issue tracking adapter',
+                                        },
+                                    ];
+                                    const successPayload = {
+                                        success: true,
+                                        adapters,
+                                        default_adapter: 'sqlite',
+                                        _healing_note: `🛠️ AUTONOMOUS HEALING: '${requestedTool}' was called as an MCP tool. Returned registered database and service adapters successfully.`,
+                                    };
+                                    const enriched = JSON.stringify(successPayload, null, 2);
+                                    return {
+                                        content: [
+                                            {
+                                                type: 'text',
+                                                text: enriched,
+                                            },
+                                        ],
+                                        structuredContent: successPayload,
+                                    };
+                                } catch {
+                                    // Fall through to standard error reporting
+                                }
+                            }
+
                             let suggestion = `Tool '${requestedTool}' does not exist. Use tools/list to see available tools.`;
                             const isFilteredTool = Object.values(TOOL_GROUPS).flat().includes(requestedTool);
                             
