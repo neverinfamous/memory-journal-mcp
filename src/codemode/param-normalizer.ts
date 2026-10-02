@@ -67,7 +67,43 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
         delete obj['_meta'];
         for (const key of Object.keys(obj)) {
             if (key.startsWith('_') && key !== '_journal') {
+                const strippedKey = key.replace(/^_+/, '');
+                if (strippedKey.length > 0 && obj[strippedKey] === undefined) {
+                    obj[strippedKey] = obj[key];
+                }
                 Reflect.deleteProperty(obj, key);
+            }
+        }
+
+        // Normalize search_path / query / inspection parameters for search/grep tools
+        const isSearchOrGrep = methodName.toLowerCase().includes('search') || 
+            methodName.toLowerCase().includes('grep') || 
+            methodName.toLowerCase().includes('find');
+
+        if (isSearchOrGrep) {
+            if (obj['search_path'] === undefined) {
+                const p = obj['searchPath'] ?? obj['SearchPath'] ?? obj['path'] ?? obj['Path'] ?? obj['dir'] ?? obj['directory'] ?? obj['cwd'];
+                if (typeof p === 'string') obj['search_path'] = p;
+            }
+            if (obj['query'] === undefined) {
+                const q = obj['Query'] ?? obj['pattern'] ?? obj['text'] ?? obj['search'] ?? obj['q'];
+                if (typeof q === 'string') obj['query'] = q;
+            }
+            if (obj['file_pattern'] === undefined) {
+                const fp = obj['filePattern'] ?? obj['FilePattern'] ?? obj['include'];
+                if (typeof fp === 'string') obj['file_pattern'] = fp;
+            }
+            if (obj['case_insensitive'] === undefined) {
+                const ci = obj['caseInsensitive'] ?? obj['CaseInsensitive'] ?? obj['ignore_case'] ?? obj['ignoreCase'];
+                if (typeof ci === 'boolean') obj['case_insensitive'] = ci;
+            }
+            if (obj['is_regex'] === undefined) {
+                const ir = obj['isRegex'] ?? obj['IsRegex'] ?? obj['regex'];
+                if (typeof ir === 'boolean') obj['is_regex'] = ir;
+            }
+            if (obj['match_per_line'] === undefined) {
+                const mpl = obj['matchPerLine'] ?? obj['MatchPerLine'];
+                if (typeof mpl === 'boolean') obj['match_per_line'] = mpl;
             }
         }
 

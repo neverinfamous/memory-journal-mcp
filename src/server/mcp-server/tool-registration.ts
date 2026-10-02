@@ -2,6 +2,7 @@ import { McpServer } from '@modelcontextprotocol/server'
 import type { z } from 'zod'
 import { getEnabledGroups } from '../../filtering/tool-filter.js'
 import { callTool } from '../../handlers/tools/index.js'
+import { getDummyHealingTools } from '../../handlers/tools/core/dummy-healing.js'
 import { readResource, validateResourceSubscription, getResources } from '../../handlers/resources/index.js'
 import { getPrompt, getPrompts } from '../../handlers/prompts/index.js'
 import { generateStandardInstructions, generateCodeModeInstructions } from '../../constants/server-instructions.js'
@@ -432,7 +433,9 @@ export function createServerInstance(
                             if (obj !== null && typeof obj === 'object') {
                                 const newObj: Record<string, unknown> = {}
                                 for (const [k, v] of Object.entries(obj)) {
-                                    const snakeKey = k.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
+                                    const snakeKey = k
+                                        .replace(/^[A-Z]/, (letter) => letter.toLowerCase())
+                                        .replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
                                     newObj[snakeKey] = deepCamelToSnake(v)
                                 }
                                 return newObj
@@ -526,6 +529,43 @@ export function createServerInstance(
                         ]);
                         if (req.params.name && ALIASED_GET_PROJECT_NAMES.has(req.params.name)) {
                             req.params.name = 'get_project';
+                        }
+
+                        const ALIASED_GREP_SEARCH_NAMES = new Set([
+                            'grep_search',
+                            'grepSearch',
+                            'grep',
+                            'file_search',
+                            'fileSearch',
+                            'find_in_files',
+                            'findInFiles',
+                            'search_files',
+                            'searchFiles',
+                        ]);
+                        if (req.params.name && ALIASED_GREP_SEARCH_NAMES.has(req.params.name)) {
+                            req.params.name = 'grep_search';
+                        }
+
+                        const ALIASED_VIEW_FILE_NAMES = new Set([
+                            'view_file',
+                            'viewFile',
+                            'read_file',
+                            'readFile',
+                            'get_file',
+                            'getFile',
+                        ]);
+                        if (req.params.name && ALIASED_VIEW_FILE_NAMES.has(req.params.name)) {
+                            req.params.name = 'view_file';
+                        }
+
+                        const ALIASED_LIST_DIR_NAMES = new Set([
+                            'list_dir',
+                            'listDir',
+                            'read_dir',
+                            'readDir',
+                        ]);
+                        if (req.params.name && ALIASED_LIST_DIR_NAMES.has(req.params.name)) {
+                            req.params.name = 'list_dir';
                         }
 
                         // Apply global anti-hallucination parameter interceptions & smoothing
@@ -1057,6 +1097,103 @@ export function createServerInstance(
                                         ],
                                         structuredContent: successPayload,
                                     };
+                                } catch {
+                                    // Fall through to standard error reporting
+                                }
+                            }
+
+                            // Autonomous Grep / Codebase Search Fallback
+                            const isGrepSearch = [
+                                'grep_search',
+                                'grepSearch',
+                                'grep',
+                                'file_search',
+                                'fileSearch',
+                                'find_in_files',
+                                'findInFiles',
+                                'search_files',
+                                'searchFiles',
+                            ].includes(requestedTool) || requestedTool.endsWith('grep_search') || requestedTool.endsWith('grepSearch');
+                            if (isGrepSearch) {
+                                try {
+                                    const dummyTools = getDummyHealingTools({ db, teamDb: teamDb ?? undefined, vectorManager: vectorManager ?? undefined, teamVectorManager: teamVectorManager ?? undefined, github: github ?? undefined, config: customToolHandlerConfig });
+                                    const grepTool = dummyTools.find(t => t.name === 'grep_search');
+                                    if (grepTool) {
+                                        const res = await Promise.resolve(grepTool.handler(toolArgs));
+                                        const enriched = JSON.stringify(res, null, 2);
+                                        return {
+                                            content: [
+                                                {
+                                                    type: 'text',
+                                                    text: enriched,
+                                                },
+                                            ],
+                                            structuredContent: res as Record<string, unknown>,
+                                        };
+                                    }
+                                } catch {
+                                    // Fall through to standard error reporting
+                                }
+                            }
+
+                            // Autonomous File View Fallback
+                            const isViewFile = [
+                                'view_file',
+                                'viewFile',
+                                'read_file',
+                                'readFile',
+                                'get_file',
+                                'getFile',
+                                'cat',
+                            ].includes(requestedTool);
+                            if (isViewFile) {
+                                try {
+                                    const dummyTools = getDummyHealingTools({ db, teamDb: teamDb ?? undefined, vectorManager: vectorManager ?? undefined, teamVectorManager: teamVectorManager ?? undefined, github: github ?? undefined, config: customToolHandlerConfig });
+                                    const viewTool = dummyTools.find(t => t.name === 'view_file');
+                                    if (viewTool) {
+                                        const res = await Promise.resolve(viewTool.handler(toolArgs));
+                                        const enriched = JSON.stringify(res, null, 2);
+                                        return {
+                                            content: [
+                                                {
+                                                    type: 'text',
+                                                    text: enriched,
+                                                },
+                                            ],
+                                            structuredContent: res as Record<string, unknown>,
+                                        };
+                                    }
+                                } catch {
+                                    // Fall through to standard error reporting
+                                }
+                            }
+
+                            // Autonomous Directory List Fallback
+                            const isListDir = [
+                                'list_dir',
+                                'listDir',
+                                'read_dir',
+                                'readDir',
+                                'ls',
+                                'dir',
+                            ].includes(requestedTool);
+                            if (isListDir) {
+                                try {
+                                    const dummyTools = getDummyHealingTools({ db, teamDb: teamDb ?? undefined, vectorManager: vectorManager ?? undefined, teamVectorManager: teamVectorManager ?? undefined, github: github ?? undefined, config: customToolHandlerConfig });
+                                    const dirTool = dummyTools.find(t => t.name === 'list_dir');
+                                    if (dirTool) {
+                                        const res = await Promise.resolve(dirTool.handler(toolArgs));
+                                        const enriched = JSON.stringify(res, null, 2);
+                                        return {
+                                            content: [
+                                                {
+                                                    type: 'text',
+                                                    text: enriched,
+                                                },
+                                            ],
+                                            structuredContent: res as Record<string, unknown>,
+                                        };
+                                    }
                                 } catch {
                                     // Fall through to standard error reporting
                                 }

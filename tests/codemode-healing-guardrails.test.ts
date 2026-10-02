@@ -1604,6 +1604,142 @@ return { success: true, projectId };
             expect(proxy.context.project_number).toBe(7);
             expect(proxy.context.session_id).toBe('sess-abc');
         });
+    });
+
+    describe('Native Tool & Codebase Search Fallbacks (agent-issues.jsonl regression)', () => {
+        it('should handle grep_search invoked directly as MCP tool (agent-issues.jsonl regression)', async () => {
+            const dummyTools = getDummyHealingTools()
+            const grepTool = dummyTools.find((t) => t.name === 'grep_search')
+            expect(grepTool).toBeDefined()
+
+            // Test on src/constants directory
+            const res = (await grepTool?.handler({
+                _case_insensitive: true,
+                _file_pattern: 'gotchas.ts',
+                _is_regex: false,
+                _match_per_line: true,
+                _query: 'GOTCHAS_HELP',
+                _search_path: 'src/constants/instructions',
+            })) as Record<string, unknown>
+
+            expect(res['success']).toBe(true)
+            expect(Array.isArray(res['matches'])).toBe(true)
+            expect((res['matches'] as unknown[]).length).toBeGreaterThan(0)
+            expect(res['_healing_note']).toContain('🛠️ AUTONOMOUS HEALING')
+        })
+
+        it('should handle non-existent directory in grep_search without crashing', async () => {
+            const dummyTools = getDummyHealingTools()
+            const grepTool = dummyTools.find((t) => t.name === 'grep_search')
+            expect(grepTool).toBeDefined()
+
+            const res = (await grepTool?.handler({
+                _case_insensitive: true,
+                _file_pattern: 'text.ts',
+                _is_regex: false,
+                _match_per_line: true,
+                _query: 'advancedSearch',
+                _search_path: 'C:\\NonExistentPath\\schemas',
+            })) as Record<string, unknown>
+
+            expect(res['success']).toBe(true)
+            expect(res['totalMatches']).toBe(0)
+            expect(res['_healing_note']).toBeDefined()
+        })
+
+        it('should route grep_search to search_entries when no path is provided', async () => {
+            let searchCalledWith: unknown = null
+            const mockContext = {
+                db: {
+                    getHealthStatus: () => ({ status: 'ok' }),
+                },
+                config: {},
+            } as any
+
+            const dummyTools = getDummyHealingTools({
+                ...mockContext,
+                db: {
+                    searchEntries: (q: string) => {
+                        searchCalledWith = q
+                        return { entries: [{ id: 1, content: 'test match' }], total: 1, count: 1 }
+                    },
+                    searchFts: () => ({ entries: [{ id: 1, content: 'test match' }], total: 1, count: 1 }),
+                    getHealthStatus: () => ({ status: 'ok' }),
+                } as any,
+            })
+            const grepTool = dummyTools.find((t) => t.name === 'grep_search')
+            expect(grepTool).toBeDefined()
+
+            const res = (await grepTool?.handler({
+                query: 'test query',
+            })) as Record<string, unknown>
+
+            expect(res['success']).toBe(true)
+            expect(res['_healing_note']).toContain('🛠️ AUTONOMOUS HEALING')
+        })
+
+        it('should handle view_file and list_dir dummy tools', async () => {
+            const dummyTools = getDummyHealingTools()
+            const viewTool = dummyTools.find((t) => t.name === 'view_file')
+            const listTool = dummyTools.find((t) => t.name === 'list_dir')
+            expect(viewTool).toBeDefined()
+            expect(listTool).toBeDefined()
+
+            const viewRes = (await viewTool?.handler({
+                path: 'package.json',
+                start_line: 1,
+                end_line: 5,
+            })) as Record<string, unknown>
+
+            expect(viewRes['success']).toBe(true)
+            expect(typeof viewRes['content']).toBe('string')
+            expect(viewRes['content'] as string).toContain('memory-journal-mcp')
+            expect(viewRes['_healing_note']).toContain('🛠️ AUTONOMOUS HEALING')
+
+            const listRes = (await listTool?.handler({
+                path: 'src',
+            })) as Record<string, unknown>
+
+            expect(listRes['success']).toBe(true)
+            expect(Array.isArray(listRes['entries'])).toBe(true)
+            expect((listRes['entries'] as unknown[]).length).toBeGreaterThan(0)
+            expect(listRes['_healing_note']).toContain('🛠️ AUTONOMOUS HEALING')
+        })
+
+        it('should unwrap leading underscores and normalize search parameters in param-normalizer', async () => {
+            const { applyArgInterceptions } = await import('../src/codemode/param-normalizer.js')
+            const intercept = applyArgInterceptions('search_entries', [{
+                _query: 'database',
+                _search_path: 'src',
+                _case_insensitive: true,
+                _file_pattern: '*.ts',
+                _is_regex: false,
+                _match_per_line: true,
+            }])
+
+            expect('args' in intercept).toBe(true)
+            if ('args' in intercept) {
+                const normalized = intercept.args[0] as Record<string, unknown>
+                expect(normalized['query']).toBe('database')
+                expect(normalized['search_path']).toBe('src')
+                expect(normalized['case_insensitive']).toBe(true)
+                expect(normalized['file_pattern']).toBe('*.ts')
+                expect(normalized['is_regex']).toBe(false)
+                expect(normalized['match_per_line']).toBe(true)
+                expect(normalized['_query']).toBeUndefined()
+                expect(normalized['_search_path']).toBeUndefined()
+            }
+        })
+
+        it('should map grep and file search aliases in METHOD_ALIASES for search and core', async () => {
+            const { METHOD_ALIASES } = await import('../src/codemode/api-constants.js')
+            expect(METHOD_ALIASES['search']?.['grep_search']).toBe('searchEntries')
+            expect(METHOD_ALIASES['search']?.['grepSearch']).toBe('searchEntries')
+            expect(METHOD_ALIASES['search']?.['file_search']).toBe('searchEntries')
+            expect(METHOD_ALIASES['core']?.['grep_search']).toBe('searchEntries')
+            expect(METHOD_ALIASES['core']?.['view_file']).toBe('getEntryById')
+            expect(METHOD_ALIASES['core']?.['list_dir']).toBe('getRecentEntries')
+        })
     })
 })
 

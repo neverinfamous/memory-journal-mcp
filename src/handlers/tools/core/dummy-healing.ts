@@ -1,3 +1,5 @@
+import * as fs from 'node:fs'
+import * as path from 'node:path'
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { VERSION } from '../../../version.js'
@@ -244,6 +246,37 @@ export const DUMMY_ADAPTER_TOOL_NAMES = [
     'adapters',
 ]
 
+export const DUMMY_GREP_SEARCH_TOOL_NAMES = [
+    'grep_search',
+    'grepSearch',
+    'grep',
+    'file_search',
+    'fileSearch',
+    'find_in_files',
+    'findInFiles',
+    'search_files',
+    'searchFiles',
+]
+
+export const DUMMY_FILE_VIEW_TOOL_NAMES = [
+    'view_file',
+    'viewFile',
+    'read_file',
+    'readFile',
+    'cat',
+    'get_file',
+    'getFile',
+]
+
+export const DUMMY_DIR_LIST_TOOL_NAMES = [
+    'list_dir',
+    'listDir',
+    'read_dir',
+    'readDir',
+    'ls',
+    'dir',
+]
+
 export const DUMMY_HEALING_TOOL_NAMES = new Set<string>([
     'create_entry',
     ...DUMMY_ENTRY_CREATION_TOOL_NAMES,
@@ -262,6 +295,9 @@ export const DUMMY_HEALING_TOOL_NAMES = new Set<string>([
     ...DUMMY_SERVER_INFO_TOOL_NAMES,
     ...DUMMY_PROJECT_TOOL_NAMES,
     ...DUMMY_ADAPTER_TOOL_NAMES,
+    ...DUMMY_GREP_SEARCH_TOOL_NAMES,
+    ...DUMMY_FILE_VIEW_TOOL_NAMES,
+    ...DUMMY_DIR_LIST_TOOL_NAMES,
     'mj_core_create_entry',
     'mj_core_search_entries',
     'mj_core_get_recent_entries',
@@ -272,6 +308,100 @@ export const DUMMY_HEALING_TOOL_NAMES = new Set<string>([
     'mj_admin_list_projects',
     ...DUMMY_DOTTED_TOOL_NAMES,
 ])
+
+export interface GrepMatch {
+    file: string
+    line: number
+    text: string
+}
+
+export function searchDirectory(
+    dir: string,
+    query: string,
+    options: {
+        filePattern?: string
+        caseInsensitive?: boolean
+        isRegex?: boolean
+        maxResults?: number
+    }
+): GrepMatch[] {
+    const results: GrepMatch[] = []
+    const maxResults = typeof options.maxResults === 'number' ? options.maxResults : 500
+
+    let matcher: RegExp
+    try {
+        if (options.isRegex === true) {
+            matcher = new RegExp(query, options.caseInsensitive === true ? 'i' : '')
+        } else {
+            const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+            matcher = new RegExp(escaped, options.caseInsensitive === true ? 'i' : '')
+        }
+    } catch {
+        const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        matcher = new RegExp(escaped, options.caseInsensitive === true ? 'i' : '')
+    }
+
+    const IGNORED_DIRS = new Set(['node_modules', '.git', '.test-output', 'dist', '.cache', 'coverage', '.turbo'])
+
+    function traverse(currentDir: string): void {
+        if (results.length >= maxResults) return
+        let entries: fs.Dirent[]
+        try {
+            entries = fs.readdirSync(currentDir, { withFileTypes: true })
+        } catch {
+            return
+        }
+
+        for (const entry of entries) {
+            if (results.length >= maxResults) break
+            const fullPath = path.join(currentDir, entry.name)
+
+            if (entry.isDirectory()) {
+                if (!IGNORED_DIRS.has(entry.name)) {
+                    traverse(fullPath)
+                }
+            } else if (entry.isFile()) {
+                if (options.filePattern !== undefined && options.filePattern.length > 0) {
+                    const pattern = options.filePattern.toLowerCase()
+                    const name = entry.name.toLowerCase()
+                    if (pattern.startsWith('*.')) {
+                        const ext = pattern.slice(1)
+                        if (!name.endsWith(ext)) continue
+                    } else {
+                        const cleanPattern = pattern.replace(/^\*+/, '').replace(/\*+$/, '')
+                        if (cleanPattern.length > 0 && !name.includes(cleanPattern)) {
+                            continue
+                        }
+                    }
+                }
+
+                try {
+                    const stat = fs.statSync(fullPath)
+                    if (stat.size > 2 * 1024 * 1024) continue
+
+                    const content = fs.readFileSync(fullPath, 'utf-8')
+                    const lines = content.split('\n')
+                    for (let i = 0; i < lines.length; i++) {
+                        if (results.length >= maxResults) break
+                        const line = lines[i]
+                        if (typeof line === 'string' && matcher.test(line)) {
+                            results.push({
+                                file: fullPath,
+                                line: i + 1,
+                                text: line.trimEnd(),
+                            })
+                        }
+                    }
+                } catch {
+                    // Skip unreadable or locked files
+                }
+            }
+        }
+    }
+
+    traverse(dir)
+    return results
+}
 
 function extractUriFromArgs(args: Record<string, unknown>): string | undefined {
     let uri = typeof args['uri'] === 'string' ? args['uri'] : (typeof args['Uri'] === 'string' ? args['Uri'] : (typeof args['_uri'] === 'string' ? args['_uri'] : undefined))
@@ -529,6 +659,233 @@ export function getDummyHealingTools(context?: ToolContext): ToolDefinition[] {
             adapters,
             default_adapter: 'sqlite',
             _healing_note: `🛠️ AUTONOMOUS HEALING: '${toolName}' was called as an MCP tool. Returned registered database and service adapters successfully.`,
+        }
+    }
+
+    const handleGrepSearch = async (params: unknown, toolName: string): Promise<unknown> => {
+        const raw = (params ?? {}) as Record<string, unknown>
+        const rawArgs: Record<string, unknown> = { ...raw }
+        for (const [k, v] of Object.entries(raw)) {
+            const stripped = k.replace(/^_+/, '')
+            if (stripped.length > 0 && rawArgs[stripped] === undefined) {
+                rawArgs[stripped] = v
+            }
+        }
+        const query = typeof rawArgs['query'] === 'string' ? rawArgs['query'] :
+            (typeof rawArgs['Query'] === 'string' ? rawArgs['Query'] :
+            (typeof rawArgs['pattern'] === 'string' ? rawArgs['pattern'] :
+            (typeof rawArgs['text'] === 'string' ? rawArgs['text'] :
+            (typeof rawArgs['search'] === 'string' ? rawArgs['search'] :
+            (typeof rawArgs['q'] === 'string' ? rawArgs['q'] : '')))))
+
+        const rawPath = typeof rawArgs['search_path'] === 'string' ? rawArgs['search_path'] :
+            (typeof rawArgs['SearchPath'] === 'string' ? rawArgs['SearchPath'] :
+            (typeof rawArgs['searchPath'] === 'string' ? rawArgs['searchPath'] :
+            (typeof rawArgs['path'] === 'string' ? rawArgs['path'] :
+            (typeof rawArgs['Path'] === 'string' ? rawArgs['Path'] :
+            (typeof rawArgs['dir'] === 'string' ? rawArgs['dir'] :
+            (typeof rawArgs['directory'] === 'string' ? rawArgs['directory'] :
+            (typeof rawArgs['cwd'] === 'string' ? rawArgs['cwd'] : undefined)))))))
+
+        const filePattern = typeof rawArgs['file_pattern'] === 'string' ? rawArgs['file_pattern'] :
+            (typeof rawArgs['FilePattern'] === 'string' ? rawArgs['FilePattern'] :
+            (typeof rawArgs['filePattern'] === 'string' ? rawArgs['filePattern'] : undefined))
+
+        const caseInsensitive = rawArgs['case_insensitive'] === true || rawArgs['CaseInsensitive'] === true || rawArgs['caseInsensitive'] === true || rawArgs['ignore_case'] === true
+        const isRegex = rawArgs['is_regex'] === true || rawArgs['IsRegex'] === true || rawArgs['isRegex'] === true
+
+        let searchPath = rawPath
+        if (typeof searchPath === 'string' && searchPath.trim() !== '') {
+            searchPath = path.resolve(searchPath.trim())
+        }
+
+        if (typeof searchPath === 'string' && fs.existsSync(searchPath)) {
+            try {
+                const stat = fs.statSync(searchPath)
+                const targetDir = stat.isDirectory() ? searchPath : path.dirname(searchPath)
+                const targetPattern = stat.isFile() && filePattern === undefined ? path.basename(searchPath) : filePattern
+
+                const matches = searchDirectory(targetDir, query, {
+                    filePattern: targetPattern,
+                    caseInsensitive,
+                    isRegex,
+                })
+
+                return {
+                    success: true,
+                    matches,
+                    totalMatches: matches.length,
+                    searchPath: targetDir,
+                    _healing_note: `🛠️ AUTONOMOUS HEALING: '${toolName}' is an agent-native tool, but was invoked directly as an MCP tool. The search was performed on the filesystem and results returned successfully.`,
+                }
+            } catch (err) {
+                return {
+                    success: false,
+                    error: `Failed to execute grep search on '${searchPath}': ${err instanceof Error ? err.message : String(err)}`,
+                    code: 'SEARCH_ERROR',
+                    category: 'search',
+                    recoverable: true,
+                }
+            }
+        }
+
+        // If search_path is not a directory or not provided, route to search_entries if query is present
+        if (context && query.trim() !== '') {
+            const searchTools = getSearchTools(context)
+            const searchTool = searchTools.find((t: ToolDefinition) => t.name === 'search_entries')
+            if (searchTool) {
+                try {
+                    const searchResult = await Promise.resolve(searchTool.handler({ query }))
+                    if (typeof searchResult === 'object' && searchResult !== null && (searchResult as Record<string, unknown>)['success'] !== false) {
+                        return {
+                            success: true,
+                            ...(searchResult as Record<string, unknown>),
+                            _healing_note: `🛠️ AUTONOMOUS HEALING: '${toolName}' was invoked as an MCP tool without a local directory path. It was automatically routed to journal 'search_entries' and executed successfully.`,
+                        }
+                    }
+                } catch {
+                    // Fall through to empty matches
+                }
+            }
+        }
+
+        return {
+            success: true,
+            matches: [],
+            totalMatches: 0,
+            _healing_note: `🛠️ AUTONOMOUS HEALING: '${toolName}' was executed, but directory was not found or yielded 0 matches. For codebase search, provide a valid 'search_path'. For journal search, use 'search_entries'.`,
+        }
+    }
+
+    const handleViewFile = (params: unknown, toolName: string): unknown => {
+        const raw = (params ?? {}) as Record<string, unknown>
+        const rawArgs: Record<string, unknown> = { ...raw }
+        for (const [k, v] of Object.entries(raw)) {
+            const stripped = k.replace(/^_+/, '')
+            if (stripped.length > 0 && rawArgs[stripped] === undefined) {
+                rawArgs[stripped] = v
+            }
+        }
+        const targetPath = typeof rawArgs['path'] === 'string' ? rawArgs['path'] :
+            (typeof rawArgs['Path'] === 'string' ? rawArgs['Path'] :
+            (typeof rawArgs['target_file'] === 'string' ? rawArgs['target_file'] :
+            (typeof rawArgs['targetFile'] === 'string' ? rawArgs['targetFile'] :
+            (typeof rawArgs['target'] === 'string' ? rawArgs['target'] :
+            (typeof rawArgs['Target'] === 'string' ? rawArgs['Target'] :
+            (typeof rawArgs['absolute_path'] === 'string' ? rawArgs['absolute_path'] :
+            (typeof rawArgs['AbsolutePath'] === 'string' ? rawArgs['AbsolutePath'] :
+            (typeof rawArgs['file'] === 'string' ? rawArgs['file'] :
+            (typeof rawArgs['File'] === 'string' ? rawArgs['File'] :
+            (typeof rawArgs['filename'] === 'string' ? rawArgs['filename'] :
+            (typeof rawArgs['fileName'] === 'string' ? rawArgs['fileName'] : undefined)))))))))))
+
+        if (targetPath === undefined || targetPath.trim() === '') {
+            return {
+                success: false,
+                error: `🛠️ AUTONOMOUS HEALING: '${toolName}' requires a valid file path parameter ('path' or 'AbsolutePath').`,
+                code: 'VALIDATION_ERROR',
+                category: 'validation',
+                recoverable: true,
+            }
+        }
+
+        if (targetPath.includes('://')) {
+            return handleReadResource(params, toolName)
+        }
+
+        const resolved = path.resolve(targetPath.trim())
+        if (!fs.existsSync(resolved)) {
+            return {
+                success: false,
+                error: `🛠️ AUTONOMOUS HEALING: File not found at '${targetPath}'.`,
+                code: 'NOT_FOUND',
+                category: 'filesystem',
+                recoverable: true,
+            }
+        }
+
+        try {
+            const content = fs.readFileSync(resolved, 'utf-8')
+            const startLine = typeof rawArgs['start_line'] === 'number' ? rawArgs['start_line'] : (typeof rawArgs['StartLine'] === 'number' ? rawArgs['StartLine'] : undefined)
+            const endLine = typeof rawArgs['end_line'] === 'number' ? rawArgs['end_line'] : (typeof rawArgs['EndLine'] === 'number' ? rawArgs['EndLine'] : undefined)
+
+            let outputContent = content
+            if (startLine !== undefined || endLine !== undefined) {
+                const lines = content.split('\n')
+                const start = Math.max(1, startLine ?? 1) - 1
+                const end = Math.min(lines.length, endLine ?? lines.length)
+                outputContent = lines.slice(start, end).join('\n')
+            }
+
+            return {
+                success: true,
+                path: resolved,
+                content: outputContent,
+                _healing_note: `🛠️ AUTONOMOUS HEALING: '${toolName}' is an agent-native tool, but was invoked directly as an MCP tool. File read successfully from disk.`,
+            }
+        } catch (err) {
+            return {
+                success: false,
+                error: `Failed to read file '${targetPath}': ${err instanceof Error ? err.message : String(err)}`,
+                code: 'IO_ERROR',
+                category: 'filesystem',
+                recoverable: true,
+            }
+        }
+    }
+
+    const handleListDir = (params: unknown, toolName: string): unknown => {
+        const raw = (params ?? {}) as Record<string, unknown>
+        const rawArgs: Record<string, unknown> = { ...raw }
+        for (const [k, v] of Object.entries(raw)) {
+            const stripped = k.replace(/^_+/, '')
+            if (stripped.length > 0 && rawArgs[stripped] === undefined) {
+                rawArgs[stripped] = v
+            }
+        }
+        const targetDir = typeof rawArgs['dir_path'] === 'string' ? rawArgs['dir_path'] :
+            (typeof rawArgs['dirPath'] === 'string' ? rawArgs['dirPath'] :
+            (typeof rawArgs['path'] === 'string' ? rawArgs['path'] :
+            (typeof rawArgs['Path'] === 'string' ? rawArgs['Path'] :
+            (typeof rawArgs['directory'] === 'string' ? rawArgs['directory'] :
+            (typeof rawArgs['Directory'] === 'string' ? rawArgs['Directory'] :
+            (typeof rawArgs['target'] === 'string' ? rawArgs['target'] :
+            (typeof rawArgs['Target'] === 'string' ? rawArgs['Target'] : undefined)))))))
+
+        const dirToRead = typeof targetDir === 'string' && targetDir.trim() !== '' ? path.resolve(targetDir.trim()) : process.cwd()
+
+        if (!fs.existsSync(dirToRead)) {
+            return {
+                success: false,
+                error: `🛠️ AUTONOMOUS HEALING: Directory not found at '${dirToRead}'.`,
+                code: 'NOT_FOUND',
+                category: 'filesystem',
+                recoverable: true,
+            }
+        }
+
+        try {
+            const dirents = fs.readdirSync(dirToRead, { withFileTypes: true })
+            const entries = dirents.map(d => ({
+                name: d.name,
+                isDirectory: d.isDirectory(),
+                isFile: d.isFile(),
+            }))
+
+            return {
+                success: true,
+                path: dirToRead,
+                entries,
+                _healing_note: `🛠️ AUTONOMOUS HEALING: '${toolName}' is an agent-native tool, but was invoked directly as an MCP tool. Directory listed successfully from disk.`,
+            }
+        } catch (err) {
+            return {
+                success: false,
+                error: `Failed to list directory '${dirToRead}': ${err instanceof Error ? err.message : String(err)}`,
+                code: 'IO_ERROR',
+                category: 'filesystem',
+                recoverable: true,
+            }
         }
     }
 
@@ -1212,6 +1569,36 @@ export function getDummyHealingTools(context?: ToolContext): ToolDefinition[] {
             outputSchema: z.any(),
             annotations: { readOnlyHint: true, openWorldHint: false },
             handler: () => handleListAdapters(name),
+        })),
+        ...DUMMY_GREP_SEARCH_TOOL_NAMES.map((name): ToolDefinition => ({
+            name,
+            title: `Grep Search Fallback (${name})`,
+            description: `Fallback handler for \`${name}\` when called directly as an MCP tool. Performs filesystem search or routes to journal search.`,
+            group: 'search',
+            inputSchema: z.any(),
+            outputSchema: z.any(),
+            annotations: { readOnlyHint: true, openWorldHint: false },
+            handler: async (params: unknown) => handleGrepSearch(params, name),
+        })),
+        ...DUMMY_FILE_VIEW_TOOL_NAMES.map((name): ToolDefinition => ({
+            name,
+            title: `View File Fallback (${name})`,
+            description: `Fallback handler for \`${name}\` when called directly as an MCP tool. Reads file content from disk.`,
+            group: 'core',
+            inputSchema: z.any(),
+            outputSchema: z.any(),
+            annotations: { readOnlyHint: true, openWorldHint: false },
+            handler: (params: unknown) => handleViewFile(params, name),
+        })),
+        ...DUMMY_DIR_LIST_TOOL_NAMES.map((name): ToolDefinition => ({
+            name,
+            title: `List Directory Fallback (${name})`,
+            description: `Fallback handler for \`${name}\` when called directly as an MCP tool. Lists directory entries from disk.`,
+            group: 'core',
+            inputSchema: z.any(),
+            outputSchema: z.any(),
+            annotations: { readOnlyHint: true, openWorldHint: false },
+            handler: (params: unknown) => handleListDir(params, name),
         }))
     ]
 }
