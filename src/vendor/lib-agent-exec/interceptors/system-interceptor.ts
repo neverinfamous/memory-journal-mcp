@@ -6,10 +6,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import { convertToWslPath, getPositionalArgs, healFragmentedQuotes, escapeUnixArg } from '../command-utils.js';
 import { getUnquoted } from './utils.js';
+import { findEcosystemScript } from '../utils.js';
 import { runMutatingInterceptors } from './mutating-interceptors.js';
 import { runStructuralInterceptors } from './structural-interceptors.js';
 import { healPathHallucinations, healEvalCodePathHallucinations } from '../path-healer.js';
 import { handleFindInterception, handleRipgrepInterception, handleGrepInterception } from './search-interceptor.js';
+import { isPowerShellCode } from '../eval-healer.js';
 const INTERPRETER_INLINE_FLAGS: Record<string, readonly string[]> = {
   node: ['-e', '--eval', '-p', '--print'],
   bun: ['-e', '--eval', '-p', '--print'],
@@ -65,10 +67,10 @@ export function systemInterceptor(ctx: ExecutionContext): void {
 
     // Frictionless Recovery: detect grep_search invocation in eval code
     if (/^grep_search\s*\(/i.test(trimmedCode)) {
-      const patternMatch = trimmedCode.match(/SearchPattern\s*:\s*["'`]([^"'`]+)["'`]/i);
-      const pathMatch = trimmedCode.match(/SearchPath\s*:\s*["'`]([^"'`]+)["'`]/i);
-      const caseMatch = trimmedCode.match(/CaseInsensitive\s*:\s*(true|false)/i);
-      const regexMatch = trimmedCode.match(/IsRegex\s*:\s*(true|false)/i);
+      const patternMatch = trimmedCode.match(/["'`]?(?:SearchPattern|Query|query|pattern)["'`]?\s*:\s*["'`]([^"'`]+)["'`]/i);
+      const pathMatch = trimmedCode.match(/["'`]?(?:SearchPath|path|dir)["'`]?\s*:\s*["'`]([^"'`]+)["'`]/i);
+      const caseMatch = trimmedCode.match(/["'`]?(?:CaseInsensitive|caseInsensitive)["'`]?\s*:\s*(true|false)/i);
+      const regexMatch = trimmedCode.match(/["'`]?(?:IsRegex|isRegex)["'`]?\s*:\s*(true|false)/i);
 
       if (patternMatch !== null && patternMatch[1] !== undefined) {
         const pattern = patternMatch[1];
@@ -82,22 +84,103 @@ export function systemInterceptor(ctx: ExecutionContext): void {
         const flags = ['-n'];
         if (isCaseInsensitive) flags.push('-i');
         if (!isRegex) flags.push('-F');
-        payload.code = `rg ${flags.join(' ')} ${escapeUnixArg(pattern, false)} ${escapeUnixArg(searchPath, false)}`;
+        payload.target = 'wsl2';
+        payload.interpreter = 'bash';
+        payload.code = `rg ${flags.join(' ')} ${escapeUnixArg(pattern, false)} ${escapeUnixArg(convertToWslPath(searchPath), false)}`;
       }
     } else {
       const pkgGrepMatch = trimmedCode.match(/^(?:bun|npm|pnpm|yarn|npx)\s+(?:run\s+)?grep_search\b\s*(.*)$/i);
       if (pkgGrepMatch !== null) {
         const rest = pkgGrepMatch[1] ?? '';
         const sMatch = rest.match(/(?:-s|--symbol|--pattern)\s+["'`]([^"'`]+)["'`]|(?:-s|--symbol|--pattern)\s+([^\s]+)/i);
-        const pMatch = rest.match(/(?:-p|--path)\s+["'`]([^"'`]+)["'`]|(?:-p|--path)\s+([^\s]+)/i);
+        const pMatch = rest.match(/(?:-p|--path|-d|--dir)\s+["'`]([^"'`]+)["'`]|(?:-p|--path|-d|--dir)\s+([^\s]+)/i);
         const pattern = (sMatch !== null ? (sMatch[1] ?? sMatch[2]) : undefined) ?? '';
         const searchPath = (pMatch !== null ? (pMatch[1] ?? pMatch[2]) : undefined) ?? '.';
 
         if (pattern.length > 0) {
           console.error(`\n   💡 AGENT HINT: 'grep_search' executed via package manager in eval code.`);
           console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-translating 'bun run grep_search' to ripgrep (rg)... (Frictionless Recovery)\x1b[0m`);
-          payload.code = `rg -n -F ${escapeUnixArg(pattern, false)} ${escapeUnixArg(searchPath, false)}`;
+          payload.target = 'wsl2';
+          payload.interpreter = 'bash';
+          payload.code = `rg -n -F ${escapeUnixArg(pattern, false)} ${escapeUnixArg(convertToWslPath(searchPath), false)}`;
         }
+      }
+    }
+
+    const gitInspectMatch = trimmedCode.match(/^git\s+(status|log|shortlog|diff)\b(.*)$/i);
+    if (gitInspectMatch !== null && gitInspectMatch[1] !== undefined) {
+      const gitSubCmd = gitInspectMatch[1].toLowerCase();
+      const cwd = payload.cwd !== undefined && payload.cwd.length > 0 ? path.resolve(payload.cwd) : process.cwd();
+      const scriptCandidate = findEcosystemScript(cwd, 'get-git-history-json.ts');
+      const fallbackScript = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace(/^\/([a-zA-Z]:)/, '$1')), '../../get-git-history-json.ts');
+      const script = scriptCandidate ?? fallbackScript;
+
+      if (fs.existsSync(script)) {
+        console.error(`\n   💡 AGENT HINT: 'git ${gitSubCmd}' inside eval payload detected.`);
+        console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-translating 'git ${gitSubCmd}' in eval to get-git-history-json.ts... (Frictionless Recovery)\x1b[0m`);
+        payload.target = 'windows';
+        payload.interpreter = 'bun';
+        const scriptPathEscaped = script.replace(/\\/g, '/');
+        const cwdEscaped = cwd.replace(/\\/g, '/');
+        if (gitSubCmd === 'status') {
+          payload.code = `import { spawnSync } from 'node:child_process'; const res = spawnSync(process.execPath, [${JSON.stringify(scriptPathEscaped)}, '--uncommitted', '--stats'], { stdio: 'inherit', cwd: ${JSON.stringify(cwdEscaped)} }); process.exit(res.status ?? 0);`;
+        } else if (gitSubCmd === 'diff') {
+          payload.code = `import { spawnSync } from 'node:child_process'; const res = spawnSync(process.execPath, [${JSON.stringify(scriptPathEscaped)}, '--stats', '--include-patch'], { stdio: 'inherit', cwd: ${JSON.stringify(cwdEscaped)} }); process.exit(res.status ?? 0);`;
+        } else {
+          payload.code = `import { spawnSync } from 'node:child_process'; const res = spawnSync(process.execPath, [${JSON.stringify(scriptPathEscaped)}], { stdio: 'inherit', cwd: ${JSON.stringify(cwdEscaped)} }); process.exit(res.status ?? 0);`;
+        }
+      }
+    }
+
+    const findGlobMatch = trimmedCode.match(/^find\s+([^\s]+)\s+([*?][^\s]*|[^\s]*[*?][^\s]*)(.*)$/i);
+    if (findGlobMatch !== null && findGlobMatch[1] !== undefined && findGlobMatch[2] !== undefined) {
+      const searchPath = findGlobMatch[1];
+      const pattern = findGlobMatch[2];
+      const rest = findGlobMatch[3] ?? '';
+      console.error(`\n   💡 AGENT HINT: 'find' without '-name' flag detected in eval code.`);
+      console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-injecting '-name' flag for pattern '${pattern}'... (Frictionless Recovery)\x1b[0m`);
+      payload.code = `find ${searchPath} -name "${pattern}" ${rest}`.trim();
+    }
+
+    if (/^find\s+([./~a-zA-Z0-9_-]+)\s+/i.test(payload.code) && !payload.code.includes('-prune')) {
+      const broadFindMatch = payload.code.match(/^find\s+([./~a-zA-Z0-9_-]+)\s+(.*)$/i);
+      if (broadFindMatch !== null && broadFindMatch[1] !== undefined && broadFindMatch[2] !== undefined) {
+        const rootPath = broadFindMatch[1].trim();
+        const rest = broadFindMatch[2];
+        const isBroad = rootPath === '.' || rootPath === './' || rootPath === '..' || rootPath === '../' || rootPath.startsWith('/mnt/') || /^[a-zA-Z]:/.test(rootPath);
+        if (isBroad && !rest.includes('-maxdepth')) {
+          console.error(`\n   🛠️ AUTONOMOUS HEALING: Broad find in eval payload detected. Auto-injecting directory pruning for node_modules, .git, and dist to prevent timeouts... (Frictionless Recovery)\x1b[0m`);
+          payload.code = `find ${rootPath} \\( -name node_modules -o -name .git -o -name dist -o -name .cache -o -name coverage \\) -prune -o ${rest}`;
+        }
+      }
+    }
+
+    const rgUnquotedMatch = payload.code.match(/^rg\s+((?:[a-zA-Z0-9_-]+\s+)+)(\/[^\s]+|[a-zA-Z]:[^\s]+|\.[^\s]+|[^\s]+\.[a-zA-Z0-9]+)$/);
+    if (rgUnquotedMatch !== null && rgUnquotedMatch[1] !== undefined && rgUnquotedMatch[2] !== undefined) {
+      const pattern = rgUnquotedMatch[1].trim();
+      const targetPath = rgUnquotedMatch[2].trim();
+      console.error(`\n   🛠️ AUTONOMOUS HEALING: Unquoted search pattern in eval 'rg' detected. Recombining into single quoted pattern... (Frictionless Recovery)\x1b[0m`);
+      payload.code = `rg "${pattern}" ${targetPath}`;
+    }
+
+    const grepDirMatch = payload.code.match(/^(?:grep|egrep)\s+(.*)$/i);
+    if (grepDirMatch !== null && !/\b(?:-[a-zA-Z]*[rR]|--recursive)\b/.test(payload.code)) {
+      const rest = grepDirMatch[1] ?? '';
+      const tokens = rest.trim().split(/\s+/);
+      const isTargetingDir = tokens.some(t => {
+        if (t.startsWith('-')) return false;
+        if (t.endsWith('/') || t.endsWith('\\') || t === '.' || t === '..' || t.startsWith('./') || t.startsWith('../')) return true;
+        try {
+          const cwd = payload.cwd !== undefined && payload.cwd.length > 0 ? path.resolve(payload.cwd) : process.cwd();
+          const p = path.resolve(cwd, t);
+          return fs.existsSync(p) && fs.statSync(p).isDirectory();
+        } catch {
+          return false;
+        }
+      });
+      if (isTargetingDir) {
+        console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected directory target in eval grep without recursive flag. Auto-injecting '-r'... (Frictionless Recovery)\x1b[0m`);
+        payload.code = payload.code.replace(/^(grep|egrep)\b/i, '$1 -r');
       }
     }
 
@@ -169,12 +252,22 @@ export function systemInterceptor(ctx: ExecutionContext): void {
       } else if (payload.type === 'script' && typeof payload.scriptPath === 'string' && fs.existsSync(payload.scriptPath)) {
         scriptContent = fs.readFileSync(payload.scriptPath, 'utf8');
       }
+
+      // If the code is PowerShell code (contains PowerShell cmdlets or variables), NEVER switch it to WSL2 bash!
+      if (isPowerShellCode(scriptContent)) {
+        if (payload.interpreter && ['bash', 'sh'].includes(payload.interpreter.toLowerCase())) {
+          payload.interpreter = 'pwsh';
+          payload.target = 'windows';
+        }
+        return;
+      }
+
       const tokens = scriptContent.split(/[\s;|{>&<]+/).filter(Boolean).map((t: string) => t.toLowerCase());
       
       const cmdStr = tokens.find((t: string) => networkAliases.includes(t));
-      const fsSearchAliases = ['grep', 'grep.exe', 'egrep', 'egrep.exe', 'fgrep', 'fgrep.exe', 'select-string', 'select-string.exe'];
+      const fsSearchAliases = ['grep', 'grep.exe', 'egrep', 'egrep.exe', 'fgrep', 'fgrep.exe'];
       const searchCmdStr = tokens.find((t: string) => fsSearchAliases.includes(t));
-      const fsListAliases = ['ls', 'ls.exe', 'dir', 'dir.exe', 'get-childitem', 'get-childitem.exe', 'gci', 'tree', 'tree.com'];
+      const fsListAliases = ['ls', 'ls.exe', 'dir', 'dir.exe', 'tree', 'tree.com'];
       const listCmdStr = tokens.find((t: string) => fsListAliases.includes(t));
 
       if (cmdStr || searchCmdStr || listCmdStr) {
@@ -193,10 +286,14 @@ export function systemInterceptor(ctx: ExecutionContext): void {
     
     if (payload.type === 'eval' || payload.type === 'script') {
       const codeOrScript = payload.type === 'eval' ? payload.code : (payload.scriptPath || '');
+      const isChainedQuality = codeOrScript && /(?:typecheck|tsc|lint|check|build|test).*(?:&&|;).*(?:typecheck|tsc|lint|check|build|test)/i.test(codeOrScript);
       const hasQualityCheck = codeOrScript && /(?:typecheck|tsc|lint|check|build|test|vitest|jest|playwright)/i.test(codeOrScript);
       const hasMountedSearch = codeOrScript && /(?:find|grep|rg|ls|tree)\b/i.test(codeOrScript);
       
-      if (hasQualityCheck) {
+      if (isChainedQuality) {
+        defaultWslTimeout = 180000;
+        console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected chained quality checks in WSL2 eval payload. Auto-extending timeout to 180s... (Frictionless Recovery)`);
+      } else if (hasQualityCheck) {
         defaultWslTimeout = 90000;
         console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected quality check in WSL2 eval payload. Auto-extending timeout to 90s... (Frictionless Recovery)`);
       } else if (hasMountedSearch) {
@@ -342,6 +439,15 @@ export function systemInterceptor(ctx: ExecutionContext): void {
         if (lower === '-path' || lower === '-path:') {
           continue;
         }
+        if (lower === '-depth' || lower === '-depth:') {
+          if (i + 1 < ctx.args.length && /^\d+$/.test(ctx.args[i + 1])) {
+            skipNext = true;
+          }
+          continue;
+        }
+        if (lower.startsWith('-depth:')) {
+          continue;
+        }
         if (lower === '-filter' || lower === '-include') {
           skipNext = true;
           continue;
@@ -354,7 +460,21 @@ export function systemInterceptor(ctx: ExecutionContext): void {
           cleanedArgs.push('-1');
           continue;
         }
-        if (lower === '-file' || lower === '-directory') {
+        if (lower === '-file' || lower === '-directory' || lower === '/ad' || lower === '/a:d') {
+          continue;
+        }
+        if (/^\/[aA](?::?[a-zA-Z-]*)?$/.test(lower)) {
+          if (lower.includes('h')) {
+            cleanedArgs.push('-a');
+          }
+          continue;
+        }
+        if (/^\/[oO](?::?[a-zA-Z-]*)?$/.test(lower)) {
+          if (lower.includes('t') || lower.includes('d')) cleanedArgs.push('-t');
+          if (lower.includes('s')) cleanedArgs.push('-S');
+          continue;
+        }
+        if (lower === '/w' || lower === '/p' || lower === '/q' || lower === '/c' || lower === '/4') {
           continue;
         }
         if (lower === '-name') {

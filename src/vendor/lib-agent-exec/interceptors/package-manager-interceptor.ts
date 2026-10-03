@@ -4,6 +4,7 @@ import os from 'os';
 import path from 'path';
 import { AUTONOMOUS_HEALING_MSG } from '../utils.js';
 import { ExecutionContext, AGENT_NATIVE_TOOLS, ECOSYSTEM_MCP_TOOLS } from './types.js';
+import { handleRipgrepInterception } from './search-interceptor.js';
 
 export function packageManagerInterceptor(ctx: ExecutionContext): void {
   let { cmdBasename } = ctx;
@@ -133,17 +134,71 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
     const subCmd = args.filter(a => !a.startsWith('-'))[0];
     if (subCmd && (AGENT_NATIVE_TOOLS as readonly string[]).includes(subCmd)) {
       if (subCmd === 'grep_search') {
-        const sIdx = args.findIndex(a => ['-s', '--symbol', '--pattern'].includes(a));
-        const pIdx = args.findIndex(a => ['-p', '--path'].includes(a));
-        const pattern = sIdx !== -1 && sIdx + 1 < args.length ? (args[sIdx + 1] ?? '') : '';
-        const searchPath = pIdx !== -1 && pIdx + 1 < args.length ? (args[pIdx + 1] ?? '.') : '.';
+        const sIdx = args.findIndex(a => ['-s', '--symbol', '--pattern', '--searchpattern', '--search-pattern'].includes(a.toLowerCase()));
+        const pIdx = args.findIndex(a => ['-p', '--path', '-d', '--dir', '--searchpath', '--search-path'].includes(a.toLowerCase()));
+        const subCmdIdx = args.indexOf(subCmd);
+        const argsAfterSubCmd = args.slice(subCmdIdx + 1);
+        const nonFlagAfterSubCmd: string[] = [];
+        for (let i = 0; i < argsAfterSubCmd.length; i++) {
+          const a = argsAfterSubCmd[i];
+          if (['-s', '--symbol', '--pattern', '-p', '--path', '-d', '--dir', '--searchpath', '--search-path', '--searchpattern', '--search-pattern'].includes(a.toLowerCase())) {
+            i++;
+            continue;
+          }
+          if (!a.startsWith('-')) {
+            nonFlagAfterSubCmd.push(a);
+          }
+        }
+        const pattern = sIdx !== -1 && sIdx + 1 < args.length ? (args[sIdx + 1] ?? '') : (nonFlagAfterSubCmd[0] ?? '');
+        const searchPath = pIdx !== -1 && pIdx + 1 < args.length ? (args[pIdx + 1] ?? '.') : (nonFlagAfterSubCmd[1] ?? '.');
         if (pattern.length > 0) {
           console.error(`\n   💡 AGENT HINT: '${subCmd}' is an agent-native tool, NOT a package manager script.`);
           console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-translating '${cmdBasename} ${subCmd}' to ripgrep (rg)... (Frictionless Recovery)\x1b[0m`);
           ctx.cmdBasename = 'rg';
-          ctx.args = ['-n', '-F', pattern, searchPath];
+          const rgFlags = ['-n'];
+          if (args.some(a => a === '-i' || a === '-ri' || a === '-ir' || a === '--case-insensitive' || (a.startsWith('-') && !a.startsWith('--') && a.includes('i')))) {
+            rgFlags.push('-i');
+          }
+          if (args.some(a => a === '-w' || a === '--word-regexp')) {
+            rgFlags.push('-w');
+          }
+          if (!args.some(a => a === '-e' || a === '--regexp')) {
+            rgFlags.push('-F');
+          }
+          ctx.args = [...rgFlags, pattern, searchPath];
           if ('command' in ctx.payload) {
             ctx.payload.command = 'rg';
+            ctx.payload.args = ctx.args;
+          }
+          handleRipgrepInterception(ctx, false);
+          return;
+        }
+      }
+      if (subCmd === 'list_dir') {
+        const subCmdIdx = args.indexOf(subCmd);
+        const pathArg = args.slice(subCmdIdx + 1).find(a => !a.startsWith('-')) ?? '.';
+        console.error(`\n   💡 AGENT HINT: 'list_dir' is an agent-native tool, NOT a package manager script.`);
+        console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-translating '${cmdBasename} ${subCmd}' to ls... (Frictionless Recovery)\x1b[0m`);
+        ctx.cmdBasename = 'ls';
+        ctx.args = [pathArg];
+        ctx.payload.target = 'wsl2';
+        if ('command' in ctx.payload) {
+          ctx.payload.command = 'ls';
+          ctx.payload.args = ctx.args;
+        }
+        return;
+      }
+      if (subCmd === 'view_file') {
+        const subCmdIdx = args.indexOf(subCmd);
+        const fileArg = args.slice(subCmdIdx + 1).find(a => !a.startsWith('-'));
+        if (fileArg) {
+          console.error(`\n   💡 AGENT HINT: 'view_file' is an agent-native tool, NOT a package manager script.`);
+          console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-translating '${cmdBasename} ${subCmd}' to cat... (Frictionless Recovery)\x1b[0m`);
+          ctx.cmdBasename = 'cat';
+          ctx.args = [fileArg];
+          ctx.payload.target = 'wsl2';
+          if ('command' in ctx.payload) {
+            ctx.payload.command = 'cat';
             ctx.payload.args = ctx.args;
           }
           return;

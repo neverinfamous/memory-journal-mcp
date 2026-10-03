@@ -145,6 +145,7 @@ export function gitInterceptor(ctx: ExecutionContext): void {
           }
           const isTargetDifferent = path.resolve(targetCwd) !== path.resolve(process.cwd());
           const scriptToInvoke = scriptCandidate;
+          ctx.payload.target = 'windows';
 
           if (cmd === 'status') {
             console.error(`\n   🛠️ AUTONOMOUS HEALING: Transparently rewriting 'git status' to '${scriptToInvoke} --uncommitted --stats'... (Frictionless Recovery)`);

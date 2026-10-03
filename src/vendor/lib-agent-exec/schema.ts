@@ -64,16 +64,64 @@ const rawPayloadUnion = z.discriminatedUnion("type", [
 ]);
 
 export const PayloadSchema = z.preprocess((val) => {
-  if (typeof val === 'object' && val !== null && !('type' in val)) {
-    if ('command' in val && typeof val.command === 'string') {
-      return { ...val, type: 'command' };
+  if (typeof val === 'object' && val !== null) {
+    const obj = { ...(val as Record<string, unknown>) };
+    const knownKeys = new Set([
+      'type', 'command', 'scriptPath', 'code', 'interpreter',
+      'args', 'cwd', 'env', 'integrationContext', 'templateOverride',
+      'target', 'timeoutMs', 'stdin', 'stdoutFile', 'stderrFile',
+      'maxBuffer', 'truncateOutputLength', 'keepPayload', 'stallTimeoutMs',
+      'bypassInterceptors', 'onSuccess', 'onFailure', 'webhookHeaders',
+      'webhookPayloadTemplate', 'webhookMethod', 'webhookTimeoutMs',
+      'expectJsonEnvelope'
+    ]);
+    const metadataKeys = ['session_id', 'sessionId', 'project_number', 'description', 'title', 'metadata', 'comment', 'timestamp', 'id'];
+    for (const k of metadataKeys) {
+      if (k in obj && !knownKeys.has(k)) {
+        delete obj[k];
+      }
     }
-    if ('scriptPath' in val && typeof val.scriptPath === 'string') {
-      return { ...val, type: 'script' };
+    const knownTypes = ['command', 'script', 'eval'];
+    if (typeof obj.type === 'string') {
+      const normalizedType = obj.type.trim().toLowerCase();
+      if (knownTypes.includes(normalizedType)) {
+        obj.type = normalizedType;
+      } else {
+        const knownInterpreters = ['bash', 'sh', 'pwsh', 'powershell', 'cmd', 'node', 'bun', 'python', 'python3', 'tsx', 'ts-node'];
+        if (knownInterpreters.includes(normalizedType)) {
+          if (!('interpreter' in obj)) {
+            obj.interpreter = normalizedType;
+          }
+          if ('code' in obj && typeof obj.code === 'string') {
+            obj.type = 'eval';
+          } else if ('scriptPath' in obj && typeof obj.scriptPath === 'string') {
+            obj.type = 'script';
+          } else {
+            obj.type = 'command';
+            if (!('command' in obj)) {
+              obj.command = normalizedType;
+            }
+          }
+        } else if ('code' in obj && typeof obj.code === 'string') {
+          obj.type = 'eval';
+        } else if ('scriptPath' in obj && typeof obj.scriptPath === 'string') {
+          obj.type = 'script';
+        } else if ('command' in obj && typeof obj.command === 'string') {
+          obj.type = 'command';
+        }
+      }
+    } else if (!('type' in obj)) {
+      if ('command' in obj && typeof obj.command === 'string') {
+        return { ...obj, type: 'command' };
+      }
+      if ('scriptPath' in obj && typeof obj.scriptPath === 'string') {
+        return { ...obj, type: 'script' };
+      }
+      if ('code' in obj && typeof obj.code === 'string') {
+        return { ...obj, type: 'eval' };
+      }
     }
-    if ('code' in val && typeof val.code === 'string') {
-      return { ...val, type: 'eval' };
-    }
+    return obj;
   }
   return val;
 }, rawPayloadUnion);

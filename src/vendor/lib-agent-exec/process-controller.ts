@@ -18,7 +18,7 @@ function isErrnoException(e: Error): e is NodeJS.ErrnoException {
   return 'code' in e || 'syscall' in e;
 }
 
-function analyzeExitCode1(payload: ExecPayload, code: number, stdout: string, stderr: string): { isGrepNoMatch: boolean, isDiffFound: boolean, isOutdatedInfo: boolean } {
+export function analyzeExitCode1(payload: ExecPayload, code: number, stdout: string, stderr: string): { isGrepNoMatch: boolean, isDiffFound: boolean, isOutdatedInfo: boolean } {
   let isGrepNoMatch = false;
   let isDiffFound = false;
   let isOutdatedInfo = false;
@@ -45,13 +45,19 @@ function analyzeExitCode1(payload: ExecPayload, code: number, stdout: string, st
             isGrepNoMatch = true;
         } else if (['find', 'find.exe'].includes(origCmd) && /(?:-exec|-execdir)\s+(?:[a-zA-Z0-9_\-/.]*\/)?(grep|egrep|fgrep|rg)\b/.test(allArgsStr)) {
             isGrepNoMatch = true;
-        } else if (isWrapper && new RegExp(commandBoundaryRegex.source + '(grep|egrep|fgrep|rg)\\b').test(allArgsStr)) {
+        } else if (isWrapper && (
+          new RegExp(commandBoundaryRegex.source + '(grep|egrep|fgrep|rg)\\b').test(allArgsStr) ||
+          new RegExp(commandBoundaryRegex.source + 'git(?:\\.exe)?(?:\\s+-[^\\s]+)*\\s+grep\\b').test(allArgsStr)
+        )) {
             isGrepNoMatch = true;
         }
 
         if (['diff', 'diff.exe', 'cmp', 'cmp.exe'].includes(origCmd)) {
             isDiffFound = true;
-        } else if (isWrapper && new RegExp(commandBoundaryRegex.source + '(diff|cmp)\\b').test(allArgsStr)) {
+        } else if (isWrapper && (
+          new RegExp(commandBoundaryRegex.source + '(diff|cmp)\\b').test(allArgsStr) ||
+          new RegExp(commandBoundaryRegex.source + 'git(?:\\.exe)?(?:\\s+-[^\\s]+)*\\s+diff\\b').test(allArgsStr)
+        )) {
             isDiffFound = true;
         }
 
@@ -100,10 +106,16 @@ function analyzeExitCode1(payload: ExecPayload, code: number, stdout: string, st
           isDiffFound = true;
         }
       } else {
-        if (new RegExp(commandBoundaryRegex.source + '(grep|egrep|fgrep|rg)\\b').test(scriptContent)) {
+        if (
+          new RegExp(commandBoundaryRegex.source + '(grep|egrep|fgrep|rg)\\b').test(scriptContent) ||
+          new RegExp(commandBoundaryRegex.source + 'git(?:\\.exe)?(?:\\s+-[^\\s]+)*\\s+grep\\b').test(scriptContent)
+        ) {
           isGrepNoMatch = true;
         }
-        if (new RegExp(commandBoundaryRegex.source + '(diff|cmp)\\b').test(scriptContent)) {
+        if (
+          new RegExp(commandBoundaryRegex.source + '(diff|cmp)\\b').test(scriptContent) ||
+          new RegExp(commandBoundaryRegex.source + 'git(?:\\.exe)?(?:\\s+-[^\\s]+)*\\s+diff\\b').test(scriptContent)
+        ) {
           isDiffFound = true;
         }
         if (new RegExp(commandBoundaryRegex.source + '(npm|pnpm|yarn|bun)\\s+(?:--?\\w+\\s+)*outdated\\b').test(scriptContent)) {
