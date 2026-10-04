@@ -177,7 +177,23 @@ export function getProjectTools(_context: ToolContext): ToolDefinition[] {
                     config['projectRegistry'] ??= {}
                     const registry = config['projectRegistry'] as Record<string, { path: string, project_number?: number }>
                     
-                    return Promise.resolve({ success: true, projects: registry })
+                    const items = Object.entries(registry).map(([name, data]) => {
+                        const dataObj = data as Record<string, unknown>
+                        const desc = typeof dataObj['description'] === 'string' ? dataObj['description'] : ''
+                        const res: Record<string, unknown> = {
+                            ...data,
+                            name,
+                            description: desc,
+                            path: data.path,
+                        }
+                        if (typeof data.project_number === 'number') {
+                            res['project_number'] = data.project_number
+                            res['projectNumber'] = data.project_number
+                        }
+                        return res
+                    })
+                    
+                    return Promise.resolve({ success: true, projects: registry, items, data: items })
                 } catch (err) {
                     return Promise.resolve(formatHandlerError(err))
                 }

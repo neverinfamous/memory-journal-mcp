@@ -634,7 +634,7 @@ async function executeCode(
                         if (typeof listFn === 'function') {
                             return (listFn as (...a: unknown[]) => Promise<unknown>).apply(this, args)
                         }
-                        return Promise.resolve({ success: true, projects: [] })
+                        return Promise.resolve({ success: true, projects: {}, items: [], data: [] })
                     }
                     const projectsObj: Record<string, unknown> = {
                         list: (...args: unknown[]) => (listFn as ((...a: unknown[]) => unknown) | undefined)?.(...args),

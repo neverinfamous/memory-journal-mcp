@@ -599,6 +599,8 @@ export const ProjectOutputSchema = z.object({
         path: z.string(),
         project_number: z.number().optional()
     })).optional(),
+    items: z.array(z.record(z.string(), z.unknown())).optional(),
+    data: z.array(z.record(z.string(), z.unknown())).optional(),
     message: z.string().optional(),
     error: z.string().optional(),
 }).extend(ErrorFieldsMixin.shape)

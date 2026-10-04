@@ -420,6 +420,50 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
             expect(foundFromRoot?.project_number).toBe(2)
         })
 
+        it('should auto-proxy projects.items and projects.data on list_projects dictionary result (agent-issues.jsonl regression)', () => {
+            const listResult = {
+                success: true,
+                projects: {
+                    'db-mcp': { path: 'C:/Users/chris/Desktop/db-mcp', project_number: 15 },
+                    'memory-journal-mcp': { path: 'C:/Users/chris/Desktop/memory-journal-mcp', project_number: 5 },
+                },
+            }
+            const wrapped = wrapResult(listResult) as Record<string, unknown>
+
+            // 1. projects.items is available directly on root wrapped result
+            const items = wrapped['items'] as { name: string; project_number: number; description: string }[]
+            expect(Array.isArray(items)).toBe(true)
+            expect(items.length).toBe(2)
+
+            // Testing exact predicate from agent-issues.jsonl: p.name.includes(...) || p.description.includes(...)
+            const target1 = items.find((p) => p.name.includes('db-mcp') || p.description.includes('db-mcp'))
+            expect(target1).toBeDefined()
+            expect(target1?.name).toBe('db-mcp')
+            expect(target1?.project_number).toBe(15)
+            expect(typeof target1?.description).toBe('string')
+
+            // Testing exact predicate from agent-issues.jsonl Record 2: p.name === "db-mcp" || p.name === "neverinfamous/db-mcp"
+            const target2 = items.find((p) => p.name === 'db-mcp' || p.name === 'neverinfamous/db-mcp')
+            expect(target2).toBeDefined()
+            expect(target2?.project_number).toBe(15)
+
+            // 2. nested wrapped.projects.items also available
+            const projectsObj = wrapped['projects'] as Record<string, unknown>
+            const nestedItems = projectsObj['items'] as { name: string; project_number: number; description: string }[]
+            expect(Array.isArray(nestedItems)).toBe(true)
+            expect(nestedItems.length).toBe(2)
+            expect(nestedItems.find((p) => p.name === 'db-mcp')?.project_number).toBe(15)
+
+            // 3. projects.data and nested projects.projects.data also available
+            const data = wrapped['data'] as { name: string; project_number: number }[]
+            expect(Array.isArray(data)).toBe(true)
+            expect(data.find((p) => p.name === 'db-mcp')?.project_number).toBe(15)
+
+            const nestedData = projectsObj['data'] as { name: string; project_number: number }[]
+            expect(Array.isArray(nestedData)).toBe(true)
+            expect(nestedData.find((p) => p.name === 'db-mcp')?.project_number).toBe(15)
+        })
+
         it('should auto-heal unquoted prose script with entry_id and content (Issue 1 regression)', () => {
             const proseCode = 'Replaced naive Math.sqrt vector normalization with numerically stable hypot fallback.'
             const healedUpdate = extractAndRecoverEntryCode(`updateEntry({

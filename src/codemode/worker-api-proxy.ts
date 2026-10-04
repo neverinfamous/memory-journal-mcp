@@ -178,6 +178,9 @@ export function buildApiProxy(
                     const semanticGroup = api['semantic'] as Record<string, unknown> | undefined;
                     const adminGroup = api['admin'] as Record<string, unknown> | undefined;
                     
+                    if (resolvedKey === 'projects' || resolvedKey === 'project' || key === 'projects' || key === 'project') {
+                        return api['projects'];
+                    }
                     if (resolvedKey === 'semanticSearch' || key === 'semantic_search') {
                         return semanticGroup?.['semantic_search'] ?? semanticGroup?.['semanticSearch'];
                     }
@@ -384,7 +387,7 @@ export function buildApiProxy(
         ? (...args: unknown[]): Promise<unknown> => invokeRpc('admin', 'list_projects', args)
         : methods['analytics']?.includes('get_cross_project_insights')
         ? (...args: unknown[]): Promise<unknown> => invokeRpc('analytics', 'get_cross_project_insights', args)
-        : (): Promise<unknown> => wrapPromise(Promise.resolve(wrapResult({ success: true, projects: [] })), 'list_projects');
+        : (): Promise<unknown> => wrapPromise(Promise.resolve(wrapResult({ success: true, projects: {}, items: [], data: [] })), 'list_projects');
 
     const adminGetProject = methods['admin']?.includes('get_project')
         ? (nameOrParams: unknown): Promise<unknown> => {

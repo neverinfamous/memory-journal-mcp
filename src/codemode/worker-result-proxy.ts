@@ -68,14 +68,18 @@ export function wrapResult(result: unknown): unknown {
                 .map(([key, item]) => {
                     if (item !== null && typeof item === 'object' && !Array.isArray(item)) {
                         const itemObj = item as Record<string, unknown>
+                        const name = typeof itemObj['name'] === 'string' && itemObj['name'].length > 0 ? itemObj['name'] : key
+                        const desc = typeof itemObj['description'] === 'string' ? itemObj['description'] : ''
+                        const projNum = itemObj['project_number'] ?? itemObj['id'] ?? itemObj['projectNumber']
                         return {
-                            name: key,
                             ...itemObj,
-                            project_number: itemObj['project_number'] ?? itemObj['id'] ?? itemObj['projectNumber'],
-                            projectNumber: itemObj['projectNumber'] ?? itemObj['project_number'] ?? itemObj['id'],
+                            name,
+                            description: desc,
+                            project_number: projNum,
+                            projectNumber: projNum,
                         }
                     }
-                    return { name: key, value: item }
+                    return { name: key, description: '', value: item }
                 })
         }
 
@@ -256,7 +260,7 @@ export function wrapResult(result: unknown): unknown {
                     }
 
                     // Property aliases for primary array or result object
-                    if (prop === 'data' || prop === 'items' || prop === 'entries' || prop === 'results' || prop === 'rows' || prop === 'dataArray') {
+                    if (prop === 'data' || prop === 'items' || prop === 'entries' || prop === 'results' || prop === 'rows' || prop === 'dataArray' || prop === 'projects' || prop === 'list' || prop === 'records') {
                         const targetRecord = target as Record<string, unknown>
                         const arrayKeys = Object.keys(targetRecord).filter(k => Array.isArray(targetRecord[k]))
                         let targetKey = arrayKeys.find(k => ['entries', 'results', 'projects', 'items', 'rows', 'tables', 'flags', 'groups', 'users', 'capabilities', 'metrics', 'events', 'records', 'logs', 'aliases', 'tags', 'issues', 'pullRequests', 'milestones', 'columns', 'comments', 'files', 'errors', 'backups', 'deleted', 'updated', 'notFound', 'history', 'relationships', 'members'].includes(k))
@@ -265,6 +269,18 @@ export function wrapResult(result: unknown): unknown {
                         }
                         if (targetKey !== undefined) {
                             return targetRecord[targetKey]
+                        }
+                        if ('projects' in targetRecord && targetRecord['projects'] !== null && typeof targetRecord['projects'] === 'object' && !Array.isArray(targetRecord['projects'])) {
+                            return wrapResult(dictToItems(targetRecord['projects'] as Record<string, unknown>))
+                        }
+                        if (isDictLike(targetRecord)) {
+                            return wrapResult(dictToItems(targetRecord))
+                        }
+                        if ('project' in targetRecord && isObject(targetRecord['project']) && !Array.isArray(targetRecord['project'])) {
+                            return wrapResult([targetRecord['project']])
+                        }
+                        if ('entry' in targetRecord && isObject(targetRecord['entry']) && !Array.isArray(targetRecord['entry'])) {
+                            return wrapResult([targetRecord['entry']])
                         }
                     }
 
