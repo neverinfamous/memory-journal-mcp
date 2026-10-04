@@ -215,6 +215,24 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
       console.error(`\n   💡 AGENT HINT: 'yarn upgrade-interactive' is a TUI tool and will hang. Use 'yarn upgrade' instead.\n${AUTONOMOUS_HEALING_MSG}`);
       process.exit(1);
     }
+    if (subCmd === 'dlx' || subCmd === 'x') {
+      const subCmdIdx = args.indexOf(subCmd);
+      const afterSubCmd = args.slice(subCmdIdx + 1);
+      const targetPkgIdx = afterSubCmd.findIndex(a => !a.startsWith('-'));
+      const targetPkg = targetPkgIdx !== -1 ? afterSubCmd[targetPkgIdx] : undefined;
+      if (targetPkg === 'rg' || targetPkg === 'ripgrep') {
+        console.error(`\n   🛠️ AUTONOMOUS HEALING: Auto-translating '${cmdBasename} ${subCmd} ${targetPkg}' to native ripgrep (rg)... (Frictionless Recovery)\x1b[0m`);
+        ctx.cmdBasename = 'rg';
+        const absoluteTargetIdx = subCmdIdx + 1 + targetPkgIdx;
+        ctx.args = args.filter((a, idx) => idx !== subCmdIdx && idx !== absoluteTargetIdx && a !== '-y' && a !== '--yes');
+        if ('command' in ctx.payload) {
+          ctx.payload.command = 'rg';
+          ctx.payload.args = ctx.args;
+        }
+        handleRipgrepInterception(ctx, false);
+        return;
+      }
+    }
     if (['init', 'create', 'dlx', 'x'].includes(subCmd) && !args.includes('-y') && !args.includes('--yes')) {
       console.error(`\n   🛠️ AUTONOMOUS HEALING: Automatically injecting '-y' into ${cmdBasename} ${subCmd} command to prevent prompt hanging.... (Frictionless Recovery)`);
       if (subCmd === 'dlx' || subCmd === 'x') {
@@ -252,6 +270,19 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
   }
 
   if (['npx', 'npx.cmd', 'npx.exe', 'pnpx', 'pnpx.cmd', 'pnpx.exe', 'bunx', 'bunx.cmd', 'bunx.exe'].includes(cmdBasename)) {
+    const firstNonFlagIdx = args.findIndex(a => !a.startsWith('-'));
+    const runnerTarget = firstNonFlagIdx !== -1 ? args[firstNonFlagIdx] : undefined;
+    if (runnerTarget === 'rg' || runnerTarget === 'ripgrep') {
+      console.error(`\n   🛠️ AUTONOMOUS HEALING: Auto-translating '${cmdBasename} ${runnerTarget}' to native ripgrep (rg)... (Frictionless Recovery)\x1b[0m`);
+      ctx.cmdBasename = 'rg';
+      ctx.args = args.filter((a, idx) => idx !== firstNonFlagIdx && a !== '-y' && a !== '--yes');
+      if ('command' in ctx.payload) {
+        ctx.payload.command = 'rg';
+        ctx.payload.args = ctx.args;
+      }
+      handleRipgrepInterception(ctx, false);
+      return;
+    }
     if (cmdBasename.startsWith('npx') && args[0] === 'tsx') {
       console.error(`\n   🛠️ AUTONOMOUS HEALING: Transparently rewriting 'npx tsx' to 'pnpm exec tsx' to prevent interactive installation prompts... (Frictionless Recovery)\x1b[0m`);
       ctx.cmdBasename = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';

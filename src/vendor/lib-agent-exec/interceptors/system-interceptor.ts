@@ -104,6 +104,16 @@ export function systemInterceptor(ctx: ExecutionContext): void {
           payload.interpreter = 'bash';
           payload.code = `rg -n -F ${escapeUnixArg(pattern, false)} ${escapeUnixArg(convertToWslPath(searchPath), false)}`;
         }
+      } else {
+        const pkgRgMatch = trimmedCode.match(/^(?:bunx|npx|pnpx|bun\s+x|pnpm\s+dlx|yarn\s+dlx)\s+(?:@\S+\/)?(?:rg|ripgrep)\b\s*(.*)$/i);
+        if (pkgRgMatch !== null) {
+          const rest = pkgRgMatch[1] ?? '';
+          console.error(`\n   💡 AGENT HINT: 'rg' executed via package runner in eval code.`);
+          console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-translating package runner rg to native ripgrep (rg)... (Frictionless Recovery)\x1b[0m`);
+          payload.target = 'wsl2';
+          payload.interpreter = 'bash';
+          payload.code = `rg ${rest}`.trim();
+        }
       }
     }
 
@@ -164,7 +174,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
     }
 
     const grepDirMatch = payload.code.match(/^(?:grep|egrep)\s+(.*)$/i);
-    if (grepDirMatch !== null && !/\b(?:-[a-zA-Z]*[rR]|--recursive)\b/.test(payload.code)) {
+    if (grepDirMatch !== null && !/(?:^|\s)(?:-[a-zA-Z]*[rR]\b|--recursive\b)/.test(payload.code)) {
       const rest = grepDirMatch[1] ?? '';
       const tokens = rest.trim().split(/\s+/);
       const isTargetingDir = tokens.some(t => {
