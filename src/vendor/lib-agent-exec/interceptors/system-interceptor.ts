@@ -94,8 +94,21 @@ export function systemInterceptor(ctx: ExecutionContext): void {
         const rest = pkgGrepMatch[1] ?? '';
         const sMatch = rest.match(/(?:-s|--symbol|--pattern)\s+["'`]([^"'`]+)["'`]|(?:-s|--symbol|--pattern)\s+([^\s]+)/i);
         const pMatch = rest.match(/(?:-p|--path|-d|--dir)\s+["'`]([^"'`]+)["'`]|(?:-p|--path|-d|--dir)\s+([^\s]+)/i);
-        const pattern = (sMatch !== null ? (sMatch[1] ?? sMatch[2]) : undefined) ?? '';
-        const searchPath = (pMatch !== null ? (pMatch[1] ?? pMatch[2]) : undefined) ?? '.';
+        let pattern = (sMatch !== null ? (sMatch[1] ?? sMatch[2]) : undefined) ?? '';
+        let searchPath = (pMatch !== null ? (pMatch[1] ?? pMatch[2]) : undefined) ?? '';
+
+        if (pattern.length === 0) {
+          const unescapedRest = rest.replace(/\\"/g, '"').replace(/\\'/g, "'");
+          const posMatches = unescapedRest.match(/(?:[^\s"'`]+|"[^"]*"|'[^']*'|`[^`]*`)/g) ?? [];
+          const nonFlag = posMatches.filter(t => !t.startsWith('-')).map(t => t.replace(/^['"`]|['"`]$/g, ''));
+          if (nonFlag.length > 0 && nonFlag[0] !== undefined) {
+            pattern = nonFlag[0];
+            searchPath = nonFlag[1] ?? searchPath;
+          }
+        }
+        if (searchPath.length === 0) {
+          searchPath = '.';
+        }
 
         if (pattern.length > 0) {
           console.error(`\n   💡 AGENT HINT: 'grep_search' executed via package manager in eval code.`);
