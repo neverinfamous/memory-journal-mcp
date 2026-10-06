@@ -59,6 +59,12 @@ export function healCodeModeScript(code: string): string {
         return healedSql
     }
 
+    // [Layer 2 Dispatcher Healing] Auto-heal prepared statement / database execution code
+    const healedPrepared = extractAndRecoverPreparedStatementCode(executionCode)
+    if (healedPrepared) {
+        return healedPrepared
+    }
+
     // [Layer 2 Dispatcher Healing] Prevent literal placeholder SyntaxErrors
     executionCode = executionCode.replace(/<CURRENT_PROJECT_NUMBER>/g, 'undefined')
     executionCode = executionCode.replace(/<CURRENT_PROJECT_ID>/g, 'undefined')
@@ -537,7 +543,12 @@ export function extractAndRecoverSqlCode(code: string): string | null {
     // UPDATE ...
     if (/^UPDATE\b/i.test(cleanSql)) {
         if (idVal !== undefined) {
-            return `return await mj.core.updateEntry({ entry_id: ${idVal} });`
+            const updatePayload: Record<string, unknown> = { entry_id: idVal }
+            const setContentMatch = /\bSET\s+[\s\S]*?\bcontent\s*=\s*(['"])([\s\S]*?)\1/i.exec(cleanSql)
+            if (setContentMatch?.[2]) {
+                updatePayload['content'] = setContentMatch[2]
+            }
+            return `return await mj.admin.updateEntry(${JSON.stringify(updatePayload)});`
         }
     }
 
@@ -549,6 +560,174 @@ export function extractAndRecoverSqlCode(code: string): string | null {
     }
 
     return `return await mj.core.getRecentEntries({ limit: ${limitVal ?? 10} });`
+}
+
+/**
+ * Auto-heals prepared statement execution patterns (db.prepare(...).run(...), stmt.run(...))
+ * into corresponding canonical mj.* API calls.
+ */
+export function extractAndRecoverPreparedStatementCode(code: string): string | null {
+    if (!code || typeof code !== 'string') return null
+    if (!code.includes('.prepare(')) return null
+
+    // 1. Extract the SQL from db.prepare(...)
+    const prepMatch = /\.prepare\s*\(\s*(['"`])([\s\S]*?)\1\s*\)/.exec(code)
+    if (!prepMatch?.[2]) return null
+    const rawSql = prepMatch[2].trim()
+
+    // 2. Extract arguments from .run(...), .get(...), or .all(...)
+    const runMatch = /\.(?:run|get|all)\s*\(([\s\S]*?)\)(?:\s*;|\s*\n|$)/.exec(code)
+    let parsedArgs: unknown[] = []
+    if (runMatch?.[1]) {
+        const rawArgs = runMatch[1].trim()
+        if (rawArgs.length > 0) {
+            try {
+                parsedArgs = vm.runInNewContext(`[${rawArgs}]`, { JSON }) as unknown[]
+            } catch {
+                const tokens = rawArgs.split(/,\s*(?=(?:[^"']*["'][^"']*["'])*[^"']*$)/)
+                parsedArgs = tokens.map((t) => {
+                    const trimmedToken = t.trim()
+                    if (/^\d+$/.test(trimmedToken)) return parseInt(trimmedToken, 10)
+                    if (trimmedToken.startsWith('"') && trimmedToken.endsWith('"')) return trimmedToken.slice(1, -1)
+                    if (trimmedToken.startsWith("'") && trimmedToken.endsWith("'")) return trimmedToken.slice(1, -1)
+                    if (trimmedToken.startsWith('JSON.stringify(') && trimmedToken.endsWith(')')) {
+                        try {
+                            const inner = trimmedToken.slice(15, -1)
+                            const parsed: unknown = JSON.parse(inner)
+                            return parsed
+                        } catch {
+                            return trimmedToken
+                        }
+                    }
+                    return trimmedToken
+                })
+            }
+        }
+    }
+
+    const cleanSql = rawSql.replace(/^--[^\n]*\n/gm, '').trim()
+    const isUpdate = /^UPDATE\b/i.test(cleanSql)
+    const isInsert = /^INSERT\b/i.test(cleanSql)
+    const isDelete = /^DELETE\b/i.test(cleanSql)
+    const isSelect = /^SELECT\b/i.test(cleanSql)
+
+    if (isUpdate) {
+        const payload: Record<string, unknown> = {}
+        const idMatch = /\bWHERE\s+[`"']?(?:id|entry_id)[`"']?\s*=\s*(?:\?|(\d+))/i.exec(cleanSql)
+        if (idMatch?.[1]) {
+            payload['entry_id'] = parseInt(idMatch[1], 10)
+        }
+
+        for (const arg of parsedArgs) {
+            if (typeof arg === 'number') {
+                payload['entry_id'] = arg
+            } else if (typeof arg === 'string') {
+                let isTags = false
+                if (arg.trim().startsWith('[') && arg.trim().endsWith(']')) {
+                    try {
+                        const parsed: unknown = JSON.parse(arg)
+                        if (Array.isArray(parsed)) {
+                            payload['tags'] = parsed.map(String)
+                            isTags = true
+                        }
+                    } catch {
+                        // ignore
+                    }
+                }
+                if (!isTags) {
+                    if (payload['content'] === undefined) {
+                        payload['content'] = arg
+                    } else if (payload['title'] === undefined) {
+                        payload['title'] = arg
+                    }
+                }
+            } else if (Array.isArray(arg)) {
+                payload['tags'] = arg.map(String)
+            } else if (typeof arg === 'object' && arg !== null) {
+                const obj = arg as Record<string, unknown>
+                if (typeof obj['entry_id'] === 'number') payload['entry_id'] = obj['entry_id']
+                if (typeof obj['id'] === 'number') payload['entry_id'] = obj['id']
+                if (typeof obj['content'] === 'string') payload['content'] = obj['content']
+                if (Array.isArray(obj['tags'])) payload['tags'] = obj['tags'].map(String)
+            }
+        }
+
+        if (payload['content'] === undefined) {
+            const setContentMatch = /\bSET\s+[\s\S]*?\bcontent\s*=\s*['"]([\s\S]*?)['"]/i.exec(cleanSql)
+            if (setContentMatch?.[1]) {
+                payload['content'] = setContentMatch[1]
+            }
+        }
+
+        if (payload['entry_id'] !== undefined) {
+            return `return await mj.admin.updateEntry(${JSON.stringify(payload)});`
+        }
+    }
+
+    if (isInsert) {
+        const payload: Record<string, unknown> = {
+            entry_type: 'technical_decision',
+        }
+        for (const arg of parsedArgs) {
+            if (typeof arg === 'string') {
+                let isTags = false
+                if (arg.trim().startsWith('[') && arg.trim().endsWith(']')) {
+                    try {
+                        const parsed: unknown = JSON.parse(arg)
+                        if (Array.isArray(parsed)) {
+                            payload['tags'] = parsed.map(String)
+                            isTags = true
+                        }
+                    } catch {
+                        // ignore
+                    }
+                }
+                if (!isTags) {
+                    if (typeof payload['content'] !== 'string') {
+                        payload['content'] = arg
+                    } else if (typeof payload['title'] !== 'string') {
+                        payload['title'] = arg
+                    }
+                }
+            } else if (Array.isArray(arg)) {
+                payload['tags'] = arg.map(String)
+            } else if (typeof arg === 'object' && arg !== null) {
+                const obj = arg as Record<string, unknown>
+                if (typeof obj['content'] === 'string') payload['content'] = obj['content']
+                if (typeof obj['title'] === 'string') payload['title'] = obj['title']
+                if (Array.isArray(obj['tags'])) payload['tags'] = obj['tags'].map(String)
+            }
+        }
+        if (typeof payload['title'] !== 'string') payload['title'] = 'Journal Entry'
+        return `return await mj.core.createEntry(${JSON.stringify(payload)});`
+    }
+
+    if (isDelete) {
+        let entryId: number | undefined
+        const idMatch = /\bWHERE\s+[`"']?(?:id|entry_id)[`"']?\s*=\s*(?:\?|(\d+))/i.exec(cleanSql)
+        if (idMatch?.[1]) entryId = parseInt(idMatch[1], 10)
+        for (const arg of parsedArgs) {
+            if (typeof arg === 'number') entryId = arg
+        }
+        if (entryId !== undefined) {
+            return `return await mj.admin.deleteEntry({ entry_id: ${entryId} });`
+        }
+    }
+
+    if (isSelect) {
+        let entryId: number | undefined
+        const idMatch = /\bWHERE\s+[`"']?(?:id|entry_id)[`"']?\s*=\s*(?:\?|(\d+))/i.exec(cleanSql)
+        if (idMatch?.[1]) entryId = parseInt(idMatch[1], 10)
+        for (const arg of parsedArgs) {
+            if (typeof arg === 'number') entryId = arg
+        }
+        if (entryId !== undefined) {
+            return `return await mj.core.getEntryById({ entry_id: ${entryId} });`
+        }
+        return `return await mj.core.getRecentEntries({ limit: 10 });`
+    }
+
+    return null
 }
 
 export function getCodeModeTools(context: ToolContext): ToolDefinition[] {

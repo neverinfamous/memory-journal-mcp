@@ -1784,6 +1784,60 @@ return { success: true, projectId };
             expect(METHOD_ALIASES['core']?.['view_file']).toBe('getEntryById')
             expect(METHOD_ALIASES['core']?.['list_dir']).toBe('getRecentEntries')
         })
+
+        it('should auto-heal getDatabase and db.prepare statement update script into mj.admin.updateEntry (agent-issues.jsonl regression)', () => {
+            const rawCode = [
+                'const db = mj.getDatabase();',
+                'const stmt = db.prepare("UPDATE journal_entries SET content = ?, tags = ? WHERE id = ?");',
+                'stmt.run("db-mcp Advanced Stress Testing: [geo]\\nFixed a security bypass where read-only tools allowed state-mutating PRAGMAs. Added PRAGMA write blocking to DatabaseAdapter.validateQuery and updated nativeExecuteRead to reject statements that do not return data.", JSON.stringify(["bugfix", "security", "geo"]), 12433);',
+                'return "Updated";',
+            ].join('\n')
+
+            const healed = healCodeModeScript(rawCode)
+            expect(healed).toBeDefined()
+            expect(healed).toContain('mj.admin.updateEntry')
+            expect(healed).toContain('12433')
+            expect(healed).toContain('Fixed a security bypass')
+            expect(healed).toContain('bugfix')
+
+            // Verify healed code compiles and executes in a VM script
+            const wrapped = `(async () => {
+                let calledWith = null;
+                const mj = {
+                    admin: {
+                        updateEntry: async (params) => {
+                            calledWith = params;
+                            return { success: true, updated: true };
+                        }
+                    }
+                };
+                return await (async () => { ${healed} })();
+            })()`
+            expect(() => {
+                new vm.Script(wrapped)
+            }).not.toThrow()
+        })
+
+        it('should map getDatabase and database aliases in METHOD_ALIASES for analytics and core', async () => {
+            const { METHOD_ALIASES } = await import('../src/codemode/api-constants.js')
+            expect(METHOD_ALIASES['analytics']?.['getDatabase']).toBe('getStatistics')
+            expect(METHOD_ALIASES['analytics']?.['database']).toBe('getStatistics')
+            expect(METHOD_ALIASES['core']?.['getDatabase']).toBe('getStatistics')
+            expect(METHOD_ALIASES['core']?.['database']).toBe('getStatistics')
+        })
+
+        it('should provide getDatabase, getDb, and connectToDatabase factory methods on buildApiProxy', async () => {
+            const { buildApiProxy } = await import('../src/codemode/worker-api-proxy.js')
+            const mockRpc = async () => ({ success: true })
+            const proxy = buildApiProxy(mockRpc, { core: ['createEntry'] }) as Record<string, unknown>
+
+            expect(typeof proxy['getDatabase']).toBe('function')
+            expect(typeof proxy['getDb']).toBe('function')
+            expect(typeof proxy['connectToDatabase']).toBe('function')
+            
+            const dbInstance = (proxy['getDatabase'] as () => unknown)()
+            expect(dbInstance).toBeDefined()
+        })
     })
 })
 

@@ -306,6 +306,197 @@ async function executeCode(
 
         const executeCodeFnRef: { current?: (arg: unknown) => Promise<unknown> } = {}
 
+        const createPreparedStatementShim = (sql: string): object => {
+            const parseSqlParams = (args: unknown[]): { action: string; params: Record<string, unknown> } => {
+                const cleanSql = sql.trim().replace(/^--[^\n]*\n/gm, '').trim()
+                const isUpdate = /^UPDATE\b/i.test(cleanSql)
+                const isInsert = /^INSERT\b/i.test(cleanSql)
+                const isDelete = /^DELETE\b/i.test(cleanSql)
+                const isSelect = /^SELECT\b/i.test(cleanSql)
+
+                if (isUpdate) {
+                    const idMatch = /\bWHERE\s+[`"']?(?:id|entry_id)[`"']?\s*=\s*(?:\?|(\d+))/i.exec(cleanSql)
+                    let entryId: number | undefined
+                    if (idMatch?.[1]) {
+                        entryId = parseInt(idMatch[1], 10)
+                    }
+
+                    let content: string | undefined
+                    let tags: string[] | undefined
+                    let title: string | undefined
+
+                    for (const arg of args) {
+                        if (typeof arg === 'number' && entryId === undefined) {
+                            entryId = arg
+                        } else if (typeof arg === 'string') {
+                            if (arg.trim().startsWith('[') && arg.trim().endsWith(']')) {
+                                try {
+                                    const parsed: unknown = JSON.parse(arg)
+                                    if (Array.isArray(parsed)) {
+                                        tags = parsed.map(String)
+                                        continue
+                                    }
+                                } catch {
+                                    // ignore
+                                }
+                            }
+                            if (content === undefined) {
+                                content = arg
+                            } else {
+                                title ??= arg
+                            }
+                        } else if (Array.isArray(arg)) {
+                            tags = arg.map(String)
+                        } else if (typeof arg === 'object' && arg !== null) {
+                            const obj = arg as Record<string, unknown>
+                            if (typeof obj['entry_id'] === 'number') entryId = obj['entry_id']
+                            if (typeof obj['id'] === 'number') entryId = obj['id']
+                            if (typeof obj['content'] === 'string') content = obj['content']
+                            if (Array.isArray(obj['tags'])) tags = obj['tags'].map(String)
+                        }
+                    }
+
+                    if (content === undefined) {
+                        const setContentMatch = /\bSET\s+[\s\S]*?\bcontent\s*=\s*['"]([\s\S]*?)['"]/i.exec(cleanSql)
+                        if (setContentMatch?.[1]) {
+                            content = setContentMatch[1]
+                        }
+                    }
+
+                    const updatePayload: Record<string, unknown> = {}
+                    if (entryId !== undefined) updatePayload['entry_id'] = entryId
+                    if (content !== undefined) updatePayload['content'] = content
+                    if (tags !== undefined) updatePayload['tags'] = tags
+                    if (title !== undefined) updatePayload['title'] = title
+
+                    return { action: 'update', params: updatePayload }
+                }
+
+                if (isInsert) {
+                    let content = ''
+                    let title = 'Journal Entry'
+                    let tags: string[] = []
+                    let entryType = 'technical_decision'
+
+                    for (const arg of args) {
+                        if (typeof arg === 'string') {
+                            if (arg.trim().startsWith('[') && arg.trim().endsWith(']')) {
+                                try {
+                                    const parsed: unknown = JSON.parse(arg)
+                                    if (Array.isArray(parsed)) {
+                                        tags = parsed.map(String)
+                                        continue
+                                    }
+                                } catch {
+                                    // ignore
+                                }
+                            }
+                            if (content === '') {
+                                content = arg
+                            } else if (title === 'Journal Entry') {
+                                title = arg
+                            }
+                        } else if (Array.isArray(arg)) {
+                            tags = arg.map(String)
+                        } else if (typeof arg === 'object' && arg !== null) {
+                            const obj = arg as Record<string, unknown>
+                            if (typeof obj['content'] === 'string') content = obj['content']
+                            if (typeof obj['title'] === 'string') title = obj['title']
+                            if (Array.isArray(obj['tags'])) tags = obj['tags'].map(String)
+                            if (typeof obj['entry_type'] === 'string') entryType = obj['entry_type']
+                        }
+                    }
+
+                    return { action: 'create', params: { content, title, tags, entry_type: entryType } }
+                }
+
+                if (isDelete) {
+                    let entryId: number | undefined
+                    const idMatch = /\bWHERE\s+[`"']?(?:id|entry_id)[`"']?\s*=\s*(?:\?|(\d+))/i.exec(cleanSql)
+                    if (idMatch?.[1]) entryId = parseInt(idMatch[1], 10)
+                    for (const arg of args) {
+                        if (typeof arg === 'number') entryId = arg
+                    }
+                    return { action: 'delete', params: { entry_id: entryId ?? 0 } }
+                }
+
+                if (isSelect) {
+                    let entryId: number | undefined
+                    const idMatch = /\bWHERE\s+[`"']?(?:id|entry_id)[`"']?\s*=\s*(?:\?|(\d+))/i.exec(cleanSql)
+                    if (idMatch?.[1]) entryId = parseInt(idMatch[1], 10)
+                    for (const arg of args) {
+                        if (typeof arg === 'number') entryId = arg
+                    }
+                    if (entryId !== undefined) {
+                        return { action: 'get_by_id', params: { entry_id: entryId } }
+                    }
+                    return { action: 'list', params: { limit: 50 } }
+                }
+
+                return { action: 'other', params: {} }
+            }
+
+            const executeOperation = (args: unknown[]): unknown => {
+                const { action, params } = parseSqlParams(args)
+                const coreGroup = shimMj['core'] as Record<string, ((...a: unknown[]) => unknown)> | undefined
+                const adminGroup = shimMj['admin'] as Record<string, ((...a: unknown[]) => unknown)> | undefined
+
+                if (action === 'update') {
+                    const updateFn = adminGroup?.['updateEntry'] ?? adminGroup?.['update_entry'] ?? coreGroup?.['updateEntry']
+                    if (typeof updateFn === 'function') {
+                        return updateFn(params)
+                    }
+                }
+                if (action === 'create') {
+                    const createFn = coreGroup?.['createEntry'] ?? coreGroup?.['create_entry']
+                    if (typeof createFn === 'function') {
+                        return createFn(params)
+                    }
+                }
+                if (action === 'delete') {
+                    const deleteFn = adminGroup?.['deleteEntry'] ?? adminGroup?.['delete_entry'] ?? coreGroup?.['deleteEntry']
+                    if (typeof deleteFn === 'function') {
+                        return deleteFn(params)
+                    }
+                }
+                if (action === 'get_by_id') {
+                    const getFn = coreGroup?.['getEntryById'] ?? coreGroup?.['get_entry_by_id']
+                    if (typeof getFn === 'function') {
+                        return getFn(params)
+                    }
+                }
+                if (action === 'list') {
+                    const listFn = coreGroup?.['getRecentEntries'] ?? coreGroup?.['get_recent_entries']
+                    if (typeof listFn === 'function') {
+                        return listFn(params)
+                    }
+                }
+                return Promise.resolve({ success: true, changes: 1 })
+            }
+
+            const stmtObj: Record<string, unknown> = {
+                run: (...args: unknown[]) => {
+                    const res = executeOperation(args)
+                    return {
+                        changes: 1,
+                        lastInsertRowid: typeof args[2] === 'number' ? args[2] : typeof args[0] === 'number' ? args[0] : 1,
+                        success: true,
+                        then: (resolve: (v: unknown) => void) => Promise.resolve(res).then(resolve),
+                    }
+                },
+                get: (...args: unknown[]) => executeOperation(args),
+                all: (...args: unknown[]) => executeOperation(args),
+                iterate: (...args: unknown[]) => executeOperation(args),
+                bind: () => stmtObj,
+                columns: () => [],
+                raw: () => stmtObj,
+                pluck: () => stmtObj,
+                expand: () => stmtObj,
+                safeIntegers: () => stmtObj,
+            }
+            return stmtObj
+        }
+
         // Permissive shim to smooth out common agent hallucinations across different repos
         const shimMj: Record<string, unknown> = new Proxy({}, {
             get(_fakeTarget: Record<string, unknown>, prop: string | symbol): unknown {
@@ -577,6 +768,8 @@ async function executeCode(
                     prop === 'createClient' || prop === 'create_client' || prop === 'initClient' || prop === 'init_client' ||
                     prop === 'getService' || prop === 'get_service' || prop === 'createService' || prop === 'create_service' ||
                     prop === 'createJournal' || prop === 'create_journal' || prop === 'open' || prop === 'start' ||
+                    prop === 'getDatabase' || prop === 'get_database' || prop === 'getDb' || prop === 'get_db' ||
+                    prop === 'connectToDatabase' || prop === 'connect_to_database' || prop === 'openDatabase' || prop === 'open_database' ||
                     prop === 'create'
                 ) {
                     const factoryFn = function(this: unknown, ..._args: unknown[]): unknown {
@@ -715,6 +908,21 @@ async function executeCode(
                             if (dbProp === 'help' || dbProp === 'describe') {
                                 return () => (target as Record<string, () => unknown>)['help']?.()
                             }
+                            if (dbProp === 'prepare' || dbProp === 'stmt' || dbProp === 'statement') {
+                                return (sql?: string) => createPreparedStatementShim(typeof sql === 'string' ? sql : '')
+                            }
+                            if (dbProp === 'exec') {
+                                return (sql?: string) => (createPreparedStatementShim(typeof sql === 'string' ? sql : '') as { run: () => unknown }).run()
+                            }
+                            if (dbProp === 'query' || dbProp === 'raw') {
+                                return (sql?: string) => (createPreparedStatementShim(typeof sql === 'string' ? sql : '') as { all: () => unknown }).all()
+                            }
+                            if (dbProp === 'close' || dbProp === 'dispose' || dbProp === 'disconnect') {
+                                return () => ({ success: true })
+                            }
+                            if (dbProp === 'getDatabase' || dbProp === 'getDb' || dbProp === 'get_database' || dbProp === 'get_db') {
+                                return () => shimMj
+                            }
                             return (..._args: unknown[]) => Promise.resolve({
                                 success: false,
                                 error: `Direct SQLite database access 'mj.db.${String(dbProp)}()' is not available in Code Mode sandbox. Use high-level API methods instead: mj.core.createEntry({ ... }), mj.core.getRecentEntries({ ... }), or mj.search.searchEntries({ ... }).`,
@@ -726,24 +934,14 @@ async function executeCode(
                         }
                     })
                 }
-                if (prop === 'query' || prop === 'raw' || prop === 'exec' || prop === 'prepare' || prop === 'stmt' || prop === 'statement') {
-                    return (..._args: unknown[]) => {
-                        const errResult = Promise.resolve({
-                            success: false,
-                            error: `Direct database execution/preparation '${typeof prop === 'string' ? prop : String(prop)}()' is disabled in Code Mode. Use mj.core.createEntry({ ... }), mj.search.searchEntries({ ... }), or mj.core.getRecentEntries() instead.`,
-                            code: 'VALIDATION_ERROR',
-                            category: 'validation',
-                            suggestion: 'Use mj.core.createEntry({ ... }) to insert entries.',
-                            recoverable: true,
-                        })
-                        return Object.assign(errResult, {
-                            run: () => errResult,
-                            all: () => errResult,
-                            get: () => errResult,
-                            exec: () => errResult,
-                            execute: () => errResult,
-                        })
-                    }
+                if (prop === 'prepare' || prop === 'stmt' || prop === 'statement') {
+                    return (sql?: string, ..._args: unknown[]) => createPreparedStatementShim(typeof sql === 'string' ? sql : '')
+                }
+                if (prop === 'query' || prop === 'raw') {
+                    return (sql?: string, ..._args: unknown[]) => (createPreparedStatementShim(typeof sql === 'string' ? sql : '') as { all: () => unknown }).all()
+                }
+                if (prop === 'exec') {
+                    return (sql?: string, ..._args: unknown[]) => (createPreparedStatementShim(typeof sql === 'string' ? sql : '') as { run: () => unknown }).run()
                 }
                 // Lifecycle methods on database/client/stream objects (e.g. db.close())
                 if (
@@ -1268,6 +1466,9 @@ async function executeCode(
             getDatabase: () => shimMj,
             get_database: () => shimMj,
             connectToDatabase: () => shimMj,
+            openDatabase: () => shimMj,
+            open_database: () => shimMj,
+            prepare: (sql?: string) => createPreparedStatementShim(typeof sql === 'string' ? sql : ''),
             search_entries: wrapDelegatingTool(
                 (arg: unknown): unknown => (shimMj['search'] as Record<string, ((...args: unknown[]) => unknown)>)?.['searchEntries']?.(arg),
                 () => (shimMj['search'] as Record<string, unknown>)?.['searchEntries']

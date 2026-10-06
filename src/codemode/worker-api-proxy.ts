@@ -43,6 +43,9 @@ export function buildApiProxy(
                 if (prop === 'catch') return target.catch.bind(target)
                 if (prop === 'finally') return target.finally.bind(target)
                 if (typeof prop === 'string' && prop !== 'constructor' && prop !== 'toString' && prop !== 'valueOf' && prop !== 'toJSON') {
+                    if (prop === 'prepare' || prop === 'exec' || prop === 'query' || prop === 'run') {
+                        throw new Error(`🛠️ AUTONOMOUS HEALING: Attempted to call database method '${prop}' on an unresolved Promise. In Code Mode, avoid direct database driver methods and use high-level mj.* API methods (e.g. mj.admin.updateEntry, mj.core.createEntry), or await the tool call.`)
+                    }
                     throw new Error(`🛠️ AUTONOMOUS HEALING: Attempted to access property '${prop}' on a Promise object. Did you forget to 'await' the tool call? (e.g. const result = await mj.group.${methodName}(...))`)
                 }
                 if (prop === Symbol.iterator) {
@@ -630,6 +633,12 @@ export function buildApiProxy(
     api['context'] = contextProxy;
     api['getContext'] = getContextRpc;
     api['get_context'] = getContextRpc;
+    api['getDatabase'] = () => api;
+    api['get_database'] = () => api;
+    api['getDb'] = () => api;
+    api['get_db'] = () => api;
+    api['connectToDatabase'] = () => api;
+    api['openDatabase'] = () => api;
 
     return new Proxy(api, {
         get(target, prop) {
@@ -656,6 +665,10 @@ export function buildApiProxy(
                 prop === 'getJournal' || prop === 'get_journal' ||
                 prop === 'loadJournal' || prop === 'load_journal' ||
                 prop === 'loadMemory' || prop === 'load_memory' ||
+                prop === 'getDatabase' || prop === 'get_database' ||
+                prop === 'getDb' || prop === 'get_db' ||
+                prop === 'connectToDatabase' || prop === 'connect_to_database' ||
+                prop === 'openDatabase' || prop === 'open_database' ||
                 prop === 'init' || prop === 'initialize' ||
                 prop === 'connect' || prop === 'open' ||
                 prop === 'default'
