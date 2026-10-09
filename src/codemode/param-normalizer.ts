@@ -283,6 +283,14 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
                 const codeAlias = obj['script'] ?? obj['js'] ?? obj['javascript'] ?? obj['query'] ?? obj['command'] ?? obj['content'] ?? obj['eval'] ?? obj['source'] ?? obj['body'] ?? obj['expression'] ?? obj['fn'] ?? obj['exec'] ?? obj['code_snippet'] ?? obj['raw_code'] ?? obj['statement'] ?? obj['statements'] ?? obj['codeBlock'] ?? obj['code_block'] ?? obj['script_content'] ?? obj['js_code'] ?? obj['code_string'] ?? obj['action'] ?? obj['task'] ?? obj['instruction'] ?? obj['instructions'] ?? obj['input'] ?? obj['payload'] ?? obj['text'];
                 if (typeof codeAlias === 'string') {
                     obj['code'] = codeAlias;
+                } else if (isRecord(obj['payload'])) {
+                    obj['code'] = JSON.stringify(obj['payload']);
+                } else if (isRecord(obj['entry'])) {
+                    obj['code'] = JSON.stringify(obj['entry']);
+                } else if (isRecord(obj['input'])) {
+                    obj['code'] = JSON.stringify(obj['input']);
+                } else if (obj['action'] !== undefined || obj['task'] !== undefined || obj['notes'] !== undefined || obj['changes'] !== undefined) {
+                    obj['code'] = JSON.stringify(obj);
                 } else {
                     // Fallback: search any string property in obj that looks like JS code or contains text
                     for (const [k, v] of Object.entries(obj)) {

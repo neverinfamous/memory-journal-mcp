@@ -65,6 +65,12 @@ export function healCodeModeScript(code: string): string {
         return healedPrepared
     }
 
+    // [Layer 2 Dispatcher Healing] Auto-heal raw JSON queries and payloads passed as code
+    const healedJson = extractAndRecoverJsonCode(executionCode)
+    if (healedJson) {
+        return healedJson
+    }
+
     // [Layer 2 Dispatcher Healing] Prevent literal placeholder SyntaxErrors
     executionCode = executionCode.replace(/<CURRENT_PROJECT_NUMBER>/g, 'undefined')
     executionCode = executionCode.replace(/<CURRENT_PROJECT_ID>/g, 'undefined')
@@ -323,10 +329,228 @@ export function healCodeModeScript(code: string): string {
 }
 
 /**
+ * Auto-heals raw JSON objects or stringified JSON passed as Code Mode execution payloads,
+ * translating them into type-safe mj.* Code Mode API calls.
+ */
+export function extractAndRecoverJsonCode(code: string): string | null {
+    if (!code || typeof code !== 'string') return null
+    const trimmed = code.trim()
+    if (!trimmed.startsWith('{') || !trimmed.endsWith('}')) return null
+
+    let parsed: Record<string, unknown>
+    try {
+        parsed = JSON.parse(trimmed) as Record<string, unknown>
+    } catch {
+        return null
+    }
+
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+        return null
+    }
+
+    // Unwrap nested container if caller wrapped payload/entry/input
+    let target = parsed
+    if (typeof parsed['payload'] === 'object' && parsed['payload'] !== null && !Array.isArray(parsed['payload'])) {
+        target = parsed['payload'] as Record<string, unknown>
+    } else if (typeof parsed['entry'] === 'object' && parsed['entry'] !== null && !Array.isArray(parsed['entry'])) {
+        target = parsed['entry'] as Record<string, unknown>
+    } else if (typeof parsed['input'] === 'object' && parsed['input'] !== null && !Array.isArray(parsed['input'])) {
+        target = parsed['input'] as Record<string, unknown>
+    }
+
+    // Check if target has an explicit tool/method call invocation
+    const toolName = typeof target['tool'] === 'string' ? target['tool'] : typeof target['method'] === 'string' ? target['method'] : typeof target['function'] === 'string' ? target['function'] : undefined
+    if (toolName) {
+        const toolParams = typeof target['params'] === 'object' && target['params'] !== null ? target['params'] : typeof target['args'] === 'object' && target['args'] !== null ? target['args'] : {}
+        const cleanTool = toolName.replace(/^mj[._]/, '')
+        return `return await (mj.${cleanTool} || mj.core.${cleanTool} || mj.${toolName})(${JSON.stringify(toolParams)});`
+    }
+
+    // Check if target is a search/query request
+    const isSearchAction = target['action'] === 'search' || target['operation'] === 'search' || target['op'] === 'search'
+    if (isSearchAction || (typeof target['query'] === 'string' && target['content'] === undefined && target['notes'] === undefined && target['changes'] === undefined && target['task'] === undefined)) {
+        const queryStr = typeof target['query'] === 'string' ? target['query'] : (typeof target['search'] === 'string' ? target['search'] : '')
+        const searchParams: Record<string, unknown> = { query: queryStr }
+        if (typeof target['limit'] === 'number') searchParams['limit'] = target['limit']
+        if (typeof target['project_number'] === 'number') searchParams['project_number'] = target['project_number']
+        return `return await mj.search.searchEntries(${JSON.stringify(searchParams)});`
+    }
+
+    // Check if target is purely a read/get entry by ID
+    const entryId = typeof target['entry_id'] === 'number' 
+        ? target['entry_id'] 
+        : typeof target['id'] === 'number' 
+            ? target['id'] 
+            : typeof target['entry_id'] === 'string' && !Number.isNaN(Number(target['entry_id'])) 
+                ? Number(target['entry_id']) 
+                : undefined
+
+    const op = typeof target['operation'] === 'string'
+        ? target['operation']
+        : typeof target['op'] === 'string'
+            ? target['op']
+            : typeof target['action'] === 'string'
+                ? target['action']
+                : ''
+
+    const isDelete = op === 'delete' || op === 'delete_entry'
+    if (isDelete && entryId !== undefined) {
+        return `return await mj.core.deleteEntry({ entry_id: ${entryId} });`
+    }
+
+    // Check if it has any entry-like or task-like fields
+    const hasContent = typeof target['content'] === 'string' && target['content'].trim().length > 0
+    const hasNotes = typeof target['notes'] === 'string' && target['notes'].trim().length > 0
+    const hasChanges = (Array.isArray(target['changes']) && target['changes'].length > 0) || (typeof target['changes'] === 'string' && target['changes'].trim().length > 0)
+    const hasTask = typeof target['task'] === 'string' && target['task'].trim().length > 0
+    const hasTitle = typeof target['title'] === 'string' && target['title'].trim().length > 0
+    const hasSummary = typeof target['summary'] === 'string' && target['summary'].trim().length > 0
+    const hasDescription = typeof target['description'] === 'string' && target['description'].trim().length > 0
+    const hasFindings = (Array.isArray(target['findings']) && target['findings'].length > 0) || (typeof target['findings'] === 'string' && target['findings'].trim().length > 0)
+    const hasDetails = typeof target['details'] === 'string' && target['details'].trim().length > 0
+    const hasStatus = typeof target['status'] === 'string' && target['status'].trim().length > 0
+    const hasType = typeof target['type'] === 'string' || typeof target['entry_type'] === 'string' || typeof target['category'] === 'string'
+    const hasOp = op === 'create_entry' || op === 'add_entry' || op === 'create' || op === 'update_entry' || op === 'update'
+
+    if (!hasContent && !hasNotes && !hasChanges && !hasTask && !hasTitle && !hasSummary && !hasDescription && !hasFindings && !hasDetails && !hasType && !hasOp && entryId !== undefined) {
+        // Pure ID lookup
+        return `return await mj.core.getEntryById({ entry_id: ${entryId} });`
+    }
+
+    if (!hasContent && !hasNotes && !hasChanges && !hasTask && !hasTitle && !hasSummary && !hasDescription && !hasFindings && !hasDetails && !hasType && !hasOp) {
+        return null
+    }
+
+    // Assemble Content
+    const contentSections: string[] = []
+    if (hasContent) {
+        contentSections.push(String(target['content']).trim())
+    }
+    if (hasNotes) {
+        contentSections.push(String(target['notes']).trim())
+    }
+    if (hasSummary && target['summary'] !== target['title'] && target['summary'] !== target['task']) {
+        contentSections.push(String(target['summary']).trim())
+    }
+    if (hasDescription) {
+        contentSections.push(String(target['description']).trim())
+    }
+    if (hasDetails) {
+        contentSections.push(String(target['details']).trim())
+    }
+    if (hasChanges) {
+        if (Array.isArray(target['changes'])) {
+            const list = (target['changes'] as unknown[]).map(c => `- ${String(c)}`).join('\n')
+            contentSections.push(`**Changes:**\n${list}`)
+        } else {
+            contentSections.push(`**Changes:**\n${String(target['changes']).trim()}`)
+        }
+    }
+    if (hasFindings) {
+        if (Array.isArray(target['findings'])) {
+            const list = (target['findings'] as unknown[]).map(f => `- ${String(f)}`).join('\n')
+            contentSections.push(`**Findings:**\n${list}`)
+        } else {
+            contentSections.push(`**Findings:**\n${String(target['findings']).trim()}`)
+        }
+    }
+    if (hasStatus) {
+        contentSections.push(`**Status:** ${String(target['status']).trim()}`)
+    }
+
+    let finalContent = contentSections.filter(Boolean).join('\n\n')
+    if (!finalContent && (hasTask || hasTitle)) {
+        finalContent = String(target['task'] ?? target['title'])
+    }
+    if (!finalContent) {
+        finalContent = 'Recorded via Code Mode payload'
+    }
+
+    // Determine Title
+    let title: string
+    if (hasTitle) {
+        title = String(target['title']).trim()
+    } else if (hasTask) {
+        title = String(target['task']).trim()
+    } else if (hasSummary) {
+        title = String(target['summary']).trim().slice(0, 80)
+    } else {
+        title = 'Journal Entry'
+    }
+
+    // Determine Entry Type
+    const rawType = target['entry_type'] ?? target['type'] ?? target['category']
+    let entryType = 'technical_decision'
+    if (typeof rawType === 'string') {
+        const low = rawType.toLowerCase()
+        if (low === 'code' || low === 'coding' || low === 'technical' || low === 'task') {
+            entryType = 'technical_decision'
+        } else {
+            entryType = low
+        }
+    }
+
+    // Determine Tags
+    const tags: string[] = []
+    if (Array.isArray(target['tags'])) {
+        for (const t of target['tags']) {
+            if (typeof t === 'string' && t.trim().length > 0 && !tags.includes(t.trim())) {
+                tags.push(t.trim())
+            }
+        }
+    } else if (typeof target['tags'] === 'string') {
+        for (const t of target['tags'].split(',')) {
+            const trimmedTag = t.trim()
+            if (trimmedTag.length > 0 && !tags.includes(trimmedTag)) {
+                tags.push(trimmedTag)
+            }
+        }
+    }
+    if (typeof target['project'] === 'string' && target['project'].trim().length > 0 && !tags.includes(target['project'].trim())) {
+        tags.push(target['project'].trim())
+    }
+
+    // Auto context preservation
+    const autoContext: Record<string, unknown> = {}
+    for (const key of ['task', 'status', 'changes', 'notes', 'details', 'action', 'component', 'pr_link', 'issue_link', 'validation_status']) {
+        if (target[key] !== undefined) {
+            autoContext[key] = target[key]
+        }
+    }
+
+    const entryParams: Record<string, unknown> = {
+        title,
+        content: finalContent,
+        entry_type: entryType,
+        tags,
+    }
+    if (Object.keys(autoContext).length > 0) {
+        entryParams['auto_context'] = autoContext
+    }
+    if (typeof target['workspace_id'] === 'string') entryParams['workspace_id'] = target['workspace_id']
+    if (typeof target['session_id'] === 'string') entryParams['session_id'] = target['session_id']
+    if (typeof target['project_number'] === 'number') entryParams['project_number'] = target['project_number']
+    if (typeof target['impact'] === 'number') entryParams['impact'] = target['impact']
+    if (typeof target['trust'] === 'number') entryParams['trust'] = target['trust']
+    if (typeof target['validation_status'] === 'string') entryParams['validation_status'] = target['validation_status']
+
+    const isUpdate = op === 'update_entry' || op === 'update' || (entryId !== undefined && !hasOp)
+    if (isUpdate && entryId !== undefined) {
+        entryParams['entry_id'] = entryId
+        return `return await mj.admin.updateEntry(${JSON.stringify(entryParams)});`
+    }
+
+    return `return await mj.core.createEntry(${JSON.stringify(entryParams)});`
+}
+
+/**
  * Attempt fuzzy recovery of an entry creation or update call from broken/mangled code
  */
 export function extractAndRecoverEntryCode(code: string): string | null {
     if (!code || typeof code !== 'string') return null
+
+    const jsonRecovered = extractAndRecoverJsonCode(code)
+    if (jsonRecovered) return jsonRecovered
 
     // Check if the code was attempting to create or update an entry
     const isCreate = /\b(?:createEntry|teamCreateEntry|appendEntry|create_entry|team_create_entry|addMemory|createMemory|saveMemory)\b/i.test(code)
@@ -752,7 +976,29 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                 
                 try {
                     const input = ExecuteCodeSchema.parse(params)
-                    let executionCode = input.code || input.script || input.source || input.query || input.content || input.text || input.body || input.js || input.javascript || input.payload || input.executionCode || input.input || input.command || input.expression || input.fn || input.exec || input.eval || input.code_snippet || input.raw_code || input.statement || input.statements || input.codeBlock || input.code_block || input.script_content || input.js_code || input.code_string || input.action || input.task || input.instruction || input.instructions
+                    let executionCode = input.code || input.script || input.source || input.query || input.content || input.text || input.body || input.js || input.javascript || (typeof input.payload === 'string' ? input.payload : undefined) || input.executionCode || (typeof input.input === 'string' ? input.input : undefined) || input.command || input.expression || input.fn || input.exec || input.eval || input.code_snippet || input.raw_code || input.statement || input.statements || input.codeBlock || input.code_block || input.script_content || input.js_code || input.code_string || input.action || input.task || input.instruction || input.instructions
+
+                    // Direct Structured Payload / Entry Recovery
+                    if (!executionCode) {
+                        if (typeof input.payload === 'object' && input.payload !== null) {
+                            executionCode = extractAndRecoverJsonCode(JSON.stringify(input.payload)) ?? undefined
+                        } else if (typeof input.entry === 'object' && input.entry !== null) {
+                            executionCode = extractAndRecoverJsonCode(JSON.stringify(input.entry)) ?? undefined
+                        } else if (typeof input.input === 'object' && input.input !== null) {
+                            executionCode = extractAndRecoverJsonCode(JSON.stringify(input.input)) ?? undefined
+                        } else if (typeof params === 'object' && params !== null) {
+                            const rawParams = params as Record<string, unknown>
+                            if (typeof rawParams['payload'] === 'object' && rawParams['payload'] !== null) {
+                                executionCode = extractAndRecoverJsonCode(JSON.stringify(rawParams['payload'])) ?? undefined
+                            } else if (typeof rawParams['entry'] === 'object' && rawParams['entry'] !== null) {
+                                executionCode = extractAndRecoverJsonCode(JSON.stringify(rawParams['entry'])) ?? undefined
+                            } else if (typeof rawParams['input'] === 'object' && rawParams['input'] !== null) {
+                                executionCode = extractAndRecoverJsonCode(JSON.stringify(rawParams['input'])) ?? undefined
+                            } else if (rawParams['action'] !== undefined || rawParams['task'] !== undefined || rawParams['notes'] !== undefined || rawParams['changes'] !== undefined) {
+                                executionCode = extractAndRecoverJsonCode(JSON.stringify(rawParams)) ?? undefined
+                            }
+                        }
+                    }
 
                     // Fallback: search params object for entry object or string properties if code is still undefined
                     if (!executionCode && typeof params === 'object' && params !== null) {
@@ -793,87 +1039,21 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                         // Anti-Hallucination: Auto-heal raw JSON string passed directly as code parameter
                         const trimmedCode = executionCode.trim()
                         if (trimmedCode.startsWith('{') && trimmedCode.endsWith('}')) {
-                            try {
-                                const parsedJson = JSON.parse(trimmedCode) as Record<string, unknown>
-                                const hasContent = typeof parsedJson['content'] === 'string' && parsedJson['content'].length > 0
-                                const op = typeof parsedJson['operation'] === 'string' ? parsedJson['operation'] : typeof parsedJson['op'] === 'string' ? parsedJson['op'] : ''
-                                const hasOp = op === 'create_entry' || op === 'add_entry' || op === 'create' || op === 'update_entry' || op === 'update'
-                                const hasType = typeof parsedJson['type'] === 'string' || typeof parsedJson['entry_type'] === 'string' || typeof parsedJson['category'] === 'string'
-                                const hasSummaryOrFindings = typeof parsedJson['summary'] === 'string' || parsedJson['findings'] !== undefined || typeof parsedJson['description'] === 'string'
-
-                                if (hasContent || hasOp || hasType || hasSummaryOrFindings) {
-                                    const contentParts: string[] = []
-                                    if (typeof parsedJson['summary'] === 'string' && parsedJson['summary'].trim().length > 0) {
-                                        contentParts.push(parsedJson['summary'].trim())
-                                    }
-                                    if (typeof parsedJson['description'] === 'string' && parsedJson['description'].trim().length > 0) {
-                                        contentParts.push(parsedJson['description'].trim())
-                                    }
-                                    if (Array.isArray(parsedJson['findings']) && parsedJson['findings'].length > 0) {
-                                        const findingsList = parsedJson['findings'].map(f => `- ${String(f)}`).join('\n')
-                                        contentParts.push(`**Findings:**\n${findingsList}`)
-                                    } else if (typeof parsedJson['findings'] === 'string' && parsedJson['findings'].trim().length > 0) {
-                                        contentParts.push(`**Findings:**\n${parsedJson['findings'].trim()}`)
-                                    }
-
-                                    let contentStr = typeof parsedJson['content'] === 'string'
-                                        ? parsedJson['content']
-                                        : typeof parsedJson['content'] === 'number' || typeof parsedJson['content'] === 'boolean'
-                                            ? String(parsedJson['content'])
-                                            : ''
-                                    if (contentParts.length > 0) {
-                                        contentStr = contentStr.length > 0 ? `${contentStr}\n\n${contentParts.join('\n\n')}` : contentParts.join('\n\n')
-                                    }
-
-                                    const rawType = parsedJson['entry_type'] ?? parsedJson['type'] ?? parsedJson['category']
-                                    let entryType = 'technical_decision'
-                                    if (typeof rawType === 'string') {
-                                        const low = rawType.toLowerCase()
-                                        if (low === 'code' || low === 'coding' || low === 'technical' || low === 'task') {
-                                            entryType = 'technical_decision'
-                                        } else {
-                                            entryType = low
-                                        }
-                                    }
-
-                                    const tags: string[] = Array.isArray(parsedJson['tags']) ? parsedJson['tags'].map(String) : []
-                                    if (typeof parsedJson['project'] === 'string' && parsedJson['project'].trim().length > 0 && !tags.includes(parsedJson['project'].trim())) {
-                                        tags.push(parsedJson['project'].trim())
-                                    }
-
-                                    const title = typeof parsedJson['title'] === 'string'
-                                        ? parsedJson['title']
-                                        : typeof parsedJson['summary'] === 'string'
-                                            ? parsedJson['summary'].slice(0, 80)
-                                            : undefined
-
-                                    const entryParams: Record<string, unknown> = {
-                                        title,
-                                        content: contentStr,
-                                        entry_type: entryType,
-                                        tags,
-                                        workspace_id: typeof parsedJson['workspace_id'] === 'string' ? parsedJson['workspace_id'] : undefined,
-                                        session_id: typeof parsedJson['session_id'] === 'string' ? parsedJson['session_id'] : undefined,
-                                        project_number: typeof parsedJson['project_number'] === 'number' ? parsedJson['project_number'] : undefined,
-                                    }
-
-                                    const isUpdate = op === 'update_entry' || op === 'update' || parsedJson['entry_id'] !== undefined || parsedJson['id'] !== undefined
-                                    if (isUpdate) {
-                                        if (parsedJson['entry_id'] !== undefined) entryParams['entry_id'] = parsedJson['entry_id']
-                                        if (parsedJson['id'] !== undefined) entryParams['id'] = parsedJson['id']
-                                        executionCode = `return await mj.admin.updateEntry(${JSON.stringify(entryParams)});`
-                                    } else {
-                                        executionCode = `return await mj.createEntry(${JSON.stringify(entryParams)});`
-                                    }
-                                }
-                            } catch {
-                                // Not valid JSON, continue normal execution
+                            const recoveredJson = extractAndRecoverJsonCode(trimmedCode)
+                            if (recoveredJson) {
+                                executionCode = recoveredJson
                             }
                         }
 
                         // Anti-Hallucination: Auto-heal raw Markdown text or natural language prompts passed directly to mj_execute_code
                         const rawObj = (typeof params === 'object' && params !== null ? params : {}) as Record<string, unknown>
-                        const entryObj = (typeof rawObj['entry'] === 'object' && rawObj['entry'] !== null ? rawObj['entry'] : rawObj) as Record<string, unknown>
+                        const entryObj = (typeof rawObj['entry'] === 'object' && rawObj['entry'] !== null
+                            ? rawObj['entry']
+                            : (typeof rawObj['payload'] === 'object' && rawObj['payload'] !== null
+                                ? rawObj['payload']
+                                : (typeof rawObj['input'] === 'object' && rawObj['input'] !== null
+                                    ? rawObj['input']
+                                    : rawObj))) as Record<string, unknown>
                         const entryKeys = [
                             'type', 'entry_type', 'title', 'category', 'changes', 'component',
                             'confidence', 'impact', 'trust', 'validation', 'validation_status',
@@ -1654,7 +1834,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                                 errLower.includes('[object object]')
                             ) {
                                 const originalInput = typeof input.code === 'string' ? input.code : (executionCode ?? '')
-                                const recoveredCode = extractAndRecoverSqlCode(originalInput) ?? extractAndRecoverEntryCode(originalInput)
+                                const recoveredCode = extractAndRecoverSqlCode(originalInput) ?? extractAndRecoverEntryCode(originalInput) ?? extractAndRecoverJsonCode(originalInput)
                                 if (recoveredCode && recoveredCode !== executionCode) {
                                     logger.info('CODEMODE_AUTONOMOUS_RECOVERY', { originalError: execResult.error, recoveredCode })
                                     await runSandbox(recoveredCode)

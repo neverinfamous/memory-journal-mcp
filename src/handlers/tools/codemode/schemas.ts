@@ -34,9 +34,9 @@ export const ExecuteCodeSchema = z.preprocess((val) => {
     body: z.string().optional(),
     js: z.string().optional(),
     javascript: z.string().optional(),
-    payload: z.string().optional(),
+    payload: z.unknown().optional(),
     executionCode: z.string().optional(),
-    input: z.string().optional(),
+    input: z.unknown().optional(),
     command: z.string().optional(),
     expression: z.string().optional(),
     fn: z.string().optional(),
@@ -86,6 +86,16 @@ export const ExecuteCodeSchemaMcp = z.object({
         .optional()
         .describe(
             'Optional search query string or SQL-style query string. If provided, Code Mode will automatically resolve it to search or retrieve entries.'
+        ),
+    payload: z.unknown()
+        .optional()
+        .describe(
+            'Optional payload object, dictionary, or JSON string (e.g. { action: "create", task: "...", notes: "...", changes: [...] }). When passed without code, Code Mode automatically translates and synthesizes it into a type-safe journal entry or API execution.'
+        ),
+    entry: z.unknown()
+        .optional()
+        .describe(
+            'Optional entry object or dictionary to create/update. When passed without code, Code Mode automatically synthesizes an appropriate journal entry.'
         ),
     auto_version: z
         .boolean()

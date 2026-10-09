@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import * as vm from 'node:vm'
 import { wrapResult } from '../src/codemode/worker-result-proxy.js'
 import { ExecuteCodeSchema } from '../src/handlers/tools/codemode/schemas.js'
-import { healCodeModeScript, extractAndRecoverEntryCode } from '../src/handlers/tools/codemode/handler.js'
+import { healCodeModeScript, extractAndRecoverEntryCode, extractAndRecoverJsonCode } from '../src/handlers/tools/codemode/handler.js'
 import { databaseOptionsSchema, networkOptionsSchema } from '../src/cli/schemas.js'
 import { getDummyHealingTools } from '../src/handlers/tools/core/dummy-healing.js'
 
@@ -1837,6 +1837,97 @@ return { success: true, projectId };
             
             const dbInstance = (proxy['getDatabase'] as () => unknown)()
             expect(dbInstance).toBeDefined()
+        })
+
+        it('should auto-heal raw JSON string containing action, task, changes, and notes into valid Code Mode createEntry (agent-issues.jsonl regression)', () => {
+            const rawJsonCode = JSON.stringify({
+                action: 'create',
+                task: 'test-advanced-stats-part10',
+                changes: [
+                    'Added .max(50) to the sampleSize field in StatsSampleSchema to align with schema description and MAX_SAMPLE_SIZE limit.'
+                ],
+                status: 'completed',
+                notes: 'Tested stats tools (sqlite.stats.windowNtile and sqlite.stats.statsSample) including SQL injection edges.'
+            })
+
+            const healed = healCodeModeScript(rawJsonCode)
+            expect(healed).toBeDefined()
+            expect(healed).toContain('mj.core.createEntry')
+            expect(healed).toContain('test-advanced-stats-part10')
+            expect(healed).toContain('Added .max(50)')
+            expect(healed).toContain('Tested stats tools')
+            expect(healed).toContain('completed')
+
+            // Verify healed code is syntactically valid in vm context
+            const wrapped = `(async () => {
+                let createdPayload = null;
+                const mj = {
+                    core: {
+                        createEntry: async (p) => {
+                            createdPayload = p;
+                            return { success: true, entry: p };
+                        }
+                    }
+                };
+                return await (async () => { ${healed} })();
+            })()`
+            expect(() => {
+                new vm.Script(wrapped)
+            }).not.toThrow()
+        })
+
+        it('should parse object payload in ExecuteCodeSchema without throwing (agent-issues.jsonl regression)', () => {
+            const input = {
+                auto_version: true,
+                dry_run: false,
+                payload: {
+                    action: 'create',
+                    changes: [
+                        'Added .max(50) to the sampleSize field in StatsSampleSchema to align with schema description and MAX_SAMPLE_SIZE limit.'
+                    ],
+                    notes: 'Tested stats tools (sqlite.stats.windowNtile and sqlite.stats.statsSample) including SQL injection edges.',
+                    status: 'completed',
+                    task: 'test-advanced-stats-part10'
+                }
+            }
+
+            expect(() => {
+                const parsed = ExecuteCodeSchema.parse(input)
+                expect(parsed.payload).toBeDefined()
+                expect(typeof parsed.payload).toBe('object')
+            }).not.toThrow()
+        })
+
+        it('should extract and recover JSON code for search and ID lookups', () => {
+            const searchJson = JSON.stringify({ action: 'search', query: 'sqlite memory' })
+            const healedSearch = extractAndRecoverJsonCode(searchJson)
+            expect(healedSearch).toBeDefined()
+            expect(healedSearch).toContain('mj.search.searchEntries')
+            expect(healedSearch).toContain('sqlite memory')
+
+            const idLookupJson = JSON.stringify({ entry_id: 12345 })
+            const healedId = extractAndRecoverJsonCode(idLookupJson)
+            expect(healedId).toBeDefined()
+            expect(healedId).toContain('mj.core.getEntryById')
+            expect(healedId).toContain('12345')
+        })
+
+        it('should normalize object payload into JSON code in param-normalizer', async () => {
+            const { applyArgInterceptions } = await import('../src/codemode/param-normalizer.js')
+            const result = applyArgInterceptions('mj_execute_code', [{
+                auto_version: true,
+                payload: {
+                    action: 'create',
+                    task: 'test-advanced-stats-part10',
+                    notes: 'Some notes'
+                }
+            }])
+            expect('args' in result).toBe(true)
+            if ('args' in result) {
+                const normalized = result.args[0] as Record<string, unknown>
+                expect(typeof normalized['code']).toBe('string')
+                expect(normalized['code']).toContain('test-advanced-stats-part10')
+            }
         })
     })
 })
