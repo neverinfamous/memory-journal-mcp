@@ -23,13 +23,12 @@ export function checkPrompt(tail: string): boolean {
   
   return match(lower)
     // Structured Prompts
-    .when(l => /(?:^|\n)[ \t]*\+?(?:password|passphrase|username|email|token|prompt|choice|select|selection|question|confirm|answer|login|authentication|user|id|pass|y\/n|yes\/no|repository|branch|commit|version|author)[ \t]*[:>?][ \t]*$/i.test(l), () => true)
+    .when(l => /(?:^|\n)[ \t]*\+?(?:password|passphrase|username|email|token|prompt|choice|select|selection|question|confirm|answer|login|authentication|user|id|pass|y\/n|yes\/no|repository|author)[ \t]*[:>?][ \t]*$/i.test(l), () => true)
     .when(l => /(?:enter|provide|type|input)(?: \w+){0,3} (?:password|passphrase|username|email|token|user|id|pass|name|code|value|title|body)[ \t:]*$/i.test(l), () => true)
     
     // Inquirer Prompts
-    .when(l => /^\s*\?\s+.*?(?:›|»|:|\[.*?\]|\(.*?\))\s*$/m.test(l), () => true)
-    .when(l => /^\s*\?\s+.*?\s*$/m.test(l), () => true)
-    .when(l => /^\s*\?[^\r\n]{0,250}(?:…|\.\.\.)/m.test(l), () => true)
+    .when(l => /^\s*\?\s+[^\r\n]+(?:\?|:|>|›|»|\[.*?\]|\(.*?\))\s*$/m.test(l), () => true)
+    .when(l => /^\s*[?✔]\s*[^\r\n]{0,250}(?:…|\.\.\.)/m.test(l), () => true)
     
     // REPLs and Shells
     .when(l => /(?:ba)?sh(?:-[\d.]+)?(?:\$|#)\s*$/m.test(l) || /ps [a-z]:\\[^>]*>\s*$/m.test(l) || /^(?:node|bash|python|ruby)> \s*$/m.test(l), () => true)

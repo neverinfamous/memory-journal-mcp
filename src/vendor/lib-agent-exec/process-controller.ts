@@ -18,11 +18,13 @@ function isErrnoException(e: Error): e is NodeJS.ErrnoException {
   return 'code' in e || 'syscall' in e;
 }
 
-export function analyzeExitCode1(payload: ExecPayload, code: number, stdout: string, stderr: string): { isGrepNoMatch: boolean, isDiffFound: boolean, isOutdatedInfo: boolean, isLsNoMatch: boolean } {
+export function analyzeExitCode1(payload: ExecPayload, code: number, stdout: string, stderr: string): { isGrepNoMatch: boolean, isDiffFound: boolean, isOutdatedInfo: boolean, isLsNoMatch: boolean, isRmNoMatch: boolean, isFindNoMatch: boolean } {
   let isGrepNoMatch = false;
   let isDiffFound = false;
   let isOutdatedInfo = false;
   let isLsNoMatch = false;
+  let isRmNoMatch = false;
+  let isFindNoMatch = false;
   
   if (code === 1 || code === 2 || code === 123) {
     let scriptContent = '';
@@ -38,6 +40,25 @@ export function analyzeExitCode1(payload: ExecPayload, code: number, stdout: str
           isLsNoMatch = true;
         } else if (isWrapper && new RegExp(commandBoundaryRegex.source + '(ls|dir)\\b').test(allArgsStr)) {
           isLsNoMatch = true;
+        }
+
+        if (['find', 'find.exe'].includes(origCmd)) {
+          isFindNoMatch = true;
+        } else if (isWrapper && new RegExp(commandBoundaryRegex.source + '(find|fd|fdfind)\\b').test(allArgsStr)) {
+          isFindNoMatch = true;
+        }
+
+        if (code === 2) {
+          const isGrepTool = ['grep', 'grep.exe', 'egrep', 'egrep.exe', 'fgrep', 'fgrep.exe', 'rg', 'rg.exe'].includes(origCmd) || (isWrapper && new RegExp(commandBoundaryRegex.source + '(grep|egrep|fgrep|rg)\\b').test(allArgsStr));
+          if (isGrepTool && (allArgsStr.includes('-s') || allArgsStr.includes('--no-messages') || stderr.trim().length === 0 || stderr.includes('No such file or directory'))) {
+            isGrepNoMatch = true;
+          }
+        }
+      }
+
+      if (code === 1) {
+        if (['rm', 'rm.exe', 'rmdir'].includes(origCmd) || (isWrapper && new RegExp(commandBoundaryRegex.source + '(rm|rmdir)\\b').test(allArgsStr))) {
+          isRmNoMatch = true;
         }
       }
 
@@ -112,6 +133,21 @@ export function analyzeExitCode1(payload: ExecPayload, code: number, stdout: str
         if (new RegExp(commandBoundaryRegex.source + '(ls|dir)\\b').test(scriptContent)) {
           isLsNoMatch = true;
         }
+        if (new RegExp(commandBoundaryRegex.source + '(find|fd|fdfind)\\b').test(scriptContent)) {
+          isFindNoMatch = true;
+        }
+        if (code === 2) {
+          const isGrepTool = new RegExp(commandBoundaryRegex.source + '(grep|egrep|fgrep|rg)\\b').test(scriptContent);
+          if (isGrepTool && (scriptContent.includes(' -s ') || scriptContent.includes(' -s\n') || scriptContent.includes('--no-messages') || stderr.trim().length === 0 || stderr.includes('No such file or directory'))) {
+            isGrepNoMatch = true;
+          }
+        }
+      }
+
+      if (code === 1) {
+        if (new RegExp(commandBoundaryRegex.source + '(rm|rmdir)\\b').test(scriptContent)) {
+          isRmNoMatch = true;
+        }
       }
 
       if (code === 123) {
@@ -144,7 +180,7 @@ export function analyzeExitCode1(payload: ExecPayload, code: number, stdout: str
   if (isOutdatedInfo && (stderr.includes('ERR_PNPM') || stderr.includes('npm ERR!') || stderr.includes('error:') || stderr.includes('Error:'))) {
     isOutdatedInfo = false;
   }
-  if (isGrepNoMatch && (stderr.includes('No such file or directory') || stderr.includes('grep:') || stderr.includes('fatal:'))) {
+  if (isGrepNoMatch && (stderr.includes('fatal:') || (code === 1 && stderr.includes('grep:')))) {
     isGrepNoMatch = false;
   }
   if (isDiffFound && (stderr.includes('No such file or directory') || stderr.includes('diff:'))) {
@@ -153,8 +189,14 @@ export function analyzeExitCode1(payload: ExecPayload, code: number, stdout: str
   if (isLsNoMatch && (!(stderr.includes('cannot access') || stderr.includes('No such file or directory') || stderr.includes('File Not Found')) || stderr.includes('Permission denied'))) {
     isLsNoMatch = false;
   }
+  if (isFindNoMatch && (!(stderr.includes('No such file or directory') || stderr.includes('cannot access') || stderr.includes('File Not Found') || stderr.includes('not found') || stderr.includes('does not exist')) || stderr.includes('Permission denied'))) {
+    isFindNoMatch = false;
+  }
+  if (isRmNoMatch && (!(stderr.includes('cannot remove') || stderr.includes('No such file or directory') || stderr.includes('cannot find') || stderr.includes('not found')) || stderr.includes('Permission denied') || stderr.includes('Operation not permitted'))) {
+    isRmNoMatch = false;
+  }
 
-  return { isGrepNoMatch, isDiffFound, isOutdatedInfo, isLsNoMatch };
+  return { isGrepNoMatch, isDiffFound, isOutdatedInfo, isLsNoMatch, isRmNoMatch, isFindNoMatch };
 }
 
 export class ProcessController {
@@ -413,8 +455,8 @@ export class ProcessController {
       }
       code = computedCode;
 
-      const { isGrepNoMatch: isGrep, isDiffFound: isDiff, isOutdatedInfo: isOutdated, isLsNoMatch: isLs } = (code !== null && code !== 0) ? analyzeExitCode1(this.payload, code, this.ioController?.stdoutTail || '', this.ioController?.stderrTail || '') : { isGrepNoMatch: false, isDiffFound: false, isOutdatedInfo: false, isLsNoMatch: false };
-      const isGracefulExit = isGrep || isDiff || isOutdated || isLs;
+      const { isGrepNoMatch: isGrep, isDiffFound: isDiff, isOutdatedInfo: isOutdated, isLsNoMatch: isLs, isRmNoMatch: isRm, isFindNoMatch: isFind } = (code !== null && code !== 0) ? analyzeExitCode1(this.payload, code, this.ioController?.stdoutTail || '', this.ioController?.stderrTail || '') : { isGrepNoMatch: false, isDiffFound: false, isOutdatedInfo: false, isLsNoMatch: false, isRmNoMatch: false, isFindNoMatch: false };
+      const isGracefulExit = isGrep || isDiff || isOutdated || isLs || isRm || isFind;
       const telemetryCode = isGracefulExit ? 0 : code;
       
       await sendDatadogTelemetry(
@@ -428,8 +470,8 @@ export class ProcessController {
       );
 
       if (this.isJson) {
-         const { isGrepNoMatch, isDiffFound, isOutdatedInfo, isLsNoMatch } = (computedCode !== null && computedCode !== 0) ? analyzeExitCode1(this.payload, computedCode, this.ioController?.stdoutTail || '', this.ioController?.stderrTail || '') : { isGrepNoMatch: false, isDiffFound: false, isOutdatedInfo: false, isLsNoMatch: false };
-         const isGraceful = isGrepNoMatch || isDiffFound || isOutdatedInfo || isLsNoMatch;
+         const { isGrepNoMatch, isDiffFound, isOutdatedInfo, isLsNoMatch, isRmNoMatch, isFindNoMatch } = (computedCode !== null && computedCode !== 0) ? analyzeExitCode1(this.payload, computedCode, this.ioController?.stdoutTail || '', this.ioController?.stderrTail || '') : { isGrepNoMatch: false, isDiffFound: false, isOutdatedInfo: false, isLsNoMatch: false, isRmNoMatch: false, isFindNoMatch: false };
+         const isGraceful = isGrepNoMatch || isDiffFound || isOutdatedInfo || isLsNoMatch || isRmNoMatch || isFindNoMatch;
          const finalCode = isGraceful ? 0 : computedCode;
 
          if (this.payload.onFailure && finalCode !== 0) {
@@ -477,7 +519,7 @@ export class ProcessController {
         if (code === null && signal) { if (!this.isJson) console.error(`\n❌ Command was terminated by signal ${signal}`);
           process.exit(1);
         } else if (code !== null) {
-          const { isGrepNoMatch, isDiffFound, isOutdatedInfo, isLsNoMatch } = analyzeExitCode1(this.payload, code, this.ioController?.stdoutTail || '', this.ioController?.stderrTail || '');
+          const { isGrepNoMatch, isDiffFound, isOutdatedInfo, isLsNoMatch, isRmNoMatch, isFindNoMatch } = analyzeExitCode1(this.payload, code, this.ioController?.stdoutTail || '', this.ioController?.stderrTail || '');
           
           if (isGrepNoMatch) { if (!this.isJson) console.error(`\nℹ️  No matches found (exit code ${code}).`);
             process.exit(0);
@@ -486,6 +528,10 @@ export class ProcessController {
           } else if (isOutdatedInfo) { if (!this.isJson) console.error(`\nℹ️  Outdated packages found (exit code ${code}).`);
             process.exit(0);
           } else if (isLsNoMatch) { if (!this.isJson) console.error(`\nℹ️  No matching files found (exit code ${code}).`);
+            process.exit(0);
+          } else if (isFindNoMatch) { if (!this.isJson) console.error(`\nℹ️  No matching files or directories found (exit code ${code}).`);
+            process.exit(0);
+          } else if (isRmNoMatch) { if (!this.isJson) console.error(`\nℹ️  Target file or directory already removed (exit code ${code}).`);
             process.exit(0);
           } else {
             let suppressRedundantExit = false;

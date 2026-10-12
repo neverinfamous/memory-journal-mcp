@@ -10,7 +10,7 @@ import { findEcosystemScript } from '../utils.js';
 import { runMutatingInterceptors } from './mutating-interceptors.js';
 import { runStructuralInterceptors } from './structural-interceptors.js';
 import { healPathHallucinations, healEvalCodePathHallucinations } from '../path-healer.js';
-import { handleFindInterception, handleRipgrepInterception, handleGrepInterception } from './search-interceptor.js';
+import { handleFindInterception, handleRipgrepInterception, handleGrepInterception, parseGrepSearchArgs, GREP_EXCLUDE_DIRS } from './search-interceptor.js';
 import { isPowerShellCode } from '../eval-healer.js';
 const INTERPRETER_INLINE_FLAGS: Record<string, readonly string[]> = {
   node: ['-e', '--eval', '-p', '--print'],
@@ -56,6 +56,27 @@ export function systemInterceptor(ctx: ExecutionContext): void {
   if (ctx.args.length !== originalArgs.length || ctx.args.some((a, idx) => a !== originalArgs[idx])) {
     console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected fragmented quotes from PowerShell tokenization. Reassembling arguments... (Frictionless Recovery)\x1b[0m`);
   }
+
+  // Unwrap shells invoked through package runners (e.g. bun run pwsh -c ... -> pwsh -c ...)
+  const pkgBase = ctx.cmdBasename.toLowerCase().replace(/\.(exe|cmd)$/i, '');
+  if (['bun', 'pnpm', 'npm', 'npx', 'yarn', 'bunx', 'pnpx', 'node', 'tsx', 'ts-node'].includes(pkgBase)) {
+    const runIdx = ctx.args[0]?.toLowerCase() === 'run' ? 1 : 0;
+    const possibleShell = ctx.args[runIdx]?.toLowerCase().replace(/\.(exe|cmd)$/i, '');
+    if (possibleShell && ['pwsh', 'powershell', 'cmd', 'bash', 'sh', 'wsl'].includes(possibleShell)) {
+      console.error(`\n   💡 AGENT HINT: Shell '${possibleShell}' invoked through package runner '${ctx.cmdBasename}'.`);
+      console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Unwrapping package runner to execute shell directly with safety interceptors... (Frictionless Recovery)\x1b[0m`);
+      ctx.cmdBasename = possibleShell;
+      if (ctx.payload.type === 'command') {
+        ctx.payload.command = possibleShell;
+      }
+      ctx.args = ctx.args.slice(runIdx + 1);
+    } else if (ctx.args.some(a => path.basename(a).toLowerCase() === 'agent-exec.ts')) {
+      // Nested agent-exec.ts invocation: disable stall interceptors on the wrapper to prevent false-positive aborts
+      ctx.payload.bypassInterceptors = true;
+      ctx.payload.timeoutMs = Math.max(ctx.payload.timeoutMs || 180000, 180000);
+    }
+  }
+
   const { cmdBasename, payload } = ctx;
   const { args } = ctx;
   const exactShellChars = ['|', '>', '<', '&&', '||', ';'];
@@ -89,43 +110,60 @@ export function systemInterceptor(ctx: ExecutionContext): void {
         payload.code = `rg ${flags.join(' ')} ${escapeUnixArg(pattern, false)} ${escapeUnixArg(convertToWslPath(searchPath), false)}`;
       }
     } else {
-      const pkgGrepMatch = trimmedCode.match(/^(?:bun|npm|pnpm|yarn|npx)\s+(?:run\s+)?grep_search\b\s*(.*)$/i);
-      if (pkgGrepMatch !== null) {
-        const rest = pkgGrepMatch[1] ?? '';
-        const sMatch = rest.match(/(?:-s|--symbol|--pattern)\s+["'`]([^"'`]+)["'`]|(?:-s|--symbol|--pattern)\s+([^\s]+)/i);
-        const pMatch = rest.match(/(?:-p|--path|-d|--dir)\s+["'`]([^"'`]+)["'`]|(?:-p|--path|-d|--dir)\s+([^\s]+)/i);
-        let pattern = (sMatch !== null ? (sMatch[1] ?? sMatch[2]) : undefined) ?? '';
-        let searchPath = (pMatch !== null ? (pMatch[1] ?? pMatch[2]) : undefined) ?? '';
-
-        if (pattern.length === 0) {
-          const unescapedRest = rest.replace(/\\"/g, '"').replace(/\\'/g, "'");
-          const posMatches = unescapedRest.match(/(?:[^\s"'`]+|"[^"]*"|'[^']*'|`[^`]*`)/g) ?? [];
-          const nonFlag = posMatches.filter(t => !t.startsWith('-')).map(t => t.replace(/^['"`]|['"`]$/g, ''));
-          if (nonFlag.length > 0 && nonFlag[0] !== undefined) {
-            pattern = nonFlag[0];
-            searchPath = nonFlag[1] ?? searchPath;
+      const grepSearchCliMatch = trimmedCode.match(/^(?:(?:bun|npm|pnpm|yarn|npx|node|tsx|ts-node)\s+(?:run\s+)?)?(?:(?:\.[/\\])?(?:\.agents[/\\]scripts[/\\]))?grep_search(?:\.ts|\.js)?\b\s*(.*)$/i);
+      if (grepSearchCliMatch !== null) {
+        const rest = grepSearchCliMatch[1] ?? '';
+        const rawTokens = rest.match(/(?:[^\s"'`]+|"[^"]*"|'[^']*'|`[^`]*`)+/g) ?? [];
+        const cleanTokens = rawTokens.map(t => {
+          if ((t.startsWith('"') && t.endsWith('"')) || (t.startsWith("'") && t.endsWith("'")) || (t.startsWith('`') && t.endsWith('`'))) {
+            return t.slice(1, -1);
           }
-        }
-        if (searchPath.length === 0) {
-          searchPath = '.';
-        }
-
+          return t;
+        });
+        const { pattern, searchPath, isCaseInsensitive, isWord, isRegex } = parseGrepSearchArgs(cleanTokens);
         if (pattern.length > 0) {
-          console.error(`\n   💡 AGENT HINT: 'grep_search' executed via package manager in eval code.`);
-          console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-translating 'bun run grep_search' to ripgrep (rg)... (Frictionless Recovery)\x1b[0m`);
+          console.error(`\n   💡 AGENT HINT: 'grep_search' executed directly in eval code.`);
+          console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-translating 'grep_search' to ripgrep (rg)... (Frictionless Recovery)\x1b[0m`);
           payload.target = 'wsl2';
           payload.interpreter = 'bash';
-          payload.code = `rg -n -F ${escapeUnixArg(pattern, false)} ${escapeUnixArg(convertToWslPath(searchPath), false)}`;
+          const rgFlags = ['-n'];
+          if (isCaseInsensitive) rgFlags.push('-i');
+          if (isWord) rgFlags.push('-w');
+          if (!isRegex) rgFlags.push('-F');
+          payload.code = `rg ${rgFlags.join(' ')} ${escapeUnixArg(pattern, false)} ${escapeUnixArg(convertToWslPath(searchPath), false)}`;
         }
       } else {
-        const pkgRgMatch = trimmedCode.match(/^(?:bunx|npx|pnpx|bun\s+x|pnpm\s+dlx|yarn\s+dlx)\s+(?:@\S+\/)?(?:rg|ripgrep)\b\s*(.*)$/i);
-        if (pkgRgMatch !== null) {
-          const rest = pkgRgMatch[1] ?? '';
-          console.error(`\n   💡 AGENT HINT: 'rg' executed via package runner in eval code.`);
-          console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-translating package runner rg to native ripgrep (rg)... (Frictionless Recovery)\x1b[0m`);
+        const listDirMatch = trimmedCode.match(/^(?:(?:bun|npm|pnpm|yarn|npx|node|tsx|ts-node)\s+(?:run\s+)?)?(?:(?:\.[/\\])?(?:\.agents[/\\]scripts[/\\]))?list_dir(?:\.ts|\.js)?\b\s*(.*)$/i);
+        if (listDirMatch !== null) {
+          const rest = (listDirMatch[1] ?? '').trim().replace(/^['"`]|['"`]$/g, '');
+          const targetPath = rest.length > 0 ? rest : '.';
+          console.error(`\n   💡 AGENT HINT: 'list_dir' executed directly in eval code.`);
+          console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-translating 'list_dir' to ls... (Frictionless Recovery)\x1b[0m`);
           payload.target = 'wsl2';
           payload.interpreter = 'bash';
-          payload.code = `rg ${rest}`.trim();
+          payload.code = `ls ${escapeUnixArg(convertToWslPath(targetPath), false)}`;
+        } else {
+          const viewFileMatch = trimmedCode.match(/^(?:(?:bun|npm|pnpm|yarn|npx|node|tsx|ts-node)\s+(?:run\s+)?)?(?:(?:\.[/\\])?(?:\.agents[/\\]scripts[/\\]))?view_file(?:\.ts|\.js)?\b\s*(.*)$/i);
+          if (viewFileMatch !== null && (viewFileMatch[1] ?? '').trim().length > 0) {
+            const targetPath = (viewFileMatch[1] ?? '').trim().replace(/^['"`]|['"`]$/g, '');
+            console.error(`\n   💡 AGENT HINT: 'view_file' executed directly in eval code.`);
+            console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-translating 'view_file' to cat... (Frictionless Recovery)\x1b[0m`);
+            payload.target = 'wsl2';
+            payload.interpreter = 'bash';
+            payload.code = `cat ${escapeUnixArg(convertToWslPath(targetPath), false)}`;
+          } else {
+            const pkgRunnerMatch = trimmedCode.match(/^(?:bunx|npx|pnpx|bun\s+x|pnpm\s+dlx|yarn\s+dlx)\s+(?:@\S+\/)?(?:rg|ripgrep|fd|fdfind)\b\s*(.*)$/i);
+            if (pkgRunnerMatch !== null) {
+              const isFd = /^(?:bunx|npx|pnpx|bun\s+x|pnpm\s+dlx|yarn\s+dlx)\s+(?:@\S+\/)?(?:fd|fdfind)\b/i.test(trimmedCode);
+              const toolName = isFd ? 'fd' : 'rg';
+              const rest = pkgRunnerMatch[1] ?? '';
+              console.error(`\n   💡 AGENT HINT: '${toolName}' executed via package runner in eval code.`);
+              console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-translating package runner ${toolName} to native ${toolName}... (Frictionless Recovery)\x1b[0m`);
+              payload.target = 'wsl2';
+              payload.interpreter = 'bash';
+              payload.code = `${toolName} ${rest}`.trim();
+            }
+          }
         }
       }
     }
@@ -178,21 +216,29 @@ export function systemInterceptor(ctx: ExecutionContext): void {
       }
     }
 
-    const rgUnquotedMatch = payload.code.match(/^rg\s+((?:[a-zA-Z0-9_-]+\s+)+)(\/[^\s]+|[a-zA-Z]:[^\s]+|\.[^\s]+|[^\s]+\.[a-zA-Z0-9]+)$/);
-    if (rgUnquotedMatch !== null && rgUnquotedMatch[1] !== undefined && rgUnquotedMatch[2] !== undefined) {
-      const pattern = rgUnquotedMatch[1].trim();
-      const targetPath = rgUnquotedMatch[2].trim();
+    const bundledSearchFlagsRegex = /(?:^|[;&|\s])(?:rg|ripgrep|grep|egrep|fgrep)\s+(["'])(-[a-zA-Z0-9_-]+(?:\s+\d+)?(?:\s+-[a-zA-Z0-9_-]+(?:\s+\d+)?)*)\s+([^"']+)\1/i;
+    if (bundledSearchFlagsRegex.test(payload.code)) {
+      console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected bundled search flags and pattern inside quotes in eval code. Unbundling flags... (Frictionless Recovery)\x1b[0m`);
+      payload.code = payload.code.replace(/(["'])(-[a-zA-Z0-9_-]+(?:\s+\d+)?(?:\s+-[a-zA-Z0-9_-]+(?:\s+\d+)?)*)\s+([^"']+)\1/g, (_m, q, flags, pattern) => {
+        return `${flags} ${q}${pattern}${q}`;
+      });
+    }
+
+    const rgUnquotedMatch = payload.code.match(/^rg\s+((?:-[^\s]+\s+)*)((?:[a-zA-Z0-9_][a-zA-Z0-9_.-]*\s+){2,})(\/[^\s]+|[a-zA-Z]:[^\s]+|\.[^\s]+|[^\s]+\.[a-zA-Z0-9]+)$/);
+    if (rgUnquotedMatch !== null && rgUnquotedMatch[2] !== undefined && rgUnquotedMatch[3] !== undefined) {
+      const flags = rgUnquotedMatch[1] ?? '';
+      const pattern = rgUnquotedMatch[2].trim();
+      const targetPath = rgUnquotedMatch[3].trim();
       console.error(`\n   🛠️ AUTONOMOUS HEALING: Unquoted search pattern in eval 'rg' detected. Recombining into single quoted pattern... (Frictionless Recovery)\x1b[0m`);
-      payload.code = `rg "${pattern}" ${targetPath}`;
+      payload.code = `rg ${flags}"${pattern}" ${targetPath}`;
     }
 
     const grepDirMatch = payload.code.match(/^(?:grep|egrep)\s+(.*)$/i);
-    if (grepDirMatch !== null && !/(?:^|\s)(?:-[a-zA-Z]*[rR]\b|--recursive\b)/.test(payload.code)) {
+    if (grepDirMatch !== null) {
       const rest = grepDirMatch[1] ?? '';
       const tokens = rest.trim().split(/\s+/);
-      const isTargetingDir = tokens.some(t => {
-        if (t.startsWith('-')) return false;
-        if (t.endsWith('/') || t.endsWith('\\') || t === '.' || t === '..' || t.startsWith('./') || t.startsWith('../')) return true;
+      const isDir = (t: string): boolean => {
+        if (t.endsWith('/') || t.endsWith('\\') || t === '.' || t === '..' || t.startsWith('./') || t.startsWith('../') || t.includes('/') || t.includes('\\') || /^[a-zA-Z]:/.test(t)) return true;
         try {
           const cwd = payload.cwd !== undefined && payload.cwd.length > 0 ? path.resolve(payload.cwd) : process.cwd();
           const p = path.resolve(cwd, t);
@@ -200,10 +246,76 @@ export function systemInterceptor(ctx: ExecutionContext): void {
         } catch {
           return false;
         }
+      };
+
+      if (!/(?:^|\s)(?:-[a-zA-Z]*[rR]\b|--recursive\b)/.test(payload.code)) {
+        const isTargetingDir = tokens.some(t => !t.startsWith('-') && isDir(t));
+        if (isTargetingDir) {
+          console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected directory target in eval grep without recursive flag. Auto-injecting '-r'... (Frictionless Recovery)\x1b[0m`);
+          payload.code = payload.code.replace(/^(grep|egrep)\b/i, '$1 -r');
+        }
+      }
+
+      // Check for reversed arguments: grep [flags] <dir> <pattern> -> grep [flags] <pattern> <dir>
+      const nonFlagTokens = tokens.filter(t => !t.startsWith('-'));
+      if (nonFlagTokens.length === 2 && !payload.code.includes('-e') && !payload.code.includes('--regexp')) {
+        const [first, second] = nonFlagTokens;
+        if (isDir(first) && !isDir(second)) {
+          console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected reversed arguments in eval grep (directory before pattern). Swapping arguments to place pattern first... (Frictionless Recovery)\x1b[0m`);
+          const regexSwap = new RegExp(`(${first.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})\\s+(${second.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`);
+          payload.code = payload.code.replace(regexSwap, '$2 $1');
+        }
+      }
+
+      const isRecursiveGrep = /(?:^|\s)(?:-[a-zA-Z]*[rR]\b|--recursive\b)/.test(payload.code);
+      const isBroadGrep = tokens.some(t => {
+        if (t.startsWith('-')) return false;
+        const clean = t.replace(/^['"]|['"]$/g, '').trim();
+        return clean === '.' || clean === './' || clean === '..' || clean === '../' || clean.startsWith('/mnt/') || /^[a-zA-Z]:/.test(clean);
       });
-      if (isTargetingDir) {
-        console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected directory target in eval grep without recursive flag. Auto-injecting '-r'... (Frictionless Recovery)\x1b[0m`);
-        payload.code = payload.code.replace(/^(grep|egrep)\b/i, '$1 -r');
+      if (isRecursiveGrep && isBroadGrep) {
+        const missingExcludes = GREP_EXCLUDE_DIRS.filter(
+          d => !payload.code.includes(`--exclude-dir=${d}`) && !payload.code.includes(`--exclude-dir ${d}`)
+        );
+        if (missingExcludes.length > 0 && !payload.code.includes('--exclude-dir=')) {
+          console.error(
+            `\n   🛠️ AUTONOMOUS HEALING: Recursive grep on mounted Windows filesystem detected. Auto-injecting --exclude-dir for node_modules, .git, and dist (and artifact/cache dirs) to prevent timeouts... (Frictionless Recovery)\x1b[0m`
+          );
+          const excludeFlags = missingExcludes.map(d => `--exclude-dir=${d}`).join(' ');
+          payload.code = payload.code.replace(/^(grep|egrep)\b/i, `$1 ${excludeFlags}`);
+        }
+        if (!payload.code.includes('--binary-files=')) {
+          payload.code = payload.code.replace(/^(grep|egrep)\b/i, '$1 --binary-files=without-match');
+        }
+        if (payload.timeoutMs === undefined || payload.timeoutMs <= 30000) {
+          payload.timeoutMs = 60000;
+        }
+      }
+    }
+
+    const rgDirMatch = payload.code.match(/^(?:rg|ripgrep)\s+(.*)$/i);
+    if (rgDirMatch !== null) {
+      const rest = rgDirMatch[1] ?? '';
+      const tokens = rest.trim().split(/\s+/);
+      const isDir = (t: string): boolean => {
+        if (t.endsWith('/') || t.endsWith('\\') || t === '.' || t === '..' || t.startsWith('./') || t.startsWith('../') || t.includes('/') || t.includes('\\') || /^[a-zA-Z]:/.test(t)) return true;
+        try {
+          const cwd = payload.cwd !== undefined && payload.cwd.length > 0 ? path.resolve(payload.cwd) : process.cwd();
+          const p = path.resolve(cwd, t);
+          return fs.existsSync(p) && fs.statSync(p).isDirectory();
+        } catch {
+          return false;
+        }
+      };
+
+      const nonFlagTokens = tokens.filter(t => !t.startsWith('-'));
+      if (nonFlagTokens.length === 2 && !payload.code.includes('-e') && !payload.code.includes('--regexp')) {
+        const [first, second] = nonFlagTokens;
+        if (isDir(first) && !isDir(second)) {
+          console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected reversed arguments in eval 'rg' (directory before pattern). Swapping arguments to place pattern first... (Frictionless Recovery)\x1b[0m`);
+          const regexSwap = new RegExp(`(${first.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})\\s+(${second.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`);
+          payload.code = payload.code.replace(regexSwap, '$2 $1');
+        }
       }
     }
 
@@ -311,24 +423,29 @@ export function systemInterceptor(ctx: ExecutionContext): void {
       const codeOrScript = payload.type === 'eval' ? payload.code : (payload.scriptPath || '');
       const isChainedQuality = codeOrScript && /(?:typecheck|tsc|lint|check|build|test).*(?:&&|;).*(?:typecheck|tsc|lint|check|build|test)/i.test(codeOrScript);
       const hasQualityCheck = codeOrScript && /(?:typecheck|tsc|lint|check|build|test|vitest|jest|playwright)/i.test(codeOrScript);
+      const isKnownDeterministic = codeOrScript && /(?:commit\.ts|get-git-history-json\.ts|backup-conversations\.ts)/i.test(codeOrScript);
       const hasMountedSearch = codeOrScript && /(?:find|grep|rg|ls|tree)\b/i.test(codeOrScript);
       
       if (isChainedQuality) {
         defaultWslTimeout = 180000;
+        payload.bypassInterceptors = true;
         console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected chained quality checks in WSL2 eval payload. Auto-extending timeout to 180s... (Frictionless Recovery)`);
-      } else if (hasQualityCheck) {
+      } else if (hasQualityCheck || isKnownDeterministic) {
         defaultWslTimeout = 90000;
-        console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected quality check in WSL2 eval payload. Auto-extending timeout to 90s... (Frictionless Recovery)`);
+        payload.bypassInterceptors = true;
+        console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected quality check or deterministic script in WSL2 eval payload. Auto-extending timeout to 90s... (Frictionless Recovery)`);
       } else if (hasMountedSearch) {
         defaultWslTimeout = 90000;
         console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected file search across mounted filesystem in WSL2 eval payload. Auto-extending timeout to 90s... (Frictionless Recovery)`);
       }
     } else if (payload.type === 'command') {
       const isQuality = /(?:typecheck|tsc|lint|check|build|test|vitest|jest|playwright)/i.test(cmdBasename) || (args && args.some(a => /(?:typecheck|tsc|lint|check|build|test|vitest|jest|playwright)/i.test(a)));
+      const isKnownDeterministic = /(?:commit\.ts|get-git-history-json\.ts|backup-conversations\.ts)/i.test(cmdBasename) || (args && args.some(a => /(?:commit\.ts|get-git-history-json\.ts|backup-conversations\.ts)/i.test(a)));
       const isSearch = /(?:find|grep|rg|ls|tree)\b/i.test(cmdBasename) || (args && args.some(a => /(?:find|grep|rg|ls|tree)\b/i.test(a)));
       
-      if (isQuality) {
+      if (isQuality || isKnownDeterministic) {
         defaultWslTimeout = 90000;
+        payload.bypassInterceptors = true;
       } else if (isSearch) {
         defaultWslTimeout = 90000;
       }

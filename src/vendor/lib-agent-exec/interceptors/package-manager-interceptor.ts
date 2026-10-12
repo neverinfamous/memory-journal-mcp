@@ -134,14 +134,14 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
     const subCmd = args.filter(a => !a.startsWith('-'))[0];
     if (subCmd && (AGENT_NATIVE_TOOLS as readonly string[]).includes(subCmd)) {
       if (subCmd === 'grep_search') {
-        const sIdx = args.findIndex(a => ['-s', '--symbol', '--pattern', '--searchpattern', '--search-pattern'].includes(a.toLowerCase()));
+        const sIdx = args.findIndex(a => ['-s', '--symbol', '--pattern', '--searchpattern', '--search-pattern', '--targetcontent', '--target-content', '--content'].includes(a.toLowerCase()));
         const pIdx = args.findIndex(a => ['-p', '--path', '-d', '--dir', '--searchpath', '--search-path'].includes(a.toLowerCase()));
         const subCmdIdx = args.indexOf(subCmd);
         const argsAfterSubCmd = args.slice(subCmdIdx + 1);
         const nonFlagAfterSubCmd: string[] = [];
         for (let i = 0; i < argsAfterSubCmd.length; i++) {
           const a = argsAfterSubCmd[i];
-          if (['-s', '--symbol', '--pattern', '-p', '--path', '-d', '--dir', '--searchpath', '--search-path', '--searchpattern', '--search-pattern'].includes(a.toLowerCase())) {
+          if (['-s', '--symbol', '--pattern', '-p', '--path', '-d', '--dir', '--searchpath', '--search-path', '--searchpattern', '--search-pattern', '--targetcontent', '--target-content', '--content'].includes(a.toLowerCase())) {
             i++;
             continue;
           }
@@ -151,7 +151,26 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
         }
         const pattern = sIdx !== -1 && sIdx + 1 < args.length ? (args[sIdx + 1] ?? '') : (nonFlagAfterSubCmd[0] ?? '');
         const searchPath = pIdx !== -1 && pIdx + 1 < args.length ? (args[pIdx + 1] ?? '.') : (nonFlagAfterSubCmd[1] ?? '.');
-        if (pattern.length > 0) {
+        const isPathLike = (s: string): boolean => {
+          if (!s || s.length === 0) return false;
+          const clean = s.trim();
+          if (clean === '.' || clean === '..' || clean.startsWith('./') || clean.startsWith('../') || clean.endsWith('/') || clean.endsWith('\\')) return true;
+          if (clean.includes('/') || clean.includes('\\') || /^[a-zA-Z]:/.test(clean)) return true;
+          try {
+            const cwd = ctx.payload.cwd !== undefined && ctx.payload.cwd.length > 0 ? path.resolve(ctx.payload.cwd) : process.cwd();
+            return fs.existsSync(path.resolve(cwd, clean)) && fs.statSync(path.resolve(cwd, clean)).isDirectory();
+          } catch {
+            return false;
+          }
+        };
+        let finalPattern = pattern;
+        let finalPath = searchPath;
+        if (isPathLike(finalPattern) && !isPathLike(finalPath) && finalPath.length > 0) {
+          const tmp = finalPattern;
+          finalPattern = finalPath;
+          finalPath = tmp;
+        }
+        if (finalPattern.length > 0) {
           console.error(`\n   💡 AGENT HINT: '${subCmd}' is an agent-native tool, NOT a package manager script.`);
           console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-translating '${cmdBasename} ${subCmd}' to ripgrep (rg)... (Frictionless Recovery)\x1b[0m`);
           ctx.cmdBasename = 'rg';
@@ -165,7 +184,7 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
           if (!args.some(a => a === '-e' || a === '--regexp')) {
             rgFlags.push('-F');
           }
-          ctx.args = [...rgFlags, pattern, searchPath];
+          ctx.args = [...rgFlags, finalPattern, finalPath];
           if ('command' in ctx.payload) {
             ctx.payload.command = 'rg';
             ctx.payload.args = ctx.args;
@@ -232,6 +251,18 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
         handleRipgrepInterception(ctx, false);
         return;
       }
+      if (targetPkg === 'fd' || targetPkg === 'fdfind') {
+        console.error(`\n   🛠️ AUTONOMOUS HEALING: Auto-translating '${cmdBasename} ${subCmd} ${targetPkg}' to native fd... (Frictionless Recovery)\x1b[0m`);
+        ctx.cmdBasename = 'fd';
+        const absoluteTargetIdx = subCmdIdx + 1 + targetPkgIdx;
+        ctx.args = args.filter((a, idx) => idx !== subCmdIdx && idx !== absoluteTargetIdx && a !== '-y' && a !== '--yes');
+        ctx.payload.target = 'wsl2';
+        if ('command' in ctx.payload) {
+          ctx.payload.command = 'fd';
+          ctx.payload.args = ctx.args;
+        }
+        return;
+      }
     }
     if (['init', 'create', 'dlx', 'x'].includes(subCmd) && !args.includes('-y') && !args.includes('--yes')) {
       console.error(`\n   🛠️ AUTONOMOUS HEALING: Automatically injecting '-y' into ${cmdBasename} ${subCmd} command to prevent prompt hanging.... (Frictionless Recovery)`);
@@ -281,6 +312,17 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
         ctx.payload.args = ctx.args;
       }
       handleRipgrepInterception(ctx, false);
+      return;
+    }
+    if (runnerTarget === 'fd' || runnerTarget === 'fdfind') {
+      console.error(`\n   🛠️ AUTONOMOUS HEALING: Auto-translating '${cmdBasename} ${runnerTarget}' to native fd... (Frictionless Recovery)\x1b[0m`);
+      ctx.cmdBasename = 'fd';
+      ctx.args = args.filter((a, idx) => idx !== firstNonFlagIdx && a !== '-y' && a !== '--yes');
+      ctx.payload.target = 'wsl2';
+      if ('command' in ctx.payload) {
+        ctx.payload.command = 'fd';
+        ctx.payload.args = ctx.args;
+      }
       return;
     }
     if (cmdBasename.startsWith('npx') && args[0] === 'tsx') {
