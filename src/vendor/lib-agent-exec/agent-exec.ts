@@ -150,7 +150,7 @@ try {
   const payload = parseResult.data;
   if (targetOverride) {
     const normalized = normalizeTarget(targetOverride);
-    if (!normalized) fatalError(`Invalid --target value: '${targetOverride}'. Must be 'windows', 'wsl2', or an alias (wsl, linux, native, win).`);
+    if (!normalized) fatalError(`Invalid --target value: '${targetOverride}'. Must be 'windows', 'wsl2', or an alias (wsl, linux, ubuntu, native, win, pwsh, cmd, bash).`);
     payload.target = normalized;
   }
   

@@ -14,20 +14,36 @@ const safeStringArray = z.array(safeString).max(1000);
 
 const lenientBoolean = z.union([z.boolean(), z.literal("true"), z.literal("false")]).transform(val => val === true || val === "true");
 
+export const TARGET_WSL2_ALIASES = [
+  'wsl', 'wsl2', 'linux', 'ubuntu', 'debian', 'posix', 'bash', 'sh', 'zsh',
+] as const;
+
+export const TARGET_WINDOWS_ALIASES = [
+  'native', 'win', 'win32', 'win64', 'windows', 'pwsh', 'powershell', 'powershell.exe',
+  'pwsh.exe', 'cmd', 'cmd.exe', 'bat', 'ps', 'ps1', 'dos', 'host', 'local', 'default',
+] as const;
+
+export const targetNormalizeSchema = z.preprocess(val => {
+  if (typeof val === 'string') {
+    const v = val.trim().toLowerCase();
+    if ((TARGET_WSL2_ALIASES as readonly string[]).includes(v)) return 'wsl2';
+    if ((TARGET_WINDOWS_ALIASES as readonly string[]).includes(v)) return 'windows';
+  }
+  return val;
+}, z.union([z.literal("windows"), z.literal("wsl2")]));
+
+export function normalizeTarget(raw: string): "windows" | "wsl2" | null {
+  const result = targetNormalizeSchema.safeParse(raw);
+  return result.success ? result.data : null;
+}
+
 const basePayloadSchema = z.object({
   args: safeStringArray.optional(),
   cwd: safeString.max(1024).optional(),
   env: z.record(safeString, z.union([z.string(), z.number(), z.boolean()]).transform(String).pipe(safeString)).optional(),
   integrationContext: z.record(z.string(), z.unknown()).optional(),
   templateOverride: safeString.max(1024).optional(),
-  target: z.preprocess(val => {
-    if (typeof val === 'string') {
-      const v = val.toLowerCase();
-      if (['wsl', 'linux', 'ubuntu'].includes(v)) return 'wsl2';
-      if (['native', 'win', 'win32'].includes(v)) return 'windows';
-    }
-    return val;
-  }, z.union([z.literal("windows"), z.literal("wsl2")])).optional(),
+  target: targetNormalizeSchema.optional(),
   timeoutMs: z.number().int().nonnegative().transform(val => Math.min(val, INT32_MAX)).optional(),
   stdin: z.string().max(10 * 1024 * 1024).optional(),
   stdoutFile: safeString.optional(),
@@ -79,6 +95,13 @@ export const PayloadSchema = z.preprocess((val) => {
     for (const k of metadataKeys) {
       if (k in obj && !knownKeys.has(k)) {
         delete obj[k];
+      }
+    }
+
+    if ('target' in obj && typeof obj.target === 'string') {
+      const norm = normalizeTarget(obj.target);
+      if (norm !== null) {
+        obj.target = norm;
       }
     }
 
@@ -227,7 +250,7 @@ export const PayloadSchema = z.preprocess((val) => {
         } else {
           obj.type = 'command';
           if (!('command' in obj)) {
-            obj.command = (obj.target === 'wsl2' || obj.target === 'linux') ? 'bash' : 'pwsh';
+            obj.command = obj.target === 'wsl2' ? 'bash' : 'pwsh';
           }
         }
       }
@@ -271,20 +294,6 @@ export const agentExecCliArgsSchema = z.object({
 });
 
 export type AgentExecCliArgs = z.infer<typeof agentExecCliArgsSchema>;
-
-const targetNormalizeSchema = z.preprocess(val => {
-  if (typeof val === 'string') {
-    const v = val.toLowerCase();
-    if (['wsl', 'linux', 'ubuntu'].includes(v)) return 'wsl2';
-    if (['native', 'win', 'win32'].includes(v)) return 'windows';
-  }
-  return val;
-}, z.union([z.literal("windows"), z.literal("wsl2")]));
-
-export function normalizeTarget(raw: string): "windows" | "wsl2" | null {
-  const result = targetNormalizeSchema.safeParse(raw);
-  return result.success ? result.data : null;
-}
 
 export const JsonEnvelopeSchema = z.object({
   status: z.union([z.literal("success"), z.literal("error")]),
