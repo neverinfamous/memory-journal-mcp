@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import * as vm from 'node:vm'
 import { wrapResult } from '../src/codemode/worker-result-proxy.js'
 import { ExecuteCodeSchema } from '../src/handlers/tools/codemode/schemas.js'
@@ -1927,6 +1927,105 @@ return { success: true, projectId };
                 const normalized = result.args[0] as Record<string, unknown>
                 expect(typeof normalized['code']).toBe('string')
                 expect(normalized['code']).toContain('test-advanced-stats-part10')
+            }
+        })
+
+        it('should preserve explicit JS code when project_number or session_id is provided to mj_execute_code', async () => {
+            const { getCodeModeTools } = await import('../src/handlers/tools/codemode/handler.js')
+            const singletonState = await import('../src/handlers/tools/codemode/singleton-state.js')
+            let capturedCode = ''
+            const mockPool = {
+                execute: async (code: string) => {
+                    capturedCode = code
+                    return { success: true, result: { count: 5 } }
+                }
+            }
+            const spy = vi.spyOn(singletonState, 'getSandboxPool').mockReturnValue(mockPool as any)
+
+            try {
+                const mockContext = {
+                    config: {
+                        codemodeEnabled: true,
+                        defaultProjectNumber: 5,
+                        projectRegistry: { 'memory-journal-mcp': { project_number: 5, path: '/dummy' } }
+                    },
+                    db: { getHealthStatus: () => ({ status: 'ok' }) },
+                    runtime: {
+                        maintenanceManager: {
+                            withActiveJob: (fn: any) => fn(),
+                            acquireMaintenanceLock: async () => {},
+                            releaseMaintenanceLock: () => {},
+                        }
+                    },
+                    io: { allowedRoots: ['/dummy'] }
+                } as any
+
+                const tools = getCodeModeTools(mockContext)
+                const executeCodeTool = tools.find(t => t.name === 'mj_execute_code')
+                expect(executeCodeTool).toBeDefined()
+
+                const jsScript = 'const entries = await mj.core.getRecentEntries({ limit: 5 }); return entries;'
+                const result = await executeCodeTool?.handler({
+                    code: jsScript,
+                    project_number: 5,
+                    session_id: 'sess-123'
+                }) as Record<string, unknown>
+
+                expect(result).toBeDefined()
+                expect(result['success']).toBe(true)
+                expect(capturedCode).toContain('mj.core.getRecentEntries')
+                expect(capturedCode).not.toContain('return await mj.createEntry(')
+            } finally {
+                spy.mockRestore()
+            }
+        })
+
+        it('should still synthesize createEntry when flat entry title and content are passed without code', async () => {
+            const { getCodeModeTools } = await import('../src/handlers/tools/codemode/handler.js')
+            const singletonState = await import('../src/handlers/tools/codemode/singleton-state.js')
+            let capturedCode = ''
+            const mockPool = {
+                execute: async (code: string) => {
+                    capturedCode = code
+                    return { success: true, result: { count: 1 } }
+                }
+            }
+            const spy = vi.spyOn(singletonState, 'getSandboxPool').mockReturnValue(mockPool as any)
+
+            try {
+                const mockContext = {
+                    config: {
+                        codemodeEnabled: true,
+                        defaultProjectNumber: 5,
+                        projectRegistry: { 'memory-journal-mcp': { project_number: 5, path: '/dummy' } }
+                    },
+                    db: { getHealthStatus: () => ({ status: 'ok' }) },
+                    runtime: {
+                        maintenanceManager: {
+                            withActiveJob: (fn: any) => fn(),
+                            acquireMaintenanceLock: async () => {},
+                            releaseMaintenanceLock: () => {},
+                        }
+                    },
+                    io: { allowedRoots: ['/dummy'] }
+                } as any
+
+                const tools = getCodeModeTools(mockContext)
+                const executeCodeTool = tools.find(t => t.name === 'mj_execute_code')
+                expect(executeCodeTool).toBeDefined()
+
+                const result = await executeCodeTool?.handler({
+                    title: 'Flat Summary',
+                    content: 'Testing flat title and content synthesis',
+                    project_number: 5
+                }) as Record<string, unknown>
+
+                expect(result).toBeDefined()
+                expect(result['success']).toBe(true)
+                expect(capturedCode).toContain('mj.createEntry')
+                expect(capturedCode).toContain('Flat Summary')
+            } finally {
+                spy.mockRestore()
             }
         })
     })

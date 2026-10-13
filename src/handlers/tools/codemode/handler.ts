@@ -1054,20 +1054,8 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                                 : (typeof rawObj['input'] === 'object' && rawObj['input'] !== null
                                     ? rawObj['input']
                                     : rawObj))) as Record<string, unknown>
-                        const entryKeys = [
-                            'type', 'entry_type', 'title', 'category', 'changes', 'component',
-                            'confidence', 'impact', 'trust', 'validation', 'validation_status',
-                            'validationStatus', 'trustScore', 'trust_score', 'impactScore', 'impact_score',
-                            'pr_link', 'pr_url', 'issue_link', 'issue_url', 'summary',
-                            'description', 'details', 'keywords', 'topic', 'action', 'status',
-                            'notes', 'tags', 'auto_context', 'content', 'body', 'text', 'message',
-                            'entry_id', 'id', 'project_number', 'session_id', 'entry',
-                            'learned_context', 'learnedContext', 'group_name', 'groupName',
-                            'lesson', 'learning', 'insight', 'rule', 'takeaway', 'knowledge',
-                            'finding', 'discovery'
-                        ]
-                        const hasEntryFields = entryKeys.some((k) => entryObj[k] !== undefined || rawObj[k] !== undefined)
-                        
+                        const isFlatCall = entryObj === rawObj
+                        const hasExplicitCode = typeof input.code === 'string' && input.code.trim().length > 0
                         const isNaturalLanguagePrompt = (text: string): boolean => {
                             const trimmed = text.trim()
                             if (!trimmed) return false
@@ -1087,8 +1075,27 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                             }
                             return false
                         }
+                        const isExplicitJsCode = hasExplicitCode && !isNaturalLanguagePrompt(executionCode)
 
-                        if (hasEntryFields || isNaturalLanguagePrompt(executionCode)) {
+                        const entryKeys = [
+                            'type', 'entry_type', 'title', 'category', 'changes', 'component',
+                            'confidence', 'impact', 'trust', 'validation', 'validation_status',
+                            'validationStatus', 'trustScore', 'trust_score', 'impactScore', 'impact_score',
+                            'pr_link', 'pr_url', 'issue_link', 'issue_url', 'summary',
+                            'description', 'details', 'keywords', 'topic', 'action', 'status',
+                            'notes', 'tags', 'auto_context', 'content', 'body', 'text', 'message',
+                            'entry_id', 'id', 'entry',
+                            'learned_context', 'learnedContext', 'group_name', 'groupName',
+                            'lesson', 'learning', 'insight', 'rule', 'takeaway', 'knowledge',
+                            'finding', 'discovery'
+                        ]
+                        if (!isFlatCall) {
+                            entryKeys.push('project_number', 'session_id')
+                        }
+                        const hasEntryFields = entryKeys.some((k) => entryObj[k] !== undefined || (!isFlatCall && rawObj[k] !== undefined))
+                        const hasExplicitLearned = typeof entryObj['learned_context'] === 'string' || typeof rawObj['learned_context'] === 'string' || typeof entryObj['learnedContext'] === 'string' || typeof rawObj['learnedContext'] === 'string' || typeof entryObj['lesson'] === 'string' || typeof rawObj['lesson'] === 'string' || typeof entryObj['insight'] === 'string' || typeof rawObj['insight'] === 'string' || typeof entryObj['knowledge'] === 'string' || typeof rawObj['knowledge'] === 'string' || typeof entryObj['rule'] === 'string' || typeof rawObj['rule'] === 'string'
+
+                        if ((!isExplicitJsCode || hasExplicitLearned || !isFlatCall) && (hasEntryFields || isNaturalLanguagePrompt(executionCode))) {
                             const learnedVal = typeof entryObj['learned_context'] === 'string' && entryObj['learned_context'].trim().length > 0
                                 ? entryObj['learned_context']
                                 : typeof rawObj['learned_context'] === 'string' && rawObj['learned_context'].trim().length > 0
