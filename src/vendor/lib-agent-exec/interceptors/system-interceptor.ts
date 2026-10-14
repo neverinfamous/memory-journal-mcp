@@ -295,6 +295,10 @@ export function systemInterceptor(ctx: ExecutionContext): void {
 
     const rgDirMatch = payload.code.match(/^(?:rg|ripgrep)\s+(.*)$/i);
     if (rgDirMatch !== null) {
+      if (/\b(?:rg|ripgrep)\b.*-E\b/.test(payload.code)) {
+        payload.code = payload.code.replace(/\b(rg|ripgrep)\b(\s+(?:-[^\s]+\s+)*)-E\b/gi, '$1$2-e');
+        console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected grep-style '-E' flag in eval 'rg'. Rewriting to '-e'... (Frictionless Recovery)\x1b[0m`);
+      }
       const rest = rgDirMatch[1] ?? '';
       const tokens = rest.trim().split(/\s+/);
       const isDir = (t: string): boolean => {

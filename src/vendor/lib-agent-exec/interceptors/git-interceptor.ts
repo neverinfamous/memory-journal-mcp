@@ -18,15 +18,26 @@ export function gitInterceptor(ctx: ExecutionContext): void {
   let targetCwd = rawCwd;
   let explicitCwd: string | undefined;
 
-  const cIndex = args.indexOf('-C');
-  if (cIndex !== -1 && cIndex + 1 < args.length) {
-    explicitCwd = args[cIndex + 1];
-    args.splice(cIndex, 2);
+  const knownGitCmds = ['add', 'am', 'archive', 'bisect', 'branch', 'bundle', 'checkout', 'cherry-pick', 'citool', 'clean', 'clone', 'commit', 'describe', 'diff', 'fetch', 'format-patch', 'gc', 'gitk', 'grep', 'gui', 'init', 'log', 'merge', 'mv', 'notes', 'pull', 'push', 'range-diff', 'rebase', 'reset', 'restore', 'revert', 'rm', 'shortlog', 'show', 'sparse-checkout', 'stash', 'status', 'submodule', 'switch', 'tag', 'worktree', 'config', 'difftool', 'mergetool', 'remote', 'blame', 'reflog'];
+  const subCmdIdx = args.findIndex(a => knownGitCmds.includes(a) || (!a.startsWith('-') && !a.startsWith('/')));
+
+  // -C <path> is a top-level git flag and MUST appear before the git subcommand
+  const searchLimit = subCmdIdx === -1 ? args.length : subCmdIdx;
+  const cIndex = args.findIndex((a, idx) => idx < searchLimit && a === '-C');
+  if (cIndex !== -1 && cIndex + 1 < searchLimit) {
+    const candidate = args[cIndex + 1];
+    if (!/^\d+$/.test(candidate)) {
+      explicitCwd = candidate;
+      args.splice(cIndex, 2);
+    }
   } else {
-    const cPrefixIndex = args.findIndex(a => a.startsWith('-C') && a.length > 2);
+    const cPrefixIndex = args.findIndex((a, idx) => idx < searchLimit && a.startsWith('-C') && a.length > 2);
     if (cPrefixIndex !== -1) {
-      explicitCwd = args[cPrefixIndex].slice(2);
-      args.splice(cPrefixIndex, 1);
+      const candidate = args[cPrefixIndex].slice(2);
+      if (!/^\d+$/.test(candidate)) {
+        explicitCwd = candidate;
+        args.splice(cPrefixIndex, 1);
+      }
     }
   }
 
@@ -38,7 +49,6 @@ export function gitInterceptor(ctx: ExecutionContext): void {
   if (!args.includes('--no-pager')) {
     args.unshift('--no-pager');
   }
-  const knownGitCmds = ['add', 'am', 'archive', 'bisect', 'branch', 'bundle', 'checkout', 'cherry-pick', 'citool', 'clean', 'clone', 'commit', 'describe', 'diff', 'fetch', 'format-patch', 'gc', 'gitk', 'grep', 'gui', 'init', 'log', 'merge', 'mv', 'notes', 'pull', 'push', 'range-diff', 'rebase', 'reset', 'restore', 'revert', 'rm', 'shortlog', 'show', 'sparse-checkout', 'stash', 'status', 'submodule', 'switch', 'tag', 'worktree', 'config', 'difftool', 'mergetool', 'remote', 'blame', 'reflog'];
   const gitSubCmd = args.find(a => knownGitCmds.includes(a)) || args.filter(a => !a.startsWith('-'))[0];
   
   match({ cmd: gitSubCmd, args, ctx })
