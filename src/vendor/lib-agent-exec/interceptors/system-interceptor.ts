@@ -425,12 +425,17 @@ export function systemInterceptor(ctx: ExecutionContext): void {
     
     if (payload.type === 'eval' || payload.type === 'script') {
       const codeOrScript = payload.type === 'eval' ? payload.code : (payload.scriptPath || '');
+      const isPlaywright = codeOrScript && /playwright/i.test(codeOrScript);
       const isChainedQuality = codeOrScript && /(?:typecheck|tsc|lint|check|build|test).*(?:&&|;).*(?:typecheck|tsc|lint|check|build|test)/i.test(codeOrScript);
-      const hasQualityCheck = codeOrScript && /(?:typecheck|tsc|lint|check|build|test|vitest|jest|playwright)/i.test(codeOrScript);
+      const hasQualityCheck = codeOrScript && /(?:typecheck|tsc|lint|check|build|test|vitest|jest)/i.test(codeOrScript);
       const isKnownDeterministic = codeOrScript && /(?:commit\.ts|get-git-history-json\.ts|backup-conversations\.ts)/i.test(codeOrScript);
       const hasMountedSearch = codeOrScript && /(?:find|grep|rg|ls|tree)\b/i.test(codeOrScript);
       
-      if (isChainedQuality) {
+      if (isPlaywright) {
+        defaultWslTimeout = 600000;
+        payload.bypassInterceptors = true;
+        console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected Playwright test in WSL2 eval payload. Auto-extending timeout to 600s... (Frictionless Recovery)`);
+      } else if (isChainedQuality) {
         defaultWslTimeout = 180000;
         payload.bypassInterceptors = true;
         console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected chained quality checks in WSL2 eval payload. Auto-extending timeout to 180s... (Frictionless Recovery)`);
@@ -443,12 +448,21 @@ export function systemInterceptor(ctx: ExecutionContext): void {
         console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected file search across mounted filesystem in WSL2 eval payload. Auto-extending timeout to 90s... (Frictionless Recovery)`);
       }
     } else if (payload.type === 'command') {
-      const isQuality = /(?:typecheck|tsc|lint|check|build|test|vitest|jest|playwright)/i.test(cmdBasename) || (args && args.some(a => /(?:typecheck|tsc|lint|check|build|test|vitest|jest|playwright)/i.test(a)));
+      const isPlaywright = /playwright/i.test(cmdBasename) || (args && args.some(a => /playwright/i.test(a)));
+      const isQuality = /(?:typecheck|tsc|lint|check|build|test|vitest|jest)/i.test(cmdBasename) || (args && args.some(a => /(?:typecheck|tsc|lint|check|build|test|vitest|jest)/i.test(a)));
       const isKnownDeterministic = /(?:commit\.ts|get-git-history-json\.ts|backup-conversations\.ts)/i.test(cmdBasename) || (args && args.some(a => /(?:commit\.ts|get-git-history-json\.ts|backup-conversations\.ts)/i.test(a)));
       const isSearch = /(?:find|grep|rg|ls|tree)\b/i.test(cmdBasename) || (args && args.some(a => /(?:find|grep|rg|ls|tree)\b/i.test(a)));
       
-      if (isQuality || isKnownDeterministic) {
-        defaultWslTimeout = 90000;
+      if (isPlaywright) {
+        defaultWslTimeout = 600000;
+        payload.bypassInterceptors = true;
+      } else if (isQuality || isKnownDeterministic) {
+        const testFiles = args ? args.filter(a => /\.(?:test|spec)\.[a-zA-Z0-9]+$/i.test(a)) : [];
+        const isMultiTest = testFiles.length > 1;
+        const isTestDir = args ? args.some(a => /(?:tests?[/\\]\w+[/\\].*[/\\].*|tests?[/\\]$)/i.test(a) && !/\.[a-zA-Z0-9_-]+$/i.test(a)) : false;
+        const isTestRunner = /(?:vitest|jest|pytest)/i.test(cmdBasename) || (args && args.some(a => /(?:vitest|jest|pytest|^test$)/i.test(a)));
+        const isFullSuite = isTestRunner && testFiles.length === 0 && !isTestDir;
+        defaultWslTimeout = isMultiTest || isTestDir || isFullSuite ? 180000 : 90000;
         payload.bypassInterceptors = true;
       } else if (isSearch) {
         defaultWslTimeout = 90000;
@@ -456,6 +470,44 @@ export function systemInterceptor(ctx: ExecutionContext): void {
     }
     
     payload.timeoutMs = Math.max(payload.timeoutMs || defaultWslTimeout, defaultWslTimeout);
+  } else {
+    if (payload.type === 'eval' || payload.type === 'script') {
+      const codeOrScript = payload.type === 'eval' ? payload.code : (payload.scriptPath || '');
+      const isPlaywright = codeOrScript && /playwright/i.test(codeOrScript);
+      const isChainedQuality = codeOrScript && /(?:typecheck|tsc|lint|check|build|test).*(?:&&|;).*(?:typecheck|tsc|lint|check|build|test)/i.test(codeOrScript);
+      const hasQualityCheck = codeOrScript && /(?:typecheck|tsc|lint|check|build|test|vitest|jest)/i.test(codeOrScript);
+      const isKnownDeterministic = codeOrScript && /(?:commit\.ts|get-git-history-json\.ts|backup-conversations\.ts)/i.test(codeOrScript);
+      if (isPlaywright) {
+        payload.timeoutMs = Math.max(payload.timeoutMs || 600000, 600000);
+        payload.bypassInterceptors = true;
+        console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected Playwright test in Windows eval payload. Auto-extending timeout to 600s... (Frictionless Recovery)`);
+      } else if (isChainedQuality) {
+        payload.timeoutMs = Math.max(payload.timeoutMs || 360000, 360000);
+        payload.bypassInterceptors = true;
+        console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected chained quality checks in Windows eval payload. Auto-extending timeout to 360s... (Frictionless Recovery)`);
+      } else if (hasQualityCheck || isKnownDeterministic) {
+        payload.timeoutMs = Math.max(payload.timeoutMs || 240000, 240000);
+        payload.bypassInterceptors = true;
+        console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected quality check or deterministic script in Windows eval payload. Auto-extending timeout to 240s... (Frictionless Recovery)`);
+      }
+    } else if (payload.type === 'command') {
+      const isPlaywright = /playwright/i.test(cmdBasename) || (args && args.some(a => /playwright/i.test(a)));
+      const isQuality = /(?:typecheck|tsc|lint|check|build|test|vitest|jest)/i.test(cmdBasename) || (args && args.some(a => /(?:typecheck|tsc|lint|check|build|test|vitest|jest)/i.test(a)));
+      const isKnownDeterministic = /(?:commit\.ts|get-git-history-json\.ts|backup-conversations\.ts)/i.test(cmdBasename) || (args && args.some(a => /(?:commit\.ts|get-git-history-json\.ts|backup-conversations\.ts)/i.test(a)));
+      if (isPlaywright) {
+        payload.timeoutMs = Math.max(payload.timeoutMs || 600000, 600000);
+        payload.bypassInterceptors = true;
+      } else if (isQuality || isKnownDeterministic) {
+        const testFiles = args ? args.filter(a => /\.(?:test|spec)\.[a-zA-Z0-9]+$/i.test(a)) : [];
+        const isMultiTest = testFiles.length > 1;
+        const isTestDir = args ? args.some(a => /(?:tests?[/\\]\w+[/\\].*[/\\].*|tests?[/\\]$)/i.test(a) && !/\.[a-zA-Z0-9_-]+$/i.test(a)) : false;
+        const isTestRunner = /(?:vitest|jest|pytest)/i.test(cmdBasename) || (args && args.some(a => /(?:vitest|jest|pytest|^test$)/i.test(a)));
+        const isFullSuite = isTestRunner && testFiles.length === 0 && !isTestDir;
+        const winTimeout = isMultiTest || isTestDir || isFullSuite ? 300000 : 240000;
+        payload.timeoutMs = Math.max(payload.timeoutMs || winTimeout, winTimeout);
+        payload.bypassInterceptors = true;
+      }
+    }
   }
 
   // 1. Generic Path Hallucination Intercepts (runs before tool matching so healed paths are matched)

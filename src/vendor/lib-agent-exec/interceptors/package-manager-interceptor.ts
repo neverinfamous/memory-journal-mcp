@@ -276,18 +276,39 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
       if (!args.includes('--no-fund') && cmdBasename.startsWith('npm')) args.push('--no-fund');
       if (!args.includes('--no-audit') && cmdBasename.startsWith('npm')) args.push('--no-audit');
     }
-    const isLongRunningQualityCheck = subCmd && (
-      subCmd.startsWith('test') ||
-      ['lint', 'typecheck', 'check', 'build'].includes(subCmd) ||
-      subCmd.includes('test') ||
-      subCmd.includes('lint') ||
-      subCmd.includes('typecheck')
+    const nonFlagArgs = args.filter(a => !a.startsWith('-'));
+    const targetScript = (subCmd === 'run' || subCmd === 'exec') ? nonFlagArgs[1] : subCmd;
+    const isPlaywright = Boolean((targetScript && /playwright/i.test(targetScript)) || args.some(a => /playwright/i.test(a)));
+    const isLongRunningQualityCheck = Boolean(
+      isPlaywright ||
+      (targetScript && (
+        targetScript.startsWith('test') ||
+        ['lint', 'typecheck', 'check', 'build'].includes(targetScript) ||
+        targetScript.includes('test') ||
+        targetScript.includes('lint') ||
+        targetScript.includes('typecheck')
+      )) ||
+      args.some(a => /(?:vitest|jest|playwright|test|lint|typecheck|tsc)/i.test(a))
     );
-    if (isLongRunningQualityCheck) {
+    if (isPlaywright) {
+      console.error(`\n   🛠️ AUTONOMOUS HEALING: Disabling stall interceptors and extending timeout for Playwright test to prevent false positive aborts.... (Frictionless Recovery)`);
+      ctx.payload.bypassInterceptors = true;
+      if (ctx.payload.timeoutMs === undefined || ctx.payload.timeoutMs < 600000) {
+        ctx.payload.timeoutMs = 600000;
+      }
+    } else if (isLongRunningQualityCheck) {
       console.error(`\n   🛠️ AUTONOMOUS HEALING: Disabling stall interceptors and extending timeout for quality command to prevent false positive aborts.... (Frictionless Recovery)`);
       ctx.payload.bypassInterceptors = true;
-      if (ctx.payload.timeoutMs === undefined || ctx.payload.timeoutMs <= 30000) {
-        ctx.payload.timeoutMs = ctx.payload.target === 'wsl2' ? 90000 : 60000;
+      const testFiles = args.filter(a => /\.(?:test|spec)\.[a-zA-Z0-9]+$/i.test(a));
+      const isMultiTest = testFiles.length > 1;
+      const isTestDir = args.some(a => /(?:tests?[/\\]\w+[/\\].*[/\\].*|tests?[/\\]$)/i.test(a) && !/\.[a-zA-Z0-9_-]+$/i.test(a));
+      const isTestRunner = /(?:vitest|jest|pytest)/i.test(cmdBasename) || args.some(a => /(?:vitest|jest|pytest|^test$)/i.test(a));
+      const isFullSuite = isTestRunner && testFiles.length === 0 && !isTestDir;
+      const targetTimeout = ctx.payload.target === 'wsl2'
+        ? (isMultiTest || isTestDir || isFullSuite ? 180000 : 90000)
+        : (isMultiTest || isTestDir || isFullSuite ? 300000 : 240000);
+      if (ctx.payload.timeoutMs === undefined || ctx.payload.timeoutMs < targetTimeout) {
+        ctx.payload.timeoutMs = targetTimeout;
       }
     }
     if (['login', 'adduser', 'publish'].includes(subCmd)) {
@@ -353,6 +374,29 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
       }
     } else {
       envOverrides['CI'] = '1';
+      const isPlaywright = args.some(a => /playwright/i.test(a));
+      const isRunnerQuality = args.some(a => /(?:vitest|jest|playwright|test|lint|typecheck|tsc)/i.test(a));
+      if (isPlaywright) {
+        console.error(`\n   🛠️ AUTONOMOUS HEALING: Disabling stall interceptors and extending timeout for Playwright test to prevent false positive aborts.... (Frictionless Recovery)`);
+        ctx.payload.bypassInterceptors = true;
+        if (ctx.payload.timeoutMs === undefined || ctx.payload.timeoutMs < 600000) {
+          ctx.payload.timeoutMs = 600000;
+        }
+      } else if (isRunnerQuality) {
+        console.error(`\n   🛠️ AUTONOMOUS HEALING: Disabling stall interceptors and extending timeout for quality command to prevent false positive aborts.... (Frictionless Recovery)`);
+        ctx.payload.bypassInterceptors = true;
+        const testFiles = args.filter(a => /\.(?:test|spec)\.[a-zA-Z0-9]+$/i.test(a));
+        const isMultiTest = testFiles.length > 1;
+        const isTestDir = args.some(a => /(?:tests?[/\\]\w+[/\\].*[/\\].*|tests?[/\\]$)/i.test(a) && !/\.[a-zA-Z0-9_-]+$/i.test(a));
+        const isTestRunner = /(?:vitest|jest|pytest)/i.test(cmdBasename) || args.some(a => /(?:vitest|jest|pytest|^test$)/i.test(a));
+        const isFullSuite = isTestRunner && testFiles.length === 0 && !isTestDir;
+        const runnerTimeout = ctx.payload.target === 'wsl2'
+          ? (isMultiTest || isTestDir || isFullSuite ? 180000 : 90000)
+          : (isMultiTest || isTestDir || isFullSuite ? 300000 : 240000);
+        if (ctx.payload.timeoutMs === undefined || ctx.payload.timeoutMs < runnerTimeout) {
+          ctx.payload.timeoutMs = runnerTimeout;
+        }
+      }
       if (!args.includes('-y') && !args.includes('--yes')) {
         console.error(`\n   🛠️ AUTONOMOUS HEALING: Automatically injecting '-y' into ${cmdBasename} command to prevent installation prompts from hanging.... (Frictionless Recovery)`);
         args.unshift('-y');
