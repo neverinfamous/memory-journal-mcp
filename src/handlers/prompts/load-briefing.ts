@@ -23,6 +23,21 @@ function getRegistryFromConfigFallback(): Record<string, unknown> | null {
     return null
 }
 
+/**
+ * Extract the configured `project_number` from a registry entry, if present
+ */
+function getProjectNumber(entry: unknown): number | undefined {
+    if (
+        typeof entry === 'object' &&
+        entry !== null &&
+        'project_number' in entry &&
+        typeof entry.project_number === 'number'
+    ) {
+        return entry.project_number
+    }
+    return undefined
+}
+
 export function getLoadBriefingPromptDefinitions(): InternalPromptDef[] {
     return [
         {
@@ -32,7 +47,7 @@ export function getLoadBriefingPromptDefinitions(): InternalPromptDef[] {
             arguments: [
                 {
                     name: 'projects',
-                    description: 'Optional comma-separated project names or numbers (e.g., memory-journal-mcp, adamic, 1, 1,5)',
+                    description: 'Optional comma-separated project names or registry project numbers (e.g., memory-journal-mcp, adamic, 16, 5,16)',
                     required: false,
                 },
             ],
@@ -67,13 +82,11 @@ export function getLoadBriefingPromptDefinitions(): InternalPromptDef[] {
                 // Active workspace detection (from config default or fallback config)
                 let activeWorkspace = ''
                 if (briefingConfig?.defaultProjectNumber !== undefined) {
-                    const activeKey = registryKeys.find(key => {
-                        const entry = registry[key] as { project_number?: number } | undefined
-                        return entry?.project_number === briefingConfig.defaultProjectNumber
-                    })
+                    const activeKey = registryKeys.find(
+                        key => getProjectNumber(registry[key]) === briefingConfig.defaultProjectNumber
+                    )
                     if (activeKey) {
-                        const activeEntry = registry[activeKey] as { project_number?: number }
-                        activeWorkspace = `${activeKey} (#${String(activeEntry.project_number)})`
+                        activeWorkspace = `${activeKey} (#${String(briefingConfig.defaultProjectNumber)})`
                     }
                 }
 
@@ -93,10 +106,14 @@ export function getLoadBriefingPromptDefinitions(): InternalPromptDef[] {
                         }
                     }
 
-                    const rows = registryKeys.map((key, index) => {
+                    // Display the configured project_number (not the list position) so the
+                    // number shown matches the registry and what the resolver below accepts
+                    const rows = registryKeys.map((key) => {
                         const entry = registry[key] as { path?: string }
                         const projectPath = entry?.path ?? '-'
-                        return `| ${String(index + 1)} | ${key} | ${projectPath} |`
+                        const projectNumber = getProjectNumber(entry)
+                        const idCell = projectNumber !== undefined ? String(projectNumber) : '-'
+                        return `| ${idCell} | ${key} | ${projectPath} |`
                     }).join('\n')
 
                     const activeString = activeWorkspace ? `\n**Active**: ${activeWorkspace}\n` : ''
@@ -107,7 +124,7 @@ export function getLoadBriefingPromptDefinitions(): InternalPromptDef[] {
                                 role: 'user',
                                 content: {
                                     type: 'text',
-                                    text: `## Available Projects\n\n| ID | Name | Path |\n|---|------|------|\n${rows}\n${activeString}\nAsk the user: "Which project(s) would you like to load? (Enter names or IDs, separated by commas. Append \`--show\` if you would like me to print the briefing in the chat)"\n\n**Agent Directives:**\n1. Call \`read_resource\` for each selected project using: \`memory://briefing/{name}\`.\n2. If the user included \`--show\`, output the loaded markdown table to them.\n3. If they did NOT include \`--show\`, silently ingest the context and reply simply with: "Context loaded. What would you like to work on?"\n4. When planning something significant, complex, or architecture-impacting, search the memory journal database for historical context. Small or simple tasks do not require this.`,
+                                    text: `## Available Projects\n\n| Project # | Name | Path |\n|---|------|------|\n${rows}\n${activeString}\nAsk the user: "Which project(s) would you like to load? (Enter names or project numbers, separated by commas. Append \`--show\` if you would like me to print the briefing in the chat)"\n\n**Agent Directives:**\n1. Call \`read_resource\` for each selected project using: \`memory://briefing/{name}\`.\n2. If the user included \`--show\`, output the loaded markdown table to them.\n3. If they did NOT include \`--show\`, silently ingest the context and reply simply with: "Context loaded. What would you like to work on?"\n4. When planning something significant, complex, or architecture-impacting, search the memory journal database for historical context. Small or simple tasks do not require this.`,
                                 },
                             },
                         ],
@@ -135,10 +152,18 @@ export function getLoadBriefingPromptDefinitions(): InternalPromptDef[] {
                         continue
                     }
 
-                    // Index match (1-based)
-                    const byIndex = registryKeys.find((_, idx) => String(idx + 1) === requested)
-                    if (byIndex) {
-                        resolvedUris.push(`memory://briefing/${byIndex}`)
+                    // Project number match (registry project_number). Purely numeric input
+                    // never falls through to partial name matching (e.g. "2" must not match "R2-...")
+                    if (/^\d+$/.test(requested)) {
+                        const requestedNumber = Number(requested)
+                        const byNumber = registryKeys.find(
+                            k => getProjectNumber(registry[k]) === requestedNumber
+                        )
+                        if (byNumber) {
+                            resolvedUris.push(`memory://briefing/${byNumber}`)
+                        } else {
+                            notFound.push(requested)
+                        }
                         continue
                     }
 
@@ -170,7 +195,11 @@ export function getLoadBriefingPromptDefinitions(): InternalPromptDef[] {
                     if (ambiguous.length > 0) {
                         errorMsg += `- Ambiguous: ${ambiguous.join(', ')}\n`
                     }
-                    errorMsg += `\nAvailable projects: ${registryKeys.join(', ')}\nPlease try again with specific names or numbers.`
+                    const availableList = registryKeys.map(k => {
+                        const projectNumber = getProjectNumber(registry[k])
+                        return projectNumber !== undefined ? `${k} (#${String(projectNumber)})` : k
+                    }).join(', ')
+                    errorMsg += `\nAvailable projects: ${availableList}\nPlease try again with specific names or project numbers.`
                     
                     return {
                         messages: [
