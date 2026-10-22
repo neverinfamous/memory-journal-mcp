@@ -5,6 +5,7 @@ import path from 'path';
 import { AUTONOMOUS_HEALING_MSG } from '../utils.js';
 import { ExecutionContext, AGENT_NATIVE_TOOLS, ECOSYSTEM_MCP_TOOLS } from './types.js';
 import { handleRipgrepInterception } from './search-interceptor.js';
+import { getUnderlyingPackageScript } from '../command-utils.js';
 
 export function packageManagerInterceptor(ctx: ExecutionContext): void {
   let { cmdBasename } = ctx;
@@ -276,11 +277,26 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
       if (!args.includes('--no-fund') && cmdBasename.startsWith('npm')) args.push('--no-fund');
       if (!args.includes('--no-audit') && cmdBasename.startsWith('npm')) args.push('--no-audit');
     }
+    const isNestedAgentExec = args.some(a => path.basename(a).toLowerCase() === 'agent-exec.ts');
+    if (isNestedAgentExec) {
+      return;
+    }
     const nonFlagArgs = args.filter(a => !a.startsWith('-'));
     const targetScript = (subCmd === 'run' || subCmd === 'exec') ? nonFlagArgs[1] : subCmd;
-    const isPlaywright = Boolean((targetScript && /playwright/i.test(targetScript)) || args.some(a => /playwright/i.test(a)));
+    const underlyingScript = getUnderlyingPackageScript(cmdBasename, args, ctx.payload.cwd);
+    const isPlaywright = Boolean(
+      (targetScript && /(?:playwright|cypress|\be2e\b|test:e2e|test-e2e)/i.test(targetScript)) ||
+      args.some(a => /(?:playwright|cypress|\be2e\b|test:e2e|test-e2e)/i.test(a)) ||
+      (underlyingScript && /(?:playwright|cypress|\be2e\b)/i.test(underlyingScript))
+    );
+    const isCoverage = Boolean(
+      (targetScript && /(?:coverage|test:coverage)/i.test(targetScript)) ||
+      args.some(a => /(?:coverage|--coverage|test:coverage)/i.test(a)) ||
+      (underlyingScript && /(?:coverage|--coverage)/i.test(underlyingScript))
+    );
     const isLongRunningQualityCheck = Boolean(
       isPlaywright ||
+      isCoverage ||
       (targetScript && (
         targetScript.startsWith('test') ||
         ['lint', 'typecheck', 'check', 'build'].includes(targetScript) ||
@@ -288,10 +304,11 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
         targetScript.includes('lint') ||
         targetScript.includes('typecheck')
       )) ||
-      args.some(a => /(?:vitest|jest|playwright|test|lint|typecheck|tsc)/i.test(a))
+      args.some(a => /(?:vitest|jest|playwright|cypress|test|lint|typecheck|tsc)/i.test(a)) ||
+      (underlyingScript && /(?:vitest|jest|playwright|cypress|eslint|tsc|typecheck|test)/i.test(underlyingScript))
     );
     if (isPlaywright) {
-      console.error(`\n   🛠️ AUTONOMOUS HEALING: Disabling stall interceptors and extending timeout for Playwright test to prevent false positive aborts.... (Frictionless Recovery)`);
+      console.error(`\n   🛠️ AUTONOMOUS HEALING: Disabling stall interceptors and extending timeout for Playwright/E2E test to prevent false positive aborts.... (Frictionless Recovery)`);
       ctx.payload.bypassInterceptors = true;
       if (ctx.payload.timeoutMs === undefined || ctx.payload.timeoutMs < 600000) {
         ctx.payload.timeoutMs = 600000;
@@ -302,11 +319,20 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
       const testFiles = args.filter(a => /\.(?:test|spec)\.[a-zA-Z0-9]+$/i.test(a));
       const isMultiTest = testFiles.length > 1;
       const isTestDir = args.some(a => /(?:tests?[/\\]\w+[/\\].*[/\\].*|tests?[/\\]$)/i.test(a) && !/\.[a-zA-Z0-9_-]+$/i.test(a));
-      const isTestRunner = /(?:vitest|jest|pytest)/i.test(cmdBasename) || args.some(a => /(?:vitest|jest|pytest|^test$)/i.test(a));
+      const isTestRunner = /(?:vitest|jest|pytest|playwright|cypress)/i.test(cmdBasename) ||
+        args.some(a => /(?:vitest|jest|pytest|playwright|cypress|^test(?::.*|-.*)?$|^coverage(?::.*)?$)/i.test(a)) ||
+        Boolean(targetScript && (targetScript.startsWith('test') || targetScript.includes('coverage'))) ||
+        Boolean(underlyingScript && /(?:vitest|jest|pytest|playwright|cypress)/i.test(underlyingScript));
       const isFullSuite = isTestRunner && testFiles.length === 0 && !isTestDir;
+      const hasTargetFiles = args.some(a => !a.startsWith('-') && /\.(?:ts|js|tsx|jsx|json|mjs|cjs)$/i.test(a));
+      const isLintOrCheck = /(?:lint|check)/i.test(cmdBasename) ||
+        args.some(a => /(?:lint|check)/i.test(a)) ||
+        Boolean(targetScript && /(?:lint|check)/i.test(targetScript)) ||
+        Boolean(underlyingScript && /(?:lint|check)/i.test(underlyingScript));
+      const isFullLintOrCheck = isLintOrCheck && !hasTargetFiles;
       const targetTimeout = ctx.payload.target === 'wsl2'
-        ? (isMultiTest || isTestDir || isFullSuite ? 180000 : 90000)
-        : (isMultiTest || isTestDir || isFullSuite ? 300000 : 240000);
+        ? (isCoverage ? 300000 : (isMultiTest || isTestDir || isFullSuite || isFullLintOrCheck ? 180000 : 90000))
+        : (isCoverage ? 480000 : (isTestDir || isFullSuite || isFullLintOrCheck ? 360000 : (isMultiTest ? 300000 : 240000)));
       if (ctx.payload.timeoutMs === undefined || ctx.payload.timeoutMs < targetTimeout) {
         ctx.payload.timeoutMs = targetTimeout;
       }
@@ -374,10 +400,11 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
       }
     } else {
       envOverrides['CI'] = '1';
-      const isPlaywright = args.some(a => /playwright/i.test(a));
-      const isRunnerQuality = args.some(a => /(?:vitest|jest|playwright|test|lint|typecheck|tsc)/i.test(a));
+      const isPlaywright = args.some(a => /(?:playwright|cypress|\be2e\b|test:e2e|test-e2e)/i.test(a));
+      const isCoverage = args.some(a => /(?:coverage|--coverage|test:coverage)/i.test(a));
+      const isRunnerQuality = args.some(a => /(?:vitest|jest|playwright|cypress|test|lint|typecheck|tsc)/i.test(a));
       if (isPlaywright) {
-        console.error(`\n   🛠️ AUTONOMOUS HEALING: Disabling stall interceptors and extending timeout for Playwright test to prevent false positive aborts.... (Frictionless Recovery)`);
+        console.error(`\n   🛠️ AUTONOMOUS HEALING: Disabling stall interceptors and extending timeout for Playwright/E2E test to prevent false positive aborts.... (Frictionless Recovery)`);
         ctx.payload.bypassInterceptors = true;
         if (ctx.payload.timeoutMs === undefined || ctx.payload.timeoutMs < 600000) {
           ctx.payload.timeoutMs = 600000;
@@ -388,11 +415,12 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
         const testFiles = args.filter(a => /\.(?:test|spec)\.[a-zA-Z0-9]+$/i.test(a));
         const isMultiTest = testFiles.length > 1;
         const isTestDir = args.some(a => /(?:tests?[/\\]\w+[/\\].*[/\\].*|tests?[/\\]$)/i.test(a) && !/\.[a-zA-Z0-9_-]+$/i.test(a));
-        const isTestRunner = /(?:vitest|jest|pytest)/i.test(cmdBasename) || args.some(a => /(?:vitest|jest|pytest|^test$)/i.test(a));
+        const isTestRunner = /(?:vitest|jest|pytest|playwright|cypress)/i.test(cmdBasename) ||
+          args.some(a => /(?:vitest|jest|pytest|playwright|cypress|^test(?::.*|-.*)?$|^coverage(?::.*)?$)/i.test(a));
         const isFullSuite = isTestRunner && testFiles.length === 0 && !isTestDir;
         const runnerTimeout = ctx.payload.target === 'wsl2'
-          ? (isMultiTest || isTestDir || isFullSuite ? 180000 : 90000)
-          : (isMultiTest || isTestDir || isFullSuite ? 300000 : 240000);
+          ? (isCoverage ? 300000 : (isMultiTest || isTestDir || isFullSuite ? 180000 : 90000))
+          : (isCoverage ? 480000 : (isTestDir || isFullSuite ? 360000 : (isMultiTest ? 300000 : 240000)));
         if (ctx.payload.timeoutMs === undefined || ctx.payload.timeoutMs < runnerTimeout) {
           ctx.payload.timeoutMs = runnerTimeout;
         }

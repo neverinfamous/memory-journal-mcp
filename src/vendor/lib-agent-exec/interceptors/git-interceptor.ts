@@ -82,7 +82,10 @@ export function gitInterceptor(ctx: ExecutionContext): void {
       ({ args, ctx }) => {
         const cwd = ctx.payload.cwd || process.cwd();
         const fallbackCommitScript = path.resolve(__dirname, '../../commit.ts');
-        const commitScriptCandidate = findEcosystemScript(targetCwd, 'commit.ts') || findEcosystemScript(cwd, 'commit.ts') || (fs.existsSync(fallbackCommitScript) ? fallbackCommitScript : null);
+        const resolvedCommitScript = findEcosystemScript(targetCwd, 'commit.ts') || findEcosystemScript(cwd, 'commit.ts') || (fs.existsSync(fallbackCommitScript) ? fallbackCommitScript : null);
+        const commitScriptCandidate = (resolvedCommitScript !== null && path.resolve(targetCwd) === path.resolve(process.cwd()) && fs.existsSync(path.join(targetCwd, '.agents', 'scripts', 'commit.ts')))
+          ? '.\\.agents\\scripts\\commit.ts'
+          : resolvedCommitScript;
         const hasWrapper = commitScriptCandidate !== null;
         
         let message: string | undefined;
@@ -152,6 +155,9 @@ export function gitInterceptor(ctx: ExecutionContext): void {
             if (isBlobInspection) {
               return;
             }
+          }
+          if (cmd === 'status' && ctx.payload.target === 'wsl2') {
+            return;
           }
           const isTargetDifferent = path.resolve(targetCwd) !== path.resolve(process.cwd());
           const scriptToInvoke = scriptCandidate;

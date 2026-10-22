@@ -247,7 +247,7 @@ export const PayloadSchema = z.preprocess((val) => {
           obj.type = 'eval';
         } else if ('scriptPath' in obj) {
           obj.type = 'script';
-        } else {
+        } else if ('target' in obj) {
           obj.type = 'command';
           if (!('command' in obj)) {
             obj.command = obj.target === 'wsl2' ? 'bash' : 'pwsh';

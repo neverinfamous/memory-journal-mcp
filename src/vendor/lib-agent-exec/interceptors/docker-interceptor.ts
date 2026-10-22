@@ -75,6 +75,22 @@ export function dockerInterceptor({ cmdBasename, args, payload }: ExecutionConte
      if (!args.includes('--progress=plain') && !args.includes('--progress')) args.push('--progress=plain');
   }
 
+  const isDockerBuild = 
+    (dockerCmds.includes(cmdBasename) && subCmd === 'build') ||
+    (isBuildxPlugin && buildxSubCmd === 'build') ||
+    ((dockerComposeCmds.includes(cmdBasename) || isComposePlugin) && composeSubCmd === 'build');
+
+  const isDockerScout = 
+    (dockerCmds.includes(cmdBasename) && (subCmd === 'scout' || args.includes('scout')));
+
+  if (isDockerBuild || isDockerScout) {
+    console.error(`\n   🛠️ AUTONOMOUS HEALING: Disabling stall interceptors and extending timeout to 600s for Docker build/scout... (Frictionless Recovery)`);
+    payload.bypassInterceptors = true;
+    if (payload.timeoutMs === undefined || payload.timeoutMs < 600000) {
+      payload.timeoutMs = 600000;
+    }
+  }
+
   if (dockerCmds.includes(cmdBasename) && !isComposePlugin && (subCmd === 'run' || subCmd === 'exec' || (subCmd === 'container' && (positionalArgs[1] === 'run' || positionalArgs[1] === 'exec')))) {
     isDockerTtySensitive = true;
   } else if (dockerComposeCmds.includes(cmdBasename) && (composeSubCmd === 'run' || composeSubCmd === 'exec')) {

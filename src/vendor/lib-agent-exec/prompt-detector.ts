@@ -28,6 +28,7 @@ export function checkPrompt(tail: string): boolean {
     
     // Inquirer Prompts
     .when(l => /^\s*\?\s+[^\r\n]+(?:\?|:|>|›|»|\[.*?\]|\(.*?\))\s*$/m.test(l), () => true)
+    .when(l => /^\s*\?\s+(?:title|body|choose\b|select\b|what's next\b)[^\r\n]*$/im.test(l), () => true)
     .when(l => /^\s*[?✔]\s*[^\r\n]{0,250}(?:…|\.\.\.)/m.test(l), () => true)
     
     // REPLs and Shells

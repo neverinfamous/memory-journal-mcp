@@ -4,7 +4,7 @@ import { match, P } from 'ts-pattern';
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
-import { convertToWslPath, getPositionalArgs, healFragmentedQuotes, escapeUnixArg } from '../command-utils.js';
+import { convertToWslPath, getPositionalArgs, healFragmentedQuotes, escapeUnixArg, getUnderlyingPackageScript } from '../command-utils.js';
 import { getUnquoted } from './utils.js';
 import { findEcosystemScript } from '../utils.js';
 import { runMutatingInterceptors } from './mutating-interceptors.js';
@@ -73,7 +73,47 @@ export function systemInterceptor(ctx: ExecutionContext): void {
     } else if (ctx.args.some(a => path.basename(a).toLowerCase() === 'agent-exec.ts')) {
       // Nested agent-exec.ts invocation: disable stall interceptors on the wrapper to prevent false-positive aborts
       ctx.payload.bypassInterceptors = true;
-      ctx.payload.timeoutMs = Math.max(ctx.payload.timeoutMs || 180000, 180000);
+      let nestedTimeout = 180000;
+      for (const a of ctx.args) {
+        if (typeof a === 'string') {
+          const timeoutMatch = a.match(/["']?timeoutMs["']?\s*:\s*(\d+)/i) || a.match(/["']?timeout["']?\s*:\s*(\d+)/i);
+          if (timeoutMatch && timeoutMatch[1]) {
+            const parsed = parseInt(timeoutMatch[1], 10);
+            if (!Number.isNaN(parsed) && parsed > nestedTimeout) {
+              nestedTimeout = parsed;
+            }
+          }
+          const flagMatch = a.match(/^--(?:timeout|timeoutMs)=(\d+)$/i);
+          if (flagMatch && flagMatch[1]) {
+            const parsed = parseInt(flagMatch[1], 10);
+            if (!Number.isNaN(parsed) && parsed > nestedTimeout) {
+              nestedTimeout = parsed;
+            }
+          }
+          if (/(?:docker|docker-compose|podman)/i.test(a) && /(?:build|scout)/i.test(a)) {
+            nestedTimeout = Math.max(nestedTimeout, 600000);
+          }
+          if (/(?:playwright|cypress|\be2e\b)/i.test(a)) {
+            nestedTimeout = Math.max(nestedTimeout, 600000);
+          }
+          if (a.endsWith('.json') && fs.existsSync(a)) {
+            try {
+              const fileContent = fs.readFileSync(a, 'utf8');
+              const fileTimeoutMatch = fileContent.match(/["']?timeoutMs["']?\s*:\s*(\d+)/i);
+              if (fileTimeoutMatch && fileTimeoutMatch[1]) {
+                const parsed = parseInt(fileTimeoutMatch[1], 10);
+                if (!Number.isNaN(parsed) && parsed > nestedTimeout) {
+                  nestedTimeout = parsed;
+                }
+              }
+              if (/(?:docker|docker-compose|podman)/i.test(fileContent) && /(?:build|scout)/i.test(fileContent)) {
+                nestedTimeout = Math.max(nestedTimeout, 600000);
+              }
+            } catch { /* ignore */ }
+          }
+        }
+      }
+      ctx.payload.timeoutMs = Math.max(ctx.payload.timeoutMs || nestedTimeout, nestedTimeout);
     }
   }
 
@@ -238,14 +278,19 @@ export function systemInterceptor(ctx: ExecutionContext): void {
       const rest = grepDirMatch[1] ?? '';
       const tokens = rest.trim().split(/\s+/);
       const isDir = (t: string): boolean => {
-        if (t.endsWith('/') || t.endsWith('\\') || t === '.' || t === '..' || t.startsWith('./') || t.startsWith('../') || t.includes('/') || t.includes('\\') || /^[a-zA-Z]:/.test(t)) return true;
+        if (/[()*+?[\]^$|{}]/.test(t) || /\\[bBwWdDsSnrtv0()[\]{}.*+?^$|]/.test(t)) return false;
         try {
           const cwd = payload.cwd !== undefined && payload.cwd.length > 0 ? path.resolve(payload.cwd) : process.cwd();
           const p = path.resolve(cwd, t);
-          return fs.existsSync(p) && fs.statSync(p).isDirectory();
+          if (fs.existsSync(p)) {
+            return fs.statSync(p).isDirectory();
+          }
         } catch {
-          return false;
+          // ignore
         }
+        if (/\.[a-zA-Z0-9]{1,6}$/.test(t)) return false;
+        if (t.endsWith('/') || t.endsWith('\\') || t === '.' || t === '..' || t.startsWith('./') || t.startsWith('../') || t.includes('/') || t.includes('\\') || /^[a-zA-Z]:/.test(t)) return true;
+        return false;
       };
 
       if (!/(?:^|\s)(?:-[a-zA-Z]*[rR]\b|--recursive\b)/.test(payload.code)) {
@@ -271,7 +316,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
       const isBroadGrep = tokens.some(t => {
         if (t.startsWith('-')) return false;
         const clean = t.replace(/^['"]|['"]$/g, '').trim();
-        return clean === '.' || clean === './' || clean === '..' || clean === '../' || clean.startsWith('/mnt/') || /^[a-zA-Z]:/.test(clean);
+        return clean === '.' || clean === './' || clean === '..' || clean === '../' || clean.startsWith('./.') || clean.startsWith('.agents') || clean.startsWith('/mnt/') || /^[a-zA-Z]:/.test(clean);
       });
       if (isRecursiveGrep && isBroadGrep) {
         const missingExcludes = GREP_EXCLUDE_DIRS.filter(
@@ -425,16 +470,27 @@ export function systemInterceptor(ctx: ExecutionContext): void {
     
     if (payload.type === 'eval' || payload.type === 'script') {
       const codeOrScript = payload.type === 'eval' ? payload.code : (payload.scriptPath || '');
-      const isPlaywright = codeOrScript && /playwright/i.test(codeOrScript);
-      const isChainedQuality = codeOrScript && /(?:typecheck|tsc|lint|check|build|test).*(?:&&|;).*(?:typecheck|tsc|lint|check|build|test)/i.test(codeOrScript);
-      const hasQualityCheck = codeOrScript && /(?:typecheck|tsc|lint|check|build|test|vitest|jest)/i.test(codeOrScript);
-      const isKnownDeterministic = codeOrScript && /(?:commit\.ts|get-git-history-json\.ts|backup-conversations\.ts)/i.test(codeOrScript);
-      const hasMountedSearch = codeOrScript && /(?:find|grep|rg|ls|tree)\b/i.test(codeOrScript);
+      const isInlineShellHallucination = payload.type === 'eval' && /^\s*(?:pwsh|powershell|cmd|bash|sh|wsl)(?:\.exe)?\b/i.test(codeOrScript);
+      const isPlaywright = !isInlineShellHallucination && Boolean(codeOrScript && /(?:playwright|cypress|\be2e\b|test:e2e)/i.test(codeOrScript));
+      const isCoverage = !isInlineShellHallucination && Boolean(codeOrScript && /(?:coverage|--coverage)/i.test(codeOrScript));
+      const isDocker = !isInlineShellHallucination && Boolean(codeOrScript && /(?:docker|docker-compose|podman)/i.test(codeOrScript) && /(?:build|scout)/i.test(codeOrScript));
+      const isChainedQuality = !isInlineShellHallucination && payload.type === 'eval' && Boolean(codeOrScript && /(?:typecheck|tsc|lint|check|build|test).*(?:&&|;).*(?:typecheck|tsc|lint|check|build|test)/i.test(codeOrScript));
+      const hasQualityCheck = !isInlineShellHallucination && payload.type === 'eval' && Boolean(codeOrScript && /(?:(?:bun|pnpm|npm|yarn|npx|bunx|pnpx)\s+(?:run\s+)?(?:typecheck|tsc|lint|check|build|test)\b|\b(?:vitest|jest|tsc|eslint)\b)/i.test(codeOrScript));
+      const isKnownDeterministic = !isInlineShellHallucination && Boolean(codeOrScript && /(?:commit\.ts|get-git-history-json\.ts|backup-conversations\.ts)/i.test(codeOrScript));
+      const hasMountedSearch = !isInlineShellHallucination && Boolean(codeOrScript && /(?:find|grep|rg|ls|tree)\b/i.test(codeOrScript));
       
       if (isPlaywright) {
         defaultWslTimeout = 600000;
         payload.bypassInterceptors = true;
-        console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected Playwright test in WSL2 eval payload. Auto-extending timeout to 600s... (Frictionless Recovery)`);
+        console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected Playwright/E2E test in WSL2 eval payload. Auto-extending timeout to 600s... (Frictionless Recovery)`);
+      } else if (isDocker) {
+        defaultWslTimeout = 600000;
+        payload.bypassInterceptors = true;
+        console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected Docker build/scout in WSL2 eval payload. Auto-extending timeout to 600s... (Frictionless Recovery)`);
+      } else if (isCoverage) {
+        defaultWslTimeout = 300000;
+        payload.bypassInterceptors = true;
+        console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected test coverage in WSL2 eval payload. Auto-extending timeout to 300s... (Frictionless Recovery)`);
       } else if (isChainedQuality) {
         defaultWslTimeout = 180000;
         payload.bypassInterceptors = true;
@@ -448,21 +504,40 @@ export function systemInterceptor(ctx: ExecutionContext): void {
         console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected file search across mounted filesystem in WSL2 eval payload. Auto-extending timeout to 90s... (Frictionless Recovery)`);
       }
     } else if (payload.type === 'command') {
-      const isPlaywright = /playwright/i.test(cmdBasename) || (args && args.some(a => /playwright/i.test(a)));
-      const isQuality = /(?:typecheck|tsc|lint|check|build|test|vitest|jest)/i.test(cmdBasename) || (args && args.some(a => /(?:typecheck|tsc|lint|check|build|test|vitest|jest)/i.test(a)));
+      const underlyingScript = getUnderlyingPackageScript(cmdBasename, args, payload.cwd);
+      const isNestedAgentExec = (args && args.some(a => path.basename(a).toLowerCase() === 'agent-exec.ts'));
+      const isDocker = /(?:docker|docker-compose|podman)/i.test(cmdBasename) && (args && args.some(a => /(?:build|scout)/i.test(a)));
+      const isPlaywright = /(?:playwright|cypress)/i.test(cmdBasename) ||
+        (args && args.some(a => /(?:playwright|cypress|\be2e\b|test:e2e|test-e2e)/i.test(a))) ||
+        /(?:playwright|cypress|\be2e\b)/i.test(underlyingScript);
+      const isCoverage = /(?:coverage)/i.test(cmdBasename) ||
+        (args && args.some(a => /(?:coverage|--coverage|test:coverage)/i.test(a))) ||
+        /(?:coverage|--coverage)/i.test(underlyingScript);
+      const isQuality = !isNestedAgentExec && !isDocker && (
+        /(?:typecheck|tsc|lint|check|build|test|vitest|jest)/i.test(cmdBasename) ||
+        (args && args.some(a => /(?:typecheck|tsc|lint|check|build|test|vitest|jest)/i.test(a))) ||
+        /(?:typecheck|tsc|lint|check|build|test|vitest|jest)/i.test(underlyingScript)
+      );
       const isKnownDeterministic = /(?:commit\.ts|get-git-history-json\.ts|backup-conversations\.ts)/i.test(cmdBasename) || (args && args.some(a => /(?:commit\.ts|get-git-history-json\.ts|backup-conversations\.ts)/i.test(a)));
       const isSearch = /(?:find|grep|rg|ls|tree)\b/i.test(cmdBasename) || (args && args.some(a => /(?:find|grep|rg|ls|tree)\b/i.test(a)));
       
-      if (isPlaywright) {
+      if (isPlaywright || isDocker) {
         defaultWslTimeout = 600000;
         payload.bypassInterceptors = true;
       } else if (isQuality || isKnownDeterministic) {
         const testFiles = args ? args.filter(a => /\.(?:test|spec)\.[a-zA-Z0-9]+$/i.test(a)) : [];
         const isMultiTest = testFiles.length > 1;
         const isTestDir = args ? args.some(a => /(?:tests?[/\\]\w+[/\\].*[/\\].*|tests?[/\\]$)/i.test(a) && !/\.[a-zA-Z0-9_-]+$/i.test(a)) : false;
-        const isTestRunner = /(?:vitest|jest|pytest)/i.test(cmdBasename) || (args && args.some(a => /(?:vitest|jest|pytest|^test$)/i.test(a)));
+        const isTestRunner = /(?:vitest|jest|pytest|playwright|cypress)/i.test(cmdBasename) ||
+          (args && args.some(a => /(?:vitest|jest|pytest|playwright|cypress|^test(?::.*|-.*)?$|^coverage(?::.*)?$)/i.test(a))) ||
+          /(?:vitest|jest|pytest|playwright|cypress)/i.test(underlyingScript);
         const isFullSuite = isTestRunner && testFiles.length === 0 && !isTestDir;
-        defaultWslTimeout = isMultiTest || isTestDir || isFullSuite ? 180000 : 90000;
+        const hasTargetFiles = args ? args.some(a => !a.startsWith('-') && /\.(?:ts|js|tsx|jsx|json|mjs|cjs)$/i.test(a)) : false;
+        const isLintOrCheck = /(?:lint|check)/i.test(cmdBasename) ||
+          (args && args.some(a => /(?:lint|check)/i.test(a))) ||
+          /(?:lint|check)/i.test(underlyingScript);
+        const isFullLintOrCheck = isLintOrCheck && !hasTargetFiles;
+        defaultWslTimeout = isCoverage ? 300000 : (isMultiTest || isTestDir || isFullSuite || isFullLintOrCheck ? 180000 : 90000);
         payload.bypassInterceptors = true;
       } else if (isSearch) {
         defaultWslTimeout = 90000;
@@ -473,37 +548,69 @@ export function systemInterceptor(ctx: ExecutionContext): void {
   } else {
     if (payload.type === 'eval' || payload.type === 'script') {
       const codeOrScript = payload.type === 'eval' ? payload.code : (payload.scriptPath || '');
-      const isPlaywright = codeOrScript && /playwright/i.test(codeOrScript);
-      const isChainedQuality = codeOrScript && /(?:typecheck|tsc|lint|check|build|test).*(?:&&|;).*(?:typecheck|tsc|lint|check|build|test)/i.test(codeOrScript);
-      const hasQualityCheck = codeOrScript && /(?:typecheck|tsc|lint|check|build|test|vitest|jest)/i.test(codeOrScript);
-      const isKnownDeterministic = codeOrScript && /(?:commit\.ts|get-git-history-json\.ts|backup-conversations\.ts)/i.test(codeOrScript);
+      const isInlineShellHallucination = payload.type === 'eval' && /^\s*(?:pwsh|powershell|cmd|bash|sh|wsl)(?:\.exe)?\b/i.test(codeOrScript);
+      const isPlaywright = !isInlineShellHallucination && Boolean(codeOrScript && /(?:playwright|cypress|\be2e\b|test:e2e)/i.test(codeOrScript));
+      const isCoverage = !isInlineShellHallucination && Boolean(codeOrScript && /(?:coverage|--coverage)/i.test(codeOrScript));
+      const isDocker = !isInlineShellHallucination && Boolean(codeOrScript && /(?:docker|docker-compose|podman)/i.test(codeOrScript) && /(?:build|scout)/i.test(codeOrScript));
+      const isChainedQuality = !isInlineShellHallucination && payload.type === 'eval' && Boolean(codeOrScript && /(?:typecheck|tsc|lint|check|build|test).*(?:&&|;).*(?:typecheck|tsc|lint|check|build|test)/i.test(codeOrScript));
+      const hasQualityCheck = !isInlineShellHallucination && payload.type === 'eval' && Boolean(codeOrScript && /(?:(?:bun|pnpm|npm|yarn|npx|bunx|pnpx)\s+(?:run\s+)?(?:typecheck|tsc|lint|check|build|test)\b|\b(?:vitest|jest|tsc|eslint)\b)/i.test(codeOrScript));
+      const isKnownDeterministic = !isInlineShellHallucination && Boolean(codeOrScript && /(?:commit\.ts|get-git-history-json\.ts|backup-conversations\.ts)/i.test(codeOrScript));
       if (isPlaywright) {
         payload.timeoutMs = Math.max(payload.timeoutMs || 600000, 600000);
         payload.bypassInterceptors = true;
-        console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected Playwright test in Windows eval payload. Auto-extending timeout to 600s... (Frictionless Recovery)`);
+        console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected Playwright/E2E test in Windows eval payload. Auto-extending timeout to 600s... (Frictionless Recovery)`);
+      } else if (isDocker) {
+        payload.timeoutMs = Math.max(payload.timeoutMs || 600000, 600000);
+        payload.bypassInterceptors = true;
+        console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected Docker build/scout in Windows eval payload. Auto-extending timeout to 600s... (Frictionless Recovery)`);
+      } else if (isCoverage) {
+        payload.timeoutMs = Math.max(payload.timeoutMs || 480000, 480000);
+        payload.bypassInterceptors = true;
+        console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected test coverage in Windows eval payload. Auto-extending timeout to 480s... (Frictionless Recovery)`);
       } else if (isChainedQuality) {
         payload.timeoutMs = Math.max(payload.timeoutMs || 360000, 360000);
         payload.bypassInterceptors = true;
         console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected chained quality checks in Windows eval payload. Auto-extending timeout to 360s... (Frictionless Recovery)`);
       } else if (hasQualityCheck || isKnownDeterministic) {
-        payload.timeoutMs = Math.max(payload.timeoutMs || 240000, 240000);
+        const isFullLintOrCheck = Boolean(codeOrScript && /(?:lint|check)/i.test(codeOrScript) && !/\.(?:ts|js|tsx|jsx)\b/i.test(codeOrScript));
+        const qualityTimeout = isFullLintOrCheck ? 360000 : 240000;
+        payload.timeoutMs = Math.max(payload.timeoutMs || qualityTimeout, qualityTimeout);
         payload.bypassInterceptors = true;
-        console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected quality check or deterministic script in Windows eval payload. Auto-extending timeout to 240s... (Frictionless Recovery)`);
+        console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected quality check or deterministic script in Windows eval payload. Auto-extending timeout to ${qualityTimeout / 1000}s... (Frictionless Recovery)`);
       }
     } else if (payload.type === 'command') {
-      const isPlaywright = /playwright/i.test(cmdBasename) || (args && args.some(a => /playwright/i.test(a)));
-      const isQuality = /(?:typecheck|tsc|lint|check|build|test|vitest|jest)/i.test(cmdBasename) || (args && args.some(a => /(?:typecheck|tsc|lint|check|build|test|vitest|jest)/i.test(a)));
+      const underlyingScript = getUnderlyingPackageScript(cmdBasename, args, payload.cwd);
+      const isNestedAgentExec = (args && args.some(a => path.basename(a).toLowerCase() === 'agent-exec.ts'));
+      const isDocker = /(?:docker|docker-compose|podman)/i.test(cmdBasename) && (args && args.some(a => /(?:build|scout)/i.test(a)));
+      const isPlaywright = /(?:playwright|cypress)/i.test(cmdBasename) ||
+        (args && args.some(a => /(?:playwright|cypress|\be2e\b|test:e2e|test-e2e)/i.test(a))) ||
+        /(?:playwright|cypress|\be2e\b)/i.test(underlyingScript);
+      const isCoverage = /(?:coverage)/i.test(cmdBasename) ||
+        (args && args.some(a => /(?:coverage|--coverage|test:coverage)/i.test(a))) ||
+        /(?:coverage|--coverage)/i.test(underlyingScript);
+      const isQuality = !isNestedAgentExec && !isDocker && (
+        /(?:typecheck|tsc|lint|check|build|test|vitest|jest)/i.test(cmdBasename) ||
+        (args && args.some(a => /(?:typecheck|tsc|lint|check|build|test|vitest|jest)/i.test(a))) ||
+        /(?:typecheck|tsc|lint|check|build|test|vitest|jest)/i.test(underlyingScript)
+      );
       const isKnownDeterministic = /(?:commit\.ts|get-git-history-json\.ts|backup-conversations\.ts)/i.test(cmdBasename) || (args && args.some(a => /(?:commit\.ts|get-git-history-json\.ts|backup-conversations\.ts)/i.test(a)));
-      if (isPlaywright) {
+      if (isPlaywright || isDocker) {
         payload.timeoutMs = Math.max(payload.timeoutMs || 600000, 600000);
         payload.bypassInterceptors = true;
       } else if (isQuality || isKnownDeterministic) {
         const testFiles = args ? args.filter(a => /\.(?:test|spec)\.[a-zA-Z0-9]+$/i.test(a)) : [];
         const isMultiTest = testFiles.length > 1;
         const isTestDir = args ? args.some(a => /(?:tests?[/\\]\w+[/\\].*[/\\].*|tests?[/\\]$)/i.test(a) && !/\.[a-zA-Z0-9_-]+$/i.test(a)) : false;
-        const isTestRunner = /(?:vitest|jest|pytest)/i.test(cmdBasename) || (args && args.some(a => /(?:vitest|jest|pytest|^test$)/i.test(a)));
+        const isTestRunner = /(?:vitest|jest|pytest|playwright|cypress)/i.test(cmdBasename) ||
+          (args && args.some(a => /(?:vitest|jest|pytest|playwright|cypress|^test(?::.*|-.*)?$|^coverage(?::.*)?$)/i.test(a))) ||
+          /(?:vitest|jest|pytest|playwright|cypress)/i.test(underlyingScript);
         const isFullSuite = isTestRunner && testFiles.length === 0 && !isTestDir;
-        const winTimeout = isMultiTest || isTestDir || isFullSuite ? 300000 : 240000;
+        const hasTargetFiles = args ? args.some(a => !a.startsWith('-') && /\.(?:ts|js|tsx|jsx|json|mjs|cjs)$/i.test(a)) : false;
+        const isLintOrCheck = /(?:lint|check)/i.test(cmdBasename) ||
+          (args && args.some(a => /(?:lint|check)/i.test(a))) ||
+          /(?:lint|check)/i.test(underlyingScript);
+        const isFullLintOrCheck = isLintOrCheck && !hasTargetFiles;
+        const winTimeout = isCoverage ? 480000 : (isTestDir || isFullSuite || isFullLintOrCheck ? 360000 : (isMultiTest ? 300000 : 240000));
         payload.timeoutMs = Math.max(payload.timeoutMs || winTimeout, winTimeout);
         payload.bypassInterceptors = true;
       }
