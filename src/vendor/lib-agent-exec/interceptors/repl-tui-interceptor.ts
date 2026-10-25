@@ -55,18 +55,77 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
         args.push(...newArgs);
       }
 
+      const isHelpOrVersion = (a: readonly string[]): boolean => {
+        return a.some((arg) => {
+          const lower = arg.toLowerCase();
+          return (
+            lower === '--version' ||
+            lower === '-version' ||
+            lower === '--help' ||
+            lower === '-help' ||
+            lower === '-?' ||
+            lower === '/?' ||
+            arg === '-V' ||
+            arg === '-VV' ||
+            arg === '-h' ||
+            (lower === '-v' &&
+              !['python', 'python.exe', 'python.cmd', 'python3', 'python3.exe', 'bash', 'bash.exe', 'sh', 'sh.exe', 'zsh', 'zsh.exe'].includes(
+                cmdBasename.toLowerCase()
+              ))
+          );
+        });
+      };
+
+      const isDbNonInteractive = (cmd: string, a: readonly string[]): boolean => {
+        if (a.some((arg) => ['-c', '--command', '-e', '--execute', '--eval'].includes(arg))) {
+          return true;
+        }
+        if (a.some((arg) => arg === '-f' || arg.startsWith('--file=') || arg === '--file')) {
+          return true;
+        }
+        if (['sqlite3', 'sqlite3.exe', 'sqlite', 'sqlite.exe'].includes(cmd)) {
+          if (a.some((arg) => arg === '-cmd' || arg === '-batch' || arg === '--batch')) {
+            return true;
+          }
+          const positional = a.filter((arg) => !arg.startsWith('-'));
+          if (positional.length >= 2) {
+            return true;
+          }
+        }
+        if (['redis-cli', 'redis-cli.exe'].includes(cmd)) {
+          const redisOptionWithArg = ['-h', '-p', '-s', '-a', '-u', '-n', '-r', '-i', '-c', '-d', '--ldb'];
+          const nonOptionArgs: string[] = [];
+          for (let i = 0; i < a.length; i++) {
+            const curr = a[i];
+            if (curr !== undefined && curr.startsWith('-')) {
+              if (redisOptionWithArg.includes(curr) && i + 1 < a.length) {
+                i++;
+              }
+              continue;
+            }
+            if (curr !== undefined) {
+              nonOptionArgs.push(curr);
+            }
+          }
+          if (nonOptionArgs.length > 0) {
+            return true;
+          }
+        }
+        return false;
+      };
+
       const blockReason = match({ cmdBasename: cmdBasename.toLowerCase(), args })
         .with({ args: [] }, () => `without arguments or stdin`)
         .with({ cmdBasename: P.union('node', 'node.exe', 'node.cmd'), args: P.when(a => a.some(arg => arg === 'inspect' || arg.startsWith('--inspect'))) }, () => `with a debugging flag`)
-        .with({ cmdBasename: P.union('mysql', 'mysql.exe', 'psql', 'psql.exe', 'sqlite3', 'sqlite3.exe', 'sqlite', 'sqlite.exe', 'redis-cli', 'redis-cli.exe', 'mongo', 'mongo.exe', 'mongosh', 'mongosh.exe'), args: P.when(a => !a.some(arg => ['-c', '--command', '-e', '--execute', '--eval'].includes(arg))) }, () => `as a DB client without execution flags`)
-        .with({ cmdBasename: P.union('ssh', 'ssh.exe', 'sftp', 'sftp.exe', 'ftp', 'ftp.exe', 'telnet', 'telnet.exe'), args: P.when(a => a.filter(arg => !arg.startsWith('-') && !arg.includes('@')).length === 0) }, () => `as a naked shell/connection without commands`)
-        .with({ cmdBasename: P.union('node', 'node.exe', 'node.cmd', 'bun', 'bun.exe', 'bun.cmd', 'deno', 'deno.exe'), args: P.when(a => a.every(arg => arg.startsWith('-')) && !a.some(arg => ['-e', '--eval', '--print', '-p', '-v', '--version', '-h', '--help'].includes(arg))) }, () => `with only flags and no script execution flags`)
-        .with({ cmdBasename: P.union('python', 'python.exe', 'python.cmd', 'python3', 'python3.exe'), args: P.when(a => a.every(arg => arg.startsWith('-')) && !a.some(arg => arg === '-c' || arg === '-m')) }, () => `with only flags and no script execution flags`)
-        .with({ cmdBasename: P.union('bash', 'bash.exe', 'sh', 'sh.exe', 'zsh', 'zsh.exe'), args: P.when(a => a.every(arg => arg.startsWith('-')) && !a.some(arg => arg === '-c')) }, () => `with only flags and no script execution flags`)
-        .with({ cmdBasename: P.union('pwsh', 'pwsh.exe', 'powershell', 'powershell.exe'), args: P.when(a => a.every(arg => arg.startsWith('-')) && !a.some(arg => arg.toLowerCase() === '-c' || arg.toLowerCase() === '-command' || arg.toLowerCase() === '-file')) }, () => `with only flags and no script execution flags`)
-        .with({ cmdBasename: P.union('ruby', 'ruby.exe', 'ruby.cmd', 'perl', 'perl.exe', 'perl.cmd'), args: P.when(a => a.every(arg => arg.startsWith('-')) && !a.some(arg => arg === '-e' || arg === '-E')) }, () => `with only flags and no script execution flags`)
-        .with({ cmdBasename: P.union('php', 'php.exe'), args: P.when(a => a.every(arg => arg.startsWith('-')) && !a.some(arg => arg === '-r')) }, () => `with only flags and no script execution flags`)
-        .with({ cmdBasename: P.union('cmd', 'cmd.exe'), args: P.when(a => a.every(arg => arg.startsWith('/')) && !a.some(arg => arg.toLowerCase() === '/c')) }, () => `with only flags and no script execution flags`)
+        .with({ cmdBasename: P.union('mysql', 'mysql.exe', 'psql', 'psql.exe', 'sqlite3', 'sqlite3.exe', 'sqlite', 'sqlite.exe', 'redis-cli', 'redis-cli.exe', 'mongo', 'mongo.exe', 'mongosh', 'mongosh.exe'), args: P.when(a => !isHelpOrVersion(a) && !isDbNonInteractive(cmdBasename.toLowerCase(), a)) }, () => `as a DB client without execution flags`)
+        .with({ cmdBasename: P.union('ssh', 'ssh.exe', 'sftp', 'sftp.exe', 'ftp', 'ftp.exe', 'telnet', 'telnet.exe'), args: P.when(a => !isHelpOrVersion(a) && a.filter(arg => !arg.startsWith('-') && !arg.includes('@')).length === 0) }, () => `as a naked shell/connection without commands`)
+        .with({ cmdBasename: P.union('node', 'node.exe', 'node.cmd', 'bun', 'bun.exe', 'bun.cmd', 'deno', 'deno.exe'), args: P.when(a => !isHelpOrVersion(a) && a.every(arg => arg.startsWith('-')) && !a.some(arg => ['-e', '--eval', '--print', '-p'].includes(arg))) }, () => `with only flags and no script execution flags`)
+        .with({ cmdBasename: P.union('python', 'python.exe', 'python.cmd', 'python3', 'python3.exe'), args: P.when(a => !isHelpOrVersion(a) && a.every(arg => arg.startsWith('-')) && !a.some(arg => arg === '-c' || arg === '-m')) }, () => `with only flags and no script execution flags`)
+        .with({ cmdBasename: P.union('bash', 'bash.exe', 'sh', 'sh.exe', 'zsh', 'zsh.exe'), args: P.when(a => !isHelpOrVersion(a) && a.every(arg => arg.startsWith('-')) && !a.some(arg => arg === '-c')) }, () => `with only flags and no script execution flags`)
+        .with({ cmdBasename: P.union('pwsh', 'pwsh.exe', 'powershell', 'powershell.exe'), args: P.when(a => !isHelpOrVersion(a) && a.every(arg => arg.startsWith('-')) && !a.some(arg => arg.toLowerCase() === '-c' || arg.toLowerCase() === '-command' || arg.toLowerCase() === '-file')) }, () => `with only flags and no script execution flags`)
+        .with({ cmdBasename: P.union('ruby', 'ruby.exe', 'ruby.cmd', 'perl', 'perl.exe', 'perl.cmd'), args: P.when(a => !isHelpOrVersion(a) && a.every(arg => arg.startsWith('-')) && !a.some(arg => arg === '-e' || arg === '-E')) }, () => `with only flags and no script execution flags`)
+        .with({ cmdBasename: P.union('php', 'php.exe'), args: P.when(a => !isHelpOrVersion(a) && a.every(arg => arg.startsWith('-')) && !a.some(arg => arg === '-r')) }, () => `with only flags and no script execution flags`)
+        .with({ cmdBasename: P.union('cmd', 'cmd.exe'), args: P.when(a => !isHelpOrVersion(a) && a.every(arg => arg.startsWith('/')) && !a.some(arg => arg.toLowerCase() === '/c')) }, () => `with only flags and no script execution flags`)
         .otherwise(() => null);
 
       if (blockReason !== null) {

@@ -82,6 +82,20 @@ export function cloudCliInterceptor({ cmdBasename, args, envOverrides, payload }
           console.error(`\n   🛠️ AUTONOMOUS HEALING: Normalizing gh --json fields from '${jsonVal}' to '${normalized}'... (Frictionless Recovery)`);
           args[i] = `--json=${normalized}`;
         }
+      } else if (currentArg === '--jq' && i + 1 < args.length) {
+        const jqArg = args[i + 1];
+        if (jqArg !== undefined && jqArg.includes('\\"')) {
+          const normalized = jqArg.replace(/\\"/g, '"');
+          console.error(`\n   🛠️ AUTONOMOUS HEALING: Healing escaped quotes in gh --jq expression from '${jqArg}' to '${normalized}'... (Frictionless Recovery)`);
+          args[i + 1] = normalized;
+        }
+      } else if (currentArg !== undefined && currentArg.startsWith('--jq=')) {
+        const jqVal = currentArg.slice('--jq='.length);
+        if (jqVal.includes('\\"')) {
+          const normalized = jqVal.replace(/\\"/g, '"');
+          console.error(`\n   🛠️ AUTONOMOUS HEALING: Healing escaped quotes in gh --jq expression from '${jqVal}' to '${normalized}'... (Frictionless Recovery)`);
+          args[i] = `--jq=${normalized}`;
+        }
       }
     }
 

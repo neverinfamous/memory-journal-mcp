@@ -96,6 +96,12 @@ export function systemInterceptor(ctx: ExecutionContext): void {
           if (/(?:playwright|cypress|\be2e\b)/i.test(a)) {
             nestedTimeout = Math.max(nestedTimeout, 600000);
           }
+          if (/(?:coverage|--coverage)/i.test(a)) {
+            nestedTimeout = Math.max(nestedTimeout, 480000);
+          }
+          if (/(?:typecheck|tsc|lint|check|build|test|vitest|jest)/i.test(a)) {
+            nestedTimeout = Math.max(nestedTimeout, 600000);
+          }
           if (a.endsWith('.json') && fs.existsSync(a)) {
             try {
               const fileContent = fs.readFileSync(a, 'utf8');
@@ -107,6 +113,15 @@ export function systemInterceptor(ctx: ExecutionContext): void {
                 }
               }
               if (/(?:docker|docker-compose|podman)/i.test(fileContent) && /(?:build|scout)/i.test(fileContent)) {
+                nestedTimeout = Math.max(nestedTimeout, 600000);
+              }
+              if (/(?:playwright|cypress|\be2e\b)/i.test(fileContent)) {
+                nestedTimeout = Math.max(nestedTimeout, 600000);
+              }
+              if (/(?:coverage|--coverage)/i.test(fileContent)) {
+                nestedTimeout = Math.max(nestedTimeout, 480000);
+              }
+              if (/(?:typecheck|tsc|lint|check|build|test|vitest|jest)/i.test(fileContent)) {
                 nestedTimeout = Math.max(nestedTimeout, 600000);
               }
             } catch { /* ignore */ }
@@ -532,12 +547,14 @@ export function systemInterceptor(ctx: ExecutionContext): void {
           (args && args.some(a => /(?:vitest|jest|pytest|playwright|cypress|^test(?::.*|-.*)?$|^coverage(?::.*)?$)/i.test(a))) ||
           /(?:vitest|jest|pytest|playwright|cypress)/i.test(underlyingScript);
         const isFullSuite = isTestRunner && testFiles.length === 0 && !isTestDir;
-        const hasTargetFiles = args ? args.some(a => !a.startsWith('-') && /\.(?:ts|js|tsx|jsx|json|mjs|cjs)$/i.test(a)) : false;
+        const targetFiles = args ? args.filter(a => !a.startsWith('-') && /\.(?:ts|js|tsx|jsx|json|mjs|cjs)$/i.test(a)) : [];
+        const hasTargetFiles = targetFiles.length > 0;
+        const hasLargeFile = targetFiles.some(a => /(?:api\.ts|codemode|bundle|generated)/i.test(a));
         const isLintOrCheck = /(?:lint|check)/i.test(cmdBasename) ||
           (args && args.some(a => /(?:lint|check)/i.test(a))) ||
           /(?:lint|check)/i.test(underlyingScript);
         const isFullLintOrCheck = isLintOrCheck && !hasTargetFiles;
-        defaultWslTimeout = isCoverage ? 300000 : (isMultiTest || isTestDir || isFullSuite || isFullLintOrCheck ? 180000 : 90000);
+        defaultWslTimeout = isCoverage ? 300000 : (isFullLintOrCheck || hasLargeFile ? 360000 : (isMultiTest || isTestDir || isFullSuite ? 180000 : 90000));
         payload.bypassInterceptors = true;
       } else if (isSearch) {
         defaultWslTimeout = 90000;
@@ -568,12 +585,13 @@ export function systemInterceptor(ctx: ExecutionContext): void {
         payload.bypassInterceptors = true;
         console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected test coverage in Windows eval payload. Auto-extending timeout to 480s... (Frictionless Recovery)`);
       } else if (isChainedQuality) {
-        payload.timeoutMs = Math.max(payload.timeoutMs || 360000, 360000);
+        payload.timeoutMs = Math.max(payload.timeoutMs || 600000, 600000);
         payload.bypassInterceptors = true;
-        console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected chained quality checks in Windows eval payload. Auto-extending timeout to 360s... (Frictionless Recovery)`);
+        console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected chained quality checks in Windows eval payload. Auto-extending timeout to 600s... (Frictionless Recovery)`);
       } else if (hasQualityCheck || isKnownDeterministic) {
         const isFullLintOrCheck = Boolean(codeOrScript && /(?:lint|check)/i.test(codeOrScript) && !/\.(?:ts|js|tsx|jsx)\b/i.test(codeOrScript));
-        const qualityTimeout = isFullLintOrCheck ? 360000 : 240000;
+        const hasLargeFile = Boolean(codeOrScript && /(?:api\.ts|codemode|bundle|generated)/i.test(codeOrScript));
+        const qualityTimeout = (isFullLintOrCheck || hasLargeFile) ? 600000 : 240000;
         payload.timeoutMs = Math.max(payload.timeoutMs || qualityTimeout, qualityTimeout);
         payload.bypassInterceptors = true;
         console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected quality check or deterministic script in Windows eval payload. Auto-extending timeout to ${qualityTimeout / 1000}s... (Frictionless Recovery)`);
@@ -605,12 +623,15 @@ export function systemInterceptor(ctx: ExecutionContext): void {
           (args && args.some(a => /(?:vitest|jest|pytest|playwright|cypress|^test(?::.*|-.*)?$|^coverage(?::.*)?$)/i.test(a))) ||
           /(?:vitest|jest|pytest|playwright|cypress)/i.test(underlyingScript);
         const isFullSuite = isTestRunner && testFiles.length === 0 && !isTestDir;
-        const hasTargetFiles = args ? args.some(a => !a.startsWith('-') && /\.(?:ts|js|tsx|jsx|json|mjs|cjs)$/i.test(a)) : false;
+        const targetFiles = args ? args.filter(a => !a.startsWith('-') && /\.(?:ts|js|tsx|jsx|json|mjs|cjs)$/i.test(a)) : [];
+        const hasTargetFiles = targetFiles.length > 0;
+        const isMultiFileLint = targetFiles.length > 1;
+        const hasLargeFile = targetFiles.some(a => /(?:api\.ts|codemode|bundle|generated)/i.test(a));
         const isLintOrCheck = /(?:lint|check)/i.test(cmdBasename) ||
           (args && args.some(a => /(?:lint|check)/i.test(a))) ||
           /(?:lint|check)/i.test(underlyingScript);
         const isFullLintOrCheck = isLintOrCheck && !hasTargetFiles;
-        const winTimeout = isCoverage ? 480000 : (isTestDir || isFullSuite || isFullLintOrCheck ? 360000 : (isMultiTest ? 300000 : 240000));
+        const winTimeout = isCoverage ? 480000 : (isFullLintOrCheck || hasLargeFile ? 600000 : (isTestDir || isFullSuite ? 360000 : (isMultiTest || isMultiFileLint ? 300000 : 240000)));
         payload.timeoutMs = Math.max(payload.timeoutMs || winTimeout, winTimeout);
         payload.bypassInterceptors = true;
       }

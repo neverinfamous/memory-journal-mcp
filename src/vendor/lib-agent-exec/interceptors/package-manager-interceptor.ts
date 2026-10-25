@@ -324,15 +324,18 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
         Boolean(targetScript && (targetScript.startsWith('test') || targetScript.includes('coverage'))) ||
         Boolean(underlyingScript && /(?:vitest|jest|pytest|playwright|cypress)/i.test(underlyingScript));
       const isFullSuite = isTestRunner && testFiles.length === 0 && !isTestDir;
-      const hasTargetFiles = args.some(a => !a.startsWith('-') && /\.(?:ts|js|tsx|jsx|json|mjs|cjs)$/i.test(a));
+      const targetFiles = args.filter(a => !a.startsWith('-') && /\.(?:ts|js|tsx|jsx|json|mjs|cjs)$/i.test(a));
+      const hasTargetFiles = targetFiles.length > 0;
+      const isMultiFileLint = targetFiles.length > 1;
+      const hasLargeFile = targetFiles.some(a => /(?:api\.ts|codemode|bundle|generated)/i.test(a));
       const isLintOrCheck = /(?:lint|check)/i.test(cmdBasename) ||
         args.some(a => /(?:lint|check)/i.test(a)) ||
         Boolean(targetScript && /(?:lint|check)/i.test(targetScript)) ||
         Boolean(underlyingScript && /(?:lint|check)/i.test(underlyingScript));
       const isFullLintOrCheck = isLintOrCheck && !hasTargetFiles;
       const targetTimeout = ctx.payload.target === 'wsl2'
-        ? (isCoverage ? 300000 : (isMultiTest || isTestDir || isFullSuite || isFullLintOrCheck ? 180000 : 90000))
-        : (isCoverage ? 480000 : (isTestDir || isFullSuite || isFullLintOrCheck ? 360000 : (isMultiTest ? 300000 : 240000)));
+        ? (isCoverage ? 300000 : (isFullLintOrCheck || hasLargeFile ? 360000 : (isMultiTest || isTestDir || isFullSuite ? 180000 : 90000)))
+        : (isCoverage ? 480000 : (isFullLintOrCheck || hasLargeFile ? 600000 : (isTestDir || isFullSuite ? 360000 : (isMultiTest || isMultiFileLint ? 300000 : 240000))));
       if (ctx.payload.timeoutMs === undefined || ctx.payload.timeoutMs < targetTimeout) {
         ctx.payload.timeoutMs = targetTimeout;
       }
