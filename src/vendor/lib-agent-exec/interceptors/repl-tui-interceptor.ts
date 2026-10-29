@@ -212,8 +212,16 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
   const shellWrapperPrefix = `(?:(?:pwsh|powershell|bash|sh|zsh|cmd|wsl)(?:\\.exe)?\\s+(?:-c|-command|\\/c)\\s+)?`;
   const cmdPrefix = `(?:^|[;\\n&|{(\`]|\\$\\()\\s*(?:['"])?\\s*${shellWrapperPrefix}(?:(?:sudo|env|su|doas|time|timeout|stdbuf|nohup|exec)\\s+)*(?:['"])?\\s*`;
   const tuiRegex = new RegExp(`(${cmdPrefix})(${pathPrefix})(${[...tuiCommands, 'journalctl', 'journalctl.exe'].join('|')})\\b`, 'i');
-  const replRegex = new RegExp(`(${cmdPrefix})(${pathPrefix})(${replCommands.join('|')})(?=\\s*['"]?\\s*(?:$|[;\\n&|)]))`, 'i');
-  const interactiveFlagRegex = new RegExp(`(${cmdPrefix})(${pathPrefix})(${replCommands.join('|')})\\s+(?:[^;\\n|&]*\\s)?(?:-(?!-)[a-zA-Z0-9]{0,3}i[a-zA-Z0-9]{0,3}\\b|--interactive\\b|inspect\\b|--inspect\\b|-m\\s+pdb\\b)`, 'i');
+  const replPattern = replCommands.map(c => {
+    const base = c.toLowerCase().replace(/\.exe$/, '');
+    if (['sh', 'bash', 'zsh', 'pwsh', 'powershell', 'cmd', 'wsl'].includes(base)) {
+      return `${c.replace('.', '\\.')}(?!\\s+(?:-c|-command|\\/c)\\b)`;
+    }
+    return c.replace('.', '\\.');
+  }).join('|');
+  const replRegex = new RegExp(`(${cmdPrefix})(${pathPrefix})(${replPattern})(?=\\s*['"]?\\s*(?:$|[;\\n&|)]))`, 'i');
+  const interactiveFlagPattern = `(?:-(?:i|it|ti)\\b|--interactive\\b|inspect\\b|--inspect\\b|--inspect-brk\\b|-m\\s+pdb\\b)`;
+  const interactiveFlagRegex = new RegExp(`(${cmdPrefix})(${pathPrefix})(${replPattern})\\s+(?:[^;\\n|&]*\\s)?${interactiveFlagPattern}`);
   
   const isBlockedRepl = (body: string) => {
     if (interactiveFlagRegex.test(body)) return true;
@@ -292,13 +300,37 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
       .with({ type: 'command', cmd: P.union('docker', 'docker.exe', 'docker.bat', 'docker-compose', 'docker-compose.exe', 'docker-compose.bat') }, (p) => {
         const runExecIdx = p.cmdArgs.findIndex(a => a === 'run' || a === 'exec');
         if (runExecIdx !== -1) {
-            // Find first positional argument after run/exec that doesn't start with '-'
-            // This is naive but works for the regex matcher since we just need the string
-            const remaining = p.cmdArgs.slice(runExecIdx + 1).filter(a => !a.startsWith('-'));
-            if (remaining.length > 0) {
-                // Return everything after the first non-flag argument (which is usually the image or container)
-                return remaining.slice(1).join(' ');
+          const dockerValueFlags = ['-v', '--volume', '-p', '--publish', '--name', '-e', '--env', '--env-file', '--build-arg', '-f', '--file', '-w', '--workdir', '-u', '--user', '--network', '--entrypoint', '-m', '--memory', '--cpus', '--label', '--hostname', '--add-host', '--dns', '--cap-add', '--cap-drop', '--device', '--log-driver', '--log-opt', '--restart', '--mount', '--tmpfs', '--ulimit', '--pid', '--ipc', '--uts', '--userns', '--cgroupns', '--runtime', '--isolation', '--security-opt', '--storage-opt', '--sysctl', '--link', '--health-cmd', '--health-interval', '--health-retries', '--health-timeout', '--stop-signal', '--stop-timeout', '--shm-size', '--gpus', '--ip', '--ip6', '--mac-address', '--init', '--read-only', '--sig-proxy', '--platform', '--pull', '-l', '-h', '--group-add', '--expose', '--domainname', '--blkio-weight', '--cidfile', '--cgroup-parent'];
+          let skipNextValue = false;
+          let containerName: string | null = null;
+          let containerCmd: string | null = null;
+          const containerCmdArgs: string[] = [];
+
+          for (let i = runExecIdx + 1; i < p.cmdArgs.length; i++) {
+            const arg = p.cmdArgs[i];
+            if (skipNextValue) { skipNextValue = false; continue; }
+            if (arg === '-T' || arg === '--no-TTY') continue;
+            if (containerName === null && arg.startsWith('-')) {
+              if (dockerValueFlags.includes(arg) || (arg.startsWith('--') && arg.includes('='))) {
+                if (!arg.includes('=')) skipNextValue = true;
+              }
+              continue;
             }
+            if (containerName === null) { containerName = arg; continue; }
+            if (containerCmd === null) { containerCmd = arg; continue; }
+            containerCmdArgs.push(arg);
+          }
+
+          if (containerCmd === null) return null;
+
+          const baseCmd = containerCmd.toLowerCase().replace(/\.exe$/, '');
+          if (['sh', 'bash', 'zsh', 'pwsh', 'powershell', 'cmd'].includes(baseCmd)) {
+            const cIdx = containerCmdArgs.findIndex(a => ['-c', '-command', '/c'].includes(a.toLowerCase()));
+            if (cIdx !== -1 && cIdx + 1 < containerCmdArgs.length) {
+              return containerCmdArgs.slice(cIdx + 1).join(' ').replace(/^['"]|['"]$/g, '').trim();
+            }
+          }
+          return [containerCmd, ...containerCmdArgs].join(' ');
         }
         return null;
       })
