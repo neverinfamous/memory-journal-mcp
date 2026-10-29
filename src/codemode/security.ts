@@ -192,8 +192,8 @@ export class CodeModeSecurityManager {
                 const actualKb = Math.ceil(actualBytes / 1024)
                 const limitKb = Math.ceil(this.config.maxResultSize / 1024)
                 errors.push(
-                    `Result exceeds maximum size of ${String(limitKb)} KB (${String(actualKb)} KB returned). ` +
-                        `Extract specific fields or aggregate data before returning. ` +
+                    `🛠️ AUTONOMOUS HEALING: Result exceeds maximum size of ${String(limitKb)} KB (${String(actualKb)} KB returned). ` +
+                        `Extract specific fields or aggregate data before returning, or pass max_result_size in mj_execute_code parameters. ` +
                         `Example: instead of \`return await mj.github.getKanbanBoard(5)\`, use ` +
                         `\`const b = await mj.github.getKanbanBoard(5); return { columns: b.columns?.length ?? 0, totalItems: b.totalItems }\``
                 )

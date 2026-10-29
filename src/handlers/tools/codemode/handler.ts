@@ -1791,6 +1791,58 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                     if (userContext['project_id'] === undefined) userContext['project_id'] = resolvedProjectNumber;
                     if (userContext['projectId'] === undefined) userContext['projectId'] = resolvedProjectNumber;
                     
+                    // Resolve requested maxResultSize with unit support (Layer 2 Dispatcher Healing)
+                    const parseSizeInBytes = (val: unknown): number | undefined => {
+                        if (typeof val === 'number') {
+                            return !Number.isNaN(val) && val > 0 ? val : undefined
+                        }
+                        if (typeof val === 'string') {
+                            const trimmed = val.trim()
+                            const match = /^(\d+(?:\.\d+)?)\s*(kb|mb|bytes|b)?$/i.exec(trimmed)
+                            if (match?.[1] !== undefined) {
+                                const num = parseFloat(match[1])
+                                const unit = (match[2] ?? 'b').toLowerCase()
+                                if (unit === 'mb') return Math.round(num * 1024 * 1024)
+                                if (unit === 'kb') return Math.round(num * 1024)
+                                return Math.round(num)
+                            }
+                            const parsed = parseInt(trimmed, 10)
+                            return !Number.isNaN(parsed) && parsed > 0 ? parsed : undefined
+                        }
+                        return undefined
+                    }
+
+                    let requestedMaxResultSize = parseSizeInBytes(
+                        input.max_result_size ??
+                        input.maxResultSize ??
+                        input.max_result_size_bytes ??
+                        input.maxResultSizeBytes
+                    )
+
+                    if (requestedMaxResultSize === undefined) {
+                        const rawKb = parseSizeInBytes(input.max_result_size_kb ?? input.maxResultSizeKb)
+                        if (rawKb !== undefined) {
+                            requestedMaxResultSize = rawKb * 1024
+                        }
+                    }
+
+                    if (requestedMaxResultSize === undefined && typeof userContext === 'object' && userContext !== null) {
+                        const ctxSize = parseSizeInBytes(
+                            userContext['max_result_size'] ??
+                            userContext['maxResultSize'] ??
+                            userContext['max_result_size_bytes'] ??
+                            userContext['maxResultSizeBytes']
+                        )
+                        if (ctxSize !== undefined) {
+                            requestedMaxResultSize = ctxSize
+                        } else {
+                            const ctxKb = parseSizeInBytes(userContext['max_result_size_kb'] ?? userContext['maxResultSizeKb'])
+                            if (ctxKb !== undefined) {
+                                requestedMaxResultSize = ctxKb * 1024
+                            }
+                        }
+                    }
+
                     // IMPORTANT: The worker relies on capturing the AuthContext from AsyncLocalStorage.
                     // We must run the execution wrapped in the current context so the worker thread
                     // can read the identical context values via getAuthContext().
@@ -1810,7 +1862,8 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                                     schemas,
                                     input.timeout ?? input.timeout_ms,
                                     userContext,
-                                    input.dry_run
+                                    input.dry_run,
+                                    requestedMaxResultSize
                                 )
                             })
                         } else {
@@ -1820,7 +1873,8 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                                 schemas,
                                 input.timeout ?? input.timeout_ms,
                                 userContext,
-                                input.dry_run
+                                input.dry_run,
+                                requestedMaxResultSize
                             )
                         }
                     }

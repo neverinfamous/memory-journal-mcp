@@ -2029,6 +2029,123 @@ return { success: true, projectId };
             }
         })
     })
+
+    describe('Layer 3 & 1: Code Mode Result Size Egress Guardrail & Compaction (agent-issues.jsonl regression)', () => {
+        it('should preserve and parse max_result_size and its aliases in ExecuteCodeSchema', () => {
+            const parsed1 = ExecuteCodeSchema.parse({
+                code: 'return 1',
+                max_result_size: 250000,
+            })
+            expect(parsed1['max_result_size']).toBe(250000)
+
+            const parsed2 = ExecuteCodeSchema.parse({
+                code: 'return 1',
+                maxResultSize: 300000,
+                max_result_size_kb: 500,
+            })
+            expect(parsed2['maxResultSize']).toBe(300000)
+            expect(parsed2['max_result_size_kb']).toBe(500)
+        })
+
+        it('should forward requested maxResultSize to the sandbox execution', async () => {
+            const { getCodeModeTools } = await import('../src/handlers/tools/codemode/handler.js')
+            const singletonState = await import('../src/handlers/tools/codemode/singleton-state.js')
+            let capturedMaxResultSize: number | undefined
+            const mockPool = {
+                execute: async (
+                    _code: string,
+                    _apiBindings: unknown,
+                    _schemas: unknown,
+                    _timeout: unknown,
+                    _userContext: unknown,
+                    _dryRun: unknown,
+                    maxResultSize?: number
+                ) => {
+                    capturedMaxResultSize = maxResultSize
+                    return { success: true, result: { status: 'ok' } }
+                }
+            }
+            const spy = vi.spyOn(singletonState, 'getSandboxPool').mockReturnValue(mockPool as any)
+
+            try {
+                const mockContext = {
+                    config: {
+                        codemodeEnabled: true,
+                        defaultProjectNumber: 5,
+                        projectRegistry: { 'memory-journal-mcp': { project_number: 5, path: '/dummy' } }
+                    },
+                    db: { getHealthStatus: () => ({ status: 'ok' }) },
+                    runtime: {
+                        maintenanceManager: {
+                            withActiveJob: (fn: any) => fn(),
+                            acquireMaintenanceLock: async () => {},
+                            releaseMaintenanceLock: () => {},
+                        }
+                    },
+                    io: { allowedRoots: ['/dummy'] }
+                } as any
+
+                const tools = getCodeModeTools(mockContext)
+                const executeCodeTool = tools.find(t => t.name === 'mj_execute_code')
+                expect(executeCodeTool).toBeDefined()
+
+                await executeCodeTool?.handler({
+                    code: 'return { status: "ok" }',
+                    max_result_size: '250KB'
+                })
+
+                expect(capturedMaxResultSize).toBe(250 * 1024)
+            } finally {
+                spy.mockRestore()
+            }
+        })
+
+        it('should successfully execute query and compact oversized structured result exceeding 100KB boundary', async () => {
+            const { WorkerSandbox } = await import('../src/codemode/worker-sandbox.js')
+            const sandbox = new WorkerSandbox()
+            try {
+                // Generate 50 entries with ~2KB each (>100KB total) similar to agent-issues.jsonl
+                const entries = Array.from({ length: 50 }, (_, i) => ({
+                    id: i + 1,
+                    title: `Entry ${i + 1}`,
+                    content: 'Detailed journal content '.repeat(100),
+                    tags: ['test', 'regression', 'codemode'],
+                }))
+
+                const bindings = {
+                    search: {
+                        search_entries: async () => ({
+                            success: true,
+                            entries,
+                        }),
+                    },
+                    analytics: {
+                        get_statistics: async () => ({
+                            success: true,
+                            totalEntries: 50,
+                            projectBreakdown: { 5: 50 },
+                        }),
+                    },
+                }
+
+                // The exact code pattern from agent-issues.jsonl
+                const code = `
+                    const defaultWs = await mj.search.search_entries({ workspace_id: 'default', limit: 50 });
+                    const stats = await mj.analytics.get_statistics({ period: 'all', project_breakdown: true, workspace_id: '*' });
+                    return { defaultWs, projectBreakdown: stats.projectBreakdown, totalEntries: stats.totalEntries };
+                `
+
+                const result = await sandbox.execute(code, bindings)
+                expect(result.success).toBe(true)
+                const res = result.result as Record<string, unknown>
+                expect(res).toBeDefined()
+                expect(res['totalEntries']).toBe(50)
+                expect(res['_compaction_notice']).toBeDefined()
+            } finally {
+                sandbox.dispose()
+            }
+        })
+    })
 })
 
 

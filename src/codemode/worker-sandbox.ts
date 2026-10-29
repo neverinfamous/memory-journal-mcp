@@ -172,7 +172,8 @@ export class WorkerSandbox {
         schemas?: Record<string, Record<string, string>>,
         timeoutMs?: number,
         contextObj?: Record<string, unknown>,
-        readonlyMode?: boolean
+        readonlyMode?: boolean,
+        maxResultSizeOverride?: number
     ): Promise<SandboxResult> {
         let effectiveTimeout = timeoutMs ?? this.options.timeoutMs
         if (effectiveTimeout > 30000) effectiveTimeout = 30000
@@ -223,9 +224,11 @@ export class WorkerSandbox {
                 void handleRpcRequest(msg, apiBindings, hostPort, methodList)
             })
 
-            let maxResultSize = process.env['CODE_MODE_MAX_RESULT_SIZE']
-                ? parseInt(process.env['CODE_MODE_MAX_RESULT_SIZE'], 10)
-                : 100 * 1024
+            let maxResultSize = maxResultSizeOverride
+            if (maxResultSize === undefined || Number.isNaN(maxResultSize) || maxResultSize <= 0) {
+                const envVal = process.env['CODE_MODE_MAX_RESULT_SIZE']
+                maxResultSize = envVal ? parseInt(envVal, 10) : 100 * 1024
+            }
 
             if (Number.isNaN(maxResultSize) || maxResultSize <= 0) {
                 maxResultSize = 100 * 1024
@@ -381,7 +384,8 @@ export class WorkerSandboxPool {
         schemas?: Record<string, Record<string, string>>,
         timeoutMs?: number,
         contextObj?: Record<string, unknown>,
-        readonlyMode?: boolean
+        readonlyMode?: boolean,
+        maxResultSizeOverride?: number
     ): Promise<SandboxResult> {
         let availableSandbox = this.pool.find((s) => !s.isBusy)
 
@@ -404,7 +408,8 @@ export class WorkerSandboxPool {
             schemas,
             timeoutMs,
             contextObj,
-            readonlyMode
+            readonlyMode,
+            maxResultSizeOverride
         )
     }
 

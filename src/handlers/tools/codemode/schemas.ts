@@ -72,6 +72,12 @@ export const ExecuteCodeSchema = z.preprocess((val) => {
     timeout_ms: z.coerce.number().optional(),
     timeout: z.coerce.number().optional(),
     readonly: z.boolean().optional(),
+    max_result_size: relaxedNumber().optional(),
+    maxResultSize: relaxedNumber().optional(),
+    max_result_size_kb: relaxedNumber().optional(),
+    maxResultSizeKb: relaxedNumber().optional(),
+    max_result_size_bytes: relaxedNumber().optional(),
+    maxResultSizeBytes: relaxedNumber().optional(),
 }).catchall(z.unknown()))
 
 export const ExecuteCodeSchemaMcp = z.object({
@@ -149,4 +155,12 @@ export const ExecuteCodeSchemaMcp = z.object({
     ).describe(
         'Maximum execution time in milliseconds before the sandbox forcibly terminates the script (max: 30000ms).'
     ),
+    max_result_size: relaxedNumber()
+        .optional()
+        .describe(
+            'Maximum allowed result size in bytes (default: 102400 / 100KB, max: 52428800 / 50MB). Pass a higher limit (e.g. 200000 or 524288) when returning large datasets or multi-entry contents to avoid result truncation.'
+        ),
+    maxResultSize: relaxedNumber()
+        .optional()
+        .describe('Alias for max_result_size.'),
 })
