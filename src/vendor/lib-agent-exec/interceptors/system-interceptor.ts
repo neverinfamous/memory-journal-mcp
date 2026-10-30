@@ -186,6 +186,12 @@ export function systemInterceptor(ctx: ExecutionContext): void {
           if (isWord) rgFlags.push('-w');
           if (!isRegex) rgFlags.push('-F');
           payload.code = `rg ${rgFlags.join(' ')} ${escapeUnixArg(pattern, false)} ${escapeUnixArg(convertToWslPath(searchPath), false)}`;
+        } else if (searchPath.length > 0) {
+          console.error(`\n   💡 AGENT HINT: 'grep_search' executed directly in eval code without pattern.`);
+          console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-translating 'grep_search' to ripgrep (rg) --files... (Frictionless Recovery)\x1b[0m`);
+          payload.target = 'wsl2';
+          payload.interpreter = 'bash';
+          payload.code = `rg --files ${escapeUnixArg(convertToWslPath(searchPath), false)}`;
         }
       } else {
         const listDirMatch = trimmedCode.match(/^(?:(?:bun|npm|pnpm|yarn|npx|node|tsx|ts-node)\s+(?:run\s+)?)?(?:(?:\.[/\\])?(?:\.agents[/\\]scripts[/\\]))?list_dir(?:\.ts|\.js)?\b\s*(.*)$/i);
