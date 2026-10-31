@@ -269,6 +269,14 @@ export function buildServerOptions(
         metricsPath: catchConfig(() => resolver.resolve<string>('metricsPath', 'METRICS_PATH'), undefined),
         metricsPort: catchConfig(() => resolver.resolveInt('metricsPort', 'MJ_METRICS_PORT', 0, 65535), undefined),
         configFilePath: catchConfig(() => resolver.loadedConfigPath, undefined),
+        maxToolInputElements: catchConfig(() => {
+            const raw = resolver.resolve<unknown>('maxToolInputElements', 'MAX_TOOL_INPUT_ELEMENTS');
+            if (raw === undefined || raw === null || raw === '') return undefined;
+            if (raw === Infinity || (typeof raw === 'string' && raw.trim().toLowerCase() === 'infinity')) {
+                return Infinity;
+            }
+            return resolver.resolveInt('maxToolInputElements', 'MAX_TOOL_INPUT_ELEMENTS', 0);
+        }, undefined),
     };
 
     return { serverOptions, transport, db, teamDb, host }

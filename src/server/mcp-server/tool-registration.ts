@@ -20,6 +20,30 @@ import { applyArgInterceptions } from '../../codemode/param-normalizer.js'
 import type { ServerContext, ServerOptions } from './types.js'
 import type { ToolRegistration, ToolHandlerConfig } from '../../types/index.js'
 
+/**
+ * Default maximum number of array elements and object properties allowed across a
+ * single tool input payload before Zod validation runs.
+ */
+export const DEFAULT_MAX_TOOL_INPUT_ELEMENTS = 25_000
+
+/**
+ * Resolves the configured `maxToolInputElements` option into the value passed to `McpServer`.
+ * - `undefined` -> `DEFAULT_MAX_TOOL_INPUT_ELEMENTS` (25,000)
+ * - `0` or `Infinity` -> `Infinity` (disables the SDK's element limit check)
+ * - positive number -> passed through as-is
+ */
+export function resolveEffectiveMaxToolInputElements(
+    configured: number | undefined
+): number {
+    if (configured === undefined) {
+        return DEFAULT_MAX_TOOL_INPUT_ELEMENTS
+    }
+    if (configured === 0 || configured === Infinity) {
+        return Infinity
+    }
+    return configured
+}
+
 export function createServerInstance(
     context: ServerContext,
     options: ServerOptions,
@@ -92,6 +116,7 @@ export function createServerInstance(
                     }
                 },
                 instructions: getInstructions(),
+                maxToolInputElements: resolveEffectiveMaxToolInputElements(options.maxToolInputElements),
             }
         )
 

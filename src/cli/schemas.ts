@@ -29,7 +29,8 @@ export const safeCoerceValidationStatus = z.preprocess((val) => {
 export const coreOptionsSchema = z.object({
     config: z.string().optional(),
     dumpConfig: z.boolean().optional(),
-    logLevel: z.string().optional()
+    logLevel: z.string().optional(),
+    maxToolInputElements: z.string().optional()
 })
 
 export const databaseOptionsSchema = z.object({

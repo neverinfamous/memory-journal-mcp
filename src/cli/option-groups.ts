@@ -10,6 +10,10 @@ export function addCoreOptions(command: Command): Command {
             .option('--config <path>', 'Path to configuration file (.yaml, .yml, .json) (env: MEMORY_JOURNAL_CONFIG)')
             .option('--dump-config', 'Print effective configuration and exit')
             .option('--log-level <level>', 'Log level: debug, info, warning, error', 'info')
+            .option(
+                '--max-tool-input-elements <count>',
+                'Maximum number of array/object elements allowed in tool input arguments (default: 25000, 0 = disabled, env: MAX_TOOL_INPUT_ELEMENTS)'
+            )
     })
 }
 

@@ -63,6 +63,8 @@ export interface ServerOptions {
     persistMetrics?: boolean
     metricsPath?: string
     configFilePath?: string
+    // MCP tool input element cap (0 or Infinity disables; defaults to DEFAULT_MAX_TOOL_INPUT_ELEMENTS)
+    maxToolInputElements?: number
 }
 
 import type { McpServer } from '@modelcontextprotocol/server'
