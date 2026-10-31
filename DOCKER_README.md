@@ -45,8 +45,22 @@ Memory Journal builds your project's long-term memory. It bridges fragmented AI 
 | **Knowledge & Search**        | Find entries instantly using hybrid search and visualize relationships with Mermaid graphs. Auto-prune low-value entries to maintain search relevance.                                               |
 | **Code Mode**                 | Execute multi-step operations efficiently in a secure sandbox to drastically reduce token usage.                                                                                                     |
 | **Team Collaboration**        | Share databases across teams with cross-project insights and role-based access control.                                                                                                              |
+| **Multi-Tenant Workspaces**   | Isolate project journals on a single SQLite database via `workspace_id`, with automatic resolution from `PROJECT_REGISTRY`, tags, or working directory.                                             |
 | **Data & Architecture**       | Export schemas safely, sync Markdown directories, secure data with encryption and automated backups, and handle errors effectively.                                                                  |
 | **Agent Collaboration**       | Share context between agents, suggest reusable rules, and automate tasks like issue triage and PR reviews.                                                                                           |
+
+---
+
+### Isolate Environments with Multi-Tenancy
+
+Memory Journal supports multi-tenancy out of the box via the `workspace_id` construct, acting as a strict isolation barrier for multiple journals sharing the same SQLite database file.
+
+- **Auto-Resolution:** When `workspace_id` is omitted, the server automatically resolves the target workspace by matching `project_number` against `PROJECT_REGISTRY`, matching content/tag keyword aliases, or inspecting `process.cwd()`, before falling back to `DEFAULT_WORKSPACE_ID` (default: `default`).
+- **Data Partitioning & Cross-Workspace Queries:** Core CRUD, Search, and Analytics tools accept `workspace_id` (e.g., `workspace_id: "alpha"`) to scope operations strictly to that workspace. Read and search tools also accept `workspace_id: "*"` to query across all workspaces.
+- **Immutability:** A `workspace_id` is permanently assigned upon entry creation and **cannot be changed** afterward.
+- **Server Config:** Set `--default-workspace-id` (or `DEFAULT_WORKSPACE_ID`) to configure the default fallback workspace for the container.
+
+---
 
 _Suggested Rule (Add to AGENTS.md, GEMINI.md, system prompts, etc.)_
 
@@ -275,7 +289,8 @@ Restart Cursor or your MCP client and start journaling!
 
 - **`--config <path>`**: Load settings from `.yaml` or `.json`. Use `--dump-config` to debug precedence.
 - **`DB_ENCRYPTION_KEY`**: Enables SQLCipher at-rest encryption.
-- **`PROJECT_REGISTRY`**: Maps repo names to paths for seamless multi-project GitHub context routing.
+- **`DEFAULT_WORKSPACE_ID` / `--default-workspace-id`**: Sets the default workspace for multi-tenant isolation on a shared SQLite database (default: `default`).
+- **`PROJECT_REGISTRY`**: Maps repo names to paths and project numbers for automatic `workspace_id` resolution and multi-project GitHub context routing.
 - **`MCP_AGENT_HEALING` / `--no-agent-healing`**: Set `MCP_AGENT_HEALING=false` (or pass `--no-agent-healing`) to disable autonomous MCP tool and parameter healing/interception.
 - **`ARCHIVE_OLDER_THAN_DAYS` / `HARD_DELETE_OLDER_THAN_DAYS` / `PRUNE_DRY_RUN`**: Control the auto-prune data lifecycle. Test rules safely with `--prune-dry-run`.
 

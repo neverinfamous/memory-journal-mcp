@@ -75,8 +75,8 @@ Memory Journal builds your project's long-term memory. It bridges fragmented AI 
 
 Memory Journal supports multi-tenancy out of the box via the `workspace_id` construct, acting as a strict isolation barrier for multiple journals sharing the same SQLite database file.
 
-- **Default Isolation:** If omitted, all entries are created in and retrieved from the `default` workspace.
-- **Data Partitioning:** Core CRUD, Search, and Analytics tools accept a `workspace_id` parameter (e.g., `workspace_id: "alpha"`) to scope operations strictly to that workspace.
+- **Auto-Resolution:** When `workspace_id` is omitted, the server automatically resolves the target workspace by matching `project_number` against `PROJECT_REGISTRY`, matching content/tag keyword aliases, or inspecting `process.cwd()`, before falling back to `DEFAULT_WORKSPACE_ID` (default: `default`).
+- **Data Partitioning & Cross-Workspace Queries:** Core CRUD, Search, and Analytics tools accept `workspace_id` (e.g., `workspace_id: "alpha"`) to scope operations strictly to that workspace. Read and search tools also accept `workspace_id: "*"` to query across all workspaces.
 - **Immutability:** A `workspace_id` is permanently assigned upon entry creation and **cannot be changed** afterward.
 - **Server Config:** Set `--default-workspace-id` (or the `DEFAULT_WORKSPACE_ID` environment variable) to configure the default fallback workspace for the server instance, allowing you to run multiple isolated journal interfaces on a single physical database.
 
@@ -564,6 +564,7 @@ memory-journal-mcp --transport http --port 3000
 | **Core Database** | |
 | `DB_PATH`                                      | Path to the personal journal SQLite database               |
 | `TEAM_DB_PATH`                                 | Path to the shared team SQLite database                    |
+| `DEFAULT_WORKSPACE_ID`                         | Default workspace ID for multi-tenant isolation (`default`)|
 | `GITHUB_TOKEN`                                 | Personal access token for GitHub integrations              |
 | `PROJECT_REGISTRY`                             | JSON map of repo names to local paths and project numbers  |
 | **Security & Tooling** | |
