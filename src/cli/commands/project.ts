@@ -9,26 +9,33 @@ import { DatabaseAdapterFactory } from '../../database/adapter-factory.js'
 import { ConfigResolver } from '../../utils/config-resolver.js'
 import { buildServerOptions } from '../server-options-builder.js'
 
-function loadConfig(): Record<string, unknown> {
-    if (!fs.existsSync(configPath)) {
+function getConfigPath(options?: Record<string, unknown>): string {
+    const custom = (options?.['config'] as string | undefined) ?? process.env['MEMORY_JOURNAL_CONFIG']
+    return custom ? path.resolve(custom) : configPath
+}
+
+function loadConfig(options?: Record<string, unknown>): Record<string, unknown> {
+    const targetPath = getConfigPath(options)
+    if (!fs.existsSync(targetPath)) {
         return { projectRegistry: {} }
     }
     try {
-        const content = fs.readFileSync(configPath, 'utf-8')
+        const content = fs.readFileSync(targetPath, 'utf-8')
         return JSON.parse(content) as Record<string, unknown>
     } catch (e) {
-        process.stderr.write(`Error reading config file ${configPath}: ${String(e)}\n`)
+        process.stderr.write(`Error reading config file ${targetPath}: ${String(e)}\n`)
         return { projectRegistry: {} }
     }
 }
 
-function saveConfig(config: Record<string, unknown>): void {
-    fs.mkdirSync(path.dirname(configPath), { recursive: true })
-    fs.writeFileSync(configPath, JSON.stringify(config, null, 4), 'utf-8')
+function saveConfig(config: Record<string, unknown>, options?: Record<string, unknown>): void {
+    const targetPath = getConfigPath(options)
+    fs.mkdirSync(path.dirname(targetPath), { recursive: true })
+    fs.writeFileSync(targetPath, JSON.stringify(config, null, 4), 'utf-8')
 }
 
 export function projectListAction(options: Record<string, unknown>, _command: Command): void {
-    const config = loadConfig()
+    const config = loadConfig(options)
     const registry = (config['projectRegistry'] ?? {}) as Record<string, { path: string, project_number?: number }>
     
     if (Object.keys(registry).length === 0) {
@@ -57,7 +64,7 @@ export async function projectCreateAction(name: string, options: Record<string, 
         process.exit(1)
     }
 
-    const config = loadConfig()
+    const config = loadConfig(options)
     config['projectRegistry'] ??= {}
 
     const registry = config['projectRegistry'] as Record<string, { path: string, project_number?: number }>
@@ -77,7 +84,7 @@ export async function projectCreateAction(name: string, options: Record<string, 
         registry[name].project_number = num
     }
 
-    saveConfig(config)
+    saveConfig(config, options)
 
     process.stdout.write(`Project '${name}' successfully registered at ${absPath}.\n`)
 
@@ -128,7 +135,7 @@ export function projectUpdateAction(name: string, options: Record<string, unknow
         process.exit(1)
     }
 
-    const config = loadConfig()
+    const config = loadConfig(options)
     const registry = (config['projectRegistry'] ?? {}) as Record<string, { path: string, project_number?: number }>
 
     if (!registry[name]) {
@@ -165,18 +172,18 @@ export function projectUpdateAction(name: string, options: Record<string, unknow
     const rest = Object.fromEntries(Object.entries(registry).filter(([key]) => key !== name))
     const newRegistry = { ...rest, [targetName]: project }
     config['projectRegistry'] = newRegistry
-    saveConfig(config)
+    saveConfig(config, options)
 
     process.stdout.write(`Project '${targetName}' successfully updated.\n`)
 }
 
-export function projectDeleteAction(name: string, _options: Record<string, unknown>, _command: Command): void {
+export function projectDeleteAction(name: string, options: Record<string, unknown>, _command: Command): void {
     if (!name || name.trim() === '') {
         process.stderr.write('Project name is required.\n')
         process.exit(1)
     }
 
-    const config = loadConfig()
+    const config = loadConfig(options)
     const registry = (config['projectRegistry'] ?? {}) as Record<string, { path: string, project_number?: number }>
 
     if (!registry[name]) {
@@ -186,7 +193,7 @@ export function projectDeleteAction(name: string, _options: Record<string, unkno
 
     const rest = Object.fromEntries(Object.entries(registry).filter(([key]) => key !== name))
     config['projectRegistry'] = rest
-    saveConfig(config)
+    saveConfig(config, options)
 
     process.stdout.write(`Project '${name}' successfully deleted.\n`)
 }

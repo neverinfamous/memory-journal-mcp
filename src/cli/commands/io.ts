@@ -82,7 +82,7 @@ export async function exportMarkdownAction(options: z.infer<typeof exportMarkdow
         }))
 
         // We bypass allowedRoots check for CLI since it's run by a trusted human/agent directly
-        const result = await exportEntriesToMarkdown(exportable, options.dir, db, [])
+        const result = await exportEntriesToMarkdown(exportable, options.dir, db, [path.resolve(options.dir)])
         process.stdout.write(JSON.stringify(result, null, 2) + '\n')
     } catch (e) {
         process.stderr.write("Export markdown failed: " + (e instanceof Error ? e.message : String(e)) + '\n')
@@ -101,7 +101,7 @@ export async function importMarkdownAction(options: z.infer<typeof importMarkdow
 
         const vectorManager = new VectorSearchManager(db, { modelName: serverOptions.embeddingModel })
 
-        const result = await importMarkdownEntries(options.dir, db, { limit: 100000 }, vectorManager, [])
+        const result = await importMarkdownEntries(options.dir, db, { limit: 100000 }, vectorManager, [path.resolve(options.dir)])
         
         process.stdout.write(JSON.stringify(result, null, 2) + '\n')
     } catch (e) {
@@ -141,7 +141,7 @@ export async function importExternalAction(options: z.infer<typeof importExterna
                 const filepath = path.join(options.dir, filename)
                 handle = await fs.open(filepath, constants.O_RDONLY | constants.O_NOFOLLOW)
                 const content = await handle.readFile('utf-8')
-                const converted = convertFile(content, filename, options.format, 'note')
+                const converted = convertFile(content, filename, options.format)
 
                 if (!converted.body.trim()) {
                     continue

@@ -28,6 +28,7 @@ import { MembersManager } from './members.js'
 import { HealthOperations } from './health-operations.js'
 import { LifecycleOperations } from './lifecycle-operations.js'
 import { InsightsOperations } from './insights-operations.js'
+import { VectorOperations } from './vector-operations.js'
 
 /**
  * SQLite Database Adapter for Memory Journal using better-sqlite3 native driver
@@ -43,6 +44,7 @@ export class DatabaseAdapter implements IDatabaseAdapter {
     private healthOps: HealthOperations
     private lifecycleOps: LifecycleOperations
     private insightsOps: InsightsOperations
+    private vectorOps: VectorOperations
 
     constructor(dbPath: string, config?: ToolHandlerConfig) {
         this.connection = new NativeConnectionManager(dbPath)
@@ -55,6 +57,7 @@ export class DatabaseAdapter implements IDatabaseAdapter {
         this.healthOps = new HealthOperations(this.connection, this.backupMgr)
         this.lifecycleOps = new LifecycleOperations(this.connection)
         this.insightsOps = new InsightsOperations(this.connection)
+        this.vectorOps = new VectorOperations(this.connection)
     }
 
     async initialize(): Promise<void> {
@@ -77,16 +80,16 @@ export class DatabaseAdapter implements IDatabaseAdapter {
         return this.entriesMgr.createEntry(input)
     }
 
-    getEntryById(id: number): JournalEntry | null {
-        return this.entriesMgr.getEntryById(id)
+    getEntryById(id: number, workspaceId?: string): JournalEntry | null {
+        return this.entriesMgr.getEntryById(id, workspaceId)
     }
 
     getEntryHistory(id: number): EntryRevision[] {
         return this.entriesMgr.getEntryHistory(id)
     }
 
-    getEntryByIdIncludeDeleted(id: number): JournalEntry | null {
-        return this.entriesMgr.getEntryByIdIncludeDeleted(id)
+    getEntryByIdIncludeDeleted(id: number, workspaceId?: string): JournalEntry | null {
+        return this.entriesMgr.getEntryByIdIncludeDeleted(id, workspaceId)
     }
 
     getEntriesByIds(ids: number[]): Map<number, JournalEntry> {
@@ -113,15 +116,24 @@ export class DatabaseAdapter implements IDatabaseAdapter {
         projectNumber?: number,
         offset?: number
     ): { entries: JournalEntry[]; nextCursor?: string } {
-        return this.entriesMgr.getRecentEntries(limit ?? 10, isPersonal, sortBy, cursor, includeArchived, workspaceId, projectNumber, offset)
+        return this.entriesMgr.getRecentEntries(
+            limit ?? 10,
+            isPersonal,
+            sortBy,
+            cursor,
+            includeArchived,
+            workspaceId,
+            projectNumber,
+            offset
+        )
     }
 
     getEntriesPage(offset: number, limit: number): { entries: JournalEntry[]; nextCursor?: string } {
         return this.entriesMgr.getEntriesPage(offset, limit)
     }
 
-    getActiveEntryCount(): number {
-        return this.entriesMgr.getActiveEntryCount()
+    getActiveEntryCount(workspaceId?: string): number {
+        return this.entriesMgr.getActiveEntryCount(workspaceId)
     }
 
     updateEntry(
@@ -145,6 +157,9 @@ export class DatabaseAdapter implements IDatabaseAdapter {
             workflowStatus?: string | null
             isArchived?: boolean
             expectedVersion?: number
+            trustScore?: number
+            impactScore?: number
+            validationStatus?: 'passed' | 'failed' | 'none'
             workspaceId?: string
             targetWorkspaceId?: string
         }
@@ -172,7 +187,12 @@ export class DatabaseAdapter implements IDatabaseAdapter {
 
     // Team Membership (RBAC)
 
-    addTeamMember(author: string, role: TeamRole, addedBy?: string, displayName?: string): TeamMember {
+    addTeamMember(
+        author: string,
+        role: TeamRole,
+        addedBy?: string,
+        displayName?: string
+    ): TeamMember {
         return this.membersMgr.addMember(author, role, addedBy, displayName)
     }
 
@@ -236,11 +256,17 @@ export class DatabaseAdapter implements IDatabaseAdapter {
         return this.entriesMgr.restoreEntry(id)
     }
 
-    getDeletedEntries(options?: { limit?: number; offset?: number }): { entries: JournalEntry[]; count: number } {
+    getDeletedEntries(options?: {
+        limit?: number
+        offset?: number
+    }): { entries: JournalEntry[]; count: number } {
         return this.entriesMgr.getDeletedEntries(options)
     }
 
-    createEntries(inputs: CreateEntryInput[]): { created: JournalEntry[]; errors: { index: number; error: Error }[] } {
+    createEntries(inputs: CreateEntryInput[]): {
+        created: JournalEntry[]
+        errors: { index: number; error: Error }[]
+    } {
         return this.entriesMgr.createEntries(inputs)
     }
 
@@ -265,23 +291,25 @@ export class DatabaseAdapter implements IDatabaseAdapter {
             workflowStatus?: string | null
             isArchived?: boolean
             expectedVersion?: number
+            trustScore?: number
+            impactScore?: number
+            validationStatus?: 'passed' | 'failed' | 'none'
         }[]
     ): { updated: JournalEntry[]; notFound: number[]; errors: { id: number; error: Error }[] } {
         return this.entriesMgr.updateEntries(updates)
     }
 
-    deleteEntries(ids: number[], permanent = false): { deleted: number[]; notFound: number[]; errors: { id: number; error: Error }[] } {
-        // deleteEntries now manages its own per-item error capturing internally.
-        // But we still wrap the overall process in a transaction to handle the vector deletion.
+    deleteEntries(
+        ids: number[],
+        permanent = false
+    ): { deleted: number[]; notFound: number[]; errors: { id: number; error: Error }[] } {
         return this.executeInTransaction(() => {
             const result = this.entriesMgr.deleteEntries(ids, permanent)
             for (const id of result.deleted) {
                 try {
                     this.deleteVector(id)
                 } catch {
-                    // Vectors failure shouldn't fail the entry deletion, but we could record it
-                    // Actually, if it throws, the transaction rolls back, breaking partial success.
-                    // Let's catch it.
+                    // Vectors failure shouldn't fail the entry deletion
                 }
             }
             return result
@@ -308,8 +336,16 @@ export class DatabaseAdapter implements IDatabaseAdapter {
             includeHighlights?: boolean
             fuzzy_match?: boolean
             auto_correct?: boolean
+            workspaceId?: string
         }
-    ): { entries: JournalEntry[]; nextCursor?: string; degraded?: boolean; highlights?: { id: number; snippet: string }[]; suggestions?: string[]; correctedQuery?: string } {
+    ): {
+        entries: JournalEntry[]
+        nextCursor?: string
+        degraded?: boolean
+        highlights?: { id: number; snippet: string }[]
+        suggestions?: string[]
+        correctedQuery?: string
+    } {
         return this.entriesMgr.searchEntries(query, options)
     }
 
@@ -327,6 +363,7 @@ export class DatabaseAdapter implements IDatabaseAdapter {
             startDate?: string
             endDate?: string
             includeArchived?: boolean
+            workspaceId?: string
         }
     ): { tags: { name: string; count: number }[]; entryTypes: { name: string; count: number }[] } {
         return this.entriesMgr.getSearchFacets(query, options)
@@ -347,18 +384,26 @@ export class DatabaseAdapter implements IDatabaseAdapter {
             sortBy?: 'timestamp' | 'importance'
             cursor?: string
             includeArchived?: boolean
+            workspaceId?: string
         }
     ): { entries: JournalEntry[]; nextCursor?: string; degraded?: boolean } {
         return this.entriesMgr.searchByDateRange(startDate, endDate, options)
     }
 
     getStatistics(
-        groupBy?: 'day' | 'week' | 'month',
+        groupBy?: 'day' | 'week' | 'month' | 'year',
         startDate?: string,
         endDate?: string,
-        projectBreakdown?: boolean
+        projectBreakdown?: boolean,
+        workspaceId?: string
     ): ReturnType<EntriesManager['getStatistics']> {
-        return this.entriesMgr.getStatistics(groupBy, startDate, endDate, projectBreakdown)
+        return this.entriesMgr.getStatistics(
+            groupBy,
+            startDate,
+            endDate,
+            projectBreakdown,
+            workspaceId
+        )
     }
 
     getTagsForEntry(entryId: number): string[] {
@@ -452,137 +497,64 @@ export class DatabaseAdapter implements IDatabaseAdapter {
     // ========================================================================
 
     getVectorMetadata(key: string): string | undefined {
-        return this.connection.getVectorMetadata(key)
+        return this.vectorOps.getVectorMetadata(key)
     }
 
     setVectorMetadata(key: string, value: string): void {
-        this.connection.setVectorMetadata(key, value)
+        this.vectorOps.setVectorMetadata(key, value)
     }
 
     createVecTable(dimensions: number): void {
-        this.connection.createVecTable(dimensions)
+        this.vectorOps.createVecTable(dimensions)
     }
 
     dropVecTable(): void {
-        this.connection.dropVecTable()
+        this.vectorOps.dropVecTable()
     }
 
     upsertVector(entryId: number, embedding: Float32Array): void {
-        const bigId = BigInt(entryId)
-        const db = this.connection.getNativeDb()
-        db.prepare('DELETE FROM vec_embeddings WHERE entry_id = ?').run(bigId)
-        db.prepare('INSERT INTO vec_embeddings(entry_id, embedding) VALUES (?, ?)').run(
-            bigId,
-            embedding
-        )
+        this.vectorOps.upsertVector(entryId, embedding)
     }
 
     upsertVectors(vectors: { entryId: number; embedding: Float32Array }[]): void {
-        const db = this.connection.getNativeDb()
-        const deleteStmt = db.prepare('DELETE FROM vec_embeddings WHERE entry_id = ?')
-        const insertStmt = db.prepare(
-            'INSERT INTO vec_embeddings(entry_id, embedding) VALUES (?, ?)'
-        )
-
-        db.transaction(() => {
-            for (const vec of vectors) {
-                const bigId = BigInt(vec.entryId)
-                deleteStmt.run(bigId)
-                insertStmt.run(bigId, vec.embedding)
-            }
-        })()
+        this.vectorOps.upsertVectors(vectors)
     }
 
     searchVectors(
         embedding: Float32Array,
         limit: number
     ): { entry_id: number; distance: number }[] {
-        const db = this.connection.getNativeDb()
-        return db
-            .prepare(
-                `SELECT v.entry_id, v.distance 
-                 FROM vec_embeddings v
-                 LEFT JOIN memory_journal mj ON v.entry_id = mj.id
-                 WHERE v.embedding MATCH ? AND v.k = ? AND mj.deleted_at IS NULL 
-                 ORDER BY v.distance LIMIT ?`
-            )
-            .all(embedding, limit * 4, limit) as { entry_id: number; distance: number }[]
+        return this.vectorOps.searchVectors(embedding, limit)
     }
 
     getVector(entryId: number): Float32Array | null {
-        try {
-            const db = this.connection.getNativeDb()
-            const row = db
-                .prepare('SELECT embedding FROM vec_embeddings WHERE entry_id = ?')
-                .get(BigInt(entryId)) as { embedding: Buffer } | undefined
-            if (!row) return null
-            return new Float32Array(row.embedding.buffer, row.embedding.byteOffset)
-        } catch (error: unknown) {
-            if (error instanceof Error && error.message.includes('no such table')) {
-                return null
-            }
-            throw error
-        }
+        return this.vectorOps.getVector(entryId)
     }
 
     deleteVector(entryId: number): void {
-        try {
-            this.connection
-                .getNativeDb()
-                .prepare('DELETE FROM vec_embeddings WHERE entry_id = ?')
-                .run(BigInt(entryId))
-        } catch (error: unknown) {
-            if (error instanceof Error && error.message.includes('no such table')) {
-                return
-            }
-            throw error
-        }
+        this.vectorOps.deleteVector(entryId)
     }
 
     clearVectors(): void {
-        try {
-            this.connection.getNativeDb().prepare('DELETE FROM vec_embeddings').run()
-        } catch (error: unknown) {
-            if (error instanceof Error && error.message.includes('no such table')) {
-                return
-            }
-            throw error
-        }
+        this.vectorOps.clearVectors()
     }
 
     getVectorCount(): number {
-        try {
-            const row = this.connection
-                .getNativeDb()
-                .prepare('SELECT COUNT(*) as count FROM vec_embeddings')
-                .get() as { count: number } | undefined
-            return row?.count ?? 0
-        } catch (error: unknown) {
-            if (error instanceof Error && error.message.includes('no such table')) {
-                return 0
-            }
-            throw error
-        }
+        return this.vectorOps.getVectorCount()
     }
 
     cleanupStaleVectors(): number {
-        try {
-            const db = this.connection.getNativeDb()
-            const result = db
-                .prepare(
-                    'DELETE FROM vec_embeddings WHERE entry_id NOT IN (SELECT id FROM memory_journal WHERE deleted_at IS NULL)'
-                )
-                .run()
-            return result.changes
-        } catch (error: unknown) {
-            if (error instanceof Error && error.message.includes('no such table')) {
-                return 0
-            }
-            throw error
-        }
+        return this.vectorOps.cleanupStaleVectors()
     }
 
-    executeDataLifecycle(options: { archiveOlderThanDays: number; pruneOlderThanDays: number; hardDeleteOlderThanDays: number; importanceThreshold: number; dryRun?: boolean; excludeTags?: string[]; }): ReturnType<IDatabaseAdapter["executeDataLifecycle"]> {
+    executeDataLifecycle(options: {
+        archiveOlderThanDays: number
+        pruneOlderThanDays: number
+        hardDeleteOlderThanDays: number
+        importanceThreshold: number
+        dryRun?: boolean
+        excludeTags?: string[]
+    }): ReturnType<IDatabaseAdapter['executeDataLifecycle']> {
         return this.lifecycleOps.executeDataLifecycle(options)
     }
 
@@ -637,15 +609,29 @@ export class DatabaseAdapter implements IDatabaseAdapter {
         return this.insightsOps.computeDigest()
     }
 
-    getCrossProjectInsights(options:  { startDate?: string; endDate?: string; minEntries: number; inactiveThresholdDays: number; }): ReturnType<IDatabaseAdapter["getCrossProjectInsights"]> {
+    getCrossProjectInsights(options: {
+        startDate?: string
+        endDate?: string
+        minEntries: number
+        inactiveThresholdDays: number
+    }): ReturnType<IDatabaseAdapter['getCrossProjectInsights']> {
         return this.insightsOps.getCrossProjectInsights(options)
     }
 
-    visualizeRelationships(options:  { entryId?: number; tags?: string[]; relationshipType?: string; depth: number; limit: number; }): ReturnType<IDatabaseAdapter["visualizeRelationships"]> {
+    visualizeRelationships(options: {
+        entryId?: number
+        tags?: string[]
+        relationshipType?: string
+        depth: number
+        limit: number
+    }): ReturnType<IDatabaseAdapter['visualizeRelationships']> {
         return this.insightsOps.visualizeRelationships(options)
     }
 
-    getTeamCollaborationMatrix(options:  { period: string; limit: number; }): ReturnType<IDatabaseAdapter["getTeamCollaborationMatrix"]> {
+    getTeamCollaborationMatrix(options: {
+        period: string
+        limit: number
+    }): ReturnType<IDatabaseAdapter['getTeamCollaborationMatrix']> {
         return this.insightsOps.getTeamCollaborationMatrix(options)
     }
 }
