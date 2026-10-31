@@ -381,10 +381,8 @@ export function searchDirectory(
                 }
 
                 try {
-                    const stat = fs.statSync(fullPath)
-                    if (stat.size > 2 * 1024 * 1024) continue
-
-                    const content = fs.readFileSync(fullPath, 'utf-8') // lgtm[js/file-system-race]
+                    const content = fs.readFileSync(fullPath, 'utf-8')
+                    if (content.length > 2 * 1024 * 1024) continue
                     const lines = content.split('\n')
                     for (let i = 0; i < lines.length; i++) {
                         if (results.length >= maxResults) break

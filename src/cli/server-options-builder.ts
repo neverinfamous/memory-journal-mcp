@@ -280,5 +280,5 @@ export function buildServerOptions(
         agentHealing: catchConfig(() => resolver.resolveBool('agentHealing', 'MCP_AGENT_HEALING') ?? true, true),
     };
 
-    return { serverOptions, transport, db, teamDb, host }
+    return { serverOptions, transport, db, teamDb, host };
 }

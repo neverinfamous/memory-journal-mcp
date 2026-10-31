@@ -513,7 +513,7 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
             if (methodName !== 'cross_team_search' && methodName !== 'crossTeamSearch') {
                 obj['auto_correct'] = isFuzzy;
             }
-            delete obj['exact_match']
+            delete obj['exact_match'];
         } else if (obj['fuzzy_match'] === true && !('auto_correct' in obj)) {
             if (methodName !== 'cross_team_search' && methodName !== 'crossTeamSearch') {
                 obj['auto_correct'] = true;
@@ -724,15 +724,15 @@ export function applyArgInterceptions(methodName: string, args: unknown[]): { ar
         }
 
         if (methodName.includes('get_statistics') || methodName.includes('getStatistics')) {
-            const timeVal = obj['time'] ?? obj['timeframe'] ?? obj['period']
+            const timeVal = obj['time'] ?? obj['timeframe'] ?? obj['period'];
             if (timeVal !== undefined) {
                 if (obj['group_by'] === undefined && typeof timeVal === 'string') {
-                    const validGroupBy = ['day', 'week', 'month'].includes(timeVal.toLowerCase()) ? timeVal.toLowerCase() : 'month'
-                    obj['group_by'] = validGroupBy
+                    const validGroupBy = ['day', 'week', 'month'].includes(timeVal.toLowerCase()) ? timeVal.toLowerCase() : 'month';
+                    obj['group_by'] = validGroupBy;
                 }
-                delete obj['time']
-                delete obj['timeframe']
-                delete obj['period']
+                delete obj['time'];
+                delete obj['timeframe'];
+                delete obj['period'];
             }
         }
 

@@ -37,12 +37,18 @@ import {
 import { serveAction } from '../../src/cli/commands/serve.js'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
 
-const { mockCreateServer } = vi.hoisted(() => ({
+const { mockCreateServer, mockEmbedderFn } = vi.hoisted(() => ({
     mockCreateServer: vi.fn().mockResolvedValue(undefined),
+    mockEmbedderFn: vi.fn().mockResolvedValue({ data: new Float32Array(384).fill(0.1) }),
 }))
 
 vi.mock('../../src/server/mcp-server/index.js', () => ({
     createServer: mockCreateServer,
+}))
+
+vi.mock('@huggingface/transformers', () => ({
+    pipeline: vi.fn().mockResolvedValue(mockEmbedderFn),
+    env: { allowRemoteModels: false, localModelPath: '' },
 }))
 
 describe('CLI Program & Commands', () => {
