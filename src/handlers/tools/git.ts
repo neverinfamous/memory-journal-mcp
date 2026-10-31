@@ -87,14 +87,14 @@ async function fetchCommits(input: FetchCommitsInput, cwd: string): Promise<Comm
     gitArgs.push(
         '--name-status',
         '-z',
-        '--format=%x1E<GIT_RECORD_BOUNDARY_TODO>%x1E%H%x1E<GIT_FIELD_BOUNDARY_TODO>%x1E%D%x1E<GIT_FIELD_BOUNDARY_TODO>%x1E%an%x1E<GIT_FIELD_BOUNDARY_TODO>%x1E%ae%x1E<GIT_FIELD_BOUNDARY_TODO>%x1E%aI%x1E<GIT_FIELD_BOUNDARY_TODO>%x1E%cn%x1E<GIT_FIELD_BOUNDARY_TODO>%x1E%ce%x1E<GIT_FIELD_BOUNDARY_TODO>%x1E%cI%x1E<GIT_FIELD_BOUNDARY_TODO>%x1E%s%x1E<GIT_FIELD_BOUNDARY_TODO>%x1E%b%x1E<GIT_FIELD_BOUNDARY_TODO>%x1E%(trailers:unfold,only)%x1E<GIT_FIELD_BOUNDARY_TODO>%x1E%(trailers:unfold)%x1E<GIT_FIELD_BOUNDARY_TODO>%x1E%P'
+        '--format=%x1E<GIT_RECORD_BOUNDARY_TODO>%x1E%H%x1E<GIT_FIELD_BOUNDARY_TODO>%x1E%D%x1E<GIT_FIELD_BOUNDARY_TODO>%x1E%aN%x1E<GIT_FIELD_BOUNDARY_TODO>%x1E%aE%x1E<GIT_FIELD_BOUNDARY_TODO>%x1E%aI%x1E<GIT_FIELD_BOUNDARY_TODO>%x1E%cN%x1E<GIT_FIELD_BOUNDARY_TODO>%x1E%cE%x1E<GIT_FIELD_BOUNDARY_TODO>%x1E%cI%x1E<GIT_FIELD_BOUNDARY_TODO>%x1E%s%x1E<GIT_FIELD_BOUNDARY_TODO>%x1E%b%x1E<GIT_FIELD_BOUNDARY_TODO>%x1E%(trailers:unfold,only)%x1E<GIT_FIELD_BOUNDARY_TODO>%x1E%(trailers:unfold)%x1E<GIT_FIELD_BOUNDARY_TODO>%x1E%P'
     )
     // Actually we should just fetch the basic BOUNDARY constants from git-runner
     const { RECORD_SEPARATOR, FIELD_SEPARATOR } = await import('../../vendor/lib-git-history/git-runner.js')
     
     // pop the fake format and push the real one
     gitArgs.pop()
-    gitArgs.push(`--format=${RECORD_SEPARATOR}%H${FIELD_SEPARATOR}%D${FIELD_SEPARATOR}%an${FIELD_SEPARATOR}%ae${FIELD_SEPARATOR}%aI${FIELD_SEPARATOR}%cn${FIELD_SEPARATOR}%ce${FIELD_SEPARATOR}%cI${FIELD_SEPARATOR}%s${FIELD_SEPARATOR}%b${FIELD_SEPARATOR}%(trailers:unfold,only)${FIELD_SEPARATOR}%(trailers:unfold)${FIELD_SEPARATOR}%P`)
+    gitArgs.push(`--format=${RECORD_SEPARATOR}%H${FIELD_SEPARATOR}%D${FIELD_SEPARATOR}%aN${FIELD_SEPARATOR}%aE${FIELD_SEPARATOR}%aI${FIELD_SEPARATOR}%cN${FIELD_SEPARATOR}%cE${FIELD_SEPARATOR}%cI${FIELD_SEPARATOR}%s${FIELD_SEPARATOR}%b${FIELD_SEPARATOR}%(trailers:unfold,only)${FIELD_SEPARATOR}%(trailers:unfold)${FIELD_SEPARATOR}%P`)
 
     const records = streamGitRecords(gitArgs, cwd)
     const batch = []
