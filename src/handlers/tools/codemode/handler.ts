@@ -47,6 +47,33 @@ function isValidJsScript(src: string): boolean {
     }
 }
 
+function escapeDelimiterChar(content: string, delimiter: string): string {
+    let result = ''
+    let i = 0
+    while (i < content.length) {
+        if (content[i] === '\\') {
+            let bsCount = 0
+            while (i < content.length && content[i] === '\\') {
+                bsCount++
+                i++
+            }
+            if (i < content.length && content[i] === delimiter) {
+                result += `\\${delimiter}`
+                i++
+            } else {
+                result += '\\'.repeat(bsCount)
+            }
+        } else if (content[i] === delimiter) {
+            result += `\\${delimiter}`
+            i++
+        } else {
+            result += content[i]
+            i++
+        }
+    }
+    return result
+}
+
 /**
  * Auto-heals common syntax, template literal, and LLM formatting errors in Code Mode execution payloads.
  */
@@ -228,8 +255,7 @@ export function healCodeModeScript(code: string): string {
             /(\b(?:content|title|text|description|message|instructions|body|notes|details|resolution_notes|query|script|comment|summary|heading)\s*:\s*)`([\s\S]*?)`(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\)))/g,
             (match: string, prefix: string, content: string, offset: number): string => {
                 if (isInsideStringLiteral(executionCode, offset)) return match
-                const normalized = content.replace(/\\`/g, '`') // lgtm[js/incomplete-sanitization]
-                const escaped = normalized.replace(/`/g, '\\`') // lgtm[js/incomplete-sanitization]
+                const escaped = escapeDelimiterChar(content, '`')
                 return `${prefix}\`${escaped}\``
             }
         )
@@ -240,10 +266,10 @@ export function healCodeModeScript(code: string): string {
             (match: string, prefix: string, content: string, offset: number): string => {
                 if (isInsideStringLiteral(executionCode, offset)) return match
                 if (content.includes('\n')) {
-                    const normalized = content.replace(/\\`/g, '`').replace(/`/g, '\\`') // lgtm[js/incomplete-sanitization]
+                    const normalized = escapeDelimiterChar(content, '`')
                     return `${prefix}\`${normalized}\``
                 }
-                const normalized = content.replace(/\\+'/g, "'").replace(/'/g, "\\'") // lgtm[js/incomplete-sanitization]
+                const normalized = escapeDelimiterChar(content, "'")
                 return `${prefix}'${normalized}'`
             }
         )
@@ -254,10 +280,10 @@ export function healCodeModeScript(code: string): string {
             (match: string, prefix: string, content: string, offset: number): string => {
                 if (isInsideStringLiteral(executionCode, offset)) return match
                 if (content.includes('\n')) {
-                    const normalized = content.replace(/\\`/g, '`').replace(/`/g, '\\`') // lgtm[js/incomplete-sanitization]
+                    const normalized = escapeDelimiterChar(content, '`')
                     return `${prefix}\`${normalized}\``
                 }
-                const normalized = content.replace(/\\+"/g, '"').replace(/"/g, '\\"') // lgtm[js/incomplete-sanitization]
+                const normalized = escapeDelimiterChar(content, '"')
                 return `${prefix}"${normalized}"`
             }
         )
@@ -267,8 +293,7 @@ export function healCodeModeScript(code: string): string {
             /(\b(?:mj\.)?(?:core\.|team\.|admin\.|search\.|io\.|github\.|git\.|backup\.)?(?:createEntry|teamCreateEntry|appendEntry|updateEntry|teamUpdateEntry|searchEntries|teamSearch|mj_create_entry|mjCreateEntry|mj_update_entry|mjUpdateEntry|mj_search_entries|mjSearchEntries)\s*\(\s*)`([\s\S]*?)`(?=\s*(?:,\s*|\)))/g,
             (match: string, prefix: string, content: string, offset: number): string => {
                 if (isInsideStringLiteral(executionCode, offset) || statementKeywordsOrBraces.test(content)) return match
-                const normalized = content.replace(/\\`/g, '`') // lgtm[js/incomplete-sanitization]
-                const escaped = normalized.replace(/`/g, '\\`') // lgtm[js/incomplete-sanitization]
+                const escaped = escapeDelimiterChar(content, '`')
                 return `${prefix}\`${escaped}\``
             }
         )
@@ -279,10 +304,10 @@ export function healCodeModeScript(code: string): string {
             (match: string, prefix: string, content: string, offset: number): string => {
                 if (isInsideStringLiteral(executionCode, offset) || statementKeywordsOrBraces.test(content)) return match
                 if (content.includes('\n')) {
-                    const normalized = content.replace(/\\`/g, '`').replace(/`/g, '\\`') // lgtm[js/incomplete-sanitization]
+                    const normalized = escapeDelimiterChar(content, '`')
                     return `${prefix}\`${normalized}\``
                 }
-                const normalized = content.replace(/\\+'/g, "'").replace(/'/g, "\\'") // lgtm[js/incomplete-sanitization]
+                const normalized = escapeDelimiterChar(content, "'")
                 return `${prefix}'${normalized}'`
             }
         )
@@ -291,10 +316,10 @@ export function healCodeModeScript(code: string): string {
             (match: string, prefix: string, content: string, offset: number): string => {
                 if (isInsideStringLiteral(executionCode, offset) || statementKeywordsOrBraces.test(content)) return match
                 if (content.includes('\n')) {
-                    const normalized = content.replace(/\\`/g, '`').replace(/`/g, '\\`') // lgtm[js/incomplete-sanitization]
+                    const normalized = escapeDelimiterChar(content, '`')
                     return `${prefix}\`${normalized}\``
                 }
-                const normalized = content.replace(/\\+"/g, '"').replace(/"/g, '\\"') // lgtm[js/incomplete-sanitization]
+                const normalized = escapeDelimiterChar(content, '"')
                 return `${prefix}"${normalized}"`
             }
         )
@@ -304,8 +329,7 @@ export function healCodeModeScript(code: string): string {
             /(\b(?:const|let|var)\s+[\w$]+\s*=\s*)`([\s\S]*?)`(?=\s*(?:;|\n\s*(?:const|let|var|return|await|mj\.|function|\/\*|\/\/)))/g,
             (match: string, prefix: string, content: string, offset: number): string => {
                 if (isInsideStringLiteral(executionCode, offset)) return match
-                const normalized = content.replace(/\\`/g, '`') // lgtm[js/incomplete-sanitization]
-                const escaped = normalized.replace(/`/g, '\\`') // lgtm[js/incomplete-sanitization]
+                const escaped = escapeDelimiterChar(content, '`')
                 return `${prefix}\`${escaped}\``
             }
         )
