@@ -1,5 +1,21 @@
 # Memory Journal MCP Server - TypeScript Version
 # Multi-stage build for optimized production image
+#
+# Security Notes:
+# - Last Docker Scout scan: 2026-10-31 on node:26.2.0-alpine (Alpine 3.23), 0 critical / 1 high / 2 medium.
+#   All three are Alpine OS packages with NO upstream fix available yet (accepted until fixed;
+#   re-check with `docker scout cves` on each base image or Alpine package update):
+#     - git 2.52.0-r0      HIGH   CVE-2025-66413  (runtime image; only matters when git runs against untrusted repos)
+#     - busybox 1.37.0-r30 MEDIUM CVE-2025-60876
+#     - nghttp2 1.69.0-r0  MEDIUM CVE-2026-58055
+#   CI gates already ignore unfixed findings (Scout `only-fixed: true`, Trivy `ignore-unfixed: true`).
+# - Runtime vs bundled: the production stage contains only the app (dist/), production node_modules
+#   (`pnpm install --prod`), git/curl/ca-certificates and the Alpine libs upgraded below.
+#   npm and npx are removed from the runtime image; pnpm exists only in the
+#   builder stage (pinned to pnpm@11.9.0 to match pnpm-lock.yaml / pnpm-workspace.yaml).
+# - Dependency pins live in pnpm-workspace.yaml `overrides` (mirrored in package.json) and .pnpmfile.cjs;
+#   .pnpmfile.cjs MUST be copied into every install stage or `--frozen-lockfile` fails the pnpmfile checksum.
+# - pnpm audit is clean as of this scan; there are no `npm pack` patched packages in this Dockerfile.
 FROM node:26.2.0-alpine AS builder
 
 WORKDIR /app
