@@ -1,6 +1,817 @@
 # Changelog
 
-This project uses a single-source-of-truth Git commit strategy. All changelog entries and release notes are embedded directly into the Git commit history and compiled automatically during the release process.
+All notable changes to this project are documented in this file.
+This changelog is auto-generated from Git history using [lib-git-history](https://github.com/neverinfamous/adamic).
 
-- **To view Unreleased changes:** View the recent git history or run the Adamic `preview-changelog.mjs` script.
-- **To view Past Releases:** Please refer to the [GitHub Releases](https://github.com/neverinfamous/memory-journal-mcp/releases) page or the `releases/` directory.
+## [Unreleased]
+
+### Features
+
+- implement dynamic git velocity summary and prompt validation fixes by **Chris LeRoux** ([ed32412](https://github.com/neverinfamous/memory-journal-mcp/commit/ed32412ff1466d3cdc206d6058149a1a6ae132f7))
+- restore generate-instructions script for dynamic architecture by **Chris LeRoux** ([5443019](https://github.com/neverinfamous/memory-journal-mcp/commit/544301962d845ef3978305a125331bd8ed17c7c0))
+- refactor to subcommand architecture by **Chris LeRoux** ([7f818d6](https://github.com/neverinfamous/memory-journal-mcp/commit/7f818d6e96dc41f3f9d80a9ebc8bbdcd29665566))
+- harden core and team tools with code mode proxy integration by **Chris LeRoux** ([a61c8e8](https://github.com/neverinfamous/memory-journal-mcp/commit/a61c8e82efeeff7c65c1a704672a4a41b518bb51))
+- optimize adversarial and workflow prompt definitions by **Chris LeRoux** ([e9d0a6a](https://github.com/neverinfamous/memory-journal-mcp/commit/e9d0a6aa3d1f13bbd250804b3a9f0f175c4152fe))
+- modernize briefing and config management infrastructure by **Chris LeRoux** ([7fc39e9](https://github.com/neverinfamous/memory-journal-mcp/commit/7fc39e9a1ac2353b3ac174b88e7eca475c4d26dc))
+- add explicit repository and target instructions to adversarial and github prompts by **Chris LeRoux** ([b60c4b8](https://github.com/neverinfamous/memory-journal-mcp/commit/b60c4b824808ce285d795b6b1fa725b0d8303c83))
+- split time-period-analysis into discrete workflow prompts by **Chris LeRoux** ([606f619](https://github.com/neverinfamous/memory-journal-mcp/commit/606f61910b0b9cd45b4b4a62dd26a3af7ceb54cc))
+- decouple git prompts from local adamic scripts by **Chris LeRoux** ([7c23abc](https://github.com/neverinfamous/memory-journal-mcp/commit/7c23abcabf7873f95f0ec323bc3535daee4b43f0))
+- harden param normalization and update server instructions for hallucination interception by **Chris LeRoux** ([dea6d3e](https://github.com/neverinfamous/memory-journal-mcp/commit/dea6d3e73db19fa7a49bbc09f71d594b153811b2))
+- add commit and quick-commit workflows by **Chris LeRoux** ([13ff941](https://github.com/neverinfamous/memory-journal-mcp/commit/13ff941e9f26064f0a4ec5f93154b13b0cf80d69))
+- implement dispatcher hallucination healing for entries by **Chris LeRoux** ([caa4501](https://github.com/neverinfamous/memory-journal-mcp/commit/caa4501491c72f6ee8a5eb140c6336f058f2c0dc))
+- implement hallucination healing for schemas by **Chris LeRoux** ([eca399c](https://github.com/neverinfamous/memory-journal-mcp/commit/eca399c24bda5c83f5621d483f6ab23c5e8f9d86))
+- automatically discover global config fallbacks by **Chris LeRoux** ([1815e70](https://github.com/neverinfamous/memory-journal-mcp/commit/1815e7073277473b6bba879913d3e4c73bc19a45))
+- implement staleness and commit grouping resources by **Chris LeRoux** ([b960eb0](https://github.com/neverinfamous/memory-journal-mcp/commit/b960eb0c4ff5d7d180fe38349c50a389a6225661))
+- pre-warmed worker pool with lifecycle management by **Chris LeRoux** ([0a4d93f](https://github.com/neverinfamous/memory-journal-mcp/commit/0a4d93fb723aea6938c359eb1d49e4f77cc8d167))
+- implement phase 2e and 3 of git commit history plan by **Chris LeRoux** ([ce003c4](https://github.com/neverinfamous/memory-journal-mcp/commit/ce003c43e1c8045598b84c85b61611bf7aef6cd6))
+- implement commit-enriched session summaries and fix flaky test by **Chris LeRoux** ([eda39c0](https://github.com/neverinfamous/memory-journal-mcp/commit/eda39c0a90708ab928c5aed0003e8e85756c980e))
+- implement dual-instruction strategy for Code Mode reliability by **Chris LeRoux** ([ec523cd](https://github.com/neverinfamous/memory-journal-mcp/commit/ec523cd61caa6a3fbf2b8e4b17027b80fa83bad2))
+- inject projectName into cross-project insights by **Chris LeRoux** ([3e5329d](https://github.com/neverinfamous/memory-journal-mcp/commit/3e5329d61be71da53487db84c6ec0e4d00e83554))
+- inject projectName into tool outputs by **Chris LeRoux** ([ef9ba9b](https://github.com/neverinfamous/memory-journal-mcp/commit/ef9ba9ba4be772ce1e649db4b9664dcb591610c0))
+- promote string-to-number coercion globally to interceptor by **Chris LeRoux** ([2f7b956](https://github.com/neverinfamous/memory-journal-mcp/commit/2f7b956ef6ce85e05246f07252b21f630f0df970))
+- add Workflow 6 Test Artifact Cleanup to journal-optimizer by **Chris LeRoux** ([83dffae](https://github.com/neverinfamous/memory-journal-mcp/commit/83dffae28f33ff4f69d250a526d6e90d392c59c8))
+- add context bloat warning and fix markdown tables by **Chris LeRoux** ([6d1490b](https://github.com/neverinfamous/memory-journal-mcp/commit/6d1490bf2c5c5ec5f0cfee15ab3f7bbdf590931a))
+- anti-hallucination templates for entry creation and session summaries by **Chris LeRoux** ([63f9b9c](https://github.com/neverinfamous/memory-journal-mcp/commit/63f9b9ce03e6c807d47dd3f04ac6bc326c9fd6c7))
+- surface memory://briefing via get_briefing tool inside Code Mode by **Chris LeRoux** ([39ec14f](https://github.com/neverinfamous/memory-journal-mcp/commit/39ec14f3ea8e879a059cd1039ee7121204ccbeae))
+- add getProject hallucination alias for smoother execution by **Chris LeRoux** ([583d66e](https://github.com/neverinfamous/memory-journal-mcp/commit/583d66e768fc608a08726663b7e7b23b224365a6))
+- auto_version opt-in for expected_version auto-population by **Chris LeRoux** ([ea0d29a](https://github.com/neverinfamous/memory-journal-mcp/commit/ea0d29a120d6b9c2d6e2b5f2a463d201ba39ac89))
+- implement Sandbox Wrapper Pattern for Code Mode by **Chris LeRoux** ([ea1dcf1](https://github.com/neverinfamous/memory-journal-mcp/commit/ea1dcf19dfde6508fd5d3b543ee5237bb7e76456))
+- implement 11 code mode optimizations by **Chris LeRoux** ([c83939e](https://github.com/neverinfamous/memory-journal-mcp/commit/c83939ebb1c4519b67a9110671f9d2fb4b21e165))
+- automate documented server instruction gotchas by **Chris LeRoux** ([3f328b3](https://github.com/neverinfamous/memory-journal-mcp/commit/3f328b354a8e531a22b49bae71e3da5ec2011bc5))
+- add scheduled report delivery and webhook support by **Chris LeRoux** ([c6d7f9b](https://github.com/neverinfamous/memory-journal-mcp/commit/c6d7f9b93bfc89019909091eb3f5e09655443b82))
+- inject explicit project_number template into session summary prompts by **Chris LeRoux** ([5faf3f2](https://github.com/neverinfamous/memory-journal-mcp/commit/5faf3f2165d641b764e5993e087eb70d21b9ee0d))
+- implement resources/subscribe capability with explicit security boundaries and update documentation by **Chris LeRoux** ([d9561b5](https://github.com/neverinfamous/memory-journal-mcp/commit/d9561b598747ff7b592c09b754ba1ae6c4146237))
+- implement database encryption support with SQLCipher and DB_ENCRYPTION_KEY by **Chris LeRoux** ([5bfa17d](https://github.com/neverinfamous/memory-journal-mcp/commit/5bfa17d51e1490bad57822eb0ea2f8c21b358929))
+- add --dump-config and config validation aggregation by **Chris LeRoux** ([477fac6](https://github.com/neverinfamous/memory-journal-mcp/commit/477fac6a2525907eabfc7b07c17d9d85fae3ab14))
+- implement configuration file resolver and sync documentation parity by **Chris LeRoux** ([a88dd69](https://github.com/neverinfamous/memory-journal-mcp/commit/a88dd69226b67fabb119f7bdf7157806e4132141))
+- implement graduated 3-stage data lifecycle by **Chris LeRoux** ([12d4362](https://github.com/neverinfamous/memory-journal-mcp/commit/12d4362c91aba14d4011a685b614f516cc8c2a8b))
+- add dry-run and exclude-tags configuration by **Chris LeRoux** ([03becff](https://github.com/neverinfamous/memory-journal-mcp/commit/03becff7694bfd02dd7a3b91d1d5df1b30e5e675))
+- implement metrics persistence and synchronize documentation tool counts by **Chris LeRoux** ([d64c145](https://github.com/neverinfamous/memory-journal-mcp/commit/d64c145478567f08bb30e877bbd0d4aab3facf1c))
+- add prometheus /metrics export functionality by **Chris LeRoux** ([b8e0351](https://github.com/neverinfamous/memory-journal-mcp/commit/b8e03515135c9778d82c0299e196539140f7e362))
+- add per-tool latency percentile tracking (p50/p95/p99) by **Chris LeRoux** ([23ee4c2](https://github.com/neverinfamous/memory-journal-mcp/commit/23ee4c2d3500cce2d3cc20b9eba7c54f4b6faffe))
+- implement author alias management and retro-consolidation tools by **Chris LeRoux** ([7b2087d](https://github.com/neverinfamous/memory-journal-mcp/commit/7b2087d7e5bac541e1a2e96d179b3f3ee1142c58))
+- add mj-mcp-optimize skill for Code Mode internals by **Chris LeRoux** ([6471aca](https://github.com/neverinfamous/memory-journal-mcp/commit/6471aca6b88857642b971f2c67cef21bf48996bf))
+- add cross_team_search tool and dynamic additional team DBs configuration by **Chris LeRoux** ([dfbe862](https://github.com/neverinfamous/memory-journal-mcp/commit/dfbe86237bfdc0e54625c61a007476ff910a11df))
+- implement real-time resources/subscribe support for team and flag resources by **Chris LeRoux** ([5afea6d](https://github.com/neverinfamous/memory-journal-mcp/commit/5afea6d79967e43c448a26e7e899afef3d0afbfb))
+- add team list/search project method aliases by **Chris LeRoux** ([4aaa390](https://github.com/neverinfamous/memory-journal-mcp/commit/4aaa390a183c5223db1e7eb32e83d1c048b14dd4))
+- add rate limit resource and passive header capture by **Chris LeRoux** ([9a67de1](https://github.com/neverinfamous/memory-journal-mcp/commit/9a67de1937d392d3ebac159b55887812cb4a83e4))
+- add safe sleep and setTimeout aliases to vm sandbox by **Chris LeRoux** ([8d4fbb3](https://github.com/neverinfamous/memory-journal-mcp/commit/8d4fbb306f0a44c9663e5b4eea550e0af5677d1d))
+- implement fuzzy search fallback and swappable vector models by **Chris LeRoux** ([2c01b17](https://github.com/neverinfamous/memory-journal-mcp/commit/2c01b17416e0cef297eb888ee7c45ac6f3599cf2))
+- complete implementations for migrations, documentation audits, and history e2e testing by **Chris LeRoux** ([e187a80](https://github.com/neverinfamous/memory-journal-mcp/commit/e187a80e18aad63141478f8ea968d51c23600f46))
+- add composite and partial performance indexes to schema by **Chris LeRoux** ([f73da9f](https://github.com/neverinfamous/memory-journal-mcp/commit/f73da9f6393ebcb91f21a857901f69cdf97679c5))
+- implement consistent project number validation, fallback resolution, and boundary safety across core & team tools by **Chris LeRoux** ([8a1fc50](https://github.com/neverinfamous/memory-journal-mcp/commit/8a1fc5054839e823220ef80fa7e8cbb4d9ade6df))
+- implement keyset cursor pagination by **Chris LeRoux** ([ce47f46](https://github.com/neverinfamous/memory-journal-mcp/commit/ce47f46cc7d05d7605f6ad6c1cfccbef3c0fb3bb))
+- implement batch operations for core and team databases by **Chris LeRoux** ([51676e7](https://github.com/neverinfamous/memory-journal-mcp/commit/51676e72ce6c75ca855ee638ce47e9f1017d8c38))
+
+### Bug Fixes
+
+- resolve unused variable lint error in system interceptor by **Chris LeRoux** ([120579f](https://github.com/neverinfamous/memory-journal-mcp/commit/120579f7cd80192c121603e2e23893de9e11631b))
+- add flag aliases to commander to prevent agent hallucination errors by **Chris LeRoux** ([5401a4c](https://github.com/neverinfamous/memory-journal-mcp/commit/5401a4cdcdb9a56fc6629335a1c575f122a382c1))
+- skip git history in vitest and resolve TS property access error by **Chris LeRoux** ([1ebcd62](https://github.com/neverinfamous/memory-journal-mcp/commit/1ebcd62263f33bb2934a6db4decbda72712c2e9e))
+- inject MJ_DB_ENCRYPTION_KEY during backup restoration integrity check by **Chris LeRoux** ([f60ffcd](https://github.com/neverinfamous/memory-journal-mcp/commit/f60ffcd7f7331de4ef4f5619083611fd5ada987a))
+- resolve RelationshipType import errors in entry.ts by **Chris LeRoux** ([a6c75de](https://github.com/neverinfamous/memory-journal-mcp/commit/a6c75de6004f5a91693d8159b40ad407aa68714f))
+- heal hallucinated target_id to camelCase targetId for relationships schema by **Chris LeRoux** ([f327d4a](https://github.com/neverinfamous/memory-journal-mcp/commit/f327d4a582b4015094d15352df9bac3bd3553d0a))
+- unescape markdown source files by **Chris LeRoux** ([a1b2f30](https://github.com/neverinfamous/memory-journal-mcp/commit/a1b2f300197820a6a3e9d1cae5f9ea065b727e1f))
+- implement missing prompts and resolve isolated test db crashes by **Chris LeRoux** ([21cb009](https://github.com/neverinfamous/memory-journal-mcp/commit/21cb009b616427ab816a2621e8ccf6958a30997f))
+- add missing environment config flags to commander options by **Chris LeRoux** ([64ba138](https://github.com/neverinfamous/memory-journal-mcp/commit/64ba1387539e52d55c83849b20167844aa58b7a2))
+- resolve simpleGit lint errors and consistent-type-imports by **Chris LeRoux** ([b0d6e99](https://github.com/neverinfamous/memory-journal-mcp/commit/b0d6e991eb4d7abc84139f0b1e0f1cc33b08757b))
+- resolve simpleGit typescript errors after adding spawnOptions by **Chris LeRoux** ([013fb0a](https://github.com/neverinfamous/memory-journal-mcp/commit/013fb0a0cd1e752db8e113fa3ceec725807c512a))
+- resolve remaining window popup sources during testing by **Chris LeRoux** ([46580de](https://github.com/neverinfamous/memory-journal-mcp/commit/46580de27d0de8cc8943f5982a7bf437a6b4005b))
+- prevent execFileSync git calls from popping windows by **Chris LeRoux** ([46d4181](https://github.com/neverinfamous/memory-journal-mcp/commit/46d418110b4349a79e0fc9097a4f46f786217597))
+- prevent spawn terminal windows popping up on Windows by **Chris LeRoux** ([a25619e](https://github.com/neverinfamous/memory-journal-mcp/commit/a25619e4deb72fc45070ff38fe96d3d070f6bbd3))
+- resolve windows spawn execution and URL package paths for background code-map generation by **Chris LeRoux** ([c0d715e](https://github.com/neverinfamous/memory-journal-mcp/commit/c0d715e6a9434e6475710dfed2c4311ed9275a27))
+- harden native git engine parser and scripts by **Chris LeRoux** ([9707cf3](https://github.com/neverinfamous/memory-journal-mcp/commit/9707cf302bd050b51bc8b8055cbbe6ce76ebd97b))
+- bypass MCP SDK validation bug by making arguments empty arrays for remaining prompts by **Chris LeRoux** ([d7e372b](https://github.com/neverinfamous/memory-journal-mcp/commit/d7e372b41a993d903ec70efc1589922f3bd5c5c1))
+- resolve schema validation crash for time-period-analysis prompt by **Chris LeRoux** ([64f44c8](https://github.com/neverinfamous/memory-journal-mcp/commit/64f44c83fd16c90badea51e09f1caad32cf95377))
+- resolve sdk validation crash for prompts with all optional arguments by **Chris LeRoux** ([1aebb53](https://github.com/neverinfamous/memory-journal-mcp/commit/1aebb53fc18ffa1bda764ec85b630a9d9f350391))
+- fix typescript assertions in resources-expanded e2e test by **Chris LeRoux** ([e88e0f7](https://github.com/neverinfamous/memory-journal-mcp/commit/e88e0f78857d059a49153f14d9243a166e1eeb84))
+- resolve failing e2e suites and add explicit lint types by **Chris LeRoux** ([e23d89d](https://github.com/neverinfamous/memory-journal-mcp/commit/e23d89db095f98b3cdc22573c2d02d7c9f70ca56))
+- implement frictionless fallback healing for hallucinated tags and enums by **Chris LeRoux** ([2a33bb4](https://github.com/neverinfamous/memory-journal-mcp/commit/2a33bb4ab4a951d8d0e59ca477ec15368cb5538f))
+- prevent llm prompt hallucination failures during execution by **Chris LeRoux** ([d61f66e](https://github.com/neverinfamous/memory-journal-mcp/commit/d61f66eb6e4ca33249e3bb2e03e3e626c53ed6dc))
+- heal agent hallucinations for session summaries and auto_context traps by **Chris LeRoux** ([2c4943d](https://github.com/neverinfamous/memory-journal-mcp/commit/2c4943d31e4e98bc8fb227bffc25bcc88783f0c0))
+- heal hallucinatory payload entry_type and tags by **Chris LeRoux** ([18edf6a](https://github.com/neverinfamous/memory-journal-mcp/commit/18edf6a3cbaf6374db267dc06cba157156fc34b4))
+- Made expected_version optional in delete_entry schemas to support soft-deletes and simplify client implementation. by **Chris LeRoux** ([d2b1c18](https://github.com/neverinfamous/memory-journal-mcp/commit/d2b1c18b5df46bb616c9bf12dde90a237cfe0ce6))
+- Remove setTimeout and sleep from codemode sandbox to enforce strict isolation. by **Chris LeRoux** ([64338fa](https://github.com/neverinfamous/memory-journal-mcp/commit/64338fafa94c066b0f32a668c3a37349b258b83e))
+- eliminate unsafe casts, remove rate-limit resource, improve check script and briefing format by **Chris LeRoux** ([4d8be3c](https://github.com/neverinfamous/memory-journal-mcp/commit/4d8be3c62583862b614fe3f49eae9fbf746caac1))
+- provide safe setTimeout wrapper in Code Mode sandbox by **Chris LeRoux** ([00164d9](https://github.com/neverinfamous/memory-journal-mcp/commit/00164d9f578d4e57b2b60d0e48252729ed0eda92))
+- Correct deleteEntry hallucination guard and hasMore injection logic by **Chris LeRoux** ([8056ae8](https://github.com/neverinfamous/memory-journal-mcp/commit/8056ae83012b3867b535d41c36b3d3a9082374c3))
+- add update_entry and delete_entry to VERSION_AWARE_TOOL_NAMES by **Chris LeRoux** ([160bb94](https://github.com/neverinfamous/memory-journal-mcp/commit/160bb941220c6ec05df8939c49f7838977f0b993))
+- update TOOL_GROUPS imports across codebase by **Chris LeRoux** ([2675415](https://github.com/neverinfamous/memory-journal-mcp/commit/2675415a35bc213785db04e1767647e606b6625d))
+- update package.json files array and team tool JSDoc count by **Chris LeRoux** ([f0eaa69](https://github.com/neverinfamous/memory-journal-mcp/commit/f0eaa698f7da99331bfdb7622a645239d0ee4a53))
+- remediate trigger collision and progressive disclosure gaps from audit by **Chris LeRoux** ([3d3e328](https://github.com/neverinfamous/memory-journal-mcp/commit/3d3e3284fe536ebe798540041054e6eb0faf4750))
+- clamp pre-warmed worker pool minInstances to maxInstances to prevent capacity bounds errors by **Chris LeRoux** ([9fe0b2b](https://github.com/neverinfamous/memory-journal-mcp/commit/9fe0b2bd6f9ff414f21636f71550e054b922f084))
+- Code Mode Proxy invariant violation on frozen target properties by **Chris LeRoux** ([789c5e1](https://github.com/neverinfamous/memory-journal-mcp/commit/789c5e1b6edf7cdc5f17662204094883ef5f79c7))
+- heal tool name hallucination and add testing guardrails by **Chris LeRoux** ([9f704a0](https://github.com/neverinfamous/memory-journal-mcp/commit/9f704a086a9dce10e6e6dce1748efd993316d9a7))
+- add missing skills to package manifest and readme by **Chris LeRoux** ([d12b78c](https://github.com/neverinfamous/memory-journal-mcp/commit/d12b78cc1e4e29f5d9aaab4192975d8b36a6b5ad))
+- resolve syntax errors in expected_version payloads for e2e tests by **Chris LeRoux** ([c1af241](https://github.com/neverinfamous/memory-journal-mcp/commit/c1af2410c5d1d123431d43c0709006311d63bdb7))
+- integrate adversarial-seo skill and patch expected_version test payloads by **Chris LeRoux** ([0b1eb68](https://github.com/neverinfamous/memory-journal-mcp/commit/0b1eb6875afcdb68c273e9a01dd4c8804134d763))
+- pass auto_context to team entry database operations by **Chris LeRoux** ([5b1faa3](https://github.com/neverinfamous/memory-journal-mcp/commit/5b1faa3cd7d0b1f72737ad078470141e9cb18229))
+- add auto_context to team entry schemas by **Chris LeRoux** ([597cd49](https://github.com/neverinfamous/memory-journal-mcp/commit/597cd490c5666db6874dfbd72441e2da6aa82119))
+- add missing auto_context field to entry tools by **Chris LeRoux** ([fe3b893](https://github.com/neverinfamous/memory-journal-mcp/commit/fe3b893f3b1701d3fc396b4612bffd7fec437a5a))
+- implement parameter hallucination smoothing and fix worker sandbox tests by **Chris LeRoux** ([2d243d3](https://github.com/neverinfamous/memory-journal-mcp/commit/2d243d38b86c6a159cd2d6bbb255968dd60e5cf0))
+- update codemode handler by **Chris LeRoux** ([3661039](https://github.com/neverinfamous/memory-journal-mcp/commit/3661039dcfbc04dd9bfbfdf73a4883052b3f5cbb))
+- prevent leaking raw MCP exceptions by wrapping rpcCall with safe error boundary by **Chris LeRoux** ([35c18b6](https://github.com/neverinfamous/memory-journal-mcp/commit/35c18b6747650a84b131a5de7c67adecab45133c))
+- fix array proxy and listDeletedEntries arguments by **Chris LeRoux** ([6d9e77b](https://github.com/neverinfamous/memory-journal-mcp/commit/6d9e77ba0bb1e3e25d953c1f9a09d4f965ac3d7b))
+- intercept auto_context parameter hallucination in create_entry by **Chris LeRoux** ([5ea3525](https://github.com/neverinfamous/memory-journal-mcp/commit/5ea35257e857a99c236ebf057c84e2aab66194c9))
+- resolve ESLint and TypeScript dynamic delete issues in Code Mode proxy by **Chris LeRoux** ([7fdb323](https://github.com/neverinfamous/memory-journal-mcp/commit/7fdb32331fb0187de7da7ba5ae5ec65739636737))
+- Update test server database fallback documentation by **Chris LeRoux** ([4c658d2](https://github.com/neverinfamous/memory-journal-mcp/commit/4c658d2d30f2371d7cd797cffc6e7ef0196c2e7e))
+- heal id to entry_id hallucinations in team schemas by **Chris LeRoux** ([a0254d2](https://github.com/neverinfamous/memory-journal-mcp/commit/a0254d24847a316800f843493f61398e7dc5aaf9))
+- apply parameter intercepts to top-level aliased bindings by **Chris LeRoux** ([3bdb6c0](https://github.com/neverinfamous/memory-journal-mcp/commit/3bdb6c0cb2d68e6c4998d9974d117fad5bd7c90c))
+- harden admin tools against parameter hallucinations by **Chris LeRoux** ([6ff67c4](https://github.com/neverinfamous/memory-journal-mcp/commit/6ff67c4b37228a49979a9e0731d95d6882c795da))
+- export injectProjectNames for codemode payload enrichment by **Chris LeRoux** ([6353ecd](https://github.com/neverinfamous/memory-journal-mcp/commit/6353ecdc4c51b50cf162a69d91488d541d046583))
+- inject projectName into Code Mode sandbox payloads by **Chris LeRoux** ([e9b9f78](https://github.com/neverinfamous/memory-journal-mcp/commit/e9b9f781a7f34e4804e256ef71903786be70eeb9))
+- enforce validation error when requested cross-team db is not configured by **Chris LeRoux** ([cf4a8bb](https://github.com/neverinfamous/memory-journal-mcp/commit/cf4a8bb673050fa5fd1fe86262925b1bacaa44e6))
+- support metadata filters in semantic_search by **Chris LeRoux** ([b4dc69f](https://github.com/neverinfamous/memory-journal-mcp/commit/b4dc69f24db3f85fdbe665768a3b183342ae1cfa))
+- enforce search isolation bypass validation for global queries by **Chris LeRoux** ([48d8766](https://github.com/neverinfamous/memory-journal-mcp/commit/48d8766d779436f1e6a8574365ef0204431b0ffe))
+- intercept create_entry_minimal hallucination at SDK layer by **Chris LeRoux** ([0de118a](https://github.com/neverinfamous/memory-journal-mcp/commit/0de118ab4f3cfd8a3246debb22323256b92d4c47))
+- add create_entry_minimal interceptor by **Chris LeRoux** ([77ee967](https://github.com/neverinfamous/memory-journal-mcp/commit/77ee967d9fc8c3384bc798cbf034f3fff2c45569))
+- intercept create_entry_minimal tool hallucination natively by **Chris LeRoux** ([aeee19f](https://github.com/neverinfamous/memory-journal-mcp/commit/aeee19ff4baa4404ec7b01d834f91fd86bd77549))
+- resolve zod 4 pipeline schema parsing and document parameter mappings by **Chris LeRoux** ([12a98d9](https://github.com/neverinfamous/memory-journal-mcp/commit/12a98d998501a74a6616960613632b94605fce13))
+- intercept parameter hallucinations in tool schemas by **Chris LeRoux** ([f35079c](https://github.com/neverinfamous/memory-journal-mcp/commit/f35079c037d04d8c06da4f616ac36ee860868c14))
+- ensure batch created entries are not personal by **Chris LeRoux** ([fdcc565](https://github.com/neverinfamous/memory-journal-mcp/commit/fdcc565e0abb7600b07c57079c4a78d8ee013d65))
+- make project_number schema optional to unblock handler-level validation and batch tool fallbacks by **Chris LeRoux** ([3893639](https://github.com/neverinfamous/memory-journal-mcp/commit/3893639803ea90f43e3cac1dfce5094c6ba1faa9))
+- allow local environment fallback for team boundary validation by **Chris LeRoux** ([73e17a8](https://github.com/neverinfamous/memory-journal-mcp/commit/73e17a832030036dc2d592dfec5eafa15234988d))
+- enforce AGGREGATE_ERROR for missing batch entries and relax get_recent_entries output schema by **Chris LeRoux** ([d71482a](https://github.com/neverinfamous/memory-journal-mcp/commit/d71482a5a8693c44a8b505315bf0d2c975f558cb))
+- resolve -32602 schema validation and batch aggregate errors by **Chris LeRoux** ([6681398](https://github.com/neverinfamous/memory-journal-mcp/commit/6681398725183e43293e68bb7f2ad87d47ab9e9d))
+- add structural anti-hallucination descriptions to MCP tool schemas and test instructions by **Chris LeRoux** ([a52b6a8](https://github.com/neverinfamous/memory-journal-mcp/commit/a52b6a867cb250e45b02f06069480353eada782f))
+- apply effectiveAutoCorrect to searchOptions by **Chris LeRoux** ([a47dfdd](https://github.com/neverinfamous/memory-journal-mcp/commit/a47dfdd58e6a185ea4ff1cc96b69d22e49416640))
+- intercept exact_match hallucination by **Chris LeRoux** ([cc21e8d](https://github.com/neverinfamous/memory-journal-mcp/commit/cc21e8d98f122130dd9a6077616ee361c046c70b))
+- enforce ErrorFieldsMixin on _execute_raw_query_unsafe and update coverage by **Chris LeRoux** ([33051ce](https://github.com/neverinfamous/memory-journal-mcp/commit/33051ce5b9af532959a87da3d8e37b5a363a7d64))
+- resolve z.any schema issue in _execute_raw_query_unsafe by **Chris LeRoux** ([9d78f50](https://github.com/neverinfamous/memory-journal-mcp/commit/9d78f50f2bbcf3068cbc412b818a9cc2607d702d))
+- pass progress context to sandbox bindings by **Chris LeRoux** ([0ec7d3d](https://github.com/neverinfamous/memory-journal-mcp/commit/0ec7d3dddc523e5123f91fc6b6af7ee5e8db9848))
+- correct idempotentHint values for admin and team alias tools by **Chris LeRoux** ([a522cef](https://github.com/neverinfamous/memory-journal-mcp/commit/a522cefb725a80a58b957108a580065050b3c13a))
+- auto-resolve repo/project string params in native tool calls by **Chris LeRoux** ([fde3ada](https://github.com/neverinfamous/memory-journal-mcp/commit/fde3adab0e92153b47c227a35cb2540b84ec0a91))
+- auto-inject defaultProjectNumber and map get_entry_history schema by **Chris LeRoux** ([e9df75d](https://github.com/neverinfamous/memory-journal-mcp/commit/e9df75db73391dc45c45103a899c0bbe35fe4487))
+- resolve ConfigManager persistence and instructionLevel sync in briefing by **Chris LeRoux** ([a20e380](https://github.com/neverinfamous/memory-journal-mcp/commit/a20e3803fdc7df6ae1bcf835f5297fc7631c2f81))
+- inject error code into proxy error messages by **Chris LeRoux** ([f6af8ad](https://github.com/neverinfamous/memory-journal-mcp/commit/f6af8ad3c1586c61296619d449dcee55df74ab2c))
+- Nullify setTimeout in sandbox by **Chris LeRoux** ([f821458](https://github.com/neverinfamous/memory-journal-mcp/commit/f821458fa32c5cd13441474e0d1337b54142de29))
+- hallucination smoothing fixes for parameter mapping and global builtins by **Chris LeRoux** ([b9dc02e](https://github.com/neverinfamous/memory-journal-mcp/commit/b9dc02e6aad748840325db8e241f99f44925fc96))
+- Code Mode Alias assertion for remove success by **Chris LeRoux** ([b99fe73](https://github.com/neverinfamous/memory-journal-mcp/commit/b99fe73d4408d8ce410b96bfc0ff0d46043b0dfc))
+- Code Mode RBAC assertions and duplicate upsert bug by **Chris LeRoux** ([d385729](https://github.com/neverinfamous/memory-journal-mcp/commit/d385729a414b9f43b27bd1e7e62264b3a77a9579))
+- prevent target_user normalizer override by **Chris LeRoux** ([f6dff1e](https://github.com/neverinfamous/memory-journal-mcp/commit/f6dff1ee6a3b387b4a73d798c70b0217db0cb9d3))
+- throw validation error for cross-project searches with non-flag tags by **Chris LeRoux** ([656d633](https://github.com/neverinfamous/memory-journal-mcp/commit/656d6337e21e9182889063b3937f87c37af133a5))
+- safely cast batch elements to satisfy TS and eslint by **Chris LeRoux** ([4cc0634](https://github.com/neverinfamous/memory-journal-mcp/commit/4cc06344466f436b7a219b581bd94e6283636154))
+- resolve linting errors for parameter normalizer by **Chris LeRoux** ([76d6ef3](https://github.com/neverinfamous/memory-journal-mcp/commit/76d6ef3388310104e5d0fa404d6a1e501086fb6e))
+- propagate project_number in batch arrays by **Chris LeRoux** ([394f061](https://github.com/neverinfamous/memory-journal-mcp/commit/394f061a299afd8dff0899090fe8618e18a583a2))
+- explicitly null setTimeout in sandbox context by **Chris LeRoux** ([1453187](https://github.com/neverinfamous/memory-journal-mcp/commit/14531878b052722dc7c1d56205de0c86f85b39ad))
+- transparent routing for team tools and cross-group hallucinations by **Chris LeRoux** ([a2a6d39](https://github.com/neverinfamous/memory-journal-mcp/commit/a2a6d39d6b835fa4abd1347b9f433d66fa23c96f))
+- intercept camelCase search method aliases for parameter mapping by **Chris LeRoux** ([8c2ef95](https://github.com/neverinfamous/memory-journal-mcp/commit/8c2ef951736ba3744fb8288464f5f283f93c0622))
+- correctly convert L2 distance to Cosine Similarity for normalized unit vectors by **Chris LeRoux** ([6f1284f](https://github.com/neverinfamous/memory-journal-mcp/commit/6f1284f5df23b3bcb76ee3915aeea3f76e5abd72))
+- intercept exact_match hallucination in search tools by **Chris LeRoux** ([f94cb13](https://github.com/neverinfamous/memory-journal-mcp/commit/f94cb1327b59261198c00ce2d6cd63944e0fc9cc))
+- enforce include_archived flags in fts and semantic search modes by **Chris LeRoux** ([1129fb3](https://github.com/neverinfamous/memory-journal-mcp/commit/1129fb3dea38d27634e41ba60b63046db437b491))
+- intercept hallucinated query string for _executeRawQueryUnsafe by **Chris LeRoux** ([2348b84](https://github.com/neverinfamous/memory-journal-mcp/commit/2348b84fafc4b43ebe4b6dd2ac1145ed9a809d49))
+- strip string literals before static security scans to prevent false positives by **Chris LeRoux** ([898b795](https://github.com/neverinfamous/memory-journal-mcp/commit/898b795993fc927b84fa189bec9eb072bfe77322))
+- fix readonly paradox when tool-filter restricts core tools by **Chris LeRoux** ([56cfb69](https://github.com/neverinfamous/memory-journal-mcp/commit/56cfb69fc8dec02eaa8af38408997fba26e8793b))
+- sandbox basics, timeout mapping, fetch proxy, and internal schema tools by **Chris LeRoux** ([d7095be](https://github.com/neverinfamous/memory-journal-mcp/commit/d7095be633a8e023ab954954c576daf8f4a99d0f))
+- enforce global readonly config and support readonly tool parameter by **Chris LeRoux** ([c6bcb72](https://github.com/neverinfamous/memory-journal-mcp/commit/c6bcb7243d2c6f95df6cadecbce8e57c68527741))
+- intercept hallucinated script parameter in mj_execute_code by **Chris LeRoux** ([b7a947e](https://github.com/neverinfamous/memory-journal-mcp/commit/b7a947e22ef7ce9dd3f18100259b3bf59c354855))
+- semanticSearch gracefully falls back to full text search when vector results are empty by **Chris LeRoux** ([d8cd5d1](https://github.com/neverinfamous/memory-journal-mcp/commit/d8cd5d16aa3058819a8f1da7c00e437814e6fe5b))
+- relax context schema to z.any() to allow arbitrary injection by **Chris LeRoux** ([74cc1d0](https://github.com/neverinfamous/memory-journal-mcp/commit/74cc1d0847a5c9fd00fe62ccec1352521e06706a))
+- hallucination smoothing aliases and success schema by **Chris LeRoux** ([f447b56](https://github.com/neverinfamous/memory-journal-mcp/commit/f447b56767258d4c51b1dd52ec77599e44be6ea1))
+- propagate uriError formatting into worker script for test compliance by **Chris LeRoux** ([3fdd0f1](https://github.com/neverinfamous/memory-journal-mcp/commit/3fdd0f1dc11bb60470a12734db59666055b2c35a))
+- sandbox resilience, param aliases, and built-in global mapping by **Chris LeRoux** ([af79bb2](https://github.com/neverinfamous/memory-journal-mcp/commit/af79bb24c62537e5d7bb25e49640cf1cbfda0e18))
+- fix author resolution and history hallucination by **Chris LeRoux** ([83665e9](https://github.com/neverinfamous/memory-journal-mcp/commit/83665e95494c47f56df8d2f244f9267ab920b6e4))
+- code mode crud parity by **Chris LeRoux** ([f352313](https://github.com/neverinfamous/memory-journal-mcp/commit/f3523138ff7341021e881809cb2ce8e41b484cfe))
+- prevent filename alias hallucination during backup restore by **Chris LeRoux** ([7534dbe](https://github.com/neverinfamous/memory-journal-mcp/commit/7534dbe8477b353f64cbbc4d21298d132daa6e7f))
+- align API signatures and test payloads for Phase 20 completion by **Chris LeRoux** ([aed4101](https://github.com/neverinfamous/memory-journal-mcp/commit/aed41010763235b37feba3110970a31405f5b72f))
+- intercept empty code payload for schema probing by **Chris LeRoux** ([a89898c](https://github.com/neverinfamous/memory-journal-mcp/commit/a89898ccc433551c2301e750aa8442b66a64480f))
+- integrate createJournalApi for full discoverability and parameter resolution by **Chris LeRoux** ([a57636a](https://github.com/neverinfamous/memory-journal-mcp/commit/a57636a83ff12483aa7fdb1aa566429d2a81acf4))
+- intercept parameter hallucinations, fix restore encryption and audit logs by **Chris LeRoux** ([d4479c3](https://github.com/neverinfamous/memory-journal-mcp/commit/d4479c319b868be17b76f567bd6e601ca8be8450))
+- add cross-group method search fallback in Code Mode by **Chris LeRoux** ([3300f07](https://github.com/neverinfamous/memory-journal-mcp/commit/3300f0752590c2c389ac3b5a5d500a55cd30cc6c))
+- intercept unresolved project_number strings in Code Mode by **Chris LeRoux** ([434778f](https://github.com/neverinfamous/memory-journal-mcp/commit/434778fe93c551d3663f51a196f6ba20d70942c9))
+- display project numbers in Workspaces list to prevent truncation by **Chris LeRoux** ([239b264](https://github.com/neverinfamous/memory-journal-mcp/commit/239b264f1ac6dacba72517cee6cd054a96476acf))
+- resolve outer projectId and move dry_run after normalization by **Chris LeRoux** ([65876dd](https://github.com/neverinfamous/memory-journal-mcp/commit/65876dd94a36fbb0a28ea8842ce3408d509b2b54))
+- widen project_number string resolution to all tools in secureDispatcher by **Chris LeRoux** ([dbef7f7](https://github.com/neverinfamous/memory-journal-mcp/commit/dbef7f717838b8cd08972a960b7ebd1fcaa2bb9f))
+- Unify dynamic method alias mapping and fix schema type validation by **Chris LeRoux** ([0dc49c2](https://github.com/neverinfamous/memory-journal-mcp/commit/0dc49c2b2896c1de04b9cafaff30d8d4f78c5e34))
+- remaining string escaping issues in vector search manager by **Chris LeRoux** ([f21598b](https://github.com/neverinfamous/memory-journal-mcp/commit/f21598b48d38eaf3a8e6f10a999033ce59b0a580))
+- imports and schemas after codemode and cli modularization by **Chris LeRoux** ([559125c](https://github.com/neverinfamous/memory-journal-mcp/commit/559125c210ff7e6b7c56feeeb8f731790efafa9d))
+- update SKILL.md §9 with three-layer alias architecture and shadowing warning by **Chris LeRoux** ([70e05e4](https://github.com/neverinfamous/memory-journal-mcp/commit/70e05e4cb8441d9a7b4d80b8e4b0705fb7482ac1))
+- move listProjects help example from core to analytics group by **Chris LeRoux** ([ff61bcc](https://github.com/neverinfamous/memory-journal-mcp/commit/ff61bcc403829bb550b7d85deaed4b5c7f55ec3a))
+- broken core.getProjects alias pointing to non-existent listProjects by **Chris LeRoux** ([12a9cad](https://github.com/neverinfamous/memory-journal-mcp/commit/12a9cad9db9d52de0d3bb4b13236a2347565b93c))
+- fix get_briefing type error and remove duplicate registration by **Chris LeRoux** ([a47267a](https://github.com/neverinfamous/memory-journal-mcp/commit/a47267a04f702d3df7e45ce675d6108d49506e07))
+- unsafe assignment of error typed value in core.ts by **Chris LeRoux** ([38dfd78](https://github.com/neverinfamous/memory-journal-mcp/commit/38dfd7812b060c0689672b3d7b0beb1ebc9b833b))
+- intercept getBriefing calls in Code Mode sandbox by **Chris LeRoux** ([3e11d1a](https://github.com/neverinfamous/memory-journal-mcp/commit/3e11d1a38d9ba1f353c00d5722295b3a945ee37a))
+- widen project_number schema and improve owner/repo string resolution by **Chris LeRoux** ([10ac8a3](https://github.com/neverinfamous/memory-journal-mcp/commit/10ac8a356a5aa2c94f4ef3891f1107d40e467db9))
+- map listEntries alias to searchEntries to prevent hallucination by **Chris LeRoux** ([a5d4fb5](https://github.com/neverinfamous/memory-journal-mcp/commit/a5d4fb59ed4a33f5a7ee67993e8c7375faba4742))
+- project registry resolution and analytics fallback parsing by **Chris LeRoux** ([70d98dc](https://github.com/neverinfamous/memory-journal-mcp/commit/70d98dce8746288b6e66a4a750aa151c91bb57ae))
+- smooth out hallucinated getConfig and readResource method calls in Code Mode by **Chris LeRoux** ([496a17f](https://github.com/neverinfamous/memory-journal-mcp/commit/496a17fd25bd14e2a598981150561090d1f793bc))
+- enforce strict project_number for core batch_create_entries by **Chris LeRoux** ([e9a53a8](https://github.com/neverinfamous/memory-journal-mcp/commit/e9a53a8e8d5656a120feb3dd4f0b974d83b1a852))
+- resolve test suite failures related to strict project_number enforcement by **Chris LeRoux** ([cd98538](https://github.com/neverinfamous/memory-journal-mcp/commit/cd985384bbede8e512d2ebed8ac0761b2b3dc07a))
+- make limit and offset optional in list_deleted_entries by **Chris LeRoux** ([592df47](https://github.com/neverinfamous/memory-journal-mcp/commit/592df473b89f1e8d2667962bbb3f597581f655ed))
+- automate Markdown escaping bug prevention via context parameter by **Chris LeRoux** ([2db727f](https://github.com/neverinfamous/memory-journal-mcp/commit/2db727f3007b408ec071556e2b55cab82dc1ac2c))
+- typecheck warning for unsafe return in wrapResult by **Chris LeRoux** ([b25fc14](https://github.com/neverinfamous/memory-journal-mcp/commit/b25fc14f53ad907edf96c7d407438d0c4244a4ba))
+- ensure test database debris is cleaned up and remove deprecated pnpm config by **Chris LeRoux** ([1d24683](https://github.com/neverinfamous/memory-journal-mcp/commit/1d246831f10db4b0295114ef8dbe7b36edfd092a))
+- smooth out listProjects proxy interception and array unwrapping by **Chris LeRoux** ([65bbb75](https://github.com/neverinfamous/memory-journal-mcp/commit/65bbb7575e2f2f6eebcf3b03e981f7bbddda34ca))
+- resolve json config parsing for complex objects by **Chris LeRoux** ([214b00b](https://github.com/neverinfamous/memory-journal-mcp/commit/214b00be763a648e3fcc93a82e002bc3ed5f79ec))
+- resolve regression in batch operations to support partial successes via AggregateMcpError by **Chris LeRoux** ([6b37f08](https://github.com/neverinfamous/memory-journal-mcp/commit/6b37f086e938475dcb697e9296f3e8f0e96492cb))
+- Complete getProjects alias interception through deep worker sandbox bindings and shimMj proxy by **Chris LeRoux** ([4f8c654](https://github.com/neverinfamous/memory-journal-mcp/commit/4f8c654239391de5d76a41571bf6b0edc8bfd98b))
+- Map mj.core.getProjects to listProjects to prevent LLM hallucinations by **Chris LeRoux** ([3304759](https://github.com/neverinfamous/memory-journal-mcp/commit/330475954aacac4bbb31dcb09f90db40ed13fc7e))
+- explicitly intercept fetch hallucinations in sandbox to return descriptive SandboxNetworkError by **Chris LeRoux** ([05157bb](https://github.com/neverinfamous/memory-journal-mcp/commit/05157bb6044cbb793399fa8c9258509592dc8cde))
+- update tool aliases and configuration by **Chris LeRoux** ([92642de](https://github.com/neverinfamous/memory-journal-mcp/commit/92642de0a85b70d8d7d57985226bec0b05ccb0de))
+- route top-level readQuery alias to rows wrapper by **Chris LeRoux** ([ec45774](https://github.com/neverinfamous/memory-journal-mcp/commit/ec457742353152288ee7628fbc9d420ef2001ff7))
+- type safety for snake_case mapping by **Chris LeRoux** ([f881656](https://github.com/neverinfamous/memory-journal-mcp/commit/f881656a643c9de466f2a3d51c5a829a7a313bc0))
+- smooth searchProjects and array method hallucinations by **Chris LeRoux** ([67ba7f4](https://github.com/neverinfamous/memory-journal-mcp/commit/67ba7f44abcfa805b4731b50690551286dcdd2ad))
+- resolve eslint warnings in rate limit implementation by **Chris LeRoux** ([95edaba](https://github.com/neverinfamous/memory-journal-mcp/commit/95edaba02aacb959b12932b3a5f4c0b1881c15da))
+- correct isArchived cast in getEntriesByIds and update AI test prompts for search boundary validations by **Chris LeRoux** ([e87109a](https://github.com/neverinfamous/memory-journal-mcp/commit/e87109ad3881655d26b2b3047b88332e7fd5dc2f))
+- code mode hallucination mapping and windows lock race condition by **Chris LeRoux** ([e230ea2](https://github.com/neverinfamous/memory-journal-mcp/commit/e230ea2efdbb1c01987645f93aa28e4d1c19aa61))
+- change team search error code to VALIDATION_ERROR when project number is missing by **Chris LeRoux** ([be20bf9](https://github.com/neverinfamous/memory-journal-mcp/commit/be20bf9ea1e3514b8c6cb8a4fab157f09a259d74))
+- correct history eviction logic and remove restrictive update project number check by **Chris LeRoux** ([c107a74](https://github.com/neverinfamous/memory-journal-mcp/commit/c107a745f315a2e01ced6aeaefd88d4b94894321))
+- import sendProgress in admin and team batch tools by **Chris LeRoux** ([a3a6eca](https://github.com/neverinfamous/memory-journal-mcp/commit/a3a6eca68e960f63a1d9f9bde2f5f7a61caec068))
+- add alias fallbacks for new batch tools to prevent agent hallucinations by **Chris LeRoux** ([4b63d21](https://github.com/neverinfamous/memory-journal-mcp/commit/4b63d21c178e168cd5f15146846ce33ebcbff2d8))
+- trigger docker hub description update on tag pushes by **Chris LeRoux** ([4b9a470](https://github.com/neverinfamous/memory-journal-mcp/commit/4b9a4709cc4922c08e17a254e5a30f8a4bda8da1))
+
+### Performance
+
+- deduplicate mkdirSync calls in sync-vendor.ts by **Chris LeRoux** (with Copilot) ([372a165](https://github.com/neverinfamous/memory-journal-mcp/commit/372a165c67ec685154bcfd766869c31144927dee))
+
+### Reverts
+
+- remove incorrectly added create_entry_minimal tool by **Chris LeRoux** ([e94a11e](https://github.com/neverinfamous/memory-journal-mcp/commit/e94a11eba3fdbcb36b0f3df5b6414869583b78c0))
+
+### Added
+
+- add --no-agent-healing toggle, enforce allowed-io-roots on fallbacks, and sanitize shipped skill by **Chris LeRoux** ([12e1b0a](https://github.com/neverinfamous/memory-journal-mcp/commit/12e1b0aec1d578b9db58b7d7d47b382ee3c6ee03))
+- bundle memory-journal-mcp skill and serve via SEP-2640 by **Chris LeRoux** ([22ef9b5](https://github.com/neverinfamous/memory-journal-mcp/commit/22ef9b552430d536727567c12052b979ca6dd7f0))
+- add maxToolInputElements guard with 25k default by **Chris LeRoux** ([edfb4c3](https://github.com/neverinfamous/memory-journal-mcp/commit/edfb4c31df02c7fc1ee7b9881b50e6e38f179bf2))
+- add quickcommit prompt and set commit default validation to lint by **Chris LeRoux** ([87a5615](https://github.com/neverinfamous/memory-journal-mcp/commit/87a5615f8f1c88c35644877c5dbc15d9431c5fa4))
+- consolidate adversarial plan review journaling by **Chris LeRoux** ([571923e](https://github.com/neverinfamous/memory-journal-mcp/commit/571923eb8f99d23c851ef0d7358f61d2baa7f778))
+- enforce workspace isolation and strict entry rejection by **Chris LeRoux** ([5c3e9d2](https://github.com/neverinfamous/memory-journal-mcp/commit/5c3e9d20ac293bce5544956ed4fbfc9761472c54))
+- patch Code Mode for graceful process.exit restarts by **Chris LeRoux** ([d64b5dd](https://github.com/neverinfamous/memory-journal-mcp/commit/d64b5dda08d52758728e178a0c6d4cbb5bd8d38f))
+- automate initial execution and add graph metrics by **Chris LeRoux** ([b719560](https://github.com/neverinfamous/memory-journal-mcp/commit/b7195600231b570ff7bcd886eb9a40b943fa5174))
+- suppress test suite errors from agent-issues.jsonl by **Chris LeRoux** ([168b74e](https://github.com/neverinfamous/memory-journal-mcp/commit/168b74e0a19cc1879a66fdf47e0bf8a55878c7d3))
+- enforce domain subagent partitioning and 4-dimension optimization protocol in optimize-journal prompt by **Chris LeRoux** ([05135b1](https://github.com/neverinfamous/memory-journal-mcp/commit/05135b1d27cf7bc4b72e530cda8f98dd202588fe))
+- implement MCP server optimization and anti-hallucination guardrails by **Chris LeRoux** ([428cf81](https://github.com/neverinfamous/memory-journal-mcp/commit/428cf817b1cfa2f73b7106eb22787b3e72cba67a))
+- add phase 3 subagent graph linking protocol to optimize-journal prompt by **Chris LeRoux** ([8919dae](https://github.com/neverinfamous/memory-journal-mcp/commit/8919daed7ae6707e2768166ba79d8e785c4e8624))
+- align mcp prompt templates with workspace auto-resolution and code mode by **Chris LeRoux** ([ab61424](https://github.com/neverinfamous/memory-journal-mcp/commit/ab614240173fad99dd5c9caf5b2b63f969da4d82))
+- harden workspace auto-resolution and optimizer auto-repair by **Chris LeRoux** ([d7d389b](https://github.com/neverinfamous/memory-journal-mcp/commit/d7d389b83704902c61a074e8010bb2b1c4b89981))
+- optimize anti-hallucination guardrails and param coercion by **Chris LeRoux** ([623c1d5](https://github.com/neverinfamous/memory-journal-mcp/commit/623c1d589f0f8b60c5d51fefd4778265707a9e1b))
+- enforce strict project assignment and block unassigned entries by **Chris LeRoux** ([381ccaa](https://github.com/neverinfamous/memory-journal-mcp/commit/381ccaa8a3c0023951efca31c39b82d74ea5cece))
+- clarify two-phase execution workflow in optimize-journal prompt by **Chris LeRoux** ([79f65cf](https://github.com/neverinfamous/memory-journal-mcp/commit/79f65cf7999a54e9b128f9721d805e05b83bdf4e))
+- add targetWorkspaceId support to updateEntry for workspace migration by **Chris LeRoux** ([2117b06](https://github.com/neverinfamous/memory-journal-mcp/commit/2117b062d232ff19995e8abc3e433261394ab311))
+- fix workspace resolution and add multi-project cognitive optimization by **Chris LeRoux** ([6fe4717](https://github.com/neverinfamous/memory-journal-mcp/commit/6fe471701b9889e07db3557144e1a69202a083f6))
+- add autoRun parameter to optimize-journal prompt for autonomous scheduled execution by **Chris LeRoux** ([1bfec8d](https://github.com/neverinfamous/memory-journal-mcp/commit/1bfec8dd8271dad091878149b432eabf6202a72f))
+- implement native Datadog observability integration with Grafana, Loki, and OpenMetrics by **Chris LeRoux** ([a4dc0b8](https://github.com/neverinfamous/memory-journal-mcp/commit/a4dc0b81b853d73399472b4dbaa2a06547cc7560))
+- add 'level' to agent issues for grafana log coloring by **Chris LeRoux** ([2c197b9](https://github.com/neverinfamous/memory-journal-mcp/commit/2c197b9110893032a463c193aba11e3ae064c169))
+- integrate observability stack and Datadog/Grafana dashboards by **Chris LeRoux** ([21e6507](https://github.com/neverinfamous/memory-journal-mcp/commit/21e6507dee8f49c2bd9257a2d5644999cd74067d))
+- granular tool filtering and dynamic catalog resource by **Chris LeRoux** ([797834e](https://github.com/neverinfamous/memory-journal-mcp/commit/797834eefe9b28409814c24e040a218a2b0c848f))
+- Removed Project ID from the load-briefing table to reduce ambiguity. Added an instruction to the prompt to instruct agents to search the memory journal before significant tasks. Cleaned up the briefing output to no longer print the full registry list in the Config row, preventing output truncation. by **Chris LeRoux** ([2c9072f](https://github.com/neverinfamous/memory-journal-mcp/commit/2c9072ff2cb2fadde5fbb132de0b396814d546ac))
+- add load-briefing and fix optional args schema logic by **Chris LeRoux** ([2832857](https://github.com/neverinfamous/memory-journal-mcp/commit/28328571e68069fdba58c5e6d3cd58616d32ff72))
+- add graceful auto-commit to badge updates by **Chris LeRoux** ([60b5908](https://github.com/neverinfamous/memory-journal-mcp/commit/60b5908a4819aa8139f9ce35fc7b6cd1868cd1a8))
+- map hallucinated session command to search alias for frictionless execution by **Chris LeRoux** ([b48e89b](https://github.com/neverinfamous/memory-journal-mcp/commit/b48e89b687282525d206afdb0133fb41972b9b70))
+- Implemented Project CRUD tools in the global registry via memory-journal.config.json. Added 'register_project', 'update_project', 'delete_project', 'list_projects', and 'get_project' MCP tools. Registered tools in filtering constants and scope maps. Wired tools to Code Mode via mj.admin. Created CLI commands for seamless local project management. The dynamic context auditor subagent updated all standard test prompts and usability test prompts to ensure 100% SSoT compliance for the new tools. Regenerated dynamic instruction files and Code Map. by **Chris LeRoux** ([2af70b8](https://github.com/neverinfamous/memory-journal-mcp/commit/2af70b8509f1b7d4faf383dfa0a80ca5e181603b))
+- streamline project initialization in CLI and Code Mode by **Chris LeRoux** ([b192502](https://github.com/neverinfamous/memory-journal-mcp/commit/b1925025f8c910e27e0a81a0f1ba1aafd75e1a81))
+- Updated commit wrapper and MCP Prompts to intelligently skip automated journal entries for low-impact commits (< 0.4) unless a history narrative is explicitly provided. Also includes the anti-hallucination gotchas to prevent schema guessing in raw SQL scripts. by **Chris LeRoux** ([188f28d](https://github.com/neverinfamous/memory-journal-mcp/commit/188f28d5a3d5dcc14a798e20e50ef3cf68b64e5e))
+- Implemented single-file YAML frontmatter capability for entry parsing, deprecating the legacy multi-file metadata payload pattern. by **Chris LeRoux** ([f1e089a](https://github.com/neverinfamous/memory-journal-mcp/commit/f1e089a5e20b2614f0caca793ab78db4030e40a4))
+-  by **Chris LeRoux** ([cdaeaf6](https://github.com/neverinfamous/memory-journal-mcp/commit/cdaeaf63c412717677fa3275dd88f84e904af601))
+- sync cli-audit workflow by **Chris LeRoux** ([8d84389](https://github.com/neverinfamous/memory-journal-mcp/commit/8d843898dd3cd2bbb30493a578a0c9ddedf88e19))
+- Updated the dbHint messages in the internal MCP prompts (session-summary, team-session-summary, create-entry, update-entry) defined in src/handlers/prompts/workflow.ts to correctly instruct calling agents to use the memory-journal-mcp CLI instead of the legacy MCP tools for entry mutation. by **Chris LeRoux** ([1beb208](https://github.com/neverinfamous/memory-journal-mcp/commit/1beb2082f8ac9dd03174e5b2fce64687219c1acd))
+- Built src/cli/commands/entry.ts to support direct SQLite interaction via --file and --content args, bypassing MCP serialization overhead for large markdown entries. Updated all internal instruction files (base.ts, core.ts, github.ts) to instruct agents to prefer these CLI patterns. Ensured correct version concurrency and strict TS typings. by **Chris LeRoux** ([3644bd6](https://github.com/neverinfamous/memory-journal-mcp/commit/3644bd6709d76c8248e8ca23cc7115ad9d015f22))
+- Category: Refactored
+Separated the `session-summary` prompt into distinct `session-summary` and `team-session-summary` prompts. Added lightweight `create-entry` and `create-team-entry` prompts to encourage granular, mid-session logging. All prompts strictly enforce required schemas for tags, relationships, impact/trust scores, and agent-context lookup. by **Chris LeRoux** ([06abd23](https://github.com/neverinfamous/memory-journal-mcp/commit/06abd23f3f280b28d21ca033547ab7a76588f7ef))
+- Category: Changed
+Implemented autonomous updates for `code-map.md` by hooking into the `session-summary` prompt handler. The system now spawns a detached `tsx` process to execute the `update-code-map.ts` script in the background. Included cross-platform `shell` invocation, module-level `import.meta.url` path resolution, and a lightweight `isGeneratingCodeMap` memory lock to prevent concurrency issues, seamlessly resolving the Copilot audit findings. by **Chris LeRoux** ([b4c253f](https://github.com/neverinfamous/memory-journal-mcp/commit/b4c253f38a4756c9ec144a78dfeb616274770415))
+- Category: Changed
+Applied Copilot's critical safety findings to the adversarial-plan-review prompt (bypassing interactive hanging using pass-through syntax `gh copilot -- -p ...`). Extrapolated this mandatory, non-interactive external validation step to all other adversarial prompts to ensure systematic Copilot reviews without hanging agent environments. by **Chris LeRoux** ([999f1f9](https://github.com/neverinfamous/memory-journal-mcp/commit/999f1f9f5faa5622fe8fe2f5e28b44a57f68ead4))
+- Upgraded the git history briefing telemetry to dynamically parse pushed/unpushed commits. Local commits render natively without broken URLs, pushed commits automatically restore their github links, and the briefing table now explicitly surfaces the raw commit message for maximum agent context without needing follow-up bash commands. by **Chris LeRoux** ([f84dd19](https://github.com/neverinfamous/memory-journal-mcp/commit/f84dd19ead2d8af4ddde7f0f5bf1fac9394f2499))
+- Removed broken GitHub HTTP links for unpushed local commits in the briefing output to prevent 404s. Upgraded the skills count text to generate a clickable absolute file:// link for instant agent/user navigation. by **Chris LeRoux** ([7eb12c6](https://github.com/neverinfamous/memory-journal-mcp/commit/7eb12c6141d35d3ddc9e57caf8e84d83534c43f9))
+- Added memory://agent-context/{repo} explicitly to the briefing output System panel so that agents visually recognize the resource without needing to consult documentation. by **Chris LeRoux** ([364b1f4](https://github.com/neverinfamous/memory-journal-mcp/commit/364b1f463aad1e9f500fd85acabf141573dafe9d))
+- Updated server instructions, resources, and tool interfaces to mandate agent context and session tracking. Refactored server initialization to inject context payloads. by **Chris LeRoux** ([7c41719](https://github.com/neverinfamous/memory-journal-mcp/commit/7c41719ed5186347c313a462fe4bdac74f935ee5))
+- Added session_id column to memory_journal to enforce agent context isolation. Updated all database operations and tests to support session tracking. by **Chris LeRoux** ([3e90f37](https://github.com/neverinfamous/memory-journal-mcp/commit/3e90f373994ebcee5b2ca9cb204a9e759228918a))
+- Standardized adversarial prompt names to use the 'adversarial-' prefix across the codebase and tests. Fixed typecheck errors in lifecycle-tools.ts and updated the package.json test scripts to run 'pnpm run check' before testing. by **Chris LeRoux** ([8b55871](https://github.com/neverinfamous/memory-journal-mcp/commit/8b5587107a59fd989759a1c8d8eafb3dc59e2892))
+- Category: Changed. Integrated autonomous pruning intervals into the server scheduler and updated importance calculations to natively reward or penalize entries based on their validation_status. Added a manual trigger tool (mj_run_auto_prune) for agents to perform cleanups interactively. by **Chris LeRoux** ([6a41b1f](https://github.com/neverinfamous/memory-journal-mcp/commit/6a41b1f05e46e3ad8d1cd51d55f388b6a741fa60))
+- Add verify-work prompt to adversarial workflows to retroactively audit recent journal entries for hallucinations, misaligned heuristics, and omissions. by **Chris LeRoux** ([a759658](https://github.com/neverinfamous/memory-journal-mcp/commit/a759658adda3bd0eb5e98d75e12748f360c506a9))
+- Add mcp-heal prompt to workflow.ts for automatic hallucination recovery. Inject anti-hallucination alerts into briefing. Apply documentation audit fixes across README, DOCKER_README, and code-map. by **Chris LeRoux** ([4cfc426](https://github.com/neverinfamous/memory-journal-mcp/commit/4cfc4263de6e89887b253f1ade051483b7c93559))
+- Added new tools for determining document staleness, updated schemas to support the new trustScore and impactScore attributes, and integrated them into the tool layer. by **Chris LeRoux** ([ab419fc](https://github.com/neverinfamous/memory-journal-mcp/commit/ab419fc95418298dd2739651628161f864c6893c))
+- Introduced trust scores and document anchor entities into the schema to improve confidence weighting of entries and allow source code links. Added database migration 012 and updated the SQLite adapter CRUD logic accordingly. by **Chris LeRoux** ([4aca35e](https://github.com/neverinfamous/memory-journal-mcp/commit/4aca35e9063246fb2c6c40f1ed0338235daf8523))
+- Added get_commit_history, search_commits, get_release_info, get_unreleased_commits, and analyze_commit_patterns tools with dual-schema Zod validation and strict security limits (max 200 chars queries, no regex control sequences, timeouts, and sanitized path errors). Fully integrated with the Code Mode sandbox via bindings. by **Chris LeRoux** ([f071158](https://github.com/neverinfamous/memory-journal-mcp/commit/f07115809ffa7d0631409d52ca4a9fe13071dee7))
+- Implemented workspace_id auto-discovery from process.cwd() using the project registry. by **Chris LeRoux** ([2608752](https://github.com/neverinfamous/memory-journal-mcp/commit/2608752819e0abf10e4ccb53be39f086b4bd4cc3))
+- Introduced workspace_id multi-tenancy isolation for the memory-journal database layer and tool handlers. by **Chris LeRoux** ([1988fd3](https://github.com/neverinfamous/memory-journal-mcp/commit/1988fd364de1c596a657216b7f65249745399d0e))
+- Exposed 'sleep' and 'setTimeout' to the Code Mode sandbox environment, satisfying the documented instructions that permit minor operational delays and timeouts for orchestrating automated scripts. by **Chris LeRoux** ([d0c1ee1](https://github.com/neverinfamous/memory-journal-mcp/commit/d0c1ee1e35a2e261bace1f8971c420e4079b4f9b))
+- Implemented an automatic fallback in Code Mode to resolve the 'project_number' based on the server's current working directory. The sandbox handler now checks the server's 'projectRegistry' and seamlessly injects the matching project ID into tools like 'create_entry', preventing validation failures when agents forget to provide the project explicitly. by **Chris LeRoux** ([c129786](https://github.com/neverinfamous/memory-journal-mcp/commit/c129786ca5b3f05a1aa59459a68e2ea1c6825031))
+- Briefing now shows relative CI age (e.g. '3d ago'), compresses workspace paths via common prefix elision with forward slashes, and omits the Journal row when empty — saving ~100 tokens total. by **Chris LeRoux** ([d0cf1ff](https://github.com/neverinfamous/memory-journal-mcp/commit/d0cf1ffa58c5f64c5e86403c5efcecc5ff027ce3))
+
+### Changed
+
+- split js and types build in memory-journal-mcp for faster hot reloads by **Chris LeRoux** ([27ce24e](https://github.com/neverinfamous/memory-journal-mcp/commit/27ce24e13272c6684787ddae0d9215df11acd243))
+- optimize vitest and playwright test suites for parallel execution and faster runtimes by **Chris LeRoux** ([cbd1d27](https://github.com/neverinfamous/memory-journal-mcp/commit/cbd1d27b1fbf7d88c2dc4c64ab684ad6132be293))
+- Redesigned the commit prompt to use semantic validation tiers (none/lint/full). Removed hardcoded package manager and commit wrapper references to ensure the prompt is toolchain-agnostic. Cleaned up stale quick-commit references. by **Chris LeRoux** ([f30b991](https://github.com/neverinfamous/memory-journal-mcp/commit/f30b9919c43e79c62ec20b2453fed26bc83ab729))
+- Refactored context-section.ts to simplify journal summaries, reducing verbosity and preventing output truncation. This was part of the earlier effort to clean up the briefing UX. by **Chris LeRoux** ([9bc21d9](https://github.com/neverinfamous/memory-journal-mcp/commit/9bc21d9b262365f129d1a3f41b36e98338e71a81))
+- optimize memory-journal-mcp with batching and rbac caching by **Chris LeRoux** ([f0d507f](https://github.com/neverinfamous/memory-journal-mcp/commit/f0d507fbc52eed1e2ff47f6d986bda13d7fd9765))
+- adjust optimize-journal output for graceful copilot fallback and clearer user options by **Chris LeRoux** ([01baf6a](https://github.com/neverinfamous/memory-journal-mcp/commit/01baf6a66675b654962a383f9c04eab0c2325168))
+- implement mcp-heal rules to prevent agent hallucinations by **Chris LeRoux** ([94a2206](https://github.com/neverinfamous/memory-journal-mcp/commit/94a2206a6787e5c087f18556c90dcd8143868740))
+- inject agent issue logger and fix tool schema coercions by **Chris LeRoux** ([1816e49](https://github.com/neverinfamous/memory-journal-mcp/commit/1816e490d2db0adc7a968c0795049086da41bf82))
+- add total unique tags and relationship breakdown to optimize-journal by **Chris LeRoux** ([ec42d87](https://github.com/neverinfamous/memory-journal-mcp/commit/ec42d87aecbb42ce3287de1b92411cf11b5d2a46))
+- add workspace breakdown and agent instructions to optimize-journal by **Chris LeRoux** ([a998ec2](https://github.com/neverinfamous/memory-journal-mcp/commit/a998ec2599d4856659a99781759eba3b61f49696))
+- calculate true orphans in briefing metric based on importance threshold by **Chris LeRoux** ([9e068b0](https://github.com/neverinfamous/memory-journal-mcp/commit/9e068b0f42b9b6647f50b850f40a93c33f268a71))
+- Implemented workspace_id and project_number resolution across core entry retrieval and relationship management tools (get_entry, get_recent, history, link, visualize). Ensured DatabaseAdapter calls use the correct workspace context instead of defaulting to the global pool. by **Chris LeRoux** ([68e3ae6](https://github.com/neverinfamous/memory-journal-mcp/commit/68e3ae6cc2fcd6f9febf0758349887a10b34f5b8))
+- update optimize-journal for dynamic workspaces and robust execution by **Chris LeRoux** ([4e1953c](https://github.com/neverinfamous/memory-journal-mcp/commit/4e1953c9904f4b58d366fbd481b072880e427e3f))
+- enhance adversarial-audit-security prompt with agentic threat vectors by **Chris LeRoux** ([f03fdfa](https://github.com/neverinfamous/memory-journal-mcp/commit/f03fdfad11abb0fc78cec5e102b9c2e18501cc27))
+- accurately scope summary searches to target workspace and sort by timestamp by **Chris LeRoux** ([8bda3b5](https://github.com/neverinfamous/memory-journal-mcp/commit/8bda3b5608521bdb0140a84bfc2f5bd92785fbda))
+- accurately scope entry counts and searches to workspace by **Chris LeRoux** ([4ae7396](https://github.com/neverinfamous/memory-journal-mcp/commit/4ae739614eeaaa04d4096de7d4788948b35a7557))
+- resolve orphan percentage calculation and empty entries list by **Chris LeRoux** ([1b7899e](https://github.com/neverinfamous/memory-journal-mcp/commit/1b7899eb56316c43e63130ce40f0ceca14f92852))
+- add mcp-heal guardrails and fix workspace orphan count by **Chris LeRoux** ([560bf55](https://github.com/neverinfamous/memory-journal-mcp/commit/560bf55df2aad30616f8c455078afd9f1dc0d08b))
+- enhance optimize-journal prompt with agent-managed editing and project consolidation rules by **Chris LeRoux** ([dfd868a](https://github.com/neverinfamous/memory-journal-mcp/commit/dfd868ad8c766cb179b9088adc3cf0868096ee93))
+- align orphan counts with workspace scopes by **Chris LeRoux** ([deabe80](https://github.com/neverinfamous/memory-journal-mcp/commit/deabe806ffe5419be8f5bf7ad4076abd2f1a420a))
+- allow fractional days for pruning and clarify table names in gotchas by **Chris LeRoux** ([a7c3f4d](https://github.com/neverinfamous/memory-journal-mcp/commit/a7c3f4daa8a8dafe0e73e719b4442a99813d6abb))
+- resolve typescript strictness and linting errors in workspace and entry resolution by **Chris LeRoux** ([3ac9156](https://github.com/neverinfamous/memory-journal-mcp/commit/3ac9156d9b08e4ea41486881b4572f254b052571))
+- resolve workspace_id split-brain in agent-context by **Chris LeRoux** ([8d49f80](https://github.com/neverinfamous/memory-journal-mcp/commit/8d49f802bd688701321392531283d5ec410d51f2))
+- Explicitly instructs agents to use semicolons instead of unix shell operators when chaining commands in Windows PowerShell to prevent ParserError. by **Chris LeRoux** ([11ea352](https://github.com/neverinfamous/memory-journal-mcp/commit/11ea352acb2b1a1434fd426c8d203b63406897aa))
+- Added a global process.argv interceptor to automatically convert hallucinated snake_case flags to kebab-case before passing them to the Commander dispatcher. by **Chris LeRoux** ([184b675](https://github.com/neverinfamous/memory-journal-mcp/commit/184b6756107f96529a90cd15e4d940f075486600))
+- Added autonomous healing safeguards to the Commander CLI output and explicitly injected instructions into the global help schema to prevent snake_case flag hallucinations. by **Chris LeRoux** ([02832c3](https://github.com/neverinfamous/memory-journal-mcp/commit/02832c33837f1d69f3cb77b47639befc3c04ed56))
+- add snake_case aliases to entry commands and refine doc-audit workflow by **Chris LeRoux** ([7e629a6](https://github.com/neverinfamous/memory-journal-mcp/commit/7e629a6f3d11dfdb5a77ed2a7752a468f4924a02))
+-  by **Chris LeRoux** ([a584edf](https://github.com/neverinfamous/memory-journal-mcp/commit/a584edf4ae2caa7d7c4dede074779196dfa196ee))
+-  by **Chris LeRoux** ([4bdfde1](https://github.com/neverinfamous/memory-journal-mcp/commit/4bdfde11f494c6382773981e4b9e0b21a9c215f0))
+-  by **Chris LeRoux** ([863a095](https://github.com/neverinfamous/memory-journal-mcp/commit/863a09585f9934eebcbdd3995015daa99960ca65))
+-  by **Chris LeRoux** ([e0dbf9e](https://github.com/neverinfamous/memory-journal-mcp/commit/e0dbf9efb21e328081deb8dee82fce6f8243b296))
+- update commit workflows to use optimized CLI and heal payloads by **Chris LeRoux** ([16ee3df](https://github.com/neverinfamous/memory-journal-mcp/commit/16ee3df4fbaec94c990a68e7415b89e3c94ad10e))
+- Extracted CLI command options into option-groups.ts to improve modularity and maintainability of the CLI configuration. by **Chris LeRoux** ([c4653d5](https://github.com/neverinfamous/memory-journal-mcp/commit/c4653d57fe253402958999d61ff4a59a90a7c878))
+-  by **Chris LeRoux** ([8c0691f](https://github.com/neverinfamous/memory-journal-mcp/commit/8c0691f21cb8dd8ce70db2d60732b8654ff1e6af))
+-  by **Chris LeRoux** ([6458e45](https://github.com/neverinfamous/memory-journal-mcp/commit/6458e455deff55174b9de3dbd05da1b548e089b2))
+-  by **Chris LeRoux** ([0f60cc5](https://github.com/neverinfamous/memory-journal-mcp/commit/0f60cc5bfd0dda9fd052fb1abf4cd1742f1fa692))
+-  by **Chris LeRoux** ([0255afa](https://github.com/neverinfamous/memory-journal-mcp/commit/0255afa72ce8fae7615f6c888068a1c00c6da283))
+-  by **Chris LeRoux** ([6378aaf](https://github.com/neverinfamous/memory-journal-mcp/commit/6378aafde3635326c1cfd9716788ecef94288930))
+-  by **Chris LeRoux** ([78cf297](https://github.com/neverinfamous/memory-journal-mcp/commit/78cf2971c5d9ffa515207c63500db5b1e531c985))
+- add fallback support to config resolver to prevent fatal cli initialization errors by **Chris LeRoux** ([e61df9c](https://github.com/neverinfamous/memory-journal-mcp/commit/e61df9c219f3cdf2d520dcf448bbee2a519415fb))
+-  by **Chris LeRoux** ([f1a4967](https://github.com/neverinfamous/memory-journal-mcp/commit/f1a496756d2ca2909c062f5956f4cfb0cfa6a37c))
+-  by **Chris LeRoux** ([88c375e](https://github.com/neverinfamous/memory-journal-mcp/commit/88c375e1ad9f6493916aa8928ca9cdb9f61b8431))
+- auto-heal api namespace and arguments hallucinations by **Chris LeRoux** ([93cb136](https://github.com/neverinfamous/memory-journal-mcp/commit/93cb136b3fb6d614fbf69264e9a0fa31bc042d4b))
+-  by **Chris LeRoux** ([9e7ffe8](https://github.com/neverinfamous/memory-journal-mcp/commit/9e7ffe8140b6b989276eccfc217d4b559277bde2))
+-  by **Chris LeRoux** ([832d0b8](https://github.com/neverinfamous/memory-journal-mcp/commit/832d0b85385655e7ee60f3d0fca729fc0ad4f7fe))
+-  by **Chris LeRoux** ([c18efa9](https://github.com/neverinfamous/memory-journal-mcp/commit/c18efa990e8bdcf4b5efa7f1d686cea5a6c6651d))
+-  by **Chris LeRoux** ([172b5fb](https://github.com/neverinfamous/memory-journal-mcp/commit/172b5fbf3c2a1a2887262c1afa32abf956abfab9))
+-  by **Chris LeRoux** ([85ed604](https://github.com/neverinfamous/memory-journal-mcp/commit/85ed60436ebf726cc6d85568bc65a910bf81567c))
+-  by **Chris LeRoux** ([b3067c8](https://github.com/neverinfamous/memory-journal-mcp/commit/b3067c8ff088d0bf367bfc01d1562232ba599579))
+-  by **Chris LeRoux** ([01ee870](https://github.com/neverinfamous/memory-journal-mcp/commit/01ee8705595099560800106b80f4016c7a9e4dfd))
+-  by **Chris LeRoux** ([a40d046](https://github.com/neverinfamous/memory-journal-mcp/commit/a40d0469a4ac5f78ee854c57755e7218bbc83163))
+- enforce cli and conditional journaling for adversarial audits by **Chris LeRoux** ([d9e83c3](https://github.com/neverinfamous/memory-journal-mcp/commit/d9e83c3e42500bed26a2f93c4932480f83308506))
+- Category: Changed
+- Updated tool, prompt, and resource counts across README.md, DOCKER_README.md, and .github/copilot-instructions.md.
+- Injected 5 missing configuration keys into mcp-config-example.json to match SSoT.
+- Fixed the MCP_CORS_ORIGIN environment variable in docker-compose.yml to match standard CORS_ORIGIN.
+- Ensured .github/copilot-instructions.md references the new Adaptive Instruction Architecture. by **Chris LeRoux** ([d549dd9](https://github.com/neverinfamous/memory-journal-mcp/commit/d549dd9db0ca5838850fdf6aae0bcad9aeb3cfdf))
+- unify metadata payload processing by **Chris LeRoux** ([dc73913](https://github.com/neverinfamous/memory-journal-mcp/commit/dc73913a1ba849d8fd0cc0e6c958f360992eb6b5))
+- filter trivial commits using briefingImportanceThreshold by **Chris LeRoux** ([adc2150](https://github.com/neverinfamous/memory-journal-mcp/commit/adc2150a21c22fe0a7469a2f5660a46107d59c6e))
+- inject project registry map into prompts and resolve strict typescript lint errors by **Chris LeRoux** ([993ff06](https://github.com/neverinfamous/memory-journal-mcp/commit/993ff065e2cd6be4a928ec4087b854cb7c3f2a6d))
+- Replaced raw git log parsing with lib-git-history JSON ingestion for the Briefing context, heavily optimizing the structural density of git log displays and including confidence scores natively. by **Chris LeRoux** ([ec469e0](https://github.com/neverinfamous/memory-journal-mcp/commit/ec469e0955be99039f9da895a311f11d0ef88507))
+- Changed DB_PATH and TEAM_DB_PATH to :memory: in vitest config to drastically speed up isolated unit tests by completely bypassing file I/O locks. by **Chris LeRoux** ([3453c68](https://github.com/neverinfamous/memory-journal-mcp/commit/3453c689649e8e4525d90550f170bfb488f8581a))
+- Refactored server-instructions.ts into modular files and updated documentation to resolve drift across READMEs, .env, and Wiki. by **Chris LeRoux** ([3e5721c](https://github.com/neverinfamous/memory-journal-mcp/commit/3e5721c0101fd164c64c81a1b4ba8993cc63dab7))
+- Dependency Updates:
+- `@types/node`: `25.9.4` → `26.0.0`
+- `better-sqlite3-multiple-ciphers`: `12.10.0` → `12.11.1`
+- `globals`: `17.6.0` → `17.7.0`
+- `typescript-eslint`: `8.61.1` → `8.62.0`
+- `Dockerfile`: Updated `sqlite-vec` from `v0.1.7-alpha.2` to `v0.1.9` to perfectly match the `package.json` specification. by **Chris LeRoux** ([3e7cf3e](https://github.com/neverinfamous/memory-journal-mcp/commit/3e7cf3e9638e81f46e015a7babf3bd3212eb0598))
+- Removed residual Hush Protocol 'team_pass_flag' etc. proxy mappings, static help text, shared BriefingConfig definitions, and test headers to finalize architectural cleanup of team flag tools. by **Chris LeRoux** ([dc0fab5](https://github.com/neverinfamous/memory-journal-mcp/commit/dc0fab56c075bcfd0e15556dfb851c99cf42fdfb))
+- Fixed drift in user-facing documentation regarding deprecated CLI flags and missing environment variables. Removed legacy INSTRUCTION_LEVEL references and added TOOL_FILTER/HOST fallbacks to .env.example. Restored compiled Adamic workflow YAMLs. by **Chris LeRoux** ([83366e5](https://github.com/neverinfamous/memory-journal-mcp/commit/83366e5a8add860c3a217dc25b158eca405eb27e))
+- Category: Changed
+Synchronized `lib-agent-exec` vendor plugins from `adamic` repository to fix the `playwright test` interactive input stall that was blocking E2E test runs. The synchronization brought in the process-controller fix that hoists shell built-in blocking (dir, echo, etc.) to apply to native Windows executions, preventing mysterious deadlocks. by **Chris LeRoux** ([318dcb3](https://github.com/neverinfamous/memory-journal-mcp/commit/318dcb39c6fe219c3e72643d44a5777e605a6936))
+- Fixed MCP_CORS_ORIGIN naming mismatch in .env.example and removed dead GitHub Commander environment variables from README. by **Chris LeRoux** ([cbcd5dc](https://github.com/neverinfamous/memory-journal-mcp/commit/cbcd5dc8f2ec5668e391f281eb7bfad3e8883247))
+- Removed legacy tests that were asserting against the deleted GitHistoryClient. by **Chris LeRoux** ([a9db66e](https://github.com/neverinfamous/memory-journal-mcp/commit/a9db66e9401c6c76f0498ace7f19012dbcc4427f))
+- Updated code map and README to reflect session isolation, agent context integration, and removed legacy git architecture. by **Chris LeRoux** ([e2ea36c](https://github.com/neverinfamous/memory-journal-mcp/commit/e2ea36cab4469dc3293a1a0dd745ab6eb42f2089))
+- Deleted legacy src/git module following migration to adamic/lib-git-history. Replaced corresponding tools and tests to use the new vendor integration. by **Chris LeRoux** ([a8cb414](https://github.com/neverinfamous/memory-journal-mcp/commit/a8cb414c66dfaf45bb04496c5c78e64a9119ecc4))
+- Category: sync-vendor\n\nSynced latest substrate hardening from adamic (d981022) to ensure robust process execution. by **Chris LeRoux** ([79010e8](https://github.com/neverinfamous/memory-journal-mcp/commit/79010e843145ec2144f28b6efa3d0240677d04e4))
+- Synchronized SSoT counts and added missing configurations per doc-audit workflow. by **Chris LeRoux** ([4c16917](https://github.com/neverinfamous/memory-journal-mcp/commit/4c1691772b4b8c60431b40db41e1a4aaacaa7d68))
+- Category: Changed
+Updated prompt test suite to target index.html instead of README.md for the refactored SEO audit. by **Chris LeRoux** ([472ca60](https://github.com/neverinfamous/memory-journal-mcp/commit/472ca6051fc4ba510f1fbc1d731b7c954bb87f53))
+- Category: Changed
+Refactored audit-seo-docs to audit-seo, focusing exclusively on technical SEO, semantic HTML, and Core Web Vitals. by **Chris LeRoux** ([6396009](https://github.com/neverinfamous/memory-journal-mcp/commit/639600974ed34ef4cb7e5c74f38ed09e63bab632))
+- Added Workflow 7 (Deep Context Optimization) to mj-mcp-optimize skill documentation. Updated session start routing to mandate comprehensive implementation plans. Documented database compaction rules advising against running VACUUM or PRAGMA optimize via the Code Mode bridge on sqlcipher. by **Chris LeRoux** ([a98c60d](https://github.com/neverinfamous/memory-journal-mcp/commit/a98c60de97ce1f0550dbd88ffd1ef26c3819359e))
+- Summarized DOCKER_README.md to avoid Docker Hub character limits and updated tool counts in reference docs. by **Chris LeRoux** ([dcc72ce](https://github.com/neverinfamous/memory-journal-mcp/commit/dcc72cecb899f9190b02289bb763c2d6b83284d4))
+- Bumped dependencies to patch known vulnerabilities. by **Chris LeRoux** ([ae56f33](https://github.com/neverinfamous/memory-journal-mcp/commit/ae56f33acb2622f7cd1a24226bbd33e7b1d4428b))
+- Removed all legacy instructionLevel functionality from configuration, CLI flags, and briefing generation, enforcing full instructions system-wide. Realigned workspace-id to default-workspace-id in configuration bindings to match CLI parameters, and patched drift issues discovered during adversarial documentation audit. by **Chris LeRoux** ([7465cac](https://github.com/neverinfamous/memory-journal-mcp/commit/7465caceefc2179ea9f6fd26bc4515357a606868))
+- Replaces process.cwd() multi-tenancy auto-discovery with call-time workspace resolution using project_number by **Chris LeRoux** ([6633c2b](https://github.com/neverinfamous/memory-journal-mcp/commit/6633c2bbdd1dff30124f32b5ebc53fac14d2999b))
+- Migrated the mj-mcp-heal skill to a centralized workflow slash command in the adamic repository for ecosystem-wide use. by **Chris LeRoux** ([5e04daf](https://github.com/neverinfamous/memory-journal-mcp/commit/5e04daf748596b5097aa534d81d60ec91662e25e))
+- Fixed: Replaced inline \equire\ imports with standard ES module imports in the Code Mode handler to resolve ESLint warnings. by **Chris LeRoux** ([83811a8](https://github.com/neverinfamous/memory-journal-mcp/commit/83811a8743a547bdc18d58b3ed36e181f66922c1))
+- Updated the mj-mcp-heal skill document to formally introduce 'The Prevention Priority'. It mandates that agents should first attempt to silently coerce hallucinatory payloads (Prevention) before falling back to throwing actionable custom validation errors (Mitigation), ensuring a more resilient environment for future interactions. by **Chris LeRoux** ([6a273cd](https://github.com/neverinfamous/memory-journal-mcp/commit/6a273cd0dac4b3693b76f808a2b6d5998b489282))
+
+### Fixed
+
+- deduplicate DatabaseAdapter and fix CLI IO/project config resolution by **Chris LeRoux** ([5dd2d6a](https://github.com/neverinfamous/memory-journal-mcp/commit/5dd2d6af94d41f46f3679938d348aab7e98e1b75))
+- require exp claim on OAuth tokens and log resource URI by **Chris LeRoux** ([849fb53](https://github.com/neverinfamous/memory-journal-mcp/commit/849fb53346da2938e42052f3ec6f319a86b8c485))
+- declare dotenv/picocolors and verify vendored deps in sync-vendor by **Chris LeRoux** ([e430fad](https://github.com/neverinfamous/memory-journal-mcp/commit/e430fad15d9f322b39666b75e79c55820934b3e0))
+- use pnpm 11 and copy .pnpmfile.cjs so frozen install works by **Chris LeRoux** ([e1e2ffb](https://github.com/neverinfamous/memory-journal-mcp/commit/e1e2ffb546cb86b8a7ca1391ba2d5bcd754e0958))
+- heal MCP server guardrails, aliases, and error handlers by **Chris LeRoux** ([d41e747](https://github.com/neverinfamous/memory-journal-mcp/commit/d41e747e2cf4a789a321ce6c599b7d16372604f9))
+- show and resolve registry project_number in load-briefing instead of list position by **Chris LeRoux** ([7bf5f0a](https://github.com/neverinfamous/memory-journal-mcp/commit/7bf5f0aa599a5ff32d48e7fdcbb458393e1d93d8))
+- heal MCP server guardrails, aliases, and error handlers by **Chris LeRoux** ([1a4c0bd](https://github.com/neverinfamous/memory-journal-mcp/commit/1a4c0bd747ff9fd1ba76f6809d82103507dac442))
+- heal MCP server guardrails, aliases, and error handlers by **Chris LeRoux** ([896d03f](https://github.com/neverinfamous/memory-journal-mcp/commit/896d03f45360da39ecf5cf95f063c48387c16e7d))
+- heal MCP server guardrails, aliases, and error handlers by **Chris LeRoux** ([e9ee3e9](https://github.com/neverinfamous/memory-journal-mcp/commit/e9ee3e93101651f3e0c03a01432e5628fd6b06c6))
+- heal MCP server guardrails, aliases, and error handlers by **Chris LeRoux** ([27bad28](https://github.com/neverinfamous/memory-journal-mcp/commit/27bad28f391fda6eb323c2b36f3ed48a277bbe76))
+- heal MCP server guardrails, aliases, and error handlers by **Chris LeRoux** ([da49136](https://github.com/neverinfamous/memory-journal-mcp/commit/da49136412c55bd8b99ce86685a3c602c6ca3694))
+- heal MCP server guardrails, aliases, and error handlers by **Chris LeRoux** ([88c30f2](https://github.com/neverinfamous/memory-journal-mcp/commit/88c30f2832eb0853b6ba1db7a6e117cfc560aeb9))
+- heal MCP server guardrails, aliases, and error handlers by **Chris LeRoux** ([22fc1f8](https://github.com/neverinfamous/memory-journal-mcp/commit/22fc1f8e34aa28d5538d84ad59856da0cfdf8e1b))
+- heal MCP server guardrails, aliases, and error handlers by **Chris LeRoux** ([92e5b90](https://github.com/neverinfamous/memory-journal-mcp/commit/92e5b90f75b960aff67cc2d7895aae97c23e535a))
+- heal valid string literal preservation and cross-group aliases by **Chris LeRoux** ([f471da8](https://github.com/neverinfamous/memory-journal-mcp/commit/f471da809389cb64b62b4303fbed0fe385db03ca))
+- heal MCP server guardrails, aliases, and error handlers by **Chris LeRoux** ([9a6fef2](https://github.com/neverinfamous/memory-journal-mcp/commit/9a6fef2a659549e9b9ed43beb6b31684befc489d))
+- heal fs and path import tdz reference error by **Chris LeRoux** ([c1a87b1](https://github.com/neverinfamous/memory-journal-mcp/commit/c1a87b1c3ba761d742f3df0309bd0002780ba45b))
+- heal dynamic mcp imports, execute unwrapping, and prompt synthesis by **Chris LeRoux** ([bcf2441](https://github.com/neverinfamous/memory-journal-mcp/commit/bcf2441f64c01f968b25f5129c0caaabe40a072c))
+- heal MCP server guardrails, aliases, and error handlers by **Chris LeRoux** ([9a34b8c](https://github.com/neverinfamous/memory-journal-mcp/commit/9a34b8c5ca1f890af274c18b6664f703bf65696e))
+- heal MCP server guardrails, aliases, and error handlers by **Chris LeRoux** ([1ddf18b](https://github.com/neverinfamous/memory-journal-mcp/commit/1ddf18bcc0fe643dbded80e7a87c1917d1699aa2))
+- heal MCP server guardrails, aliases, and error handlers by **Chris LeRoux** ([a829a02](https://github.com/neverinfamous/memory-journal-mcp/commit/a829a023adda25f7a4d73aa76930a9d36e6acf2a))
+- heal sqlite and db schema introspection and help methods by **Chris LeRoux** ([fb0fab9](https://github.com/neverinfamous/memory-journal-mcp/commit/fb0fab9ae7917d627ebc3b536bf0e6f6d53072f7))
+- heal dynamic import and safe fs stat inspections by **Chris LeRoux** ([9674d4c](https://github.com/neverinfamous/memory-journal-mcp/commit/9674d4c5c8fdd81bd390041701411ac6720dd7a5))
+- heal JSON payloads, updateMemory globals, and method help introspection by **Chris LeRoux** ([e853029](https://github.com/neverinfamous/memory-journal-mcp/commit/e853029c84a7d8857ba738a03494db42880f93f9))
+- heal MCP server guardrails, aliases, and error handlers by **Chris LeRoux** ([c9fb41f](https://github.com/neverinfamous/memory-journal-mcp/commit/c9fb41f4159cefc150927425a26593bbd8a58ec9))
+- heal MCP server guardrails, aliases, and error handlers by **Chris LeRoux** ([0e419d7](https://github.com/neverinfamous/memory-journal-mcp/commit/0e419d721aafa900d35cc6ca7b7daa7e85e5faa5))
+- resolve strict lint rules on string coercion in entry commands and codemode by **Chris LeRoux** ([62770e4](https://github.com/neverinfamous/memory-journal-mcp/commit/62770e4bb1b51ac6a8d87b7ac1b511dfba444ef9))
+- heal MCP server guardrails, aliases, and error handlers by **Chris LeRoux** ([50be23c](https://github.com/neverinfamous/memory-journal-mcp/commit/50be23caf135d3e319473903bd6e5286ae8e5be1))
+- heal MCP server guardrails, aliases, and error handlers by **Chris LeRoux** ([bb2f488](https://github.com/neverinfamous/memory-journal-mcp/commit/bb2f488dbc6cbc93c26f723f6fb0a4f7f36b43ff))
+- heal MCP server guardrails, aliases, and error handlers by **Chris LeRoux** ([f230050](https://github.com/neverinfamous/memory-journal-mcp/commit/f2300501e04604cf74932f5da3119ca9c01c6c35))
+- heal agent-id resource template alias resolution by **Chris LeRoux** ([69e09e5](https://github.com/neverinfamous/memory-journal-mcp/commit/69e09e5d61fa16c793c4148b42ee14220c52109c))
+- heal MCP server guardrails, aliases, and error handlers by **Chris LeRoux** ([2165131](https://github.com/neverinfamous/memory-journal-mcp/commit/2165131a9bf7cebe8649fd0476c567db97c83cfb))
+- refine workspace keyword aliases to prevent false-positive tag matches by **Chris LeRoux** ([e83371f](https://github.com/neverinfamous/memory-journal-mcp/commit/e83371f568013e431b4b8a93359226affd955a14))
+- satisfy strict eslint rules for schema auto-resolution by **Chris LeRoux** ([c590d1d](https://github.com/neverinfamous/memory-journal-mcp/commit/c590d1d5a7c0643798158f90c6fcd23713d1cc00))
+- heal MCP server guardrails, aliases, and error handlers by **Chris LeRoux** ([89b5d37](https://github.com/neverinfamous/memory-journal-mcp/commit/89b5d37883460767291b36c09082162f566367f1))
+- heal MCP server guardrails, aliases, and error handlers by **Chris LeRoux** ([f19952a](https://github.com/neverinfamous/memory-journal-mcp/commit/f19952a18f5e2402e8fd889f82830758d3134959))
+- maintain fs write security guardrails while preserving healing by **Chris LeRoux** ([1124d96](https://github.com/neverinfamous/memory-journal-mcp/commit/1124d9616b7fbbc19e69b485191a6e847e340431))
+- resolve logged agent issues from logs/agent-issues.jsonl by **Chris LeRoux** ([46dbe8f](https://github.com/neverinfamous/memory-journal-mcp/commit/46dbe8f8456768351063608e867c220e5d4456c9))
+- auto-heal better-sqlite3 and child_process execution hallucinations in Code Mode by **Chris LeRoux** ([b8610e0](https://github.com/neverinfamous/memory-journal-mcp/commit/b8610e043a9946a2ebf9403bb7e1ab1b39454a9c))
+- auto-heal raw SQL queries and database tool hallucinations into Code Mode calls by **Chris LeRoux** ([717fe21](https://github.com/neverinfamous/memory-journal-mcp/commit/717fe21fe99e5b9c29516cffe31d5626df750f93))
+- heal MCP server guardrails, aliases, and error handlers by **Chris LeRoux** ([107345e](https://github.com/neverinfamous/memory-journal-mcp/commit/107345e061886c1439f4fc9b5f498cbf49ce19e3))
+- unescape backtick to restore missing adversarial security audit prompt by **Chris LeRoux** ([26ccab6](https://github.com/neverinfamous/memory-journal-mcp/commit/26ccab69b7c07144373ebf4bff0da675b74b01cd))
+- restore adversarial code quality prompt syntax and apply performant search method without breaking template literals by **Chris LeRoux** ([5ebc0d1](https://github.com/neverinfamous/memory-journal-mcp/commit/5ebc0d19309503c582447eac3e47d394ef94118c))
+- heal MCP server guardrails, aliases, and error handlers by **Chris LeRoux** ([03a574a](https://github.com/neverinfamous/memory-journal-mcp/commit/03a574a51760e2313c7b93303ddb194c143f627c))
+- auto-heal FTS5 corruption during AutoPrune lifecycle operations by **Chris LeRoux** ([3687f2a](https://github.com/neverinfamous/memory-journal-mcp/commit/3687f2a9e5131ba5170da9be85cd035a08217626))
+- heal MCP server guardrails, aliases, and error handlers by **Chris LeRoux** ([b32ec06](https://github.com/neverinfamous/memory-journal-mcp/commit/b32ec068eca585c7d0a7de0670cf34ae48c40718))
+- add singleton and factory shims for MemoryJournal.getInstance anti-hallucination guardrails by **Chris LeRoux** ([745a72c](https://github.com/neverinfamous/memory-journal-mcp/commit/745a72c6ae430a96ecf906d3749831139af01a13))
+- harden stale lock directory cleanup against Windows EPERM errors by **Chris LeRoux** ([626e3af](https://github.com/neverinfamous/memory-journal-mcp/commit/626e3af33dce0425ab7dde3ab24818f76888e79d))
+- add autonomous prompt and resource healing fallbacks by **Chris LeRoux** ([8c6ad34](https://github.com/neverinfamous/memory-journal-mcp/commit/8c6ad34dff504a86574b9aee2c449ceecd3dd3e6))
+- heal CLI option aliases, resource tool fallbacks, and codemode normalizer by **Chris LeRoux** ([8748e5a](https://github.com/neverinfamous/memory-journal-mcp/commit/8748e5ab102977cda818acd8effe4adca51930dc))
+- standardize http session error status codes by **Chris LeRoux** ([e3cf9cb](https://github.com/neverinfamous/memory-journal-mcp/commit/e3cf9cb8692bbfa6941aaceecc7d066a2fb43302))
+- resolve progressToken extraction for progress notifications by **Chris LeRoux** ([29e1cb9](https://github.com/neverinfamous/memory-journal-mcp/commit/29e1cb9dd491e7d54fd47203eb043215456e6432))
+- align tool registration types with MCP v2 SDK by **Chris LeRoux** ([11f8e8d](https://github.com/neverinfamous/memory-journal-mcp/commit/11f8e8dad90695b7b293fa0c47dfd056603676f1))
+- type check fix for ALIASED_EXECUTE_CODE_NAMES in tool registration by **Chris LeRoux** ([cdc8f52](https://github.com/neverinfamous/memory-journal-mcp/commit/cdc8f528942d79865af6098716b3a51bb98292e4))
+- heal empty code payload and add mysql_execute_code tool alias by **Chris LeRoux** ([4ecff5a](https://github.com/neverinfamous/memory-journal-mcp/commit/4ecff5af77db90be8779b5ac71502fad64eb390d))
+- intercept hallucinated mj_ tool names and harden test suite by **Chris LeRoux** ([4a271eb](https://github.com/neverinfamous/memory-journal-mcp/commit/4a271eb2fc88e03baa3064fbb5baeca787265c75))
+- harden proxy result unwrapping and add fetch/namespace anti-hallucination shims by **Chris LeRoux** ([99e03db](https://github.com/neverinfamous/memory-journal-mcp/commit/99e03dbc3216dfb7641200bff1cf1a243f463516))
+- correct failed result array proxy and fix security test auto-healing bypasses by **Chris LeRoux** ([44ee6dd](https://github.com/neverinfamous/memory-journal-mcp/commit/44ee6dd1809a5a245e7b000f37f424f4cb0a0e18))
+- implement multi-layer anti-hallucination & auto-healing guardrails by **Chris LeRoux** ([817d3a7](https://github.com/neverinfamous/memory-journal-mcp/commit/817d3a76f36f0f407c57d2c38d1a652cb5b53682))
+- harden parameter schemas and anti-hallucination instruction guardrails by **Chris LeRoux** ([be5f1a9](https://github.com/neverinfamous/memory-journal-mcp/commit/be5f1a9fc250bf2a8fe9150e4813cce69ce72684))
+- heal failed result property access and missing code auto-healing by **Chris LeRoux** ([e1c9576](https://github.com/neverinfamous/memory-journal-mcp/commit/e1c95762696d09711f0347cb23b6fac274886a4a))
+- heal project method/property hallucinations and clarify security hint by **Chris LeRoux** ([05704fe](https://github.com/neverinfamous/memory-journal-mcp/commit/05704fea120b0f7cd7e301814ed93a5b2b64a66c))
+- correct project breakdown instructions and schema descriptions to prevent workspace id misallocations by **Chris LeRoux** ([d8536c9](https://github.com/neverinfamous/memory-journal-mcp/commit/d8536c94d3b6e274b08ad03f1054c1edc23ec4c2))
+- normalize security regexes and update auth scope mappings by **Chris LeRoux** ([f35437c](https://github.com/neverinfamous/memory-journal-mcp/commit/f35437c612a9329de067751090bf05a64e28a5c2))
+- add dotted tool fallback handlers and enhance project lookup by number by **Chris LeRoux** ([7f5aa54](https://github.com/neverinfamous/memory-journal-mcp/commit/7f5aa540a2792f20313558bc98828e1b08ebc469))
+- enhance auto-healing for process.env, JSON strings, CLI flags, and worker errors by **Chris LeRoux** ([8d38d43](https://github.com/neverinfamous/memory-journal-mcp/commit/8d38d43fbdc28186d85700d4d107fef79ba00f35))
+- surface sanitized runtime errors and refine security string stripping by **Chris LeRoux** ([28117af](https://github.com/neverinfamous/memory-journal-mcp/commit/28117afbcb9c7d55fe5659d708cc95c5e930dea4))
+- fix check-unassigned-entries script decryption key mapping and schema drift by **Chris LeRoux** ([73ad326](https://github.com/neverinfamous/memory-journal-mcp/commit/73ad326998850dea49f6c8bb895b81c1e836f1b5))
+- preserve import statements for security validation and handle import syntax errors by **Chris LeRoux** ([87271f4](https://github.com/neverinfamous/memory-journal-mcp/commit/87271f4594f55bf14aa8d96045103e46afb97d9b))
+- render journal status row in briefing by **Chris LeRoux** ([21c0e3f](https://github.com/neverinfamous/memory-journal-mcp/commit/21c0e3f7548819739e6fd6042913797d9545b60f))
+- enhance missing project_number resolution errors and add memory://agent-id resource alias by **Chris LeRoux** ([2799c6d](https://github.com/neverinfamous/memory-journal-mcp/commit/2799c6d8fc9293a2031e0b47c174a0e7c1e8e3e6))
+- auto-heal imports requires group function calls and globalThis hallucinations by **Chris LeRoux** ([cc7f64f](https://github.com/neverinfamous/memory-journal-mcp/commit/cc7f64fe63442ccbb542a95322f696abe6ccb6eb))
+- correct openmetrics port 9466→9465 to match --metrics-port in mcp_config.json by **Chris LeRoux** ([102be91](https://github.com/neverinfamous/memory-journal-mcp/commit/102be91d8ca858466c3a268b1435ed5f1987f149))
+- resolve lint type assertions and dynamic property deletion by **Chris LeRoux** ([29663d7](https://github.com/neverinfamous/memory-journal-mcp/commit/29663d722202344aeaf5a3b44ca55f4dace7e908))
+- restore input declaration and resolve lint deprecation warnings by **Chris LeRoux** ([f27d498](https://github.com/neverinfamous/memory-journal-mcp/commit/f27d498a348b81194ec844e9c59dbf3fc1163de6))
+- heal missing code parameter and handle raw strings and parameter aliases by **Chris LeRoux** ([ed54020](https://github.com/neverinfamous/memory-journal-mcp/commit/ed540200f3cd2504437ff352f286b50195c3b154))
+- heal agent hallucinations and update workflow validation by **Chris LeRoux** ([cb89390](https://github.com/neverinfamous/memory-journal-mcp/commit/cb893903049fbc0cee3dc21c08a492d05e418a3d))
+- optimize MCP tool resolution and anti-hallucination guardrails by **Chris LeRoux** ([5e61416](https://github.com/neverinfamous/memory-journal-mcp/commit/5e6141635245d7464ea868d9902e1823f13c70e5))
+- auto-heal raw markdown payloads and enrich syntax errors in Code Mode by **Chris LeRoux** ([28c3b65](https://github.com/neverinfamous/memory-journal-mcp/commit/28c3b655279afd3195ade87dc8affdece1a3abfe))
+- enforce MAX_QUERY_LIMIT validation on out-of-bounds limit parameters by **Chris LeRoux** ([9a18b00](https://github.com/neverinfamous/memory-journal-mcp/commit/9a18b0070dd0125a1f7e4cdb209f9f48655302f6))
+- preserve security-sensitive keywords during string literal stripping by **Chris LeRoux** ([b5a4087](https://github.com/neverinfamous/memory-journal-mcp/commit/b5a40879fa3c1e22e7bd9b028bfa5595f25d7bee))
+- optimize code mode anti-hallucination guardrails and security scanning by **Chris LeRoux** ([565cec2](https://github.com/neverinfamous/memory-journal-mcp/commit/565cec27a6ae884ffebe6029dc587a0672c15b9b))
+- support project_number filtering in getRecentEntries by **Chris LeRoux** ([0e880dc](https://github.com/neverinfamous/memory-journal-mcp/commit/0e880dc705ff7ef33244b4193cc6d56f7941f8b7))
+- forward projectNumber and workspaceId in DatabaseAdapter getRecentEntries and fix optimizer prompt template literal by **Chris LeRoux** ([a14a725](https://github.com/neverinfamous/memory-journal-mcp/commit/a14a725096e43d92c73958e48b9d4f0003f90993))
+- optimize MCP server and add anti-hallucination guardrails by **Chris LeRoux** ([f9a3fee](https://github.com/neverinfamous/memory-journal-mcp/commit/f9a3fee211972765c568cffce84c69331f574043))
+- optimize MCP server & add anti-hallucination guardrails by **Chris LeRoux** ([94d00c7](https://github.com/neverinfamous/memory-journal-mcp/commit/94d00c7574670547c1060c251fe9fc9da0d0a799))
+- pass ids to run method for hard deletes by **Chris LeRoux** ([71ce90b](https://github.com/neverinfamous/memory-journal-mcp/commit/71ce90beebd1593e266bd9992cdb1f502f6f348c))
+- pass missing IDs parameter to sqlite run method during hard delete by **Chris LeRoux** ([224398b](https://github.com/neverinfamous/memory-journal-mcp/commit/224398bb0f4a27b81ae85bb7f91107c02d17728a))
+- heal agent hallucinations for missing globals, parameter mappings, and cli flag aliases by **Chris LeRoux** ([d7fecc5](https://github.com/neverinfamous/memory-journal-mcp/commit/d7fecc5a45d79a548d66cef71e2de4cf731d2bf1))
+- optimize worker sandbox shims and prompt guardrails to heal agent hallucinations by **Chris LeRoux** ([e707489](https://github.com/neverinfamous/memory-journal-mcp/commit/e707489ebb6281d2816d9b191b61b89f3811a3aa))
+- align 5 MCP prompts with current lib-agent-exec and commit.ts infrastructure by **Chris LeRoux** ([ca69dd3](https://github.com/neverinfamous/memory-journal-mcp/commit/ca69dd3cdeaeee84712cc8065b85d5e6b75c4fe4))
+- enforce strict project resolution and tag alias matching to eliminate unassigned entries by **Chris LeRoux** ([b1b8b78](https://github.com/neverinfamous/memory-journal-mcp/commit/b1b8b789f3904f54a84b98ac635030c92376d0d1))
+- eliminate unassigned journal entries and isolate test config by **Chris LeRoux** ([964c298](https://github.com/neverinfamous/memory-journal-mcp/commit/964c29808d9956da3c550ed41e5110aba2f94dd8))
+- add global sandbox aliases and param fallback handling by **Chris LeRoux** ([586b86f](https://github.com/neverinfamous/memory-journal-mcp/commit/586b86fcb9f4efb50c736da979e50e2ba5e13c77))
+- integrate param normalizer into tool registration by **Chris LeRoux** ([310f07a](https://github.com/neverinfamous/memory-journal-mcp/commit/310f07ac44c40a0ae8e8595dc22fc9e2b496d9c9))
+- resolve workspace and project assignment anomalies and update tests by **Chris LeRoux** ([8ca1dcb](https://github.com/neverinfamous/memory-journal-mcp/commit/8ca1dcbd5a6ecaa9f500fe785c76befc519b2de0))
+- harden MCP server against hallucinations and parameter errors by **Chris LeRoux** ([2cd3977](https://github.com/neverinfamous/memory-journal-mcp/commit/2cd3977859aa96b4beb66b2e9b70d818cd459f95))
+- return structured validation error for invalid keep_count by **Chris LeRoux** ([558c5b9](https://github.com/neverinfamous/memory-journal-mcp/commit/558c5b92bb46bce823f5423056558b243c92ee58))
+- log tool execution errors to agent-issues.jsonl by **Chris LeRoux** ([c2347f7](https://github.com/neverinfamous/memory-journal-mcp/commit/c2347f754490d6e0f63efb759e143bf1da3d6b69))
+- correct Grafana dashboard metric queries to match Prometheus output by **Chris LeRoux** ([1995ead](https://github.com/neverinfamous/memory-journal-mcp/commit/1995ead84960d1c7a8f3472f40c896a80a2b29d9))
+- prevent cross-network autodiscovery timeouts by **Chris LeRoux** ([c0e3c94](https://github.com/neverinfamous/memory-journal-mcp/commit/c0e3c943594270aca74249895bd3c6dd8ae68528))
+- remove count suffix from gauges and correct metrics by **Chris LeRoux** ([0fd238b](https://github.com/neverinfamous/memory-journal-mcp/commit/0fd238be66b9cb8f20fb18bca1523535c87ff191))
+- isolate infra stack and correct prometheus gauges by **Chris LeRoux** ([be5f89c](https://github.com/neverinfamous/memory-journal-mcp/commit/be5f89c8b989f9576e276cde41f7cdac2c7b2caa))
+- fix dashboard metric queries mapping for tool calls and errors by **Chris LeRoux** ([fc24938](https://github.com/neverinfamous/memory-journal-mcp/commit/fc2493886a2ad3dc01dfbb3011c119d30e0d0f5f))
+- intercept hallucinated methods with dummy tools by **Chris LeRoux** ([fa5b8f2](https://github.com/neverinfamous/memory-journal-mcp/commit/fa5b8f2207dbddd1c54723e6ee2bf4fb970f73e6))
+- safely handle ZodError rendering in updateEntryAction by **Chris LeRoux** ([7edd66e](https://github.com/neverinfamous/memory-journal-mcp/commit/7edd66ed530503af49184e6ea43101c41d15b222))
+- mandate workspace_id for all entries by **Chris LeRoux** ([9274c93](https://github.com/neverinfamous/memory-journal-mcp/commit/9274c93fda77884836725e2dffaeb9355fd87263))
+- resolve safe-outputs report-as-issue config for noop by **Chris LeRoux** ([03831f1](https://github.com/neverinfamous/memory-journal-mcp/commit/03831f1eb76cdb0a61af9373846343268a423eaf))
+- resolve project breakdown names from registry by **Chris LeRoux** ([72e2706](https://github.com/neverinfamous/memory-journal-mcp/commit/72e27065759ce7f307ca6af563f01a05d0c5fbd4))
+- correctly resolve project names from config registry in statistics, and cleanup scratch file by **Chris LeRoux** ([a443469](https://github.com/neverinfamous/memory-journal-mcp/commit/a443469df79ac9fd70fa80543cec59c98016f222))
+- align e2e tests with globally enabled tool updates by **Chris LeRoux** ([3686abf](https://github.com/neverinfamous/memory-journal-mcp/commit/3686abf556ba08057cf302bd57222dfee3d01206))
+- restore optional argsSchema to fix client validation by **Chris LeRoux** ([d4c79cc](https://github.com/neverinfamous/memory-journal-mcp/commit/d4c79cc49c06203e4d3ae825221bbd6466347a65))
+- patch dynamic context gaps and parameter hallucinations by **Chris LeRoux** ([0789f82](https://github.com/neverinfamous/memory-journal-mcp/commit/0789f820252ba712cc7c1fd8db6102233a3bdc26))
+- intercept git commit --amend natively by **Chris LeRoux** ([72bce2b](https://github.com/neverinfamous/memory-journal-mcp/commit/72bce2be5cba0c905d31a2c5fa59984b115eb751))
+- synchronize testing prompts with tool map SSoT by **Chris LeRoux** ([f4aba0b](https://github.com/neverinfamous/memory-journal-mcp/commit/f4aba0b1cce177dca0b0bb91ac5caa783aa1dcde))
+- heal mj.search.entries hallucination via alias by **Chris LeRoux** ([d1599e5](https://github.com/neverinfamous/memory-journal-mcp/commit/d1599e5c27cbad711867217f57600a63cb9cb7ca))
+- stabilize cli parsing and aliases mapping by **Chris LeRoux** ([7b434d0](https://github.com/neverinfamous/memory-journal-mcp/commit/7b434d0d6d78e6164dc7c2f81e154abca7e49b09))
+- implement agent hallucination healing interceptor for session command by **Chris LeRoux** ([8beb44c](https://github.com/neverinfamous/memory-journal-mcp/commit/8beb44c4461fdffb31c2b3be0ef413da5f4e0c20))
+- fix project create --db option fallback ignoring config by **Chris LeRoux** ([fbaa747](https://github.com/neverinfamous/memory-journal-mcp/commit/fbaa747079a76a451d92c0bc1704818816e8d499))
+- auto-resolve workspaceId from projectNumber in code mode createEntry by **Chris LeRoux** ([b36f82a](https://github.com/neverinfamous/memory-journal-mcp/commit/b36f82af78a38f2f8a349e5688b7a8d8692cc708))
+- Update SQLite search query to always include importanceScore regardless of sort order. Plumb activeWorkspaceId into briefing context to ensure accurate workspace scoping for journal summaries. by **Chris LeRoux** ([b636af1](https://github.com/neverinfamous/memory-journal-mcp/commit/b636af107bc6df94991d201b46c74eb90c880227))
+- add AUTONOMOUS HEALING prefix to proxy interceptor errors by **Chris LeRoux** ([b6ac599](https://github.com/neverinfamous/memory-journal-mcp/commit/b6ac599aa68423e01b0123cc7267ae67807931ee))
+- seamlessly heal node and python eval payloads and support pnpm.cmd intercept by **Chris LeRoux** ([57fd05e](https://github.com/neverinfamous/memory-journal-mcp/commit/57fd05eda05d5764c0809b4c8601b85d43d9ef69))
+- add autonomous healing dummy command for entry delete hallucination by **Chris LeRoux** ([ca359ee](https://github.com/neverinfamous/memory-journal-mcp/commit/ca359eedfe0e23003c4f5d929ab3283a6d7295bb))
+- Category: Fixed
+Fixed auto-resolution of workspace and project numbers.
+- Injected `config` (server options) down to `DatabaseAdapterFactory` and `EntriesManager`.
+- Updated `buildEntryPayload` to auto-resolve both `projectNumber` and `workspaceId` based on CWD and global project registry.
+- Fixed `resolveProjectNumberFromPath` path matching. by **Chris LeRoux** ([9885ef8](https://github.com/neverinfamous/memory-journal-mcp/commit/9885ef8e72888f11c89df70c452099828d6612b6))
+-  by **Chris LeRoux** ([62ed775](https://github.com/neverinfamous/memory-journal-mcp/commit/62ed775c2a599f0bdbfc9fa63b897fa32aa4360f))
+- prevent blanket staging in git workflows by **Chris LeRoux** ([232c289](https://github.com/neverinfamous/memory-journal-mcp/commit/232c28971712cbc07bf00976068870a3bb00d571))
+- improve error message for filtered tools by **Chris LeRoux** ([d9e467c](https://github.com/neverinfamous/memory-journal-mcp/commit/d9e467c16d66aca5fb9abfe153b57da1ec50c15b))
+- Updated the missing project_number validation error message to point to the agent-context resource instead of the Briefing, preventing AI agents from hallucinating or following incorrect instructions. by **Chris LeRoux** ([0691ffa](https://github.com/neverinfamous/memory-journal-mcp/commit/0691ffa1e58b56ea1cc430ee634e0a30150d5434))
+- History-Category: Added
+History-Entry: Implemented native `--auto-context-file` and `--rel-file` file flags in the `memory-journal-mcp` CLI to eliminate severe PowerShell JSON quoting friction for agent executors. Rewrote the explicit execution templates in `session-summary` and all other entry prompts to enforce standard usage of the `<appDataDir>\brain\<conversation-id>\scratch\` directory for complex JSON payload generation, definitively solving Windows argument stripping issues.
+History-Impact: 0.8
+History-Confidence: 1.0
+History-Validation: passed by **Chris LeRoux** ([25c8eae](https://github.com/neverinfamous/memory-journal-mcp/commit/25c8eae0a22de15ab49a71ef134f8eb44f73c097))
+- History-Category: Added
+History-Entry: Implemented `addHelpText` meta-prompts across the entire CLI hierarchy (`exec` and all `admin` subcommands) to ensure any future agents are explicitly given strict operating instructions, guarding against hallucination and parameter errors in the commander pipeline. Added `--help` AI guardrails to `commit.ts` as well.
+History-Impact: 0.6
+History-Confidence: 1.0
+History-Validation: passed by **Chris LeRoux** ([fc474b2](https://github.com/neverinfamous/memory-journal-mcp/commit/fc474b2f2ec803e8155c30b64659ffb83e1fd57f))
+- resolve global secrets.env from ~/.gemini/config to prevent encryption key misses across workspaces by **Chris LeRoux** ([8e7044c](https://github.com/neverinfamous/memory-journal-mcp/commit/8e7044c5f0cae2feab9b249d451deca7272f47ed))
+- support stdin for native entry creation and fallback to MJ_DB_ENCRYPTION_KEY by **Chris LeRoux** ([37b03fd](https://github.com/neverinfamous/memory-journal-mcp/commit/37b03fd6399cff66da9746b8f0fa7dac0ba911e4))
+- Enhanced param-normalizer.ts to intelligently catch and flatten hallucinated 'filter' objects. This heuristic intercepts agent-generated payloads that incorrectly nest search parameters inside a 'filter' wrapper (e.g. searchEntries({ filter: { project_number: 16 } })) and natively translates them to top-level schemas before Zod evaluation, fully immunizing the dispatch layer. by **Chris LeRoux** ([1ac4db9](https://github.com/neverinfamous/memory-journal-mcp/commit/1ac4db91bb66652938ca10fdb001417a4b6a5b7f))
+- Extended the mcp-heal workflow modifications to cover the team variants of the prompts (team-session-summary, create-team-entry, update-team-entry) which previously lacked the strict 'Do NOT use import or require' sandbox rules. by **Chris LeRoux** ([83f21e4](https://github.com/neverinfamous/memory-journal-mcp/commit/83f21e45b03a5ab7d3b1d61153c016a2f2cffe72))
+- Implemented mcp-heal workflow modifications to harden the codebase against session-summary hallucinations. Layer 1: Hardened instructions in workflow.ts to explicitly enforce target_id parameter naming and forbid sandbox imports. Layer 2: Added auto-normalization heuristics to param-normalizer.ts to silently coerce array-nested targetId permutations. by **Chris LeRoux** ([eddd123](https://github.com/neverinfamous/memory-journal-mcp/commit/eddd123a4ebfd793418b6b0f20c10aa8464028a6))
+- Patched bug in team schemas where multiple integration fields were accidentally omitted from Zod schema. by **Chris LeRoux** ([68dc842](https://github.com/neverinfamous/memory-journal-mcp/commit/68dc842cfdb535b8ca1e72841a8ee7109cfbc8f3))
+- Updated git-audit-trust workflow to use local relative path for get-git-history-json.ts and implemented Node.js script approach to prevent agent-exec pipeline blocks. by **Chris LeRoux** ([0d5aed9](https://github.com/neverinfamous/memory-journal-mcp/commit/0d5aed9fbf13521f3ca92be44dd1a0ec510a9dfb))
+- Category: Fixed
+Implemented dedicated test database isolation architecture using `AsyncLocalStorage` proxying for `DatabaseAdapter` and `VectorSearchManager`.
+Fixed server stall issues during Playwright e2e tests by implementing proper SIGINT/SIGTERM graceful shutdown handlers.
+Resolved CLI configuration fallbacks where `testDbPath` and `testTeamDbPath` were incorrectly parsed.
+Fixed missing return types and unused parameters in `DatabaseAdapterProxy.ts`, `VectorSearchManagerProxy.ts`, and `core.ts`. by **Chris LeRoux** ([f68a44c](https://github.com/neverinfamous/memory-journal-mcp/commit/f68a44c3c27459ef52e70747ced133273abf70e6))
+- Fixed a ReferenceError in the Code Mode sandbox when explicitly calling create_entry by adding the alias to both the shimMj proxy block and the global sandbox object exports by **Chris LeRoux** ([9f3235c](https://github.com/neverinfamous/memory-journal-mcp/commit/9f3235c3d96dffb7b94ef47a91e39d34b6d1ccb7))
+- Fixed agent-context.ts to pull briefingConfig dynamically from ResourceContext instead of statically capturing it at server load. This ensures accurate project numbers and workspace resolution when registry configuration changes. by **Chris LeRoux** ([eb451c2](https://github.com/neverinfamous/memory-journal-mcp/commit/eb451c2d6cbcb710710d2ba73b96c0e2de0301df))
+- Removed duplicate briefingResource registration from getAllResourceDefinitions to fix 'Resource memory://briefing is already registered' errors during server instantiation. by **Chris LeRoux** ([1ed1af7](https://github.com/neverinfamous/memory-journal-mcp/commit/1ed1af748b861c6bffcb4df2db22ff94b99602e6))
+- Healed auto_context commits hallucination where agents pass commit_shas instead of commits by automatically normalising it in the dispatcher. by **Chris LeRoux** ([156c7c8](https://github.com/neverinfamous/memory-journal-mcp/commit/156c7c80f7db6a0832b4c6cad025a813279baf47))
+- Category: bug
+Fixed an unhandled synchronous exception in the worker API proxy that was causing the `Code Mode` worker to crash when agents hallucinated invalid methods or properties. Synchronous errors in the proxy `get` and `apply` traps are now wrapped in rejected promises carrying properly formatted `wrapResult` error payloads (`VALIDATION_ERROR`). This successfully prevents the worker termination and routes actionable errors back to the agent, eliminating the unhelpful `INTERNAL_ERROR` behavior. by **Chris LeRoux** ([7690a3c](https://github.com/neverinfamous/memory-journal-mcp/commit/7690a3cbcb6fc9c46321a1107d8889e28c4caa7a))
+- Implemented proactive hallucination healing in Code Mode worker proxy for session summaries and added teamCreateEntry aliases. by **Chris LeRoux** ([bf84508](https://github.com/neverinfamous/memory-journal-mcp/commit/bf845080790859943384103fd616f634d5e305e7))
+- Bug Fix: Added missing \.optional()\ modifiers to all \elaxedNumber()\ usages in SDK schemas to prevent raw MCP \-32602 InvalidParams\ errors. Relaxed regex header validation for session summaries to support variable markdown depth (e.g. \### Accomplished\). Intercepted top-level \commits\ arrays in parameter normalizer to seamlessly migrate them to \uto_context\ payloads. Added \	eam_id\ and \	eam\ alias protection mapping to \workspace_id\ to prevent strict Zod validation crashes. by **Chris LeRoux** ([cb82161](https://github.com/neverinfamous/memory-journal-mcp/commit/cb821618559218a58551ecc0334584c737d23ff0))
+- Healed Code Mode schema by adding 'source' alias to mitigate hallucinated payloads. Updated error message to explicitly list 'context' parameter. Fixed test failures caused by package.json resolution in system-section and removed unused imports. by **Chris LeRoux** ([352d379](https://github.com/neverinfamous/memory-journal-mcp/commit/352d3791920cbd79b1de148268edf6fd438ecd25))
+- Fixed a workspace context mismatch where the git history and local test health statuses incorrectly defaulted to the memory-journal-mcp repository instead of resolving the dynamically requested active workspace. Additionally improved the Briefing markdown presentation by truncating multi-line commit entries, linkifying commit SHAs, stripping markdown from journal summaries, and compacting the tools telemetry layout. by **Chris LeRoux** ([1131780](https://github.com/neverinfamous/memory-journal-mcp/commit/1131780843c44705ba544c5d7e3d5049491d3a9d))
+- Finalized esbuild v0.28.1 override in pnpm-lock.yaml after restoring node_modules, and updated coverage badges. by **Chris LeRoux** ([a07b89b](https://github.com/neverinfamous/memory-journal-mcp/commit/a07b89bb36af9c6cd5068b092067d747281aca8e))
+- Enforced esbuild 0.28.1 override using .pnpmfile.cjs. by **Chris LeRoux** ([66e5861](https://github.com/neverinfamous/memory-journal-mcp/commit/66e586148109271b9eed3037ea123c43a0808215))
+- Updated gh copilot integrations across all adversarial skills to use the --yolo flag and absolute paths, preventing non-interactive permission hangs and piping issues. by **Chris LeRoux** ([bcee187](https://github.com/neverinfamous/memory-journal-mcp/commit/bcee187f556a6a9e74ba612ef5d7184906479afc))
+- Optimized Code Mode context injection by normalizing path separators across Windows platforms via \path.resolve()\. This prevents auto-resolution failures where the server's working directory (\C:\\\\\ formatted) failed to match registry definitions (\C:/\ formatted). by **Chris LeRoux** ([483d06b](https://github.com/neverinfamous/memory-journal-mcp/commit/483d06b3be7f72302a3e71b568d98a0802902068))
+- Resolved an issue where Code Mode inadvertently stripped the auto_context payload entirely from memory journal entry creations. The proxy interceptor now properly stringifies plain object payloads and relays valid JSON strings, passing validation while preserving agent resilience. by **Chris LeRoux** ([a88e650](https://github.com/neverinfamous/memory-journal-mcp/commit/a88e6505fd0bfb07748f6fe70080e07588c6e849))
+- Fixed unhandled exception logic in test-cm-team-flags-analytics test script. by **Chris LeRoux** ([d5a05d6](https://github.com/neverinfamous/memory-journal-mcp/commit/d5a05d67ee60480d22f8b907cd250ac9617b20d2))
+- Fixed an issue where the briefing's Latest entries would display as empty if the database query omitted the importance scores, causing all entries to be filtered out regardless of the configured threshold. by **Chris LeRoux** ([6eceb49](https://github.com/neverinfamous/memory-journal-mcp/commit/6eceb492858ac0192dabb1f32b6b07b09b558c2f))
+- Removed the _execute_raw_query_unsafe MCP tool — a SQL injection vector that allowed arbitrary query execution. Replaced internal briefing usage with safe, purpose-built getRelationshipHubs() and getOrphanCount() methods. Tool count corrected from 101 to 100. by **Chris LeRoux** ([7743350](https://github.com/neverinfamous/memory-journal-mcp/commit/77433505965b7c740b5f988e19fe2a4390c0dc46))
+- Fixed an issue in native-connection.ts where providing a raw hex string starting with x' for the encryption key would cause a syntax error due to improper quoting. by **Chris LeRoux** ([321cb3a](https://github.com/neverinfamous/memory-journal-mcp/commit/321cb3a4c86573db586f94bc65c2cafd3e5e037a))
+- Enforced schema validation for commit-narrative contexts and isolated e2e tests to prevent configuration leakage. by **Chris LeRoux** ([7d92f2f](https://github.com/neverinfamous/memory-journal-mcp/commit/7d92f2f48988c6290a54dbb9635da32da7bd3a90))
+- Fixed ConfigResolver bug where dynamically resolved defaults overrode environment paths during strict equality checks, which resolves E2E state pollution and stray db creation. by **Chris LeRoux** ([3af2d19](https://github.com/neverinfamous/memory-journal-mcp/commit/3af2d19ae44d47ddf784afc5ee02b1fc747f0527))
+- **e2e**: [TEST] Stabilized full Playwright E2E suite covering sandbox boundaries, audit logs, and progress notifications. by **Chris LeRoux** ([f1b1716](https://github.com/neverinfamous/memory-journal-mcp/commit/f1b1716bd9d5a478114df02d1af9615c9443a643))
+
+## [v8.0.1]
+
+### Bug Fixes
+
+- compile sqlite-vec from source on alpine to eliminate CVEs (#602) by **Chris LeRoux** ([d9212ae](https://github.com/neverinfamous/memory-journal-mcp/commit/d9212aec8b526eff977b4f8e08f39b5e3c0263ec))
+
+## [v6.0.1]
+
+### Features
+
+- wire --enable-hsts CLI flag and MCP_ENABLE_HSTS env var to HTTP transport by **Chris LeRoux** ([b4c9fb0](https://github.com/neverinfamous/memory-journal-mcp/commit/b4c9fb0646cc22c3d53a3ca647725e017cc9fcfe))
+- migrate to dual-backend sqlite with better-sqlite3 and sql.js fallback by **Chris LeRoux** ([4a72e04](https://github.com/neverinfamous/memory-journal-mcp/commit/4a72e0422c3cec34fbd80511cb4ec0f17a52816e))
+- integrate UNRELEASED.md workflow by **Chris LeRoux** ([8b166cf](https://github.com/neverinfamous/memory-journal-mcp/commit/8b166cf542db94e79473f47474a914156d133798))
+- add agentic workflows - deps maintenance, docs drift, CI health (#238) by **Chris LeRoux** ([3bd1f64](https://github.com/neverinfamous/memory-journal-mcp/commit/3bd1f642a56dbaa55ee536e8ca964d7a0160db9b))
+
+### Bug Fixes
+
+- close-before-reconnect transport pattern, Copilot fixes, docs by **Chris LeRoux** ([f42f067](https://github.com/neverinfamous/memory-journal-mcp/commit/f42f067092277420554b3535305ce7464016030d))
+- correct milestoneCount field from total to count in codemode2 tests by **Chris LeRoux** ([6e48013](https://github.com/neverinfamous/memory-journal-mcp/commit/6e48013496be8da75d131fdadf2dc3d568310486))
+- correct 3 field name mismatches in codemode2 test spec - Kanban status: 'In Progress' -> 'In progress' (matches actual status option) - Traffic assertion: traffic.clones -> traffic.traffic?.clones (nested structure) - Export assertion: entry_type -> entryType (camelCase in export JSON) by **Chris LeRoux** ([fe4ccbf](https://github.com/neverinfamous/memory-journal-mcp/commit/fe4ccbf2318f2b583c54afc1b4b85ed03d6c36fa))
+- correct camelCase field names in code mode test spec (entry_type → entryType, remove importance/importanceBreakdown expectations) by **Chris LeRoux** ([cc081ee](https://github.com/neverinfamous/memory-journal-mcp/commit/cc081ee7f1bf543db7332067fe1bda58b0bdab94))
+- honor is_personal filter in cross-DB queries by **Chris LeRoux** ([78dab33](https://github.com/neverinfamous/memory-journal-mcp/commit/78dab339a936d567424195035a427e7ceb6be97b))
+- code mode admin help examples and readonly docs by **Chris LeRoux** ([7b315cf](https://github.com/neverinfamous/memory-journal-mcp/commit/7b315cf9d1fa01e1f1e6954619a8366b421f39d1))
+- cross-DB search limit drops entries during mergeAndDedup by **Chris LeRoux** ([c61dc1e](https://github.com/neverinfamous/memory-journal-mcp/commit/c61dc1e0760552f96d0c6cf06f3df5a651891dcf))
+- mermaid graph resources return raw text instead of JSON envelopes by **Chris LeRoux** ([6e7275b](https://github.com/neverinfamous/memory-journal-mcp/commit/6e7275b5b96cb66d961e14dbf97e8f599f697be5))
+- eliminate kanban race condition using idempotent addProjectItem by **Chris LeRoux** ([c2dc563](https://github.com/neverinfamous/memory-journal-mcp/commit/c2dc5636f1b5f86b1c95b685880e0aad814a4389))
+- add 1s delay before kanban board query in close_github_issue_with_entry by **Chris LeRoux** ([0b1cffc](https://github.com/neverinfamous/memory-journal-mcp/commit/0b1cffcc02349e40e3e2bb45477e84da6ffd15cd))
+- merge_tags FOREIGN KEY constraint + briefing format spec by **Chris LeRoux** ([1a029f8](https://github.com/neverinfamous/memory-journal-mcp/commit/1a029f8e3322e9bfd0f3f6973b8805b88d7dde20))
+- use relaxedNumber() in get_github_issues/prs inputSchema for structured validation errors by **Chris LeRoux** ([e33decc](https://github.com/neverinfamous/memory-journal-mcp/commit/e33decc4bda6fefa3e53e5943799dfed3a6f0fa7))
+- export_entries entry_types filter scans full database instead of truncated window by **Chris LeRoux** ([3eaf694](https://github.com/neverinfamous/memory-journal-mcp/commit/3eaf694192cb78dbd7f0b3b66b52edb7691a52b7))
+- quality gate hint always shown regardless of hint_on_empty by **Chris LeRoux** ([8b48c7a](https://github.com/neverinfamous/memory-journal-mcp/commit/8b48c7a00a5ae27e45e02e30feaeef3e1f94aba1))
+- semantic_search hint_on_empty quality gate - treat low-similarity results as noise by **Chris LeRoux** ([2c8309f](https://github.com/neverinfamous/memory-journal-mcp/commit/2c8309f3c1549bd34164cd867e89574898760eee))
+- vector index reports failed entries, add Code Mode getRecent alias by **Chris LeRoux** ([9b0410f](https://github.com/neverinfamous/memory-journal-mcp/commit/9b0410f1e0af57a34c2f1d9354fc1df1bfeffef4))
+- correct invalid significance_type in test-tools.md (minor_improvement → lesson_learned) by **Chris LeRoux** ([f33fc95](https://github.com/neverinfamous/memory-journal-mcp/commit/f33fc95d357bee312de8015d468d25dbc4ea107d))
+- standardize native wrapper mapping for rawDb exec routines by **Chris LeRoux** ([4e7d2a2](https://github.com/neverinfamous/memory-journal-mcp/commit/4e7d2a20168219d239576518a398349eedeec58f))
+- resolve zod version conflict with openai by **Chris LeRoux** ([ea08b43](https://github.com/neverinfamous/memory-journal-mcp/commit/ea08b43bff04d687fc8316d0896d8f404e11defa))
+- resolve native driver test failures by **Chris LeRoux** ([61739e5](https://github.com/neverinfamous/memory-journal-mcp/commit/61739e56d57b045386cc1faa9a7108b39e8b4288))
+- resolve ESLint type imports and unused variable warnings in HTTP server by **Chris LeRoux** ([57608ba](https://github.com/neverinfamous/memory-journal-mcp/commit/57608babfd3ad12b95279b3093bb96a5f47f0ed3))
+- revert docker/scout-action to v1.18.2 — v1.20.1 returns 403 on asset download (#235) by **Chris LeRoux** ([78ef35e](https://github.com/neverinfamous/memory-journal-mcp/commit/78ef35e341756eba84b8dfa7757b0fd17551caf8))
+
+### Performance
+
+- enable tsup splitting, migrate tags/relationships to direct prepare by **Chris LeRoux** ([151dd4c](https://github.com/neverinfamous/memory-journal-mcp/commit/151dd4ce69e4d57a12f22d9ad87a5c728b8e3cd4))
+- migrate to @huggingface/transformers v3, add tsup build, batch semantic search, parallelize briefing by **Chris LeRoux** ([a908bf0](https://github.com/neverinfamous/memory-journal-mcp/commit/a908bf0181463851757c7b86d67d5bde7e173f6e))
+- serialize bounds, query columns, and defer WASM imports by **Chris LeRoux** ([57a7f57](https://github.com/neverinfamous/memory-journal-mcp/commit/57a7f574a003a1ef2361408f1f415ea4e854ddd2))
+- optimize sqlite projections and bound github api cache by **Chris LeRoux** ([43f2e91](https://github.com/neverinfamous/memory-journal-mcp/commit/43f2e911d0bb5cbcb8b2310d666d0715cffd9892))
+
+## [v4.4.0]
+
+### Features
+
+- add --server-host CLI option and MCP_HOST env var for HTTP bind address (#98) by **Chris LeRoux** ([74e6965](https://github.com/neverinfamous/memory-journal-mcp/commit/74e6965699a1932da9e24791cc614d21a6cd46f0))
+
+### Bug Fixes
+
+- patch CVE-2026-26960 (tar 7.5.7 -> 7.5.8) (#127) by **Chris LeRoux** ([1528cec](https://github.com/neverinfamous/memory-journal-mcp/commit/1528cec88244940ea5eee4a9ea33fadad5a7b57f))
+- P154 proactive existence checks for delete_entry, link_entries, visualize_relationships (#100) by **Chris LeRoux** ([a57b447](https://github.com/neverinfamous/memory-journal-mcp/commit/a57b447a919fb36ff5c2fef454935371e5c18383))
+- update qs 6.14.1 to 6.14.2 (GHSA-w7fw-mjwx-w883) (#99) by **Chris LeRoux** ([c3ff58a](https://github.com/neverinfamous/memory-journal-mcp/commit/c3ff58afb805bec44134c852aac408dd49a88992))
+
+## [v4.3.1]
+
+### Bug Fixes
+
+- update tar to 7.5.7 for CVE-2026-24842 (#92) by **Chris LeRoux** ([0d62c26](https://github.com/neverinfamous/memory-journal-mcp/commit/0d62c26d696fa6c120c5e2e4c1b768312423b7e7))
+- get_cross_project_insights outputSchema validation for empty results (#90) by **Chris LeRoux** ([d7a49ee](https://github.com/neverinfamous/memory-journal-mcp/commit/d7a49ee21fa71184a6d96502d03587effe300405))
+
+## [v4.3.0]
+
+### Features
+
+- add secondary sort, issueUrl auto-population, and harmonized graph arrows by **Chris LeRoux** ([88b2dcb](https://github.com/neverinfamous/memory-journal-mcp/commit/88b2dcbf0295e3c6c9f12c6a596d0d623d81b5ac))
+- add significance gradients with computed importance scores by **Chris LeRoux** ([e87a137](https://github.com/neverinfamous/memory-journal-mcp/commit/e87a137a4b83bff5e34348e32f72202509024649))
+- add enhanced analytics metrics to get_statistics by **Chris LeRoux** ([5970be7](https://github.com/neverinfamous/memory-journal-mcp/commit/5970be7ecbad60ee3a1b63b8639d3677690b24d7))
+- add causal relationship types (blocked_by, resolved, caused) by **Chris LeRoux** ([fab18e7](https://github.com/neverinfamous/memory-journal-mcp/commit/fab18e7c9fe5e474af31ccc6f8e13ac3aa24676d))
+
+### Bug Fixes
+
+- remove tag trigger from Docker workflow to prevent duplicate builds by **Chris LeRoux** ([20c87f8](https://github.com/neverinfamous/memory-journal-mcp/commit/20c87f85d59407750888fa35f8782c3cfd0bc389))
+
+## [v4.2.0]
+
+### Features
+
+- expand outputSchema coverage to 31 tools, fix CI status cancelled handling by **Chris LeRoux** ([135b7c9](https://github.com/neverinfamous/memory-journal-mcp/commit/135b7c9e2ed6c58efefa451aac28e4c1acb44e01))
+- enhance restore_backup warning and PR timeline metadata by **Chris LeRoux** ([32508c7](https://github.com/neverinfamous/memory-journal-mcp/commit/32508c7b364f08439411100b00c305d10c6c80bc))
+- add duplicate relationship detection to link_entries by **Chris LeRoux** ([a7073cf](https://github.com/neverinfamous/memory-journal-mcp/commit/a7073cfcc6ff3b35de5be1af463f36418f9797fe))
+- add cleanup_backups tool, merge_tags tool, enhance semantic_search hint by **Chris LeRoux** ([90d512b](https://github.com/neverinfamous/memory-journal-mcp/commit/90d512b5e321eb74a49ea0e5676d9c721e76b636))
+- add stateless HTTP mode for serverless deployments by **Chris LeRoux** ([d845c0e](https://github.com/neverinfamous/memory-journal-mcp/commit/d845c0ef0e2dd5b1021ed890092faf6a5795c11e))
+- implement HTTP/SSE transport with StreamableHTTPServerTransport by **Chris LeRoux** ([b8c5ca9](https://github.com/neverinfamous/memory-journal-mcp/commit/b8c5ca9204918ae5a80ab715f03c7074c26b94e6))
+
+### Bug Fixes
+
+- add CORS support for browser-based MCP clients (e.g., MCP Inspector) by **Chris LeRoux** ([2a26e94](https://github.com/neverinfamous/memory-journal-mcp/commit/2a26e945516d1e71b2be3324c03efa40609a993b))
+- apply version tag on both releases and main branch deploys by **Chris LeRoux** ([93e1002](https://github.com/neverinfamous/memory-journal-mcp/commit/93e10029092539194c2ad2f0f850f657ee4c1aff))
+- apply latest tag on both releases and main branch deploys by **Chris LeRoux** ([cac1585](https://github.com/neverinfamous/memory-journal-mcp/commit/cac1585c3f80f565265cf3554c5681ab672869b3))
+- update version references to 4.1.0 in source files, server.json, DOCKER_README by **Chris LeRoux** ([78c90ff](https://github.com/neverinfamous/memory-journal-mcp/commit/78c90fffc208a636f7d44cba27c9012115e93593))
+
+## [v4.1.0]
+
+### Features
+
+- add auto-rebuild index, move_to_done, and autoContext docs by **Chris LeRoux** ([c519443](https://github.com/neverinfamous/memory-journal-mcp/commit/c5194432fbd1b85a0467a04389df16333a9933db))
+- add semantic_search hint_on_empty flag, PR resource hints, GitHub fallback docs by **Chris LeRoux** ([6f358c8](https://github.com/neverinfamous/memory-journal-mcp/commit/6f358c880003504c23ad037aebd0ea8e2264b678))
+- expand structuredContent coverage from 5 to 24 tools by **Chris LeRoux** ([86ad8fc](https://github.com/neverinfamous/memory-journal-mcp/commit/86ad8fc9689debd2c0e49f088e86ccca5cb1b7de))
+- add MCP icons array support (2025-11-25 spec) by **Chris LeRoux** ([0da8950](https://github.com/neverinfamous/memory-journal-mcp/commit/0da89509b38d9c8eb898f899c947f14e7a3ff4b0))
+- add MCP progress notifications for long-running operations by **Chris LeRoux** ([04a27a6](https://github.com/neverinfamous/memory-journal-mcp/commit/04a27a693b6fbe990849dd9475884913a81180de))
+
+### Bug Fixes
+
+- npm publish checkout handles release and workflow_dispatch triggers by **Chris LeRoux** ([65caf57](https://github.com/neverinfamous/memory-journal-mcp/commit/65caf5745498a628b4cdc8230cb8a6fc25a29e34))
+- latest and version tags only on releases, not workflow_run by **Chris LeRoux** ([6d1ca83](https://github.com/neverinfamous/memory-journal-mcp/commit/6d1ca83e50c6bda5476edabf3704796d717f8e24))
+- update VERSION file to 4.1.0 (was missed during release) by **Chris LeRoux** ([ca07bd4](https://github.com/neverinfamous/memory-journal-mcp/commit/ca07bd488cecbe0faa4831bfca31719cf4911e43))
+- checkout correct ref for release/tag events, restrict latest tag to workflow_run only by **Chris LeRoux** ([be9ef75](https://github.com/neverinfamous/memory-journal-mcp/commit/be9ef75f85844f04ea0f3d17c44704ff6a265d2a))
+- patch CVE-2026-23745 - npm bundled tar 7.5.2 -> 7.5.3 by **Chris LeRoux** ([4c7b9a4](https://github.com/neverinfamous/memory-journal-mcp/commit/4c7b9a412ca931474428455f87082d4dabcc5fef))
+- delete_entry now removes from vector index, remove misleading instructions query param docs by **Chris LeRoux** ([fa980e2](https://github.com/neverinfamous/memory-journal-mcp/commit/fa980e2c91a041e04ded796d437b56dc381826b7))
+- align field naming and default backlog status for Kanban issues by **Chris LeRoux** ([d9a7891](https://github.com/neverinfamous/memory-journal-mcp/commit/d9a789146e466b9271c1a5daa39c5ffea1454889))
+- list_tags schema, semantic_search hint, deterministic ordering by **Chris LeRoux** ([7b3dd8c](https://github.com/neverinfamous/memory-journal-mcp/commit/7b3dd8cf9513a2ff21a5ad1c4aff5a46ad1b5030))
+- properly capture progress primitives before db reinitialization by **Chris LeRoux** ([7d02610](https://github.com/neverinfamous/memory-journal-mcp/commit/7d026101b347a7b2a08ebb5e8ba269d63ce38170))
+- skip final progress notification for restore_backup by **Chris LeRoux** ([f570799](https://github.com/neverinfamous/memory-journal-mcp/commit/f5707995b006d8bbfdfb462208d5e7d9013cd887))
+- capture progress context before async db operation by **Chris LeRoux** ([0a52937](https://github.com/neverinfamous/memory-journal-mcp/commit/0a529372e55f93ceb920e76f6c797395eeee0c82))
+- patch diff@8.0.3 for GHSA-73rr-hh4g-fpgx + scan before push by **Chris LeRoux** ([e51e863](https://github.com/neverinfamous/memory-journal-mcp/commit/e51e8638438564fca6a8796eb12f838c9174ad21))
+- GHSA-73rr-hh4g-fpgx (diff DoS) + stricter Docker security gate by **Chris LeRoux** ([ec79238](https://github.com/neverinfamous/memory-journal-mcp/commit/ec792382a38a2e3f9abe7b1b75a5a9f8adad007e))
+- update trivy-action from non-existent 0.29.1 to 0.33.1 by **Chris LeRoux** ([c39f318](https://github.com/neverinfamous/memory-journal-mcp/commit/c39f3189b55b9128a87e1ba1aa6df2127d1891aa))
+
+## [v4.0.0]
+
+### Features
+
+- add initial_status parameter to create_github_issue_with_entry by **Chris LeRoux** ([fc3df64](https://github.com/neverinfamous/memory-journal-mcp/commit/fc3df644f640c1720448daf7024748f53305b72f))
+- Add GitHub Actions virtualization and Project Board automation by **Chris LeRoux** ([7da5d09](https://github.com/neverinfamous/memory-journal-mcp/commit/7da5d0914b0eff885ee70c8841a3840bf2d31c8e))
+- add memory://instructions resource for unified client briefing by **Chris LeRoux** ([1f41a5f](https://github.com/neverinfamous/memory-journal-mcp/commit/1f41a5f92d3e41ebe1e661e892ecc78bf0849b97))
+- add text content fallback for structuredContent responses by **Chris LeRoux** ([fb7d903](https://github.com/neverinfamous/memory-journal-mcp/commit/fb7d90394fcb5d20a86615910792647aa11c653a))
+- Add MCP 2025-11-25 outputSchema to 5 high-value tools by **Chris LeRoux** ([2661f21](https://github.com/neverinfamous/memory-journal-mcp/commit/2661f210e8529a41ff909042b86acb811a4155b2))
+- add GitHub issue lifecycle tools with automatic journal entries by **Chris LeRoux** ([eccae61](https://github.com/neverinfamous/memory-journal-mcp/commit/eccae6159107ccbe1f576fa069077fcbdb3abe5f))
+- update ServerInstructions for Cursor compatibility, update client-specific notes by **Chris LeRoux** ([7087c80](https://github.com/neverinfamous/memory-journal-mcp/commit/7087c803e6f3a12e00d3d52d009c367074e985da))
+- add templateResources to memory://briefing for AntiGravity discoverability by **Chris LeRoux** ([54ef052](https://github.com/neverinfamous/memory-journal-mcp/commit/54ef052df008b10f14e64e2452283ce6ffff2a9a))
+- add auto-subscribe hints and userMessage for briefing acknowledgment by **Chris LeRoux** ([777eb2c](https://github.com/neverinfamous/memory-journal-mcp/commit/777eb2cc712bdb404e1be545a5ca8a29cfe16ff1))
+- add confirm-briefing prompt for session acknowledgment (v3.1.7) by **Chris LeRoux** ([7858d54](https://github.com/neverinfamous/memory-journal-mcp/commit/7858d54b6bef02060816853f41d35f7c45123144))
+- add MCP 2025-11-25 lastModified resource annotations by **Chris LeRoux** ([6b65749](https://github.com/neverinfamous/memory-journal-mcp/commit/6b65749885cfc43e0677c7f20ff1e953458392fe))
+- add memory://briefing resource for token-efficient session initialization by **Chris LeRoux** ([560acc1](https://github.com/neverinfamous/memory-journal-mcp/commit/560acc1fc3b826d8848dadc610c79852d379ae00))
+
+### Bug Fixes
+
+- use getIndexStats() for authoritative vector stats by **Chris LeRoux** ([400c4be](https://github.com/neverinfamous/memory-journal-mcp/commit/400c4be9c7e467f73165ece244b3f342a45c2266))
+- address 8 issues from testing feedback by **Chris LeRoux** ([c2b38fe](https://github.com/neverinfamous/memory-journal-mcp/commit/c2b38fe0503f2241bb2a64651f74d963671cdee4))
+- search filters & add default project support by **Chris LeRoux** ([614d778](https://github.com/neverinfamous/memory-journal-mcp/commit/614d778fc2e95d107fb36fbdb6ac4dad92161b4d))
+- semantic search timing, auto-indexing, and CI status discrepancy by **Chris LeRoux** ([9e9f4b8](https://github.com/neverinfamous/memory-journal-mcp/commit/9e9f4b8dfe865aef1d6d3d4b2c0731db0ea2c996))
+- correct tool count from 29 to 31 in TOOL_GROUPS and health resource by **Chris LeRoux** ([c7fd0fa](https://github.com/neverinfamous/memory-journal-mcp/commit/c7fd0faa87126eec0ebbd62561f46ff927abf61c))
+- ensure security-scan and merge-and-push run on workflow_run by **Chris LeRoux** ([2e1755e](https://github.com/neverinfamous/memory-journal-mcp/commit/2e1755ee78de3cf525fbaa022ccc753ee8f1e8a1))
+- apply latest tag for workflow_run events by **Chris LeRoux** ([77682c3](https://github.com/neverinfamous/memory-journal-mcp/commit/77682c368d3a2104b34c69bba2f48d233469b29e))
+- pin vectra to v0.11.1 (v0.12.x missing type definitions) by **Chris LeRoux** ([1d3d3c4](https://github.com/neverinfamous/memory-journal-mcp/commit/1d3d3c4a44921da6ddb4d43e87a4588664a09481))
+
+## [v3.1.0]
+
+### Features
+
+- add GitHub Projects v2 Kanban support - Add 2 new tools: get_kanban_board, move_kanban_item - Add 2 new resources: memory://kanban/{project_number}, memory://kanban/{project_number}/diagram - Add Kanban types and GraphQL methods in GitHubIntegration - Enhance get-context-bundle prompt with Kanban info - Update README with 29 tools, 16 resources by **Chris LeRoux** ([2d062b3](https://github.com/neverinfamous/memory-journal-mcp/commit/2d062b31de2a362b6b2332ed1ac20fef85398915))
+
+### Bug Fixes
+
+- regenerate package-lock.json for CI sync by **Chris LeRoux** ([27551dc](https://github.com/neverinfamous/memory-journal-mcp/commit/27551dcbd019e5407536889aeee9ed5237043da6))
+- improve Kanban project discovery and add AI agent instructions by **Chris LeRoux** ([9ded186](https://github.com/neverinfamous/memory-journal-mcp/commit/9ded1866ff0463f1bcedf38f16c052e759aa717d))
+- regenerate package-lock.json for CI compatibility by **Chris LeRoux** ([cd48b7f](https://github.com/neverinfamous/memory-journal-mcp/commit/cd48b7f8fbe6075c2d61f42f4594f09388f051d3))
+- migrate Dependabot from pip to npm ecosystem by **Chris LeRoux** ([2fc3641](https://github.com/neverinfamous/memory-journal-mcp/commit/2fc364112871fd98f4ca3ff12719344e97fb75fd))
+
+## [v3.0.0]
+
+### Features
+
+- modernize GitHub workflows for TypeScript v3.0.0 by **Chris LeRoux** ([46c0909](https://github.com/neverinfamous/memory-journal-mcp/commit/46c0909ee720d2bdf17e2e804ec2ea07fc9dd2a1))
+
+### Bug Fixes
+
+- gate Docker publish on lint-and-test success by **Chris LeRoux** ([906b332](https://github.com/neverinfamous/memory-journal-mcp/commit/906b332f16f3f23a284be93f47368b6e2295b59d))
+- add LOW severity CVEs to trivyignore (protobufjs bundled deps) by **Chris LeRoux** ([e4c9748](https://github.com/neverinfamous/memory-journal-mcp/commit/e4c9748f778b5970bb0fa8c085608fdd9c040d3c))
+- skip Node.js base image npm directory in Trivy scan (glob CVE) by **Chris LeRoux** ([346af25](https://github.com/neverinfamous/memory-journal-mcp/commit/346af25fd958df65c07d4c92e41212aff3db9cd9))
+- add exit-code 0 to SARIF Trivy step to ensure file is always generated by **Chris LeRoux** ([8b879d1](https://github.com/neverinfamous/memory-journal-mcp/commit/8b879d1113dba0f2ef3bc3a6d7b97f862f009552))
+- add overrides for brace-expansion/tmp CVEs, ignore glob base image CVE by **Chris LeRoux** ([d4833f5](https://github.com/neverinfamous/memory-journal-mcp/commit/d4833f5beeaf9fe2ad5fdc0d1b737074697e1455))
+- reorder Trivy scans so SARIF is generated before blocking scan by **Chris LeRoux** ([e347c40](https://github.com/neverinfamous/memory-journal-mcp/commit/e347c40474bae50530d2297f717944e4df2f712d))
+- override axios to 1.13.2 (CVE fixes for SSRF and DoS) by **Chris LeRoux** ([d4ae5d0](https://github.com/neverinfamous/memory-journal-mcp/commit/d4ae5d0135acba2f68ee3a21eb5e46b9637aab05))
+
+## [2.2.0]
+
+### Bug Fixes
+
+- use unpinned Alpine packages to get latest security patches by **Chris LeRoux** ([a679bff](https://github.com/neverinfamous/memory-journal-mcp/commit/a679bff814146bc978d4dcc68025c7e8f6726d8c))
+- Update dependencies for CVE-2025-66416 and CVE-2025-66418 by **Chris LeRoux** ([a500d32](https://github.com/neverinfamous/memory-journal-mcp/commit/a500d327446c31bca997768291460c420b1ef142))
+
+## [v1.2.1]
+
+### Features
+
+- Add MCP Registry support v1.1.3 by **Chris LeRoux** ([23a5165](https://github.com/neverinfamous/memory-journal-mcp/commit/23a5165ad2c4896c554d622587d4e396439412e5))
+
+### Bug Fixes
+
+- Address CVE-2025-8869 (pip tar extraction vulnerability) by **Chris LeRoux** ([8c88ef1](https://github.com/neverinfamous/memory-journal-mcp/commit/8c88ef193301750ea0cb8e90ddb7b3f10161f057))
+- Update MCP Registry URLs to include /v0/ API prefix by **Chris LeRoux** ([4805c3a](https://github.com/neverinfamous/memory-journal-mcp/commit/4805c3a96129a1b66c9bb66fd3ac33c6fff5eeec))
+
+## [v1.0.2]
+
+### Features
+
+- Add Docker supply chain attestations by **Chris LeRoux** ([82bc10a](https://github.com/neverinfamous/memory-journal-mcp/commit/82bc10a1e0d2496cf8097b4459c7261d5c2807d2))
+
+### Bug Fixes
+
+- Use sha- prefix instead of sha256- for Git commit tags by **Chris LeRoux** ([b67dae7](https://github.com/neverinfamous/memory-journal-mcp/commit/b67dae7f1bab577685f4d2f1d00dc320363843a5))
+- Add missing SHA and master-xxx tags to Docker workflow by **Chris LeRoux** ([016390e](https://github.com/neverinfamous/memory-journal-mcp/commit/016390ef4cb7d3a0c68f67f9daef7cba15bae2d3))
+
+## [v1.0.0]
+
+### Features
+
+- comprehensive flake8 cleanup and remove redundant Trivy scanner by **Chris LeRoux** ([f44aea3](https://github.com/neverinfamous/memory-journal-mcp/commit/f44aea35a587834c7bdd75bfb4b7bacccc36c560))
+- optimize Docker tags and add Docker Scout security scanning by **Chris LeRoux** ([0a25059](https://github.com/neverinfamous/memory-journal-mcp/commit/0a2505966899d6147d7fd5bab365696f5d48d27e))
+- deploy FULL-FEATURED remote MCP server with ALL original functionality by **Chris LeRoux** ([d1354bf](https://github.com/neverinfamous/memory-journal-mcp/commit/d1354bf1d59c5b97b27a320c509f4c905cb6c76a))
+- deploy proper remote MCP server to Cloudflare Workers by **Chris LeRoux** ([9aa04c8](https://github.com/neverinfamous/memory-journal-mcp/commit/9aa04c8ad7fbe5456a6d8eb4f67b801758c44104))
+- add Cloudflare Workers deployment by **Chris LeRoux** ([53f79e0](https://github.com/neverinfamous/memory-journal-mcp/commit/53f79e07f59865b80b467e6c49765e15de11147a))
+- add Smithery metadata and description by **Chris LeRoux** ([4a1df4e](https://github.com/neverinfamous/memory-journal-mcp/commit/4a1df4efb159d2f4e224f7f7d5057fee5eb711b3))
+
+### Bug Fixes
+
+- Update Docker workflow to support multi-arch builds for version tags by **Chris LeRoux** ([8a4fcc8](https://github.com/neverinfamous/memory-journal-mcp/commit/8a4fcc85c08798ab98796e77114cf942412dd7f1))
+- skip Docker Scout for large 'latest' image and fix final E127/E128 indentation by **Chris LeRoux** ([835e87e](https://github.com/neverinfamous/memory-journal-mcp/commit/835e87eccd960b71f9a1c3e4f18c878adab2ec22))
+- add timeout handling for Docker Scout scan to prevent exit code 143 by **Chris LeRoux** ([e764dfe](https://github.com/neverinfamous/memory-journal-mcp/commit/e764dfea53b035ba675dc5ec77b2d7da98ce4e99))
+- Docker Scout logic - allow builds with only low/medium severity vulnerabilities by **Chris LeRoux** ([7f6328e](https://github.com/neverinfamous/memory-journal-mcp/commit/7f6328efe0d935017403a06fd6e4274e7d227c36))
+- implement correct Docker Scout severity filtering with --only-severity by **Chris LeRoux** ([ad33fc8](https://github.com/neverinfamous/memory-journal-mcp/commit/ad33fc80d7621b4a21c1b3426d47ac2712109e40))
+- correct Docker Scout command syntax and make scan non-blocking by **Chris LeRoux** ([861542c](https://github.com/neverinfamous/memory-journal-mcp/commit/861542c720ccf7c2ea9f6fb1042857aa13ef7f36))
+- add debugging for missing Docker Scout and flake8 steps, suppress man page warnings by **Chris LeRoux** ([2028faa](https://github.com/neverinfamous/memory-journal-mcp/commit/2028faa0f96ee2fd6482060c98e2b18786bda8e4))
+- restore Docker Scout with correct syntax and revert unnecessary env changes by **Chris LeRoux** ([9500b9c](https://github.com/neverinfamous/memory-journal-mcp/commit/9500b9cf4f9c734ee4b3f453db6e3ffbefa4a5bc))
+- streamline workflow, remove problematic Docker Scout, and clean up build warnings by **Chris LeRoux** ([7421965](https://github.com/neverinfamous/memory-journal-mcp/commit/7421965b8cb8ab938151b2fe1507ab62049fb7da))
+- resolve GitHub Actions secrets syntax error and final indentation issues by **Chris LeRoux** ([43fb602](https://github.com/neverinfamous/memory-journal-mcp/commit/43fb6025b05c03dcecee9d78664204e46e1afff2))
+- resolve final E127/E128 indentation issues and workflow YAML problems by **Chris LeRoux** ([5a2912b](https://github.com/neverinfamous/memory-journal-mcp/commit/5a2912b7af09e9c0bdeb6df05c668364f31f0a45))
+- systematically resolve all remaining flake8 issues and simplify Docker tags by **Chris LeRoux** ([283508e](https://github.com/neverinfamous/memory-journal-mcp/commit/283508efb1de8356ea37ff12628cc825ba97087b))
+- resolve remaining flake8 issues and correct Docker tag generation by **Chris LeRoux** ([a066126](https://github.com/neverinfamous/memory-journal-mcp/commit/a066126a8aa8a406020c3557eec18e658f279bd2))
+- resolve Docker tag generation and clean up flake8 issues by **Chris LeRoux** ([1bd4d22](https://github.com/neverinfamous/memory-journal-mcp/commit/1bd4d224a42756a6ef9c8f161357b9bd0617feba))
+- restore complete workflow with proper tag generation and job dependencies by **Chris LeRoux** ([aa51178](https://github.com/neverinfamous/memory-journal-mcp/commit/aa51178b1ca59104738ae668ee821a3fdfcb8503))
+- Docker Scout integration and workflow issues by **Chris LeRoux** ([bf1990c](https://github.com/neverinfamous/memory-journal-mcp/commit/bf1990c7be3d57538fe7ff2b9b7f77309562a67a))
+- improve MCP protocol compliance and update Alpine base images by **Chris LeRoux** ([f4ed442](https://github.com/neverinfamous/memory-journal-mcp/commit/f4ed4422b2b607fd755f3f75ca2bb5e3a29d1f90))
+- restore full Dockerfile with ML dependencies for Docker Hub latest tag by **Chris LeRoux** ([46c5860](https://github.com/neverinfamous/memory-journal-mcp/commit/46c5860b30692789a5f80eac9b1a8f57d0a045a2))
+- add aiohttp dependencies to Dockerfile.smithery for HTTP server by **Chris LeRoux** ([61db5ee](https://github.com/neverinfamous/memory-journal-mcp/commit/61db5ee8f2f9e5005b32ac3bb99a6b0341ddb6db))
+- restore Docker variants and configure HTTP MCP for Smithery by **Chris LeRoux** ([0aa6948](https://github.com/neverinfamous/memory-journal-mcp/commit/0aa6948c2309040ffb7a64474f37c87937f5eba6))
+- make Alpine Dockerfile the default for Smithery compatibility by **Chris LeRoux** ([e73f190](https://github.com/neverinfamous/memory-journal-mcp/commit/e73f1906778c8315380425cf9e9dda6b1319c85f))
+- use Alpine Dockerfile for Smithery to match enableSemanticSearch: false default by **Chris LeRoux** ([6a9fffb](https://github.com/neverinfamous/memory-journal-mcp/commit/6a9fffbe078756e3e9daee920a40f2b55007a3cb))
+- correct Smithery configuration for proper MCP server deployment by **Chris LeRoux** ([b0fcd6f](https://github.com/neverinfamous/memory-journal-mcp/commit/b0fcd6f98dca2f703a36599a516a58cc294c819a))
+- resolve HTTP server CORS issue for Smithery deployment by **Chris LeRoux** ([f44ae5b](https://github.com/neverinfamous/memory-journal-mcp/commit/f44ae5b55e3f710be4fef4d8f2aaffd95abaf8d1))
+
+### Reverts
+
+- roll back Alpine version update due to critical security regression by **Chris LeRoux** ([5265099](https://github.com/neverinfamous/memory-journal-mcp/commit/52650990e2c5ed124ddb4acf4f2c1d8eda28926a))

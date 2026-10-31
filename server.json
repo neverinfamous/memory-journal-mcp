@@ -3,7 +3,7 @@
     "name": "io.github.neverinfamous/memory-journal-mcp",
     "title": "Memory Journal MCP",
     "description": "Persistent knowledge graphs and intelligent context recall across AI threads with GitHub integration",
-    "version": "8.0.1",
+    "version": "9.0.0",
     "packages": [
         {
             "registryType": "oci",
