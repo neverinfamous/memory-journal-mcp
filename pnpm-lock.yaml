@@ -19,7 +19,7 @@ overrides:
   esbuild: 0.28.2
   minimatch: '>=11.0.1'
 
-pnpmfileChecksum: sha256-0iNrKWzc1/+EtqbnnVFUW/AqyTie7qANHI5ygSHDfA4=
+pnpmfileChecksum: sha256-oXxASFJClAQgjlfIAmxURMDmbCaYGv7uejsD39P/9VU=
 
 importers:
 

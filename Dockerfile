@@ -11,10 +11,10 @@ RUN apk add --no-cache python3 make g++ gettext git sqlite-dev && \
     apk upgrade --no-cache
 
 # Install pnpm to ensure reproducible builds across the ecosystem
-RUN npm install -g pnpm@9.15.4 && npm cache clean --force
+RUN npm install -g pnpm@11.9.0 && npm cache clean --force
 
 # Copy package files first for better layer caching
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc .pnpmfile.cjs ./
 
 # Install all dependencies (including devDependencies for build)
 # The .npmrc has legacy-peer-deps=true to handle zod peer conflicts
@@ -46,7 +46,7 @@ RUN curl -L https://github.com/asg017/sqlite-vec/archive/refs/tags/v0.1.9.tar.gz
 
 # Install production-only dependencies in a separate directory for clean copy
 RUN mkdir /app/prod_modules && \
-    cp package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc /app/prod_modules/ && \
+    cp package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc .pnpmfile.cjs /app/prod_modules/ && \
     cd /app/prod_modules && \
     pnpm install --frozen-lockfile --prod && \
     rm -rf node_modules/protobufjs/cli
