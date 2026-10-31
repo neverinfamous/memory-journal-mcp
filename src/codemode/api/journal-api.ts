@@ -248,12 +248,10 @@ export class JournalApi {
             
             const configPath = process.env['MEMORY_JOURNAL_CONFIG'] ?? path.resolve(os.homedir(), '.gemini', 'config', 'memory-journal.config.json')
             let config: Record<string, unknown> = { projectRegistry: {} }
-            if (fs.existsSync(configPath)) {
-                try {
-                    config = JSON.parse(fs.readFileSync(configPath, 'utf-8')) as Record<string, unknown>
-                } catch {
-                    // Ignore parse error
-                }
+            try {
+                config = JSON.parse(fs.readFileSync(configPath, 'utf-8')) as Record<string, unknown>
+            } catch {
+                // Ignore missing or unreadable config file
             }
             config['projectRegistry'] ??= {}
             const registry = config['projectRegistry'] as Record<string, { path: string, project_number?: number }>
@@ -296,9 +294,7 @@ export class JournalApi {
             
             const configPath = process.env['MEMORY_JOURNAL_CONFIG'] ?? path.resolve(os.homedir(), '.gemini', 'config', 'memory-journal.config.json')
             let config: Record<string, unknown> = { projectRegistry: {} }
-            if (fs.existsSync(configPath)) {
-                try { config = JSON.parse(fs.readFileSync(configPath, 'utf-8')) as Record<string, unknown> } catch { /* no-op */ }
-            }
+            try { config = JSON.parse(fs.readFileSync(configPath, 'utf-8')) as Record<string, unknown> } catch { /* no-op */ }
             config['projectRegistry'] ??= {}
             const registry = config['projectRegistry'] as Record<string, { path: string, project_number?: number }>
             
@@ -324,9 +320,7 @@ export class JournalApi {
             
             const configPath = process.env['MEMORY_JOURNAL_CONFIG'] ?? path.resolve(os.homedir(), '.gemini', 'config', 'memory-journal.config.json')
             let config: Record<string, unknown> = { projectRegistry: {} }
-            if (fs.existsSync(configPath)) {
-                try { config = JSON.parse(fs.readFileSync(configPath, 'utf-8')) as Record<string, unknown> } catch { /* no-op */ }
-            }
+            try { config = JSON.parse(fs.readFileSync(configPath, 'utf-8')) as Record<string, unknown> } catch { /* no-op */ }
             config['projectRegistry'] ??= {}
             const registry = config['projectRegistry'] as Record<string, { path: string, project_number?: number }>
             
@@ -344,9 +338,7 @@ export class JournalApi {
         this.admin['listProjects'] = (): Promise<{ success: boolean, projects: unknown }> => {
             const configPath = process.env['MEMORY_JOURNAL_CONFIG'] ?? path.resolve(os.homedir(), '.gemini', 'config', 'memory-journal.config.json')
             let config: Record<string, unknown> = { projectRegistry: {} }
-            if (fs.existsSync(configPath)) {
-                try { config = JSON.parse(fs.readFileSync(configPath, 'utf-8')) as Record<string, unknown> } catch { /* no-op */ }
-            }
+            try { config = JSON.parse(fs.readFileSync(configPath, 'utf-8')) as Record<string, unknown> } catch { /* no-op */ }
             return Promise.resolve({ success: true, projects: config['projectRegistry'] ?? {} })
         }
 

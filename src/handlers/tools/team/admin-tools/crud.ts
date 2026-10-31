@@ -177,10 +177,7 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
 
                     // Verify entry exists and belongs to project (if projectNumber is specified)
                     const existing = teamDb.getEntryByIdIncludeDeleted(entry_id, workspace_id)
-                    if (
-                        !existing ||
-                        (projectNumber !== undefined && existing.projectNumber !== projectNumber)
-                    ) {
+                    if (existing?.projectNumber !== projectNumber) {
                         return {
                             success: false,
                             error: `Team entry ${String(entry_id)} not found or lacks permission for project ${projectNumber}`,
@@ -266,7 +263,7 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
 
                     // Verify entry exists and belongs to project (if projectNumber is specified)
                     const existing = teamDb.getEntryByIdIncludeDeleted(entry_id, workspace_id)
-                    if (!existing || (projectNumber !== undefined && existing.projectNumber !== projectNumber)) {
+                    if (existing?.projectNumber !== projectNumber) {
                         return {
                             success: false,
                             entryId: entry_id,

@@ -33,7 +33,7 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
 
       - name: Install pnpm
-        run: npm install -g pnpm@9.15.4
+        run: npm install -g pnpm@11.9.0
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile || (echo "Retrying in 5s..." && sleep 5 && pnpm install --frozen-lockfile) || (echo "Retrying in 10s..." && sleep 10 && pnpm install --frozen-lockfile)
