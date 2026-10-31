@@ -72,8 +72,26 @@ test.describe('E2E Resource Reads: Complete Coverage', () => {
         await expect(client.readResource({ uri: 'memory://workflows' })).rejects.toThrow('MEMORY_JOURNAL_WORKFLOW_SUMMARY')
     })
 
-    test('should read memory://skills (unconfigured)', async () => {
-        await expect(client.readResource({ uri: 'memory://skills' })).rejects.toThrow('SKILLS_DIR_PATH')
+    test('should read memory://skills (shipped skills when unconfigured)', async () => {
+        const response = await client.readResource({ uri: 'memory://skills' })
+
+        expect(response.contents).toBeDefined()
+        expect(response.contents.length).toBeGreaterThan(0)
+
+        const text = (response.contents[0] as { text: string }).text
+        const parsed = JSON.parse(text) as {
+            configured: boolean
+            skills: { name: string; source: string }[]
+        }
+        expect(parsed.configured).toBe(true)
+        expect(parsed.skills).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    name: 'memory-journal-mcp',
+                    source: 'shipped',
+                }),
+            ])
+        )
     })
 
     // --- GitHub resources (no token in test env) ---

@@ -238,12 +238,22 @@ describe('Resource Handler Coverage', () => {
             const originalEnv = process.env['SKILLS_DIR_PATH']
             delete process.env['SKILLS_DIR_PATH']
 
-            try {
-                await readResource('memory://skills', db)
-                throw new Error('Did not throw')
-            } catch (e: any) {
-                expect(e.message).toContain('No skills')
+            const result = await readResource('memory://skills', db)
+            const data = result.data as {
+                configured: boolean
+                skills: { name: string; excerpt: string; source: string }[]
+                count: number
             }
+            expect(data.configured).toBe(true)
+            expect(data.count).toBeGreaterThanOrEqual(1)
+            expect(data.skills).toEqual(
+                expect.arrayContaining([
+                    expect.objectContaining({
+                        name: 'memory-journal-mcp',
+                        source: 'shipped',
+                    }),
+                ])
+            )
 
             // Restore
             if (originalEnv !== undefined) process.env['SKILLS_DIR_PATH'] = originalEnv
