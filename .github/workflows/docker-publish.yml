@@ -27,7 +27,7 @@ jobs:
   # This ensures no vulnerable images reach Docker Hub
   security-scan:
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       security-events: write
@@ -73,7 +73,7 @@ jobs:
   smoke-test:
     needs: [security-scan]
     if: ${{ needs.security-scan.result == 'success' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: read
@@ -133,7 +133,7 @@ jobs:
       matrix:
         include:
           - platform: linux/amd64
-            runner: ubuntu-latest
+            runner: ubuntu-24.04
           - platform: linux/arm64
             runner: ubuntu-24.04-arm
 
@@ -221,7 +221,7 @@ jobs:
 
   # Merge platform images into multi-arch manifest
   merge-and-push:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [build-platform]
     if: always() && needs.build-platform.result == 'success' && github.event_name != 'pull_request'
     permissions:

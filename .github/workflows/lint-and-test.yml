@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   lint:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         node-version: [24.x, 26.x]
@@ -49,7 +49,7 @@ jobs:
         run: pnpm run test:e2e
 
   security-scan:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
@@ -71,7 +71,7 @@ jobs:
   # Smoke test: verify the Docker image builds and starts successfully
   # Catches dependency resolution failures that only surface after npm prune (neverinfamous/db-mcp#149)
   docker-smoke-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: read
