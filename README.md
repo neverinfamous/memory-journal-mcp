@@ -571,6 +571,8 @@ memory-journal-mcp --transport http --port 3000
 | `TOOL_FILTER`                                  | Control tool exposure (`full`, `starter`, `readonly`, `-github`) |
 | `CODE_MODE_MAX_RESULT_SIZE`                    | Max execution payload buffer size in Code Mode (bytes)     |
 | `CODEMODE_INTERNAL_FULL_ACCESS`                | Allow Code Mode to bypass tool filters internally          |
+| `MCP_AGENT_HEALING`                            | Enable/disable autonomous tool & parameter healing (`true`/`false`, CLI: `--no-agent-healing`) |
+| `MAX_TOOL_INPUT_ELEMENTS`                      | Max array/object elements in tool inputs (default: `25000`, `0` = disabled) |
 | **Briefing & Context** | |
 | `BRIEFING_ENTRY_COUNT`                         | Number of granular journal entries in briefing (default: 3)|
 | `BRIEFING_SUMMARY_COUNT`                       | Number of session summaries in briefing (default: 1)       |

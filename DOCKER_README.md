@@ -276,6 +276,7 @@ Restart Cursor or your MCP client and start journaling!
 - **`--config <path>`**: Load settings from `.yaml` or `.json`. Use `--dump-config` to debug precedence.
 - **`DB_ENCRYPTION_KEY`**: Enables SQLCipher at-rest encryption.
 - **`PROJECT_REGISTRY`**: Maps repo names to paths for seamless multi-project GitHub context routing.
+- **`MCP_AGENT_HEALING` / `--no-agent-healing`**: Set `MCP_AGENT_HEALING=false` (or pass `--no-agent-healing`) to disable autonomous MCP tool and parameter healing/interception.
 - **`ARCHIVE_OLDER_THAN_DAYS` / `HARD_DELETE_OLDER_THAN_DAYS` / `PRUNE_DRY_RUN`**: Control the auto-prune data lifecycle. Test rules safely with `--prune-dry-run`.
 
 For a complete list of all extensive environment variables and detailed routing docs, see the **[Configuration Wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki/Configuration)**.
