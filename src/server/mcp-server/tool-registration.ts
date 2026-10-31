@@ -120,6 +120,10 @@ export function createServerInstance(
             }
         )
 
+        if (context.skillCatalog && typeof server.isConnected === 'function') {
+            context.skillCatalog.attach(server)
+        }
+
         for (const tool of allTools) {
             // Build tool options matching MCP SDK expectations
             interface McpToolOptions {

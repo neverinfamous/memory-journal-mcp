@@ -1,3 +1,7 @@
+import * as fs from 'node:fs'
+import * as path from 'node:path'
+import { loadSkills } from '@modelcontextprotocol/server/ext/skills/node'
+import type { SkillCatalog } from '@modelcontextprotocol/server/ext/skills'
 import { DatabaseAdapterFactory } from '../../database/adapter-factory.js'
 import { DatabaseAdapterProxy } from '../../database/core/DatabaseAdapterProxy.js'
 import { VectorSearchManager } from '../../vector/vector-search-manager/index.js'
@@ -15,6 +19,53 @@ import { runAutoPrune } from '../auto-prune.js'
 import type { ServerOptions, ServerContext } from './types.js'
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import type { ToolFilterConfig } from '../../filtering/tool-filter.js'
+
+/**
+ * Resolves the bundled `skills/` directory relative to the current module,
+ * supporting both source (`src/server/mcp-server/`) and compiled (`dist/`) layouts.
+ */
+export function resolveBundledSkillsDir(): string | undefined {
+    let dir = import.meta.dirname
+    for (let i = 0; i < 5; i++) {
+        const candidate = path.join(dir, 'skills')
+        if (fs.existsSync(path.join(candidate, 'memory-journal-mcp', 'SKILL.md'))) {
+            return candidate
+        }
+        const parent = path.dirname(dir)
+        if (parent === dir) break
+        dir = parent
+    }
+    return undefined
+}
+
+/**
+ * Loads the bundled SEP-2640 skill catalog from disk.
+ */
+export async function loadBundledSkillCatalog(
+    skillsDirOverride?: string
+): Promise<SkillCatalog | undefined> {
+    const skillsDir = skillsDirOverride ?? resolveBundledSkillsDir()
+    if (!skillsDir) {
+        return undefined
+    }
+    try {
+        return await loadSkills(skillsDir, {
+            onWarning: (warning) => {
+                logger.warning(`Bundled skill catalog warning (${warning.path}): ${warning.message}`, {
+                    module: 'McpServer',
+                })
+            },
+        })
+    } catch (error: unknown) {
+        logger.warning('Failed to load bundled skill catalog', {
+            module: 'McpServer',
+            path: skillsDir,
+            error: error instanceof Error ? error.message : String(error),
+        })
+        return undefined
+    }
+}
+
 export async function initializeDependencies(options: ServerOptions): Promise<ServerContext> {
     const { transport, dbPath, teamDbPath, testDbPath, testTeamDbPath } = options
 
@@ -340,6 +391,8 @@ export async function initializeDependencies(options: ServerOptions): Promise<Se
         allowedRoots: finalAllowedIoRoots,
     })
 
+    const skillCatalog = await loadBundledSkillCatalog()
+
     return {
         db,
         testDb,
@@ -352,6 +405,7 @@ export async function initializeDependencies(options: ServerOptions): Promise<Se
         configManager,
         scheduler,
         allowedIoRoots: finalAllowedIoRoots,
-        activeMetricsPath
+        activeMetricsPath,
+        ...(skillCatalog ? { skillCatalog } : {}),
     }
 }

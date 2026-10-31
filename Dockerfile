@@ -94,6 +94,7 @@ RUN apk add --no-cache git ca-certificates && \
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/vec0.so ./vec0.so
 COPY --from=builder /app/prod_modules/node_modules ./node_modules
+COPY skills ./skills
 COPY package*.json ./
 COPY LICENSE ./
 

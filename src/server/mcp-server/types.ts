@@ -68,6 +68,7 @@ export interface ServerOptions {
 }
 
 import type { McpServer } from '@modelcontextprotocol/server'
+import type { SkillCatalog } from '@modelcontextprotocol/server/ext/skills'
 export type McpServerFactory = () => McpServer
 
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
@@ -90,4 +91,5 @@ export interface ServerContext {
     scheduler: Scheduler | null;
     allowedIoRoots: string[];
     activeMetricsPath?: string;
+    skillCatalog?: SkillCatalog;
 }
