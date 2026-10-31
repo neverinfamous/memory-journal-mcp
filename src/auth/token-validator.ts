@@ -91,6 +91,9 @@ export class TokenValidator {
                 issuer: this.issuer,
                 audience: this.audience,
                 clockTolerance: this.clockTolerance,
+                // jose only checks `exp` when it is present. Require it so a validly signed token
+                // without an expiry cannot become a permanent credential.
+                requiredClaims: ['exp'],
             })
 
             // Extract and normalize claims
@@ -176,10 +179,22 @@ export class TokenValidator {
             scopes = payload['scope'].filter((s): s is string => typeof s === 'string')
         }
 
+        // Defense in depth: jwtVerify is configured with requiredClaims: ['exp'], so this is
+        // unreachable today. Fail closed (rather than defaulting to 0) if that ever changes.
+        const { exp } = payload
+        if (exp === undefined) {
+            throw new jose.errors.JWTClaimValidationFailed(
+                'missing required "exp" claim',
+                payload,
+                'exp',
+                'missing'
+            )
+        }
+
         return {
             sub: payload.sub ?? 'unknown',
             scopes,
-            exp: payload.exp ?? 0,
+            exp,
             iat: payload.iat ?? 0,
             iss: payload.iss,
             aud: payload.aud,

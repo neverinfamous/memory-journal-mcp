@@ -307,6 +307,7 @@ export class HttpTransport {
 
             logger.info('OAuth 2.1 authentication enabled', {
                 module: 'HTTP',
+                resource: resourceServer.getResourceUri(),
                 audience: this.config.oauthAudience,
             })
         } else if (authToken) {
