@@ -1,5 +1,5 @@
 import { parseArgs } from 'util';
-import { readFileSync, writeFileSync, cpSync, mkdirSync } from 'fs';
+import { readFileSync, writeFileSync, cpSync, mkdirSync, existsSync } from 'fs';
 import { join, dirname, resolve } from 'path';
 import { execSync } from 'child_process';
 import { builtinModules } from 'module';
@@ -22,6 +22,18 @@ function extractPackageImports(source: string): Set<string> {
     packages.add(name);
   }
   return packages;
+}
+
+/**
+ * Extract relative import specifiers (e.g. './command-utils.js') from a TypeScript source file.
+ */
+function extractRelativeImports(source: string): string[] {
+  const specifiers: string[] = [];
+  const pattern = /(?:^|\n)\s*(?:import|export)\s+(?:[^'"\n;]*?\s+from\s+)?['"](\.[^'"]*)['"]/g;
+  for (const match of source.matchAll(pattern)) {
+    if (match[1] !== undefined) specifiers.push(match[1]);
+  }
+  return specifiers;
 }
 
 const args = parseArgs({
@@ -120,17 +132,33 @@ try {
   }
 
   const missing = new Map<string, Set<string>>();
+  const unresolved = new Map<string, Set<string>>();
   for (const lib of libsToSync) {
     const libConfig = vendorData.libs[lib];
     for (const file of libConfig.files as string[]) {
       if (!file.endsWith('.ts')) continue;
-      const source = readFileSync(join(cwd, 'src', 'vendor', lib, file), 'utf8');
+      const filePath = join(cwd, 'src', 'vendor', lib, file);
+      const source = readFileSync(filePath, 'utf8');
+      for (const specifier of extractRelativeImports(source)) {
+        const target = resolve(dirname(filePath), specifier.replace(/\.js$/, '.ts'));
+        if (existsSync(target)) continue;
+        const users = unresolved.get(`${lib}/${specifier}`) ?? new Set<string>();
+        users.add(`${lib}/${file}`);
+        unresolved.set(`${lib}/${specifier}`, users);
+      }
       for (const pkg of extractPackageImports(source)) {
         if (declared.has(pkg)) continue;
         const users = missing.get(pkg) ?? new Set<string>();
         users.add(`${lib}/${file}`);
         missing.set(pkg, users);
       }
+    }
+  }
+
+  if (unresolved.size > 0) {
+    console.error('\nVendored files import sibling modules that are not synced (add them to src/vendor/VENDOR.json "files"):');
+    for (const [specifier, users] of unresolved) {
+      console.error(`  - ${specifier}  <- ${[...users].slice(0, 3).join(', ')}`);
     }
   }
 
@@ -141,6 +169,9 @@ try {
       console.error(`  - ${pkg}${range !== undefined ? ` (adamic uses ${range})` : ''}  <- ${[...users].slice(0, 3).join(', ')}`);
     }
     console.error(`\nAdd them, e.g.: pnpm add -D ${[...missing.keys()].map((pkg) => (adamicDeps[pkg] !== undefined ? `${pkg}@${adamicDeps[pkg]}` : pkg)).join(' ')}`);
+  }
+
+  if (unresolved.size > 0 || missing.size > 0) {
     process.exit(1);
   }
 
