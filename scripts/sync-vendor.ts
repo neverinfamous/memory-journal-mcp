@@ -2,12 +2,34 @@ import { parseArgs } from 'util';
 import { readFileSync, writeFileSync, cpSync, mkdirSync } from 'fs';
 import { join, dirname, resolve } from 'path';
 import { execSync } from 'child_process';
+import { builtinModules } from 'module';
+
+/**
+ * Extract third-party package names imported by a TypeScript source file.
+ * Relative paths, node builtins, `node:` and `bun:` specifiers are ignored.
+ */
+function extractPackageImports(source: string): Set<string> {
+  const packages = new Set<string>();
+  const pattern = /(?:^|\n)\s*(?:import|export)\s+(?:[^'"\n;]*?\s+from\s+)?['"]([^'"]+)['"]/g;
+  for (const match of source.matchAll(pattern)) {
+    const specifier = match[1];
+    if (specifier === undefined) continue;
+    if (specifier.startsWith('.') || specifier.startsWith('/')) continue;
+    if (specifier.startsWith('node:') || specifier.startsWith('bun:')) continue;
+    const parts = specifier.split('/');
+    const name = specifier.startsWith('@') ? parts.slice(0, 2).join('/') : (parts[0] ?? specifier);
+    if (builtinModules.includes(name)) continue;
+    packages.add(name);
+  }
+  return packages;
+}
 
 const args = parseArgs({
   options: {
     lib: { type: 'string' },
     'adamic-root': { type: 'string', default: '../adamic' },
     test: { type: 'boolean', default: false },
+    check: { type: 'boolean', default: false },
   },
 });
 
@@ -30,7 +52,7 @@ try {
     libsToSync = [args.values.lib as string];
   }
 
-  for (const lib of libsToSync) {
+  for (const lib of args.values.check ? [] : libsToSync) {
     const libConfig = vendorData.libs[lib];
     console.log(`\nSyncing ${lib}...`);
     
@@ -69,8 +91,58 @@ try {
     libConfig.syncedFromCommit = headSha;
   }
 
-  writeFileSync(vendorJsonPath, JSON.stringify(vendorData, null, 2) + '\n');
-  console.log('\nUpdated VENDOR.json');
+  if (!args.values.check) {
+    writeFileSync(vendorJsonPath, JSON.stringify(vendorData, null, 2) + '\n');
+    console.log('\nUpdated VENDOR.json');
+  }
+
+  // Vendored code must not rely on transitive hoisting: every third-party package it
+  // imports has to be declared by this project (pnpm's strict layout does not hoist).
+  const consumerPkg = JSON.parse(readFileSync(join(cwd, 'package.json'), 'utf8')) as Record<string, unknown>;
+  const declared = new Set<string>();
+  for (const field of ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies']) {
+    const section = consumerPkg[field];
+    if (typeof section === 'object' && section !== null) {
+      for (const name of Object.keys(section)) declared.add(name);
+    }
+  }
+  let adamicDeps: Record<string, string> = {};
+  try {
+    const adamicPkg = JSON.parse(readFileSync(join(adamicRoot, 'package.json'), 'utf8')) as Record<string, unknown>;
+    for (const field of ['dependencies', 'devDependencies']) {
+      const section = adamicPkg[field];
+      if (typeof section === 'object' && section !== null) {
+        adamicDeps = { ...adamicDeps, ...(section as Record<string, string>) };
+      }
+    }
+  } catch {
+    // adamic package.json is only used to suggest version ranges
+  }
+
+  const missing = new Map<string, Set<string>>();
+  for (const lib of libsToSync) {
+    const libConfig = vendorData.libs[lib];
+    for (const file of libConfig.files as string[]) {
+      if (!file.endsWith('.ts')) continue;
+      const source = readFileSync(join(cwd, 'src', 'vendor', lib, file), 'utf8');
+      for (const pkg of extractPackageImports(source)) {
+        if (declared.has(pkg)) continue;
+        const users = missing.get(pkg) ?? new Set<string>();
+        users.add(`${lib}/${file}`);
+        missing.set(pkg, users);
+      }
+    }
+  }
+
+  if (missing.size > 0) {
+    console.error('\nVendored code imports packages that are not declared in package.json:');
+    for (const [pkg, users] of missing) {
+      const range = adamicDeps[pkg];
+      console.error(`  - ${pkg}${range !== undefined ? ` (adamic uses ${range})` : ''}  <- ${[...users].slice(0, 3).join(', ')}`);
+    }
+    console.error(`\nAdd them, e.g.: pnpm add -D ${[...missing.keys()].map((pkg) => (adamicDeps[pkg] !== undefined ? `${pkg}@${adamicDeps[pkg]}` : pkg)).join(' ')}`);
+    process.exit(1);
+  }
 
   if (args.values.test) {
     console.log('\nRunning tests...');
