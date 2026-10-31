@@ -10,6 +10,11 @@ import { getCodeModeTools } from '../codemode/handler.js'
 import { safeString } from '../schemas.js'
 import { getPrompt, getPrompts } from '../../prompts/index.js'
 import { readResource, getResources } from '../../resources/index.js'
+import {
+    assertSafeDirectoryPath,
+    assertSafeFilePath,
+    PathTraversalError,
+} from '../../../utils/security-utils.js'
 
 export const DUMMY_DOTTED_TOOL_NAMES = [
     'mj.core.createEntry',
@@ -694,15 +699,33 @@ export function getDummyHealingTools(context?: ToolContext): ToolDefinition[] {
         const caseInsensitive = rawArgs['case_insensitive'] === true || rawArgs['CaseInsensitive'] === true || rawArgs['caseInsensitive'] === true || rawArgs['ignore_case'] === true
         const isRegex = rawArgs['is_regex'] === true || rawArgs['IsRegex'] === true || rawArgs['isRegex'] === true
 
+        const allowedRoots = context?.config?.allowedIoRoots ?? []
         let searchPath = rawPath
         if (typeof searchPath === 'string' && searchPath.trim() !== '') {
             searchPath = path.resolve(searchPath.trim())
+        }
+
+        if (typeof searchPath === 'string') {
+            try {
+                assertSafeDirectoryPath(searchPath, allowedRoots)
+            } catch (err) {
+                return {
+                    success: false,
+                    error: `Failed to execute grep search on '${searchPath}': ${err instanceof Error ? err.message : String(err)}`,
+                    code: err instanceof PathTraversalError ? 'PATH_TRAVERSAL' : 'SEARCH_ERROR',
+                    category: err instanceof PathTraversalError ? 'validation' : 'search',
+                    recoverable: false,
+                }
+            }
         }
 
         if (typeof searchPath === 'string' && fs.existsSync(searchPath)) {
             try {
                 const stat = fs.statSync(searchPath)
                 const targetDir = stat.isDirectory() ? searchPath : path.dirname(searchPath)
+                if (stat.isFile()) {
+                    assertSafeFilePath(searchPath, allowedRoots)
+                }
                 const targetPattern = stat.isFile() && filePattern === undefined ? path.basename(searchPath) : filePattern
 
                 const matches = searchDirectory(targetDir, query, {
@@ -722,9 +745,9 @@ export function getDummyHealingTools(context?: ToolContext): ToolDefinition[] {
                 return {
                     success: false,
                     error: `Failed to execute grep search on '${searchPath}': ${err instanceof Error ? err.message : String(err)}`,
-                    code: 'SEARCH_ERROR',
-                    category: 'search',
-                    recoverable: true,
+                    code: err instanceof PathTraversalError ? 'PATH_TRAVERSAL' : 'SEARCH_ERROR',
+                    category: err instanceof PathTraversalError ? 'validation' : 'search',
+                    recoverable: !(err instanceof PathTraversalError),
                 }
             }
         }
@@ -794,6 +817,19 @@ export function getDummyHealingTools(context?: ToolContext): ToolDefinition[] {
         }
 
         const resolved = path.resolve(targetPath.trim())
+        const allowedRoots = context?.config?.allowedIoRoots ?? []
+        try {
+            assertSafeFilePath(resolved, allowedRoots)
+        } catch (err) {
+            return {
+                success: false,
+                error: err instanceof Error ? err.message : String(err),
+                code: err instanceof PathTraversalError ? 'PATH_TRAVERSAL' : 'VALIDATION_ERROR',
+                category: 'validation',
+                recoverable: false,
+            }
+        }
+
         if (!fs.existsSync(resolved)) {
             return {
                 success: false,
@@ -853,6 +889,18 @@ export function getDummyHealingTools(context?: ToolContext): ToolDefinition[] {
             (typeof rawArgs['Target'] === 'string' ? rawArgs['Target'] : undefined)))))))
 
         const dirToRead = typeof targetDir === 'string' && targetDir.trim() !== '' ? path.resolve(targetDir.trim()) : process.cwd()
+        const allowedRoots = context?.config?.allowedIoRoots ?? []
+        try {
+            assertSafeDirectoryPath(dirToRead, allowedRoots)
+        } catch (err) {
+            return {
+                success: false,
+                error: err instanceof Error ? err.message : String(err),
+                code: err instanceof PathTraversalError ? 'PATH_TRAVERSAL' : 'VALIDATION_ERROR',
+                category: 'validation',
+                recoverable: false,
+            }
+        }
 
         if (!fs.existsSync(dirToRead)) {
             return {

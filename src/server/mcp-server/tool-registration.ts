@@ -455,7 +455,8 @@ export function createServerInstance(
             requestHandlers.set('tools/call', async (request: unknown, extra: unknown) => {
                 try {
                     const req = request as { params?: { name?: string; arguments?: Record<string, unknown> } }
-                    if (req?.params?.arguments) {
+                    const healingEnabled = options.agentHealing !== false && customToolHandlerConfig.agentHealing !== false
+                    if (req?.params?.arguments && healingEnabled) {
                         // Deep camelToSnake normalization for Native MCP tool calls
                         const deepCamelToSnake = (obj: unknown): unknown => {
                             if (Array.isArray(obj)) return obj.map(deepCamelToSnake)
@@ -631,14 +632,16 @@ export function createServerInstance(
                                 }
                             }
                         }
+                    }
+
+                    if (req?.params?.name && !allToolNames.has(req.params.name)) {
+                        const requestedTool = req.params.name;
+                        const toolArgs = req.params.arguments ?? {};
+                        const normalized = requestedTool.replace(/^mj_/, '').replace(/_/g, '-');
+                        const matchingPrompt = prompts.find((p) => p.name === normalized || p.name === requestedTool || p.name === requestedTool.replace(/^mj_/, ''));
 
                         // Catch hallucinated tool names BEFORE the SDK throws a generic validation error
-
-                        if (req.params?.name && !allToolNames.has(req.params.name)) {
-                            const requestedTool = req.params.name;
-                            
-                            const normalized = requestedTool.replace(/^mj_/, '').replace(/_/g, '-');
-                            const matchingPrompt = prompts.find((p) => p.name === normalized || p.name === requestedTool || p.name === requestedTool.replace(/^mj_/, ''));
+                        if (healingEnabled) {
                             
                             // Autonomous Prompt Healing Fallback
                             if (matchingPrompt) {
@@ -1227,52 +1230,54 @@ export function createServerInstance(
                                     // Fall through to standard error reporting
                                 }
                             }
+                        }
 
-                            let suggestion = `Tool '${requestedTool}' does not exist. Use tools/list to see available tools.`;
-                            const isFilteredTool = Object.values(TOOL_GROUPS).flat().includes(requestedTool);
-                            
-                            if (isFilteredTool) {
-                                suggestion = `'${requestedTool}' is a valid tool but it is not currently exposed because of your active --tool-filter or codemode restrictions. If you are in Code Mode, invoke it via 'mj_execute_code' (e.g. 'await mj.core.${requestedTool}(...)').`;
-                            } else if (matchingPrompt !== undefined) {
-                                suggestion = `'${requestedTool}' is an MCP Prompt, not an MCP Tool. Please use the 'get_prompt' tool (or your native MCP Prompts integration) to evaluate it, then use 'create_entry' to save the result.`;
-                            } else if (requestedTool.startsWith('mj_')) {
-                                suggestion = `'${requestedTool}' is not a valid root tool. If you are trying to use Code Mode, you must invoke the 'mj_execute_code' tool and write javascript (e.g. 'await mj.core.searchEntries(...)').`;
-                            }
+                        let suggestion = `Tool '${requestedTool}' does not exist. Use tools/list to see available tools.`;
+                        const isFilteredTool = Object.values(TOOL_GROUPS).flat().includes(requestedTool);
+                        
+                        if (isFilteredTool) {
+                            suggestion = `'${requestedTool}' is a valid tool but it is not currently exposed because of your active --tool-filter or codemode restrictions. If you are in Code Mode, invoke it via 'mj_execute_code' (e.g. 'await mj.core.${requestedTool}(...)').`;
+                        } else if (matchingPrompt !== undefined) {
+                            suggestion = `'${requestedTool}' is an MCP Prompt, not an MCP Tool. Please use the 'get_prompt' tool (or your native MCP Prompts integration) to evaluate it, then use 'create_entry' to save the result.`;
+                        } else if (requestedTool.startsWith('mj_')) {
+                            suggestion = `'${requestedTool}' is not a valid root tool. If you are trying to use Code Mode, you must invoke the 'mj_execute_code' tool and write javascript (e.g. 'await mj.core.searchEntries(...)').`;
+                        }
 
-                            const errorResult = {
-                                success: false,
-                                error: `MCP error -32602: Tool ${requestedTool} not found`,
-                                code: 'TOOL_NOT_FOUND',
-                                category: 'hallucination',
-                                suggestion,
-                                recoverable: false,
-                            };
+                        const errorResult = {
+                            success: false,
+                            error: `MCP error -32602: Tool ${requestedTool} not found`,
+                            code: 'TOOL_NOT_FOUND',
+                            category: 'hallucination',
+                            suggestion,
+                            recoverable: false,
+                        };
 
+                        if (healingEnabled) {
                             logAgentIssue({
                                 source: 'MCP',
                                 action: requestedTool,
                                 input: toolArgs,
                                 error: errorResult.error
                             });
-
-                            const enriched = JSON.stringify({
-                                ...errorResult,
-                                _meta: { tokenEstimate: 0 },
-                            });
-                            const tokenEstimate = Math.ceil(Buffer.byteLength(enriched, 'utf8') / 4);
-                            const finalText = enriched.replace('"tokenEstimate":0', `"tokenEstimate":${tokenEstimate}`);
-
-                            return {
-                                content: [
-                                    {
-                                        type: 'text',
-                                        text: finalText,
-                                    },
-                                ],
-                                structuredContent: errorResult,
-                                isError: true,
-                            };
                         }
+
+                        const enriched = JSON.stringify({
+                            ...errorResult,
+                            _meta: { tokenEstimate: 0 },
+                        });
+                        const tokenEstimate = Math.ceil(Buffer.byteLength(enriched, 'utf8') / 4);
+                        const finalText = enriched.replace('"tokenEstimate":0', `"tokenEstimate":${tokenEstimate}`);
+
+                        return {
+                            content: [
+                                {
+                                    type: 'text',
+                                    text: finalText,
+                                },
+                            ],
+                            structuredContent: errorResult,
+                            isError: true,
+                        };
                     }
 
                     const result = await originalHandler(request, extra)

@@ -14,6 +14,10 @@ export function addCoreOptions(command: Command): Command {
                 '--max-tool-input-elements <count>',
                 'Maximum number of array/object elements allowed in tool input arguments (default: 25000, 0 = disabled, env: MAX_TOOL_INPUT_ELEMENTS)'
             )
+            .option(
+                '--no-agent-healing',
+                'Disable autonomous MCP tool and parameter healing/interception (env: MCP_AGENT_HEALING=false)'
+            )
     })
 }
 

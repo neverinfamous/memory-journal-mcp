@@ -277,6 +277,7 @@ export function buildServerOptions(
             }
             return resolver.resolveInt('maxToolInputElements', 'MAX_TOOL_INPUT_ELEMENTS', 0);
         }, undefined),
+        agentHealing: catchConfig(() => resolver.resolveBool('agentHealing', 'MCP_AGENT_HEALING') ?? true, true),
     };
 
     return { serverOptions, transport, db, teamDb, host }

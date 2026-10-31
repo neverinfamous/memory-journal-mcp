@@ -181,8 +181,9 @@ export function getTools(
     if (filterConfig) {
         // Filtered lists are not cached — filter sets vary per call
         const mapToUse = config?.runtime?.toolMapCache ?? toolMapCache ?? EMPTY_TOOL_MAP
+        const includeDummyTools = config?.agentHealing !== false
         return Array.from(mapToUse.values())
-            .filter((t) => filterConfig.enabledTools.has(t.name) || DUMMY_HEALING_TOOL_NAMES.has(t.name))
+            .filter((t) => filterConfig.enabledTools.has(t.name) || (includeDummyTools && DUMMY_HEALING_TOOL_NAMES.has(t.name)))
             .map(mapTool)
     }
 
@@ -369,12 +370,14 @@ export async function callTool(
 ): Promise<unknown> {
     ensureToolCache(db, vectorManager, github, config, teamDb, teamVectorManager)
 
-    const intercept = applyArgInterceptions(name, [args])
-    if ('error' in intercept) {
-        return intercept.error
+    if (config?.agentHealing !== false) {
+        const intercept = applyArgInterceptions(name, [args])
+        if ('error' in intercept) {
+            return intercept.error
+        }
+        const cleanArgs = (intercept.args[0] as Record<string, unknown>) ?? args
+        args = cleanArgs
     }
-    const cleanArgs = (intercept.args[0] as Record<string, unknown>) ?? args
-    args = cleanArgs
 
     const mapToUse = config?.runtime?.toolMapCache ?? toolMapCache ?? EMPTY_TOOL_MAP
     const tool = mapToUse.get(name)
@@ -518,6 +521,9 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
         ...getCodeModeTools(context),
         ...getGitTools(context),
     ]
+    if (context.config?.agentHealing === false) {
+        return primaryTools
+    }
     const primaryNames = new Set(primaryTools.map((t) => t.name))
     const dummyTools = getDummyHealingTools(context).filter((t) => !primaryNames.has(t.name))
     return [...primaryTools, ...dummyTools]

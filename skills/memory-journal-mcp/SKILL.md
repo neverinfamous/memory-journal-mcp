@@ -25,7 +25,7 @@ The Memory Journal MCP provides comprehensive, dynamic instructions via its `mem
 - **Context Recovery:** If you lose workspace context mid-task (e.g., needing a `project_number`), NEVER re-query `memory://briefing`. Query `memory://agent-id`.
 
 ## 3. Commit Integration & Entry Creation
-- **Automated Commit Journaling:** When committing via `bun .\.agents\scripts\commit.ts`, include `--journal` (or `--journal-project <id>`). This automatically generates a journal entry tagged `commit-narrative` containing `auto_context` with `commits: ["<sha>"]` and metadata (`impact`, `confidence`, `validation_status`).
+- **Commit Journaling:** When recording commit history in the journal, create an entry (via `mj_execute_code`, `create_entry`, or `memory-journal-mcp entry create`) tagged `commit-narrative` containing `auto_context` with `commits: ["<sha>"]` and heuristic metadata (`impact_score`, `trust_score`, `validation_status`).
 - **Commit Narrative Guardrails:** Any entry tagged `"commit-narrative"` MUST include `auto_context` containing a non-empty `commits` array (e.g., `{ "commits": ["<sha>"] }`).
 
 ## 4. Session Summary Guardrails
@@ -38,9 +38,4 @@ The Memory Journal MCP provides comprehensive, dynamic instructions via its `mem
 
 ## 5. Tool Execution & Lifecycle Rules
 - **Token Efficiency:** Prioritize MCP Code Mode (`mj_execute_code`) or native MCP tools for token-efficient entry logging, searches, and aggregations.
-- **Runtime Configuration & Server Restart:** The server exposes `update_configuration`. Configuration changes require a server restart. To restart safely, execute `mj_execute_code` with `process.exit(0)` to trigger graceful IDE resurrection. If Code Mode is unavailable, run `bun .\.agents\scripts\restart-mcp.ts memory-journal-mcp`.
-
-## 6. Source Repository & Codebase References
-When modifying or debugging the underlying `memory-journal-mcp` server codebase (located at `C:\Users\chris\Desktop\memory-journal-mcp`), consult these references:
-- **[Agent-Optimized README](file:///C:/Users/chris/Desktop/memory-journal-mcp/AGENT_README.md)**: Architectural patterns, Dual-Schema Zod validation, and error handling contracts.
-- **[Architectural Code Map](file:///C:/Users/chris/Desktop/memory-journal-mcp/test-server/code-map.md)**: Handler-to-tool mappings, directory tree, error hierarchy, and key constants.
+- **Runtime Configuration:** Use `update_configuration` to hot-reload tool filters (`tool_filter`) and briefing settings at runtime—the server automatically emits `notifications/tools/list_changed` without requiring a restart.

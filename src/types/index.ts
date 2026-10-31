@@ -213,6 +213,8 @@ export interface ToolHandlerConfig {
     oauthEnabled?: boolean
     codemodeEnabled?: boolean
     codemodeInternalFullAccess?: boolean
+    /** Enable autonomous MCP tool and parameter healing/interception (default: true) */
+    agentHealing?: boolean
     /** Default role for un-registered authors (default: denied) */
     teamDefaultRole?: 'admin' | 'member' | 'viewer' | 'denied'
     /** Admin author to bootstrap if team_members table is empty */

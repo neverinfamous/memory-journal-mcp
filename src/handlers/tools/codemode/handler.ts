@@ -976,10 +976,13 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                 
                 try {
                     const input = ExecuteCodeSchema.parse(params)
-                    let executionCode = input.code || input.script || input.source || input.query || input.content || input.text || input.body || input.js || input.javascript || (typeof input.payload === 'string' ? input.payload : undefined) || input.executionCode || (typeof input.input === 'string' ? input.input : undefined) || input.command || input.expression || input.fn || input.exec || input.eval || input.code_snippet || input.raw_code || input.statement || input.statements || input.codeBlock || input.code_block || input.script_content || input.js_code || input.code_string || input.action || input.task || input.instruction || input.instructions
+                    const healingEnabled = context.config?.agentHealing !== false
+                    let executionCode = healingEnabled
+                        ? (input.code || input.script || input.source || input.query || input.content || input.text || input.body || input.js || input.javascript || (typeof input.payload === 'string' ? input.payload : undefined) || input.executionCode || (typeof input.input === 'string' ? input.input : undefined) || input.command || input.expression || input.fn || input.exec || input.eval || input.code_snippet || input.raw_code || input.statement || input.statements || input.codeBlock || input.code_block || input.script_content || input.js_code || input.code_string || input.action || input.task || input.instruction || input.instructions)
+                        : input.code
 
                     // Direct Structured Payload / Entry Recovery
-                    if (!executionCode) {
+                    if (healingEnabled && !executionCode) {
                         if (typeof input.payload === 'object' && input.payload !== null) {
                             executionCode = extractAndRecoverJsonCode(JSON.stringify(input.payload)) ?? undefined
                         } else if (typeof input.entry === 'object' && input.entry !== null) {
@@ -1001,7 +1004,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     // Fallback: search params object for entry object or string properties if code is still undefined
-                    if (!executionCode && typeof params === 'object' && params !== null) {
+                    if (healingEnabled && !executionCode && typeof params === 'object' && params !== null) {
                         const rawObj = params as Record<string, unknown>
                         const entryObj = (typeof rawObj['entry'] === 'object' && rawObj['entry'] !== null ? rawObj['entry'] : rawObj) as Record<string, unknown>
                         if (typeof entryObj['content'] === 'string' || typeof entryObj['title'] === 'string' || typeof entryObj['type'] === 'string' || typeof entryObj['entry_type'] === 'string' || typeof entryObj['instructions'] === 'string' || typeof rawObj['instructions'] === 'string') {
@@ -1033,7 +1036,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     // [Layer 2 Dispatcher Healing] Apply full script healing
-                    if (executionCode) {
+                    if (healingEnabled && executionCode) {
                         executionCode = healCodeModeScript(executionCode)
 
                         // Anti-Hallucination: Auto-heal raw JSON string passed directly as code parameter
@@ -1285,6 +1288,17 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
 
                     // 1a. Missing Payload Interceptor
                     if (!executionCode || executionCode.trim() === '') {
+                        if (!healingEnabled) {
+                            return {
+                                success: false,
+                                error: 'Missing required parameter: code',
+                                code: 'VALIDATION_ERROR',
+                                category: 'validation',
+                                recoverable: true,
+                                project_id: undefined,
+                                executionTimeMs: 0,
+                            }
+                        }
                         const inputContext = (input as Record<string, unknown>)['context']
                         const paramsContext = typeof params === 'object' && params !== null ? (params as Record<string, unknown>)['context'] : undefined
                         if (typeof inputContext === 'string' && inputContext.trim().length > 0) {
@@ -1883,7 +1897,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                         await runSandbox(executionCode ?? '')
 
                         // Autonomous Recovery Retry: If execution failed due to syntax error or TypeError (e.g. tagged template tag or unescaped backtick)
-                        if (execResult && !execResult.success && typeof execResult.error === 'string') {
+                        if (healingEnabled && execResult && !execResult.success && typeof execResult.error === 'string') {
                             const errLower = execResult.error.toLowerCase()
                             if (
                                 errLower.includes('syntax error') ||

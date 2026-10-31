@@ -34,6 +34,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
         oauthEnabled: options.oauthEnabled,
         codemodeEnabled: true,
         codemodeInternalFullAccess: options.codemodeInternalFullAccess,
+        agentHealing: options.agentHealing,
         teamDefaultRole: options.teamDefaultRole,
         teamAdmin: options.teamAdmin,
         runtime,

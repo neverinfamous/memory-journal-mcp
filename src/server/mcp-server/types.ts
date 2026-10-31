@@ -65,6 +65,8 @@ export interface ServerOptions {
     configFilePath?: string
     // MCP tool input element cap (0 or Infinity disables; defaults to DEFAULT_MAX_TOOL_INPUT_ELEMENTS)
     maxToolInputElements?: number
+    // Autonomous MCP tool and parameter healing/interception (default: true; disabled via --no-agent-healing / MCP_AGENT_HEALING=false)
+    agentHealing?: boolean
 }
 
 import type { McpServer } from '@modelcontextprotocol/server'

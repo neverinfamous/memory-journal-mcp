@@ -105,14 +105,11 @@ Only link truly related entries. Do NOT create bulk relationships between unrela
 
 ### Git Commit Standards
 
-When committing changes to the repository, you MUST use the \`commit.ts\` wrapper (e.g. \`bun .agents/scripts/commit.ts\`) rather than raw \`git commit\`. 
+When committing changes to a repository:
 
-- **Automated Journaling**: ALWAYS append the \`--journal\` flag to your commit command. This automatically spins up the \`memory-journal-mcp\` CLI in the background to log your commit as a structured entry.
-- **Scoring**: You must provide accurate scores: \`--impact <0.1-1.0>\` (blast radius) and \`--confidence <0.1-1.0>\` (verification level). **NEVER "rubber stamp" 1.0** without rigorous validation; accurately reflect verification.
-- **Validation**: Provide \`--validation <passed|failed|none>\`.
-
-Example:
-\`bun .agents/scripts/commit.ts --msg "refactor(core): adhere to 500-line modularity rule" --confidence 0.8 --impact 0.4 --validation passed --journal --add src/\`
+- **Commit Journaling**: Record a corresponding \`commit-narrative\` journal entry containing \`auto_context: { "commits": ["<sha>"] }\` along with accurate heuristic scores (\`impact_score\`, \`trust_score\`, \`validation_status\`). If your workspace provides a \`commit.ts\` wrapper (e.g. \`.agents/scripts/commit.ts\`), append \`--journal\` to automate this step; otherwise use standard \`git commit\` and log the entry via \`mj_execute_code\`, \`create_entry\`, or \`memory-journal-mcp entry create\`.
+- **Scoring**: Provide accurate scores (\`0.1-1.0\`) for blast radius (\`impact_score\`) and verification level (\`trust_score\`). **NEVER "rubber stamp" 1.0** without rigorous validation; accurately reflect verification.
+- **Validation**: Provide \`validation_status\` (\`passed\`, \`failed\`, or \`none\`).
 
 ## Available Tools
 
