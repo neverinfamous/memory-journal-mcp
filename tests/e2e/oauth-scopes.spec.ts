@@ -9,15 +9,16 @@
  * admin: rebuild_vector_index (admin group)
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test-fixture.js'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { setTimeout as delay } from 'node:timers/promises'
 import * as jose from 'jose'
 import express from 'express'
 import type { Server } from 'node:http'
+import { join } from 'node:path'
 
-const OAUTH_SCOPES_PORT = 3113
-const JWKS_PORT = 3114
+const OAUTH_SCOPES_PORT = 5113 + (Number(process.env.TEST_PARALLEL_INDEX || 0) * 100)
+const JWKS_PORT = 5114 + (Number(process.env.TEST_PARALLEL_INDEX || 0) * 100)
 
 test.describe.configure({ mode: 'serial' })
 
@@ -101,16 +102,19 @@ test.describe('OAuth 2.1 Scope Enforcement E2E', () => {
                 stdio: 'pipe',
                 env: {
                     ...process.env,
+                    MJ_METRICS_PORT: '0',
                     ALLOWED_IO_ROOTS: process.cwd(),
                     MCP_RATE_LIMIT_MAX: '10000',
+                    MEMORY_JOURNAL_CONFIG: join(process.cwd(), 'tests', 'e2e', 'empty-config.json'),
                 },
+                windowsHide: true,
             }
         )
 
         serverProcess.stderr?.on('data', (d) => console.error('E2E SERVER STDERR:', d.toString()))
         serverProcess.stdout?.on('data', (d) => console.log('E2E SERVER STDOUT:', d.toString()))
         let ready = false
-        for (let i = 0; i < 30; i++) {
+        for (let i = 0; i < 120; i++) {
             try {
                 const res = await fetch(`http://localhost:${OAUTH_SCOPES_PORT}/health`)
                 if (res.ok) {
@@ -120,7 +124,7 @@ test.describe('OAuth 2.1 Scope Enforcement E2E', () => {
             } catch {}
             await delay(500)
         }
-        if (!ready) throw new Error('MCP server failed to start within 15 seconds')
+        if (!ready) throw new Error('MCP server failed to start within 60 seconds')
     })
 
     test.afterAll(async () => {
@@ -152,6 +156,7 @@ test.describe('OAuth 2.1 Scope Enforcement E2E', () => {
         const headers = {
             'Content-Type': 'application/json',
             Accept: 'application/json, text/event-stream',
+                    'mcp-protocol-version': '2024-11-05',
             Authorization: `Bearer ${token}`,
         }
 

@@ -51,8 +51,8 @@ describe('Team Search Tool Handlers', () => {
     let personalDb: DatabaseAdapter
     let teamDb: DatabaseAdapter
 
-    const personalDbPath = './test-team-search-personal.db'
-    const teamDbPath = './test-team-search-team.db'
+    const personalDbPath = './.test-output/vitest/test-team-search-personal.db'
+    const teamDbPath = './.test-output/vitest/test-team-search-team.db'
 
     beforeAll(async () => {
         try {
@@ -69,7 +69,7 @@ describe('Team Search Tool Handlers', () => {
 
         const r1 = (await callTool(
             'team_create_entry',
-            {
+            { workspace_id: 'default', 
                 project_number: 1,
                 content: 'Strategic Search test 1',
                 tags: ['strategy', 'shared'],
@@ -83,7 +83,7 @@ describe('Team Search Tool Handlers', () => {
         )) as any
         const r2 = (await callTool(
             'team_create_entry',
-            {
+            { workspace_id: 'default', 
                 project_number: 1,
                 content: 'Tactical Search test 2',
                 tags: ['tactics'],
@@ -141,7 +141,28 @@ describe('Team Search Tool Handlers', () => {
             expect(result.success).toBe(false)
             expect(result.error).toContain('not configured')
         })
+
+        it('should return validation error when searching globally without project_number with non-flag tags', async () => {
+            const result = (await callTool(
+                'team_search',
+                {
+                    query: 'test',
+                    tags: ['strategy'],
+                },
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
+            )) as any
+            expect(result.success).toBe(false)
+            expect(result.code).toBe('VALIDATION_ERROR')
+        })
+
+
     })
+
 
     describe('team_search_by_date_range', () => {
         it('should search team entries by date range', async () => {
@@ -197,5 +218,27 @@ describe('Team Search Tool Handlers', () => {
             )) as any
             expect(result.success).toBe(false)
         })
+
+        it('should return validation error when searching globally without project_number and entry_type is not flag', async () => {
+            const result = (await callTool(
+                'team_search_by_date_range',
+                {
+                    start_date: '2020-01-01',
+                    end_date: '2030-01-01',
+                    entry_type: 'standup',
+                },
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
+            )) as any
+            expect(result.success).toBe(false)
+            expect(result.code).toBe('VALIDATION_ERROR')
+        })
+
+
     })
+
 })

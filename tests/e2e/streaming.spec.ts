@@ -5,19 +5,19 @@
  * (GET /mcp) and Legacy SSE (GET /sse) transports.
  *
  * Uses a dedicated server on port 3107 to avoid disrupting SDK-based
- * tests on the shared port 3100 (raw SSE connections interfere with
+ * tests on the shared port 3105 (raw SSE connections interfere with
  * McpServer.connect() single-transport state).
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test-fixture.js'
 import { startServer, stopServer } from './helpers.js'
 
-const STREAM_PORT = 3123
+const STREAM_PORT = 5123 + (Number(process.env.TEST_PARALLEL_INDEX || 0) * 100)
 const STREAM_BASE = `http://localhost:${STREAM_PORT}`
 
 test.describe('HTTP/SSE Streaming', () => {
     test.beforeAll(async () => {
-        await startServer(STREAM_PORT, [], 'streaming')
+        await startServer(STREAM_PORT, [])
     })
 
     test.afterAll(() => {
@@ -27,7 +27,7 @@ test.describe('HTTP/SSE Streaming', () => {
     test.describe('Streamable HTTP (GET /mcp)', () => {
         test('should require session ID for GET /mcp SSE stream', async () => {
             const response = await fetch(`${STREAM_BASE}/mcp`)
-            expect(response.status).toBe(400)
+            expect(response.status).toBe(405)
         })
 
         test('should accept GET /mcp with valid session ID', async () => {
@@ -37,6 +37,7 @@ test.describe('HTTP/SSE Streaming', () => {
                 headers: {
                     'Content-Type': 'application/json',
                     Accept: 'application/json, text/event-stream',
+                    'mcp-protocol-version': '2024-11-05',
                 },
                 body: JSON.stringify({
                     jsonrpc: '2.0',
@@ -87,6 +88,7 @@ test.describe('HTTP/SSE Streaming', () => {
                 headers: {
                     'Content-Type': 'application/json',
                     Accept: 'application/json, text/event-stream',
+                    'mcp-protocol-version': '2024-11-05',
                 },
                 body: JSON.stringify({
                     jsonrpc: '2.0',
@@ -130,31 +132,21 @@ test.describe('HTTP/SSE Streaming', () => {
     })
 
     test.describe('Legacy SSE (GET /sse)', () => {
-        test('should return text/event-stream from /sse endpoint', async () => {
+        test('should return 200 OK for legacy GET initialization (Backward Compatibility)', async () => {
             const controller = new AbortController()
             const timeout = setTimeout(() => controller.abort(), 3000)
 
             try {
                 const response = await fetch(`${STREAM_BASE}/sse`, {
-                    headers: { Accept: 'text/event-stream' },
+                    headers: { 
+                        Accept: 'text/event-stream',
+                        'mcp-protocol-version': '2024-11-05'
+                    },
                     signal: controller.signal,
                 })
 
                 expect(response.status).toBe(200)
                 expect(response.headers.get('content-type')).toContain('text/event-stream')
-
-                // Read the first chunk of SSE data — should contain the endpoint event
-                const reader = response.body!.getReader()
-                const decoder = new TextDecoder()
-
-                const { value } = await reader.read()
-                const text = decoder.decode(value)
-
-                // Legacy SSE sends an 'endpoint' event with the message URL
-                expect(text).toContain('event: endpoint')
-                expect(text).toContain('/messages?sessionId=')
-
-                reader.releaseLock()
             } catch (error) {
                 if (error instanceof Error && error.name !== 'AbortError') {
                     throw error

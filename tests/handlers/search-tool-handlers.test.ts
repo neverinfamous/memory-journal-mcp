@@ -13,6 +13,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { callTool as _callTool } from '../../src/handlers/tools/index.js'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
+import * as fs from 'fs'
 
 const callTool = (
     name: any,
@@ -50,10 +51,15 @@ const callTool = (
 describe('Search Tool Handlers - Coverage', () => {
     let db: DatabaseAdapter
     let teamDb: DatabaseAdapter
-    const testDbPath = './test-search-cov.db'
-    const teamDbPath = './test-search-team-cov.db'
+    const testDbPath = './.test-output/vitest/test-search-cov.db'
+    const teamDbPath = './.test-output/vitest/test-search-team-cov.db'
 
     beforeAll(async () => {
+        try {
+            if (fs.existsSync(testDbPath)) fs.unlinkSync(testDbPath)
+            if (fs.existsSync(teamDbPath)) fs.unlinkSync(teamDbPath)
+        } catch {}
+        
         db = new DatabaseAdapter(testDbPath)
         await db.initialize()
         teamDb = new DatabaseAdapter(teamDbPath)
@@ -114,13 +120,9 @@ describe('Search Tool Handlers - Coverage', () => {
         db.close()
         teamDb.close()
         try {
-            const fs = require('node:fs')
-            for (const p of [testDbPath, teamDbPath]) {
-                if (fs.existsSync(p)) fs.unlinkSync(p)
-            }
-        } catch {
-            // Ignore cleanup errors
-        }
+            if (fs.existsSync(testDbPath)) fs.unlinkSync(testDbPath)
+            if (fs.existsSync(teamDbPath)) fs.unlinkSync(teamDbPath)
+        } catch {}
     })
 
     // ========================================================================
@@ -179,6 +181,27 @@ describe('Search Tool Handlers - Coverage', () => {
             expect(result.success).toBe(false)
             expect(result.code).toBe('VALIDATION_ERROR')
         })
+
+        it('should accept search modes (fts, semantic, auto, hybrid) without validation errors', async () => {
+            const modes = ['fts', 'semantic', 'auto', 'hybrid']
+            for (const mode of modes) {
+                const result = (await callTool(
+                    'search_entries',
+                    { query: 'alpha', mode, limit: 10 },
+                    db
+                )) as { entries?: unknown[]; error?: string }
+                expect(result.error).toBeUndefined()
+            }
+        })
+
+        it('should accept fuzzy_match and auto_correct booleans without validation errors', async () => {
+            const result = (await callTool(
+                'search_entries',
+                { query: 'alpha', fuzzy_match: false, auto_correct: true, limit: 10 },
+                db
+            )) as { entries?: unknown[]; error?: string }
+            expect(result.error).toBeUndefined()
+        })
     })
 
     // ========================================================================
@@ -223,6 +246,25 @@ describe('Search Tool Handlers - Coverage', () => {
             )) as { entries: unknown[]; count: number }
 
             expect(result.count).toBeGreaterThan(0)
+        })
+
+        it('should filter by workspace_id', async () => {
+            db.createEntry({ content: 'Workspace filter test', workspaceId: 'test-ws-search' })
+            const result = (await callTool(
+                'search_entries',
+                { query: 'Workspace filter', workspace_id: 'test-ws-search', limit: 10 },
+                db
+            )) as { entries: unknown[]; count: number }
+
+            expect(result.count).toBeGreaterThan(0)
+            
+            const emptyResult = (await callTool(
+                'search_entries',
+                { query: 'Workspace filter', workspace_id: 'other-ws', limit: 10 },
+                db
+            )) as { entries: unknown[]; count: number }
+            
+            expect(emptyResult.count).toBe(0)
         })
 
         it('should handle combined filters with teamDb', async () => {
@@ -305,6 +347,34 @@ describe('Search Tool Handlers - Coverage', () => {
             expect(result.count).toBeGreaterThan(0)
         })
 
+        it('should filter by workspace_id', async () => {
+            const today = new Date().toISOString().split('T')[0]!
+            db.createEntry({ content: 'Workspace date test', workspaceId: 'test-ws-date' })
+            const result = (await callTool(
+                'search_by_date_range',
+                {
+                    start_date: today,
+                    end_date: today,
+                    workspace_id: 'test-ws-date',
+                },
+                db
+            )) as { entries: unknown[]; count: number }
+
+            expect(result.count).toBeGreaterThan(0)
+            
+            const emptyResult = (await callTool(
+                'search_by_date_range',
+                {
+                    start_date: today,
+                    end_date: today,
+                    workspace_id: 'other-ws',
+                },
+                db
+            )) as { entries: unknown[]; count: number }
+            
+            expect(emptyResult.count).toBe(0)
+        })
+
         it('should apply tags filter', async () => {
             const today = new Date().toISOString().split('T')[0]!
             const result = (await callTool(
@@ -366,6 +436,7 @@ describe('Search Tool Handlers - Coverage', () => {
                 { query: 'error handling', limit: 10 },
                 db
             )) as { entries: { content: string }[]; count: number }
+            console.log('unquoted:', unquoted)
             expect(unquoted.count).toBeGreaterThan(0)
 
             // Quoted phrase — should also match after sanitizeFtsQuery rewrites it
@@ -417,7 +488,7 @@ describe('Search Tool Handlers - Coverage', () => {
 
     describe('Importance-sorted search', () => {
         let impDb: DatabaseAdapter
-        const impDbPath = './test-importance-sort.db'
+        const impDbPath = './.test-output/vitest/test-importance-sort.db'
         let lowId: number
         let highId: number
         let medId: number
@@ -496,7 +567,7 @@ describe('Search Tool Handlers - Coverage', () => {
             expect(result.entries[result.entries.length - 1]!.id).toBe(lowId)
         })
 
-        it('should NOT include importanceScore when sort_by is default (timestamp)', async () => {
+        it('should ALWAYS include importanceScore when sort_by is default (timestamp)', async () => {
             const result = (await callTool(
                 'search_entries',
                 { query: 'ImpSort', limit: 10 },
@@ -505,7 +576,7 @@ describe('Search Tool Handlers - Coverage', () => {
 
             expect(result.count).toBe(3)
             for (const entry of result.entries) {
-                expect(entry['importanceScore']).toBeUndefined()
+                expect(typeof entry['importanceScore']).toBe('number')
             }
         })
 
@@ -568,7 +639,7 @@ describe('Search Tool Handlers - Coverage', () => {
             expect(result.error).toBeDefined()
         })
 
-        it('should accept sort_by: "timestamp" explicitly', async () => {
+        it('should accept sort_by: "timestamp" explicitly and include importanceScore', async () => {
             const result = (await callTool(
                 'search_entries',
                 { query: 'ImpSort', sort_by: 'timestamp', limit: 10 },
@@ -577,7 +648,7 @@ describe('Search Tool Handlers - Coverage', () => {
 
             expect(result.count).toBe(3)
             for (const entry of result.entries) {
-                expect(entry['importanceScore']).toBeUndefined()
+                expect(typeof entry['importanceScore']).toBe('number')
             }
         })
     })

@@ -9,9 +9,9 @@ import { ICON_BRIEFING } from '../../../../constants/icons.js'
 import {
     withPriority,
     withSessionInit,
+    withAutoRead,
     ASSISTANT_FOCUSED,
 } from '../../../../utils/resource-annotations.js'
-
 import { getGitHubIntegration } from '../../../../github/github-integration/index.js'
 import { DEFAULT_BRIEFING_CONFIG } from '../../shared.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from '../../shared.js'
@@ -19,9 +19,6 @@ import { buildGitHubSection } from './github-section.js'
 import {
     buildJournalContext,
     buildTeamContext,
-    buildRulesFileInfo,
-    buildSkillsDirInfo,
-    buildFlagsContext,
     buildGraphContext,
 } from './context-section.js'
 import { formatUserMessage } from './user-message.js'
@@ -36,10 +33,7 @@ export const briefingResource: InternalResourceDef = {
         'AUTO-READ AT SESSION START: Returns the exact markdown string to display to the user for the briefing.',
     mimeType: 'text/markdown',
     icons: [ICON_BRIEFING],
-    annotations: {
-        ...withSessionInit(withPriority(1.0, ASSISTANT_FOCUSED)),
-        autoRead: true,
-    },
+    annotations: withAutoRead(withSessionInit(withPriority(1.0, ASSISTANT_FOCUSED))),
     handler: async (_uri: string, context: ResourceContext) => {
         return buildBriefingData(context)
     },
@@ -53,9 +47,7 @@ export const dynamicBriefingResource: InternalResourceDef = {
         'Project-specific briefing context for AI agents. Same as memory://briefing but targets a specific repository name from the registered workspaces.',
     mimeType: 'text/markdown',
     icons: [ICON_BRIEFING],
-    annotations: {
-        ...withPriority(0.9, ASSISTANT_FOCUSED),
-    },
+    annotations: withPriority(0.9, ASSISTANT_FOCUSED),
     handler: async (uri: string, context: ResourceContext) => {
         const match = /memory:\/\/briefing\/(.+)/.exec(uri)
         const repoName = match?.[1] ? decodeURIComponent(match[1]) : undefined
@@ -63,7 +55,7 @@ export const dynamicBriefingResource: InternalResourceDef = {
     },
 }
 
-async function buildBriefingData(
+export async function buildBriefingData(
     context: ResourceContext,
     targetRepo?: string
 ): Promise<ResourceResult> {
@@ -71,30 +63,31 @@ async function buildBriefingData(
 
     let activeGithub = context.github
     let activeProjectNumber = config.defaultProjectNumber
+    let activeRepoPath: string | undefined
+    let activeWorkspaceId: string | undefined
 
     if (targetRepo) {
         let resolvedRepo = targetRepo
         if (!config.projectRegistry?.[resolvedRepo]) {
             resolvedRepo = targetRepo.split('/').pop() || targetRepo
         }
+        activeWorkspaceId = resolvedRepo
 
         const registryEntry = config.projectRegistry?.[resolvedRepo]
         if (registryEntry) {
             const repoPath = registryEntry.path
+            activeRepoPath = repoPath
             activeGithub = getGitHubIntegration(repoPath, context.runtime)
             activeProjectNumber = registryEntry.project_number ?? undefined
         }
     }
 
     // Build all sections
-    const journal = buildJournalContext(context, config, activeProjectNumber)
+    const journal = buildJournalContext(context, config, activeProjectNumber, activeWorkspaceId)
     const github = await buildGitHubSection(activeGithub, config)
     const team = buildTeamContext(context, config, activeProjectNumber)
-    const rulesFile = buildRulesFileInfo(config.rulesFilePath, config.allowedIoRoots)
-    const skillsDir = buildSkillsDirInfo(config.skillsDirPath, config.allowedIoRoots)
     const insights = buildInsightsSection(context)
-    const flags = buildFlagsContext(context)
-    const graphStats = buildGraphContext(context)
+    const graphStats = buildGraphContext(context, journal.workspaceId)
 
     const latestPreviews = journal.latestEntries.map((e) => `#${e.id} (${e.type}): ${e.preview}`)
 
@@ -102,14 +95,7 @@ async function buildBriefingData(
         ? journal.sessionSummaries.map((s) => `#${s.id} (${s.type}): ${s.preview}`)
         : null
 
-    const system = await buildSystemContext(config, context.filterConfig)
-
-    // Build registry paths map for non-IDE agent context
-    const registryPaths = config.projectRegistry
-        ? Object.fromEntries(
-              Object.entries(config.projectRegistry).map(([name, entry]) => [name, entry.path])
-          )
-        : undefined
+    const system = buildSystemContext(config, context.filterConfig, activeRepoPath, context.resourceCount)
 
     const userMessage = formatUserMessage({
         repoName: github?.repo ?? 'local',
@@ -120,30 +106,25 @@ async function buildBriefingData(
         summaryPreviews,
         github,
         teamTotalEntries: team?.teamInfo.totalEntries,
-        rulesFile,
-        skillsDir,
         analyticsInsights: insights ?? undefined,
-        flagSummary: flags,
         graphSummary: graphStats,
         version: system.version,
         toolCount: system.toolCount,
         resourceCount: system.resourceCount,
         promptCount: system.promptCount,
         localTime: system.localTime,
-        unreleasedSummary: system.unreleasedSummary ?? undefined,
+        gitHistory: system.gitHistory ?? undefined,
         testHealth: system.testHealth ?? undefined,
         filterSummary: system.filterSummary,
         isReadonly: system.isReadonly,
         teamConfigured: !!context.teamDb,
         githubConfigured: !!activeGithub,
-        instructionLevel: system.instructionLevel,
-        registryRepos: system.registryRepos,
         ioRootCount: system.ioRootCount,
         hasCodeMap: system.hasCodeMap,
         lastReleaseDaysAgo: system.lastReleaseDaysAgo ?? undefined,
         localCheck: system.localCheck ?? undefined,
+        workspaceId: system.workspaceId ?? journal.workspaceId,
         deprecationWarnings: context.runtime?.metrics?.getDeprecationWarnings() ?? [],
-        registryPaths,
     })
 
     return {

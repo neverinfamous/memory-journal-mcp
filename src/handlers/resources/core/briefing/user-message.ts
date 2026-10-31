@@ -9,9 +9,9 @@
  */
 
 import type { BriefingGitHub } from './github-section.js'
-import type { RulesFile, SkillsDir, FlagSummary, GraphSummary } from './context-section.js'
+import type { GraphSummary } from './context-section.js'
 import type { BriefingInsights } from './insights-section.js'
-import type { UnreleasedSummary, TestHealth } from './system-section.js'
+import type { GitHistorySummary, TestHealth } from './system-section.js'
 
 const escapeContent = (text: string): string =>
     text.replace(/<\/?untrusted_remote_content[^>]*>/gi, '').replace(/\r?\n/g, ' ')
@@ -19,6 +19,22 @@ const escapeContent = (text: string): string =>
 /** Escape pipe characters for use inside markdown table cells */
 const escapeCell = (text: string): string =>
     escapeContent(text).replace(/\\/g, '\\\\').replace(/\|/g, '\\|')
+
+/** Compute a short relative-age string (e.g. '3d ago', '5h ago') from an ISO timestamp */
+const relativeAge = (isoTimestamp: string): string | null => {
+    try {
+        const diffMs = Date.now() - new Date(isoTimestamp).getTime()
+        if (diffMs < 0) return null
+        const minutes = Math.floor(diffMs / 60_000)
+        if (minutes < 60) return `${String(minutes)}m ago`
+        const hours = Math.floor(minutes / 60)
+        if (hours < 24) return `${String(hours)}h ago`
+        const days = Math.floor(hours / 24)
+        return `${String(days)}d ago`
+    } catch {
+        return null
+    }
+}
 
 /**
  * Build the user-facing markdown output for the briefing.
@@ -32,31 +48,26 @@ export function formatUserMessage(opts: {
     summaryPreviews?: string[] | null
     github: BriefingGitHub | null
     teamTotalEntries?: number
-    rulesFile?: RulesFile
-    skillsDir?: SkillsDir
+
     analyticsInsights?: BriefingInsights
-    flagSummary?: FlagSummary
     graphSummary?: GraphSummary
     version?: string
     toolCount?: number
     resourceCount?: number
     promptCount?: number
     localTime?: string
-    unreleasedSummary?: UnreleasedSummary
+    gitHistory?: GitHistorySummary | null
     testHealth?: TestHealth
     filterSummary?: string | null
     isReadonly?: boolean
     teamConfigured?: boolean
     githubConfigured?: boolean
-    instructionLevel?: string
-    registryRepos?: string[] | null
     ioRootCount?: number
     hasCodeMap?: boolean
     lastReleaseDaysAgo?: number
     localCheck?: boolean
     deprecationWarnings?: string[]
-    /** Registered workspace paths for non-IDE agents: { repoName: diskPath } */
-    registryPaths?: Record<string, string>
+    workspaceId?: string
 }): string {
     const {
         repoName,
@@ -65,8 +76,6 @@ export function formatUserMessage(opts: {
         latestPreviews,
         summaryPreviews,
         github,
-        rulesFile,
-        skillsDir,
         analyticsInsights,
         graphSummary,
     } = opts
@@ -83,7 +92,7 @@ export function formatUserMessage(opts: {
                 cancelled: '⛔',
                 unknown: '❓',
             }
-            ciDisplay = ws.runs.map((r) => `${icons[r.conclusion] ?? '❓'} ${r.name}`).join(' · ')
+            ciDisplay = ws.runs.map((r) => `${icons[r.conclusion] ?? '❓'} ${r.url ? `[${r.name}](${r.url})` : r.name}`).join(' · ')
         } else {
             const parts: string[] = []
             if (ws.passing > 0) parts.push(`${String(ws.passing)} passing`)
@@ -98,25 +107,16 @@ export function formatUserMessage(opts: {
         ciDisplay = `✅ ${github.ciName} (passing)`
     }
 
+    // Append relative age to CI display if timestamp available
+    const ciAge = github?.ciUpdatedAt ? relativeAge(github.ciUpdatedAt) : null
+    if (ciAge) ciDisplay += ` (${ciAge})`
+
     // ========================================================================
     // TABLE ROW 1: GitHub
     // ========================================================================
-    let gitStatus = ''
-    if (github?.localGitStatus) {
-        const { modified, untracked, isClean } = github.localGitStatus
-        if (isClean) {
-            gitStatus = ' · Git: Clean'
-        } else {
-            const parts: string[] = []
-            if (modified > 0) parts.push(`${String(modified)} modified`)
-            if (untracked > 0) parts.push(`${String(untracked)} untracked`)
-            gitStatus = ` · Git: ${parts.join(', ')}`
-        }
-    }
-
     const githubParts = [
         `**${escapeCell(repoName)}**`,
-        `${escapeCell(branchName)}${escapeCell(gitStatus)}`,
+        escapeCell(branchName),
         escapeCell(ciDisplay),
     ]
 
@@ -137,6 +137,17 @@ export function formatUserMessage(opts: {
         }
 
         // PRs
+        if (github.activePr) {
+            const apr = github.activePr
+            let reviewStr = 'Pending Review'
+            if (apr.reviewStatus === 'approved') reviewStr = 'Approved'
+            else if (apr.reviewStatus === 'changes_requested') reviewStr = `Changes Requested (${String(apr.commentCount ?? 0)} comments)`
+            else if (apr.reviewStatus) reviewStr = apr.reviewStatus
+            
+            const ciStr = apr.ciStatus ? `CI: ${apr.ciStatus.charAt(0).toUpperCase() + apr.ciStatus.slice(1)}` : 'CI: Unknown'
+            trackingParts.push(`Current PR (#${String(apr.number)}): ${escapeCell(reviewStr)} · ${escapeCell(ciStr)}`)
+        }
+
         if (github.prStatusSummary) {
             const s = github.prStatusSummary
             const parts: string[] = []
@@ -172,6 +183,9 @@ export function formatUserMessage(opts: {
     // TABLE ROW 3: Journal
     // ========================================================================
     const journalLine1 = [`${String(totalEntries)} entries`]
+    if (opts.workspaceId) {
+        journalLine1.push(`Workspace: **${escapeCell(opts.workspaceId)}**`)
+    }
     if (opts.teamTotalEntries !== undefined) {
         journalLine1.push(`Team: ${String(opts.teamTotalEntries)}`)
     }
@@ -183,12 +197,13 @@ export function formatUserMessage(opts: {
         for (let i = 1; i < latestPreviews.length; i++) {
             journalParts.push(`Entry: ${escapeCell(latestPreviews[i] ?? '')}`)
         }
-    } else {
+    } else if (!summaryPreviews || summaryPreviews.length === 0) {
         journalParts.push('Latest: No entries yet')
     }
     if (summaryPreviews && summaryPreviews.length > 0) {
         for (const s of summaryPreviews) {
-            journalParts.push(`Summary: ${escapeCell(s)}`)
+            const cleaned = s.replace(/#+\s/g, '').replace(/\*\*/g, '').replace(/[-*]\s/g, '• ')
+            journalParts.push(`Summary: ${escapeCell(cleaned)} (Use \`mj_execute_code\` or \`read_resource\` to view full entry)`)
         }
     }
 
@@ -206,34 +221,29 @@ export function formatUserMessage(opts: {
     if (opts.toolCount !== undefined) {
         if (opts.filterSummary) {
             const isCodeMode = opts.filterSummary.includes('codemode')
-            const codeModeNote = isCodeMode ? ' (100KB cap) — use mj.* API' : ''
+            const codeModeNote = isCodeMode ? ' (multiplexed to all tools) | 100KB Cap | Prefers: mj.* API' : ''
             sysLines.push(
-                `${String(opts.toolCount)} tools (filter: ${escapeCell(opts.filterSummary)}${codeModeNote})`
+                `${String(opts.toolCount)} tools | Filter: ${escapeCell(opts.filterSummary)}${codeModeNote}`
             )
         } else {
             sysLines.push(`${String(opts.toolCount)} tools`)
         }
     }
-
     sysLines.push('📊 memory://metrics/summary')
+    sysLines.push('📍 memory://agent-context/{repo}')
 
     const testLines: string[] = []
     if (opts.testHealth) {
         const th = opts.testHealth
-        const covStr = th.coverage > 0 ? ` (${String(Math.round(th.coverage))}%)` : ''
-        testLines.push(`Tests: ${String(th.unitTests)}+${String(th.e2eTests)} E2E${covStr}`)
+        const covStr = th.coverage > 0 ? ` (${String(Math.round(th.coverage))}% cov)` : ''
+        testLines.push(`Tests: ${String(th.unitTests)} pass + ${String(th.e2eTests)} E2E${covStr}`)
     }
     if (opts.localCheck !== undefined) {
         testLines.push(`Lint & Typecheck: ${opts.localCheck ? '✅' : '❌'}`)
     }
     if (testLines.length) sysLines.push(testLines.join(' · '))
 
-    const sysLine3 = []
-    if (rulesFile)
-        sysLine3.push(`📄 ${escapeCell(rulesFile.name)} (${String(rulesFile.sizeKB)} KB)`)
-    if (skillsDir)
-        sysLine3.push(`🧠 ${String(skillsDir.count)} skill${skillsDir.count !== 1 ? 's' : ''}`)
-    if (sysLine3.length) sysLines.push(sysLine3.join(' · '))
+
 
     if (opts.hasCodeMap) {
         sysLines.push(
@@ -242,6 +252,7 @@ export function formatUserMessage(opts: {
     }
 
     if (opts.localTime) sysLines.push(`🕒 ${opts.localTime}`)
+    if (opts.workspaceId) sysLines.push(`Tenant: **${escapeCell(opts.workspaceId)}**`)
 
     // ========================================================================
     // TABLE ROW 5: Config (only when non-default values present)
@@ -250,23 +261,16 @@ export function formatUserMessage(opts: {
 
     const configLine1: string[] = []
     if (opts.isReadonly) configLine1.push('mode: readonly')
-    if (opts.instructionLevel) configLine1.push(`level: ${opts.instructionLevel}`)
     if (configLine1.length) configLines.push(configLine1.join(' · '))
 
     const configLine2: string[] = []
-    configLine2.push(`team: ${opts.teamConfigured ? 'yes' : 'no'}`)
-    configLine2.push(`github: ${opts.githubConfigured ? 'yes' : 'no'}`)
+    configLine2.push(`team: ${opts.teamConfigured ? 'yes' : 'no (TEAM_DB_PATH unset)'}`)
+    configLine2.push(`github: ${opts.githubConfigured ? 'yes' : 'no (token unset)'}`)
     if (configLine2.length) configLines.push(configLine2.join(' · '))
 
     const configLine3: string[] = []
     if (opts.ioRootCount !== undefined && opts.ioRootCount > 0) {
         configLine3.push(`IO: ${String(opts.ioRootCount)} root${opts.ioRootCount !== 1 ? 's' : ''}`)
-    }
-    if (opts.registryRepos && opts.registryRepos.length > 0) {
-        const repoNames = opts.registryRepos.slice(0, 3).join(', ')
-        const suffix =
-            opts.registryRepos.length > 3 ? ` +${String(opts.registryRepos.length - 3)}` : ''
-        configLine3.push(`registry: ${escapeCell(repoNames)}${suffix}`)
     }
     if (configLine3.length) configLines.push(configLine3.join(' · '))
 
@@ -291,7 +295,7 @@ export function formatUserMessage(opts: {
     if (github?.copilotReviews) {
         const cr = github.copilotReviews
         insightsLines.push(
-            `Copilot: ${String(cr.reviewed)} reviewed · ${String(cr.approved)} approved${cr.changesRequested > 0 ? ` · ${String(cr.changesRequested)} changes requested` : ''}${cr.totalComments > 0 ? ` (${String(cr.totalComments)} comments)` : ''}`
+            `GH Copilot Reviews: ${String(cr.reviewed)} reviewed · ${String(cr.approved)} approved${cr.changesRequested > 0 ? ` · ${String(cr.changesRequested)} changes requested` : ''}${cr.totalComments > 0 ? ` (${String(cr.totalComments)} comments)` : ''}`
         )
     }
 
@@ -321,60 +325,60 @@ export function formatUserMessage(opts: {
                 .filter(([_, count]) => count > 0)
                 .map(([type, count]) => `${type}: ${String(count)}`)
                 .join(', ') || 'none'
-        graphLines.push(
-            `${String(graphSummary.totalRelationships)} relationships<br>Top: ${escapeCell(topTypes)} (view: memory://graph/recent)`
-        )
+        
+        const orphanAlert = graphSummary.orphanRatio !== undefined && graphSummary.orphanRatio > 0.2 ? '🔴 ' : ''
+        let graphText = `${orphanAlert}${String(graphSummary.totalRelationships)} relationships<br>Causal: ${escapeCell(topTypes)} (view: memory://graph/recent)`
+        
+        if (graphSummary.topHubs.length > 0) {
+            const hubsStr = graphSummary.topHubs
+                .map(h => `#${String(h.id)}${h.preview ? ` ${h.preview}` : ''}`.trim())
+                .join(', ')
+            graphText += `<br>Context Hubs: ${escapeCell(hubsStr)}`
+        }
+
+        graphLines.push(graphText)
     }
 
     // ========================================================================
-    // TABLE ROW 8: Unreleased
+    // TABLE ROW 8: Git History
     // ========================================================================
-    const unreleasedLines: string[] = []
-    if (opts.unreleasedSummary) {
-        const u = opts.unreleasedSummary
-        const parts: string[] = []
-        if (u.added > 0) parts.push(`${String(u.added)} added`)
-        if (u.changed > 0) parts.push(`${String(u.changed)} changed`)
-        if (u.fixed > 0) parts.push(`${String(u.fixed)} fixed`)
-        if (u.security > 0) parts.push(`${String(u.security)} security`)
-        if (u.removed > 0) parts.push(`${String(u.removed)} removed`)
-        if (parts.length > 0) {
-            const ageStr =
-                opts.lastReleaseDaysAgo !== undefined
-                    ? `(${String(opts.lastReleaseDaysAgo)}d) `
-                    : ''
-            let line = `${ageStr}${parts.join(' · ')}`
-            if ((u.keyItems?.length ?? 0) > 0) {
-                line += `<br>Recent focus: ${escapeCell(u.keyItems.join(', '))}`
-            }
-            unreleasedLines.push(line)
+    const gitHistoryLines: string[] = []
+    if (opts.gitHistory && opts.gitHistory.commits.length > 0) {
+        const stats = opts.gitHistory.stats;
+        if (stats) {
+            gitHistoryLines.push(`**Velocity (Last ${stats.total}):** ${stats.highImpact} High Impact | ${stats.lowImpact} Low Impact | Avg Conf: ${stats.avgConfidence.toFixed(2)}`);
         }
+        
+        const repoPathUrl = opts.github?.repo ? `https://github.com/${opts.github.repo}/commit/` : null;
+        const shortCommits = opts.gitHistory.commits.map(c => {
+            const shaText = c.isPushed && repoPathUrl ? `[\`${c.hash}\`](${repoPathUrl}${c.hash})` : `\`${c.hash}\``;
+            
+            const metaParts: string[] = [];
+            if (c.type) metaParts.push(c.type);
+            if (c.size) metaParts.push(c.size);
+            if (c.significance !== undefined) metaParts.push(`Sig:${c.significance}`);
+            if (c.confidence !== undefined) metaParts.push(`Conf:${c.confidence}`);
+            if (c.isBreaking) metaParts.push('🚨');
+            
+            const metaStr = metaParts.length > 0 ? ` [${metaParts.join('|')}]` : '';
+            const issuesStr = c.associatedIssues && c.associatedIssues.length > 0 
+                ? ` (${c.associatedIssues.map(i => escapeCell(i)).join(', ')})`
+                : '';
+                
+            return `${shaText}${metaStr} ${escapeCell(c.message)}${issuesStr}`;
+        }).join('<br>');
+        gitHistoryLines.push(`**Recent Changes:**<br>${shortCommits}`);
+        gitHistoryLines.push(`💡 **Tip:** Use MCP Prompts (\`git-impact-search\`, \`git-velocity-report\`, \`git-audit-trust\`) for deep analysis instead of raw git commands.`);
     }
 
-    // ========================================================================
-    // TABLE ROW 9: Workspaces
-    // ========================================================================
-    const workspacesLines: string[] = []
-    if (opts.registryPaths) {
-        const entries = Object.entries(opts.registryPaths)
-        if (entries.length > 0) {
-            const pathList = entries
-                .map(([name, diskPath]) => {
-                    const isActive = name === repoName || name === repoName.split('/').pop()
-                    const formatted = `${escapeCell(name)}: ${escapeCell(diskPath)}`
-                    return isActive ? `**${formatted}** (active)` : formatted
-                })
-                .join('<br>')
-            workspacesLines.push(pathList)
-        }
-    }
 
     // ========================================================================
     // Assembly
     // ========================================================================
     let flagsAlert = ''
-    if (opts.flagSummary && opts.flagSummary.count > 0) {
-        flagsAlert = `⚠️ **${String(opts.flagSummary.count)} active flag(s)** — review before proceeding.\n${opts.flagSummary.flags.map((f) => `🚩 ${f.flag_type}${f.target_user ? ` → @${f.target_user}` : ''}: ${f.fullContent.replace(/<\/?untrusted_remote_content[^>]*>/gi, '')}`).join('\n')}\n\n`
+    if (graphSummary?.orphanRatio !== undefined && graphSummary.orphanRatio > 0.2) {
+        const orphanPct = Math.round(graphSummary.orphanRatio * 100)
+        flagsAlert += `⚠️ **Journal Health:** ${orphanPct}% of entries are orphaned (0 relationships). Consider running \`mj-mcp-optimize\`.\n\n`
     }
 
     if (opts.deprecationWarnings && opts.deprecationWarnings.length > 0) {
@@ -391,9 +395,6 @@ export function formatUserMessage(opts: {
         tableRows.push(`| **Tracking** | ${trackingParts.join('<br>')} |`)
     }
     tableRows.push(`| **Journal** | ${journalParts.join('<br>')} |`)
-    if (sysLines.length > 0) {
-        tableRows.push(`| **System** | ${sysLines.join('<br>')} |`)
-    }
     if (configLines.length > 0) {
         tableRows.push(`| **Config** | ${configLines.join('<br>')} |`)
     }
@@ -403,12 +404,12 @@ export function formatUserMessage(opts: {
     if (graphLines.length > 0) {
         tableRows.push(`| **Graph** | ${graphLines.join('<br>')} |`)
     }
-    if (unreleasedLines.length > 0) {
-        tableRows.push(`| **Unreleased** | ${unreleasedLines.join('<br>')} |`)
-    }
-    if (workspacesLines.length > 0) {
-        tableRows.push(`| **Workspaces** | ${workspacesLines.join('<br>')} |`)
+    if (gitHistoryLines.length > 0) {
+        tableRows.push(`| **Git History** | ${gitHistoryLines.join('<br>')} |`)
     }
 
-    return `${flagsAlert}${tableRows.join('\n')}`
+
+    const footer = `\n\n> **Directive:** Context ingested. Await explicit user instruction before execution.`
+
+    return `${flagsAlert}${tableRows.join('\n')}${footer}`
 }

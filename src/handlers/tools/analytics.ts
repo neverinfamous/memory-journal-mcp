@@ -7,6 +7,7 @@
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../types/index.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
+import { resolveWorkspaceId } from '../../utils/workspace-resolver.js'
 import {
     DATE_FORMAT_REGEX,
     DATE_FORMAT_MESSAGE,
@@ -73,6 +74,7 @@ const StatisticsOutputSchema = z
             .array(
                 z.object({
                     project_number: z.number(),
+                    projectName: z.string().optional(),
                     entry_count: z.number(),
                 })
             )
@@ -85,6 +87,7 @@ const StatisticsOutputSchema = z
 const ProjectSummaryOutputSchema = z
     .object({
         project_number: z.number(),
+        projectName: z.string().optional(),
         entry_count: z.number(),
         first_entry: z.string(),
         last_entry: z.string(),
@@ -102,6 +105,7 @@ const CrossProjectInsightsOutputSchema = z
             .array(
                 z.object({
                     project_number: z.number(),
+                    projectName: z.string().optional(),
                     last_entry_date: z.string(),
                 })
             )
@@ -111,6 +115,7 @@ const CrossProjectInsightsOutputSchema = z
             .array(
                 z.object({
                     project_number: z.number(),
+                    projectName: z.string().optional(),
                     percentage: z.string(),
                 })
             )
@@ -131,14 +136,21 @@ const GetStatisticsSchema = z.object({
     start_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
     end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
     project_breakdown: z.boolean().optional().default(false),
-})
+    workspace_id: z.string().optional(),
+    project_number: z.unknown().optional(), // Allow injected project_number
+}).strict()
 
 /** Relaxed schema — passed to SDK inputSchema so Zod errors reach the handler */
 const GetStatisticsSchemaMcp = z.object({
     group_by: z.string().optional().default('week'),
     start_date: z.string().optional(),
     end_date: z.string().optional(),
-    project_breakdown: z.boolean().optional().default(false),
+    project_breakdown: z.boolean().optional().default(false).describe('Set to true to return multi-project entry breakdown across all registered projects (workspace_id: "*").'),
+    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
+    project_number: z.unknown().optional().describe('Anti-Hallucination Hint: get_statistics cannot be filtered by project_number. It always returns global stats. Use project_breakdown: true instead.'),
+    timeframe: z.unknown().optional().describe('Anti-Hallucination Hint: Use group_by instead of timeframe or period.'),
+    period: z.unknown().optional().describe('Anti-Hallucination Hint: Use group_by instead of timeframe or period.'),
+    time: z.unknown().optional().describe('Anti-Hallucination Hint: Use group_by instead of timeframe or time.'),
 })
 
 /** Strict schema — used inside handler for structured Zod errors */
@@ -154,7 +166,9 @@ const CrossProjectInsightsInputSchema = z.object({
         .optional()
         .describe('End date (YYYY-MM-DD)'),
     min_entries: z.number().optional().default(3).describe('Minimum entries to include project'),
-})
+    workspace_id: z.string().optional(),
+    project_number: z.unknown().optional(), // Allow injected project_number
+}).strict()
 
 /** Relaxed schema — passed to SDK inputSchema so Zod errors reach the handler */
 const CrossProjectInsightsInputSchemaMcp = z.object({
@@ -164,6 +178,10 @@ const CrossProjectInsightsInputSchemaMcp = z.object({
         .optional()
         .default(3)
         .describe('Minimum entries to include project'),
+    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
+    project_number: z.unknown().optional().describe('Anti-Hallucination Hint: get_cross_project_insights analyzes ALL projects. Do not pass a project_number.'),
+    query: z.unknown().optional().describe('Anti-Hallucination Hint: get_cross_project_insights does not take a query. It analyzes all entries.'),
+    limit: z.unknown().optional().describe('Anti-Hallucination Hint: get_cross_project_insights does not take a limit.'),
 })
 
 // ============================================================================
@@ -189,13 +207,15 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
             },
             handler: (params: unknown) => {
                 try {
-                    const { group_by, start_date, end_date, project_breakdown } =
+                    const { group_by, start_date, end_date, project_breakdown, workspace_id } =
                         GetStatisticsSchema.parse(params)
+                    const wsId = resolveWorkspaceId(workspace_id, undefined, context.config)
                     const stats = db.getStatistics(
                         group_by,
                         start_date,
                         end_date,
-                        project_breakdown
+                        project_breakdown,
+                        wsId
                     )
                     return { success: true, ...(stats as object), groupBy: group_by }
                 } catch (err) {
@@ -220,12 +240,14 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     const input = CrossProjectInsightsInputSchema.parse(params)
+                    const wsId = resolveWorkspaceId(input.workspace_id, undefined, context.config)
 
                     const results = db.getCrossProjectInsights({
                         startDate: input.start_date,
                         endDate: input.end_date,
                         minEntries: input.min_entries,
                         inactiveThresholdDays: INACTIVE_THRESHOLD_DAYS,
+                        workspaceId: wsId,
                     })
 
                     if (results.projects.length === 0) {

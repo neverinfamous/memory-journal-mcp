@@ -9,12 +9,19 @@ export function getStatistics(
     groupBy: 'day' | 'week' | 'month' | 'year' = 'week',
     startDate?: string,
     endDate?: string,
-    projectBreakdown?: boolean
+    projectBreakdown?: boolean,
+    workspaceId = 'default'
 ): Record<string, unknown> {
     const { db } = context
 
     let dateFilter = ''
     const dateParams: unknown[] = []
+
+    if (workspaceId !== '*') {
+        dateFilter += ' AND workspace_id = ?'
+        dateParams.push(workspaceId)
+    }
+
     if (startDate) {
         dateFilter += ' AND DATE(timestamp) >= DATE(?)'
         dateParams.push(startDate)
@@ -156,18 +163,58 @@ export function getStatistics(
     if (projectBreakdown) {
         const projRows = db
             .prepare(
-                `SELECT project_number, COUNT(*) as entry_count
+                `SELECT 
+                    project_number, 
+                    COUNT(*) as entry_count,
+                    MAX(issue_url) as sample_issue_url,
+                    MAX(pr_url) as sample_pr_url
             FROM memory_journal
             WHERE deleted_at IS NULL AND project_number IS NOT NULL${dateFilter}
             GROUP BY project_number
             ORDER BY entry_count DESC`
             )
-            .all(...dateParams) as { project_number: number; entry_count: number }[]
+            .all(...dateParams) as {
+                project_number: number
+                entry_count: number
+                sample_issue_url: string | null
+                sample_pr_url: string | null
+            }[]
 
-        result['projectBreakdown'] = projRows.map((r) => ({
-            project_number: r.project_number,
-            entry_count: r.entry_count,
-        }))
+        result['projectBreakdown'] = projRows.map((r) => {
+            let name: string | undefined = undefined
+            
+            // 1. Try to resolve from config registry by matching project_number
+            if (context.config?.projectRegistry) {
+                for (const [key, val] of Object.entries(context.config.projectRegistry)) {
+                    if (val.project_number === r.project_number) {
+                        name = key
+                        break
+                    }
+                }
+            }
+            
+            // 2. Fallback to URL parsing if not found in config
+            if (!name) {
+                const url = r.sample_issue_url || r.sample_pr_url
+                if (url) {
+                    try {
+                        const parsed = new URL(url)
+                        const parts = parsed.pathname.split('/').filter(Boolean)
+                        if (parts.length >= 2) {
+                            name = parts[1]
+                        }
+                    } catch {
+                        // Ignore URL parsing errors
+                    }
+                }
+            }
+            
+            return {
+                project_number: r.project_number,
+                entry_count: r.entry_count,
+                ...(name ? { name } : {}),
+            }
+        })
     }
 
     return result

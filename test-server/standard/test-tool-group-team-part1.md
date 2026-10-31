@@ -1,0 +1,55 @@
+# Re-Test memory-journal-mcp — Team Tool Group
+
+**Scope:** Deterministic verification of Team tools (`team_create_entry`, `team_search`, `team_update_entry`, `team_batch_create_entries`, etc.) against strict error handling constraints.
+
+**Prerequisites:**
+
+- **Validation:** Ensure the test agent validates strict mode and boundary limits on newly hardened schemas.
+> **Note**: When updating schemas or validation logic, please refer to the `/zod` skill for best practices on Standard Schema and Safe Parsing.
+- Confirm MCP server instructions were auto-received before starting.
+- **Use direct MCP tools exclusively.** Do NOT use Code Mode (`mj_execute_code`) for these tests. Code Mode tests are handled separately in the `codemode` track. If you must use a script to supplement a test, use a standard Node/shell script.
+- Seed data from `test-seed.md` must be present.
+
+**Workflow after testing:**
+
+1. Create a plan to fix any issues found or potential improvement opportunities, including changes to `src/constants/server-instructions.ts`. **Do NOT edit this test prompt file directly.** **If you encounter parameter or tool hallucinations during testing, intercept them gracefully in the server code (e.g., `src/filtering/tool-filter.ts`) so future agents succeed automatically.**
+2. Use `test-server/tool-reference.md` and `test-server/scripts/tool-map.json` as sources of truth and ensure fixes comply with the `mcp-builder` skill.
+3. **Local Verification**: If you or a subagent modifies the codebase, you MUST run the linter and typechecker (`pnpm run lint` and `npx tsc --noEmit`) locally and fix any issues BEFORE committing. Pay strict attention to ESLint and TypeScript compiler outputs. You MUST fix all validation issues prior to committing. Do NOT ignore warnings or errors. Follow strict TypeScript guidelines: NEVER use `any` (use `unknown` with type guards), avoid unsafe typecasts, and ensure explicit return types.
+   - DO NOT perform live server verification. DO NOT wait for a server restart. DO NOT pause or send a message asking the user to refresh the server.
+4. **Commit**: Immediately commit passing changes using the `bun ./.agents/scripts/commit.ts --msg "type(scope): message" --impact <0.1-1.0> --confidence <0.1-1.0> --validation passed --journal --add <path>` utility. Do NOT use raw `git commit`. WARNING: Do NOT commit your code and then attempt to use `git commit --amend` to fix a lingering lint or test issue later. Amending a commit rewrites the commit SHA, which will permanently break the changelog tracking workflow. DO NOT stop to ask the USER to verify—you must run `pnpm run lint` and `npx tsc --noEmit` yourself, you are autonomous.
+5. Provide a very brief final summary.
+   - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total estimated tokens that actually entered the context window during this test pass.
+---
+
+## 1. Zod Boundary & Type Mismatch Matrix
+
+> **Note:** Type mismatch leakage (e.g., `-32602` raw MCP errors instead of structured `VALIDATION_ERROR`) is now automatically tested in CI via `test-server/scripts/test-team-zod.mjs`.
+
+| Tool                                           | Domain Error Test                                    | Zod Empty Param (`{}`)            | Zod Type Mismatch |
+| ---------------------------------------------- | ---------------------------------------------------- | --------------------------------- | ----------------- |
+| All Team Tools                                 | Team DB not configured -> Returns `{success: false}` | N/A                               | N/A               |
+| `team_create_entry`                            | `type: "invalid"`                              | ⚠️ Should return validation error | `content: 123`    |
+| `team_get_recent`                              | N/A                                                  | Should succeed (defaults)         | `limit: "abc"`    |
+| `team_list_deleted_entries`                    | N/A                                                  | Should succeed (defaults)         | `limit: "abc"`    |
+| `team_update_entry`                            | `id: 999999`                                   | ⚠️ Should return validation error | `id: "abc"` |
+| `team_restore_entry`                           | `id: 999999`                                   | ⚠️ Should return validation error | `id: "abc"` |
+| `team_add_author_alias` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
+| `team_batch_create_entries` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
+| `team_get_collaboration_matrix` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
+| `team_import_markdown` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
+| `team_rebuild_vector_index` | Auto-injected missing test | ⚠️ Should return validation error | `param: "abc"` |
+
+### Specific Domain Checks
+
+- **Unavailable Team Vector**: Use `team_semantic_search(workspace_id: "test-ws")` without vector initialization -> verify structured JSON error.
+- **Team Insights**: Verify `team_get_cross_project_insights` returns the requisite fields even when the query returns absolutely zero rows.
+- **Update Project Omission**: Verify that `team_update_entry` successfully updates an entry when `workspace_id` is omitted by falling back to its existing project number.
+
+
+## Success Criteria
+
+> **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
+
+- Agent reports the Total Token Estimate in the final summary (using `_meta.tokenEstimate` from responses). The tokens tracked should only count the estimated tokens that actually entered the context window.
+- Team Database missing context natively halts and warns user without crashing the MCP worker.
+- Missing models do not crash vector fallback pipelines.

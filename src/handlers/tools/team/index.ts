@@ -1,12 +1,12 @@
 /**
- * Team Tool Group - 28 tools
+ * Team Tool Group - 44 tools
  *
  * Barrel re-export composing all team tool sub-modules.
  *
  * Tools:
  *   Core:          team_create_entry, team_get_entry_by_id, team_get_recent, team_list_tags
  *   Search:        team_search, team_search_by_date_range
- *   Admin:         team_update_entry, team_delete_entry, team_merge_tags
+ *   Admin:         team_update_entry, team_delete_entry, team_list_deleted_entries, team_merge_tags
  *   Analytics:     team_get_statistics, team_get_cross_project_insights, team_get_collaboration_matrix
  *   Relationships: team_link_entries, team_visualize_relationships
  *   Export:        team_export_entries
@@ -14,31 +14,35 @@
  *   Backup:        team_backup, team_list_backups
  *   Vector:        team_semantic_search, team_get_vector_index_stats,
  *                  team_rebuild_vector_index, team_add_to_vector_index
- *   Flags:         team_pass_flag, team_resolve_flag,
- *                  team_list_flags, team_update_flag, team_get_flag_analytics
+
+ *   Members:       team_add_member, team_remove_member, team_update_member_role,
+ *                  team_list_members, team_get_member
+ *   Aliases:       team_add_author_alias, team_remove_author_alias, team_list_author_aliases,
+ *                  team_resolve_author, team_consolidate_authors
  *
  * Requires TEAM_DB_PATH to be configured. All tools return structured
  * errors when the team database is not available.
  */
 
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
+import { wrapWithRbac } from './rbac.js'
 import { getTeamCoreTools } from './core-tools.js'
 import { getTeamSearchTools } from './search-tools.js'
-import { getTeamAdminTools } from './admin-tools.js'
+import { getTeamAdminTools } from './admin-tools/index.js'
 import { getTeamAnalyticsTools } from './analytics-tools.js'
 import { getTeamRelationshipTools } from './relationship-tools.js'
 import { getTeamExportTools } from './export-tools.js'
 import { getTeamIoTools } from './io-tools.js'
 import { getTeamBackupTools } from './backup-tools.js'
 import { getTeamVectorTools } from './vector-tools.js'
-import { getTeamFlagTools } from './flag-tools.js'
-import { getTeamFlagExtensionTools } from './flag-extension-tools.js'
+import { getTeamMemberTools } from './member-tools.js'
+import { getTeamAliasTools } from './alias-tools.js'
 
 /**
- * Get all team tool definitions (28 tools).
+ * Get all team tool definitions (43 tools).
  */
 export function getTeamTools(context: ToolContext): ToolDefinition[] {
-    return [
+    const tools = [
         ...getTeamCoreTools(context),
         ...getTeamSearchTools(context),
         ...getTeamAdminTools(context),
@@ -48,7 +52,10 @@ export function getTeamTools(context: ToolContext): ToolDefinition[] {
         ...getTeamIoTools(context),
         ...getTeamBackupTools(context),
         ...getTeamVectorTools(context),
-        ...getTeamFlagTools(context),
-        ...getTeamFlagExtensionTools(context),
+        ...getTeamMemberTools(context),
+        ...getTeamAliasTools(context),
     ]
+
+    return wrapWithRbac(context, tools)
 }
+

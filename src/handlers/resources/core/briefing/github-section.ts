@@ -35,7 +35,7 @@ export interface BriefingGitHub {
         failing: number
         pending: number
         cancelled: number
-        runs?: { name: string; conclusion: string }[]
+        runs?: { name: string; conclusion: string; url?: string }[]
     }
     copilotReviews?: {
         reviewed: number
@@ -50,6 +50,16 @@ export interface BriefingGitHub {
         degraded?: boolean
     }
     ciName?: string
+    ciUpdatedAt?: string
+    activePr?: {
+        number: number
+        title: string
+        url: string
+        state: string
+        reviewStatus?: string
+        commentCount?: number
+        ciStatus?: string
+    }
     degraded?: boolean
     degradedReasons?: string[]
 }
@@ -140,25 +150,87 @@ export async function buildGitHubSection(
         const localGitStatus =
             localGitStatusResult.status === 'fulfilled'
                 ? localGitStatusResult.value
-                : { modified: 0, untracked: 0, isClean: true, degraded: true }
+                : { modified: 0, untracked: 0, isClean: true, degraded: true, resolvedIssues: undefined }
+
         if (localGitStatusResult.status === 'rejected')
             degradedReasons.push(
                 `Local Git Status fetch failed: ${String(localGitStatusResult.reason)}`
             )
 
-        const { openIssues, openIssueList, openPRs, openPrList } = issuesAndPrs
+        let { openIssues, openIssueList } = issuesAndPrs
+        const { openPRs, openPrList, allPrs } = issuesAndPrs
         const workflowSummary = ciStatus.workflowSummary
         const ciName = ciStatus.ciName
         const milestones = milestonesData.items ?? []
         const insights = insightsData.insights
         const copilotReviews = copilotReviewsData.reviews
+        
+        // Briefing Staleness Fix: Filter out locally resolved issues
+        const resolvedIssues = localGitStatus.resolvedIssues
+        if (resolvedIssues !== undefined && resolvedIssues.length > 0 && openIssueList !== undefined) {
+            const initialListLength = openIssueList.length
+            openIssueList = openIssueList.filter(i => !resolvedIssues.includes(i.number))
+            const removedCount = initialListLength - openIssueList.length
+            openIssues = Math.max(0, openIssues - removedCount)
+        }
+
         const degraded = degradedReasons.length > 0
+
+        let activePr: BriefingGitHub['activePr'] = undefined
+        const localBranch = 'branch' in localGitStatus ? localGitStatus.branch : undefined;
+        const activePrData =
+            localBranch && allPrs
+                ? allPrs.find((p) => p.headRef === localBranch)
+                : undefined
+
+        if (activePrData) {
+            let reviewStatus: string | undefined
+            let commentCount = 0
+            try {
+                const reviewSummary = await github.getCopilotReviewSummary(
+                    owner,
+                    repo,
+                    activePrData.number
+                )
+                if (reviewSummary.state !== 'none') {
+                    reviewStatus = reviewSummary.state
+                    commentCount = reviewSummary.commentCount
+                }
+            } catch {
+                // ignore
+            }
+
+            let prCiStatus: string | undefined
+            try {
+                const runs = await github.getWorkflowRuns(owner, repo, 20)
+                const prRun = runs.find((r) => r.headBranch === activePrData.headRef)
+                if (prRun) {
+                    if (prRun.status !== 'completed') prCiStatus = 'pending'
+                    else if (prRun.conclusion === 'success') prCiStatus = 'passing'
+                    else if (prRun.conclusion === 'failure') prCiStatus = 'failing'
+                    else if (prRun.conclusion === 'cancelled') prCiStatus = 'cancelled'
+                }
+            } catch {
+                // ignore
+            }
+
+            activePr = {
+                number: activePrData.number,
+                title: activePrData.title,
+                url: activePrData.url,
+                state: activePrData.state,
+                reviewStatus,
+                commentCount,
+                ciStatus: prCiStatus,
+            }
+        }
 
         return {
             repo: `${owner}/${repo}`,
             branch: resolved.branch,
             ci: ciStatus.status,
             ciName,
+            ciUpdatedAt: ciStatus.ciUpdatedAt,
             localGitStatus,
             openIssues,
             openPRs,
@@ -166,6 +238,7 @@ export async function buildGitHubSection(
             insights,
             openIssueList,
             openPrList,
+            ...(activePr ? { activePr } : {}),
             ...(config.prStatusBreakdown && openPrList
                 ? {
                       prStatusSummary: {
@@ -199,6 +272,7 @@ export async function buildGitHubSection(
 interface CiResult {
     status: 'passing' | 'failing' | 'pending' | 'cancelled' | 'unknown'
     ciName?: string
+    ciUpdatedAt?: string
     workflowSummary?: BriefingGitHub['workflowSummary']
     degraded?: boolean
 }
@@ -280,13 +354,14 @@ async function fetchCiStatus(
                                   r.status !== 'completed'
                                       ? 'pending'
                                       : (r.conclusion ?? 'unknown'),
+                              url: r.url,
                           })),
                       }
                     : {}),
             }
         }
 
-        return { status, ciName: latestRun?.name, workflowSummary }
+        return { status, ciName: latestRun?.name, ciUpdatedAt: latestRun?.updatedAt, workflowSummary }
     } catch (error) {
         logger.debug('Failed to fetch CI status', {
             module: 'BRIEFING',
@@ -307,6 +382,7 @@ async function fetchIssuesAndPrs(
     openPRs: number
     openIssueList?: { number: number; title: string }[]
     openPrList?: { number: number; title: string; state: string }[]
+    allPrs?: { number: number; title: string; url: string; state: string; headRef?: string }[]
     degraded?: boolean
 }> {
     try {
@@ -342,7 +418,7 @@ async function fetchIssuesAndPrs(
                   }))
                 : undefined
 
-        return { openIssues, openPRs, openIssueList, openPrList }
+        return { openIssues, openPRs, openIssueList, openPrList, allPrs: prs }
     } catch (error) {
         logger.debug('Failed to fetch issues and PRs', {
             module: 'BRIEFING',

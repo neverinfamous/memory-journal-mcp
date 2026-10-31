@@ -9,6 +9,14 @@ vi.mock('../../src/handlers/resources/core/briefing/github-section.js', () => ({
     buildGitHubSection: vi.fn().mockResolvedValue({}),
 }))
 
+vi.mock('../../src/git/index.js', () => ({
+    GitHistoryClient: vi.fn().mockImplementation(() => ({
+        getCommitHistory: vi.fn().mockResolvedValue([]),
+        getReleaseInfo: vi.fn().mockResolvedValue([]),
+        getUnreleasedChangelog: vi.fn().mockRejectedValue(new Error('unreleased not supported')),
+    })),
+}))
+
 import { dynamicBriefingResource } from '../../src/handlers/resources/core/briefing/index.js'
 import {
     GitHubIntegration,
@@ -22,8 +30,7 @@ vi.mock('../../src/handlers/resources/core/briefing/context-section.js', () => (
         sessionSummaries: [{ id: 1, type: 'summary', preview: 'test' }],
     }),
     buildTeamContext: vi.fn().mockReturnValue(null),
-    buildRulesFileInfo: vi.fn().mockReturnValue(null),
-    buildSkillsDirInfo: vi.fn().mockReturnValue(null),
+
     buildFlagsContext: vi.fn().mockReturnValue(undefined),
     buildGraphContext: vi.fn().mockReturnValue(undefined),
 }))

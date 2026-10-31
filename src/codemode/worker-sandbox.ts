@@ -30,6 +30,10 @@ import {
  */
 function getWorkerScriptPath(): string {
     const currentDir = path.dirname(fileURLToPath(import.meta.url))
+    // If we're executing directly from src/ (e.g. during vitest runs), point to the built dist/ version
+    if (currentDir.endsWith('src\\codemode') || currentDir.endsWith('src/codemode')) {
+        return path.resolve(process.cwd(), 'dist/worker-script.js')
+    }
     return path.join(currentDir, 'worker-script.js')
 }
 
@@ -45,6 +49,8 @@ export class WorkerSandbox {
     private readonly options: Required<SandboxOptions>
     private worker: Worker | null = null
     public isBusy = false
+    public readonly createdAt: number = Date.now()
+    public lastUsedAt: number = Date.now()
     private currentExecution: {
         resolve: (result: SandboxResult) => void
         timeoutHandle: NodeJS.Timeout
@@ -53,6 +59,10 @@ export class WorkerSandbox {
         startRss: number
     } | null = null
     private executionId = 0
+
+    public get isDisposed(): boolean {
+        return this.worker === null && !this.isBusy
+    }
 
     constructor(options?: SandboxOptions) {
         this.options = { ...DEFAULT_SANDBOX_OPTIONS, ...options }
@@ -90,6 +100,7 @@ export class WorkerSandbox {
                 const resolve = this.currentExecution.resolve
                 this.currentExecution = null
                 this.isBusy = false
+                this.lastUsedAt = Date.now()
                 resolve(result)
             }
         })
@@ -99,9 +110,13 @@ export class WorkerSandbox {
         })
 
         this.worker.on('exit', (exitCode) => {
-            if (exitCode !== 0) {
+            if (exitCode >= 200 && exitCode < 300) {
+                const actualExitCode = exitCode - 200
+                process.stderr.write(`[CodeMode] Triggering graceful host exit with code ${actualExitCode}\n`)
+                process.exit(actualExitCode)
+            } else if (exitCode !== 0) {
                 this.handleWorkerDeath(
-                    `Worker exited with code ${String(exitCode)} (likely timeout or OOM)`
+                    `🛠️ AUTONOMOUS HEALING: Worker execution timed out or ran out of memory. Avoid executing hundreds of sequential RPC calls (e.g. inside a loop calling getEntryById) or unbounded loops without keyset/offset pagination. For project counts and aggregates, use 'mj.analytics.getStatistics({ projectBreakdown: true })' or 'mj.admin.listProjects()' instead of iterating entries. Reduce batch/sample size or filter results server-side. (Worker exit code ${String(exitCode)})`
                 )
             }
         })
@@ -157,7 +172,8 @@ export class WorkerSandbox {
         schemas?: Record<string, Record<string, string>>,
         timeoutMs?: number,
         contextObj?: Record<string, unknown>,
-        readonlyMode?: boolean
+        readonlyMode?: boolean,
+        maxResultSizeOverride?: number
     ): Promise<SandboxResult> {
         let effectiveTimeout = timeoutMs ?? this.options.timeoutMs
         if (effectiveTimeout > 30000) effectiveTimeout = 30000
@@ -208,9 +224,11 @@ export class WorkerSandbox {
                 void handleRpcRequest(msg, apiBindings, hostPort, methodList)
             })
 
-            let maxResultSize = process.env['CODE_MODE_MAX_RESULT_SIZE']
-                ? parseInt(process.env['CODE_MODE_MAX_RESULT_SIZE'], 10)
-                : 100 * 1024
+            let maxResultSize = maxResultSizeOverride
+            if (maxResultSize === undefined || Number.isNaN(maxResultSize) || maxResultSize <= 0) {
+                const envVal = process.env['CODE_MODE_MAX_RESULT_SIZE']
+                maxResultSize = envVal ? parseInt(envVal, 10) : 100 * 1024
+            }
 
             if (Number.isNaN(maxResultSize) || maxResultSize <= 0) {
                 maxResultSize = 100 * 1024
@@ -285,17 +303,79 @@ async function handleRpcRequest(
 // Worker Sandbox Pool
 // =============================================================================
 
+/** Lifecycle sweep interval in milliseconds */
+const LIFECYCLE_INTERVAL_MS = 15_000
+
 /**
- * Pool of persistent worker-thread sandboxes.
+ * Pool of persistent worker-thread sandboxes with pre-warming
+ * and lifecycle management (age recycling, idle eviction, re-warming).
  */
 export class WorkerSandboxPool {
     private readonly options: Required<PoolOptions>
     private readonly sandboxOptions: SandboxOptions
     private pool: WorkerSandbox[] = []
+    private lifecycleTimer: ReturnType<typeof setInterval> | null = null
 
     constructor(sandboxOptions?: SandboxOptions, poolOptions?: PoolOptions) {
         this.sandboxOptions = sandboxOptions ?? {}
         this.options = { ...DEFAULT_POOL_OPTIONS, ...poolOptions }
+        if (this.options.minInstances > this.options.maxInstances) {
+            this.options.minInstances = this.options.maxInstances
+        }
+        this.warmPool()
+        this.lifecycleTimer = setInterval(() => this.lifecycleSweep(), LIFECYCLE_INTERVAL_MS)
+        this.lifecycleTimer.unref()
+    }
+
+    /**
+     * Eagerly create workers up to `minInstances`.
+     */
+    private warmPool(): void {
+        while (this.pool.length < this.options.minInstances) {
+            this.pool.push(new WorkerSandbox(this.sandboxOptions))
+        }
+    }
+
+    /**
+     * Periodic lifecycle sweep:
+     * 1. Remove already-disposed workers
+     * 2. Recycle workers that exceed maxWorkerAgeMs
+     * 3. Evict idle workers (oldest first) above minInstances
+     * 4. Re-warm pool to minInstances
+     */
+    private lifecycleSweep(): void {
+        const now = Date.now()
+
+        // 1. Remove disposed workers
+        this.pool = this.pool.filter((w) => !w.isDisposed)
+
+        // 2. Recycle aged workers (non-busy, exceeded max age)
+        for (let i = this.pool.length - 1; i >= 0; i--) {
+            const worker = this.pool[i]
+            if (worker && !worker.isBusy && now - worker.createdAt > this.options.maxWorkerAgeMs) {
+                worker.dispose()
+                this.pool.splice(i, 1)
+            }
+        }
+
+        // 3. Evict idle workers above minInstances (oldest idle first)
+        const idleCandidates = this.pool
+            .map((w, idx) => ({ worker: w, idx }))
+            .filter(
+                ({ worker }) =>
+                    !worker.isBusy && now - worker.lastUsedAt > this.options.idleTimeoutMs
+            )
+            .sort((a, b) => a.worker.lastUsedAt - b.worker.lastUsedAt)
+
+        for (const { worker } of idleCandidates) {
+            if (this.pool.length <= this.options.minInstances) break
+            worker.dispose()
+            const poolIdx = this.pool.indexOf(worker)
+            if (poolIdx !== -1) this.pool.splice(poolIdx, 1)
+        }
+
+        // 4. Re-warm to minInstances
+        this.warmPool()
     }
 
     async execute(
@@ -304,7 +384,8 @@ export class WorkerSandboxPool {
         schemas?: Record<string, Record<string, string>>,
         timeoutMs?: number,
         contextObj?: Record<string, unknown>,
-        readonlyMode?: boolean
+        readonlyMode?: boolean,
+        maxResultSizeOverride?: number
     ): Promise<SandboxResult> {
         let availableSandbox = this.pool.find((s) => !s.isBusy)
 
@@ -327,7 +408,8 @@ export class WorkerSandboxPool {
             schemas,
             timeoutMs,
             contextObj,
-            readonlyMode
+            readonlyMode,
+            maxResultSizeOverride
         )
     }
 
@@ -336,6 +418,10 @@ export class WorkerSandboxPool {
     }
 
     dispose(): void {
+        if (this.lifecycleTimer !== null) {
+            clearInterval(this.lifecycleTimer)
+            this.lifecycleTimer = null
+        }
         for (const worker of this.pool) {
             worker.dispose()
         }

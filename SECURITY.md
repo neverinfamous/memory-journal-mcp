@@ -35,7 +35,7 @@ are safely handled by the database layer and do not pose injection risks.
 
 ### **SQL Injection Prevention**
 
-- ✅ **No Raw SQL Execution** — All raw SQL methods (`_executeRawQueryUnsafe`) have been removed. All handlers must use strict, parameterized methods defined by `IDatabaseAdapter`.
+- ✅ **Raw SQL Restrictions** — Standard handlers must strictly use parameterized methods defined by `IDatabaseAdapter`.
 - ✅ **Parameterized queries** used throughout
 - ✅ **Input validation** via Zod schemas before database operations
 - ✅ **Warning system** for potentially dangerous content patterns
@@ -87,8 +87,10 @@ export MCP_CORS_ORIGIN="http://localhost:3000,https://my-app.com"
 ### **Session Management (Stateful Mode)**
 
 - ✅ **UUID-based session IDs** (cryptographically random)
-- ✅ **30-minute session timeout** - idle sessions automatically expired
-- ✅ **5-minute sweep interval** - periodic cleanup of abandoned sessions
+- ✅ **Idle timeout** — Sessions inactive for 30 minutes are automatically expired
+- ✅ **Absolute TTL** — Sessions have a hard 24-hour maximum lifetime regardless of activity, forcing periodic re-authentication
+- ✅ **In-flight protection** — Sessions with active requests are skipped by the sweep timer to prevent mid-request disconnection
+- ✅ **5-minute sweep interval** — periodic cleanup of abandoned sessions
 - ✅ **Explicit session termination** via `DELETE /mcp`
 
 ### **Request Size Limits**
@@ -111,7 +113,7 @@ For production HTTP deployments, Memory Journal supports **OAuth 2.1 authenticat
 
 | Scope   | Tool Groups                                       | Description                |
 | ------- | ------------------------------------------------- | -------------------------- |
-| `read`  | core, search, analytics, relationships, export    | Read-only operations       |
+| `read`  | core, search, analytics, relationships, io, git   | Read-only operations       |
 | `write` | github, team (+ all read groups)                  | Read + write operations    |
 | `admin` | admin, backup, codemode (+ all write/read groups) | Full administrative access |
 
@@ -170,7 +172,7 @@ GITHUB_TOKEN=ghp_...            # GitHub personal access token
 
 # Optional
 GITHUB_ORG_TOKEN=ghp_...        # For organization projects
-PROJECT_REGISTRY='{"my-repo":{"path":"/path/to/repo","project_number":1}}'  # Multi-project routing
+PROJECT_REGISTRY='{"my-repo":{"path":"/path/to/repo","project_number":1}}'  # Multi-project routing (Tip: Use `npx memory-journal-mcp project create`)
 DEFAULT_PROJECT_NUMBER=1         # Default project for issue assignment
 MCP_CORS_ORIGIN=                 # CORS origin (default: none)
 MCP_HOST=localhost               # Server bind host
@@ -235,7 +237,7 @@ docker pull writenotenow/memory-journal-mcp:latest
 
 ## 🔒 **Code Mode Sandbox Security**
 
-Code Mode (`mj_execute_code`) executes user-provided JavaScript in a hardened `worker_threads` + `vm.createContext` sandbox:
+Code Mode (`mj_execute_code`) executes user-provided JavaScript in a hardened `worker_threads` + `vm.createContext` sandbox, enforcing fleet-standard restrictions:
 
 ### **Engine-Level Restrictions**
 
@@ -243,10 +245,11 @@ Code Mode (`mj_execute_code`) executes user-provided JavaScript in a hardened `w
 - ✅ **Separate V8 isolate** — each worker thread runs in its own V8 instance with enforced heap limits (`maxOldGenerationSizeMb`, `maxYoungGenerationSizeMb`)
 - ✅ **Frozen prototypes** — all built-in prototypes (Object, Function, Array, Error, Map, Set, Promise, etc.) frozen inside the vm context to prevent dynamic constructor chain escapes
 - ✅ **Proxy constructor nullified** — `Proxy: undefined` in the sandbox context prevents meta-object protocol abuse
+- ✅ **Frozen API surfaces** — All injected API objects (mj.*, group namespaces, console shim, context) are Object.freeze()'d to prevent prototype pollution on the API bridge
 
 ### **Static Code Validation**
 
-- ✅ **18 blocked patterns** — regex rules blocking `require()`, `import()`, `process.*`, `global.*`, `eval()`, `Function()`, `__proto__`, `constructor.constructor`, `['constructor']`, `Reflect.*`, `Symbol.*`, `new Proxy()`, `child_process`, `fs.*`, `net.*`, `http.*`, `https.*`
+- ✅ **Comprehensive blocked patterns** — regex rules blocking `require()`, `import()`, `process.*`, `global.*`, `eval()`, `Function()`, `__proto__`, `constructor.constructor`, `['constructor']`, `Reflect.*`, `Symbol.*`, `new Proxy()`, `child_process`, `fs.*`, `net.*`, `http.*`, `https.*`
 - ✅ **50KB code size limit** — prevents payload-based resource exhaustion
 
 ### **Runtime Protection**
@@ -258,6 +261,7 @@ Code Mode (`mj_execute_code`) executes user-provided JavaScript in a hardened `w
 - ✅ **Readonly Proxy traps** — when `readonly: true`, stripped mutation methods throw clear error messages listing available methods
 - ✅ **Schema Introspection Scope** — `.schema()` properties are strictly bound to the permitted methods in the RPC allowlist, preventing unintended internal structure leakage
 - ✅ **Audit logging** — all executions logged with code preview, metrics, and readonly mode
+- ✅ **Pre-warmed worker pool** — Worker threads are pre-warmed on startup to eliminate cold-start latency, with idle recycling and age-based recycling for memory hygiene
 
 ## 🔍 **Data Privacy**
 
@@ -406,7 +410,8 @@ chmod 700 /shared/team-data
 - [x] HTTP timeouts and built-in rate limiter (100 req/min)
 - [x] DNS rebinding protection and strict HSTS
 - [x] Security headers (CSP, X-Content-Type-Options, X-Frame-Options, Cache-Control, Referrer-Policy, Permissions-Policy)
-- [x] Session timeout (30 minutes)
+- [x] Session idle timeout (30 minutes) and 5-minute sweep interval
+- [x] Session absolute TTL (24 hours) and in-flight request protection
 - [x] Non-root Docker user
 - [x] Multi-stage Docker build
 - [x] Local-first data architecture
@@ -414,11 +419,13 @@ chmod 700 /shared/team-data
 - [x] Code Mode sandbox isolation (worker_threads V8 isolate + vm.createContext)
 - [x] Code Mode V8 codeGeneration restrictions (eval/Function disabled at engine level)
 - [x] Code Mode frozen built-in prototypes (constructor chain escape prevention)
-- [x] Code Mode blocked patterns (18 static regex rules)
+- [x] Code Mode blocked patterns (Multiple static regex rules)
 - [x] Code Mode Proxy constructor nullified in sandbox context
 - [x] Code Mode RPC allowlist validation (host-side method authorization)
 - [x] Code Mode readonly Proxy traps (structured errors for stripped methods)
 - [x] CI/CD security pipeline (CodeQL, Trivy, secret scanning)
+- [x] Code Mode frozen API surfaces (Object.freeze on mj.*, console, context)
+- [x] Code Mode pre-warmed worker pool with lifecycle management
 - [x] Comprehensive security documentation
 
 ## 🎯 **Threat Model**
@@ -471,7 +478,7 @@ chmod 700 /shared/team-data
 
 | Component    | Supported Versions | Notes                                                                 |
 | ------------ | ------------------ | --------------------------------------------------------------------- |
-| Node.js      | 26.x (LTS)         | Minimum required version for `worker_threads` and isolation features. |
+| Node.js      | 24.x+ (26.x LTS)   | Minimum Node 24+. Node 26.x LTS recommended for isolation features. |
 | MCP Protocol | 2024-11-05         | Full compatibility with the official Model Context Protocol.          |
 | Docker Base  | `node:26-alpine`   | Alpine-based images receive regular vulnerability patches.            |
 
@@ -480,7 +487,7 @@ chmod 700 /shared/team-data
 If you discover a security vulnerability, please:
 
 1. **Do not** open a public GitHub issue
-2. **Contact** the maintainers privately
+2. **Report** via the [GitHub Security Advisories](https://github.com/neverinfamous/memory-journal-mcp/security/advisories/new) private reporting feature.
 3. **Provide** detailed information about the vulnerability
 4. **Allow** time for the issue to be addressed before public disclosure
 

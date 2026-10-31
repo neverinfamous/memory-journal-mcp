@@ -60,8 +60,8 @@ vi.mock('../../src/auth/auth-context.js', async (importOriginal: any) => {
 describe('Targeted Gap Closure', () => {
     let db: DatabaseAdapter
     let teamDb: DatabaseAdapter
-    const testDbPath = './test-gaps.db'
-    const teamDbPath = './test-gaps-team.db'
+    const testDbPath = './.test-output/vitest/test-gaps.db'
+    const teamDbPath = './.test-output/vitest/test-gaps-team.db'
 
     beforeAll(async () => {
         db = new DatabaseAdapter(testDbPath)
@@ -96,7 +96,7 @@ describe('Targeted Gap Closure', () => {
     describe('test_simple', () => {
         it('should return default message when no param', async () => {
             const result = (await callTool('test_simple', {}, db)) as { message: string }
-            expect(result.message).toContain('Test response: Hello')
+            expect(result.message).toContain('Echo: Hello')
         })
 
         it('should return custom message', async () => {
@@ -123,7 +123,7 @@ describe('Targeted Gap Closure', () => {
     // core.ts — create_entry with vectorManager (fire-and-forget)
     // ========================================================================
 
-    describe('create_entry_minimal with vectorManager', () => {
+    describe('create_entry with vectorManager', () => {
         it('should auto-index entry to vector store', async () => {
             const vectorManager = {
                 isInitialized: vi.fn().mockReturnValue(true),
@@ -137,8 +137,8 @@ describe('Targeted Gap Closure', () => {
             } as any
 
             const result = (await callTool(
-                'create_entry_minimal',
-                { content: 'Minimal entry with vector indexing' },
+                'create_entry',
+                { workspace_id: 'default',  content: 'Minimal entry with vector indexing', project_number: 1 },
                 db,
                 vectorManager
             )) as { success: boolean }
@@ -214,7 +214,7 @@ describe('Targeted Gap Closure', () => {
         it('team_create_entry should return error', async () => {
             const result = (await callTool(
                 'team_create_entry',
-                {
+                { workspace_id: 'default', 
                     project_number: 1,
                     content: 'Test entry',
                 },
@@ -271,7 +271,7 @@ describe('Targeted Gap Closure', () => {
         it('should create entry in team database', async () => {
             const result = (await callTool(
                 'team_create_entry',
-                {
+                { workspace_id: 'default', 
                     project_number: 1,
                     content: 'Team collaboration entry',
                     tags: ['team-test'],
@@ -292,7 +292,7 @@ describe('Targeted Gap Closure', () => {
         it('should handle invalid entry_type', async () => {
             const result = (await callTool(
                 'team_create_entry',
-                {
+                { workspace_id: 'default', 
                     project_number: 1,
                     content: 'Bad type entry',
                     entry_type: 'invalid_type_xyz',

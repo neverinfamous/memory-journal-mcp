@@ -41,6 +41,8 @@ const callTool = (
                     },
                 },
                 io: { allowedRoots: [process.cwd()] },
+                codemodeEnabled: true,
+                codemodeInternalFullAccess: true,
             } as any),
         progress,
         teamDb,
@@ -51,7 +53,7 @@ import { getAllToolNames } from '../../src/filtering/tool-filter.js'
 
 describe('mj_execute_code Tool Handler', () => {
     let db: DatabaseAdapter
-    const testDbPath = './test-codemode-handler.db'
+    const testDbPath = './.test-output/vitest/test-codemode-handler.db'
 
     beforeAll(async () => {
         db = new DatabaseAdapter(testDbPath)
@@ -94,7 +96,7 @@ describe('mj_execute_code Tool Handler', () => {
                 (t) => (t as { name: string }).name === 'mj_execute_code'
             ) as { description: string } | undefined
             expect(codeTool?.description).toContain('sandbox')
-            expect(codeTool?.description).toContain('mj.*')
+            expect(codeTool?.description).toContain('mj.')
         })
 
         it('should have annotations with readOnlyHint=false', () => {
@@ -107,7 +109,13 @@ describe('mj_execute_code Tool Handler', () => {
 
         it('should match getAllToolNames() count', () => {
             const tools = getTools(db, null)
-            expect(tools.length).toBe(getAllToolNames().length)
+            const allNames = getAllToolNames()
+            const allNamesSet = new Set(allNames)
+            const primaryTools = tools.filter((t) => {
+                const name = (t as { name: string }).name
+                return allNamesSet.has(name)
+            })
+            expect(primaryTools.length).toBe(allNames.length)
         })
     })
 
@@ -119,7 +127,7 @@ describe('mj_execute_code Tool Handler', () => {
         it('should reject code with require()', async () => {
             const result = (await callTool(
                 'mj_execute_code',
-                { code: 'const fs = require("fs")' },
+                { code: 'return require("fs")' },
                 db
             )) as { success: boolean; error: string }
 
@@ -195,7 +203,7 @@ describe('mj_execute_code Tool Handler', () => {
         it('should reject code with fs access', async () => {
             const result = (await callTool(
                 'mj_execute_code',
-                { code: 'fs.readFileSync("/etc/passwd")' },
+                { code: 'fs.writeFileSync("/etc/passwd", "...")' },
                 db
             )) as { success: boolean; error: string }
 
@@ -209,22 +217,39 @@ describe('mj_execute_code Tool Handler', () => {
     // =========================================================================
 
     describe('schema validation', () => {
-        it('should reject missing code parameter', async () => {
+        it('should auto-heal missing code parameter and return active sandbox status', async () => {
             const result = (await callTool('mj_execute_code', {}, db)) as {
                 success: boolean
-                error?: string
+                result?: { status: string; availableNamespaces: string[] }
+                _healing_note?: string
             }
 
-            expect(result.success).toBe(false)
+            expect(result.success).toBe(true)
+            expect(result.result?.status).toBe('active')
+            expect(result._healing_note).toContain('AUTONOMOUS HEALING')
         })
 
-        it('should reject empty string code', async () => {
+        it('should auto-heal empty string code and return active sandbox status', async () => {
             const result = (await callTool('mj_execute_code', { code: '' }, db)) as {
                 success: boolean
-                error?: string
+                result?: { status: string; availableNamespaces: string[] }
+                _healing_note?: string
+            }
+
+            expect(result.success).toBe(true)
+            expect(result.result?.status).toBe('active')
+            expect(result._healing_note).toContain('AUTONOMOUS HEALING')
+        })
+
+        it('should accept code via alternative keys (query, content, text, etc.) instead of returning missing code error', async () => {
+            // Passing a blocked security pattern via 'query' to test that execution reaches security validation (beyond missing code parameter check)
+            const result = (await callTool('mj_execute_code', { query: 'process.exit(1)' }, db)) as {
+                success: boolean
+                error: string
             }
 
             expect(result.success).toBe(false)
+            expect(result.error).toContain('Security validation failed')
         })
     })
 })

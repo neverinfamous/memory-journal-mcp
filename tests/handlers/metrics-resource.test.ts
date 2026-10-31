@@ -2,8 +2,10 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import {
     metricsSummaryResource,
     metricsTokensResource,
+    metricsResourcesResource,
     metricsSystemResource,
     metricsUsersResource,
+    metricsLatencyResource,
     getMetricsResourceDefinitions,
 } from '../../src/handlers/resources/core/metrics-resource.js'
 import { MetricsAccumulator } from '../../src/observability/metrics.js'
@@ -19,14 +21,16 @@ describe('Metrics Resources', () => {
         // Nothing to reset, instance is recreated
     })
 
-    it('getMetricsResourceDefinitions returns all four definitions', () => {
+    it('getMetricsResourceDefinitions returns all six definitions', () => {
         const defs = getMetricsResourceDefinitions()
-        expect(defs.length).toBe(4)
+        expect(defs.length).toBe(6)
         expect(defs.map((d) => d.name)).toEqual([
             'Metrics Summary',
             'Metrics Tokens',
+            'Metrics Resources',
             'Metrics System',
             'Metrics Users',
+            'Metrics Latency',
         ])
     })
 
@@ -105,6 +109,30 @@ describe('Metrics Resources', () => {
         })
     })
 
+    describe('metricsResourcesResource', () => {
+        it('returns note when no resource reads recorded', async () => {
+            const res = (await metricsResourcesResource.handler('memory://metrics/resources', {
+                runtime: { metrics },
+            } as any)) as any
+            expect(res.data).toContain('note: No resource reads recorded yet.')
+        })
+
+        it('returns resource read breakdown sorted by total reads', async () => {
+            metrics.recordResourceRead('memory://briefing', false)
+            metrics.recordResourceRead('memory://briefing', false)
+            metrics.recordResourceRead('memory://status', true)
+
+            const res = (await metricsResourcesResource.handler('memory://metrics/resources', {
+                runtime: { metrics },
+            } as any)) as any
+
+            expect(res.data).toContain('uri: memory://briefing')
+            expect(res.data).toContain('read_count: 2')
+            expect(res.data).toContain('uri: memory://status')
+            expect(res.data).toContain('error_count: 1')
+        })
+    })
+
     describe('metricsSystemResource', () => {
         it('returns process and environment system metrics', async () => {
             const res = (await metricsSystemResource.handler('memory://metrics/system', {
@@ -158,6 +186,39 @@ describe('Metrics Resources', () => {
             expect(res.data).toContain('calls: 2')
             expect(res.data).toContain('user: bob')
             expect(res.data).toContain('calls: 1')
+        })
+    })
+
+    describe('metricsLatencyResource', () => {
+        it('returns note when no latency data recorded', async () => {
+            const res = (await metricsLatencyResource.handler('memory://metrics/latency', {
+                runtime: { metrics },
+            } as any)) as any
+            expect(res.data).toContain('No latency data recorded yet')
+        })
+
+        it('returns per-tool percentile data after recording calls', async () => {
+            for (let i = 1; i <= 100; i++) {
+                metrics.record({
+                    toolName: 'search_entries',
+                    isError: false,
+                    durationMs: i,
+                    inputTokens: 10,
+                    outputTokens: 20,
+                })
+            }
+
+            const res = (await metricsLatencyResource.handler('memory://metrics/latency', {
+                runtime: { metrics },
+            } as any)) as any
+
+            expect(res.data).toContain('tool: search_entries')
+            expect(res.data).toContain('p50_ms: 50')
+            expect(res.data).toContain('p95_ms: 95')
+            expect(res.data).toContain('p99_ms: 99')
+            expect(res.data).toContain('min_ms: 1')
+            expect(res.data).toContain('max_ms: 100')
+            expect(res.data).toContain('count: 100')
         })
     })
 })

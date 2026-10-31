@@ -6,17 +6,17 @@
  * for token efficiency (mcp-builder §1.1).
  *
  * Resources:
- *   memory://metrics/summary  — HIGH_PRIORITY  — aggregate call/error/token stats
- *   memory://metrics/tokens   — MEDIUM_PRIORITY — per-tool token usage breakdown
- *   memory://metrics/system   — MEDIUM_PRIORITY — process memory, uptime, Node version
- *   memory://metrics/users    — LOW_PRIORITY    — per-user call count breakdown
+ *   memory://metrics/summary   — HIGH_PRIORITY   — aggregate call/error/token stats
+ *   memory://metrics/tokens    — MEDIUM_PRIORITY — per-tool token usage breakdown
+ *   memory://metrics/resources — MEDIUM_PRIORITY — per-resource read frequency breakdown
+ *   memory://metrics/system    — MEDIUM_PRIORITY — process memory, uptime, Node version
+ *   memory://metrics/users     — LOW_PRIORITY    — per-user call count breakdown
  */
 
 // Removed globalMetrics import
 import {
-    HIGH_PRIORITY,
-    MEDIUM_PRIORITY,
-    LOW_PRIORITY,
+    withPriority,
+    ASSISTANT_FOCUSED,
 } from '../../../utils/resource-annotations.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from '../shared.js'
 
@@ -40,10 +40,7 @@ export const metricsSummaryResource: InternalResourceDef = {
         'Aggregate metrics across all tool calls since server start. ' +
         'Includes total calls, errors, duration, and token estimates.',
     mimeType: 'text/plain',
-    annotations: {
-        ...HIGH_PRIORITY,
-        audience: ['assistant'],
-    },
+    annotations: withPriority(0.9, ASSISTANT_FOCUSED),
     handler: (_uri: string, ctx: ResourceContext): ResourceResult => {
         const lastModified = nowIso()
         const s = ctx.runtime?.metrics.getSummary()
@@ -70,7 +67,9 @@ export const metricsSummaryResource: InternalResourceDef = {
             `  avg_duration_ms: ${avgDuration}\n` +
             `  total_input_tokens: ${s.totalInputTokens}\n` +
             `  total_output_tokens: ${s.totalOutputTokens}\n` +
-            `  tools_called: ${Object.keys(s.toolBreakdown).length}\n`
+            `  total_resource_reads: ${s.totalResourceReads}\n` +
+            `  tools_called: ${Object.keys(s.toolBreakdown).length}\n` +
+            `  resources_read: ${Object.keys(s.resourceBreakdown).length}\n`
 
         return { data: text, annotations: { lastModified } }
     },
@@ -88,10 +87,7 @@ export const metricsTokensResource: InternalResourceDef = {
         'Per-tool token usage breakdown sorted by total output tokens. ' +
         'Use this to identify which tools are consuming the most context window.',
     mimeType: 'text/plain',
-    annotations: {
-        ...MEDIUM_PRIORITY,
-        audience: ['assistant'],
-    },
+    annotations: withPriority(0.6, ASSISTANT_FOCUSED),
     handler: (_uri: string, ctx: ResourceContext): ResourceResult => {
         const lastModified = nowIso()
         const breakdown = ctx.runtime?.metrics.getTokenBreakdown() ?? []
@@ -121,6 +117,45 @@ export const metricsTokensResource: InternalResourceDef = {
 }
 
 // ============================================================================
+// memory://metrics/resources
+// ============================================================================
+
+export const metricsResourcesResource: InternalResourceDef = {
+    uri: 'memory://metrics/resources',
+    name: 'Metrics Resources',
+    title: 'Resource Read Frequency',
+    description:
+        'Per-resource read frequency breakdown sorted by total reads. ' +
+        'Use this to identify which resources are accessed most often.',
+    mimeType: 'text/plain',
+    annotations: withPriority(0.6, ASSISTANT_FOCUSED),
+    handler: (_uri: string, ctx: ResourceContext): ResourceResult => {
+        const lastModified = nowIso()
+        const breakdown = ctx.runtime?.metrics.getResourceBreakdown() ?? []
+
+        if (breakdown.length === 0) {
+            return {
+                data: `resource_breakdown:\n  note: No resource reads recorded yet.\n  as_of: ${lastModified}\n`,
+                annotations: { lastModified },
+            }
+        }
+
+        const rows = breakdown
+            .map(
+                (r) =>
+                    `  - uri: ${r.uri}\n` +
+                    `    read_count: ${r.readCount}\n` +
+                    `    error_count: ${r.errorCount}`
+            )
+            .join('\n')
+
+        const text = `resource_breakdown:\n  as_of: ${lastModified}\n${rows}\n`
+
+        return { data: text, annotations: { lastModified } }
+    },
+}
+
+// ============================================================================
 // memory://metrics/system
 // ============================================================================
 
@@ -131,10 +166,7 @@ export const metricsSystemResource: InternalResourceDef = {
     description:
         'Process-level system metrics: memory usage, uptime, Node.js version, and platform.',
     mimeType: 'text/plain',
-    annotations: {
-        ...MEDIUM_PRIORITY,
-        audience: ['assistant'],
-    },
+    annotations: withPriority(0.6, ASSISTANT_FOCUSED),
     handler: (_uri: string, ctx: ResourceContext): ResourceResult => {
         const lastModified = nowIso()
         const sys = ctx.runtime?.metrics.getSystemMetrics()
@@ -171,10 +203,7 @@ export const metricsUsersResource: InternalResourceDef = {
         'Per-user tool call counts. Populated when user identifiers are provided ' +
         'via OAuth or request metadata. Returns empty breakdown when no user tracking configured.',
     mimeType: 'text/plain',
-    annotations: {
-        ...LOW_PRIORITY,
-        audience: ['assistant'],
-    },
+    annotations: withPriority(0.4, ASSISTANT_FOCUSED),
     handler: (_uri: string, ctx: ResourceContext): ResourceResult => {
         const lastModified = nowIso()
         const userBreakdown = ctx.runtime?.metrics.getUserBreakdown() ?? {}
@@ -203,6 +232,49 @@ export const metricsUsersResource: InternalResourceDef = {
 }
 
 // ============================================================================
+// memory://metrics/latency
+// ============================================================================
+
+export const metricsLatencyResource: InternalResourceDef = {
+    uri: 'memory://metrics/latency',
+    name: 'Metrics Latency',
+    title: 'Latency Percentile Breakdown by Tool',
+    description:
+        'Per-tool latency percentiles (p50, p95, p99) with min/max bounds. ' +
+        'Use this to identify tools with problematic tail latency.',
+    mimeType: 'text/plain',
+    annotations: withPriority(0.6, ASSISTANT_FOCUSED),
+    handler: (_uri: string, ctx: ResourceContext): ResourceResult => {
+        const lastModified = nowIso()
+        const summary = ctx.runtime?.metrics.getLatencySummary() ?? []
+
+        if (summary.length === 0) {
+            return {
+                data: `latency_percentiles:\n  note: No latency data recorded yet.\n  as_of: ${lastModified}\n`,
+                annotations: { lastModified },
+            }
+        }
+
+        const rows = summary
+            .map(
+                (t) =>
+                    `  - tool: ${t.toolName}\n` +
+                    `    count: ${String(t.count)}\n` +
+                    `    p50_ms: ${String(t.p50Ms)}\n` +
+                    `    p95_ms: ${String(t.p95Ms)}\n` +
+                    `    p99_ms: ${String(t.p99Ms)}\n` +
+                    `    min_ms: ${String(t.minMs)}\n` +
+                    `    max_ms: ${String(t.maxMs)}`
+            )
+            .join('\n')
+
+        const text = `latency_percentiles:\n  as_of: ${lastModified}\n${rows}\n`
+
+        return { data: text, annotations: { lastModified } }
+    },
+}
+
+// ============================================================================
 // Convenience: all four metrics resources
 // ============================================================================
 
@@ -210,7 +282,9 @@ export function getMetricsResourceDefinitions(): InternalResourceDef[] {
     return [
         metricsSummaryResource,
         metricsTokensResource,
+        metricsResourcesResource,
         metricsSystemResource,
         metricsUsersResource,
+        metricsLatencyResource,
     ]
 }

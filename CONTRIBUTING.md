@@ -14,7 +14,7 @@ Thank you for your interest in contributing to the Memory Journal MCP Server! Th
 
 ### Prerequisites
 
-- **Node.js 24+** (see `engines` in `package.json`)
+- **Node.js 24+** (Node.js 26.x LTS recommended)
 - **npm** (comes with Node.js)
 - **Git** (for version control and GitHub integration testing)
 - **Docker** (optional, for container testing)
@@ -27,16 +27,16 @@ git clone https://github.com/YOUR_USERNAME/memory-journal-mcp.git
 cd memory-journal-mcp
 
 # Install dependencies
-npm install
+pnpm install
 
 # Build TypeScript
-npm run build
+pnpm run build
 
 # Run the test suite
-npm test
+pnpm test
 
 # Run the full quality check
-npm run lint && npm run typecheck
+pnpm run lint && pnpm run typecheck
 ```
 
 ### Docker Development (Optional)
@@ -80,23 +80,23 @@ We especially welcome contributions in these areas:
 
 ```bash
 # Run all tests
-npm test
+pnpm test
 
 # Run tests in watch mode
-npm run test:watch
+pnpm run test:watch
 
 # Run tests with coverage
-npm run test:coverage
+pnpm run test:coverage
 
 # Run benchmarks
-npm run bench
+pnpm run bench
 ```
 
 ### Quality Checks
 
 ```bash
 # Lint + type check (required before submitting)
-npm run lint && npm run typecheck
+pnpm run lint && pnpm run typecheck
 
 # Format code with Prettier
 npx prettier --write .
@@ -130,7 +130,7 @@ docker run --rm -i -v ./data:/app/data memory-journal-dev
 ### TypeScript Code Style
 
 - **Strict mode** — `tsconfig.json` enforces strict TypeScript
-- **ESLint** — Run `npm run lint` to check, `npm run lint:fix` to auto-fix
+- **ESLint** — Run `pnpm run lint` to check, `pnpm run lint:fix` to auto-fix
 - **Prettier** — Run `npx prettier --write .` for formatting
 - **Type safety** — Avoid `any`; use proper types and Zod schemas
 - **Modularity** — Keep files under ~500 lines; split into sub-modules when approaching the limit
@@ -154,7 +154,7 @@ docker run --rm -i -v ./data:/app/data memory-journal-dev
 
 When reporting bugs, please include:
 
-1. **Environment details** (OS, Node.js version, npm version)
+1. **Environment details** (OS, Node.js version, pnpm version)
 2. **Steps to reproduce** the issue
 3. **Expected vs actual behavior**
 4. **MCP client details** (Cursor version, configuration)
@@ -180,7 +180,7 @@ Use our [Feature Request template](.github/ISSUE_TEMPLATE/feature_request.md).
 ### Before Submitting
 
 - [ ] **Fork** the repository and create a feature branch
-- [ ] **Test** your changes (`npm test`, `npm run lint && npm run typecheck`)
+- [ ] **Test** your changes (`pnpm test`, `pnpm run lint && pnpm run typecheck`)
 - [ ] **Format** your code (`npx prettier --write .`)
 - [ ] **Update documentation** if you changed APIs or behavior
 - [ ] **Add examples** for new features
@@ -213,12 +213,12 @@ Use our [Feature Request template](.github/ISSUE_TEMPLATE/feature_request.md).
 
 ```
 src/
-├── cli.ts                      # CLI entry point (Commander)
+├── cli/                        # CLI entry point (Commander)
 ├── index.ts                    # Library entry point
 ├── audit/                      # JSONL audit log, audit resource
 ├── auth/                       # OAuth 2.1 authentication
 ├── codemode/                   # Sandboxed JS execution engine
-├── constants/                  # Server instructions (source + generated)
+├── constants/                  # Server instructions (agent prompt and composable segments)
 ├── database/
 │   ├── adapter-factory.ts      # Adapter instantiation
 │   ├── core/                   # Interfaces, schema, entry columns
@@ -227,11 +227,11 @@ src/
 ├── github/
 │   └── github-integration/     # GitHub API integration
 ├── handlers/
-│   ├── tools/                  # 73 tool handlers (10 groups)
-│   ├── resources/              # 47 resource handlers
-│   └── prompts/                # 19 prompt handlers
+│   ├── tools/                  # tool handlers (multiple groups)
+│   ├── resources/              # resource handlers
+│   └── prompts/                # prompt handlers
 ├── markdown/                   # Markdown import/export (round-trip frontmatter parsing)
-├── observability/              # Metrics interceptor, token estimator
+├── observability/              # Metrics interceptor, token estimator, latency tracker
 ├── server/
 │   ├── mcp-server.ts           # MCP server setup
 │   ├── registration.ts         # Tool/resource/prompt registration

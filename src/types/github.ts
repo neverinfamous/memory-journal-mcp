@@ -35,6 +35,7 @@ export interface GitHubPullRequest {
     title: string
     url: string
     state: 'OPEN' | 'CLOSED' | 'MERGED'
+    headRef?: string
 }
 
 /**

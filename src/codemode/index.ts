@@ -41,4 +41,4 @@ export {
 export { CodeModeSecurityManager } from './security.js'
 
 // API
-export { JournalApi, createJournalApi } from './api.js'
+export { JournalApi, createJournalApi } from './api/index.js'

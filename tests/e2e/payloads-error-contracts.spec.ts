@@ -9,8 +9,8 @@
  * nonexistent entry, self-loop link, and duplicate link detection.
  */
 
-import { test, expect } from '@playwright/test'
-import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import { test, expect } from './test-fixture.js'
+import type { Client } from '@modelcontextprotocol/client'
 import { createClient, callToolAndParse, expectSuccess } from './helpers.js'
 
 test.describe.configure({ mode: 'serial' })
@@ -23,7 +23,7 @@ test.describe('Payload Contracts: Structured Error Fields', () => {
     test.beforeAll(async () => {
         client = await createClient()
         // Seed two entries for relationship error tests
-        const e1 = await callToolAndParse(client, 'create_entry', {
+        const e1 = await callToolAndParse(client, 'create_entry', { workspace_id: 'default', 
             project_number: 1,
             content: 'Error contract test entry A',
             entry_type: 'test_entry',
@@ -31,7 +31,7 @@ test.describe('Payload Contracts: Structured Error Fields', () => {
         expectSuccess(e1)
         entryId1 = (e1.entry as Record<string, unknown>).id as number
 
-        const e2 = await callToolAndParse(client, 'create_entry', {
+        const e2 = await callToolAndParse(client, 'create_entry', { workspace_id: 'default', 
             project_number: 1,
             content: 'Error contract test entry B',
             entry_type: 'test_entry',
@@ -154,7 +154,7 @@ test.describe('Payload Contracts: Structured Error Fields', () => {
         const payload = await callToolAndParse(client, 'delete_entry', {
             project_number: 1,
             entry_id: 999999998,
-        })
+            expected_version: 1 })
 
         // Should be a structured error with minimum fields
         if (payload.success === false) {

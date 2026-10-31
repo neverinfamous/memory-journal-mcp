@@ -1,23 +1,21 @@
-import type { Tag } from '../../../types/index.js'
+
 import {
     ICON_CLOCK,
     ICON_STAR,
-    ICON_TAG,
-    ICON_ANALYTICS,
     ICON_BRIEFING,
 } from '../../../constants/icons.js'
 // removed ENTRY_COLUMNS
 import {
     withPriority,
     ASSISTANT_FOCUSED,
-    LOW_PRIORITY,
-    MEDIUM_PRIORITY,
 } from '../../../utils/resource-annotations.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from '../shared.js'
 // removed transformEntryRow
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { fileURLToPath } from 'node:url'
+
+import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server'
 
 import {
     assertSafeFilePath,
@@ -34,10 +32,15 @@ export const recentResource: InternalResourceDef = {
     icons: [ICON_CLOCK],
     annotations: withPriority(0.8, ASSISTANT_FOCUSED),
     handler: (_uri: string, context: ResourceContext): ResourceResult => {
-        const entries = context.db.getRecentEntries(10)
+        const { entries } = context.db.getRecentEntries(10)
         const lastModified = entries[0]?.timestamp ?? new Date().toISOString()
+        const payloadData = { entries, count: entries.length }
+        const tokenEstimate = Math.ceil(JSON.stringify(payloadData).length / 4)
         return {
-            data: { entries, count: entries.length },
+            data: {
+                ...payloadData,
+                _meta: { tokenEstimate },
+            },
             annotations: { lastModified },
         }
     },
@@ -94,41 +97,18 @@ export const significantResource: InternalResourceDef = {
             return b.timestampMs - a.timestampMs
         })
         const top20 = entriesWithImportance.slice(0, 20)
-        return { entries: top20, count: top20.length }
+        const payloadData = { entries: top20, count: top20.length }
+        const tokenEstimate = Math.ceil(JSON.stringify(payloadData).length / 4)
+        return { 
+            data: { 
+                ...payloadData, 
+                _meta: { tokenEstimate } 
+            } 
+        }
     },
 }
 
-export const tagsResource: InternalResourceDef = {
-    uri: 'memory://tags',
-    name: 'All Tags',
-    title: 'Tag List',
-    description: 'All available tags with usage counts',
-    mimeType: 'application/json',
-    icons: [ICON_TAG],
-    annotations: { ...LOW_PRIORITY, audience: ['assistant'] },
-    handler: (_uri: string, context: ResourceContext) => {
-        const tags: Tag[] = context.db.listTags()
-        const mappedTags = tags.map((t) => ({
-            id: t.id,
-            name: t.name,
-            count: t.usageCount,
-        }))
-        return { tags: mappedTags, count: mappedTags.length }
-    },
-}
 
-export const statisticsResource: InternalResourceDef = {
-    uri: 'memory://statistics',
-    name: 'Statistics',
-    title: 'Journal Statistics',
-    description: 'Overall journal statistics',
-    mimeType: 'application/json',
-    icons: [ICON_ANALYTICS],
-    annotations: { ...LOW_PRIORITY, audience: ['assistant'] },
-    handler: (_uri: string, context: ResourceContext) => {
-        return context.db.getStatistics('week')
-    },
-}
 
 interface CachedRuleEntry {
     content: string
@@ -148,13 +128,9 @@ export const rulesResource: InternalResourceDef = {
     handler: async (_uri: string, context: ResourceContext): Promise<ResourceResult> => {
         const rulesPath = context.briefingConfig?.rulesFilePath ?? process.env['RULES_FILE_PATH']
         if (!rulesPath) {
-            return {
-                data: {
-                    configured: false,
-                    message:
-                        'RULES_FILE_PATH is not configured. Set this env var to serve rules content.',
-                },
-            }
+            throw new ProtocolError(ProtocolErrorCode.InternalError, 
+                'RULES_FILE_PATH is not configured. Set this env var to serve rules content.'
+            )
         }
         try {
             const allowedRoots = context.briefingConfig?.allowedIoRoots ?? []
@@ -162,12 +138,9 @@ export const rulesResource: InternalResourceDef = {
             const expandedRoots = [...allowedRoots, path.dirname(rulesPath)]
             assertSafeFilePath(rulesPath, expandedRoots)
         } catch (err) {
-            return {
-                data: {
-                    configured: true,
-                    error: err instanceof Error ? err.message : String(err),
-                },
-            }
+            throw new ProtocolError(ProtocolErrorCode.InvalidParams, 
+                err instanceof Error ? err.message : String(err)
+            )
         }
 
         try {
@@ -217,13 +190,7 @@ export const rulesResource: InternalResourceDef = {
             }
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err)
-            return {
-                data: {
-                    configured: true,
-                    error: `Could not read rules file: ${message}`,
-                    // Removed configuration path disclosure
-                },
-            }
+            throw new ProtocolError(ProtocolErrorCode.InternalError, `Could not read rules file: ${message}`)
         }
     },
 }
@@ -235,7 +202,7 @@ export const workflowsResource: InternalResourceDef = {
     description: 'Summary of available agent workflows from the configured workflow directory',
     mimeType: 'application/json',
     icons: [ICON_BRIEFING],
-    annotations: { ...MEDIUM_PRIORITY, audience: ['assistant'] },
+    annotations: withPriority(0.6, ASSISTANT_FOCUSED),
     handler: (_uri: string, context: ResourceContext): ResourceResult => {
         // Prefer briefingConfig.workflowSummary (set via CLI --workflow-summary or
         // MEMORY_JOURNAL_WORKFLOW_SUMMARY env var in cli.ts). Fall back to env var
@@ -244,18 +211,19 @@ export const workflowsResource: InternalResourceDef = {
             context.briefingConfig?.workflowSummary ??
             process.env['MEMORY_JOURNAL_WORKFLOW_SUMMARY']
         if (workflowSummary === undefined || workflowSummary === '') {
-            return {
-                data: {
-                    configured: false,
-                    message:
-                        'No workflow summary is available. Set MEMORY_JOURNAL_WORKFLOW_SUMMARY env var or use --workflow-summary.',
-                },
-            }
+            throw new ProtocolError(ProtocolErrorCode.InvalidParams, 
+                'No workflow summary is available. Set MEMORY_JOURNAL_WORKFLOW_SUMMARY env var or use --workflow-summary.'
+            )
         }
+        const payloadData = {
+            configured: true,
+            summary: workflowSummary,
+        }
+        const tokenEstimate = Math.ceil(JSON.stringify(payloadData).length / 4)
         return {
             data: {
-                configured: true,
-                summary: workflowSummary,
+                ...payloadData,
+                _meta: { tokenEstimate }
             },
         }
     },
@@ -332,7 +300,7 @@ export const skillsResource: InternalResourceDef = {
     description: 'Index of available agent skills (shipped + user-configured via SKILLS_DIR_PATH)',
     mimeType: 'application/json',
     icons: [ICON_BRIEFING],
-    annotations: { ...MEDIUM_PRIORITY, audience: ['assistant'] },
+    annotations: withPriority(0.6, ASSISTANT_FOCUSED),
     handler: async (_uri: string, context: ResourceContext): Promise<ResourceResult> => {
         const userSkillsDir =
             context.briefingConfig?.skillsDirPath ?? process.env['SKILLS_DIR_PATH']
@@ -349,24 +317,16 @@ export const skillsResource: InternalResourceDef = {
                     throw new Error(`Configured SKILLS_DIR_PATH does not exist: ${userSkillsDir}`)
                 }
             } catch (err) {
-                return {
-                    data: {
-                        configured: true,
-                        error: err instanceof Error ? err.message : String(err),
-                        skills: [],
-                        count: 0,
-                    },
-                }
+                throw new ProtocolError(ProtocolErrorCode.InvalidParams, 
+                    err instanceof Error ? err.message : String(err)
+                )
             }
         }
 
         if (!hasAnySource) {
-            return {
-                data: {
-                    configured: false,
-                    message: 'No skills available. Set SKILLS_DIR_PATH to index user skills.',
-                },
-            }
+            throw new ProtocolError(ProtocolErrorCode.InvalidParams, 
+                'No skills available. Set SKILLS_DIR_PATH to index user skills.'
+            )
         }
 
         try {
@@ -374,16 +334,21 @@ export const skillsResource: InternalResourceDef = {
 
             const cached = cachedSkillsMap.get(currentDirs)
             if (cached && Date.now() - cached.timestamp < SKILLS_CACHE_TTL_MS) {
+                const payloadData = {
+                    configured: true,
+                    // Prevent path disclosure of host directories
+                    skills: cached.skills.map((s) => ({
+                        name: s.name,
+                        excerpt: s.excerpt,
+                        source: s.source,
+                    })),
+                    count: cached.skills.length,
+                }
+                const tokenEstimate = Math.ceil(JSON.stringify(payloadData).length / 4)
                 return {
                     data: {
-                        configured: true,
-                        // Prevent path disclosure of host directories
-                        skills: cached.skills.map((s) => ({
-                            name: s.name,
-                            excerpt: s.excerpt,
-                            source: s.source,
-                        })),
-                        count: cached.skills.length,
+                        ...payloadData,
+                        _meta: { tokenEstimate }
                     },
                 }
             }
@@ -419,28 +384,27 @@ export const skillsResource: InternalResourceDef = {
                 if (firstKey) cachedSkillsMap.delete(firstKey)
             }
 
+            const payloadData = {
+                configured: true,
+                // Prevent path disclosure of host directories
+                skills: skills.map((s) => ({
+                    name: s.name,
+                    excerpt: s.excerpt,
+                    source: s.source,
+                })),
+                count: skills.length,
+            }
+            const tokenEstimate = Math.ceil(JSON.stringify(payloadData).length / 4)
+
             return {
                 data: {
-                    configured: true,
-                    // Prevent path disclosure of host directories
-                    skills: skills.map((s) => ({
-                        name: s.name,
-                        excerpt: s.excerpt,
-                        source: s.source,
-                    })),
-                    count: skills.length,
+                    ...payloadData,
+                    _meta: { tokenEstimate }
                 },
             }
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err)
-            return {
-                data: {
-                    configured: true,
-                    error: `Could not scan skills directory: ${message}`,
-                    skills: [],
-                    count: 0,
-                },
-            }
+            throw new ProtocolError(ProtocolErrorCode.InternalError, `Could not scan skills directory: ${message}`)
         }
     },
 }

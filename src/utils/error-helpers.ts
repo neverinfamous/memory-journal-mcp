@@ -8,7 +8,7 @@
 
 import { ZodError } from 'zod'
 import { MemoryJournalMcpError } from '../types/errors.js'
-import { ErrorCategory, type ErrorResponse } from '../types/error-types.js'
+import type { ErrorResponse } from '../types/error-types.js'
 import { matchSuggestion } from './errors/suggestions.js'
 
 /**
@@ -52,32 +52,57 @@ export function formatHandlerError(err: unknown): ErrorResponse {
         return err.toResponse()
     }
 
+    // Native AggregateError handling
+    if (typeof AggregateError !== 'undefined' && err instanceof AggregateError) {
+        return {
+            success: false,
+            error: err.message,
+            code: 'AGGREGATE_ERROR',
+            category: 'internal',
+            recoverable: false,
+            aggregated_errors: err.errors.map((e: unknown) => ({
+                message: e instanceof Error ? e.message : String(e),
+                ...(e instanceof Error && e.name ? { name: e.name } : {}),
+            })),
+        }
+    }
+
     // Zod validation errors
     if (err instanceof ZodError) {
         return {
             success: false,
             error: formatZodError(err),
             code: 'VALIDATION_ERROR',
-            category: ErrorCategory.VALIDATION,
+            category: 'validation',
             suggestion: 'Check input parameters against the tool schema',
             recoverable: false,
         }
     }
 
     // Unknown / raw errors — enrich via ERROR_SUGGESTIONS pattern matching
-    const message = err instanceof Error ? err.message : String(err)
+    const message = err instanceof Error
+        ? err.message
+        : (typeof err === 'object' && err !== null && 'message' in err && typeof (err as Record<string, unknown>)['message'] === 'string'
+            ? (err as Record<string, unknown>)['message'] as string
+            : String(err))
     const matched = matchSuggestion(message)
     const sanitizedMessage = message.replace(
         /(?:[A-Za-z]:)?(?:[\\/][\w.-]+)+[\\/]?/g,
         '<sanitized_path>'
     )
 
+    const isAutonomousHealing = message.includes('🛠️ AUTONOMOUS HEALING:')
+    const isRuntimeError = err instanceof Error || (typeof err === 'object' && err !== null && 'message' in err && typeof (err as Record<string, unknown>)['message'] === 'string')
+    const displayError = isAutonomousHealing || isRuntimeError || matched !== undefined
+        ? sanitizedMessage
+        : 'An internal error occurred during tool execution. Please check the server logs for more details.'
+
     return {
         success: false,
-        error: 'An internal error occurred during tool execution. Please check the server logs for more details.',
-        code: matched?.code ?? 'INTERNAL_ERROR',
-        category: ErrorCategory.INTERNAL,
-        recoverable: false,
+        error: displayError,
+        code: matched?.code ?? (isAutonomousHealing || isRuntimeError ? 'VALIDATION_ERROR' : 'INTERNAL_ERROR'),
+        category: isAutonomousHealing || isRuntimeError ? 'validation' : 'internal',
+        recoverable: isAutonomousHealing || isRuntimeError || (matched !== undefined),
         ...(matched?.suggestion ? { suggestion: matched.suggestion } : {}),
         ...(process.env['DEBUG'] === 'true'
             ? { details: { internal_message: sanitizedMessage } }

@@ -14,6 +14,7 @@ vi.mock('../../src/utils/logger.js', () => ({
 }))
 
 import { getWorkflowPromptDefinitions } from '../../src/handlers/prompts/workflow.js'
+import { getAnalyticsPromptDefinitions } from '../../src/handlers/prompts/analytics.js'
 import { getTeamResourceDefinitions } from '../../src/handlers/resources/team.js'
 import { getGraphResourceDefinitions } from '../../src/handlers/resources/graph.js'
 
@@ -23,9 +24,9 @@ import { getGraphResourceDefinitions } from '../../src/handlers/resources/graph.
 
 function createMockDb(overrides: Record<string, unknown> = {}) {
     return {
-        searchEntries: vi.fn().mockReturnValue([]),
-        searchByDateRange: vi.fn().mockReturnValue([]),
-        getRecentEntries: vi.fn().mockReturnValue([]),
+        searchEntries: vi.fn().mockReturnValue({ entries: [] }),
+        searchByDateRange: vi.fn().mockReturnValue({ entries: [] }),
+        getRecentEntries: vi.fn().mockReturnValue({ entries: [] }),
         getStatistics: vi.fn().mockReturnValue({ totalEntries: 0 }),
         getSignificantEntries: vi.fn().mockReturnValue([]),
         getRecentGraphRelationships: vi.fn().mockReturnValue([]),
@@ -54,173 +55,46 @@ describe('Workflow prompts — branch coverage', () => {
 
     beforeEach(() => {
         vi.clearAllMocks()
-        prompts = getWorkflowPromptDefinitions()
+        prompts = [...getWorkflowPromptDefinitions(), ...getAnalyticsPromptDefinitions()]
     })
 
-    it('find-related: should handle empty query fallback', () => {
-        const findRelated = prompts.find((p) => p.name === 'find-related')!
+    it('prepare-standup: should format standup entries', () => {
+        const analysis = prompts.find((p) => p.name === 'prepare-standup')!
         const db = createMockDb()
-        const result = findRelated.handler({}, db as never)
-        expect(result.messages[0]!.content.text).toContain('Find entries related to: ""')
+        const result = analysis.handler({}, db as never)
+        expect(result.messages[0]!.content.text).toContain('standup')
     })
 
-    it('prepare-standup: should format entries', () => {
-        const standup = prompts.find((p) => p.name === 'prepare-standup')!
-        const db = createMockDb({
-            searchByDateRange: vi
-                .fn()
-                .mockReturnValue([
-                    { timestamp: '2025-01-01', entryType: 'note', content: 'Did things' },
-                ]),
-        })
-        const result = standup.handler({}, db as never)
-        expect(result.messages[0]!.content.text).toContain('Did things')
-    })
-
-    it('prepare-retro: should use default days when not provided', () => {
-        const retro = prompts.find((p) => p.name === 'prepare-retro')!
+    it('prepare-retro: should format retro entries', () => {
+        const analysis = prompts.find((p) => p.name === 'prepare-retro')!
         const db = createMockDb()
-        retro.handler({}, db as never)
-        expect(db.searchByDateRange).toHaveBeenCalledTimes(1)
+        const result = analysis.handler({}, db as never)
+        expect(result.messages[0]!.content.text).toContain('retrospective')
     })
 
-    it('prepare-retro: should use custom days', () => {
-        const retro = prompts.find((p) => p.name === 'prepare-retro')!
-        const db = createMockDb({
-            searchByDateRange: vi
-                .fn()
-                .mockReturnValue([
-                    { timestamp: '2025-01-01', entryType: 'note', content: 'x'.repeat(250) },
-                ]),
-        })
-        const result = retro.handler({ days: '7' }, db as never)
-        expect(result.messages[0]!.content.text).toContain('last 7 days')
-    })
-
-    it('weekly-digest: should format entries with content truncation', () => {
-        const digest = prompts.find((p) => p.name === 'weekly-digest')!
-        const db = createMockDb({
-            searchByDateRange: vi
-                .fn()
-                .mockReturnValue([
-                    { timestamp: '2025-01-01', entryType: 'note', content: 'x'.repeat(200) },
-                ]),
-        })
-        const result = digest.handler({}, db as never)
+    it('weekly-digest: should format weekly digest', () => {
+        const analysis = prompts.find((p) => p.name === 'weekly-digest')!
+        const db = createMockDb()
+        const result = analysis.handler({}, db as never)
         expect(result.messages[0]!.content.text).toContain('weekly digest')
     })
 
-    it('analyze-period: should use provided dates', () => {
-        const analyze = prompts.find((p) => p.name === 'analyze-period')!
+    it('session-summary: should handle no entries', async () => {
+        const summary = prompts.find((p) => p.name === 'session-summary')!
         const db = createMockDb()
-        const result = analyze.handler(
-            { start_date: '2025-01-01', end_date: '2025-01-31' },
-            db as never
-        )
-        expect(result.messages[0]!.content.text).toContain('2025-01-01 to 2025-01-31')
-    })
-
-    it('analyze-period: should handle missing date args', () => {
-        const analyze = prompts.find((p) => p.name === 'analyze-period')!
-        const db = createMockDb()
-        const result = analyze.handler({}, db as never)
-        expect(result.messages[0]!.content.text).toContain('Analyze the period')
-    })
-
-    it('goal-tracker: should format significant entries', () => {
-        const goalTracker = prompts.find((p) => p.name === 'goal-tracker')!
-        const db = createMockDb({
-            getSignificantEntries: vi.fn().mockReturnValue([]),
-        })
-        const result = goalTracker.handler({}, db as never)
-        expect(result.messages[0]!.content.text).toContain('goals')
-    })
-
-    it('get-context-bundle: should truncate content over 60 chars', () => {
-        const contextBundle = prompts.find((p) => p.name === 'get-context-bundle')!
-        const db = createMockDb({
-            getRecentEntries: vi.fn().mockReturnValue([
-                { id: 1, entryType: 'note', timestamp: '2025-01-01', content: 'x'.repeat(70) },
-                { id: 2, entryType: 'note', timestamp: '2025-01-02', content: 'short' },
-            ]),
-        })
-        const result = contextBundle.handler({}, db as never)
-        expect(result.messages[0]!.content.text).toContain('...')
-    })
-
-    it('get-recent-entries: should use default limit', () => {
-        const recent = prompts.find((p) => p.name === 'get-recent-entries')!
-        const db = createMockDb({
-            getRecentEntries: vi.fn().mockReturnValue([
-                {
-                    id: 1,
-                    entryType: 'note',
-                    timestamp: '2025-01-01',
-                    content: 'test',
-                    tags: ['a'],
-                },
-            ]),
-        })
-        const result = recent.handler({}, db as never)
-        expect(db.getRecentEntries).toHaveBeenCalledWith(10)
-        expect(result.messages[0]!.content.text).toContain('a')
-    })
-
-    it('get-recent-entries: should use custom limit and handle empty tags', () => {
-        const recent = prompts.find((p) => p.name === 'get-recent-entries')!
-        const db = createMockDb({
-            getRecentEntries: vi.fn().mockReturnValue([
-                {
-                    id: 1,
-                    entryType: 'note',
-                    timestamp: '2025-01-01',
-                    content: 'test',
-                    tags: [],
-                },
-            ]),
-        })
-        const result = recent.handler({ limit: '5' }, db as never)
-        expect(db.getRecentEntries).toHaveBeenCalledWith(5)
-        expect(result.messages[0]!.content.text).toContain('none')
-    })
-
-    it('confirm-briefing: should handle no entries', () => {
-        const confirm = prompts.find((p) => p.name === 'confirm-briefing')!
-        const db = createMockDb()
-        const result = confirm.handler({}, db as never)
+        const result = await summary.handler({}, db as never)
         expect(result.messages[0]!.content.text).toContain('No entries yet')
     })
 
-    it('confirm-briefing: should format entries when present', () => {
-        const confirm = prompts.find((p) => p.name === 'confirm-briefing')!
-        const db = createMockDb({
-            getRecentEntries: vi
-                .fn()
-                .mockReturnValue([
-                    { id: 1, entryType: 'note', timestamp: '2025-01-01', content: 'x'.repeat(50) },
-                ]),
-            getStatistics: vi.fn().mockReturnValue({ totalEntries: 42 }),
-        })
-        const result = confirm.handler({}, db as never)
-        expect(result.messages[0]!.content.text).toContain('42 total entries')
-    })
-
-    it('session-summary: should handle no entries', () => {
-        const summary = prompts.find((p) => p.name === 'session-summary')!
-        const db = createMockDb()
-        const result = summary.handler({}, db as never)
-        expect(result.messages[0]!.content.text).toContain('No entries yet')
-    })
-
-    it('session-summary: should truncate long content', () => {
+    it('session-summary: should truncate long content', async () => {
         const summary = prompts.find((p) => p.name === 'session-summary')!
         const db = createMockDb({
-            getRecentEntries: vi.fn().mockReturnValue([
+            getRecentEntries: vi.fn().mockReturnValue({ entries: [
                 { id: 1, entryType: 'note', content: 'x'.repeat(90) },
                 { id: 2, entryType: 'note', content: 'short' },
-            ]),
+            ]}),
         })
-        const result = summary.handler({}, db as never)
+        const result = await summary.handler({}, db as never)
         expect(result.messages[0]!.content.text).toContain('...')
         // The short entry should NOT have '...'
         expect(result.messages[0]!.content.text).toContain('short')
@@ -256,9 +130,9 @@ describe('Team resources — branch coverage', () => {
             const teamDb = createMockDb({
                 getRecentEntries: vi
                     .fn()
-                    .mockReturnValue([
+                    .mockReturnValue({ entries: [
                         { id: 1, entryType: 'note', timestamp: '2025-01-01', content: 'test' },
-                    ]),
+                    ]}),
                 getAuthorsForEntries: vi.fn().mockReturnValue(new Map([[1, 'alice']])),
             })
             const context = createMockContext({ teamDb })
@@ -274,7 +148,7 @@ describe('Team resources — branch coverage', () => {
 
         it('should handle empty entries with fallback timestamp', () => {
             const teamDb = createMockDb({
-                getRecentEntries: vi.fn().mockReturnValue([]),
+                getRecentEntries: vi.fn().mockReturnValue({ entries: [] }),
             })
             const context = createMockContext({ teamDb })
             const resource = resources.find((r) => r.uri === 'memory://team/recent')!
@@ -364,79 +238,7 @@ describe('Graph resources — branch coverage', () => {
         resources = getGraphResourceDefinitions()
     })
 
-    describe('memory://graph/recent', () => {
-        it('should return no-data message when no relationships', () => {
-            const resource = resources.find((r) => r.uri === 'memory://graph/recent')!
-            const context = createMockContext({
-                db: createMockDb({
-                    getRecentGraphRelationships: vi.fn().mockReturnValue([]),
-                }),
-            })
-            const result = resource.handler('memory://graph/recent', context as never) as string
-            expect(result).toContain('No relationships found')
-        })
 
-        it('should handle unknown relationship type with default arrow', () => {
-            const resource = resources.find((r) => r.uri === 'memory://graph/recent')!
-            const context = createMockContext({
-                db: createMockDb({
-                    getRecentGraphRelationships: vi.fn().mockReturnValue([
-                        {
-                            from_entry_id: 1,
-                            to_entry_id: 2,
-                            relationship_type: 'unknown_type',
-                            from_content: 'Entry one content',
-                            to_content: 'Entry two content',
-                        },
-                    ]),
-                }),
-            })
-            const result = resource.handler('memory://graph/recent', context as never) as string
-            expect(result).toContain('-->')
-            expect(result).toContain('unknown_type')
-        })
-    })
-
-    describe('memory://graph/actions', () => {
-        it('should return no-github message when github integration not available', async () => {
-            const resource = resources.find((r) => r.uri === 'memory://graph/actions')!
-            const context = createMockContext()
-            const result = (await resource.handler(
-                'memory://graph/actions',
-                context as never
-            )) as string
-            expect(result).toContain('GitHub integration not available')
-        })
-
-        it('should return no-repo message when repo info missing', async () => {
-            const resource = resources.find((r) => r.uri === 'memory://graph/actions')!
-            const context = createMockContext({
-                github: {
-                    getRepoInfo: vi.fn().mockResolvedValue({ owner: null, repo: null }),
-                },
-            })
-            const result = (await resource.handler(
-                'memory://graph/actions',
-                context as never
-            )) as string
-            expect(result).toContain('Repository not detected')
-        })
-
-        it('should return no-runs message when no workflow runs', async () => {
-            const resource = resources.find((r) => r.uri === 'memory://graph/actions')!
-            const context = createMockContext({
-                github: {
-                    getRepoInfo: vi.fn().mockResolvedValue({ owner: 'o', repo: 'r' }),
-                    getWorkflowRuns: vi.fn().mockResolvedValue([]),
-                },
-            })
-            const result = (await resource.handler(
-                'memory://graph/actions',
-                context as never
-            )) as string
-            expect(result).toContain('No GitHub Actions workflow runs')
-        })
-    })
 
     describe('memory://actions/recent', () => {
         it('should fallback to database when no github', async () => {
@@ -450,7 +252,7 @@ describe('Graph resources — branch coverage', () => {
                 'memory://actions/recent',
                 context as never
             )) as Record<string, unknown>
-            expect(result.source).toBe('database')
+            expect((result as any).data.source).toBe('database')
         })
 
         it('should fallback to database when github throws', async () => {
@@ -467,7 +269,7 @@ describe('Graph resources — branch coverage', () => {
                 'memory://actions/recent',
                 context as never
             )) as Record<string, unknown>
-            expect(result.source).toBe('database')
+            expect((result as any).data.source).toBe('database')
         })
 
         it('should fallback when repo info has no owner', async () => {
@@ -484,7 +286,7 @@ describe('Graph resources — branch coverage', () => {
                 'memory://actions/recent',
                 context as never
             )) as Record<string, unknown>
-            expect(result.source).toBe('database')
+            expect((result as any).data.source).toBe('database')
         })
     })
 })

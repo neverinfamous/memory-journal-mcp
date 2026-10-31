@@ -51,8 +51,8 @@ describe('Team Core Tool Handlers', () => {
     let personalDb: DatabaseAdapter
     let teamDb: DatabaseAdapter
 
-    const personalDbPath = './test-team-core-personal.db'
-    const teamDbPath = './test-team-core-team.db'
+    const personalDbPath = './.test-output/vitest/test-team-core-personal.db'
+    const teamDbPath = './.test-output/vitest/test-team-core-team.db'
     let entry1Id: number
 
     beforeAll(async () => {
@@ -70,7 +70,7 @@ describe('Team Core Tool Handlers', () => {
 
         const r1 = (await callTool(
             'team_create_entry',
-            {
+            { workspace_id: 'default', 
                 project_number: 1,
                 content: 'Core test 1',
                 tags: ['core-1', 'shared'],
@@ -85,7 +85,7 @@ describe('Team Core Tool Handlers', () => {
         entry1Id = r1.entry.id
         await callTool(
             'team_create_entry',
-            {
+            { workspace_id: 'default', 
                 project_number: 1,
                 content: 'Core test 2',
                 tags: ['shared'],

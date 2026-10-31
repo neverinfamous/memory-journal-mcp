@@ -17,7 +17,6 @@ flowchart LR
     subgraph CI["CI"]
         GK["gatekeeper (orchestrator)"]
         LT["lint-and-test"]
-        DAM["dependabot-auto-merge"]
     end
 
     subgraph Security["Security"]
@@ -34,7 +33,6 @@ flowchart LR
     subgraph Agentic["Agentic Workflows (Copilot)"]
         CHM["ci-health-monitor"]
         DDD["docs-drift-detector"]
-        AM["agentics-maintenance"]
     end
 
     Push --> GK
@@ -48,7 +46,6 @@ flowchart LR
     PR --> LT
     PR --> CQL
     PR --> SS
-    PR --> DAM
     PR --> DDD
 
     Tag --> NPM
@@ -56,11 +53,9 @@ flowchart LR
     Sched --> CQL
     Sched --> SU
     Sched --> CHM
-    Sched --> AM
 
     Manual --> SU
     Manual --> CHM
-    Manual --> AM
 ```
 
 ---
@@ -73,7 +68,6 @@ flowchart LR
 | ------------------------------------------------------ | ------------------------------ | --------------------------------------------------------------------------------------- |
 | [gatekeeper.yml](gatekeeper.yml)                       | push to `main` / tag `v*`      | Orchestrates CI/CD: fans out lint + security scans, gates docker-publish on all passing |
 | [lint-and-test.yml](lint-and-test.yml)                 | PR to `main` / `workflow_call` | Lint, typecheck, build, unit tests (Node 24.x + 25.x matrix), npm audit                 |
-| [dependabot-auto-merge.yml](dependabot-auto-merge.yml) | PR (`dependabot[bot]`)         | Auto-merges patch/minor Dependabot PRs, warns on major updates                          |
 
 ### Security
 
@@ -97,8 +91,6 @@ These are AI-powered workflows using [GitHub Copilot Coding Agent](https://docs.
 | Prompt                                               | Lock File                                                    | Schedule             | Purpose                                                                                  |
 | ---------------------------------------------------- | ------------------------------------------------------------ | -------------------- | ---------------------------------------------------------------------------------------- |
 | [ci-health-monitor.md](ci-health-monitor.md)         | [ci-health-monitor.lock.yml](ci-health-monitor.lock.yml)     | Wed 14:00 UTC        | Audits workflows for deprecated actions, Node.js runtime issues, stale Dependabot config |
-| [docs-drift-detector.md](docs-drift-detector.md)     | [docs-drift-detector.lock.yml](docs-drift-detector.lock.yml) | PR (on code changes) | Audits README, DOCKER_README, CONTRIBUTING for drift against code changes                |
-| [agentics-maintenance.yml](agentics-maintenance.yml) | —                                                            | Daily 00:37 UTC      | Auto-closes expired discussions, issues, and PRs created by agentic workflows            |
 
 ---
 
@@ -125,7 +117,7 @@ For manual feature releases, the maintainer runs `/bump-deploy` locally which pu
 
 | Secret            | Used By                                             | Purpose                        |
 | ----------------- | --------------------------------------------------- | ------------------------------ |
-| `GITHUB_TOKEN`    | auto-release, security-update, agentics-maintenance | Git operations, issue creation |
+| `GITHUB_TOKEN`    | auto-release, security-update | Git operations, issue creation |
 | `NPM_TOKEN`       | publish-npm                                         | npm registry authentication    |
 | `DOCKER_USERNAME` | docker-publish                                      | Docker Hub login               |
 | `DOCKER_PASSWORD` | docker-publish                                      | Docker Hub login               |

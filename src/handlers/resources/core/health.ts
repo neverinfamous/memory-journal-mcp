@@ -1,6 +1,6 @@
 import { getAllToolNames } from '../../../filtering/tool-filter.js'
 import { ICON_HEALTH } from '../../../constants/icons.js'
-import { HIGH_PRIORITY } from '../../../utils/resource-annotations.js'
+import { withPriority, ASSISTANT_FOCUSED } from '../../../utils/resource-annotations.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from '../shared.js'
 // globalMetrics removed
 
@@ -19,10 +19,7 @@ export const healthResource: InternalResourceDef = {
         'Server health status including database, backups, vector index (real-time stats), and tool filter status',
     mimeType: 'application/json',
     icons: [ICON_HEALTH],
-    annotations: {
-        ...HIGH_PRIORITY,
-        audience: ['assistant'],
-    },
+    annotations: withPriority(0.9, ASSISTANT_FOCUSED),
     handler: (_uri: string, context: ResourceContext): ResourceResult => {
         const dbHealth = context.db.getHealthStatus()
 
@@ -71,28 +68,35 @@ export const healthResource: InternalResourceDef = {
             }
         })()
 
+        const payloadData = {
+            ...dbHealth,
+            vectorIndex,
+            toolFilter,
+            teamDatabase: context.teamDb
+                ? {
+                      configured: true,
+                      ...context.teamDb.getHealthStatus(),
+                  }
+                : { configured: false },
+            scheduler: context.scheduler
+                ? context.scheduler.getStatus()
+                : { active: false, jobs: [] },
+            audit: context.runtime?.auditLogger
+                ? {
+                      droppedCount: context.runtime.auditLogger.droppedCount,
+                      status: context.runtime.auditLogger.droppedCount > 0 ? 'degraded' : 'ok',
+                  }
+                : { status: 'unknown' },
+            metrics: metricsSummary,
+            timestamp: lastModified,
+        }
+
+        const tokenEstimate = Math.ceil(JSON.stringify(payloadData).length / 4)
+
         return {
             data: {
-                ...dbHealth,
-                vectorIndex,
-                toolFilter,
-                teamDatabase: context.teamDb
-                    ? {
-                          configured: true,
-                          ...context.teamDb.getHealthStatus(),
-                      }
-                    : { configured: false },
-                scheduler: context.scheduler
-                    ? context.scheduler.getStatus()
-                    : { active: false, jobs: [] },
-                audit: context.runtime?.auditLogger
-                    ? {
-                          droppedCount: context.runtime.auditLogger.droppedCount,
-                          status: context.runtime.auditLogger.droppedCount > 0 ? 'degraded' : 'ok',
-                      }
-                    : { status: 'unknown' },
-                metrics: metricsSummary,
-                timestamp: lastModified,
+                ...payloadData,
+                _meta: { tokenEstimate },
             },
             annotations: { lastModified },
         }

@@ -110,7 +110,7 @@ function createMockGitHub(overrides: Partial<Record<string, unknown>> = {}): Git
 
 describe('GitHub Body Truncation', () => {
     let db: DatabaseAdapter
-    const testDbPath = './test-body-truncation.db'
+    const testDbPath = './.test-output/vitest/test-body-truncation.db'
 
     beforeAll(async () => {
         db = new DatabaseAdapter(testDbPath)

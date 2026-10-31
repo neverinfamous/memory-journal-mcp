@@ -126,7 +126,7 @@ describe('Security Utilities', () => {
 
 describe('DatabaseAdapter SQL Injection Protection', () => {
     let db: DatabaseAdapter
-    const testDbPath = './test-security.db'
+    const testDbPath = './.test-output/vitest/test-security.db'
 
     beforeAll(async () => {
         // Use temp file database for testing (DatabaseAdapter always saves to disk)
@@ -183,7 +183,7 @@ describe('DatabaseAdapter SQL Injection Protection', () => {
                 // Should not throw - parameterized queries handle this
                 const results = db.searchEntries(payload)
                 // Results should be based on LIKE matching, not SQL execution
-                expect(Array.isArray(results)).toBe(true)
+                expect(Array.isArray(results.entries)).toBe(true)
             }
         })
 
@@ -196,8 +196,8 @@ describe('DatabaseAdapter SQL Injection Protection', () => {
             const percentResults = db.searchEntries('50%')
             const underscoreResults = db.searchEntries('user_name')
 
-            expect(Array.isArray(percentResults)).toBe(true)
-            expect(Array.isArray(underscoreResults)).toBe(true)
+            expect(Array.isArray(percentResults.entries)).toBe(true)
+            expect(Array.isArray(underscoreResults.entries)).toBe(true)
         })
     })
 

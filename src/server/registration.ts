@@ -5,18 +5,19 @@
  * Handles resource and prompt registration with the MCP SDK.
  */
 
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js'
-import type { Variables } from '@modelcontextprotocol/sdk/shared/uriTemplate.js'
+import type { McpServer } from '@modelcontextprotocol/server'
+import { ResourceTemplate } from '@modelcontextprotocol/server'
+import type { Variables } from '@modelcontextprotocol/server'
 import { z } from 'zod'
 
 import type { IDatabaseAdapter } from '../database/core/interfaces.js'
 import { getPrompt } from '../handlers/prompts/index.js'
 import { auditOperation } from '../audit/interceptor.js'
 import type { ServerRuntime } from '../utils/maintenance-lock.js'
-
 import { ConfigurationError } from '../types/errors.js'
 import { enforceAccessBoundary } from '../auth/validation.js'
+import type { BriefingConfig } from '../handlers/resources/shared.js'
+import type { GitHubIntegration } from '../github/github-integration/index.js'
 
 // ============================================================================
 // Types
@@ -143,17 +144,22 @@ export function registerPrompts(
     prompts: PromptDefinition[],
     db: IDatabaseAdapter,
     teamDb?: IDatabaseAdapter,
-    runtime?: ServerRuntime
+    runtime?: ServerRuntime,
+    github?: GitHubIntegration,
+    briefingConfig?: BriefingConfig
 ): void {
     for (const promptDef of prompts) {
         let argsSchema: Record<string, z.ZodType> | undefined
         if (promptDef.arguments && promptDef.arguments.length > 0) {
-            argsSchema = {}
-            for (const arg of promptDef.arguments) {
-                argsSchema[arg.name] =
-                    arg.required === true
-                        ? z.string().describe(arg.description)
-                        : z.string().optional().describe(arg.description)
+            const hasRequired = promptDef.arguments.some((a) => a.required)
+            if (hasRequired) {
+                argsSchema = {}
+                for (const arg of promptDef.arguments) {
+                    argsSchema[arg.name] =
+                        arg.required === true
+                            ? z.string().describe(arg.description)
+                            : z.string().optional().describe(arg.description)
+                }
             }
         }
 
@@ -161,7 +167,7 @@ export function registerPrompts(
             promptDef.name,
             {
                 description: promptDef.description ?? '',
-                ...(argsSchema ? { argsSchema } : {}),
+                ...(argsSchema ? { argsSchema: z.object(argsSchema) } : {}),
                 ...(promptDef.icons ? { icons: promptDef.icons } : {}),
             },
             (providedArgs) => {
@@ -173,20 +179,20 @@ export function registerPrompts(
                 const auditLog = runtime.auditLogger
                 enforceAccessBoundary(promptDef.name, 'prompt', promptDef.capabilities, auditLog)
                 return auditOperation(auditLog, 'prompt', promptDef.name, async () => {
-                    const executePrompt = (): Promise<{
+                    const executePrompt = async (): Promise<{
                         messages: {
                             role: 'user' | 'assistant'
                             content: { type: 'text'; text: string }
                         }[]
                     }> => {
                         const args = providedArgs as Record<string, string>
-                        const promptResult = getPrompt(promptDef.name, args, db, teamDb)
-                        return Promise.resolve({
+                        const promptResult = await getPrompt(promptDef.name, args, db, teamDb, github, briefingConfig)
+                        return {
                             messages: promptResult.messages.map((m) => ({
                                 role: m.role as 'user' | 'assistant',
                                 content: m.content as { type: 'text'; text: string },
                             })),
-                        })
+                        }
                     }
 
                     return await runtime.maintenanceManager.withActiveJob(executePrompt)

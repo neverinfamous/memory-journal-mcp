@@ -6,8 +6,8 @@
  * structured errors with agent-guidance, and boundary cases work correctly.
  */
 
-import { test, expect } from '@playwright/test'
-import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import { test, expect } from './test-fixture.js'
+import type { Client } from '@modelcontextprotocol/client'
 import { createClient, callToolAndParse } from './helpers.js'
 
 test.describe.configure({ mode: 'serial' })

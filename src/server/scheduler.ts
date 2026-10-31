@@ -7,10 +7,13 @@
  */
 
 import type { IDatabaseAdapter } from '../database/core/interfaces.js'
-import type { VectorSearchManager } from '../vector/vector-search-manager.js'
+import type { VectorSearchManager } from '../vector/vector-search-manager/index.js'
 import { logger } from '../utils/logger.js'
 import type { DigestSnapshot } from '../database/sqlite-adapter/entries/digest.js'
 import type { ServerRuntime } from '../utils/maintenance-lock.js'
+import { deliverReport, formatDigestReport, type ReportDeliveryOptions } from './digest-reporter.js'
+import { runAutoPrune } from './auto-prune.js'
+import { VERSION } from '../version.js'
 
 // ============================================================================
 // Types
@@ -28,6 +31,20 @@ export interface SchedulerOptions {
     rebuildIndexIntervalMinutes: number
     /** Analytics digest interval in minutes (0 = disabled; recommended: 1440 for daily) */
     digestIntervalMinutes: number
+    /** Scheduled report generation interval in minutes (0 = disabled; recommended: 10080 for weekly) */
+    reportIntervalMinutes: number
+    /** Webhook options for report delivery */
+    reportDeliveryOptions?: ReportDeliveryOptions
+    /** Automated pruning interval in minutes (0 = disabled; recommended: 1440 for daily) */
+    pruneIntervalMinutes: number
+    
+    // Auto-prune configuration
+    archiveOlderThanDays?: number
+    pruneOlderThanDays?: number
+    hardDeleteOlderThanDays?: number
+    pruneImportanceThreshold?: number
+    pruneDryRun?: boolean
+    pruneExcludeTags?: string[]
 }
 
 /** Status of a single scheduled job */
@@ -72,6 +89,7 @@ interface JobTimer {
  * - **vacuum**: Runs `PRAGMA optimize` and flushes database to disk.
  * - **rebuild-index**: Rebuilds vector search index from all entries.
  * - **digest**: Computes and persists an analytics snapshot for proactive insights.
+ * - **prune**: Cleans up old, low-importance entries based on configuration.
  */
 export class Scheduler {
     private readonly options: SchedulerOptions
@@ -123,6 +141,10 @@ export class Scheduler {
             })
         }
 
+        if (this.options.pruneIntervalMinutes > 0) {
+            this.scheduleJob('prune', this.options.pruneIntervalMinutes, () => this.runPrune())
+        }
+
         if (rebuildIndexIntervalMinutes > 0) {
             if (this.vectorManager) {
                 this.scheduleJob('rebuild-index', rebuildIndexIntervalMinutes, () =>
@@ -139,6 +161,13 @@ export class Scheduler {
         if (this.options.digestIntervalMinutes > 0) {
             this.scheduleJob('digest', this.options.digestIntervalMinutes, () => {
                 this.runDigest()
+                return Promise.resolve()
+            })
+        }
+
+        if (this.options.reportIntervalMinutes > 0) {
+            this.scheduleJob('report', this.options.reportIntervalMinutes, () => {
+                this.runReport()
                 return Promise.resolve()
             })
         }
@@ -321,11 +350,36 @@ export class Scheduler {
             return
         }
 
-        const { indexed: count } = await this.vectorManager.rebuildIndex(this.db)
+        const { indexed: count } = await this.vectorManager.rebuildIndex()
         logger.info(`Scheduled vector index rebuild: ${String(count)} entries indexed`, {
             module: 'Scheduler',
             operation: 'rebuild-index',
             context: { entriesIndexed: count },
+        })
+    }
+
+    // ========================================================================
+    // Private — Prune job
+    // ========================================================================
+
+    /**
+     * Prune job: auto-prune low-importance old entries.
+     */
+    private async runPrune(): Promise<void> {
+        const pruneResult = await runAutoPrune(this.db, {
+            archiveOlderThanDays: this.options.archiveOlderThanDays ?? 0,
+            pruneOlderThanDays: this.options.pruneOlderThanDays ?? 0,
+            hardDeleteOlderThanDays: this.options.hardDeleteOlderThanDays ?? 0,
+            importanceThreshold: this.options.pruneImportanceThreshold ?? 0.15,
+            dryRun: this.options.pruneDryRun,
+            excludeTags: this.options.pruneExcludeTags,
+        })
+        logger.info('Scheduled auto-prune completed', {
+            module: 'Scheduler',
+            operation: 'prune',
+            archivedCount: pruneResult.archivedCount,
+            prunedCount: pruneResult.prunedCount,
+            hardDeletedCount: pruneResult.hardDeletedCount,
         })
     }
 
@@ -337,17 +391,41 @@ export class Scheduler {
      * Digest job: compute analytics snapshot and persist to database.
      */
     private runDigest(): void {
-        const snapshot = this.db.computeDigest() as unknown as DigestSnapshot
-        this.db.saveAnalyticsSnapshot('digest', snapshot as unknown as Record<string, unknown>)
+        const snapshot = this.db.computeDigest()
+        this.db.saveAnalyticsSnapshot('digest', snapshot)
         logger.info('Scheduled analytics digest computed', {
             module: 'Scheduler',
             operation: 'digest',
             context: {
-                currentPeriodEntries: snapshot.currentPeriodEntries,
-                activityGrowthPercent: snapshot.activityGrowthPercent,
-                topImportanceCount: snapshot.topImportanceEntries.length,
+                currentPeriodEntries: (snapshot as unknown as DigestSnapshot).currentPeriodEntries,
+                activityGrowthPercent: (snapshot as unknown as DigestSnapshot).activityGrowthPercent,
+                topImportanceCount: (snapshot as unknown as DigestSnapshot).topImportanceEntries.length,
             },
         })
+    }
+
+    // ========================================================================
+    // Private — Report job
+    // ========================================================================
+
+    /**
+     * Report job: compute analytics snapshot, persist, and deliver via webhook.
+     */
+    private runReport(): void {
+        const snapshot = this.db.computeDigest()
+        this.db.saveAnalyticsSnapshot('report', snapshot)
+        logger.info('Scheduled analytics report computed', {
+            module: 'Scheduler',
+            operation: 'report',
+            context: {
+                currentPeriodEntries: (snapshot as unknown as DigestSnapshot).currentPeriodEntries,
+            },
+        })
+
+        if (this.options.reportDeliveryOptions?.webhookUrl) {
+            const report = formatDigestReport(snapshot as unknown as DigestSnapshot, VERSION)
+            void deliverReport(report, snapshot as unknown as DigestSnapshot, this.options.reportDeliveryOptions)
+        }
     }
 
     // ========================================================================

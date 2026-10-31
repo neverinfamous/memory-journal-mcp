@@ -5,8 +5,8 @@
  * update_entry, delete_entry, merge_tags, rebuild_vector_index, add_to_vector_index.
  */
 
-import { test, expect } from '@playwright/test'
-import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import { test, expect } from './test-fixture.js'
+import type { Client } from '@modelcontextprotocol/client'
 import { createClient, callToolAndParse, expectSuccess } from './helpers.js'
 
 test.describe.configure({ mode: 'serial' })
@@ -18,7 +18,7 @@ test.describe('Payload Contracts: Admin', () => {
     test.beforeAll(async () => {
         client = await createClient()
         // Create an entry for admin operations
-        const e = await callToolAndParse(client, 'create_entry', {
+        const e = await callToolAndParse(client, 'create_entry', { workspace_id: 'default', 
             project_number: 1,
             content: 'Admin test entry',
             entry_type: 'test_entry',
@@ -70,11 +70,40 @@ test.describe('Payload Contracts: Admin', () => {
 
     test('delete_entry returns { success, entryId }', async () => {
         const payload = await callToolAndParse(client, 'delete_entry', {
-            project_number: 1,
+            entry_id: entryId,
+            expected_version: 2 })
+        expectSuccess(payload)
+        expect(payload.success).toBeDefined()
+        expect(payload.entryId).toBe(entryId)
+    })
+
+    test('restore_entry returns { success, entryId }', async () => {
+        const payload = await callToolAndParse(client, 'restore_entry', {
             entry_id: entryId,
         })
         expectSuccess(payload)
         expect(payload.success).toBeDefined()
         expect(payload.entryId).toBe(entryId)
+    })
+
+    test('update_configuration returns { success, updated }', async () => {
+        const payload = await callToolAndParse(client, 'update_configuration', {
+            briefing_entries: 5,
+        })
+        expectSuccess(payload)
+        expect(payload.success).toBe(true)
+        expect(Array.isArray(payload.updated)).toBe(true)
+        expect(payload.updated).toContain('briefing_entries')
+    })
+
+    test('update_configuration gracefully strips hallucinatory meta keys like target', async () => {
+        const payload = await callToolAndParse(client, 'update_configuration', {
+            target: 'test',
+            briefing_entries: 5,
+        })
+        expectSuccess(payload)
+        expect(payload.success).toBe(true)
+        expect(Array.isArray(payload.updated)).toBe(true)
+        expect(payload.updated).toContain('briefing_entries')
     })
 })

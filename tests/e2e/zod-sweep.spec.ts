@@ -11,7 +11,7 @@
  * Ported from db-mcp/tests/e2e/zod-sweep.spec.ts — adapted for memory-journal-mcp tool names.
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test-fixture.js'
 import { createClient, callToolRaw } from './helpers.js'
 
 test.describe.configure({ mode: 'serial' })
@@ -71,7 +71,7 @@ async function assertZodHandlerError(toolName: string) {
 // =============================================================================
 
 test.describe('Zod Sweep: Core', () => {
-    const tools = ['create_entry', 'get_entry_by_id', 'create_entry_minimal']
+    const tools = ['create_entry', 'get_entry_by_id']
 
     for (const tool of tools) {
         test(`${tool}({}) → handler error`, async () => {
@@ -140,11 +140,7 @@ test.describe('Zod Sweep: Backup', () => {
 // Code Mode
 // =============================================================================
 
-test.describe('Zod Sweep: Code Mode', () => {
-    test('mj_execute_code({}) → handler error', async () => {
-        await assertZodHandlerError('mj_execute_code')
-    })
-})
+// mj_execute_code is excluded because it has no required parameters (defaults to mj.help())
 
 // =============================================================================
 // Team Group (tools with required params)

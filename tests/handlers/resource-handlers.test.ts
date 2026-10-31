@@ -8,10 +8,23 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { getResources, readResource } from '../../src/handlers/resources/index.js'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
 import { getAllToolNames } from '../../src/filtering/tool-filter.js'
+import { vi } from 'vitest'
+
+vi.mock('../../src/git/git-client.js', () => {
+    return {
+        GitHistoryClient: vi.fn().mockImplementation(() => ({
+            getUnreleasedChangelog: vi.fn().mockResolvedValue({
+                categories: {},
+                totalCount: 0
+            }),
+            getCommitHistory: vi.fn().mockResolvedValue([])
+        }))
+    }
+})
 
 describe('Resource Handlers', () => {
     let db: DatabaseAdapter
-    const testDbPath = './test-resources.db'
+    const testDbPath = './.test-output/vitest/test-resources.db'
 
     beforeAll(async () => {
         db = new DatabaseAdapter(testDbPath)
@@ -75,8 +88,6 @@ describe('Resource Handlers', () => {
             expect(uris).toContain('memory://briefing')
             expect(uris).toContain('memory://health')
             expect(uris).toContain('memory://recent')
-            expect(uris).toContain('memory://significant')
-            expect(uris).toContain('memory://tags')
         })
 
         it('should include template resources', () => {
@@ -86,6 +97,16 @@ describe('Resource Handlers', () => {
             expect(uris).toContain('memory://projects/{number}/timeline')
             expect(uris).toContain('memory://issues/{issue_number}/entries')
             expect(uris).toContain('memory://prs/{pr_number}/entries')
+        })
+
+        it('should include agent-id and agent-context resources and aliases', () => {
+            const resources = getResources()
+            const uris = resources.map((r) => (r as { uri: string }).uri)
+
+            expect(uris).toContain('memory://agent-id')
+            expect(uris).toContain('memory://agent-context')
+            expect(uris).toContain('memory://agent-context/{+repo}')
+            expect(uris).toContain('memory://agent-id/{+repo}')
         })
     })
 
@@ -107,7 +128,7 @@ describe('Resource Handlers', () => {
 
             expect(result.data).toBeDefined()
             expect(typeof result.data).toBe('string')
-            expect(result.data as string).toContain('Essential Session Start')
+            expect(result.data as string).toContain('Essential Behaviors')
         })
 
         it('should show all tools in memory://instructions when no filter is set', async () => {
@@ -176,13 +197,6 @@ describe('Resource Handlers', () => {
             }
         })
 
-        it('should read memory://tags', async () => {
-            const result = await readResource('memory://tags', db)
-
-            const data = result.data as { tags: unknown[]; count: number }
-            expect(data.tags).toBeDefined()
-            expect(data.count).toBeGreaterThan(0)
-        })
 
         it('should read memory://health', async () => {
             const result = await readResource('memory://health', db)
@@ -197,20 +211,8 @@ describe('Resource Handlers', () => {
             expect(data.timestamp).toBeDefined()
         })
 
-        it('should read memory://graph/recent', async () => {
-            const result = await readResource('memory://graph/recent', db)
 
-            expect(typeof result.data).toBe('string')
-            expect(result.data as string).toContain('graph TD')
-        })
 
-        it('should read memory://statistics', async () => {
-            const result = await readResource('memory://statistics', db)
-
-            const data = result.data as { totalEntries: number; entriesByType: object }
-            expect(data.totalEntries).toBeGreaterThan(0)
-            expect(data.entriesByType).toBeDefined()
-        })
     })
 
     // ========================================================================
@@ -275,13 +277,6 @@ describe('Resource Handlers', () => {
     // ========================================================================
 
     describe('readResource - additional branch coverage', () => {
-        it('should read memory://graph/actions', async () => {
-            const result = await readResource('memory://graph/actions', db)
-
-            expect(typeof result.data).toBe('string')
-            expect(result.data as string).toContain('graph')
-        })
-
         it('should read memory://actions/recent', async () => {
             const result = await readResource('memory://actions/recent', db)
 
@@ -323,16 +318,27 @@ describe('Resource Handlers', () => {
             expect(data.projectNumber).toBe(42)
         })
 
-        it('should return no-github diagram for kanban without integration', async () => {
-            const result = await readResource(
-                'memory://kanban/1/diagram',
-                db,
-                undefined,
-                undefined,
-                null // no github
-            )
-            expect(typeof result.data).toBe('string')
-            expect(result.data as string).toContain('GitHub integration not available')
+        it('should read memory://agent-id and memory://agent-context with project context', async () => {
+            const agentIdRes = await readResource('memory://agent-id', db)
+            expect(typeof agentIdRes.data).toBe('string')
+            expect(agentIdRes.data).toContain('Project:')
+            expect(agentIdRes.data).toContain('Project Number:')
+            expect(agentIdRes.data).toContain('Workspace ID:')
+            expect(agentIdRes.data).toContain('Instructions:')
+
+            const agentContextRes = await readResource('memory://agent-context', db)
+            expect(typeof agentContextRes.data).toBe('string')
+            expect(agentContextRes.data).toContain('Project:')
+        })
+
+        it('should read repo-specific memory://agent-context and memory://agent-id templates', async () => {
+            const agentContextRepo = await readResource('memory://agent-context/db-mcp', db)
+            expect(typeof agentContextRepo.data).toBe('string')
+            expect(agentContextRepo.data).toContain('Project: db-mcp')
+
+            const agentIdRepo = await readResource('memory://agent-id/db-mcp', db)
+            expect(typeof agentIdRepo.data).toBe('string')
+            expect(agentIdRepo.data).toContain('Project: db-mcp')
         })
     })
 })

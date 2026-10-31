@@ -17,7 +17,7 @@ vi.mock('../../src/utils/logger.js', () => ({
 
 import { TokenValidator, createTokenValidator } from '../../src/auth/token-validator.js'
 import { AUTH_ERROR_CODES } from '../../src/auth/errors.js'
-import { searchByDateRange } from '../../src/database/sqlite-adapter/entries/search.js'
+import { searchByDateRange } from '../../src/database/sqlite-adapter/entries/search/index.js'
 import { getStatistics } from '../../src/database/sqlite-adapter/entries/statistics.js'
 import { calculateImportance } from '../../src/database/sqlite-adapter/entries/importance.js'
 
@@ -46,8 +46,25 @@ function createTestDb() {
             workflow_name TEXT DEFAULT NULL,
             workflow_status TEXT DEFAULT NULL,
             significance_type TEXT DEFAULT NULL,
+            impact_score REAL DEFAULT NULL,
+            trust_score REAL DEFAULT NULL,
+            validation_status TEXT DEFAULT 'none',
             auto_context TEXT DEFAULT NULL,
-            share_with_team INTEGER DEFAULT 0
+            share_with_team INTEGER DEFAULT 0,
+            is_archived INTEGER DEFAULT 0,
+            version INTEGER DEFAULT 1,
+            workspace_id TEXT DEFAULT 'default',
+            session_id TEXT DEFAULT NULL
+        );
+        CREATE TABLE entry_anchors (
+            id INTEGER PRIMARY KEY,
+            entry_id INTEGER NOT NULL,
+            anchor_path TEXT NOT NULL,
+            anchor_type TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending',
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (entry_id) REFERENCES memory_journal (id) ON DELETE CASCADE
         );
         CREATE TABLE tags (id INTEGER PRIMARY KEY, name TEXT UNIQUE, usage_count INTEGER DEFAULT 0);
         CREATE TABLE entry_tags (entry_id INTEGER, tag_id INTEGER);
@@ -198,58 +215,58 @@ describe('searchByDateRange — filter combinations', () => {
     })
 
     it('should filter by date range only', () => {
-        const result = searchByDateRange(context, '2025-01-01', '2025-01-31')
+        const result = searchByDateRange(context, '2025-01-01', '2025-01-31').entries
         expect(result.length).toBe(2)
     })
 
     it('should filter by isPersonal', () => {
-        const result = searchByDateRange(context, '2025-01-01', '2025-12-31', { isPersonal: true })
+        const result = searchByDateRange(context, '2025-01-01', '2025-12-31', { isPersonal: true }).entries
         expect(result.every((e) => e.isPersonal === true)).toBe(true)
     })
 
     it('should filter by projectNumber', () => {
-        const result = searchByDateRange(context, '2025-01-01', '2025-12-31', { projectNumber: 42 })
+        const result = searchByDateRange(context, '2025-01-01', '2025-12-31', { projectNumber: 42 }).entries
         expect(result.length).toBe(2)
     })
 
     it('should filter by issueNumber', () => {
-        const result = searchByDateRange(context, '2025-01-01', '2025-12-31', { issueNumber: 10 })
+        const result = searchByDateRange(context, '2025-01-01', '2025-12-31', { issueNumber: 10 }).entries
         expect(result.length).toBe(1)
     })
 
     it('should filter by prNumber', () => {
-        const result = searchByDateRange(context, '2025-01-01', '2025-12-31', { prNumber: 20 })
+        const result = searchByDateRange(context, '2025-01-01', '2025-12-31', { prNumber: 20 }).entries
         expect(result.length).toBe(1)
     })
 
     it('should filter by workflowRunId', () => {
         const result = searchByDateRange(context, '2025-01-01', '2025-12-31', {
             workflowRunId: 100,
-        })
+        }).entries
         expect(result.length).toBe(1)
     })
 
     it('should filter by entryType', () => {
         const result = searchByDateRange(context, '2025-01-01', '2025-12-31', {
             entryType: 'decision',
-        })
+        }).entries
         expect(result.length).toBe(1)
     })
 
     it('should filter by tags', () => {
         const result = searchByDateRange(context, '2025-01-01', '2025-12-31', {
             tags: ['test-tag'],
-        })
+        }).entries
         expect(result.length).toBe(1)
     })
 
     it('should handle startDate without T (appends time)', () => {
-        const result = searchByDateRange(context, '2025-01-01', '2025-01-31')
+        const result = searchByDateRange(context, '2025-01-01', '2025-01-31').entries
         expect(result.length).toBeGreaterThanOrEqual(0)
     })
 
     it('should handle endDate without T (appends time)', () => {
-        const result = searchByDateRange(context, '2025-01-01', '2025-01-31')
+        const result = searchByDateRange(context, '2025-01-01', '2025-01-31').entries
         expect(result.length).toBeGreaterThanOrEqual(0)
     })
 
@@ -260,7 +277,7 @@ describe('searchByDateRange — filter combinations', () => {
             issueNumber: 10,
             prNumber: 20,
             workflowRunId: 100,
-        })
+        }).entries
         expect(result.length).toBe(1)
     })
 })

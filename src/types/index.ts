@@ -6,14 +6,13 @@
  */
 
 import type { IDatabaseAdapter } from '../database/core/interfaces.js'
-import type { VectorSearchManager } from '../vector/vector-search-manager.js'
+import type { VectorSearchManager } from '../vector/vector-search-manager/index.js'
 import type { GitHubIntegration } from '../github/github-integration/index.js'
 import type { ProgressContext } from '../utils/progress-utils.js'
 
 // Re-export sub-module types
 export type { ToolGroup, MetaGroup, ToolFilterRule, ToolFilterConfig } from './filtering.js'
-export { ErrorCategory } from './error-types.js'
-export type { ErrorResponse, ErrorContext } from './error-types.js'
+export type { ErrorCategory, ErrorResponse, ErrorContext } from './error-types.js'
 export {
     MemoryJournalMcpError,
     ConnectionError,
@@ -33,7 +32,11 @@ export type {
     Embedding,
     ImportanceBreakdown,
     ImportanceResult,
+    EntryRevision,
+    Anchor,
+    AnchorStatus,
 } from './entities.js'
+export { ENTRY_TYPES, RELATIONSHIP_TYPES, SIGNIFICANCE_TYPES } from './entities.js'
 export type {
     GitHubProject,
     GitHubIssue,
@@ -174,14 +177,19 @@ export interface ProjectRegistryEntry {
  * Tool handler configuration options
  */
 import type { ServerRuntime } from '../utils/maintenance-lock.js'
+import type { SubscriptionManager } from '../server/subscription-manager.js'
+import type { BriefingConfig } from '../handlers/resources/shared.js'
 
 export interface ToolHandlerConfig {
     /** Default GitHub Project number for auto-assignment */
     defaultProjectNumber?: number
+    /** Default workspace ID for isolating journal entries */
+    defaultWorkspaceId?: string
     /** Project registry mapping dynamic repo IDs to local paths and kanban boards */
     projectRegistry?: Record<string, ProjectRegistryEntry>
-    /** Hush Protocol flag vocabulary */
-    flagVocabulary?: string[]
+    /** Additional team database mappings (label -> path) for cross-team discovery */
+    additionalTeamDbs?: Record<string, string>
+
     /** Allowlisted roots for file IO */
     allowedIoRoots?: string[]
     /**
@@ -203,11 +211,26 @@ export interface ToolHandlerConfig {
     /** Server auth configuration passed down for strict security gates */
     authEnabled?: boolean
     oauthEnabled?: boolean
+    codemodeEnabled?: boolean
     codemodeInternalFullAccess?: boolean
+    /** Enable autonomous MCP tool and parameter healing/interception (default: true) */
+    agentHealing?: boolean
+    /** Default role for un-registered authors (default: denied) */
+    teamDefaultRole?: 'admin' | 'member' | 'viewer' | 'denied'
+    /** Admin author to bootstrap if team_members table is empty */
+    teamAdmin?: string
     /**
      * Server runtime context for tracking instance-bound globals (Audit logger, Maintenance Lock).
      */
     runtime?: ServerRuntime
+    /**
+     * Optional subscription manager for triggering real-time MCP notifications.
+     */
+    subscriptionManager?: SubscriptionManager
+    /**
+     * Optional briefing configuration for Code Mode dynamic resolution.
+     */
+    briefingConfig?: BriefingConfig
 }
 
 /**
@@ -311,6 +334,9 @@ export interface ServerConfig {
     /** Default GitHub Project number for auto-assignment */
     defaultProjectNumber?: number
 
+    /** Default workspace ID for isolating journal entries */
+    defaultWorkspaceId?: string
+
     /** Project registry mapping dynamic repo IDs to local paths and kanban boards */
     projectRegistry?: Record<string, ProjectRegistryEntry>
 
@@ -320,11 +346,19 @@ export interface ServerConfig {
     /** Sentence transformer model name */
     modelName: string
 
-    /** Briefing depth for AI client instructions */
-    instructionLevel?: 'essential' | 'standard' | 'full'
 
-    /** Hush Protocol flag vocabulary (defaults: blocker, needs_review, help_requested, fyi) */
-    flagVocabulary?: string[]
+
+    /** Default role for un-registered authors (default: denied) */
+    teamDefaultRole?: 'admin' | 'member' | 'viewer' | 'denied'
+
+    /** Admin author to bootstrap if team_members table is empty */
+    teamAdmin?: string
+
+    /** Whether to persist metrics to disk across server restarts */
+    persistMetrics?: boolean
+
+    /** Custom path to the metrics JSON file. If not provided, it is derived from dbPath */
+    metricsPath?: string
 }
 
 /**
@@ -334,6 +368,7 @@ export const DEFAULT_CONFIG: Partial<ServerConfig> = {
     dbPath: './memory_journal.db',
     enableSemanticSearch: true,
     modelName: 'all-MiniLM-L6-v2',
+    persistMetrics: false,
 }
 
 // ============================================================================

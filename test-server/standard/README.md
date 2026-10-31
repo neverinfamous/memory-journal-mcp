@@ -1,64 +1,17 @@
 # Standard Feature Tests
 
+## Value Proposition
+**Validate Capabilities Instantly.** Ensure rock-solid reliability across 108 MCP tools. Catch regressions early. Maintain perfect data integrity. Empower AI agents with deterministic, isolated test workflows.
+
 > **This README is optimized for AI agent consumption.**
 
-This directory contains the core modular test files for `memory-journal-mcp`. These tests execute direct `callTool` operations via MCP to validate the standard capabilities of the server.
+This directory contains the core modular test files for `memory-journal-mcp`. Execute direct `callTool` operations via MCP. Validate standard server capabilities seamlessly.
 
 > **CRITICAL:** `test-seed.md` **must** be executed first in any test session. All other test files in this directory depend on the seed data being present. Once seeded, you may run any of the other tests independently.
 
-## Test Modules
+## Test Sequence & Workflow
 
-### Seed & Infrastructure
-
-| File                 | Phase | Purpose                                                                                    | When to Run          |
-| -------------------- | :---: | ------------------------------------------------------------------------------------------ | -------------------- |
-| `test-seed.md`       |   0   | **Seed Data** — Create 17 entries (S1–S17) required by all other test files                | **Always run first** |
-| `test-core-infra.md` |   1   | **Infrastructure** — Health, briefing, protocol validation scripts, GitHub status resource | After seed           |
-
-### Core Functional Tests
-
-| File                         | Phase | Purpose                                                                                             | When to Run |
-| ---------------------------- | :---: | --------------------------------------------------------------------------------------------------- | ----------- |
-| `test-core-crud.md`          |   2   | **Entry CRUD** — Create, read, update, delete operations                                            | After seed  |
-| `test-core-search.md`        |   3   | **Text Search** — FTS5, phrase/prefix/boolean, LIKE fallback, hybrid auto-mode, date range, filters | After seed  |
-| `test-core-semantic.md`      |   4   | **Semantic Search & Analytics** — Vector search, index management, statistics, cross-project        | After seed  |
-| `test-core-relationships.md` |   5   | **Relationships** — Entry linking, causal types, visualization (Mermaid), graph resources           | After seed  |
-| `test-core-io.md`            |   6   | **IO & Interoperability** — Export/Import Markdown roundtrips, slugification, JSON legacy exports   | After seed  |
-| `test-core-admin.md`         |   7   | **Admin & Backup** — Tag management, backup/restore operations                                      | After seed  |
-
-### Cross-Cutting Validation
-
-| File                | Phase | Purpose                                                                                 | When to Run |
-| ------------------- | :---: | --------------------------------------------------------------------------------------- | ----------- |
-| `test-schemas.md`   |   9   | **Output Schemas** — Verify all 60 outputSchema tools return `structuredContent`        | After seed  |
-| `test-resources.md` |  10   | **Resources** — All 37 resources (29 static + 8 template, happy + error paths)          | After seed  |
-| `test-errors.md`    |  11   | **Error Handling** — Prompt handlers, structured error verification, numeric coercion   | After seed  |
-| `test-integrity.md` |  12   | **Data Integrity** — Boundary values, round-trip fidelity, implementation bug detection | After seed  |
-
-### External Integrations
-
-| File                       | Phase | Purpose                                                                                                 | When to Run |
-| -------------------------- | :---: | ------------------------------------------------------------------------------------------------------- | ----------- |
-| `test-github.md`           |  13   | **GitHub Integration** — 16 GitHub tools (read-only, lifecycle, milestones, insights, Copilot, cleanup) | After seed  |
-| `test-kanban-lifecycle.md` | 13.5  | **Kanban Lifecycle** — Seamless Add/Move/Delete flow using token-efficient `get_kanban_board`           | After seed  |
-| `test-team.md`             |  14   | **Team Collaboration** — 25 team tools + 4 team resources (incl. Hush Protocol flags)                   | After seed  |
-
-### Granular Tool Group Stress Tests
-
-| File                        | Phase | Purpose                                                                  | When to Run |
-| --------------------------- | :---: | ------------------------------------------------------------------------ | ----------- |
-| `test-tool-group-core.md`   |  15a  | **Core** — Structured error matrix, Zod sweeps, boundary testing         | After seed  |
-| `test-tool-group-admin.md`  |  15b  | **Admin** — Structured error matrix, Zod sweeps, integrity tests         | After seed  |
-| `test-tool-group-backup.md` |  15c  | **Backup** — Structured error matrix, filter boundary enforcement        | After seed  |
-| `test-tool-group-search.md` |  15d  | **Search** — Structured error matrix, limit/threshold boundaries         | After seed  |
-| `test-tool-group-github.md` |  15e  | **GitHub** — Structured error matrix, OutputSchema compliance            | After seed  |
-| `test-tool-group-team.md`   |  15f  | **Team** — Structured error matrix, missing DB context, vector fallbacks | After seed  |
-
-### Cross-Cutting Optimization Tests
-
-| File                           | Phase | Purpose                                                                                             | When to Run |
-| ------------------------------ | :---: | --------------------------------------------------------------------------------------------------- | ----------- |
-| `test-payload-optimization.md` |  16   | **Payload Optimization** — Kanban throttling, body truncation, pagination cap, Code Mode result cap | After seed  |
+The exhaustive list of test files, their sequence (Dependency DAG), and the coordinator workflow are maintained in the [`coordinator-workflow.md`](./coordinator-workflow.md) file. Please refer to that document for the canonical list of tests and the proper execution sequence.
 
 ## Node.js Helper Scripts
 
@@ -66,76 +19,26 @@ Certain boundary tests (e.g., massive payload execution) exceed typical token co
 
 | Script               | Purpose                                                                                                      | Associated Workflow |
 | -------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------- |
-| `test-http.mjs`      | Verifies HTTP transport 413 Payload Too Large limits                                                         | `test-integrity.md` |
-| `test-long-mcp.mjs`  | Verifies the maximum `content` length capacity limits (50k/100k boundaries)                                  | `test-integrity.md` |
+| `test-http.mjs`      | Verifies HTTP transport 413 Payload Too Large limits                                                         | `test-integrity-part1.md` |
+| `test-long-mcp.mjs`  | Verifies the maximum `content` length capacity limits (50k/100k boundaries)                                  | `test-integrity-part2.md` |
 | `verify-schemas.mjs` | Programmatically verifies that all output schemas are strictly defined for `structuredContent` compatibility | `test-schemas.md`   |
+| `test-subscribe.mjs` | Validates MCP real-time resource subscriptions and scope-based authorization boundaries                      | `test-core-infra.md`|
 
-## Tool Group Requirements
-
-The following table maps each standard testing prompt to the specific MCP tool groups that must be enabled (e.g., via `--tool-filter`) to execute the test successfully.
-
-| Test Prompt                    | Primary Focus       | Required Tool Groups                                                                                    |
-| ------------------------------ | ------------------- | ------------------------------------------------------------------------------------------------------- |
-| `test-core-admin.md`           | Admin / Tagging     | `admin`, `backup`, `codemode`, `core`, `search`                                                         |
-| `test-core-crud.md`            | CRUD Operations     | `admin`, `codemode`, `core`, `github`                                                                   |
-| `test-core-infra.md`           | Sandbox / Codemode  | `analytics`, `codemode`, `core`                                                                         |
-| `test-core-io.md`              | IO / Export         | `codemode`, `io`                                                                                        |
-| `test-core-relationships.md`   | Graph Links         | `codemode`, `relationships`                                                                             |
-| `test-core-search.md`          | Search              | `admin`, `analytics`, `codemode`, `core`, `search`                                                      |
-| `test-core-semantic.md`        | Semantic Search     | `admin`, `analytics`, `codemode`, `search`                                                              |
-| `test-errors.md`               | General             | `admin`, `analytics`, `backup`, `codemode`, `core`, `full`, `github`, `relationships`, `search`, `team` |
-| `test-github.md`               | GitHub Integrations | `codemode`, `github`                                                                                    |
-| `test-integrity.md`            | Data Integrity      | `admin`, `analytics`, `codemode`, `core`, `io`, `relationships`, `search`                               |
-| `test-kanban-lifecycle.md`     | Kanban Lifecycles   | `codemode`, `github`                                                                                    |
-| `test-payload-optimization.md` | Payload Limitations | `codemode`, `core`, `github`, `search`                                                                  |
-| `test-resources.md`            | General             | `analytics`, `codemode`, `core`, `github`                                                               |
-| `test-schemas.md`              | General             | `admin`, `analytics`, `backup`, `codemode`, `core`, `github`, `io`, `relationships`, `search`, `team`   |
-| `test-seed.md`                 | General             | `full`                                                                                                  |
-| `test-team.md`                 | Team Operations     | `admin`, `codemode`, `team`                                                                             |
-| `test-tool-group-admin.md`     | Admin / Tagging     | `admin`, `codemode`, `core`                                                                             |
-| `test-tool-group-backup.md`    | General             | `backup`, `codemode`, `io`                                                                              |
-| `test-tool-group-core.md`      | General             | `analytics`, `codemode`, `core`                                                                         |
-| `test-tool-group-github.md`    | GitHub Integrations | `codemode`, `github`                                                                                    |
-| `test-tool-group-search.md`    | Search              | `codemode`, `search`                                                                                    |
-| `test-tool-group-team.md`      | Team Operations     | `codemode`, `team`                                                                                      |
-
-## Dependency DAG
-
-```
-Phase 0 (Seed Data) ─── MUST PASS FIRST
-    │
-    ├── Phase 1 (Infrastructure)
-    ├── Phase 2 (CRUD) ──────────────── independent
-    ├── Phase 3 (Search) ────────────── independent
-    ├── Phase 4 (Semantic) ──────────── independent
-    ├── Phase 5 (Relationships) ─────── independent
-    ├── Phase 6 (IO) ────────────────── independent
-    ├── Phase 7 (Admin) ─────────────── independent
-    ├── Phase 9 (Schemas) ───────────── independent
-    ├── Phase 10 (Resources) ────────── independent
-    ├── Phase 11 (Errors) ───────────── independent
-    ├── Phase 12 (Integrity) ────────── independent
-    ├── Phase 13 (GitHub) ───────────── independent
-    ├── Phase 14 (Team) ─────────────── independent
-    ├── Phase 15a–f (Tool Groups) ──── independent (any order)
-    └── Phase 16 (Payload Optimization) independent
-```
-
-## Execution Workflow
-
-1. Run `test-seed.md` (Phase 0) — **must pass before proceeding**.
-2. Run `test-core-infra.md` (Phase 1) to verify server health and connectivity.
-3. Continue with Phases 2–14 in any order (all independent after seed).
-4. Run the 6 `test-tool-group-*.md` files (Phase 15) in any order for Zod sweep / structured error verification.
-5. Run `test-payload-optimization.md` (Phase 16) to verify payload optimization features.
-6. Cleanup is handled within individual test files where applicable.
-
-## Token Estimate Reporting
+## Track Token Consumption
 
 All test workflows in `test-server/standard/` require the agent to track and report the token estimate used during the test pass.
 
 **How to calculate:**
 
-- Every tool execution returns a `_meta.tokenEstimate` object in the response. Sum these values.
+- Every tool execution returns a `_meta.tokenEstimate` object in the response. Sum these values. (Estimates use a content-type-aware heuristic: prose=4.0, json=2.8, code=3.2 bytes/token).
 - _Alternatively_, you may read the `memory://metrics/summary` resource before and after testing to find the delta, or report the session totals via `memory://audit`.
 - Always provide this **Total Token Estimate** clearly in your final test report summary so the user can track context window consumption. The tokens tracked should only count the estimated tokens that actually entered the context window.
+
+## Validate Telemetry Metrics
+
+During or after your execution workflows, explicitly verify that resource read telemetry is accumulating accurately:
+
+1. Perform a read on a known resource (e.g. `memory://briefing` or `memory://status`).
+2. Attempt a read on an invalid resource to trigger an error path.
+3. Read the `memory://metrics/resources` resource and `memory://metrics/summary`.
+4. Validate that `total_resource_reads` and the specific breakdown count for the read resources accurately reflect your actions.

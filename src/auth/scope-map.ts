@@ -6,10 +6,11 @@
  * module load for O(1) per-call lookup.
  */
 
-import { TOOL_GROUPS } from '../filtering/tool-filter.js'
-import { TOOL_GROUP_SCOPES, TOOL_SCOPE_OVERRIDES } from './scopes.js'
+import { TOOL_GROUPS } from '../filtering/tool-constants.js'
+import { SCOPES, TOOL_GROUP_SCOPES, TOOL_SCOPE_OVERRIDES } from './scopes.js'
 import type { StandardScope } from './scopes.js'
 import type { ToolGroup } from '../types/index.js'
+import { DUMMY_HEALING_TOOL_NAMES } from '../handlers/tools/core/dummy-healing.js'
 
 /**
  * Map from tool name to required minimum scope.
@@ -35,12 +36,31 @@ for (const [toolName, scope] of Object.entries(TOOL_SCOPE_OVERRIDES)) {
 
 export function getRequiredScope(toolName: string): StandardScope {
     const scope = toolScopeMap.get(toolName)
-    if (!scope) {
-        throw new Error(
-            `CRITICAL SECURITY FAILURE: Tool '${toolName}' is missing from scope mapping`
-        )
+    if (scope) {
+        return scope
     }
-    return scope
+
+    // Dynamic fallback for synthetic & dotted Code Mode tools
+    if (toolName.startsWith('mj.admin.') || toolName.startsWith('mj_admin_')) {
+        return SCOPES.ADMIN
+    }
+    if (toolName.startsWith('mj.core.') || toolName.startsWith('mj_core_')) {
+        const lower = toolName.toLowerCase()
+        if (lower.includes('update') || lower.includes('delete')) {
+            return SCOPES.ADMIN
+        }
+        if (lower.includes('create')) {
+            return SCOPES.WRITE
+        }
+        return SCOPES.READ
+    }
+    if (DUMMY_HEALING_TOOL_NAMES.has(toolName) || toolName.startsWith('memory://')) {
+        return SCOPES.READ
+    }
+
+    throw new Error(
+        `CRITICAL SECURITY FAILURE: Tool '${toolName}' is missing from scope mapping`
+    )
 }
 
 /**

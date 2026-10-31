@@ -3,18 +3,84 @@ services:
     build: .
     container_name: memory-journal-mcp
     volumes:
-      # Mount local data directory for persistent SQLite database
       - ./data:/app/data:rw,noexec,nosuid,nodev
     environment:
       - DB_PATH=/app/data/memory_journal.db
-      - AUDIT_LOG_PATH=stderr
-      # Optional: GitHub integration
-      # - GITHUB_TOKEN=<your-github-token>
-      # - PROJECT_REGISTRY={"my-repo":{"path":"/app/repo","project_number":1}}
-      # Optional: CORS origin (default: none)
-      # - MCP_CORS_ORIGIN=http://localhost:3000
-      # Required for IO operations to sandbox filesystem access
+      - DB_ENCRYPTION_KEY=
+      - TEAM_DB_PATH=
+      - ADDITIONAL_TEAM_DBS=
+      - TEAM_AUTHOR=
+      - TEAM_DEFAULT_ROLE=
+      - TEAM_ADMIN=
+      - GITHUB_TOKEN=
+      - GITHUB_HOST=
+      - DEFAULT_PROJECT_NUMBER=
+      - PROJECT_REGISTRY=
+      - MEMORY_JOURNAL_MCP_TOOL_FILTER=
+      - CODE_MODE_MAX_RESULT_SIZE=
+      - CODEMODE_INTERNAL_FULL_ACCESS=
       - ALLOWED_IO_ROOTS=/app/data
+      - NODE_ENV=
+      - DEBUG=
+      - MEMORY_JOURNAL_CONFIG=
+      - MCP_HOST=
+      - PORT=
+      - STATELESS=
+      - MCP_AUTH_TOKEN=
+      - MCP_AUTH_SCOPES=
+      - CORS_ORIGIN=
+      - MCP_RATE_LIMIT_MAX=
+      - MCP_ENABLE_HSTS=
+      - LOG_LEVEL=
+      - TRUST_PROXY=
+      - PUBLIC_ORIGIN=
+      - DEFAULT_WORKSPACE_ID=
+      - OAUTH_ENABLED=
+      - OAUTH_ISSUER=
+      - OAUTH_AUDIENCE=
+      - OAUTH_JWKS_URI=
+      - OAUTH_ALLOW_PLAINTEXT_LOOPBACK=
+      - OAUTH_CLOCK_TOLERANCE=
+      - BRIEFING_IMPORTANCE_THRESHOLD=
+      - BRIEFING_ENTRY_COUNT=
+      - BRIEFING_COMMIT_COUNT=
+      - BRIEFING_SUMMARY_COUNT=
+      - BRIEFING_INCLUDE_TEAM=
+      - BRIEFING_MILESTONE_COUNT=
+      - BRIEFING_ISSUE_COUNT=
+      - BRIEFING_PR_COUNT=
+      - BRIEFING_PR_STATUS=
+      - BRIEFING_WORKFLOW_COUNT=
+      - BRIEFING_WORKFLOW_STATUS=
+      - BRIEFING_COPILOT_REVIEWS=
+      - RULES_FILE_PATH=
+      - SKILLS_DIR_PATH=
+      - MEMORY_JOURNAL_WORKFLOW_SUMMARY=
+      - AUDIT_LOG_PATH=stderr
+      - AUDIT_REDACT=
+      - AUDIT_READS=
+      - AUDIT_LOG_MAX_SIZE=
+      - PERSIST_METRICS=
+      - METRICS_PATH=
+      - METRICS_EXPORT=
+      - BACKUP_INTERVAL=
+      - KEEP_BACKUPS=
+      - VACUUM_INTERVAL=
+      - REBUILD_INDEX_INTERVAL=
+      - DIGEST_INTERVAL=
+      - REPORT_INTERVAL=
+      - REPORT_WEBHOOK_URL=
+      - REPORT_WEBHOOK_AUTH=
+      - REPORT_CONTENT_TYPE=
+      - EMBEDDING_MODEL=
+      - AUTO_REBUILD_INDEX=
+      - AUTO_PRUNE_INTERVAL_MINUTES=
+      - ARCHIVE_OLDER_THAN_DAYS=
+      - PRUNE_OLDER_THAN_DAYS=
+      - HARD_DELETE_OLDER_THAN_DAYS=
+      - PRUNE_IMPORTANCE_THRESHOLD=
+      - PRUNE_DRY_RUN=
+      - PRUNE_EXCLUDE_TAGS=
     read_only: true
     tmpfs:
       - /tmp:noexec,nosuid,nodev
@@ -26,30 +92,91 @@ services:
       - mcp-net
     stdin_open: true
     tty: true
-    # MCP stdio communication (default transport)
     command: ['node', 'dist/cli.js']
     restart: unless-stopped
 
-  # HTTP transport service for remote access
   memory-journal-mcp-http:
     build: .
     container_name: memory-journal-mcp-http
     volumes:
       - ./data:/app/data:rw,noexec,nosuid,nodev
     environment:
-      - NODE_ENV=production
       - DB_PATH=/app/data/memory_journal.db
-      - MCP_HOST=0.0.0.0
-      - AUDIT_LOG_PATH=stderr
-      # Required for HTTP: Bearer token authentication
-      - MCP_AUTH_TOKEN=${MCP_AUTH_TOKEN:?MCP_AUTH_TOKEN is required for HTTP transport in production}
-      # Optional: GitHub integration
-      # - GITHUB_TOKEN=<your-github-token>
-      # - PROJECT_REGISTRY={"my-repo":{"path":"/app/repo","project_number":1}}
-      # Optional: CORS origin (default: none)
-      # - MCP_CORS_ORIGIN=http://localhost:3000
-      # Required for IO operations to sandbox filesystem access
+      - DB_ENCRYPTION_KEY=
+      - TEAM_DB_PATH=
+      - ADDITIONAL_TEAM_DBS=
+      - TEAM_AUTHOR=
+      - TEAM_DEFAULT_ROLE=
+      - TEAM_ADMIN=
+      - GITHUB_TOKEN=
+      - GITHUB_HOST=
+      - DEFAULT_PROJECT_NUMBER=
+      - PROJECT_REGISTRY=
+      - MEMORY_JOURNAL_MCP_TOOL_FILTER=
+      - CODE_MODE_MAX_RESULT_SIZE=
+      - CODEMODE_INTERNAL_FULL_ACCESS=
       - ALLOWED_IO_ROOTS=/app/data
+      - NODE_ENV=
+      - DEBUG=
+      - MEMORY_JOURNAL_CONFIG=
+      - MCP_HOST=0.0.0.0
+      - PORT=3000
+      - STATELESS=
+      - MCP_AUTH_TOKEN=${MCP_AUTH_TOKEN:?MCP_AUTH_TOKEN is required for HTTP transport in production}
+      - MCP_AUTH_SCOPES=
+      - CORS_ORIGIN=
+      - MCP_RATE_LIMIT_MAX=
+      - MCP_ENABLE_HSTS=
+      - LOG_LEVEL=
+      - TRUST_PROXY=
+      - PUBLIC_ORIGIN=
+      - DEFAULT_WORKSPACE_ID=
+      - OAUTH_ENABLED=
+      - OAUTH_ISSUER=
+      - OAUTH_AUDIENCE=
+      - OAUTH_JWKS_URI=
+      - OAUTH_ALLOW_PLAINTEXT_LOOPBACK=
+      - OAUTH_CLOCK_TOLERANCE=
+      - BRIEFING_IMPORTANCE_THRESHOLD=
+      - BRIEFING_ENTRY_COUNT=
+      - BRIEFING_COMMIT_COUNT=
+      - BRIEFING_SUMMARY_COUNT=
+      - BRIEFING_INCLUDE_TEAM=
+      - BRIEFING_MILESTONE_COUNT=
+      - BRIEFING_ISSUE_COUNT=
+      - BRIEFING_PR_COUNT=
+      - BRIEFING_PR_STATUS=
+      - BRIEFING_WORKFLOW_COUNT=
+      - BRIEFING_WORKFLOW_STATUS=
+      - BRIEFING_COPILOT_REVIEWS=
+      - RULES_FILE_PATH=
+      - SKILLS_DIR_PATH=
+      - MEMORY_JOURNAL_WORKFLOW_SUMMARY=
+      - AUDIT_LOG_PATH=stderr
+      - AUDIT_REDACT=
+      - AUDIT_READS=
+      - AUDIT_LOG_MAX_SIZE=
+      - PERSIST_METRICS=
+      - METRICS_PATH=
+      - METRICS_EXPORT=
+      - BACKUP_INTERVAL=
+      - KEEP_BACKUPS=
+      - VACUUM_INTERVAL=
+      - REBUILD_INDEX_INTERVAL=
+      - DIGEST_INTERVAL=
+      - REPORT_INTERVAL=
+      - REPORT_WEBHOOK_URL=
+      - REPORT_WEBHOOK_AUTH=
+      - REPORT_CONTENT_TYPE=
+      - EMBEDDING_MODEL=
+      - AUTO_REBUILD_INDEX=
+      - AUTO_PRUNE_INTERVAL_MINUTES=
+      - ARCHIVE_OLDER_THAN_DAYS=
+      - PRUNE_OLDER_THAN_DAYS=
+      - HARD_DELETE_OLDER_THAN_DAYS=
+      - PRUNE_IMPORTANCE_THRESHOLD=
+      - PRUNE_DRY_RUN=
+      - PRUNE_EXCLUDE_TAGS=
     read_only: true
     tmpfs:
       - /tmp:noexec,nosuid,nodev

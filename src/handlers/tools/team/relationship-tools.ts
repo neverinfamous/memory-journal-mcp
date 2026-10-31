@@ -6,7 +6,8 @@
 
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
-import { TEAM_DB_ERROR_RESPONSE } from './helpers.js'
+import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
+import { TEAM_DB_ERROR_RESPONSE, triggerTeamNotifications } from './helpers.js'
 import {
     TeamLinkEntriesSchema,
     TeamLinkEntriesSchemaMcp,
@@ -49,7 +50,9 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                         relationship_type,
                         description,
                         project_number,
+                        workspace_id,
                     } = TeamLinkEntriesSchema.parse(params)
+                    const wsId = workspace_id ? resolveWorkspaceId(workspace_id, project_number, context.config) : '*'
 
                     // Guard: self-referential links are not meaningful
                     if (from_entry_id === to_entry_id) {
@@ -65,27 +68,45 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                     }
 
                     // Verify both entries exist and belong to the project
-                    const fromEntry = teamDb.getEntryById(from_entry_id)
-                    if (fromEntry?.projectNumber !== project_number) {
+                    const fromEntry = teamDb.getEntryById(from_entry_id, wsId)
+                    if (!fromEntry) {
                         return {
                             success: false,
-                            error: `Team entry ${String(from_entry_id)} not found or lacks permission for project ${project_number}`,
+                            error: `Team entry ${String(from_entry_id)} not found`,
                             code: 'RESOURCE_NOT_FOUND',
                             category: 'resource',
-                            suggestion:
-                                'Verify the team entry ID and project number, and try again',
+                            suggestion: 'Verify the team entry ID and try again',
                             recoverable: true,
                         }
                     }
-                    const toEntry = teamDb.getEntryById(to_entry_id)
-                    if (toEntry?.projectNumber !== project_number) {
+                    if (project_number !== undefined && fromEntry.projectNumber !== undefined && fromEntry.projectNumber !== project_number) {
                         return {
                             success: false,
-                            error: `Team entry ${String(to_entry_id)} not found or lacks permission for project ${project_number}`,
+                            error: `Team entry ${String(from_entry_id)} does not belong to project ${project_number}`,
                             code: 'RESOURCE_NOT_FOUND',
                             category: 'resource',
-                            suggestion:
-                                'Verify the team entry ID and project number, and try again',
+                            suggestion: 'Verify the team entry ID and project number, and try again',
+                            recoverable: true,
+                        }
+                    }
+                    const toEntry = teamDb.getEntryById(to_entry_id, wsId)
+                    if (!toEntry) {
+                        return {
+                            success: false,
+                            error: `Team entry ${String(to_entry_id)} not found`,
+                            code: 'RESOURCE_NOT_FOUND',
+                            category: 'resource',
+                            suggestion: 'Verify the team entry ID and try again',
+                            recoverable: true,
+                        }
+                    }
+                    if (project_number !== undefined && toEntry.projectNumber !== undefined && toEntry.projectNumber !== project_number) {
+                        return {
+                            success: false,
+                            error: `Team entry ${String(to_entry_id)} does not belong to project ${project_number}`,
+                            code: 'RESOURCE_NOT_FOUND',
+                            category: 'resource',
+                            suggestion: 'Verify the team entry ID and project number, and try again',
                             recoverable: true,
                         }
                     }
@@ -115,6 +136,8 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                         relationship_type,
                         description
                     )
+
+                    triggerTeamNotifications(context)
 
                     return {
                         success: true,
@@ -146,13 +169,14 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                         return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
-                    const { entry_id, tag, depth } = TeamVisualizeRelationshipsSchema.parse(params)
+                    const { entry_id, tag, depth, workspace_id } = TeamVisualizeRelationshipsSchema.parse(params)
+                    const wsId = workspace_id ? resolveWorkspaceId(workspace_id, undefined, context.config) : '*'
 
                     // Collect entry IDs to visualize
                     let entryIds: number[] = []
 
                     if (entry_id !== undefined) {
-                        const fromEntry = teamDb.getEntryById(entry_id)
+                        const fromEntry = teamDb.getEntryById(entry_id, wsId)
                         if (!fromEntry) {
                             return {
                                 success: false,
@@ -186,14 +210,15 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                         }
                     } else if (tag) {
                         // Get entries by tag using an all-time date range to bypass date filtering
-                        const tagEntries = teamDb.searchByDateRange('1970-01-01', '2999-12-31', {
+                        const { entries: tagEntries } = teamDb.searchByDateRange('1970-01-01', '2999-12-31', {
                             tags: [tag],
                             limit: 50,
+                            workspaceId: wsId,
                         })
                         entryIds = tagEntries.map((e) => e.id)
                     } else {
                         // Default: recent entries
-                        const recent = teamDb.getRecentEntries(20)
+                        const { entries: recent } = teamDb.getRecentEntries(20, undefined, undefined, undefined, undefined, wsId)
                         entryIds = recent.map((e) => e.id)
                     }
 
@@ -212,7 +237,7 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                     const seenEdges = new Set<string>()
 
                     for (const eid of entryIds) {
-                        const entry = teamDb.getEntryById(eid)
+                        const entry = teamDb.getEntryById(eid, wsId)
                         if (entry) {
                             let label = entry.content.substring(0, 40).replace(/\n/g, ' ')
                             if (entry.content.length > 40) label += '...'
@@ -260,3 +285,4 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
         },
     ]
 }
+

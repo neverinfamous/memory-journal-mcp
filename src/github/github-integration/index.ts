@@ -1,4 +1,4 @@
-import type { RepoInfo, IssueDetails, PullRequestDetails, LocalGitStatus } from './types.js'
+import type { RepoInfo, IssueDetails, PullRequestDetails, LocalGitStatus, RateLimitSnapshot, GitHubRateLimitResponse } from './types.js'
 import { GitHubClient } from './client.js'
 import { IssuesManager } from './issues.js'
 import { PullRequestsManager } from './pull-requests.js'
@@ -84,6 +84,20 @@ export class GitHubIntegration {
 
     isApiAvailable(): boolean {
         return this.client.isApiAvailable()
+    }
+
+    getLatestRateLimit(): RateLimitSnapshot | null {
+        return this.client.latestRateLimit
+    }
+
+    async getRateLimit(): Promise<GitHubRateLimitResponse> {
+        const cached = this.client.getCachedWithTtl('rate-limit', 30_000)
+        if (cached !== undefined) return cached as GitHubRateLimitResponse
+
+        if (!this.client.octokit) throw new Error('GitHub API not available')
+        const { data } = await this.client.octokit.rateLimit.get()
+        this.client.setCache('rate-limit', data)
+        return data as GitHubRateLimitResponse
     }
 
     clearCache(): void {

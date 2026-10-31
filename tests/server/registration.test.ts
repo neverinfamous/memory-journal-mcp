@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { registerResources, registerPrompts } from '../../src/server/registration.js'
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { McpServer } from '@modelcontextprotocol/server'
 import { ConfigurationError } from '../../src/types/errors.js'
 
 describe('Registration Helpers', () => {

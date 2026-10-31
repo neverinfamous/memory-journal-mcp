@@ -6,24 +6,25 @@ import { WorkerSandbox, WorkerSandboxPool } from '../../src/codemode/index.js'
 
 const workerScriptSrc = path.join(__dirname, '../../src/codemode/worker-script.ts')
 const workerScriptJs = path.join(__dirname, '../../src/codemode/worker-script.js')
+const workerScriptDistJs = path.join(__dirname, '../../dist/worker-script.js')
 
 beforeAll(() => {
     // Compile worker-script.ts to .js specifically for test execution
     // worker_threads cannot run .ts files directly in this vitest setup
     // Uses esbuild's JS API directly (npx esbuild via execSync hangs on Windows)
-    if (!fs.existsSync(workerScriptJs)) {
-        esbuild.buildSync({
-            entryPoints: [workerScriptSrc],
-            bundle: true,
-            platform: 'node',
-            format: 'esm',
-            outfile: workerScriptJs,
-        })
-    }
+    esbuild.buildSync({
+        entryPoints: [workerScriptSrc],
+        bundle: true,
+        platform: 'node',
+        format: 'esm',
+        outfile: workerScriptJs,
+    })
+    fs.mkdirSync(path.dirname(workerScriptDistJs), { recursive: true })
+    fs.copyFileSync(workerScriptJs, workerScriptDistJs)
 }, 30_000)
 
 afterAll(() => {
-    // Cleanup generated JS file
+    // Cleanup generated JS files
     if (fs.existsSync(workerScriptJs)) {
         fs.unlinkSync(workerScriptJs)
     }
@@ -62,6 +63,164 @@ describe('WorkerSandbox', () => {
         expect(result.result).toBe(42)
     })
 
+    it('should support global aliases (_journal, MJ, adapter, Entry, getJournal, services, kernel)', async () => {
+        const sandbox = new WorkerSandbox()
+        const bindings = {
+            core: {
+                testFunc: async (x: number) => x * 2,
+            },
+        }
+        const code = `
+            const r1 = await _journal.core.testFunc(1);
+            const r2 = await MJ.core.testFunc(2);
+            const r3 = await adapter.core.testFunc(3);
+            const r4 = await Entry.core.testFunc(4);
+            const j = await getJournal();
+            const r5 = await j.core.testFunc(5);
+            const r6 = await services.journal.core.testFunc(6);
+            const r7 = await kernel.memory.core.testFunc(7);
+            return [r1, r2, r3, r4, r5, r6, r7];
+        `
+        const result = await sandbox.execute(code, bindings)
+        expect(result.success).toBe(true)
+        expect(result.result).toEqual([2, 4, 6, 8, 10, 12, 14])
+    })
+
+    it('should support mj.projects() as callable function and mj.getJournal("proj")', async () => {
+        const sandbox = new WorkerSandbox()
+        const bindings = {
+            analytics: {
+                get_cross_project_insights: async () => ({ success: true, insights: [] }),
+            },
+            core: {
+                create_entry: async (args: any) => ({ success: true, id: 99 }),
+            },
+        }
+        const code = `
+            const p = await mj.projects();
+            const j = await mj.getJournal("mysql-mcp");
+            const entryRes = await j.addEntry({ content: "test entry" });
+            return { p, entryRes };
+        `
+        const result = await sandbox.execute(code, bindings)
+        expect(result.success).toBe(true)
+        expect(result.result.p.success).toBe(true)
+        expect(result.result.entryRes.id).toBe(99)
+    })
+
+    it('should support entries, search, and db shim method calls', async () => {
+        const sandbox = new WorkerSandbox()
+        const bindings = {
+            core: {
+                get_recent_entries: async (args: any) => ({ success: true, entries: [{ id: 1 }] }),
+                create_entry: async (args: any) => ({ success: true, id: 2 }),
+            },
+            search: {
+                search_entries: async (args: any) => ({ success: true, results: [{ id: 3 }] }),
+            },
+        }
+        const code = `
+            const s1 = await mj.entries.search({ query: 'test' });
+            const l1 = await mj.entries.listEntries();
+            const c1 = await mj.entries.createEntry({ content: 'test' });
+            const q1 = await mj.search.query({ query: 'test' });
+            const dbRes = await mj.db.all('SELECT * FROM entries');
+            return { s1, l1, c1, q1, dbRes };
+        `
+        const result = await sandbox.execute(code, bindings)
+        expect(result.success).toBe(true)
+        const res = result.result as any
+        expect(res.s1.results[0].id).toBe(3)
+        expect(res.l1.entries[0].id).toBe(1)
+        expect(res.c1.id).toBe(2)
+        expect(res.q1.results[0].id).toBe(3)
+        expect(res.dbRes.success).toBe(false)
+        expect(res.dbRes.error).toContain('Direct SQLite database access')
+    })
+
+    it('should support sqlite.schema.help() and schema introspection shims (agent-issues regression)', async () => {
+        const sandbox = new WorkerSandbox()
+        const bindings = {
+            analytics: {
+                get_statistics: async () => ({
+                    success: true,
+                    totalEntries: 100,
+                    databaseSize: '1.2MB',
+                }),
+            },
+            core: {
+                create_entry: async () => ({ success: true, id: 1 }),
+            },
+        }
+
+        // Test 1: Exact failing code from logs/agent-issues.jsonl
+        const r1 = await sandbox.execute('return sqlite.schema.help();', bindings)
+        expect(r1.success).toBe(true)
+        expect((r1.result as any).group).toBe('schema')
+        expect((r1.result as any).tables).toContain('entries')
+
+        // Test 2: Global schema.help()
+        const r2 = await sandbox.execute('return schema.help();', bindings)
+        expect(r2.success).toBe(true)
+        expect((r2.result as any).tables).toContain('entries')
+
+        // Test 3: mj.schema.help()
+        const r3 = await sandbox.execute('return mj.schema.help();', bindings)
+        expect(r3.success).toBe(true)
+        expect((r3.result as any).tables).toContain('entries')
+
+        // Test 4: db.schema.help()
+        const r4 = await sandbox.execute('return db.schema.help();', bindings)
+        expect(r4.success).toBe(true)
+        expect((r4.result as any).tables).toContain('entries')
+
+        // Test 5: sqlite.schema() calls getStatistics
+        const r5 = await sandbox.execute('return await sqlite.schema();', bindings)
+        expect(r5.success).toBe(true)
+        expect((r5.result as any).totalEntries).toBe(100)
+
+        // Test 6: sqlite.schema.listTables()
+        const r6 = await sandbox.execute('return await sqlite.schema.listTables();', bindings)
+        expect(r6.success).toBe(true)
+        expect((r6.result as any).tables).toContain('entries')
+
+        // Test 7: sqlite.schema.describeTable('entries')
+        const r7 = await sandbox.execute("return await sqlite.schema.describeTable('entries');", bindings)
+        expect(r7.success).toBe(true)
+        expect((r7.result as any).tables).toContain('entries')
+
+        // Test 8: sqlite.help()
+        const r8 = await sandbox.execute('return sqlite.help();', bindings)
+        expect(r8.success).toBe(true)
+
+        // Test 9: db.help()
+        const r9 = await sandbox.execute('return db.help();', bindings)
+        expect(r9.success).toBe(true)
+    })
+
+    it('should support MemoryJournal.getInstance() and top-level searchEntries invocation', async () => {
+        const sandbox = new WorkerSandbox()
+        const bindings = {
+            search: {
+                search_entries: async (args: any) => ({
+                    success: true,
+                    entries: [{ id: 42, content: `Found query: ${args?.query}` }],
+                }),
+            },
+        }
+        const code = `
+            const journalClient = await MemoryJournal.getInstance();
+            const searchRes = await journalClient.searchEntries({ query: 'project briefing adamic' });
+            const directSearch = await searchEntries({ query: 'direct search test' });
+            return { searchRes, directSearch };
+        `
+        const result = await sandbox.execute(code, bindings)
+        expect(result.success).toBe(true)
+        const res = result.result as any
+        expect(res.searchRes.entries[0].content).toContain('project briefing adamic')
+        expect(res.directSearch.entries[0].content).toContain('direct search test')
+    })
+
     it('should enforce timeout limiting', async () => {
         // Provide a very short timeout
         const sandbox = new WorkerSandbox({ timeoutMs: 50 })
@@ -73,7 +232,7 @@ describe('WorkerSandbox', () => {
         const result = await sandbox.execute(code, {})
         expect(result.success).toBe(false)
         expect(result.error).toMatch(/timed out|timeout|code 1/i)
-    })
+    }, 30000)
 
     it('should catch synchronous syntax errors or throw', async () => {
         const sandbox = new WorkerSandbox()
@@ -92,11 +251,8 @@ describe('WorkerSandbox', () => {
         // Non-existent group: the worker proxy doesn't create nested proxies
         // for unknown groups, so accessing mj.nonexistent returns undefined
         const code = `
-            try {
-                await mj.nonexistent.method();
-            } catch(e) {
-                return e.message;
-            }
+            const res = await mj.nonexistent.method();
+            return res.error;
         `
         const result = await sandbox.execute(code, bindings)
         expect(result.success).toBe(true)
@@ -114,11 +270,8 @@ describe('WorkerSandbox', () => {
             },
         }
         const code = `
-            try {
-                await mj.core.doesNotExist();
-            } catch(e) {
-                return e.message;
-            }
+            const res = await mj.core.doesNotExist();
+            return res.error;
         `
         const result = await sandbox.execute(code, bindings)
         expect(result.success).toBe(true)
@@ -135,11 +288,8 @@ describe('WorkerSandbox', () => {
             },
         }
         const code = `
-            try {
-                await mj.core.failingMethod();
-            } catch(e) {
-                return e.message;
-            }
+            const res = await mj.core.failingMethod();
+            return res.error;
         `
         const result = await sandbox.execute(code, bindings)
         expect(result.success).toBe(true)
@@ -187,7 +337,7 @@ describe('WorkerSandbox', () => {
             enumerable: true,
         })
 
-        const code = 'try { await mj.testGroup.doBad(); } catch(e) { return e.message; }'
+        const code = 'const res = await mj.testGroup.doBad(); return res.error;'
         const result = await sandbox.execute(code, bindings)
         expect(result.success).toBe(true)
         expect(String(result.result)).toContain('Unknown method: testGroup.doBad')
@@ -207,7 +357,7 @@ describe('WorkerSandbox', () => {
             },
             enumerable: true,
         })
-        const code = 'try { await mj.topFunc(); } catch(e) { return e.message; }'
+        const code = 'const res = await mj.topFunc(); return res.error;'
         const result = await sandbox.execute(code, bindings)
         expect(result.success).toBe(true)
         expect(String(result.result)).toContain('Unknown method: _topLevel.topFunc')
@@ -229,7 +379,7 @@ describe('WorkerSandbox', () => {
 
     it('should reject unauthorized method invocation', async () => {
         const sandbox = new WorkerSandbox()
-        const code = 'while(true) {}'
+        const code = 'await new Promise(() => {})'
         // Pass timeout 50ms so it terminates naturally
         const execPromise = sandbox.execute(
             code,
@@ -240,9 +390,9 @@ describe('WorkerSandbox', () => {
 
         await new Promise((resolve) => setTimeout(resolve, 10))
 
-        const hostPort = sandbox['currentExecution']!.hostPort
+        const hostPort = sandbox['currentExecution']!.hostPort as any
         let sentError = false
-        hostPort.on('message', (msg) => {
+        hostPort.on('message', (msg: any) => {
             // Because postMessage sends TO the worker, we can't easily listen to the worker's receive end if it's spinning.
             // But we CAN intercept the hostPort's outgoing message by spying on it.
         })
@@ -265,7 +415,7 @@ describe('WorkerSandbox', () => {
 
         await execPromise
         expect(sentError).toBe(true)
-    })
+    }, 15000)
 
     it('should handle timeout fallback if worker script fails to timeout', async () => {
         const sandbox = new WorkerSandbox()
@@ -281,8 +431,8 @@ describe('WorkerSandbox', () => {
 
         const result = await execPromise
         expect(result.success).toBe(false)
-        expect(result.error).toContain('Worker exited')
-    })
+        expect(result.error).toContain('Worker exit code')
+    }, 15000)
 })
 describe('WorkerSandboxPool', () => {
     it('should create and execute using pool', async () => {

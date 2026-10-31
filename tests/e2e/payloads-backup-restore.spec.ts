@@ -6,8 +6,8 @@
  * backup error, and full backup→restore cycle.
  */
 
-import { test, expect } from '@playwright/test'
-import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import { test, expect } from './test-fixture.js'
+import type { Client } from '@modelcontextprotocol/client'
 import { createClient, callToolAndParse, expectSuccess } from './helpers.js'
 
 test.describe.configure({ mode: 'serial' })
@@ -49,7 +49,7 @@ test.describe('Payload Contracts: Backup Restore', () => {
 
     test('full backup → restore cycle succeeds', async () => {
         // Step 1: Create an entry so the DB is non-empty
-        const entry = await callToolAndParse(client, 'create_entry', {
+        const entry = await callToolAndParse(client, 'create_entry', { workspace_id: 'default', 
             project_number: 1,
             content: 'Backup restore cycle test entry',
             entry_type: 'test_entry',
@@ -71,6 +71,7 @@ test.describe('Payload Contracts: Backup Restore', () => {
             confirm: true,
         })) as Record<string, unknown>
 
+        console.error('RESTORE PAYLOAD ERROR:', JSON.stringify(restorePayload, null, 2))
         expect(restorePayload.success).toBe(true)
     })
 })

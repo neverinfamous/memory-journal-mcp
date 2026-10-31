@@ -1,0 +1,16 @@
+logs:
+  - type: file
+    path: /var/log/memory-journal-mcp/agent-issues.jsonl
+    service: memory_journal_mcp
+    source: memory_journal_mcp
+    tags:
+      - env:development
+      - log_type:agent_issues
+
+  - type: file
+    path: /var/log/memory-journal-mcp/mcp-audit.jsonl
+    service: memory_journal_mcp
+    source: memory_journal_mcp
+    tags:
+      - env:development
+      - log_type:mcp_audit

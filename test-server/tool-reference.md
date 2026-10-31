@@ -1,63 +1,85 @@
 # Tool Reference
 
-Complete reference of all **73 tools** organized by 10 tool groups + codemode. Each group automatically includes Code Mode (`mj_execute_code`) for token-efficient operations.
+Complete reference of all tools organized by logical tool groups. Each group automatically includes Code Mode (`mj_execute_code`) for token-efficient operations.
 
-> **3 tool shortcuts** (`starter`, `essential`, `readonly`) provide curated subsets for common use cases.
+> **Tool shortcuts** (`starter`, `essential`, `readonly`) provide curated subsets for common use cases.
 >
 > Use [Tool Filtering](#️-tool-filtering) to select the groups you need. See [Code Mode](#-recommended-code-mode-maximum-token-savings) for the `mj.*` API that exposes every tool below through sandboxed JavaScript.
 
+> **Note**: When updating schemas or validation logic, please refer to the `/zod` skill for best practices on Standard Schema and Safe Parsing.
+
 ---
 
-## codemode (1 tool)
+## 🌟 Recommended: Code Mode (Maximum Token Savings)
 
-Sandboxed JavaScript execution that exposes all 10 tool groups through the `mj.*` API.
+Code Mode (`mj_execute_code`) dramatically reduces token usage (70–90%) and is included by default in all presets.
+
+Code executes in a **sandboxed VM context** with:
+
+- **Static code validation** — blocked patterns include `require()`, `process`, `eval()`, and filesystem access
+- **Rate limiting** — 60 executions per minute per client
+- **Hard timeouts** — configurable execution limit (default 30s)
+- **Full API access** — all tool groups available via `mj.*`
+
+**API Groups:** `mj.core.*` (also aliased as `journal.*`), `mj.search.*`, `mj.analytics.*`, `mj.relationships.*`, `mj.io.*`, `mj.admin.*`, `mj.github.*`, `mj.backup.*`, `mj.team.*`
+
+---
+
+## codemode
+
+Sandboxed JavaScript execution that exposes all tool groups through the `mj.*` API.
 
 | Tool              | Description                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `mj_execute_code` | Execute JavaScript in a sandboxed environment with access to all journal tools via the `mj.*` API. Enables multi-step workflows in a single call, reducing token usage by 70-90%. API groups: `mj.core.*` (or `journal.*`), `mj.search.*`, `mj.analytics.*`, `mj.relationships.*`, `mj.export.*`, `mj.admin.*`, `mj.github.*`, `mj.backup.*`, `mj.team.*`. Use `mj.help()` for method listing. Returns the last expression value. |
+| `mj_execute_code` | Execute JavaScript in a sandboxed environment with access to all journal tools via the `mj.*` API. Enables multi-step workflows in a single call, reducing token usage by 70-90%. API groups: `mj.core.*` (or `journal.*`), `mj.search.*`, `mj.analytics.*`, `mj.relationships.*`, `mj.io.*`, `mj.admin.*`, `mj.github.*`, `mj.git.*`, `mj.backup.*`, `mj.team.*`. Use `mj.help()` for method listing. Aliases: `query` (search, q), `output_dir` (path, filepath), `keep_count` (keep), `target_user` (user, assignee), `flag_type` (severity), `workspace_id` (team, project). Returns the last expression value. |
 
 ---
 
-## core (6 tools + Code Mode)
+## core
 
 Entry lifecycle — create, retrieve, tags, and test.
 
 | Tool                   | Description                                                                        |
 | ---------------------- | ---------------------------------------------------------------------------------- |
-| `create_entry`         | Create a new journal entry with context and tags (v2.1.0: GitHub Actions support). |
+| `create_entry`         | Create a new journal entry with context and tags. Supports `workspace_id` for multi-tenancy. |
 | `get_entry_by_id`      | Get a specific journal entry by ID with full details.                              |
-| `get_recent_entries`   | Get recent journal entries. Supports `sort_by` (timestamp or importance).          |
-| `create_entry_minimal` | Minimal entry creation without context or tags.                                    |
+| `get_recent_entries`   | Get recent journal entries. Supports `sort_by` (timestamp or importance), cursor pagination, and `workspace_id`.          |
+| `get_entry_history`    | Get the revision history of a specific journal entry (capped at 10 revisions).     |
 | `test_simple`          | Simple test tool that just returns a message.                                      |
+| `test_error_handling`  | Test tool for validating error handler responses.                                  |
+| `trigger_progress`     | Test tool to trigger an MCP progress notification sequence.                        |
 | `list_tags`            | List all available tags.                                                           |
+| `mark_anchors_stale`   | Mark explicit relationships between entries as stale or out-of-date.               |
 
 ---
 
-## search (4 tools + Code Mode)
+## search
 
 Full-text, date-range, and semantic/vector search.
 
 | Tool                     | Description                                                                                                                                                                                              |
 | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `search_entries`         | Full-text search journal entries using FTS5 (supports phrases `"exact match"`, prefix `auth*`, boolean `NOT`/`OR`/`AND`, ranked by relevance). Optional filters and `sort_by` (timestamp or importance). |
-| `search_by_date_range`   | Search journal entries within a date range with optional filters and `sort_by` (timestamp or importance).                                                                                                |
+| `search_entries`         | Search journal entries. Use `mode` (`auto`, `fts`, `semantic`, `hybrid`). Supports `workspace_id`, filters, `sort_by`, cursor pagination, facets, and highlights. |
+| `search_by_date_range`   | Search journal entries within a date range with optional filters, `workspace_id`, `sort_by`, and cursor pagination.                                                                                                |
 | `semantic_search`        | Perform semantic/vector search on journal entries using AI embeddings.                                                                                                                                   |
 | `get_vector_index_stats` | Get statistics about the semantic search vector index.                                                                                                                                                   |
+| `list_deleted_entries`   | List recently soft-deleted entries that can be restored.                                                                                                                                                 |
+| `cross_team_search`      | Search across multiple configured team databases simultaneously. Returns results with team_db labels. Read-only and degrades gracefully. |
 
 ---
 
-## analytics (2 tools + Code Mode)
+## analytics
 
 Statistics, cross-project insights, and analytics.
 
 | Tool                         | Description                                                                 |
 | ---------------------------- | --------------------------------------------------------------------------- |
-| `get_statistics`             | Get journal statistics and analytics (Phase 2: includes project breakdown). |
+| `get_statistics`             | Get journal statistics and analytics (supports `workspace_id` filtering). |
 | `get_cross_project_insights` | Analyze patterns across all GitHub Projects tracked in journal entries.     |
 
 ---
 
-## relationships (2 tools + Code Mode)
+## relationships
 
 Link entries and visualize knowledge graphs.
 
@@ -68,7 +90,7 @@ Link entries and visualize knowledge graphs.
 
 ---
 
-## io (3 tools + Code Mode)
+## io
 
 Export and import journal data in multiple formats, including Markdown roundtripping.
 
@@ -77,24 +99,37 @@ Export and import journal data in multiple formats, including Markdown roundtrip
 | `export_entries`  | Export journal entries to JSON or Markdown format.                         |
 | `export_markdown` | Export the entire journal to a structured directory of Markdown files.     |
 | `import_markdown` | Import a structured directory of Markdown files into the journal database. |
+| `import_external` | Import knowledge management exports (Notion, Obsidian, Logseq) into the journal. normalizes wikilinks, YAML frontmatter, and block hierarchies. |
 
 ---
 
-## admin (5 tools + Code Mode)
+## admin
 
-Entry mutations, vector index management, and tag maintenance.
+Entry mutations, vector index management, tag maintenance, and audit log search.
 
 | Tool                   | Description                                                                                                                                                            |
 | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `update_entry`         | Update an existing journal entry (content, type, tags, and 11 metadata fields including significance, project, issue, PR, and workflow). Pass `null` to clear a field. |
+| `update_configuration` | Dynamically update the running server configuration (e.g., briefing depth, token limits) without restarting.                                                           |
+| `register_project`     | Register a new project in the global registry. This is required before the agent can switch context to this repository.                                                |
+| `update_project`       | Update the details (path, number, or name) of an existing project in the registry.                                                                                     |
+| `delete_project`       | Remove a project from the global registry.                                                                                                                             |
+| `get_project`          | Get details of a specific registered project.                                                                                                                          |
+| `list_projects`        | List all registered projects.                                                                                                                                          |
+| `update_entry`         | Update an existing journal entry (content, type, tags, and 14 metadata fields including trustScore, impactScore, significance, workspace_id, issueNumber, prNumber, and workflow). Pass `expectedVersion` for optimistic locking. Pass `null` to clear a field. |
 | `delete_entry`         | Delete a journal entry (soft delete with timestamp).                                                                                                                   |
+| `restore_entry`        | Restore a soft-deleted journal entry.                                                                                                                                  |
 | `merge_tags`           | Merge one tag into another to consolidate similar tags (e.g., merge "phase-2" into "phase2"). The source tag is deleted after merge.                                   |
 | `rebuild_vector_index` | Rebuild the semantic search vector index from all existing entries.                                                                                                    |
 | `add_to_vector_index`  | Add a specific entry to the semantic search vector index.                                                                                                              |
+| `batch_create_entries` | Create multiple journal entries at once (Max 50 per batch). Ideal for data imports or bulk processing.                                                                  |
+| `batch_update_entries` | Update multiple existing journal entries in a single transaction (Max 50 per batch). Pass `expected_version` per entry for optimistic locking.                                                                                    |
+| `batch_delete_entries` | Delete multiple existing journal entries in a single transaction (Max 50 per batch).                                                                                    |
+| `run_auto_prune`       | Manually trigger the auto-prune background job to soft-delete or hard-delete stale entries based on importance thresholds and configured intervals.                    |
+| `search_audit_log`     | Search operational telemetry audit logs by tool name, user, date range, status, or category. Returns the most recent matches up to the limit.                          |
 
 ---
 
-## github (18 tools + Code Mode)
+## github
 
 GitHub integration — Issues, PRs, context, Kanban boards, Milestones, Insights, issue lifecycle, and Copilot Reviews.
 
@@ -121,7 +156,22 @@ GitHub integration — Issues, PRs, context, Kanban boards, Milestones, Insights
 
 ---
 
-## backup (4 tools + Code Mode)
+## git
+
+Commit history mining, release tracking, and commit analytics using `simple-git`.
+
+| Tool                      | Description                                                                                                                               |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `get_commit_history`      | Fetch the commit history of the repository (with optional range or limit).                                                                 |
+| `search_commits`          | Search commit messages or authors within the repository.                                                                                  |
+| `get_release_info`        | Retrieve information about a specific release tag, including commit count and timestamp.                                                   |
+| `get_unreleased_commits`  | Track commits that have been merged since the last release tag.                                                                            |
+| `analyze_commit_patterns` | Analyze commit history to identify frequent contributors and frequently modified files.                                                    |
+| `check_entry_staleness`   | Evaluate journal entry staleness by cross-referencing with recent git commits or branch activity.                                          |
+
+---
+
+## backup
 
 Database backup, restore, and retention management.
 
@@ -134,7 +184,7 @@ Database backup, restore, and retention management.
 
 ---
 
-## team (28 tools + Code Mode)
+## team
 
 Team collaboration with a separate shared database. Requires `TEAM_DB_PATH`.
 
@@ -144,23 +194,28 @@ Team collaboration with a separate shared database. Requires `TEAM_DB_PATH`.
 | ---------------------- | ----------------------------------------------------------------------------------------------- |
 | `team_create_entry`    | Create an entry in the team database for sharing with collaborators.                            |
 | `team_get_entry_by_id` | Get a specific team entry by ID with full details including relationships and importance score. |
-| `team_get_recent`      | Get recent entries from the team database. Supports `sort_by` (timestamp or importance).        |
+| `team_get_recent`      | Get recent entries from the team database. Supports `sort_by` (timestamp or importance) and cursor pagination.        |
 | `team_list_tags`       | List all tags used in the team database with usage counts.                                      |
 
 ### Search
 
 | Tool                        | Description                                                                                            |
 | --------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `team_search`               | Search entries in the team database by text and/or tags. Supports `sort_by` (timestamp or importance). |
-| `team_search_by_date_range` | Search team entries within a date range with optional filters and `sort_by` (timestamp or importance). |
+| `team_search`               | Search team entries. Use `mode` (`auto`, `fts`, `semantic`, `hybrid`) to control strategy. Supports `sort_by` (timestamp or importance), cursor pagination, `include_facets`, `include_highlights`, hybrid search weights, `fuzzy_match` (typo tolerance), and `auto_correct`. |
+| `team_search_by_date_range` | Search team entries within a date range with optional filters, `sort_by` (timestamp or importance), and cursor pagination. |
+| `team_list_deleted_entries` | List recently soft-deleted team entries that can be restored. Requires TEAM_DB_PATH. |
 
 ### Admin
 
 | Tool                | Description                                                                                                                                               |
 | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `team_update_entry` | Update a team entry (content, type, tags, and 11 metadata fields including significance, project, issue, PR, and workflow). Pass `null` to clear a field. |
+| `team_update_entry` | Update a team entry (content, type, tags, and 14 metadata fields including trustScore, impactScore, significance, workspace_id, issueNumber, prNumber, and workflow). Pass `expectedVersion` for optimistic locking. Pass `null` to clear a field. |
 | `team_delete_entry` | Soft-delete a team entry (marks as deleted, preservable).                                                                                                 |
+| `team_restore_entry`| Restore a soft-deleted team entry. Requires TEAM_DB_PATH.                                                                                                 |
 | `team_merge_tags`   | Merge a source tag into a target tag in the team database.                                                                                                |
+| `team_batch_create_entries` | Create multiple team journal entries at once (Max 50 per batch). Ideal for data imports or bulk processing.                                                                  |
+| `team_batch_update_entries` | Update multiple existing team journal entries in a single transaction (Max 50 per batch). Pass `expected_version` per entry for optimistic locking.                                                                                    |
+| `team_batch_delete_entries` | Delete multiple existing team journal entries in a single transaction (Max 50 per batch).                                                                                    |
 
 ### Analytics
 
@@ -184,6 +239,7 @@ Team collaboration with a separate shared database. Requires `TEAM_DB_PATH`.
 | `team_export_entries`  | Export team entries in JSON or Markdown format with optional date range, type, and tag filters. |
 | `team_export_markdown` | Export team journal to a structured directory of Markdown files.                                |
 | `team_import_markdown` | Import team entries from a structured directory of Markdown files.                              |
+| `team_import_external` | Import knowledge management exports (Notion, Obsidian, Logseq) into the team journal.           |
 
 ### Backup
 
@@ -201,48 +257,54 @@ Team collaboration with a separate shared database. Requires `TEAM_DB_PATH`.
 | `team_rebuild_vector_index`   | Rebuild the team semantic search vector index from all existing team entries. Requires TEAM_DB_PATH.      |
 | `team_add_to_vector_index`    | Add a specific team entry to the semantic search vector index. Requires TEAM_DB_PATH.                     |
 
-### Flags
 
-| Tool                      | Description                                                                                                                                               |
-| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `team_pass_flag`          | Create a machine-actionable flag in the team database. Flags replace communication noise with structured, searchable signals.                             |
-| `team_resolve_flag`       | Mark a team flag as resolved with an optional resolution comment. Idempotent — safe to call on already-resolved flags.                                    |
-| `team_list_flags`         | List and filter flags with structured metadata. Filter by status (active/resolved/all), flag_type, target_user, or author. Sort by priority or timestamp. |
-| `team_update_flag`        | Update a flag's metadata without resolving it. Escalate severity, reassign target_user, edit message, add link, or reopen a resolved flag.                |
-| `team_get_flag_analytics` | Aggregate flag analytics: resolution velocity, type distribution, per-user workload, staleness counts, and period-over-period trend comparison.           |
+### Members
+
+| Tool                        | Description                                                                                                                                               |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `team_add_member`           | Add a new member to the team with a specified role (viewer, member, admin). Admins only.                                                                  |
+| `team_remove_member`        | Remove a member from the team. Admins only.                                                                                                               |
+| `team_update_member_role`   | Update the role of an existing team member. Admins only.                                                                                                  |
+| `team_list_members`         | List all team members and their roles.                                                                                                                    |
+| `team_get_member`           | Get details about a specific team member by their author name.                                                                                            |
+
+### Aliases
+
+| Tool                       | Description                                                                                                                                               |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `team_add_author_alias`    | Map an alternate author name (alias) to a canonical author identity in the team database. Admins only.                                                    |
+| `team_remove_author_alias` | Remove an existing author alias mapping. Admins only.                                                                                                     |
+| `team_list_author_aliases` | List all author aliases and their canonical mappings.                                                                                                     |
+| `team_resolve_author`      | Resolve a given author name to its canonical identity based on existing aliases. Returns the original name if no alias exists.                            |
+| `team_consolidate_authors` | Retroactively update existing team entries and relationships to use the canonical author name for a given alias or canonical target. Admins only.         |
 
 ---
 
 ## ⚙️ Tool Filtering
 
-Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `--tool-filter`):
+Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `--tool-filter`). At runtime, agents can use the `update_configuration` tool to switch tools on-the-fly.
 
-| Filter               | Tools | Use Case                 |
-| -------------------- | ----- | ------------------------ |
-| `full`               | 73    | All tools (default)      |
-| `starter`            | ~11   | Core + search + codemode |
-| `essential`          | ~7    | Minimal footprint        |
-| `readonly`           | 17    | Disable all mutations    |
-| `-github`            | 52    | Exclude a group          |
-| `-github,-analytics` | 50    | Exclude multiple groups  |
+| Filter               | Use Case                 |
+| -------------------- | ------------------------ |
+| `full`               | All tools (default)      |
+| `starter`            | Core + search + codemode |
+| `essential`          | Minimal footprint        |
+| `readonly`           | Disable all mutations    |
+| `-github`            | Exclude a group          |
+| `-github,-analytics` | Exclude multiple groups  |
 
 **Filter Syntax:** `shortcut` or `group` or `tool_name` (whitelist mode) · `-group` (disable group) · `-tool` (disable tool) · `+tool` (re-enable after group disable)
 
 **Custom Selection:** List individual tool names to create your own whitelist: `--tool-filter "create_entry,search_entries,semantic_search"`
 
-**Groups:** `core`, `search`, `analytics`, `relationships`, `io`, `admin`, `github`, `backup`, `team`, `codemode`
+**Groups:** `core`, `search`, `analytics`, `relationships`, `io`, `admin`, `github`, `git`, `backup`, `team`, `codemode`
 
----
+> **Note**: Both `update_configuration` and `mj_execute_code` are **always enabled** regardless of your filter to ensure you can never lock yourself out of the configuration system or Code Mode.
 
-## 🌟 Recommended: Code Mode (Maximum Token Savings)
+### Runtime Tool Discovery
+Agents should use this workflow to dynamically load tools they need:
+1. Read the `memory://tools/available` resource to view the catalog of all tools and their current enabled/disabled state.
+2. Call `update_configuration({ tool_filter: "..." })` to enable the specific tools needed for the task.
+3. Perform the task.
 
-Code Mode (`mj_execute_code`) dramatically reduces token usage (70–90%) and is included by default in all presets.
 
-Code executes in a **sandboxed VM context** with:
-
-- **Static code validation** — blocked patterns include `require()`, `process`, `eval()`, and filesystem access
-- **Rate limiting** — 60 executions per minute per client
-- **Hard timeouts** — configurable execution limit (default 30s)
-- **Full API access** — all 10 tool groups available via `mj.*`
-
-**API Groups:** `mj.core.*` (also aliased as `journal.*`), `mj.search.*`, `mj.analytics.*`, `mj.relationships.*`, `mj.io.*`, `mj.admin.*`, `mj.github.*`, `mj.backup.*`, `mj.team.*`

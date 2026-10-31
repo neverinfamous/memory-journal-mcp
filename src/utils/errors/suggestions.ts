@@ -100,6 +100,24 @@ export const ERROR_SUGGESTIONS: ErrorSuggestion[] = [
         suggestion: 'Internal sandbox error. Retry the operation.',
         code: 'INTERNAL_ERROR',
     },
+    {
+        pattern: /(?:memory|mcp|core|journal|api) is not defined/i,
+        suggestion:
+            'In Code Mode (mj_execute_code), top-level objects like "mj" or "core" provide API access (e.g. mj.core.createEntry, core.getRecentEntries, or mj.analytics.getStatistics). Verify object variable references.',
+        code: 'VALIDATION_ERROR',
+    },
+    {
+        pattern: /egress policy|egress limit|output limit exceeded/i,
+        suggestion:
+            'Result payload exceeds egress size boundary. Extract specific fields or reduce search limit (e.g. limit: 10) instead of returning full objects.',
+        code: 'VALIDATION_ERROR',
+    },
+    {
+        pattern: /import statement|dynamic import|require.*not allowed/i,
+        suggestion:
+            'Dynamic import() and require() statements are not permitted in Code Mode sandbox scripts. All API methods are available pre-loaded under the top-level "mj" global object.',
+        code: 'VALIDATION_ERROR',
+    },
     // Zod enum validation patterns — return valid values for self-correction
     {
         pattern: /invalid enum value.*significance/i,
@@ -110,7 +128,7 @@ export const ERROR_SUGGESTIONS: ErrorSuggestion[] = [
     {
         pattern: /invalid enum value.*entry.?type/i,
         suggestion:
-            'Valid entry_type values: retrospective, bug_fix, project_decision, feature_implementation, technical_note, code_review, planning, research, enhancement, milestone, adversarial_review, development_note, learning, standup, meeting_notes, technical_achievement, plan_draft, plan_refinement, copilot_validation, other, personal_reflection',
+            'Valid entry_type values: retrospective, bug_fix, project_decision, feature_implementation, technical_note, code_review, planning, research, enhancement, milestone, adversarial_review, development_note, learning, standup, meeting_notes, technical_achievement, plan_draft, plan_refinement, plan_finalized, copilot_validation, other, personal_reflection',
         code: 'VALIDATION_ERROR',
     },
 ]
@@ -125,7 +143,7 @@ export const ERROR_SUGGESTIONS: ErrorSuggestion[] = [
  */
 export function matchSuggestion(
     message: string
-): { suggestion: string; code?: string } | undefined {
+): { suggestion: string; code?: string | undefined } | undefined {
     for (const entry of ERROR_SUGGESTIONS) {
         if (entry.pattern.test(message)) {
             return { suggestion: entry.suggestion, code: entry.code }

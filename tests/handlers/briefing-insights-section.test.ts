@@ -68,7 +68,7 @@ describe('Briefing Insights Section', () => {
         const result = buildInsightsSection(context)
         expect(result).not.toBeNull()
         // Tests the `else` branches in formatDigest
-        expect(result?.activityTrend).toBe('5 entries this period (no previous data)')
+        expect(result?.activityTrend).toBe('5 entries this period')
         expect(result?.significanceSpike).toBe('1 significant entries this period')
         expect(result?.relationshipDensity).toBeUndefined()
     })

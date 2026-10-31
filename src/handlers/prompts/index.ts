@@ -8,9 +8,15 @@
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import type { McpIcon } from '../../types/index.js'
 import { getWorkflowPromptDefinitions } from './workflow.js'
+import { getAnalyticsPromptDefinitions } from './analytics.js'
 import { getGitHubPromptDefinitions } from './github.js'
+import { getGitPromptDefinitions } from './git.js'
+import type { BriefingConfig } from '../resources/shared.js'
+import type { GitHubIntegration } from '../../github/github-integration/index.js'
+
 import { getAdversarialPromptDefinitions } from './adversarial.js'
-import { getTeamPromptDefinitions } from './team.js'
+import { getOptimizerPromptDefinitions } from './optimizer.js'
+import { getLoadBriefingPromptDefinitions } from './load-briefing.js'
 import { ResourceNotFoundError } from '../../types/errors.js'
 
 /**
@@ -39,32 +45,34 @@ export interface InternalPromptDef {
     handler: (
         args: Record<string, string>,
         db: IDatabaseAdapter,
-        teamDb?: IDatabaseAdapter
-    ) => { messages: PromptMessage[] }
+        teamDb?: IDatabaseAdapter,
+        github?: GitHubIntegration,
+        briefingConfig?: BriefingConfig
+    ) => { messages: PromptMessage[] } | Promise<{ messages: PromptMessage[] }>
 }
 
 /**
  * Get all prompt definitions for MCP list
  */
 export function getPrompts(): object[] {
-    const prompts = getAllPromptDefinitions()
-    return prompts.map((p) => ({
-        name: p.name,
-        description: p.description,
-        arguments: p.arguments,
-        icons: p.icons,
-    }))
+    return getAllPromptDefinitions().map((def) => {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { handler: _handler, ...rest } = def
+        return rest
+    })
 }
 
 /**
- * Get a prompt by name
+ * Execute a prompt by name
  */
 export function getPrompt(
     name: string,
     args: Record<string, string>,
     db: IDatabaseAdapter,
-    teamDb?: IDatabaseAdapter
-): { messages: PromptMessage[] } {
+    teamDb?: IDatabaseAdapter,
+    github?: GitHubIntegration,
+    briefingConfig?: BriefingConfig
+): Promise<{ messages: PromptMessage[] }> {
     const prompts = getAllPromptDefinitions()
     const prompt = prompts.find((p) => p.name === name)
 
@@ -72,17 +80,20 @@ export function getPrompt(
         throw new ResourceNotFoundError('Prompt', name)
     }
 
-    return prompt.handler(args, db, teamDb)
+    return Promise.resolve(prompt.handler(args, db, teamDb, github, briefingConfig))
 }
 
 /**
  * Get all prompt definitions by composing sub-module definitions
  */
-function getAllPromptDefinitions(): InternalPromptDef[] {
+export function getAllPromptDefinitions(): InternalPromptDef[] {
     return [
         ...getWorkflowPromptDefinitions(),
+        ...getAnalyticsPromptDefinitions(),
         ...getGitHubPromptDefinitions(),
+        ...getGitPromptDefinitions(),
         ...getAdversarialPromptDefinitions(),
-        ...getTeamPromptDefinitions(),
+        ...getOptimizerPromptDefinitions(),
+        ...getLoadBriefingPromptDefinitions(),
     ]
 }

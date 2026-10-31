@@ -46,7 +46,38 @@ export interface PullRequestDetails extends GitHubPullRequest {
  * Local Git status details
  */
 export interface LocalGitStatus {
+    branch?: string | null
     modified: number
     untracked: number
     isClean: boolean
+    resolvedIssues?: number[]
+}
+
+/** Snapshot of rate limit state from response headers */
+export interface RateLimitSnapshot {
+    limit: number
+    remaining: number
+    used: number
+    reset: number
+    resource: string
+    capturedAt: string
+}
+
+/** Rate limit category details */
+export interface RateLimitCategory {
+    limit: number
+    remaining: number
+    used: number
+    reset: number
+}
+
+/** Full rate limit response from GET /rate_limit */
+export interface GitHubRateLimitResponse {
+    resources: {
+        core: RateLimitCategory
+        search: RateLimitCategory
+        graphql: RateLimitCategory
+        [key: string]: RateLimitCategory
+    }
+    rate: RateLimitCategory
 }

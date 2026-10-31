@@ -27,36 +27,54 @@ const NON_RETURNABLE =
  *   `for (const x of xs) { ... }`    → unchanged             (control flow)
  */
 export function transformAutoReturn(code: string): string {
-    const trimmed = code.trimEnd()
+    let trimmed = code.trimEnd()
     if (!trimmed) return code
 
-    // Find the boundary of the last statement.
-    // Walk backwards from the end to find the last semicolon or newline
-    // that is NOT inside braces/brackets/parens.
+    // Strip trailing semicolons so the final statement isn't empty
+    while (trimmed.endsWith(';')) {
+        trimmed = trimmed.slice(0, -1).trimEnd()
+    }
+
+    let inString: string | null = null
+    let isEscaped = false
+    let lastBoundary = -1
     let depth = 0
-    let splitIndex = -1
 
-    for (let i = trimmed.length - 1; i >= 0; i--) {
-        const ch = trimmed.charAt(i)
-        // Track nesting (walking backwards, so openers increase depth)
-        if (ch === '}' || ch === ']' || ch === ')') depth++
-        else if (ch === '{' || ch === '[' || ch === '(') depth--
-
-        if (depth === 0 && (ch === ';' || ch === '\n')) {
-            splitIndex = i
-            break
+    // Forward pass to safely find statement boundaries
+    for (let i = 0; i < trimmed.length; i++) {
+        const ch = trimmed[i]
+        
+        if (inString) {
+            if (ch === '\\') {
+                isEscaped = !isEscaped
+            } else {
+                if (ch === inString && !isEscaped) {
+                    inString = null
+                }
+                isEscaped = false
+            }
+        } else {
+            if (ch === "'" || ch === '"' || ch === '`') {
+                inString = ch
+            } else if (ch === '{' || ch === '[' || ch === '(') {
+                depth++
+            } else if (ch === '}' || ch === ']' || ch === ')') {
+                depth--
+            } else if (depth === 0 && (ch === ';' || ch === '\n')) {
+                lastBoundary = i
+            }
         }
     }
 
     // Extract the last statement
-    const lastStmt = (splitIndex >= 0 ? trimmed.slice(splitIndex + 1) : trimmed).trim()
+    const lastStmt = (lastBoundary >= 0 ? trimmed.slice(lastBoundary + 1) : trimmed).trim()
 
     if (!lastStmt) return code
     if (NON_RETURNABLE.test(lastStmt)) return code
 
     // Insert `return` before the last statement
-    if (splitIndex >= 0) {
-        const before = trimmed.slice(0, splitIndex + 1)
+    if (lastBoundary >= 0) {
+        const before = trimmed.slice(0, lastBoundary + 1)
         return `${before}\nreturn ${lastStmt}`
     }
 

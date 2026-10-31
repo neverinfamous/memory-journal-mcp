@@ -5,9 +5,11 @@
  * via Streamable HTTP transport and read resources end-to-end.
  */
 
-import { test, expect } from '@playwright/test'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+import { test, expect } from './test-fixture.js'
+import { Client } from '@modelcontextprotocol/client'
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
+
+import { getServerUrl } from './helpers.js'
 
 test.describe.configure({ mode: 'serial' })
 
@@ -15,7 +17,7 @@ test.describe('E2E Resource Reads (via MCP SDK Client)', () => {
     let client: Client
 
     test.beforeAll(async () => {
-        const transport = new StreamableHTTPClientTransport(new URL('http://localhost:3100/mcp'))
+        const transport = new StreamableHTTPClientTransport(getServerUrl('/mcp'), { protocolVersion: '2024-11-05' })
         client = new Client(
             { name: 'playwright-resource-test', version: '1.0.0' },
             { capabilities: {} }
@@ -38,7 +40,6 @@ test.describe('E2E Resource Reads (via MCP SDK Client)', () => {
         expect(uris).toContain('memory://health')
         expect(uris).toContain('memory://briefing')
         expect(uris).toContain('memory://recent')
-        expect(uris).toContain('memory://statistics')
     })
 
     test('should read memory://health resource', async () => {
@@ -77,16 +78,6 @@ test.describe('E2E Resource Reads (via MCP SDK Client)', () => {
         expect(parsed).toBeDefined()
     })
 
-    test('should read memory://statistics resource', async () => {
-        const response = await client.readResource({ uri: 'memory://statistics' })
-
-        expect(response.contents).toBeDefined()
-        expect(response.contents.length).toBeGreaterThan(0)
-
-        const text = (response.contents[0] as { text: string }).text
-        const parsed = JSON.parse(text)
-        expect(parsed).toHaveProperty('totalEntries')
-    })
 
     test('should list resource templates', async () => {
         const response = await client.listResourceTemplates()

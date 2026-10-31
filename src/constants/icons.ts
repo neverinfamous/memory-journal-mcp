@@ -62,6 +62,13 @@ export const ICON_GITHUB: McpIcon = {
     sizes: ['24x24'],
 }
 
+/** Git branch for git history operations */
+export const ICON_GIT: McpIcon = {
+    src: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"%3E%3Ccircle cx="18" cy="18" r="3"/%3E%3Ccircle cx="6" cy="6" r="3"/%3E%3Cpath d="M13 6h3a2 2 0 0 1 2 2v7"/%3E%3Cpath d="M6 9v12"/%3E%3C/svg%3E',
+    mimeType: 'image/svg+xml',
+    sizes: ['24x24'],
+}
+
 /** Archive/box for backup */
 export const ICON_BACKUP: McpIcon = {
     src: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"%3E%3Cpolyline points="21 8 21 21 3 21 3 8"/%3E%3Crect x="1" y="3" width="22" height="5"/%3E%3Cline x1="10" y1="12" x2="14" y2="12"/%3E%3C/svg%3E',
@@ -157,12 +164,6 @@ export const ICON_PROMPT: McpIcon = {
     sizes: ['24x24'],
 }
 
-/** Alert triangle for flags (Hush Protocol) */
-export const ICON_FLAG: McpIcon = {
-    src: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"%3E%3Cpath d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/%3E%3Cline x1="12" y1="9" x2="12" y2="13"/%3E%3Cline x1="12" y1="17" x2="12.01" y2="17"/%3E%3C/svg%3E',
-    mimeType: 'image/svg+xml',
-    sizes: ['24x24'],
-}
 
 // ============================================================================
 // Tool Group Icon Mapping
@@ -177,6 +178,7 @@ export const TOOL_GROUP_ICONS: Record<string, McpIcon> = {
     io: ICON_IO,
     admin: ICON_ADMIN,
     github: ICON_GITHUB,
+    git: ICON_GIT,
     backup: ICON_BACKUP,
     team: ICON_TEAM,
 }

@@ -114,7 +114,7 @@ function createMockGitHub(overrides: Partial<Record<string, unknown>> = {}): Git
 
 describe('Kanban Payload Optimization', () => {
     let db: DatabaseAdapter
-    const testDbPath = './test-kanban-payload.db'
+    const testDbPath = './.test-output/vitest/test-kanban-payload.db'
 
     beforeAll(async () => {
         db = new DatabaseAdapter(testDbPath)

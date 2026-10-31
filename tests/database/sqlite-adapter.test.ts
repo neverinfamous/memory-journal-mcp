@@ -186,7 +186,7 @@ describe('DatabaseAdapter', () => {
 
     describe('getRecentEntries', () => {
         it('should respect limit', () => {
-            const entries = db.getRecentEntries(2)
+            const { entries } = db.getRecentEntries(2)
             expect(entries.length).toBeLessThanOrEqual(2)
         })
 
@@ -194,11 +194,19 @@ describe('DatabaseAdapter', () => {
             db.createEntry({ content: 'Personal entry', isPersonal: true })
             db.createEntry({ content: 'Non-personal entry', isPersonal: false })
 
-            const personal = db.getRecentEntries(100, true)
-            const nonPersonal = db.getRecentEntries(100, false)
+            const { entries: personal } = db.getRecentEntries(100, true)
+            const { entries: nonPersonal } = db.getRecentEntries(100, false)
 
             expect(personal.every((e) => e.isPersonal)).toBe(true)
             expect(nonPersonal.every((e) => !e.isPersonal)).toBe(true)
+        })
+
+        it('should support offset pagination', () => {
+            const { entries: all } = db.getRecentEntries(5)
+            if (all.length >= 2) {
+                const { entries: offsetEntries } = db.getRecentEntries(2, undefined, 'timestamp', undefined, false, undefined, undefined, 1)
+                expect(offsetEntries[0]?.id).toBe(all[1]?.id)
+            }
         })
     })
 
@@ -209,8 +217,8 @@ describe('DatabaseAdapter', () => {
         })
 
         it('should paginate through entries', () => {
-            const page1 = db.getEntriesPage(0, 2)
-            const page2 = db.getEntriesPage(2, 2)
+            const { entries: page1 } = db.getEntriesPage(0, 2)
+            const { entries: page2 } = db.getEntriesPage(2, 2)
 
             expect(page1.length).toBeLessThanOrEqual(2)
             // Pages should not overlap (different IDs)
@@ -263,26 +271,26 @@ describe('DatabaseAdapter', () => {
     describe('searchEntries', () => {
         it('should find entries by content', () => {
             db.createEntry({ content: 'Unique search term xyz123' })
-            const results = db.searchEntries('xyz123')
+            const { entries: results } = db.searchEntries('xyz123')
 
             expect(results.length).toBeGreaterThan(0)
             expect(results[0]?.content).toContain('xyz123')
         })
 
         it('should respect limit', () => {
-            const results = db.searchEntries('entry', { limit: 1 })
+            const { entries: results } = db.searchEntries('entry', { limit: 1 })
             expect(results.length).toBeLessThanOrEqual(1)
         })
 
         it('should filter by projectNumber', () => {
             db.createEntry({ content: 'Project specific qwer', projectNumber: 99 })
-            const results = db.searchEntries('qwer', { projectNumber: 99 })
+            const { entries: results } = db.searchEntries('qwer', { projectNumber: 99 })
 
             expect(results.length).toBeGreaterThan(0)
         })
 
         it('should return empty for non-matching query', () => {
-            const results = db.searchEntries('nonexistent_term_that_has_no_matches')
+            const { entries: results } = db.searchEntries('nonexistent_term_that_has_no_matches')
             expect(results).toEqual([])
         })
     })
@@ -294,12 +302,12 @@ describe('DatabaseAdapter', () => {
             const start = now.toISOString().split('T')[0]!
             const end = start
 
-            const results = db.searchByDateRange(start, end)
+            const { entries: results } = db.searchByDateRange(start, end)
             expect(results.length).toBeGreaterThan(0)
         })
 
         it('should return empty for future date range', () => {
-            const results = db.searchByDateRange('2099-01-01', '2099-12-31')
+            const { entries: results } = db.searchByDateRange('2099-01-01', '2099-12-31')
             expect(results).toEqual([])
         })
     })
@@ -622,27 +630,27 @@ describe('DatabaseAdapter', () => {
     describe('searchEntries - advanced filters', () => {
         it('should filter by issueNumber', () => {
             db.createEntry({ content: 'Issue filter test', issueNumber: 888 })
-            const results = db.searchEntries('', { issueNumber: 888 })
+            const { entries: results } = db.searchEntries('', { issueNumber: 888 })
             expect(results.length).toBeGreaterThan(0)
         })
 
         it('should filter by prNumber', () => {
             db.createEntry({ content: 'PR filter test', prNumber: 77 })
-            const results = db.searchEntries('', { prNumber: 77 })
+            const { entries: results } = db.searchEntries('', { prNumber: 77 })
             expect(results.length).toBeGreaterThan(0)
         })
 
         it('should filter by isPersonal', () => {
-            const results = db.searchEntries('', { isPersonal: false })
+            const { entries: results } = db.searchEntries('', { isPersonal: false })
             expect(results.every((e) => !e.isPersonal)).toBe(true)
         })
 
         it('should filter by tags', () => {
             db.createEntry({ content: 'tags search target', tags: ['searchfilter'] })
-            const results = db.searchEntries('target', { tags: ['searchfilter'] })
-            const emptyResults = db.searchEntries('target', { tags: ['nonexistent-tag'] })
+            const { entries: results } = db.searchEntries('target', { tags: ['searchfilter'] })
+            const { entries: emptyResults } = db.searchEntries('target', { tags: ['nonexistent-tag'] })
             // Test non-FTS too
-            const noFts = db.searchEntries('', { tags: ['searchfilter'] })
+            const { entries: noFts } = db.searchEntries('', { tags: ['searchfilter'] })
             expect(results.length).toBeGreaterThan(0)
             expect(emptyResults.length).toBe(0)
             expect(noFts.some((e) => e.tags.includes('searchfilter'))).toBe(true)
@@ -650,7 +658,7 @@ describe('DatabaseAdapter', () => {
 
         it('should filter by entryType', () => {
             db.createEntry({ content: 'entrytype target', entryType: 'milestone' })
-            const results = db.searchEntries('entrytype target', { entryType: 'milestone' })
+            const { entries: results } = db.searchEntries('entrytype target', { entryType: 'milestone' })
             expect(results.length).toBeGreaterThan(0)
             expect(results.every((e) => e.entryType === 'milestone')).toBe(true)
         })
@@ -660,16 +668,16 @@ describe('DatabaseAdapter', () => {
             const today = new Date().toISOString().split('T')[0]!
             const future = new Date(Date.now() + 86400000 * 2).toISOString().split('T')[0]!
 
-            const exactMatches = db.searchEntries('date target xyz', {
+            const { entries: exactMatches } = db.searchEntries('date target xyz', {
                 startDate: today,
                 endDate: today,
             })
             expect(exactMatches.length).toBeGreaterThan(0)
 
-            const noMatchesFuture = db.searchEntries('date target xyz', { startDate: future })
+            const { entries: noMatchesFuture } = db.searchEntries('date target xyz', { startDate: future })
             expect(noMatchesFuture.length).toBe(0)
 
-            const matchesPast = db.searchEntries('date target xyz', { endDate: today })
+            const { entries: matchesPast } = db.searchEntries('date target xyz', { endDate: today })
             expect(matchesPast.length).toBeGreaterThan(0)
         })
     })
@@ -677,7 +685,7 @@ describe('DatabaseAdapter', () => {
     describe('searchByDateRange - with type filter', () => {
         it('should filter by entry type', () => {
             const today = new Date().toISOString().split('T')[0]!
-            const results = db.searchByDateRange(today, today, {
+            const { entries: results } = db.searchByDateRange(today, today, {
                 entryType: 'project_decision',
             })
             for (const r of results) {
@@ -688,7 +696,7 @@ describe('DatabaseAdapter', () => {
         it('should filter by tags', () => {
             db.createEntry({ content: 'Tag date range', tags: ['daterange-tag'] })
             const today = new Date().toISOString().split('T')[0]!
-            const results = db.searchByDateRange(today, today, {
+            const { entries: results } = db.searchByDateRange(today, today, {
                 tags: ['daterange-tag'],
             })
             expect(results.length).toBeGreaterThan(0)

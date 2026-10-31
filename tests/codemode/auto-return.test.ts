@@ -145,12 +145,10 @@ describe('transformAutoReturn', () => {
         })
 
         it('should handle trailing semicolon', () => {
-            // Last statement after the final semicolon is empty, so no transform
             const code = 'mj.help();'
             const result = transformAutoReturn(code)
-            // The semicolon makes the "last statement" empty, so it falls
-            // back to returning code unchanged
-            expect(result).toBe('mj.help();')
+            // The new parser correctly strips trailing semicolons and prepends return
+            expect(result).toBe('return mj.help()')
         })
 
         it('should not return closing brace of a block', () => {

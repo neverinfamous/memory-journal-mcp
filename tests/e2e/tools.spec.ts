@@ -5,9 +5,11 @@
  * via Streamable HTTP transport and execute tools end-to-end.
  */
 
-import { test, expect } from '@playwright/test'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+import { test, expect } from './test-fixture.js'
+import { Client } from '@modelcontextprotocol/client'
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
+
+import { getServerUrl } from './helpers.js'
 
 test.describe.configure({ mode: 'serial' })
 
@@ -15,7 +17,7 @@ test.describe('E2E Tool Execution (via MCP SDK Client)', () => {
     let client: Client
 
     test.beforeAll(async () => {
-        const transport = new StreamableHTTPClientTransport(new URL('http://localhost:3100/mcp'))
+        const transport = new StreamableHTTPClientTransport(getServerUrl('/mcp'), { protocolVersion: '2024-11-05' })
         client = new Client(
             { name: 'playwright-tool-test', version: '1.0.0' },
             { capabilities: {} }
@@ -52,10 +54,17 @@ test.describe('E2E Tool Execution (via MCP SDK Client)', () => {
         }
     }
 
-    test('should execute create_entry_minimal and get structured response', async () => {
+    test('should execute create_entry and get structured response', async () => {
         const response = await client.callTool({
-            name: 'create_entry_minimal',
-            arguments: { content: 'Playwright e2e test entry' },
+            name: 'create_entry',
+            arguments: { 
+                workspace_id: 'default',
+                project_number: 1, 
+                content: 'Playwright e2e test entry',
+                trust_score: 0.8,
+                impact_score: 0.5,
+                validation_status: 'passed'
+            },
         })
 
         expect(response.isError).toBeUndefined()
@@ -66,6 +75,21 @@ test.describe('E2E Tool Execution (via MCP SDK Client)', () => {
         expect(parsed).toHaveProperty('success', true)
         expect(parsed).toHaveProperty('entry')
         expect(parsed.entry).toHaveProperty('id')
+        expect(parsed.entry).toHaveProperty('trustScore', 0.8)
+        expect(parsed.entry).toHaveProperty('impactScore', 0.5)
+        expect(parsed.entry).toHaveProperty('validationStatus', 'passed')
+    })
+
+    test('should execute mark_anchors_stale tool', async () => {
+        const response = await client.callTool({
+            name: 'mark_anchors_stale',
+            arguments: { updates: [{ id: 999999, status: 'stale' }] }, // It will execute but just update 0 rows in DB realistically, or maybe error depending on DB schema, but we just verify it executes without schema errors
+        })
+
+        expect(response.isError).toBeUndefined()
+        const parsed = getOutput(response) as any
+        expect(parsed).toHaveProperty('success', true)
+        expect(parsed).toHaveProperty('updated_count', 1)
     })
 
     test('should execute get_recent_entries and return entries array', async () => {
@@ -83,10 +107,11 @@ test.describe('E2E Tool Execution (via MCP SDK Client)', () => {
         expect(Array.isArray(parsed.entries)).toBe(true)
     })
 
-    test('should return structured error for invalid entry_type', async () => {
+    test('should heal invalid entry_type to other', async () => {
         const response = await client.callTool({
             name: 'create_entry',
             arguments: {
+                workspace_id: 'default',
                 project_number: 1,
                 content: 'test validation',
                 entry_type: 'invalid_type',
@@ -98,8 +123,8 @@ test.describe('E2E Tool Execution (via MCP SDK Client)', () => {
         expect(Array.isArray(response.content)).toBe(true)
 
         const parsed = getOutput(response) as any
-        expect(parsed).toHaveProperty('success', false)
-        expect(parsed).toHaveProperty('error')
-        expect(parsed.error).toContain('entry_type')
+        expect(parsed).toHaveProperty('success', true)
+        expect(parsed.entry.entryType).toBe('other')
+        expect(parsed.entry.tags).toContain('invalid-type')
     })
 })

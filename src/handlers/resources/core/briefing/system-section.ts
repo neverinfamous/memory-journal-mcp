@@ -11,28 +11,41 @@
  */
 
 import * as fs from 'node:fs'
-import { createRequire } from 'node:module'
+
 import * as path from 'node:path'
+import { z } from 'zod'
 
 import { VERSION } from '../../../../version.js'
-import { getAllToolNames, TOOL_GROUPS } from '../../../../filtering/tool-filter.js'
+import { getAllToolNames } from '../../../../filtering/tool-filter.js'
+import { TOOL_GROUPS } from '../../../../filtering/tool-constants.js'
 import type { ToolFilterConfig } from '../../../../filtering/tool-filter.js'
 import { getPrompts } from '../../../prompts/index.js'
 import { logger } from '../../../../utils/logger.js'
 import type { BriefingConfig } from '../../shared.js'
 
+
 // ============================================================================
 // Types
 // ============================================================================
 
-export interface UnreleasedSummary {
-    added: number
-    changed: number
-    fixed: number
-    security: number
-    removed: number
-    /** Top 3 bold-prefixed category names from Added/Changed/Fixed sections */
-    keyItems: string[]
+export interface GitHistorySummary {
+    stats?: {
+        total: number;
+        highImpact: number;
+        lowImpact: number;
+        avgConfidence: number;
+    }
+    commits: { 
+        hash: string; 
+        type?: string;
+        size?: string;
+        significance?: number | string;
+        confidence?: number | string;
+        isBreaking?: boolean;
+        message: string; 
+        isPushed?: boolean;
+        associatedIssues?: string[];
+    }[]
 }
 
 export interface TestHealth {
@@ -47,16 +60,12 @@ export interface SystemContext {
     resourceCount: number
     promptCount: number
     localTime: string
-    unreleasedSummary: UnreleasedSummary | null
+    gitHistory: GitHistorySummary | null
     testHealth: TestHealth | null
     /** Compact filter summary, e.g. "codemode (1/70)", or null when all tools exposed */
     filterSummary: string | null
     /** Whether the system is in a read-only state (admin tools disabled) */
     isReadonly: boolean
-    /** Active instruction level (essential | standard | full) */
-    instructionLevel: string
-    /** Registered repo names from PROJECT_REGISTRY, null when unconfigured */
-    registryRepos: string[] | null
     /** Count of ALLOWED_IO_ROOTS entries */
     ioRootCount: number
     /** Whether code-map.md exists in the project root */
@@ -65,35 +74,17 @@ export interface SystemContext {
     lastReleaseDaysAgo: number | null
     /** Status of the local lint/tsc check, if available */
     localCheck: boolean | null
+    /** The active workspace ID if configured */
+    workspaceId?: string
 }
 
-// ============================================================================
-// Lazy Resource Count (replaces former hardcoded RESOURCE_COUNT constant)
-// ============================================================================
-
-/** Startup-cached resource count derived from live registry */
-let cachedResourceCount: number | undefined
-
-/**
- * Get the total resource count by lazy-loading the resource registry.
- * Uses dynamic import() to avoid a circular dependency:
- * system-section → resources/index → core/index → briefing/index → system-section
- */
-async function getResourceCount(): Promise<number> {
-    if (cachedResourceCount !== undefined) return cachedResourceCount
-
-    try {
-        const { getResources } = await import('../../index.js')
-        cachedResourceCount = getResources().length
-    } catch {
-        logger.debug('Failed to dynamically load resource count (non-critical)', {
-            module: 'BRIEFING',
-            operation: 'resource-count',
-        })
-        cachedResourceCount = 0
-    }
-    return cachedResourceCount
+export interface BuildSystemContextOptions {
+    config?: BriefingConfig
+    filterConfig?: ToolFilterConfig | null
+    targetRepoPath?: string
 }
+
+
 
 // ============================================================================
 // Startup-Cached Parsers
@@ -108,94 +99,23 @@ async function getResourceCount(): Promise<number> {
  * breaks when tsup flattens the directory structure.
  */
 function resolveProjectRoot(): string {
-    const require = createRequire(import.meta.url)
-    const pkgPath = require.resolve('../package.json')
-    return path.dirname(pkgPath)
+    let current = new URL(import.meta.url).pathname
+    if (process.platform === 'win32' && current.startsWith('/')) {
+        current = current.slice(1)
+    }
+    current = path.dirname(current)
+    while (current !== path.dirname(current)) {
+        if (fs.existsSync(path.join(current, 'package.json'))) {
+            return current
+        }
+        current = path.dirname(current)
+    }
+    return process.cwd()
 }
 
-/**
- * Parse `UNRELEASED.md` into category counts.
- *
- * Expects Keep-a-Changelog format with `### Added`, `### Changed`, etc.
- * Each `-` prefixed line under a header counts as one change.
- */
-export function parseUnreleasedSummary(content: string): UnreleasedSummary | null {
-    const counts: UnreleasedSummary = {
-        added: 0,
-        changed: 0,
-        fixed: 0,
-        security: 0,
-        removed: 0,
-        keyItems: [],
-    }
-
-    /** Count-only fields of UnreleasedSummary (excludes keyItems) */
-    type CountKey = 'added' | 'changed' | 'fixed' | 'security' | 'removed'
-
-    const headerMap: Record<string, CountKey> = {
-        added: 'added',
-        changed: 'changed',
-        fixed: 'fixed',
-        security: 'security',
-        removed: 'removed',
-    }
-
-    let currentCategory: CountKey | null = null
-
-    for (const line of content.split('\n')) {
-        const trimmed = line.trim()
-
-        // Detect category headers: ### Added, ### Changed, etc.
-        const headerMatch = /^###\s+(\w+)/.exec(trimmed)
-        if (headerMatch?.[1]) {
-            const key = headerMap[headerMatch[1].toLowerCase()]
-            currentCategory = key ?? null
-            continue
-        }
-
-        // Count only top-level bullet items (no leading whitespace)
-        if (currentCategory !== null && line.startsWith('- ')) {
-            counts[currentCategory]++
-        }
-    }
-
-    const total = counts.added + counts.changed + counts.fixed + counts.security + counts.removed
-    return total > 0 ? { ...counts, keyItems: parseUnreleasedKeyItems(content) } : null
-}
-
-/**
- * Extract the top 3 unique bold-prefixed category names from UNRELEASED.md.
- *
- * Looks for lines matching `- **category**: description` under Added/Changed/Fixed
- * headers and returns deduplicated category names.
- */
-export function parseUnreleasedKeyItems(content: string): string[] {
-    const categories = new Set<string>()
-    let inRelevantSection = false
-
-    for (const line of content.split('\n')) {
-        const trimmed = line.trim()
-
-        // Track if we're under Added, Changed, or Fixed headers
-        const headerMatch = /^###\s+(\w+)/.exec(trimmed)
-        if (headerMatch?.[1]) {
-            const section = headerMatch[1].toLowerCase()
-            inRelevantSection = section === 'added' || section === 'changed' || section === 'fixed'
-            continue
-        }
-
-        // Extract bold prefix from top-level bullets: - **prefix**: ...
-        if (inRelevantSection && line.startsWith('- ')) {
-            const boldMatch = /^-\s+\*\*([^*]+)\*\*/.exec(line)
-            if (boldMatch?.[1]) {
-                categories.add(boldMatch[1].trim())
-            }
-        }
-    }
-
-    // Return top 3 unique items
-    return [...categories].slice(0, 3)
-}
+// ============================================================================
+// Cached Startup Data
+// ============================================================================
 
 /**
  * Parse README.md badge lines for test counts and coverage.
@@ -219,37 +139,134 @@ export function parseTestHealth(content: string): TestHealth | null {
     }
 }
 
-// ============================================================================
-// Cached Startup Data
-// ============================================================================
+const cachedGitHistory = new Map<string, GitHistorySummary | null>()
+const cachedTestHealth = new Map<string, TestHealth | null>()
 
-let cachedUnreleased: UnreleasedSummary | null | undefined
-let cachedTestHealth: TestHealth | null | undefined
+import { execFileSync } from 'node:child_process'
 
-function loadCachedUnreleased(): UnreleasedSummary | null {
-    if (cachedUnreleased !== undefined) return cachedUnreleased
+function loadCachedGitHistory(commitCount: number, targetPath?: string, importanceThreshold?: number): GitHistorySummary | null {
+    const root = targetPath || resolveProjectRoot()
+    const existing = cachedGitHistory.get(root)
+    if (existing !== undefined) return existing
 
     try {
-        const root = resolveProjectRoot()
-        const filePath = path.join(root, 'UNRELEASED.md')
-        const content = fs.readFileSync(filePath, 'utf-8')
-        cachedUnreleased = parseUnreleasedSummary(content)
-    } catch {
-        logger.debug('UNRELEASED.md not found or unreadable (non-critical)', {
-            module: 'BRIEFING',
-            operation: 'unreleased-parse',
+        if (process.env['VITEST']) {
+            cachedGitHistory.set(root, null)
+            return null
+        }
+
+        const fetchLimit = Math.max(50, commitCount * 4)
+        const out = execFileSync('bun', [
+            'C:\\Users\\chris\\Desktop\\adamic\\.agents\\scripts\\get-git-history-json.ts',
+            '--limit', String(fetchLimit),
+            '--summary'
+        ], { cwd: root, encoding: 'utf-8', windowsHide: true })
+        
+        const parsedData = JSON.parse(out) as unknown
+        
+        const gitHistorySchema = z.object({
+            commits: z.array(z.object({
+                commit: z.string().optional(),
+                type: z.string().optional(),
+                size: z.string().optional(),
+                isBreaking: z.boolean().optional(),
+                subject: z.string().optional(),
+                metadata: z.object({
+                    significance: z.union([z.number(), z.string()]).optional(),
+                    impact: z.union([z.number(), z.string()]).optional(),
+                    confidence: z.union([z.number(), z.string()]).optional(),
+                    trust: z.union([z.number(), z.string()]).optional()
+                }).optional(),
+                associatedIssues: z.array(z.object({
+                    issue: z.string()
+                })).optional()
+            }).loose()).optional()
+        }).loose()
+        
+        const parsed = gitHistorySchema.parse(parsedData)
+        
+        const unpushedHashes = new Set<string>()
+        try {
+            const unpushedOut = execFileSync('git', ['log', '@{u}..HEAD', '--format=%H'], { cwd: root, encoding: 'utf-8', windowsHide: true })
+            unpushedOut.split('\n').filter(Boolean).forEach(h => unpushedHashes.add(h.trim()))
+        } catch {
+            // Ignore if no upstream tracking branch
+        }
+
+        const commits: GitHistorySummary['commits'] = (parsed.commits ?? []).map(c => {
+            const fullHash = c.commit ?? ''
+            const issues = c.associatedIssues ? c.associatedIssues.map(i => i.issue) : []
+            return {
+                hash: fullHash.substring(0, 7),
+                type: c.type,
+                size: c.size,
+                significance: c.metadata?.significance ?? c.metadata?.impact,
+                confidence: c.metadata?.confidence ?? c.metadata?.trust,
+                isBreaking: !!c.isBreaking,
+                message: c.subject ?? '',
+                isPushed: !unpushedHashes.has(fullHash),
+                associatedIssues: issues.length > 0 ? issues : undefined
+            }
         })
-        cachedUnreleased = null
+        
+        let highImpact = 0
+        let lowImpact = 0
+        let totalConf = 0
+        let confCount = 0
+        
+        for (const c of commits) {
+            const sig = typeof c.significance === 'number' ? c.significance : parseFloat(c.significance || '0')
+            if (sig >= 0.5 || c.isBreaking) {
+                highImpact++
+            } else {
+                lowImpact++
+            }
+            
+            if (c.confidence !== undefined) {
+                const conf = typeof c.confidence === 'number' ? c.confidence : parseFloat(c.confidence)
+                if (!isNaN(conf)) {
+                    totalConf += conf
+                    confCount++
+                }
+            }
+        }
+        
+        const threshold = importanceThreshold ?? 0.3;
+        const filteredCommits = commits.filter(c => {
+            const sig = typeof c.significance === 'number' ? c.significance : parseFloat(c.significance || '0');
+            return sig >= threshold || c.isBreaking;
+        });
+
+        const stats = {
+            total: commits.length,
+            highImpact,
+            lowImpact,
+            avgConfidence: confCount > 0 ? totalConf / confCount : 1.0
+        }
+        
+        const result = { 
+            stats, 
+            commits: filteredCommits.slice(0, Math.max(1, commitCount)) 
+        }
+        cachedGitHistory.set(root, result)
+    } catch (err: unknown) {
+        logger.debug('Failed to get git history via child_process (non-critical)', {
+            module: 'BRIEFING',
+            operation: 'git-history',
+            error: err instanceof Error ? err.message : String(err)
+        })
+        cachedGitHistory.set(root, null)
     }
 
-    return cachedUnreleased
+    return cachedGitHistory.get(root) ?? null
 }
 
-function loadCachedTestHealth(): TestHealth | null {
-    if (cachedTestHealth !== undefined) return cachedTestHealth
+function loadCachedTestHealth(targetPath?: string): TestHealth | null {
+    const root = targetPath || resolveProjectRoot()
+    const existing = cachedTestHealth.get(root)
+    if (existing !== undefined) return existing
 
     try {
-        const root = resolveProjectRoot()
 
         // Primary: read structured coverage data from vitest json-summary output
         const coveragePath = path.join(root, '.test-output', 'coverage', 'coverage-summary.json')
@@ -280,7 +297,7 @@ function loadCachedTestHealth(): TestHealth | null {
             } catch {
                 // Ignore error if README.md doesn't exist or is unreadable
             }
-            cachedTestHealth = { unitTests, e2eTests, coverage }
+            cachedTestHealth.set(root, { unitTests, e2eTests, coverage })
         } else {
             // Fallback: parse everything from README badges (legacy path)
             const readmePath = path.join(root, 'README.md')
@@ -289,33 +306,27 @@ function loadCachedTestHealth(): TestHealth | null {
             const bytesRead = fs.readSync(fd, buf, 0, 2048, 0)
             fs.closeSync(fd)
             const content = buf.toString('utf-8', 0, bytesRead)
-            cachedTestHealth = parseTestHealth(content)
+            cachedTestHealth.set(root, parseTestHealth(content))
         }
     } catch {
         logger.debug('Test health data not found or unreadable (non-critical)', {
             module: 'BRIEFING',
             operation: 'test-health-parse',
         })
-        cachedTestHealth = null
+        cachedTestHealth.set(root, null)
     }
 
-    return cachedTestHealth
+    const final = cachedTestHealth.get(root)
+    return final !== undefined ? final : null
 }
 
 // ============================================================================
 // Last Release Age (from CHANGELOG.md)
 // ============================================================================
 
-let cachedLastReleaseDaysAgo: number | null | undefined
+const cachedLastReleaseDaysAgo = new Map<string, number | null>()
 
-/**
- * Parse the first versioned release header from CHANGELOG.md to compute
- * days elapsed since the last tagged release.
- *
- * Expects Keep-a-Changelog headers: `## [x.y.z](url) - YYYY-MM-DD`
- */
 export function parseLastReleaseAge(content: string): number | null {
-    // Match: ## [7.7.1](url) - 2026-05-15  OR  ## [7.7.1] - 2026-05-15
     const match = /^## \[[\d.]+\].*?-\s*(\d{4}-\d{2}-\d{2})/m.exec(content)
     if (!match?.[1]) return null
     const releaseDate = new Date(match[1] + 'T00:00:00Z')
@@ -323,28 +334,29 @@ export function parseLastReleaseAge(content: string): number | null {
     return Math.max(0, Math.floor(elapsed / 86_400_000))
 }
 
-function loadCachedLastReleaseDaysAgo(): number | null {
-    if (cachedLastReleaseDaysAgo !== undefined) return cachedLastReleaseDaysAgo
+function loadCachedLastReleaseDaysAgo(targetPath?: string): number | null {
+    const root = targetPath || resolveProjectRoot()
+    const existing = cachedLastReleaseDaysAgo.get(root)
+    if (existing !== undefined) return existing
 
     try {
-        const root = resolveProjectRoot()
-        const filePath = path.join(root, 'CHANGELOG.md')
-        // Only read the first 1KB — the latest release header is near the top
-        const fd = fs.openSync(filePath, 'r')
-        const buf = Buffer.alloc(1024)
-        const bytesRead = fs.readSync(fd, buf, 0, 1024, 0)
-        fs.closeSync(fd)
-        const content = buf.toString('utf-8', 0, bytesRead)
-        cachedLastReleaseDaysAgo = parseLastReleaseAge(content)
+        const changelogPath = path.join(root, 'CHANGELOG.md')
+        if (fs.existsSync(changelogPath)) {
+            const content = fs.readFileSync(changelogPath, 'utf-8')
+            const age = parseLastReleaseAge(content)
+            cachedLastReleaseDaysAgo.set(root, age)
+        } else {
+            cachedLastReleaseDaysAgo.set(root, null)
+        }
     } catch {
-        logger.debug('CHANGELOG.md not found or unreadable (non-critical)', {
+        logger.debug('Failed to get release info (non-critical)', {
             module: 'BRIEFING',
-            operation: 'release-age-parse',
+            operation: 'release-age',
         })
-        cachedLastReleaseDaysAgo = null
+        cachedLastReleaseDaysAgo.set(root, null)
     }
 
-    return cachedLastReleaseDaysAgo
+    return cachedLastReleaseDaysAgo.get(root) ?? null
 }
 
 // ============================================================================
@@ -359,10 +371,12 @@ function loadCachedLastReleaseDaysAgo(): number | null {
  * localTime provides chronological grounding for date-relative agent queries.
  * Filter, instruction level, and registry state are derived from runtime config.
  */
-export async function buildSystemContext(
+export function buildSystemContext(
     config?: BriefingConfig,
-    filterConfig?: ToolFilterConfig | null
-): Promise<SystemContext> {
+    filterConfig?: ToolFilterConfig | null,
+    targetRepoPath?: string,
+    resourceCount?: number
+): SystemContext {
     const now = new Date()
 
     // Format localTime compactly: "2026-05-25 06:12 EDT"
@@ -394,14 +408,13 @@ export async function buildSystemContext(
         }
     }
 
-    // Check if readonly (admin tools disabled)
+    // Check if readonly (admin tools disabled, and codemode disabled since codemode is root)
     let isReadonly = false
     if (filterConfig) {
-        isReadonly = !TOOL_GROUPS.admin.some((t) => filterConfig.enabledTools.has(t))
+        const hasAdmin = TOOL_GROUPS.admin.some((t) => filterConfig.enabledTools.has(t))
+        const hasCodemode = filterConfig.enabledTools.has('mj_execute_code')
+        isReadonly = !hasAdmin && !hasCodemode
     }
-
-    // Registry repos
-    const registryRepos = config?.projectRegistry ? Object.keys(config.projectRegistry) : null
 
     // IO roots count
     const ioRootCount = config?.allowedIoRoots?.length ?? 0
@@ -409,7 +422,7 @@ export async function buildSystemContext(
     // Check for code-map.md in project root
     let hasCodeMap = false
     try {
-        const root = resolveProjectRoot()
+        const root = targetRepoPath || resolveProjectRoot()
         hasCodeMap = fs.existsSync(path.join(root, 'test-server', 'code-map.md'))
     } catch {
         // Non-critical — code-map indicator is best-effort
@@ -418,7 +431,7 @@ export async function buildSystemContext(
     // Check for local health status
     let localCheck: boolean | null = null
     try {
-        const root = resolveProjectRoot()
+        const root = targetRepoPath || resolveProjectRoot()
         const healthPath = path.join(root, '.test-output', 'health-status.json')
         if (fs.existsSync(healthPath)) {
             const content = fs.readFileSync(healthPath, 'utf-8')
@@ -434,18 +447,17 @@ export async function buildSystemContext(
     return {
         version: VERSION,
         toolCount: totalTools,
-        resourceCount: await getResourceCount(),
+        resourceCount: resourceCount ?? 0,
         promptCount: getPrompts().length,
         localTime,
-        unreleasedSummary: loadCachedUnreleased(),
-        testHealth: loadCachedTestHealth(),
+        gitHistory: loadCachedGitHistory(config?.commitCount ?? 3, targetRepoPath, config?.briefingImportanceThreshold),
+        testHealth: loadCachedTestHealth(targetRepoPath),
         filterSummary,
         isReadonly,
-        instructionLevel: 'standard',
-        registryRepos: registryRepos && registryRepos.length > 0 ? registryRepos : null,
         ioRootCount,
         hasCodeMap,
-        lastReleaseDaysAgo: loadCachedLastReleaseDaysAgo(),
+        lastReleaseDaysAgo: loadCachedLastReleaseDaysAgo(targetRepoPath),
         localCheck,
+        workspaceId: config?.defaultWorkspaceId,
     }
 }

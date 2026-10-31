@@ -32,6 +32,12 @@ describe('scope-map', () => {
             }
         })
 
+        it('should return correct scope for synthetic and prefixed tools', () => {
+            expect(getRequiredScope('mj_core_create_entry')).toBe('write')
+            expect(getRequiredScope('mj_core_search_entries')).toBe('read')
+            expect(getRequiredScope('mj_admin_get_project')).toBe('read')
+        })
+
         it('should throw error for unknown tools', () => {
             expect(() => getRequiredScope('nonexistent_tool_xyz')).toThrow(
                 'CRITICAL SECURITY FAILURE'
@@ -67,6 +73,17 @@ describe('scope-map', () => {
                         ].includes(tool)
                     ) {
                         expected = 'write'
+                    } else if (
+                        [
+                            'list_projects',
+                            'listProjects',
+                            'get_projects',
+                            'getProjects',
+                            'get_project',
+                            'getProject'
+                        ].includes(tool)
+                    ) {
+                        expected = 'read'
                     }
                     expect(map.get(tool)).toBe(expected)
                 }

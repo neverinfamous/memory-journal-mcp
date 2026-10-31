@@ -5,7 +5,7 @@
  * return correct responses with expected structure.
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test-fixture.js'
 
 test.describe('Health & Root Info', () => {
     test('should return 200 OK from /health endpoint', async ({ request }) => {
@@ -37,6 +37,7 @@ test.describe('Health & Root Info', () => {
         const response = await request.post('/mcp', {
             headers: {
                 Accept: 'application/json, text/event-stream',
+                    'mcp-protocol-version': '2024-11-05',
             },
             data: {
                 jsonrpc: '2.0',

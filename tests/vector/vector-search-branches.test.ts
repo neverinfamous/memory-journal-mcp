@@ -16,7 +16,7 @@ vi.mock('../../src/utils/progress-utils.js', () => ({
     sendProgress: vi.fn().mockResolvedValue(undefined),
 }))
 
-import { VectorSearchManager } from '../../src/vector/vector-search-manager.js'
+import { VectorSearchManager } from '../../src/vector/vector-search-manager/index.js'
 
 // ============================================================================
 // Tests
@@ -27,15 +27,14 @@ describe('VectorSearchManager — branch coverage', () => {
         vi.clearAllMocks()
     })
 
-    it('should return false from addEntry when no db after initialize', async () => {
+    it('should throw from addEntry when no db after initialize', async () => {
         const manager = new VectorSearchManager(null as any)
 
         // Force skipping real initialization by marking it as initialized
         // but with no db connection
         Object.assign(manager, { initialized: true })
 
-        const result = await manager.addEntry(1, 'test content')
-        expect(result).toEqual({ success: false, error: 'Vector database not available' })
+        await expect(manager.addEntry({ id: 1, content: 'test content' } as any)).rejects.toThrow('Vector database not available')
     })
 
     it('should return empty results from search when no db after initialize', async () => {
@@ -61,9 +60,8 @@ describe('VectorSearchManager — branch coverage', () => {
             Object.assign(manager, { initialized: true })
         })
 
-        const result = await manager.addEntry(1, 'test')
+        await expect(manager.addEntry({ id: 1, content: 'test' } as any)).rejects.toThrow('Vector search not initialized properly. Cannot rebuild index.')
         expect(initSpy).toHaveBeenCalled()
-        expect(result).toEqual({ success: false, error: 'Vector database not available' }) // no db, so returns structured error
     })
 
     it('should auto-initialize when calling search on uninitialized manager', async () => {
@@ -73,7 +71,7 @@ describe('VectorSearchManager — branch coverage', () => {
             Object.assign(manager, { initialized: true })
         })
 
-        await expect(manager.search('query')).rejects.toThrow('Vector database not available')
+        await expect(manager.search('query')).rejects.toThrow('Vector search not initialized properly. Cannot rebuild index.')
         expect(initSpy).toHaveBeenCalled()
     })
 })

@@ -19,28 +19,63 @@ import type {
     ToolHandlerConfig,
 } from '../../types/index.js'
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
-import type { VectorSearchManager } from '../../vector/vector-search-manager.js'
+import type { VectorSearchManager } from '../../vector/vector-search-manager/index.js'
 import type { GitHubIntegration } from '../../github/github-integration/index.js'
 import type { ProgressContext } from '../../utils/progress-utils.js'
+import type { ProjectRegistryEntry } from '../../types/index.js'
 
-import { getCoreTools } from './core.js'
+import { getCoreTools, getStalenessTools, getDummyHealingTools, DUMMY_HEALING_TOOL_NAMES } from './core/index.js'
 import { getSearchTools } from './search/index.js'
 import { getAnalyticsTools } from './analytics.js'
 import { getRelationshipTools } from './relationships.js'
-import { getIoTools } from './io.js'
-import { getAdminTools } from './admin.js'
+import { getIoTools } from './io/index.js'
+import { getAdminTools } from './admin/index.js'
 import { getGitHubTools } from './github.js'
 import { getBackupTools } from './backup.js'
 import { getTeamTools } from './team/index.js'
-import { getCodeModeTools } from './codemode.js'
+import { getCodeModeTools } from './codemode/index.js'
+import { getGitTools } from './git.js'
 
 import { wrapWithMetrics, injectTokenEstimate } from '../../observability/index.js'
 
 import { enforceAccessBoundary } from '../../auth/validation.js'
 import { ResourceNotFoundError, ConfigurationError } from '../../types/errors.js'
+import { z } from 'zod'
+import { requestContextStorage } from '../../utils/request-context.js'
+import { applyArgInterceptions } from '../../codemode/param-normalizer.js'
 
 // Re-export for backward compatibility (McpServer imports these)
 export type { ToolHandlerConfig }
+
+// ============================================================================
+// Project Name Injection
+// ============================================================================
+
+export function injectProjectNames(obj: unknown, registry?: Record<string, ProjectRegistryEntry>): void {
+    if (obj === undefined || obj === null || typeof obj !== 'object' || registry === undefined) return
+    
+    if (Array.isArray(obj)) {
+        obj.forEach(item => injectProjectNames(item, registry))
+    } else {
+        const record = obj as Record<string, unknown>
+        const pNum = typeof record['projectNumber'] === 'number' ? record['projectNumber'] : 
+                     (typeof record['project_number'] === 'number' ? record['project_number'] : undefined)
+        
+        if (pNum !== undefined && typeof record['projectName'] === 'undefined') {
+            const entry = Object.entries(registry).find(
+                ([_, r]) => r.project_number === pNum
+            )
+            if (entry) {
+                record['projectName'] = entry[0]
+            }
+        }
+        for (const key in record) {
+            if (typeof record[key] === 'object' && record[key] !== null) {
+                injectProjectNames(record[key], registry)
+            }
+        }
+    }
+}
 
 // Global audit singletons removed per CRIT-1
 // Callers must provide ServerRuntime.
@@ -103,6 +138,11 @@ function getToolIcon(
             title: 'Code Mode',
             description: 'Sandboxed code execution',
         },
+        git: {
+            iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/source-branch.svg',
+            title: 'Git History',
+            description: 'Git history operations',
+        },
     }
     return iconMap[group]
 }
@@ -141,8 +181,9 @@ export function getTools(
     if (filterConfig) {
         // Filtered lists are not cached — filter sets vary per call
         const mapToUse = config?.runtime?.toolMapCache ?? toolMapCache ?? EMPTY_TOOL_MAP
+        const includeDummyTools = config?.agentHealing !== false
         return Array.from(mapToUse.values())
-            .filter((t) => filterConfig.enabledTools.has(t.name))
+            .filter((t) => filterConfig.enabledTools.has(t.name) || (includeDummyTools && DUMMY_HEALING_TOOL_NAMES.has(t.name)))
             .map(mapTool)
     }
 
@@ -254,6 +295,11 @@ function ensureToolCache(
     // When audit logging is enabled, also wraps with the audit interceptor.
     // This is O(n) once per cache miss — production cost is negligible.
     const instrumentedDefs: ToolDefinition[] = rawDefs.map((t) => {
+        let schema = t.inputSchema
+        if (schema instanceof z.ZodObject) {
+            schema = schema.extend({ use_test_db: z.boolean().optional() })
+        }
+
         // Layer 1: Metrics collection (always active if runtime is provided)
         const metricsInstance = config?.runtime?.metrics
         const metricsWrapped =
@@ -268,14 +314,24 @@ function ensureToolCache(
         // Layer 2: Audit logging (only when initialized)
         const runtimeAudit = config?.runtime ? config.runtime.auditInterceptor : null
         const interceptor = runtimeAudit
-        const finalHandler =
+        const baseHandler =
             interceptor !== null && interceptor !== undefined
                 ? (args: Record<string, unknown>): Promise<unknown> =>
                       interceptor.around(t.name, args, () => metricsWrapped(args))
                 : metricsWrapped
 
+        const finalHandler = (args: Record<string, unknown>): Promise<unknown> => {
+            if (args['use_test_db'] === true) {
+                const cleanArgs = { ...args }
+                delete cleanArgs['use_test_db']
+                return requestContextStorage.run({ useTestDb: true }, () => baseHandler(cleanArgs))
+            }
+            return baseHandler(args)
+        }
+
         return {
             ...t,
+            inputSchema: schema,
             handler: finalHandler as (params: unknown) => unknown,
         }
     })
@@ -289,7 +345,7 @@ function ensureToolCache(
             vectorManager,
             config,
             teamDb,
-            teamVectorManager,
+            teamVectorManager
         }
     } else {
         toolMapCache = new Map(instrumentedDefs.map((t) => [t.name, t]))
@@ -314,10 +370,37 @@ export async function callTool(
 ): Promise<unknown> {
     ensureToolCache(db, vectorManager, github, config, teamDb, teamVectorManager)
 
+    if (config?.agentHealing !== false) {
+        const intercept = applyArgInterceptions(name, [args])
+        if ('error' in intercept) {
+            return intercept.error
+        }
+        const cleanArgs = (intercept.args[0] as Record<string, unknown>) ?? args
+        args = cleanArgs
+    }
+
     const mapToUse = config?.runtime?.toolMapCache ?? toolMapCache ?? EMPTY_TOOL_MAP
     const tool = mapToUse.get(name)
 
     if (!tool) {
+        if (name === 'read_resource' || name === 'readResource') {
+            throw new ResourceNotFoundError(
+                'Tool',
+                `${name}. Code Mode cannot directly call read_resource as an MCP tool. Use mj_execute_code or query tools directly.`
+            )
+        }
+        if (['create_entry', 'createEntry', 'insert_entry', 'insertEntry', 'add_entry', 'addEntry', 'search_entries', 'searchEntries', 'get_recent_entries', 'getRecentEntries', 'list_projects', 'listProjects', 'get_project', 'getProject'].includes(name)) {
+            throw new ResourceNotFoundError(
+                'Tool',
+                `${name}. memory-journal-mcp uses Code Mode: use 'mj_execute_code' with JavaScript (e.g. return await mj.core.${name}(...)).`
+            )
+        }
+        if (name.includes('.') || name.startsWith('mj.') || name.startsWith('mj_core_') || name.startsWith('mj_admin_') || name.startsWith('mj_search_')) {
+            throw new ResourceNotFoundError(
+                'Tool',
+                `${name}. '${name}' is a Code Mode JavaScript function/namespace, not a top-level MCP tool. Use 'mj_execute_code' with JavaScript (e.g. return await ${name}({ ... })).`
+            )
+        }
         throw new ResourceNotFoundError('Tool', name)
     }
 
@@ -347,7 +430,7 @@ export async function callTool(
             teamVectorManager,
             github,
             config,
-            progress,
+            progress
         }
         const freshTools = getAllToolDefinitions(context)
         const freshTool = freshTools.find((t) => t.name === name)
@@ -369,11 +452,20 @@ export async function callTool(
                     : null
             const interceptor = runtimeAudit
 
-            const wrappedHandler = async (a: Record<string, unknown>): Promise<unknown> => {
+            const baseHandler = async (a: Record<string, unknown>): Promise<unknown> => {
                 if (interceptor !== null && interceptor !== undefined) {
                     return await interceptor.around(freshTool.name, a, () => metricsWrapped(a))
                 }
                 return await metricsWrapped(a)
+            }
+
+            const wrappedHandler = async (a: Record<string, unknown>): Promise<unknown> => {
+                if (a['use_test_db'] === true) {
+                    const cleanArgs = { ...a }
+                    delete cleanArgs['use_test_db']
+                    return requestContextStorage.run({ useTestDb: true }, () => baseHandler(cleanArgs))
+                }
+                return baseHandler(a)
             }
 
             if (
@@ -384,10 +476,12 @@ export async function callTool(
                     () => wrappedHandler(args),
                     name === 'restore_backup'
                 )
+                injectProjectNames(freshResult, config?.projectRegistry)
                 return injectTokenEstimate(freshResult)
             }
 
             const freshResult = await wrappedHandler(args)
+            injectProjectNames(freshResult, config?.projectRegistry)
             return injectTokenEstimate(freshResult)
         }
     }
@@ -400,10 +494,12 @@ export async function callTool(
             () => Promise.resolve(tool.handler(args)),
             name === 'restore_backup' // restore bypasses lock since it acquires exclusive
         )
+        injectProjectNames(result, config?.projectRegistry)
         return injectTokenEstimate(result)
     }
 
     const result = await Promise.resolve(tool.handler(args))
+    injectProjectNames(result, config?.projectRegistry)
     return injectTokenEstimate(result)
 }
 
@@ -411,8 +507,9 @@ export async function callTool(
  * Compose all tool definitions from group modules
  */
 function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
-    return [
+    const primaryTools = [
         ...getCoreTools(context),
+        ...getStalenessTools(context),
         ...getSearchTools(context),
         ...getAnalyticsTools(context),
         ...getRelationshipTools(context),
@@ -422,5 +519,12 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
         ...getBackupTools(context),
         ...getTeamTools(context),
         ...getCodeModeTools(context),
+        ...getGitTools(context),
     ]
+    if (context.config?.agentHealing === false) {
+        return primaryTools
+    }
+    const primaryNames = new Set(primaryTools.map((t) => t.name))
+    const dummyTools = getDummyHealingTools(context).filter((t) => !primaryNames.has(t.name))
+    return [...primaryTools, ...dummyTools]
 }

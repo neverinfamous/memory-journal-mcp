@@ -5,16 +5,13 @@
  * context sections for the briefing resource.
  */
 
-import * as fs from 'node:fs'
-import * as path from 'node:path'
 import type { BriefingConfig, ResourceContext } from '../../shared.js'
 import { logger } from '../../../../utils/logger.js'
-import { parseFlagContext } from '../../../../types/auto-context.js'
+
 import {
     markUntrustedContentInline,
-    assertSafeFilePath,
-    assertSafeDirectoryPath,
 } from '../../../../utils/security-utils.js'
+import type { JournalEntry } from '../../../../types/index.js'
 
 // ============================================================================
 // Journal Context
@@ -25,14 +22,35 @@ const PREVIEW_LENGTH = 120
 
 function cleanPreview(content: string | undefined | null, length: number): string {
     if (!content) return ''
-    const clean = content.trim().replace(/\s+/g, ' ')
-    if (clean.length <= length) return clean
+    
+    // Path Truncation and Noise Reduction
+    const cleaned = content
+        .replace(/## Accomplished - /g, '')
+        .replace(/## Accomplished\n?/g, '')
+        // Windows paths
+        .replace(/C:\\Users\\[^\\]+\\.gemini\\antigravity(?:-ide)?\\brain/g, '<appDataDir>\\brain')
+        .replace(/C:\\Users\\[^\\]+\\Desktop/g, '<desktop>')
+        // Linux/Mac paths
+        .replace(/\/home\/[^/]+\/\.gemini\/antigravity(?:-ide)?\/brain/g, '<appDataDir>/brain')
+        .replace(/\/home\/[^/]+\/Desktop/g, '<desktop>')
+        .replace(/\/Users\/[^/]+\/\.gemini\/antigravity(?:-ide)?\/brain/g, '<appDataDir>/brain')
+        .replace(/\/Users\/[^/]+\/Desktop/g, '<desktop>')
+        .replace(/\r?\n/g, ' ')
+        .trim()
+        
+    if (cleaned.length <= length) return cleaned
 
-    // Truncate at a word boundary to avoid cutting mid-word
-    const truncated = clean.slice(0, length)
+    // First try to truncate at the last full sentence or bullet point within the length limit
+    const truncated = cleaned.slice(0, length)
+    const sentenceBoundaryMatch = /.*[.?!](?=\s|$)/.exec(truncated)
+    if (sentenceBoundaryMatch && sentenceBoundaryMatch[0].length > length * 0.4) {
+        return sentenceBoundaryMatch[0]
+    }
+
+    // Fallback: Truncate at a word boundary to avoid cutting mid-word
     const lastSpace = truncated.lastIndexOf(' ')
     const boundary = lastSpace > length * 0.6 ? lastSpace : length
-    return clean.slice(0, boundary) + '…'
+    return cleaned.slice(0, boundary) + '…'
 }
 
 export interface JournalContext {
@@ -41,68 +59,115 @@ export interface JournalContext {
     latestSessionSummary?: { id: number; timestamp: string; type: string; preview: string }
     sessionSummaries?: { id: number; timestamp: string; type: string; preview: string }[]
     lastModified: string
+    workspaceId?: string
 }
+
+function extractEntries(result: JournalEntry[] | { entries: JournalEntry[] }): JournalEntry[] {
+    if (Array.isArray(result)) return result
+    return 'entries' in result ? result.entries : []
+}
+
+
 
 export function buildJournalContext(
     context: ResourceContext,
     config: BriefingConfig,
-    projectNumber?: number | null
+    projectNumber?: number | null,
+    activeWorkspaceId?: string
 ): JournalContext {
-    // ── Session summaries (computed first to enable deduplication) ──────
-    const summaryEntries =
+    const threshold = config.briefingImportanceThreshold ?? 0.3
+    const isImportant = (e: JournalEntry): boolean => {
+        if (e.tags?.includes('session-summary')) return true
+        const score = e.importanceScore ?? context.db.calculateImportance(e.id).score
+        return score >= threshold
+    }
+
+    const targetWs = activeWorkspaceId || config.defaultWorkspaceId || 'default'
+    const summaryFetchLimit = Math.max(20, (config.summaryCount ?? 1) * 5)
+    const rawSummaryEntries =
         typeof projectNumber === 'number'
-            ? context.db.searchEntries('', {
-                  limit: config.summaryCount,
+            ? extractEntries(context.db.searchEntries('', {
+                  limit: summaryFetchLimit,
                   projectNumber,
                   tags: ['session-summary'],
-              })
-            : context.db.searchEntries('', {
-                  limit: config.summaryCount,
+                  workspaceId: targetWs,
+                  sortBy: 'timestamp'
+              }))
+            : extractEntries(context.db.searchEntries('', {
+                  limit: summaryFetchLimit,
                   tags: ['session-summary'],
-              })
+                  workspaceId: targetWs,
+                  sortBy: 'timestamp'
+              }))
+    
+    let summaryEntries = rawSummaryEntries.filter(isImportant)
+    if (summaryEntries.length === 0 && rawSummaryEntries.length > 0) {
+        summaryEntries = rawSummaryEntries
+    }
 
     // Fallback to retrospective type if no tag matched
-    const retroEntries =
+    const rawRetroEntries =
         summaryEntries.length === 0
             ? typeof projectNumber === 'number'
-                ? context.db.searchEntries('', {
-                      limit: config.summaryCount,
+                ? extractEntries(context.db.searchEntries('', {
+                      limit: summaryFetchLimit,
                       projectNumber,
                       entryType: 'retrospective',
-                  })
-                : context.db.searchEntries('', {
-                      limit: config.summaryCount,
+                      workspaceId: targetWs,
+                      sortBy: 'timestamp'
+                  }))
+                : extractEntries(context.db.searchEntries('', {
+                      limit: summaryFetchLimit,
                       entryType: 'retrospective',
-                  })
+                      workspaceId: targetWs,
+                      sortBy: 'timestamp'
+                  }))
             : []
+            
+    let retroEntries = rawRetroEntries.filter(isImportant)
+    if (retroEntries.length === 0 && rawRetroEntries.length > 0) {
+        retroEntries = rawRetroEntries
+    }
 
-    const finalSummaryEntries = summaryEntries.length > 0 ? summaryEntries : retroEntries
+    const finalSummaryEntries = (summaryEntries.length > 0 ? summaryEntries : retroEntries).slice(0, config.summaryCount ?? 1)
 
     let latestSessionSummary
     let sessionSummaries
     if (finalSummaryEntries.length > 0) {
-        sessionSummaries = finalSummaryEntries.map((entry) => {
+        sessionSummaries = finalSummaryEntries.map((entry: JournalEntry) => {
+            const titleLine = entry.content.split(/\r?\n/)[0]?.replace(/^#+\s*(?:Session Summary:\s*)?/, '') ?? ''
             return {
                 id: entry.id,
                 timestamp: entry.timestamp,
                 type: entry.entryType,
-                preview: markUntrustedContentInline(cleanPreview(entry.content, PREVIEW_LENGTH)),
+                preview: markUntrustedContentInline(cleanPreview(titleLine, PREVIEW_LENGTH)),
             }
         })
+        
         latestSessionSummary = sessionSummaries[0]
     }
 
-    // ── Latest entries (deduplicated against summaries) ──────────────
-    const recentEntries =
-        typeof projectNumber === 'number'
-            ? context.db.searchEntries('', { limit: config.entryCount, projectNumber })
-            : context.db.getRecentEntries(config.entryCount)
+    // Fetch a larger buffer to account for entries that might get deduplicated out or filtered by importance
+    const fetchLimit = Math.max(100, config.entryCount * 10)
+    const rawRecentEntries = extractEntries(
+        context.db.searchEntries('', { 
+            limit: fetchLimit, 
+            workspaceId: targetWs,
+            ...(typeof projectNumber === 'number' ? { projectNumber } : {}),
+            sortBy: 'timestamp'
+        })
+    )
+            
+    let recentEntries = rawRecentEntries.filter(isImportant)
+    if (recentEntries.length === 0 && rawRecentEntries.length > 0) {
+        recentEntries = rawRecentEntries
+    }
 
     // Exclude entries already shown in the Summary slot to diversify briefing content
-    const summaryIds = new Set(finalSummaryEntries.map((e) => e.id))
-    const dedupedRecent = recentEntries.filter((e) => !summaryIds.has(e.id))
+    const summaryIds = new Set(finalSummaryEntries.map((e: JournalEntry) => e.id))
+    const dedupedRecent = recentEntries.filter((e: JournalEntry) => !summaryIds.has(e.id)).slice(0, config.entryCount)
 
-    const latestEntries = dedupedRecent.map((e) => {
+    const latestEntries = dedupedRecent.map((e: JournalEntry) => {
         return {
             id: e.id,
             timestamp: e.timestamp,
@@ -111,10 +176,11 @@ export function buildJournalContext(
         }
     })
 
-    const totalEntries = context.db.getActiveEntryCount()
+    const targetWsForCount = config.defaultWorkspaceId || undefined
+    const totalEntries = context.db.getActiveEntryCount(targetWsForCount)
     const lastModified = recentEntries[0]?.timestamp ?? new Date().toISOString()
 
-    return { totalEntries, latestEntries, latestSessionSummary, sessionSummaries, lastModified }
+    return { totalEntries, latestEntries, latestSessionSummary, sessionSummaries, lastModified, workspaceId: config.defaultWorkspaceId }
 }
 
 // ============================================================================
@@ -140,8 +206,8 @@ export function buildTeamContext(
         const teamTotalEntries = context.teamDb.getActiveEntryCount()
         const teamRecent =
             typeof projectNumber === 'number'
-                ? context.teamDb.searchEntries('', { limit: 1, projectNumber })
-                : context.teamDb.getRecentEntries(1)
+                ? extractEntries(context.teamDb.searchEntries('', { limit: 1, projectNumber }))
+                : extractEntries(context.teamDb.getRecentEntries(1))
         const teamLatestEntry = teamRecent[0] as Record<string, unknown> | undefined
         const teamContent = teamLatestEntry
             ? ((teamLatestEntry['content'] as string | undefined) ?? '')
@@ -161,8 +227,8 @@ export function buildTeamContext(
         if (config.includeTeam) {
             const teamEntries =
                 typeof projectNumber === 'number'
-                    ? context.teamDb.searchEntries('', { limit: config.entryCount, projectNumber })
-                    : context.teamDb.getRecentEntries(config.entryCount)
+                    ? extractEntries(context.teamDb.searchEntries('', { limit: config.entryCount, projectNumber }))
+                    : extractEntries(context.teamDb.getRecentEntries(config.entryCount))
             teamLatestEntries = teamEntries.map((e) => {
                 return {
                     id: e.id,
@@ -190,145 +256,9 @@ export function buildTeamContext(
 // Rules & Skills Awareness
 // ============================================================================
 
-export interface RulesFile {
-    path: string
-    name: string
-    sizeKB: number
-    lastModified: string
-}
 
-export interface SkillsDir {
-    path: string
-    count: number
-    names: string[]
-}
 
-/** Milliseconds per hour / per day for age formatting */
-const MS_PER_HOUR = 3_600_000
-const MS_PER_DAY = 86_400_000
 
-export function buildRulesFileInfo(
-    rulesFilePath: string | undefined,
-    allowedIoRoots: string[] = []
-): RulesFile | undefined {
-    if (!rulesFilePath) return undefined
-
-    try {
-        const expandedRoots = [...allowedIoRoots, path.dirname(rulesFilePath)]
-        assertSafeFilePath(rulesFilePath, expandedRoots)
-        const stat = fs.statSync(rulesFilePath)
-        const ageMs = Date.now() - stat.mtimeMs
-        const ageHours = Math.floor(ageMs / MS_PER_HOUR)
-        const ageDays = Math.floor(ageMs / MS_PER_DAY)
-        const agoStr =
-            ageDays > 0
-                ? `${String(ageDays)}d ago`
-                : ageHours > 0
-                  ? `${String(ageHours)}h ago`
-                  : 'just now'
-
-        return {
-            path: path.basename(rulesFilePath),
-            name: path.basename(rulesFilePath),
-            sizeKB: Math.round(stat.size / 1024),
-            lastModified: agoStr,
-        }
-    } catch (error) {
-        logger.debug('Failed to read rules file', {
-            module: 'BRIEFING',
-            operation: 'rules-file',
-            error: error instanceof Error ? error.message : String(error),
-        })
-        return undefined
-    }
-}
-
-export function buildSkillsDirInfo(
-    skillsDirPath: string | undefined,
-    allowedIoRoots: string[] = []
-): SkillsDir | undefined {
-    if (!skillsDirPath) return undefined
-
-    try {
-        const expandedRoots = [...allowedIoRoots, skillsDirPath]
-        assertSafeDirectoryPath(skillsDirPath, expandedRoots)
-        const entries = fs.readdirSync(skillsDirPath, { withFileTypes: true })
-        const skillDirs = entries.filter((e) => e.isDirectory())
-        return {
-            path: path.basename(skillsDirPath),
-            count: skillDirs.length,
-            names: skillDirs.map((d) => d.name),
-        }
-    } catch (error) {
-        logger.debug('Failed to read skills directory', {
-            module: 'BRIEFING',
-            operation: 'skills-dir',
-            error: error instanceof Error ? error.message : String(error),
-        })
-        return undefined
-    }
-}
-
-// ============================================================================
-// Flags Context (Hush Protocol)
-// ============================================================================
-
-export interface FlagSummary {
-    count: number
-    flags: {
-        id: number
-        flag_type: string
-        target_user: string | null
-        preview: string
-        fullContent: string
-        timestamp: string
-    }[]
-}
-
-/**
- * Build active (unresolved) flag summary for the briefing.
- * Returns undefined if team DB is not configured or no active flags exist.
- */
-export function buildFlagsContext(context: ResourceContext): FlagSummary | undefined {
-    if (!context.teamDb) return undefined
-
-    try {
-        const flagEntries = context.teamDb.searchEntries('', {
-            entryType: 'flag',
-            limit: 20,
-        })
-
-        const activeFlags = flagEntries
-            .map((entry) => {
-                const ctx = parseFlagContext(entry.autoContext)
-                if (!ctx || ctx.resolved) return null
-
-                return {
-                    id: entry.id,
-                    flag_type: ctx.flag_type,
-                    target_user: ctx.target_user ?? null,
-                    preview: markUntrustedContentInline(cleanPreview(entry.content, 80)),
-                    fullContent: markUntrustedContentInline(entry.content),
-                    timestamp: entry.timestamp,
-                }
-            })
-            .filter((f): f is NonNullable<typeof f> => f !== null)
-
-        if (activeFlags.length === 0) return undefined
-
-        return {
-            count: activeFlags.length,
-            flags: activeFlags,
-        }
-    } catch (error) {
-        logger.debug('Failed to build flags context', {
-            module: 'BRIEFING',
-            operation: 'flags-context',
-            error: error instanceof Error ? error.message : String(error),
-        })
-        return undefined
-    }
-}
 
 // ============================================================================
 // Graph Context
@@ -338,9 +268,11 @@ export interface GraphSummary {
     totalRelationships: number
     density: number
     causalMetrics: Record<string, number>
+    topHubs: { id: number; preview: string; count: number }[]
+    orphanRatio?: number
 }
 
-export function buildGraphContext(context: ResourceContext): GraphSummary | undefined {
+export function buildGraphContext(context: ResourceContext, workspaceId?: string): GraphSummary | undefined {
     try {
         const stats = context.db.getStatistics('week')
         const comp = stats['relationshipComplexity'] as
@@ -350,10 +282,35 @@ export function buildGraphContext(context: ResourceContext): GraphSummary | unde
 
         if (!comp || !causal) return undefined
 
+
+        const totalActiveEntries = context.db.getActiveEntryCount(workspaceId)
+
+        // Fetch top hubs and orphan ratio via purpose-built safe methods
+        let topHubs: { id: number; preview: string; count: number }[] = []
+        let orphanRatio: number | undefined
+
+        try {
+            const hubs = context.db.getRelationshipHubs(3)
+            topHubs = hubs.map(hub => ({
+                id: hub.entryId,
+                count: hub.totalLinks,
+                preview: ''
+            }))
+
+            if (totalActiveEntries > 0) {
+                const orphanCount = context.db.getOrphanCount(workspaceId)
+                orphanRatio = orphanCount / totalActiveEntries
+            }
+        } catch {
+            // Ignore query errors gracefully
+        }
+
         return {
             totalRelationships: comp.totalRelationships,
             density: comp.avgPerEntry,
             causalMetrics: causal,
+            topHubs,
+            orphanRatio,
         }
     } catch (error) {
         logger.debug('Failed to build graph context', {

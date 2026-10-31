@@ -5,8 +5,9 @@ import * as path from 'node:path'
 import { execFile } from 'node:child_process'
 import { logger } from '../../utils/logger.js'
 import { ConnectionError } from '../../types/errors.js'
-import { SCHEMA_SQL, TEAM_SCHEMA_SQL } from '../core/schema.js'
+import { MigrationManager } from '../migrations/migration-manager.js'
 import type { IDatabaseConnection, QueryResult } from '../core/interfaces.js'
+
 
 /**
  * Pre-compiled regex to detect SQL mutation statements.
@@ -15,31 +16,6 @@ import type { IDatabaseConnection, QueryResult } from '../core/interfaces.js'
 const IS_MUTATION_RE =
     /^\s*(INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|PRAGMA (?!table_info|foreign_key_list|index_info|index_list|journal_mode|synchronous|temp_store|integrity_check))./i
 
-/**
- * Shared migration columns required by both personal and team schemas.
- * Adding a new column here ensures it is applied in both migrateSchema() and applyTeamSchema().
- */
-const SHARED_MIGRATION_COLUMNS: { name: string; sql: string }[] = [
-    {
-        name: 'significance_type',
-        sql: 'ALTER TABLE memory_journal ADD COLUMN significance_type TEXT',
-    },
-    { name: 'auto_context', sql: 'ALTER TABLE memory_journal ADD COLUMN auto_context TEXT' },
-    { name: 'deleted_at', sql: 'ALTER TABLE memory_journal ADD COLUMN deleted_at TEXT' },
-    { name: 'project_number', sql: 'ALTER TABLE memory_journal ADD COLUMN project_number INTEGER' },
-    { name: 'project_owner', sql: 'ALTER TABLE memory_journal ADD COLUMN project_owner TEXT' },
-    { name: 'issue_number', sql: 'ALTER TABLE memory_journal ADD COLUMN issue_number INTEGER' },
-    { name: 'issue_url', sql: 'ALTER TABLE memory_journal ADD COLUMN issue_url TEXT' },
-    { name: 'pr_number', sql: 'ALTER TABLE memory_journal ADD COLUMN pr_number INTEGER' },
-    { name: 'pr_url', sql: 'ALTER TABLE memory_journal ADD COLUMN pr_url TEXT' },
-    { name: 'pr_status', sql: 'ALTER TABLE memory_journal ADD COLUMN pr_status TEXT' },
-    {
-        name: 'workflow_run_id',
-        sql: 'ALTER TABLE memory_journal ADD COLUMN workflow_run_id INTEGER',
-    },
-    { name: 'workflow_name', sql: 'ALTER TABLE memory_journal ADD COLUMN workflow_name TEXT' },
-    { name: 'workflow_status', sql: 'ALTER TABLE memory_journal ADD COLUMN workflow_status TEXT' },
-]
 
 export class NativeConnectionManager implements IDatabaseConnection {
     private db: Database | null = null
@@ -61,6 +37,19 @@ export class NativeConnectionManager implements IDatabaseConnection {
         try {
             this.db = new DatabaseAdapter(this.dbPath)
             const db = this.db
+
+            // Decrypt if key is provided (must be done before any other PRAGMAs or queries)
+            const rawKey = process.env['MJ_DB_ENCRYPTION_KEY'] || process.env['DB_ENCRYPTION_KEY']
+            if (rawKey) {
+                const key = rawKey
+                if (key.startsWith("x'") && key.endsWith("'")) {
+                    // Raw hex keys must not be wrapped in additional single quotes
+                    db.pragma(`key = "${key}"`)
+                } else {
+                    db.pragma(`key = '${key}'`)
+                }
+                logger.info('Database encryption key applied', { module: 'NativeConnectionManager' })
+            }
 
             // Native-only PRAGMAs for performance and safety
             db.pragma('journal_mode = WAL')
@@ -97,19 +86,16 @@ export class NativeConnectionManager implements IDatabaseConnection {
                 })
             }
 
-            // Create base schema
-            db.exec(SCHEMA_SQL)
+            // Run schema migrations (creates memory_journal and other core tables versioned)
+            this.migrateSchema()
 
-            // Create vector embeddings table (sqlite-vec vec0 virtual table)
+            // Create vector metadata table
             db.exec(`
-                CREATE VIRTUAL TABLE IF NOT EXISTS vec_embeddings USING vec0(
-                    entry_id INTEGER PRIMARY KEY,
-                    embedding float[384]
+                CREATE TABLE IF NOT EXISTS vector_metadata (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL
                 )
             `)
-
-            // Run schema migrations
-            this.migrateSchema()
 
             this.initialized = true
             logger.info('Native database opened', {
@@ -128,22 +114,11 @@ export class NativeConnectionManager implements IDatabaseConnection {
     private migrateSchema(): void {
         const db = this.ensureDb()
 
-        // table_info in better-sqlite3 returns an array of objects like { "cid": 0, "name": "id", ...}
-        const tableInfo = db.prepare('PRAGMA table_info(memory_journal)').all() as {
-            name: string
-        }[]
-        const columns = new Set(tableInfo.map((row) => row.name))
+        // 1. Run versioned migrations
+        MigrationManager.runMigrations(db, false)
 
-        const added: string[] = []
-
+        // 2. Perform post-migration checks and updates
         db.transaction(() => {
-            for (const col of SHARED_MIGRATION_COLUMNS) {
-                if (!columns.has(col.name)) {
-                    db.exec(col.sql)
-                    added.push(col.name)
-                }
-            }
-
             db.prepare('UPDATE tags SET usage_count = 0 WHERE usage_count IS NULL').run()
 
             // Populate FTS5 index for existing databases that were created before FTS5 was added.
@@ -178,7 +153,6 @@ export class NativeConnectionManager implements IDatabaseConnection {
             }
 
             if (needsRebuild) {
-                added.push(rebuildReason)
                 // Defer rebuilding FTS5 index to prevent blocking server startup
                 const deferMs = process.env['NODE_ENV'] === 'test' ? 10 : 5000
                 setTimeout(() => {
@@ -189,7 +163,7 @@ export class NativeConnectionManager implements IDatabaseConnection {
                         db.exec("INSERT INTO fts_content(fts_content) VALUES ('rebuild')");
                         db.close();
                     `
-                    execFile('node', ['-e', code, this.dbPath], (err, _stdout, stderr) => {
+                    execFile('node', ['-e', code, this.dbPath], { windowsHide: true }, (err, _stdout, stderr) => {
                         if (err) {
                             logger.error('Failed to rebuild FTS5 index in background process', {
                                 module: 'NativeConnectionManager',
@@ -206,48 +180,13 @@ export class NativeConnectionManager implements IDatabaseConnection {
                 }, deferMs)
             }
         })()
-
-        if (added.length > 0) {
-            logger.info('Schema migrated', {
-                module: 'NativeConnectionManager',
-                dbPath: this.dbPath,
-                changes: added.map((c) => (c.startsWith('fts5:') ? c : `column:${c}`)),
-            })
-        }
     }
 
     applyTeamSchema(): void {
         const db = this.ensureDb()
-        const tableInfo = db.prepare('PRAGMA table_info(memory_journal)').all() as {
-            name: string
-        }[]
-        const columns = new Set(tableInfo.map((row) => row.name))
-
-        // Shared columns + team-only author column
-        const teamColumns: { name: string; sql: string }[] = [
-            ...SHARED_MIGRATION_COLUMNS,
-            { name: 'author', sql: TEAM_SCHEMA_SQL.trim() },
-        ]
-
-        const added: string[] = []
-
-        db.transaction(() => {
-            for (const col of teamColumns) {
-                if (!columns.has(col.name)) {
-                    db.exec(col.sql)
-                    added.push(col.name)
-                }
-            }
-        })()
-
-        if (added.length > 0) {
-            logger.info('Team schema migrated', {
-                module: 'NativeConnectionManager',
-                dbPath: this.dbPath,
-                columnsAdded: added,
-            })
-        }
+        MigrationManager.applyTeamMigrations(db)
     }
+
 
     /**
      * @internal QUARANTINED
@@ -375,5 +314,36 @@ export class NativeConnectionManager implements IDatabaseConnection {
         this.db = db as Database
         this.db.pragma('foreign_keys = ON')
         this.initialized = true
+    }
+
+    // ========================================================================
+    // Vector Metadata and Tables
+    // ========================================================================
+
+    getVectorMetadata(key: string): string | undefined {
+        const db = this.ensureDb()
+        const row = db.prepare('SELECT value FROM vector_metadata WHERE key = ?').get(key) as { value: string } | undefined
+        return row?.value
+    }
+
+    setVectorMetadata(key: string, value: string): void {
+        const db = this.ensureDb()
+        db.prepare('INSERT INTO vector_metadata (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(key, value)
+    }
+
+    createVecTable(dimensions: number): void {
+        const db = this.ensureDb()
+        // Wait, vec0 doesn't support parameterized dimensions via '?', we have to interpolate
+        db.exec(`
+            CREATE VIRTUAL TABLE IF NOT EXISTS vec_embeddings USING vec0(
+                entry_id INTEGER PRIMARY KEY,
+                embedding float[${dimensions}]
+            )
+        `)
+    }
+
+    dropVecTable(): void {
+        const db = this.ensureDb()
+        db.exec('DROP TABLE IF EXISTS vec_embeddings')
     }
 }

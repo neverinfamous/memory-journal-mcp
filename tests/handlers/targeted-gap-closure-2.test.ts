@@ -84,7 +84,7 @@ import {
 
 describe('Targeted Gap Closure — Batch 2', () => {
     let db: DatabaseAdapter
-    const testDbPath = './test-gaps-2.db'
+    const testDbPath = './.test-output/vitest/test-gaps-2.db'
 
     beforeAll(async () => {
         try {
@@ -119,7 +119,7 @@ describe('Targeted Gap Closure — Batch 2', () => {
         it('update_entry should return not found for invalid ID', async () => {
             const result = (await callTool(
                 'update_entry',
-                { entry_id: 99999, content: 'Updated content' },
+                { entry_id: 99999, project_number: 1, content: 'Updated content' },
                 db
             )) as { success: boolean; error: string }
 
@@ -128,7 +128,7 @@ describe('Targeted Gap Closure — Batch 2', () => {
         })
 
         it('delete_entry should return not found for invalid ID', async () => {
-            const result = (await callTool('delete_entry', { entry_id: 99999 }, db)) as {
+            const result = (await callTool('delete_entry', { entry_id: 99999, expected_version: 1 }, db)) as {
                 success: boolean
                 error: string
             }

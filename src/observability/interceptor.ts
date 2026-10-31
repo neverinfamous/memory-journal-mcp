@@ -17,6 +17,7 @@ import { performance } from 'node:perf_hooks'
 import { estimatePayloadTokens } from './token-estimator.js'
 import type { MetricsAccumulator } from './metrics.js'
 import { logger } from '../utils/logger.js'
+import { logAgentIssue } from '../utils/issue-logger.js'
 
 // ============================================================================
 // Types
@@ -82,6 +83,14 @@ export function wrapWithMetrics(
                     error: err instanceof Error ? err.message : String(err),
                 })
             }
+            
+            logAgentIssue({
+                source: 'MCP',
+                action: toolName,
+                input: args,
+                error: err instanceof Error ? err.message : String(err)
+            })
+            
             throw err
         }
 
@@ -99,6 +108,15 @@ export function wrapWithMetrics(
             logger.error(`Accumulator failed to record metrics:`, {
                 module: 'Metrics',
                 error: err instanceof Error ? err.message : String(err),
+            })
+        }
+
+        if (isError) {
+            logAgentIssue({
+                source: 'MCP',
+                action: toolName,
+                input: args,
+                error: (result as Record<string, unknown>)['error'] as string
             })
         }
 

@@ -22,7 +22,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.ref }}
 
@@ -31,19 +31,12 @@ jobs:
         with:
           node-version: '24.x'
           registry-url: 'https://registry.npmjs.org'
-          cache: 'npm'
+
+      - name: Install pnpm
+        run: npm install -g pnpm@11.9.0
 
       - name: Install dependencies
-        run: npm ci || (echo "Retrying in 5s..." && sleep 5 && npm ci) || (echo "Retrying in 10s..." && sleep 10 && npm ci)
-
-      - name: Check version consistency
-        run: |
-          PKG_VERSION=$(node -p "require('./package.json').version")
-          LOCK_VERSION=$(node -p "require('./package-lock.json').version")
-          if [ "$PKG_VERSION" != "$LOCK_VERSION" ]; then
-            echo "::error::Version mismatch between package.json ($PKG_VERSION) and package-lock.json ($LOCK_VERSION)"
-            exit 1
-          fi
+        run: pnpm install --frozen-lockfile || (echo "Retrying in 5s..." && sleep 5 && pnpm install --frozen-lockfile) || (echo "Retrying in 10s..." && sleep 10 && pnpm install --frozen-lockfile)
 
       - name: Read version
         id: version
@@ -68,11 +61,11 @@ jobs:
 
       - name: Build package
         if: steps.check.outputs.skip != 'true'
-        run: npm run build
+        run: pnpm run build
 
       - name: Publish to NPM
         if: steps.check.outputs.skip != 'true'
-        run: npm publish --access public --provenance
+        run: pnpm publish --access public --provenance --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 

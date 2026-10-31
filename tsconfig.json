@@ -18,7 +18,6 @@
         "noImplicitThis": true,
         "useUnknownInCatchVariables": true,
         "alwaysStrict": true,
-        "exactOptionalPropertyTypes": false,
         /* Additional Checks */
         "noUnusedLocals": true,
         "noUnusedParameters": true,

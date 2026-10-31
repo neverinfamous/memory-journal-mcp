@@ -4,6 +4,7 @@ import { getRequiredScope } from './scope-map.js'
 import { PermissionError } from '../types/errors.js'
 import { logger } from '../utils/logger.js'
 import type { AuditLogger } from '../audit/index.js'
+import { resolveAuthor } from '../utils/security-utils.js'
 
 /**
  * Enforces unified access boundaries for tools and resources.
@@ -24,7 +25,7 @@ export function enforceAccessBoundary(
     const isTeam =
         capabilities?.requiresTeamScope ??
         (targetType === 'resource'
-            ? targetName.startsWith('memory://team/') || targetName.startsWith('memory://flags')
+            ? targetName.startsWith('memory://team/')
             : targetName.startsWith('team_'))
 
     const isAdmin =
@@ -33,10 +34,10 @@ export function enforceAccessBoundary(
 
     // Strict fail-closed boundary for team domains
     if (isTeam) {
-        const envAuthor = process.env['TEAM_AUTHOR']?.trim()
+        const author = resolveAuthor()
         const hasAuthClaim = auth?.authenticated === true && auth?.claims !== undefined
         const bypassCodeMode = process.env['CODEMODE_INTERNAL_FULL_ACCESS'] === 'true'
-        if (!envAuthor && !hasAuthClaim && !bypassCodeMode) {
+        if (author === 'unknown' && !hasAuthClaim && !bypassCodeMode) {
             logger.warning(`Access to team ${targetType} denied: unauthenticated`, {
                 module: 'AUTH',
                 operation: 'fail-closed',
@@ -83,7 +84,7 @@ export function enforceAccessBoundary(
                 })
             }
             throw new PermissionError(
-                `Access to ${targetType} '${targetName}' denied: insufficient scope.`
+                `🛠️ AUTONOMOUS HEALING: Access to ${targetType} '${targetName}' denied: insufficient scope. You are attempting to use a tool that requires higher privileges (e.g. GitHub or Admin scope). Please use an alternative tool, run it natively via terminal if it's a CLI command, or ask the user to provide the necessary authorization.`
             )
         }
     }

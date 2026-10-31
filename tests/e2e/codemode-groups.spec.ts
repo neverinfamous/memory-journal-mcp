@@ -13,7 +13,7 @@
  * admin, github, backup, team.
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test-fixture.js'
 import { createClient, callToolAndParse, expectSuccess } from './helpers.js'
 
 test.describe.configure({ mode: 'serial' })
@@ -39,7 +39,6 @@ test.describe('Code Mode Groups: Global help()', () => {
                 'search',
                 'analytics',
                 'relationships',
-                'export',
                 'admin',
                 'github',
                 'backup',
@@ -87,8 +86,8 @@ test.describe('Code Mode Groups: Per-Group help()', () => {
             expect(result.group).toBe('core')
             const methods = result.methods as string[]
             expect(Array.isArray(methods)).toBe(true)
-            expect(methods).toContain('createEntry')
-            expect(methods).toContain('getRecentEntries')
+            expect(methods).toContain('create_entry')
+            expect(methods).toContain('get_recent_entries')
         } finally {
             await client.close()
         }
@@ -105,7 +104,7 @@ test.describe('Code Mode Groups: Per-Group help()', () => {
             expect(result.group).toBe('search')
             const methods = result.methods as string[]
             expect(Array.isArray(methods)).toBe(true)
-            expect(methods).toContain('searchEntries')
+            expect(methods).toContain('search_entries')
         } finally {
             await client.close()
         }
@@ -122,7 +121,7 @@ test.describe('Code Mode Groups: Per-Group help()', () => {
             expect(result.group).toBe('analytics')
             const methods = result.methods as string[]
             expect(Array.isArray(methods)).toBe(true)
-            expect(methods).toContain('getStatistics')
+            expect(methods).toContain('get_statistics')
         } finally {
             await client.close()
         }
@@ -139,24 +138,24 @@ test.describe('Code Mode Groups: Per-Group help()', () => {
             expect(result.group).toBe('relationships')
             const methods = result.methods as string[]
             expect(Array.isArray(methods)).toBe(true)
-            expect(methods).toContain('linkEntries')
+            expect(methods).toContain('link_entries')
         } finally {
             await client.close()
         }
     })
 
-    test('mj.export.help() returns methods including exportEntries', async () => {
+    test('mj.io.help() returns methods including export_entries', async () => {
         const client = await createClient()
         try {
             const p = await callToolAndParse(client, 'mj_execute_code', {
-                code: 'return mj.export.help();',
+                code: 'return mj.io.help();',
             })
             expectSuccess(p)
             const result = p.result as Record<string, unknown>
-            expect(result.group).toBe('export')
+            expect(result.group).toBe('io')
             const methods = result.methods as string[]
             expect(Array.isArray(methods)).toBe(true)
-            expect(methods).toContain('exportEntries')
+            expect(methods).toContain('export_entries')
         } finally {
             await client.close()
         }
@@ -173,8 +172,8 @@ test.describe('Code Mode Groups: Per-Group help()', () => {
             expect(result.group).toBe('admin')
             const methods = result.methods as string[]
             expect(Array.isArray(methods)).toBe(true)
-            expect(methods).toContain('updateEntry')
-            expect(methods).toContain('deleteEntry')
+            expect(methods).toContain('update_entry')
+            expect(methods).toContain('delete_entry')
         } finally {
             await client.close()
         }
@@ -191,7 +190,7 @@ test.describe('Code Mode Groups: Per-Group help()', () => {
             expect(result.group).toBe('github')
             const methods = result.methods as string[]
             expect(Array.isArray(methods)).toBe(true)
-            expect(methods).toContain('getGithubIssues')
+            expect(methods).toContain('get_github_issue')
         } finally {
             await client.close()
         }
@@ -208,8 +207,8 @@ test.describe('Code Mode Groups: Per-Group help()', () => {
             expect(result.group).toBe('backup')
             const methods = result.methods as string[]
             expect(Array.isArray(methods)).toBe(true)
-            expect(methods).toContain('backupJournal')
-            expect(methods).toContain('listBackups')
+            expect(methods).toContain('backup_journal')
+            expect(methods).toContain('list_backups')
         } finally {
             await client.close()
         }
@@ -226,7 +225,7 @@ test.describe('Code Mode Groups: Per-Group help()', () => {
             expect(result.group).toBe('team')
             const methods = result.methods as string[]
             expect(Array.isArray(methods)).toBe(true)
-            expect(methods).toContain('teamCreateEntry')
+            expect(methods).toContain('team_create_entry')
         } finally {
             await client.close()
         }
@@ -243,7 +242,7 @@ test.describe('Code Mode Groups: Bulk Validation', () => {
         try {
             const p = await callToolAndParse(client, 'mj_execute_code', {
                 code: `
-                    const groups = ["core","search","analytics","relationships","export","admin","github","backup","team"];
+                    const groups = ["core","search","analytics","relationships","io","admin","github","backup","team"];
                     const results = {};
                     for (const g of groups) {
                         const h = await mj[g].help();
@@ -320,11 +319,11 @@ test.describe('Code Mode Groups: Representative Calls', () => {
         }
     })
 
-    test('mj.export.exportEntries() returns export data', async () => {
+    test('mj.io.exportEntries() returns export data', async () => {
         const client = await createClient()
         try {
             const p = await callToolAndParse(client, 'mj_execute_code', {
-                code: `return await mj.export.exportEntries({ project_number: 1, format: 'json', limit: 1 });`,
+                code: `return await mj.io.exportEntries({ project_number: 1, format: 'json', limit: 1 });`,
             })
             expectSuccess(p)
             const result = p.result as Record<string, unknown>

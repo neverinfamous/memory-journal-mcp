@@ -1,164 +1,91 @@
-import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js'
-import type { McpServerFactory } from '../../../server/mcp-server.js'
-import type { Request, Response, Express } from 'express'
-import type { IncomingMessage, ServerResponse } from 'node:http'
+import type { Transport, JSONRPCMessage } from '@modelcontextprotocol/server'
+import { randomUUID } from 'node:crypto'
+import type { Request, Response } from 'express'
 import { logger } from '../../../utils/logger.js'
-import type { StatefulContext } from './stateful.js'
-import { JSONRPC_SERVER_ERROR } from '../types.js'
-import { requestContextStorage } from '../../../utils/request-context.js'
 
-export function setupLegacySSE(
-    ctx: StatefulContext,
-    app: Express,
-    serverFactory: McpServerFactory
-): void {
-    app.get('/sse', (req: Request, res: Response): void => {
-        logger.info('Legacy SSE connection requested', { module: 'HTTP' })
+/**
+ * A custom Server Transport that implements the Legacy SSE (MCP 2024-11-05) protocol.
+ * This is required because the official @modelcontextprotocol/server v2 package
+ * removed stateful SSEServerTransport in favor of Streamable HTTP (MCP 2025-03-26).
+ * This transport allows older clients (like SSEClientTransport) to connect using
+ * `GET /sse` followed by `POST /messages`.
+ */
+export class LegacySSEServerTransport implements Transport {
+    private res: Response | null = null
+    public sessionId: string
+    public onclose?: () => void
+    public onerror?: (error: Error) => void
+    public onmessage?: (message: JSONRPCMessage) => void
 
-        // Enforce session limit to prevent unbounded memory growth
-        const envMax = process.env['MAX_STATEFUL_SESSIONS']
-        let maxSessions = 1000
-        if (envMax) {
-            const parsed = parseInt(envMax, 10)
-            if (!Number.isNaN(parsed) && parsed > 0) {
-                maxSessions = parsed
-            }
+    constructor(private messagesEndpoint: string, sessionId?: string) {
+        this.sessionId = sessionId ?? randomUUID()
+    }
+
+    async start(): Promise<void> {
+        // No-op for Legacy SSE.
+        // The transport is "started" implicitly when connected.
+    }
+
+    close(): Promise<void> {
+        if (this.res) {
+            this.res.end()
+            this.res = null
         }
+        const onclose = this.onclose
+        this.onclose = undefined
+        onclose?.()
+        return Promise.resolve()
+    }
 
-        if (ctx.transports.size + ctx.sseTransports.size >= maxSessions) {
-            res.status(429).json({
-                jsonrpc: '2.0',
-                error: {
-                    code: JSONRPC_SERVER_ERROR,
-                    message: 'Too Many Requests: Maximum active sessions reached',
-                },
-                id: null,
-            })
-            return
+    send(message: JSONRPCMessage): Promise<void> {
+        if (!this.res) {
+            return Promise.reject(new Error("Not connected"))
         }
+        // Send JSON-RPC message as SSE data
+        this.res.write(`event: message\ndata: ${JSON.stringify(message)}\n\n`)
+        return Promise.resolve()
+    }
 
-        // eslint-disable-next-line @typescript-eslint/no-deprecated -- backward compat for MCP 2024-11-05 clients
-        const sseTransport = new SSEServerTransport('/messages', res as ServerResponse)
-
-        // Store transport by session ID after start
-        sseTransport.onclose = () => {
-            logger.info('Legacy SSE transport closed', {
-                module: 'HTTP',
-                sessionId: sseTransport.sessionId,
-            })
-            ctx.sseTransports.delete(sseTransport.sessionId)
-            ctx.sessionSubjects.delete(sseTransport.sessionId)
-        }
-
-        // SEC-2.1: Run legacy SSE connection within request context so rate limiting
-        // and audit attribution work under the legacy transport (mirrors Streamable HTTP).
-        void requestContextStorage.run({ ip: req.ip }, async () => {
-            try {
-                const doConnect = async (): Promise<void> => {
-                    const newServer = serverFactory()
-                    await newServer.connect(sseTransport)
-                    ctx.serverConnected = true
-                }
-
-                const priorLock: Promise<void> = ctx.connectionLock ?? Promise.resolve()
-                ctx.connectionLock = priorLock.then(doConnect).catch(doConnect)
-                await ctx.connectionLock
-
-                ctx.sseTransports.set(sseTransport.sessionId, sseTransport)
-                ctx.touchSession(sseTransport.sessionId)
-
-                if (req.auth) {
-                    ctx.sessionSubjects.set(sseTransport.sessionId, req.auth.sub)
-                }
-
-                logger.info('Legacy SSE connection established', {
-                    module: 'HTTP',
-                    sessionId: sseTransport.sessionId,
-                })
-            } catch (error) {
-                logger.error('Error starting SSE transport', {
-                    module: 'HTTP',
-                    error: error instanceof Error ? error.message : String(error),
-                })
-                if (!res.headersSent) {
-                    res.status(500).end()
-                }
-            }
+    /**
+     * Handles the initial GET request to establish the SSE stream.
+     */
+    handleSseRequest(req: Request, res: Response): void {
+        this.res = res
+        res.writeHead(200, {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache, no-transform',
+            'Connection': 'keep-alive',
+            'X-Accel-Buffering': 'no',
+            'mcp-session-id': this.sessionId
         })
+        
+        // Send the endpoint event immediately to inform the client where to POST messages
+        const endpointUrl = `${this.messagesEndpoint}?sessionId=${this.sessionId}`
+        res.write(`event: endpoint\ndata: ${endpointUrl}\n\n`)
 
-        // Clean up when client disconnects
+        // Keep the connection alive
         req.on('close', () => {
-            ctx.sseTransports.delete(sseTransport.sessionId)
-            ctx.sessionSubjects.delete(sseTransport.sessionId)
-            ctx.sessionLastActivity.delete(sseTransport.sessionId)
+            this.close().catch((err: unknown) => {
+                logger.error('Error closing Legacy SSE transport', { error: String(err) })
+            })
         })
-    })
+    }
 
-    // POST /messages — Route messages to Legacy SSE transport
-    app.post('/messages', (req: Request, res: Response): void => {
-        const sessionId =
-            typeof req.query['sessionId'] === 'string' ? req.query['sessionId'] : undefined
-
-        if (sessionId === undefined) {
-            res.status(400).json({
-                jsonrpc: '2.0',
-                error: { code: JSONRPC_SERVER_ERROR, message: 'Missing sessionId parameter' },
-                id: null,
-            })
+    /**
+     * Handles incoming POST requests containing JSON-RPC messages.
+     */
+    handlePostMessage(req: Request, res: Response): void {
+        const body = req.body as unknown
+        if (body === undefined || body === null || typeof body !== 'object') {
+            res.status(400).json({ error: 'Invalid JSON body' })
             return
         }
 
-        const transport = ctx.sseTransports.get(sessionId)
-        if (transport === undefined) {
-            res.status(404).json({
-                jsonrpc: '2.0',
-                error: { code: JSONRPC_SERVER_ERROR, message: 'Session not found' },
-                id: null,
-            })
-            return
+        if (this.onmessage) {
+            this.onmessage(req.body as JSONRPCMessage)
         }
-
-        const expectedSub = ctx.sessionSubjects.get(sessionId)
-        if (expectedSub !== undefined && req.auth?.sub !== expectedSub) {
-            res.status(403).json({
-                jsonrpc: '2.0',
-                error: {
-                    code: JSONRPC_SERVER_ERROR,
-                    message: 'Forbidden: Session belongs to a different subject',
-                },
-                id: null,
-            })
-            return
-        }
-
-        // Refresh session activity on message receipt
-        ctx.touchSession(sessionId)
-
-        // SEC-2.1: Thread request context into the message dispatch so per-request
-        // attributes (IP, sessionId) are visible to rate limiters and audit loggers.
-        void requestContextStorage.run({ ip: req.ip, sessionId }, async () => {
-            try {
-                await transport.handlePostMessage(
-                    req as IncomingMessage,
-                    res as ServerResponse,
-                    req.body
-                )
-            } catch (error) {
-                logger.error('Unhandled fault in legacy SSE message handler', {
-                    module: 'HTTP',
-                    error: error instanceof Error ? error.message : String(error),
-                })
-                if (!res.headersSent) {
-                    res.status(500).json({
-                        jsonrpc: '2.0',
-                        error: {
-                            code: JSONRPC_SERVER_ERROR,
-                            message: 'Internal server error during legacy SSE dispatch',
-                        },
-                        id: null,
-                    })
-                }
-            }
-        })
-    })
+        
+        // Legacy POST /messages must respond with 202 Accepted
+        res.status(202).end()
+    }
 }

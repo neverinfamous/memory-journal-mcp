@@ -6,15 +6,17 @@
  * with scheduler flags (--backup-interval, --vacuum-interval, etc.)
  */
 
-import { test, expect } from '@playwright/test'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+import { test, expect } from './test-fixture.js'
+import { Client } from '@modelcontextprotocol/client'
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
+
+import { getServerUrl } from './helpers.js'
 
 test.describe('Scheduler Activation (HTTP Only)', () => {
     let client: Client
 
     test.beforeAll(async () => {
-        const transport = new StreamableHTTPClientTransport(new URL('http://localhost:3100/mcp'))
+        const transport = new StreamableHTTPClientTransport(getServerUrl('/mcp'), { protocolVersion: '2024-11-05' })
         client = new Client(
             { name: 'playwright-scheduler-test', version: '1.0.0' },
             { capabilities: {} }

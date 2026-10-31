@@ -5,8 +5,8 @@
  * get_statistics, get_cross_project_insights.
  */
 
-import { test, expect } from '@playwright/test'
-import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import { test, expect } from './test-fixture.js'
+import type { Client } from '@modelcontextprotocol/client'
 import { createClient, callToolAndParse, expectSuccess } from './helpers.js'
 
 test.describe.configure({ mode: 'serial' })

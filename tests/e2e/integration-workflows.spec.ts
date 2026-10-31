@@ -15,7 +15,7 @@
  * Ported from db-mcp/tests/e2e/integration-workflows.spec.ts — adapted for memory-journal-mcp.
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test-fixture.js'
 import { createClient, callToolAndParse, expectSuccess } from './helpers.js'
 
 test.describe.configure({ mode: 'serial' })
@@ -32,7 +32,7 @@ test.describe('Integration: Core → Search → Analytics Pipeline', () => {
         try {
             // Step 1: Create entries
             for (let i = 0; i < 3; i++) {
-                const p = await callToolAndParse(client, 'create_entry', {
+                const p = await callToolAndParse(client, 'create_entry', { workspace_id: 'default', 
                     project_number: 1,
                     content: `Integration test entry ${i + 1}: _e2e_integration_pipeline_`,
                     entry_type: 'test_entry',
@@ -67,7 +67,7 @@ test.describe('Integration: Core → Search → Analytics Pipeline', () => {
         const client = await createClient()
         try {
             for (const id of entryIds) {
-                await callToolAndParse(client, 'delete_entry', { project_number: 1, entry_id: id })
+                await callToolAndParse(client, 'delete_entry', { project_number: 1, entry_id: id , expected_version: 1 })
             }
         } finally {
             await client.close()
@@ -87,7 +87,7 @@ test.describe('Integration: Core → Relationships → Visualization', () => {
         const client = await createClient()
         try {
             // Step 1: Create two entries
-            const a = await callToolAndParse(client, 'create_entry', {
+            const a = await callToolAndParse(client, 'create_entry', { workspace_id: 'default', 
                 project_number: 1,
                 content: 'Integration entry A _e2e_integration_links_',
                 entry_type: 'test_entry',
@@ -95,7 +95,7 @@ test.describe('Integration: Core → Relationships → Visualization', () => {
             expectSuccess(a)
             entryIdA = (a.entry as Record<string, unknown>).id as number
 
-            const b = await callToolAndParse(client, 'create_entry', {
+            const b = await callToolAndParse(client, 'create_entry', { workspace_id: 'default', 
                 project_number: 1,
                 content: 'Integration entry B _e2e_integration_links_',
                 entry_type: 'test_entry',
@@ -128,12 +128,12 @@ test.describe('Integration: Core → Relationships → Visualization', () => {
                 await callToolAndParse(client, 'delete_entry', {
                     project_number: 1,
                     entry_id: entryIdA,
-                })
+                    expected_version: 1 })
             if (entryIdB)
                 await callToolAndParse(client, 'delete_entry', {
                     project_number: 1,
                     entry_id: entryIdB,
-                })
+                    expected_version: 1 })
         } finally {
             await client.close()
         }
@@ -151,7 +151,7 @@ test.describe('Integration: Core → Export Pipeline', () => {
         const client = await createClient()
         try {
             // Step 1: Create entry with unique tag
-            const p = await callToolAndParse(client, 'create_entry', {
+            const p = await callToolAndParse(client, 'create_entry', { workspace_id: 'default', 
                 project_number: 1,
                 content: 'Integration export test _e2e_integration_export_',
                 entry_type: 'test_entry',
@@ -178,7 +178,7 @@ test.describe('Integration: Core → Export Pipeline', () => {
                 await callToolAndParse(client, 'delete_entry', {
                     project_number: 1,
                     entry_id: exportEntryId,
-                })
+                expected_version: 1 })
             }
         } finally {
             await client.close()

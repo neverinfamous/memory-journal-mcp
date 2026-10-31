@@ -1,28 +1,67 @@
-import { execSync } from 'node:child_process'
-import { writeFileSync, mkdirSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { writeFileSync, mkdirSync, existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 const testOutputDir = join(process.cwd(), '.test-output')
 const healthStatusFile = join(testOutputDir, 'health-status.json')
 
-try {
-    // Ensure the output directory exists
-    mkdirSync(testOutputDir, { recursive: true })
+const target = process.argv[2] // 'lint', 'typecheck', or undefined for all
 
-    console.log('Running lint and typecheck...')
-    // Run both checks
-    execSync('npm run lint && npm run typecheck', { stdio: 'inherit' })
+function runCommand(command: string, args: string[]) {
+    const fullCommand = `${command} ${args.join(' ')}`
+    const result = spawnSync(fullCommand, { stdio: 'inherit', shell: true })
+    return result.status === 0
+}
 
-    console.log('Checks passed! Writing health-status.json...')
-    // Write success status
-    writeFileSync(healthStatusFile, JSON.stringify({ ok: true, timestamp: Date.now() }, null, 2))
+let lintOk = true
+let typecheckOk = true
 
-    process.exit(0)
-} catch (error) {
-    console.error('Checks failed! Writing health-status.json...')
-    // Write failure status
-    writeFileSync(healthStatusFile, JSON.stringify({ ok: false, timestamp: Date.now() }, null, 2))
+// Load existing state if available
+if (existsSync(healthStatusFile)) {
+    try {
+        const existing = JSON.parse(readFileSync(healthStatusFile, 'utf-8'))
+        lintOk = existing.lintOk ?? true
+        typecheckOk = existing.typecheckOk ?? true
+    } catch {}
+}
 
-    // Exit with error code to ensure CI/other scripts fail appropriately
+mkdirSync(testOutputDir, { recursive: true })
+
+let success = true
+
+if (!target || target === 'lint') {
+    console.log('Running lint...')
+    const passed = runCommand('pnpm', ['exec', 'eslint', 'src/', 'tests/'])
+    lintOk = passed
+    if (!passed) success = false
+}
+
+if (!target || target === 'typecheck') {
+    console.log('Running typecheck...')
+    const passed = runCommand('pnpm', ['exec', 'tsc', '--noEmit'])
+    typecheckOk = passed
+    if (!passed) success = false
+}
+
+if (!target) {
+    // Also run code-map if running all
+    console.log('Running code-map generation...')
+    runCommand('pnpm', ['exec', 'tsx', 'scripts/update-code-map.ts'])
+
+    // Run workspace isolation check
+    console.log('Running workspace isolation check...')
+    const unassignedPassed = runCommand('pnpm', ['exec', 'tsx', 'scripts/check-unassigned-entries.ts'])
+    if (!unassignedPassed) success = false
+}
+
+const overallOk = lintOk && typecheckOk
+
+console.log(success ? 'Checks passed!' : 'Checks failed!')
+writeFileSync(
+    healthStatusFile,
+    JSON.stringify({ ok: overallOk, lintOk, typecheckOk, timestamp: Date.now() }, null, 2)
+)
+
+if (!success) {
     process.exit(1)
 }

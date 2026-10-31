@@ -1,12 +1,13 @@
 import { spawn } from 'child_process'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
+import { rmSync } from 'fs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const projectDir = join(__dirname, '..', '..')
-const proc = spawn(process.execPath, ['dist/cli.js', '--instruction-level', 'essential'], {
+const proc = spawn(process.execPath, ['dist/cli.js', '--db', 'test-prompts.db', '--team-db', 'test-team-prompts.db'], {
     cwd: projectDir,
-    env: { ...process.env, TEAM_DB_PATH: 'test-team-prompts.db' },
+    env: { ...process.env, TEAM_DB_PATH: 'test-team-prompts.db', JOURNAL_DB_PATH: 'test-prompts.db', TEST_DB_PATH: 'test-prompts.db', TEST_TEAM_DB_PATH: 'test-team-prompts.db', JOURNAL_CONFIG_DIR: 'test-server', MEMORY_JOURNAL_CONFIG: join(__dirname, 'test-server-config.json') },
     stdio: ['pipe', 'pipe', 'pipe'],
 })
 
@@ -74,36 +75,44 @@ async function main() {
 
     const testCases = [
         // 8.1 No-argument prompts
-        { name: 'prepare-standup', args: {}, expect: 'standup' },
-        { name: 'weekly-digest', args: {}, expect: 'weekly' },
         { name: 'goal-tracker', args: {}, expect: 'goal' },
-        { name: 'get-context-bundle', args: {}, expect: 'context' },
-        { name: 'confirm-briefing', args: {}, expect: 'session' },
         { name: 'session-summary', args: {}, expect: 'session' },
-        { name: 'team-session-summary', args: {}, expect: 'team session' },
-        // 8.1 Required-argument prompts
-        { name: 'find-related', args: { query: 'architecture' }, expect: 'architecture' },
-        {
-            name: 'analyze-period',
-            args: { start_date: '2026-01-01', end_date: '2026-12-31' },
-            expect: '2026',
-        },
-        // 8.1 Optional-argument prompts
+        { name: 'prepare-standup', args: {}, expect: 'standup' },
         { name: 'prepare-retro', args: {}, expect: 'retrospective' },
-        { name: 'prepare-retro', args: { days: '7' }, expect: '7' },
-        { name: 'get-recent-entries', args: {}, expect: '' },
-        { name: 'get-recent-entries', args: { limit: '3' }, expect: '' },
+        { name: 'weekly-digest', args: {}, expect: 'weekly digest' },
+        { name: 'create-entry', args: {}, expect: 'entry' },
+        { name: 'update-entry', args: {}, expect: 'entry' },
+        { name: 'create-team-entry', args: {}, expect: 'entry' },
+        { name: 'update-team-entry', args: {}, expect: 'entry' },
+        { name: 'team-session-summary', args: {}, expect: 'session' },
         // 8.2 GitHub prompts
-        { name: 'project-status-summary', args: { project_number: '5' }, expect: '5' },
-        { name: 'pr-summary', args: { pr_number: '67' }, expect: '67' },
-        { name: 'code-review-prep', args: { pr_number: '67' }, expect: '67' },
-        { name: 'pr-retrospective', args: { pr_number: '67' }, expect: '67' },
-        { name: 'project-milestone-tracker', args: { project_number: '5' }, expect: '5' },
+        { name: 'issue-commander', args: { project_number: '5' }, expect: '{project_number}' },
+        { name: 'project-status-summary', args: { project_number: '5' }, expect: 'Project #5' },
+        { name: 'project-milestone-tracker', args: { project_number: '5' }, expect: 'Project #5' },
+        { name: 'pr-commander', args: { pr_number: '67' }, expect: '{pr_number}' },
+        { name: 'pr-summary', args: { pr_number: '67' }, expect: 'PR #67' },
+        { name: 'code-review-prep', args: { pr_number: '67' }, expect: 'PR #67' },
+        { name: 'pr-retrospective', args: { pr_number: '67' }, expect: 'PR #67' },
         { name: 'actions-failure-digest', args: {}, expect: '' },
         // 8.3 Adversarial and flag prompts
-        { name: 'adversarial-plan-review', args: { topic: 'migration' }, expect: 'migration' },
+        { name: 'adversarial-plan-review', args: { topic: 'migration' }, expect: 'determine it from the user' },
+        { name: 'adversarial-audit-code-quality', args: { target: 'src/main.ts' }, expect: 'determine it from the user' },
+        { name: 'adversarial-audit-security', args: { target: 'auth.ts' }, expect: 'determine it from the user' },
+        { name: 'adversarial-audit-performance', args: { target: 'index.ts' }, expect: 'determine it from the user' },
+        { name: 'adversarial-audit-seo', args: { target: 'index.html' }, expect: 'determine it from the user' },
+        { name: 'adversarial-audit-skill', args: { target: 'my-skill' }, expect: 'determine it from the user' },
+        { name: 'adversarial-audit-workflow', args: { target: 'ci.yml' }, expect: 'determine it from the user' },
         { name: 'flag-dashboard', args: {}, expect: '' },
         { name: 'flag-dashboard', args: { flag_type: 'blocker' }, expect: 'blocker' },
+        { name: 'mcp-heal', args: {}, expect: '' },
+        { name: 'verify-work', args: {}, expect: 'verification' },
+        // 8.4 Git History prompts
+        { name: 'commit', args: {}, expect: 'Commit Workflow' },
+        // 8.5 Optimizer prompts
+        { name: 'optimize-journal', args: {}, expect: 'Optimizer' },
+        // 8.6 Load-briefing prompt
+        { name: 'load-briefing', args: {}, expect: 'Available Projects' },
+        { name: 'load-briefing', args: { projects: 'nonexistent-project-xyz' }, expect: 'not found' },
     ]
 
     console.log(`\n=== TESTING ${testCases.length} PROMPT CALLS ===\n`)
@@ -167,22 +176,38 @@ async function main() {
         fail++
     }
 
-    try {
-        const resp = await rpc('prompts/get', { name: 'find-related', arguments: {} })
-        if (resp.error) {
-            console.log(`PASS find-related(no args): error returned`)
-        } else {
-            console.log(`PASS find-related(no args): handled gracefully`)
-        }
-        pass++
-    } catch (err) {
-        console.log(`FAIL find-related(no args): ${err.message}`)
-        fail++
-    }
+
 
     console.log(`\n=== RESULTS: ${pass} pass, ${fail} fail (${pass + fail} total) ===`)
     proc.kill()
-    process.exit(fail > 0 ? 1 : 0)
+    
+    // Clean up test databases
+    const filesToClean = [
+        'test-prompts.db',
+        'test-prompts.db-shm',
+        'test-prompts.db-wal',
+        'test-team-prompts.db',
+        'test-team-prompts.db-shm',
+        'test-team-prompts.db-wal',
+        'test-prompts-test.db',
+        'test-prompts-test.db-shm',
+        'test-prompts-test.db-wal',
+        'test-team-prompts-test.db',
+        'test-team-prompts-test.db-shm',
+        'test-team-prompts-test.db-wal'
+    ]
+    
+    // Wait briefly to allow process to release file locks
+    setTimeout(() => {
+        for (const file of filesToClean) {
+            try {
+                rmSync(join(projectDir, file), { force: true })
+            } catch (e) {
+                // Ignore cleanup errors (e.g., file still locked)
+            }
+        }
+        process.exit(fail > 0 ? 1 : 0)
+    }, 500)
 }
 
 main().catch((err) => {

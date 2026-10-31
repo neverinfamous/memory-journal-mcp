@@ -34,8 +34,13 @@ jobs:
       issues: write
       security-events: write
 
+  e2e:
+    uses: ./.github/workflows/e2e.yml
+    permissions:
+      contents: read
+
   publish:
-    needs: [lint, codeql, secrets, trivy]
+    needs: [lint, codeql, secrets, trivy, e2e]
     # Publish only on tag pushes (v*) after ALL security gates pass.
     # Main-branch pushes (squash merge) run checks only — the tag push triggers the actual publish.
     if: |
@@ -44,7 +49,8 @@ jobs:
       needs.lint.result == 'success' &&
       needs.codeql.result == 'success' &&
       needs.secrets.result == 'success' &&
-      needs.trivy.result == 'success'
+      needs.trivy.result == 'success' &&
+      needs.e2e.result == 'success'
     uses: ./.github/workflows/docker-publish.yml
     permissions:
       contents: write

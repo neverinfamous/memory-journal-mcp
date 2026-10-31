@@ -5,8 +5,6 @@ import { healthResource } from './health.js'
 import {
     recentResource,
     significantResource,
-    tagsResource,
-    statisticsResource,
     rulesResource,
     workflowsResource,
     skillsResource,
@@ -23,8 +21,6 @@ export function getCoreResourceDefinitions(): InternalResourceDef[] {
         instructionsResource,
         recentResource,
         significantResource,
-        tagsResource,
-        statisticsResource,
         rulesResource,
         workflowsResource,
         skillsResource,

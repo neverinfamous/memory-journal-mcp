@@ -6,109 +6,18 @@
  */
 
 import type { ToolGroup, MetaGroup, ToolFilterRule, ToolFilterConfig } from '../types/index.js'
+import { TOOL_GROUPS, META_GROUPS } from './tool-constants.js'
 
 // Re-export ToolFilterConfig from types
 export type { ToolFilterConfig } from '../types/index.js'
 
-/**
- * Tool group definitions mapping group names to tool names
- *
- * All 73 tools are categorized here for filtering support.
- */
-export const TOOL_GROUPS: Record<ToolGroup, string[]> = {
-    core: [
-        'create_entry',
-        'get_entry_by_id',
-        'get_recent_entries',
-        'create_entry_minimal',
-        'test_simple',
-        'list_tags',
-    ],
-    search: ['search_entries', 'search_by_date_range', 'semantic_search', 'get_vector_index_stats'],
-    analytics: ['get_statistics', 'get_cross_project_insights'],
-    relationships: ['link_entries', 'visualize_relationships'],
-    io: ['export_entries', 'export_markdown', 'import_markdown'],
-    admin: [
-        'update_entry',
-        'delete_entry',
-        'rebuild_vector_index',
-        'add_to_vector_index',
-        'merge_tags',
-    ],
-    github: [
-        'get_github_issues',
-        'get_github_prs',
-        'get_github_issue',
-        'get_github_pr',
-        'get_github_context',
-        'get_kanban_board',
-        'move_kanban_item',
-        'add_kanban_item',
-        'delete_kanban_item',
-        'create_github_issue_with_entry',
-        'close_github_issue_with_entry',
-        'get_github_milestones',
-        'get_github_milestone',
-        'create_github_milestone',
-        'update_github_milestone',
-        'delete_github_milestone',
-        'get_repo_insights',
-        'get_copilot_reviews',
-    ],
-    backup: ['backup_journal', 'list_backups', 'restore_backup', 'cleanup_backups'],
-    team: [
-        'team_create_entry',
-        'team_get_entry_by_id',
-        'team_get_recent',
-        'team_list_tags',
-        'team_search',
-        'team_search_by_date_range',
-        'team_update_entry',
-        'team_delete_entry',
-        'team_merge_tags',
-        'team_get_statistics',
-        'team_link_entries',
-        'team_visualize_relationships',
-        'team_export_entries',
-        'team_export_markdown',
-        'team_import_markdown',
-        'team_backup',
-        'team_list_backups',
-        'team_semantic_search',
-        'team_get_vector_index_stats',
-        'team_rebuild_vector_index',
-        'team_add_to_vector_index',
-        'team_get_cross_project_insights',
-        'team_get_collaboration_matrix',
-        'team_pass_flag',
-        'team_resolve_flag',
-        'team_list_flags',
-        'team_update_flag',
-        'team_get_flag_analytics',
-    ],
-    codemode: ['mj_execute_code'],
-}
+export { TOOL_GROUPS, META_GROUPS }
 
-/**
- * Meta-group definitions mapping shortcuts to groups
+/** 
+ * Tools that are always enabled regardless of filter configuration.
+ * Prevents agents from locking themselves out of the config system or Code Mode. 
  */
-export const META_GROUPS: Record<MetaGroup, ToolGroup[]> = {
-    starter: ['core', 'search', 'codemode'],
-    essential: ['core', 'codemode'],
-    full: [
-        'core',
-        'search',
-        'analytics',
-        'relationships',
-        'io',
-        'admin',
-        'github',
-        'backup',
-        'team',
-        'codemode',
-    ],
-    readonly: ['core', 'search', 'analytics', 'relationships', 'io', 'codemode'],
-}
+export const ALWAYS_ENABLED_TOOLS = ['update_configuration', 'mj_execute_code'] as const
 
 /**
  * Get all tool names across all groups
@@ -283,6 +192,11 @@ export function parseToolFilter(filterString: string): ToolFilterConfig {
                 }
             }
         }
+    }
+
+    // Always include escape-hatch tools so agents can't lock themselves out
+    for (const tool of ALWAYS_ENABLED_TOOLS) {
+        enabledTools.add(tool)
     }
 
     return {

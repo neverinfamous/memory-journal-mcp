@@ -1,5 +1,5 @@
 /**
- * Search Excellence Tests — Phase 1 (Hush Protocol)
+ * Search Excellence Tests — Phase 1
  *
  * Unit tests for:
  * - Auto-mode query classifier (classifyQuery, resolveSearchMode)
@@ -260,7 +260,7 @@ describe('Search Helpers', () => {
 
 describe('search_entries with mode param', () => {
     let db: DatabaseAdapter
-    const testDbPath = './test-search-mode.db'
+    const testDbPath = './.test-output/vitest/test-search-mode.db'
 
     beforeAll(async () => {
         db = new DatabaseAdapter(testDbPath)
@@ -428,7 +428,7 @@ describe('search_entries with mode param', () => {
 
 describe('semantic_search enhancements', () => {
     let db: DatabaseAdapter
-    const testDbPath = './test-semantic-enhance.db'
+    const testDbPath = './.test-output/vitest/test-semantic-enhance.db'
     let mockVectorManager: any
     let entry1Id: number
     let entry2Id: number

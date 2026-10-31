@@ -19,6 +19,7 @@ import type { AuditCategory } from './types.js'
 import { getRequiredScope } from '../auth/scope-map.js'
 import { getAuthContext } from '../auth/auth-context.js'
 import { getRequestContext } from '../utils/request-context.js'
+import { estimateTokens } from '../observability/token-estimator.js'
 
 // ============================================================================
 // Types
@@ -116,19 +117,19 @@ export function createAuditInterceptor(auditLogger: AuditLogger): AuditIntercept
             try {
                 const result = await fn()
 
-                // Compute token estimate from result (~4 bytes per token)
+                // Compute token estimate from result
                 if (typeof result === 'object' && result !== null) {
                     try {
                         const json = JSON.stringify({
                             ...result,
                             _meta: { tokenEstimate: 0 },
                         })
-                        tokenEstimate = Math.ceil(Buffer.byteLength(json, 'utf8') / 4)
+                        tokenEstimate = estimateTokens(json, 'json')
                     } catch {
                         // Serialization failure must not block tool execution
                     }
                 } else if (typeof result === 'string') {
-                    tokenEstimate = Math.ceil(Buffer.byteLength(result, 'utf8') / 4)
+                    tokenEstimate = estimateTokens(result, 'prose')
                 }
 
                 return result
@@ -148,7 +149,7 @@ export function createAuditInterceptor(auditLogger: AuditLogger): AuditIntercept
                     ...errorResult,
                     _meta: { tokenEstimate: 0 },
                 })
-                tokenEstimate = Math.ceil(Buffer.byteLength(enriched, 'utf8') / 4)
+                tokenEstimate = estimateTokens(enriched, 'json')
 
                 throw err // Re-throw — don't swallow
             } finally {
@@ -225,12 +226,12 @@ export async function auditOperation<T>(
         if (typeof result === 'object' && result !== null) {
             try {
                 const json = JSON.stringify(result)
-                tokenEstimate = Math.ceil(Buffer.byteLength(json, 'utf8') / 4)
+                tokenEstimate = estimateTokens(json, 'json')
             } catch {
                 // Serialization failure must not block execution
             }
         } else if (typeof result === 'string') {
-            tokenEstimate = Math.ceil(Buffer.byteLength(result, 'utf8') / 4)
+            tokenEstimate = estimateTokens(result, 'prose')
         }
         return result
     } catch (err) {

@@ -463,8 +463,7 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    // Must use (board as any).deleteProjectItem to bypass TS issue if not defined in abstraction yet
-                    // Actually, we've formally defined it in ProjectsManager.
+                    // Delete project item from board
                     const result = await resolved.github.deleteProjectItem(
                         board.projectId,
                         input.item_id

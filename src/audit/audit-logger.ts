@@ -17,9 +17,9 @@
  * propagate to tool callers.
  */
 
-import { appendFile, mkdir, open, rename, stat } from 'node:fs/promises'
+import { appendFile, mkdir, open, rename, stat, readFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
-import type { AuditConfig, AuditEntry } from './types.js'
+import type { AuditConfig, AuditEntry, AuditSearchFilters } from './types.js'
 import { logger } from '../utils/logger.js'
 
 // ============================================================================
@@ -275,6 +275,63 @@ export class AuditLogger {
                 { cause: err }
             )
         }
+    }
+
+    /**
+     * Search across the active log and all rotated archives.
+     * Reads files backward from newest to oldest up to the configured limit.
+     */
+    async search(filters: AuditSearchFilters): Promise<AuditEntry[]> {
+        if (this.stderrMode) return []
+        
+        await this.flush()
+        
+        const results: AuditEntry[] = []
+        const limit = filters.limit ?? 100
+        
+        // Search current log first, then older rotated logs .1 through .5
+        const files = [this.config.logPath]
+        for (let i = 1; i <= MAX_ARCHIVES; i++) {
+            files.push(`${this.config.logPath}.${String(i)}`)
+        }
+        
+        for (const file of files) {
+            try {
+                const content = await readFile(file, 'utf-8')
+                const lines = content.split('\n').filter(Boolean)
+                // Read backwards to get newest first
+                for (let i = lines.length - 1; i >= 0; i--) {
+                    try {
+                        const line = lines[i]
+                        if (!line) continue
+                        const entry = JSON.parse(line) as AuditEntry
+                        
+                        // Apply filters
+                        if (filters.tool_name && entry.tool !== filters.tool_name) continue
+                        if (filters.user && entry.user !== filters.user) continue
+                        if (filters.status !== undefined && entry.success !== filters.status) continue
+                        if (filters.category && entry.category !== filters.category) continue
+                        if (filters.date_range?.start && entry.timestamp < filters.date_range.start) continue
+                        if (filters.date_range?.end && entry.timestamp > filters.date_range.end) continue
+                        
+                        results.push(entry)
+                        
+                        if (results.length >= limit) {
+                            return results
+                        }
+                    } catch {
+                        // ignore parse errors for individual lines
+                    }
+                }
+            } catch (err) {
+                // Ignore if file doesn't exist (e.g. rotation hasn't happened yet)
+                if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+                    throw err
+                }
+            }
+        }
+        
+        return results
     }
 
     // =========================================================================

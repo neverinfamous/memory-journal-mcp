@@ -65,10 +65,31 @@ export class CodeModeSecurityManager {
             errors.push('Code cannot be empty')
         }
 
+        const SENSITIVE_BRACKETS = /^['"`](?:constructor|__proto__)['"`]$/i
+        const stripString = (match: string): string => (SENSITIVE_BRACKETS.test(match) ? match : '""')
+
+        // Normalize and strip comments/template literals before pattern matching
+        // (e.g., the word "process." in a Markdown string triggering the process.env block).
+        const strippedCode = code
+            .normalize('NFKC')
+            .replace(/\/\*[\s\S]*?\*\//g, ' ') // Block comments
+            .replace(/\/\/[^\n]*/g, ' ') // Line comments
+            .replace(/`(?:[^`\\]|\\.)*`/g, (m) => (SENSITIVE_BRACKETS.test(m) ? m : '``')) // Template literals
+            .replace(/"(?:[^"\\]|\\.)*"/g, stripString) // Double-quoted strings
+            .replace(/'(?:[^'\\]|\\.)*'/g, stripString) // Single-quoted strings
+
         // Blocked pattern scan
         for (const pattern of this.config.blockedPatterns) {
-            if (pattern.test(code)) {
-                errors.push(`Code contains blocked pattern: ${pattern.source}`)
+            if (pattern.test(strippedCode)) {
+                let hint = ''
+                if (pattern.source.includes('require') || pattern.source.includes('import')) {
+                    hint = ' Dynamic require() and ES module import statements are disabled in sandboxed Code Mode. To manage journal entries or settings, use mj.* tools directly (e.g., `await mj.core.createEntry({ content: "..." })` or `await mj.search.searchEntries({ query: "..." })`).'
+                } else if (pattern.source.includes('fs')) {
+                    hint = ' Node.js filesystem access is disabled in sandboxed Code Mode. To query database metrics, health, or journal entries, use `await mj.analytics.getStatistics()` or `await mj.core.getRecentEntries()`. File existence and stat queries on database paths are auto-healed in Code Mode.'
+                } else if (pattern.source.includes('process')) {
+                    hint = ' Process access is disabled in sandboxed Code Mode.'
+                }
+                errors.push(`🛠️ AUTONOMOUS HEALING: Code contains blocked pattern: ${pattern.source}.${hint}`)
             }
         }
 
@@ -171,8 +192,8 @@ export class CodeModeSecurityManager {
                 const actualKb = Math.ceil(actualBytes / 1024)
                 const limitKb = Math.ceil(this.config.maxResultSize / 1024)
                 errors.push(
-                    `Result exceeds maximum size of ${String(limitKb)} KB (${String(actualKb)} KB returned). ` +
-                        `Extract specific fields or aggregate data before returning. ` +
+                    `🛠️ AUTONOMOUS HEALING: Result exceeds maximum size of ${String(limitKb)} KB (${String(actualKb)} KB returned). ` +
+                        `Extract specific fields or aggregate data before returning, or pass max_result_size in mj_execute_code parameters. ` +
                         `Example: instead of \`return await mj.github.getKanbanBoard(5)\`, use ` +
                         `\`const b = await mj.github.getKanbanBoard(5); return { columns: b.columns?.length ?? 0, totalItems: b.totalItems }\``
                 )

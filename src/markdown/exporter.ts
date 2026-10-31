@@ -119,100 +119,105 @@ export async function exportEntriesToMarkdown(
     // associated relationship data, preserving interchange fidelity.
     const relationshipsMap = db.getRelationshipsForEntries(validEntries.map((e) => e.id))
 
-    for (const entry of validEntries) {
-        // Build frontmatter data
-        const fmData: FrontmatterData = {
-            mj_id: entry.id,
-            entry_type: entry.entryType,
-            timestamp: entry.timestamp,
-            source: 'memory-journal-mcp',
-        }
+    const CHUNK_SIZE = 50
+    for (let i = 0; i < validEntries.length; i += CHUNK_SIZE) {
+        const chunk = validEntries.slice(i, i + CHUNK_SIZE)
+        
+        await Promise.all(chunk.map(async (entry) => {
+            // Build frontmatter data
+            const fmData: FrontmatterData = {
+                mj_id: entry.id,
+                entry_type: entry.entryType,
+                timestamp: entry.timestamp,
+                source: 'memory-journal-mcp',
+            }
 
-        if (entry.tags !== undefined && entry.tags.length > 0) {
-            fmData.tags = entry.tags
-        }
+            if (entry.tags !== undefined && entry.tags.length > 0) {
+                fmData.tags = entry.tags
+            }
 
-        if (entry.significance !== undefined) {
-            fmData.significance = entry.significance
-        }
+            if (entry.significance !== undefined) {
+                fmData.significance = entry.significance
+            }
 
-        if (entry.author !== undefined) {
-            fmData.author = entry.author
-        }
+            if (entry.author !== undefined) {
+                fmData.author = entry.author
+            }
 
-        // Apply pre-fetched relationships for this entry
-        const relationships = relationshipsMap.get(entry.id) ?? []
-        if (relationships.length > 0) {
-            fmData.relationships = relationships.map((r) => ({
-                type: r.relationshipType,
-                target_id: r.fromEntryId === entry.id ? r.toEntryId : r.fromEntryId,
-            }))
-        }
+            // Apply pre-fetched relationships for this entry
+            const relationships = relationshipsMap.get(entry.id) ?? []
+            if (relationships.length > 0) {
+                fmData.relationships = relationships.map((r) => ({
+                    type: r.relationshipType,
+                    target_id: r.fromEntryId === entry.id ? r.toEntryId : r.fromEntryId,
+                }))
+            }
 
-        // Generate file content
-        const frontmatter = serializeFrontmatter(fmData)
-        const fileContent = frontmatter + '\n' + entry.content + '\n'
+            // Generate file content
+            const frontmatter = serializeFrontmatter(fmData)
+            const fileContent = frontmatter + '\n' + entry.content + '\n'
 
-        // Write file atomically preventing symlink traversal via O_NOFOLLOW
-        const filename = generateFilename(entry.id, entry.content)
-        const filepath = join(resolvedOutputDir, filename)
+            // Write file atomically preventing symlink traversal via O_NOFOLLOW
+            const filename = generateFilename(entry.id, entry.content)
+            const filepath = join(resolvedOutputDir, filename)
 
-        let handle
-        try {
-            // Mitigate TOCTOU by verifying the actual resolved path immediately before open
-            // using native realpath to bypass Node.js cache
-            const preRealpath = realpathSync.native(resolvedOutputDir)
+            let handle
+            try {
+                // Mitigate TOCTOU by verifying the actual resolved path immediately before open
+                // using native realpath to bypass Node.js cache
+                const preRealpath = realpathSync.native(resolvedOutputDir)
 
-            // constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW
-            handle = await open(
-                filepath,
-                constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW,
-                0o600
-            )
-
-            // Post-open verification to mitigate TOCTOU (Node.js lacks openat)
-            const postRealpath = realpathSync.native(resolvedOutputDir)
-            if (preRealpath !== postRealpath) {
-                throw new Error(
-                    `Directory swapped during export operation! Aborting to prevent path traversal.`
+                // constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW
+                handle = await open(
+                    filepath,
+                    constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW,
+                    0o600
                 )
-            }
 
-            // Verify the final real path is still within allowed roots
-            assertSafeDirectoryPath(postRealpath, allowedRoots)
+                // Post-open verification to mitigate TOCTOU (Node.js lacks openat)
+                const postRealpath = realpathSync.native(resolvedOutputDir)
+                if (preRealpath !== postRealpath) {
+                    throw new Error(
+                        `Directory swapped during export operation! Aborting to prevent path traversal.`
+                    )
+                }
 
-            await handle.writeFile(fileContent, 'utf-8')
-            files.push(filename)
-        } catch (err: unknown) {
-            if (
-                err instanceof Error &&
-                (err.message.includes('became a symlink') ||
-                    err.message.includes('Directory swapped'))
-            ) {
-                throw err
-            }
+                // Verify the final real path is still within allowed roots
+                assertSafeDirectoryPath(postRealpath, allowedRoots)
 
-            const code =
-                err instanceof Error && 'code' in err ? (err as { code?: string }).code : undefined
-            if (code === 'ELOOP' || code === 'EEXIST') {
-                logger.warning('Refusing to overwrite symlink during export', {
-                    module: 'Exporter',
-                    filepath,
-                })
-                skipped++
-            } else {
-                logger.error('Failed to write markdown file', {
-                    module: 'Exporter',
-                    filepath,
-                    error: err instanceof Error ? err.message : String(err),
-                })
-                skipped++
+                await handle.writeFile(fileContent, 'utf-8')
+                files.push(filename)
+            } catch (err: unknown) {
+                if (
+                    err instanceof Error &&
+                    (err.message.includes('became a symlink') ||
+                        err.message.includes('Directory swapped'))
+                ) {
+                    throw err
+                }
+
+                const code =
+                    err instanceof Error && 'code' in err ? (err as { code?: string }).code : undefined
+                if (code === 'ELOOP' || code === 'EEXIST') {
+                    logger.warning('Refusing to overwrite symlink during export', {
+                        module: 'Exporter',
+                        filepath,
+                    })
+                    skipped++
+                } else {
+                    logger.error('Failed to write markdown file', {
+                        module: 'Exporter',
+                        filepath,
+                        error: err instanceof Error ? err.message : String(err),
+                    })
+                    skipped++
+                }
+            } finally {
+                if (handle) {
+                    await handle.close()
+                }
             }
-        } finally {
-            if (handle) {
-                await handle.close()
-            }
-        }
+        }))
     }
 
     return {

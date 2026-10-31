@@ -7,9 +7,9 @@
  * and team (recent, statistics).
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test-fixture.js'
 import { createClient } from './helpers.js'
-import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import type { Client } from '@modelcontextprotocol/client'
 
 test.describe.configure({ mode: 'serial' })
 
@@ -65,37 +65,33 @@ test.describe('E2E Resource Reads: Complete Coverage', () => {
 
     // --- Configuration-dependent resources (unconfigured in test env) ---
     test('should read memory://rules (unconfigured)', async () => {
-        const response = await client.readResource({ uri: 'memory://rules' })
-
-        expect(response.contents).toBeDefined()
-        expect(response.contents.length).toBeGreaterThan(0)
-
-        const text = (response.contents[0] as { text: string }).text
-        const parsed = JSON.parse(text)
-        expect(parsed).toHaveProperty('configured', false)
+        await expect(client.readResource({ uri: 'memory://rules' })).rejects.toThrow('RULES_FILE_PATH')
     })
 
     test('should read memory://workflows (unconfigured)', async () => {
-        const response = await client.readResource({ uri: 'memory://workflows' })
-
-        expect(response.contents).toBeDefined()
-        expect(response.contents.length).toBeGreaterThan(0)
-
-        const text = (response.contents[0] as { text: string }).text
-        const parsed = JSON.parse(text)
-        expect(parsed).toHaveProperty('configured', false)
+        await expect(client.readResource({ uri: 'memory://workflows' })).rejects.toThrow('MEMORY_JOURNAL_WORKFLOW_SUMMARY')
     })
 
-    test('should read memory://skills (unconfigured)', async () => {
+    test('should read memory://skills (shipped skills when unconfigured)', async () => {
         const response = await client.readResource({ uri: 'memory://skills' })
 
         expect(response.contents).toBeDefined()
         expect(response.contents.length).toBeGreaterThan(0)
 
         const text = (response.contents[0] as { text: string }).text
-        const parsed = JSON.parse(text)
-        // Without SKILLS_DIR_PATH, should return { configured: false } or empty skills
-        expect(typeof parsed).toBe('object')
+        const parsed = JSON.parse(text) as {
+            configured: boolean
+            skills: { name: string; source: string }[]
+        }
+        expect(parsed.configured).toBe(true)
+        expect(parsed.skills).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    name: 'memory-journal-mcp',
+                    source: 'shipped',
+                }),
+            ])
+        )
     })
 
     // --- GitHub resources (no token in test env) ---
@@ -111,29 +107,15 @@ test.describe('E2E Resource Reads: Complete Coverage', () => {
         expect(text.length).toBeGreaterThan(0)
     })
 
-    test('should read memory://github/insights', async () => {
-        const response = await client.readResource({ uri: 'memory://github/insights' })
 
-        expect(response.contents).toBeDefined()
-        expect(response.contents.length).toBeGreaterThan(0)
-
-        const text = (response.contents[0] as { text: string }).text
-        expect(typeof text).toBe('string')
-        expect(text.length).toBeGreaterThan(0)
-    })
 
     test('should read memory://github/milestones', async () => {
         await expect(client.readResource({ uri: 'memory://github/milestones' })).rejects.toThrow(
-            'GitHub API not available'
+            /(GitHub API not available|Bad credentials|Not Found)/
         )
     })
 
     // --- Graph resources ---
-    test('should read memory://graph/actions', async () => {
-        await expect(client.readResource({ uri: 'memory://graph/actions' })).rejects.toThrow(
-            'GitHub API not available'
-        )
-    })
 
     test('should read memory://actions/recent', async () => {
         const response = await client.readResource({ uri: 'memory://actions/recent' })

@@ -6,19 +6,16 @@ import { z } from 'zod'
 import { logger } from '../utils/logger.js'
 
 /**
- * Hush Protocol Flag Context Schema
+ * Session Commit Context Schema
  */
-export const FlagContextSchema = z.object({
-    flag_type: z.string(),
-    target_user: z.string().nullable().optional(),
-    link: z.string().nullable().optional(),
-    resolved: z.boolean(),
-    resolved_at: z.string().nullable().optional(),
-    resolution: z.string().nullable().optional(),
-    author: z.string().optional(),
+export const SessionCommitContextSchema = z.object({
+    commits: z.array(z.string()),
+    branch: z.string().optional(),
+    pr: z.number().optional(),
+    repo: z.string().optional(),
 })
 
-export type FlagContext = z.infer<typeof FlagContextSchema>
+export type SessionCommitContext = z.infer<typeof SessionCommitContextSchema>
 
 /**
  * Versioned Envelope Schema for explicit typing
@@ -33,7 +30,10 @@ export type VersionedEnvelope = z.infer<typeof VersionedEnvelopeSchema>
 /**
  * Union schema for all valid AutoContext payloads
  */
-export const AutoContextSchema = z.union([FlagContextSchema, VersionedEnvelopeSchema])
+export const AutoContextSchema = z.union([
+    VersionedEnvelopeSchema,
+    SessionCommitContextSchema,
+])
 
 /**
  * Helper to safely parse and validate autoContext JSON.
@@ -71,12 +71,14 @@ export function parseAutoContext(
 }
 
 /**
- * Safe extractor specifically for Flag entries.
+ * Safe extractor specifically for Session Commit entries.
  */
-export function parseFlagContext(autoContext: string | null | undefined): FlagContext | null {
+export function parseSessionCommitContext(
+    autoContext: string | null | undefined
+): SessionCommitContext | null {
     const parsed = parseAutoContext(autoContext)
     if (parsed === null) return null
 
-    const result = FlagContextSchema.safeParse(parsed)
+    const result = SessionCommitContextSchema.safeParse(parsed)
     return result.success ? result.data : null
 }

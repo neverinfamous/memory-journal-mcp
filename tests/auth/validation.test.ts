@@ -22,6 +22,8 @@ describe('enforceAccessBoundary', () => {
 
     it('should throw if target is team and no auth or TEAM_AUTHOR is present', () => {
         delete process.env['TEAM_AUTHOR']
+        delete process.env['USERNAME']
+        delete process.env['USER']
         process.env['CODEMODE_INTERNAL_FULL_ACCESS'] = 'false'
         vi.mocked(authContext.getAuthContext).mockReturnValue(undefined)
 
@@ -35,6 +37,8 @@ describe('enforceAccessBoundary', () => {
 
     it('should allow team target if CODEMODE_INTERNAL_FULL_ACCESS is true', () => {
         delete process.env['TEAM_AUTHOR']
+        delete process.env['USERNAME']
+        delete process.env['USER']
         process.env['CODEMODE_INTERNAL_FULL_ACCESS'] = 'true'
         vi.mocked(authContext.getAuthContext).mockReturnValue(undefined)
 
@@ -45,6 +49,7 @@ describe('enforceAccessBoundary', () => {
         vi.mocked(authContext.getAuthContext).mockReturnValue({
             authenticated: true,
             claims: { sub: 'test', scopes: ['read'], exp: 0, iat: 0, iss: '', aud: '' },
+            scopes: ['read'],
         })
 
         const mockAuditLogger = {
@@ -65,6 +70,7 @@ describe('enforceAccessBoundary', () => {
         vi.mocked(authContext.getAuthContext).mockReturnValue({
             authenticated: true,
             claims: { sub: 'test', scopes: ['admin'], exp: 0, iat: 0, iss: '', aud: '' },
+            scopes: ['admin'],
         })
 
         expect(() => enforceAccessBoundary('memory://audit', 'resource')).not.toThrow()
@@ -74,6 +80,7 @@ describe('enforceAccessBoundary', () => {
         vi.mocked(authContext.getAuthContext).mockReturnValue({
             authenticated: true,
             claims: { sub: 'test', scopes: ['read'], exp: 0, iat: 0, iss: '', aud: '' },
+            scopes: ['read'],
         })
         process.env['TEAM_AUTHOR'] = 'test-author'
 

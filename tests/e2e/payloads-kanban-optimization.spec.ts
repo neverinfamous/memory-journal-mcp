@@ -8,8 +8,8 @@
  * Tests verify the response shape is valid in both cases.
  */
 
-import { test, expect } from '@playwright/test'
-import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import { test, expect } from './test-fixture.js'
+import type { Client } from '@modelcontextprotocol/client'
 import { createClient } from './helpers.js'
 
 test.describe.configure({ mode: 'serial' })

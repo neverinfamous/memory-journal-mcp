@@ -12,7 +12,7 @@ describe('Help Resource Handlers', () => {
     let db: DatabaseAdapter
 
     beforeAll(async () => {
-        const dbPath = './test-help-resource.db'
+        const dbPath = './.test-output/vitest/test-help-resource.db'
         if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath)
         db = new DatabaseAdapter(dbPath)
         await db.initialize()
@@ -20,7 +20,7 @@ describe('Help Resource Handlers', () => {
 
     afterAll(() => {
         db.close()
-        const dbPath = './test-help-resource.db'
+        const dbPath = './.test-output/vitest/test-help-resource.db'
         if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath)
     })
 
@@ -51,7 +51,7 @@ describe('Help Resource Handlers', () => {
         const createEntry = result.data.tools.find((t: any) => t.name === 'create_entry')
         expect(createEntry.parameters).toBeDefined()
 
-        // content is z.string().optional() (relaxed) — not required at SDK level
+        // content is z.string().min(1) — required at SDK level
         const contentParam = createEntry.parameters.find((p: any) => p.name === 'content')
         expect(contentParam).toBeDefined()
         expect(contentParam.type).toBe('string')
@@ -68,20 +68,17 @@ describe('Help Resource Handlers', () => {
         const defs = getHelpResourceDefinitions()
         const groupHelp = defs.find((d) => d.uri === 'memory://help/{group}')
 
-        const result = (await groupHelp!.handler(
+        await expect(groupHelp!.handler(
             'memory://help/invalid_group_name',
             getContext()
-        )) as any
-        expect(result.data.error).toContain('not found')
-        expect(result.data.availableGroups).toBeDefined()
+        )).rejects.toThrow('not found')
     })
 
     it('should return error for malformed URI in memory://help/{group}', async () => {
         const defs = getHelpResourceDefinitions()
         const groupHelp = defs.find((d) => d.uri === 'memory://help/{group}')
 
-        const result = (await groupHelp!.handler('memory://help/', getContext())) as any
-        expect(result.data.error).toContain('Invalid group')
+        await expect(groupHelp!.handler('memory://help/', getContext())).rejects.toThrow('Invalid group')
     })
 
     it('should handle all tool groups including codemode and team', async () => {

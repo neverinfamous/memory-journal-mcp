@@ -24,7 +24,8 @@ export interface ISandbox {
         schemas?: Record<string, Record<string, string>>,
         timeoutMs?: number,
         contextObj?: Record<string, unknown>,
-        readonlyMode?: boolean
+        readonlyMode?: boolean,
+        maxResultSize?: number
     ): Promise<SandboxResult>
 }
 
@@ -36,7 +37,8 @@ export interface ISandboxPool {
         schemas?: Record<string, Record<string, string>>,
         timeoutMs?: number,
         contextObj?: Record<string, unknown>,
-        readonlyMode?: boolean
+        readonlyMode?: boolean,
+        maxResultSize?: number
     ): Promise<SandboxResult>
     getActiveCount(): number
     dispose(): void

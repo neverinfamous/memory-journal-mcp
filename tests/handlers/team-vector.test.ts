@@ -7,7 +7,7 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import { callTool as _callTool } from '../../src/handlers/tools/index.js'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
-import { VectorSearchManager } from '../../src/vector/vector-search-manager.js'
+import { VectorSearchManager } from '../../src/vector/vector-search-manager/index.js'
 
 const callTool = (
     name: any,
@@ -57,8 +57,8 @@ describe('Team Vector Tool Handlers', () => {
     let personalDb: DatabaseAdapter
     let teamDb: DatabaseAdapter
     let vectorManager: VectorSearchManager
-    const personalDbPath = './test-team-vector-personal.db'
-    const teamDbPath = './test-team-vector-team.db'
+    const personalDbPath = './.test-output/vitest/test-team-vector-personal.db'
+    const teamDbPath = './.test-output/vitest/test-team-vector-team.db'
 
     beforeAll(async () => {
         try {
@@ -81,7 +81,7 @@ describe('Team Vector Tool Handlers', () => {
                 return [{ entryId: 1, score: 0.8 }]
             },
             getStats: () => ({ itemCount: 10, modelName: 'test-model', dimensions: 384 }),
-            rebuildIndex: async () => ({ indexed: 10, failed: 0 }),
+            rebuildIndex: async () => ({ success: true, indexed: 10, failed: 0, firstError: null, partial: false, errors: [] }),
             addEntry: async (id: number) => ({
                 success: id !== 999,
                 error: id === 999 ? 'Failed' : undefined,
@@ -94,7 +94,7 @@ describe('Team Vector Tool Handlers', () => {
         // Create the entry that the mock returns
         await callTool(
             'team_create_entry',
-            {
+            { workspace_id: 'default', 
                 project_number: 1,
                 content: 'Vector matched',
             },

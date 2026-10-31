@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { computeRRFScores, hybridSearch } from '../../src/handlers/tools/search/hybrid.js'
 import type { IDatabaseAdapter } from '../../src/database/core/interfaces.js'
-import type { VectorSearchManager } from '../../src/vector/vector-search-manager.js'
+import type { VectorSearchManager } from '../../src/vector/vector-search-manager/index.js'
 import type { JournalEntry } from '../../src/types/index.js'
 
 describe('Hybrid Search', () => {
@@ -59,10 +59,10 @@ describe('Hybrid Search', () => {
         } as unknown as VectorSearchManager
 
         it('combines FTS5 and vector results successfully', async () => {
-            vi.mocked(mockDb.searchEntries).mockResolvedValueOnce([
+            vi.mocked(mockDb.searchEntries).mockReturnValueOnce({ entries: [
                 { id: 1 },
                 { id: 2 },
-            ] as JournalEntry[])
+            ] as JournalEntry[] })
 
             vi.mocked(mockVectorManager.search).mockResolvedValueOnce([
                 { entryId: 2, similarity: 0.9 },
@@ -84,11 +84,11 @@ describe('Hybrid Search', () => {
         })
 
         it('filters correctly by isPersonal', async () => {
-            vi.mocked(mockDb.searchEntries).mockResolvedValueOnce([
+            vi.mocked(mockDb.searchEntries).mockReturnValueOnce({ entries: [
                 { id: 1 },
                 { id: 2 },
                 { id: 3 },
-            ] as JournalEntry[])
+            ] as JournalEntry[] })
 
             vi.mocked(mockVectorManager.search).mockResolvedValueOnce([])
 
@@ -104,7 +104,7 @@ describe('Hybrid Search', () => {
         })
 
         it('works safely without vectorManager', async () => {
-            vi.mocked(mockDb.searchEntries).mockResolvedValueOnce([{ id: 1 }] as JournalEntry[])
+            vi.mocked(mockDb.searchEntries).mockReturnValueOnce({ entries: [{ id: 1 }] as JournalEntry[] })
 
             const result = await hybridSearch('test', mockDb, undefined, { limit: 10 })
 
@@ -113,11 +113,11 @@ describe('Hybrid Search', () => {
         })
 
         it('respects limit constraints', async () => {
-            vi.mocked(mockDb.searchEntries).mockResolvedValueOnce([
+            vi.mocked(mockDb.searchEntries).mockReturnValueOnce({ entries: [
                 { id: 1 },
                 { id: 2 },
                 { id: 3 },
-            ] as JournalEntry[])
+            ] as JournalEntry[] })
 
             vi.mocked(mockVectorManager.search).mockResolvedValueOnce([])
 

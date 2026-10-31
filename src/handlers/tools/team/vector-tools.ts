@@ -8,6 +8,8 @@
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
+import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
+import { logger } from '../../../utils/logger.js'
 import { TEAM_DB_ERROR_RESPONSE, batchFetchAuthors } from './helpers.js'
 import {
     TeamSemanticSearchSchema,
@@ -20,7 +22,7 @@ import {
     TeamAddToVectorIndexOutputSchema,
 } from './schemas.js'
 import { passMetadataFilters } from '../search/helpers.js'
-import type { SemanticSearchResult } from '../../../vector/vector-search-manager.js'
+import type { SemanticSearchResult } from '../../../vector/vector-search-manager/index.js'
 
 // ============================================================================
 // Constants
@@ -58,6 +60,7 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     const input = TeamSemanticSearchSchema.parse(params)
+                    const wsId = input.workspace_id ? resolveWorkspaceId(input.workspace_id, input.project_number, context.config) : undefined
 
                     if (!input.query && input.entry_id === undefined) {
                         return {
@@ -93,7 +96,10 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                         input.entry_type !== undefined ||
                         input.start_date !== undefined ||
                         input.end_date !== undefined ||
-                        input.project_number !== undefined
+                        input.project_number !== undefined ||
+                        input.issue_number !== undefined ||
+                        input.pr_number !== undefined ||
+                        input.workflow_run_id !== undefined
 
                     const internalLimit = hasFilters
                         ? Math.min(Math.max(input.limit * 10, 100), 1000)
@@ -138,6 +144,9 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                             if (entry.projectNumber !== input.project_number) {
                                 return null
                             }
+                            if (wsId && entry.workspaceId !== wsId) {
+                                return null
+                            }
 
                             // Apply filters
                             if (
@@ -148,6 +157,9 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                                         entryType: input.entry_type,
                                         startDate: input.start_date,
                                         endDate: input.end_date,
+                                        issueNumber: input.issue_number,
+                                        prNumber: input.pr_number,
+                                        workflowRunId: input.workflow_run_id,
                                     },
                                     teamDb
                                 )
@@ -234,7 +246,7 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
             name: 'team_rebuild_vector_index',
             title: 'Rebuild Team Vector Index',
             description:
-                'Rebuild the team semantic search vector index from all existing team entries. Requires TEAM_DB_PATH.',
+                'Rebuild the team semantic search vector index from all existing team entries. Requires TEAM_DB_PATH. [REQUIRES ADMIN SCOPE]',
             group: 'team',
             inputSchema: z.object({}).strict(),
             outputSchema: TeamRebuildVectorIndexOutputSchema,
@@ -263,12 +275,15 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    const { indexed, failed, firstError, partial } =
-                        await teamVectorManager.rebuildIndex(teamDb, progress)
-                    const success = indexed > 0 || failed === 0
+                    const { success, indexed, failed, firstError } =
+                        await teamVectorManager.rebuildIndex(progress)
+                    
+                    if (!success && firstError) {
+                        logger.warning(`Team vector index rebuild had errors: ${firstError}`)
+                    }
+
                     return {
                         success,
-                        partial,
                         entriesIndexed: indexed,
                         ...(failed > 0 ? { failedEntries: failed } : {}),
                         ...(!success
@@ -302,7 +317,7 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                         return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
-                    const { entry_id, project_number } = TeamAddToVectorIndexSchema.parse(params)
+                    const { entry_id, project_number, workspace_id } = TeamAddToVectorIndexSchema.parse(params)
 
                     if (!teamVectorManager) {
                         return {
@@ -317,8 +332,8 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    const entry = teamDb.getEntryById(entry_id)
-                    if (entry?.projectNumber !== project_number) {
+                    const entry = teamDb.getEntryById(entry_id, workspace_id)
+                    if (!entry || entry.projectNumber !== project_number) {
                         return {
                             success: false,
                             entryId: entry_id,
@@ -331,15 +346,18 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    const result = await teamVectorManager.addEntry(entry_id, entry.content)
-                    return {
-                        success: result.success,
-                        entryId: entry_id,
-                        ...(result.success
-                            ? {}
-                            : {
-                                  error: result.error ?? 'Failed to generate or store embedding',
-                              }),
+                    try {
+                        await teamVectorManager.addEntry(entry)
+                        return {
+                            success: true,
+                            entryId: entry_id,
+                        }
+                    } catch (err) {
+                        return {
+                            success: false,
+                            entryId: entry_id,
+                            error: err instanceof Error ? err.message : 'Failed to generate or store embedding'
+                        }
                     }
                 } catch (err) {
                     return formatHandlerError(err)
@@ -348,3 +366,4 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
         },
     ]
 }
+

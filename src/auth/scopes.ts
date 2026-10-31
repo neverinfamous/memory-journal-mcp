@@ -10,7 +10,7 @@
  */
 
 import type { ToolGroup } from '../types/index.js'
-import { TOOL_GROUPS } from '../filtering/tool-filter.js'
+import { TOOL_GROUPS } from '../filtering/tool-constants.js'
 
 // =============================================================================
 // Scope Constants
@@ -62,6 +62,7 @@ export const TOOL_GROUP_SCOPES: Record<ToolGroup, StandardScope> = {
     io: SCOPES.READ,
     admin: SCOPES.ADMIN,
     github: SCOPES.WRITE,
+    git: SCOPES.READ,
     backup: SCOPES.ADMIN,
     // SEC-1.3: Team tools require the dedicated `team` scope, not generic `write`.
     // This aligns tool-level enforcement with the resource-level boundary at memory://team/*.
@@ -81,6 +82,51 @@ export const TOOL_SCOPE_OVERRIDES: Record<string, StandardScope> = {
     create_entry_minimal: SCOPES.WRITE,
     link_entries: SCOPES.WRITE,
     export_markdown: SCOPES.WRITE,
+
+    // Synthetic & healing fallback tools
+    read_resource: SCOPES.READ,
+    mj_read_resource: SCOPES.READ,
+    memory_read_resource: SCOPES.READ,
+    'load-briefing': SCOPES.READ,
+    mj_session_summary: SCOPES.READ,
+
+    // Dotted Code Mode tools
+    'mj.core.createEntry': SCOPES.WRITE,
+    'mj.core.create_entry': SCOPES.WRITE,
+    'mj.core.searchEntries': SCOPES.READ,
+    'mj.core.search_entries': SCOPES.READ,
+    'mj.core.getRecentEntries': SCOPES.READ,
+    'mj.core.get_recent_entries': SCOPES.READ,
+    'mj.core.getEntryById': SCOPES.READ,
+    'mj.core.get_entry_by_id': SCOPES.READ,
+    'mj.core.updateEntry': SCOPES.ADMIN,
+    'mj.core.update_entry': SCOPES.ADMIN,
+    'mj.core.deleteEntry': SCOPES.ADMIN,
+    'mj.core.delete_entry': SCOPES.ADMIN,
+    'mj.core.listProjects': SCOPES.READ,
+    'mj.core.list_projects': SCOPES.READ,
+    'mj.admin.getProject': SCOPES.READ,
+    'mj.admin.get_project': SCOPES.READ,
+    'mj.admin.listProjects': SCOPES.READ,
+    'mj.admin.list_projects': SCOPES.READ,
+    'mj.projects.listProjects': SCOPES.READ,
+    'mj.projects.list_projects': SCOPES.READ,
+
+    // Prefixed Code Mode fallback tools
+    mj_core_create_entry: SCOPES.WRITE,
+    mj_core_search_entries: SCOPES.READ,
+    mj_core_get_recent_entries: SCOPES.READ,
+    mj_core_get_entry_by_id: SCOPES.READ,
+    mj_admin_get_project: SCOPES.READ,
+    mj_admin_list_projects: SCOPES.READ,
+    
+    // Project tool fallbacks
+    list_projects: SCOPES.READ,
+    listProjects: SCOPES.READ,
+    get_projects: SCOPES.READ,
+    getProjects: SCOPES.READ,
+    get_project: SCOPES.READ,
+    getProject: SCOPES.READ,
 }
 
 /**

@@ -34,6 +34,8 @@ function createMockDb() {
         }),
         pragma: vi.fn(),
         flushSave: vi.fn(),
+        getAnalyticsSnapshots: vi.fn().mockReturnValue([]),
+        createAnalyticsSnapshot: vi.fn(),
     }
 }
 
@@ -52,6 +54,8 @@ function defaultOptions(overrides: Partial<SchedulerOptions> = {}): SchedulerOpt
         keepBackups: 5,
         vacuumIntervalMinutes: 0,
         rebuildIndexIntervalMinutes: 0,
+        reportIntervalMinutes: 0,
+        digestIntervalMinutes: 0,
         ...overrides,
     }
 }
@@ -299,11 +303,29 @@ describe('Scheduler', () => {
 
             await vi.advanceTimersByTimeAsync(60_000)
 
-            expect(vectorManager.rebuildIndex).toHaveBeenCalledWith(db)
+            expect(vectorManager.rebuildIndex).toHaveBeenCalledWith()
 
             const status = scheduler.getStatus()
             const job = status.jobs.find((j) => j.name === 'rebuild-index')
             expect(job!.lastResult).toBe('success')
+
+            scheduler.stop()
+        })
+    })
+
+    describe('report job', () => {
+        it('should be created when reportIntervalMinutes and URL are provided', async () => {
+            const db = createMockDb()
+            const scheduler = new Scheduler(
+                defaultOptions({ reportIntervalMinutes: 60, reportDeliveryOptions: { webhookUrl: 'https://example.com/hook' } }),
+                db as never
+            )
+            scheduler.start()
+
+            const status = scheduler.getStatus()
+            const reportJob = status.jobs.find(j => j.name === 'report')
+            expect(reportJob).toBeDefined()
+            expect(reportJob!.intervalMinutes).toBe(60)
 
             scheduler.stop()
         })
@@ -357,9 +379,9 @@ describe('Scheduler', () => {
             scheduler.start()
 
             const status = scheduler.getStatus()
-            expect(status.jobs[0].intervalMinutes).toBe(10)
-            expect(status.jobs[1].intervalMinutes).toBe(20)
-            expect(status.jobs[2].intervalMinutes).toBe(30)
+            expect(status.jobs.find(j => j.name === 'backup')!.intervalMinutes).toBe(10)
+            expect(status.jobs.find(j => j.name === 'vacuum')!.intervalMinutes).toBe(20)
+            expect(status.jobs.find(j => j.name === 'rebuild-index')!.intervalMinutes).toBe(30)
 
             scheduler.stop()
         })

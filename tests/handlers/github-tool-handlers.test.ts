@@ -190,7 +190,7 @@ function createMockGitHub(overrides: Partial<Record<string, unknown>> = {}): Git
 
 describe('GitHub Tool Handlers', () => {
     let db: DatabaseAdapter
-    const testDbPath = './test-gh-tools.db'
+    const testDbPath = './.test-output/vitest/test-gh-tools.db'
 
     beforeAll(async () => {
         db = new DatabaseAdapter(testDbPath)

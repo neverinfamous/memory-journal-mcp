@@ -41,7 +41,7 @@ vi.mock('../../src/utils/security-utils.js', () => ({
     assertAllowedPathBoundaries: vi.fn(),
 }))
 
-import { getIoTools } from '../../src/handlers/tools/io.js'
+import { getIoTools } from '../../src/handlers/tools/io/index.js'
 
 // ============================================================================
 // Helpers
@@ -60,8 +60,8 @@ function createMockEntries(count = 3) {
 function createMockContext(dbOverrides: Partial<Record<string, unknown>> = {}) {
     return {
         db: {
-            getRecentEntries: vi.fn().mockReturnValue(createMockEntries()),
-            searchByDateRange: vi.fn().mockReturnValue(createMockEntries(2)),
+            getRecentEntries: vi.fn().mockReturnValue({ entries: createMockEntries() }),
+            searchByDateRange: vi.fn().mockReturnValue({ entries: createMockEntries(2) }),
             ...dbOverrides,
         },
         progress: null,
@@ -81,7 +81,7 @@ describe('getIoTools', () => {
         const context = createMockContext()
         const tools = getIoTools(context as never)
 
-        expect(tools).toHaveLength(3)
+        expect(tools).toHaveLength(4)
         const exportTool = tools.find((t) => t.name === 'export_entries')
         expect(exportTool).toBeDefined()
         expect(exportTool!.group).toBe('io')
@@ -100,7 +100,7 @@ describe('getIoTools', () => {
 
         expect(result['format']).toBe('json')
         expect(result['entries']).toHaveLength(3)
-        expect(context.db.getRecentEntries).toHaveBeenCalledWith(100) // default limit
+        expect(context.db.getRecentEntries).toHaveBeenCalledWith(100, undefined, undefined, undefined, undefined, 'default') // default limit
     })
 
     it('should respect custom limit', async () => {
@@ -110,7 +110,7 @@ describe('getIoTools', () => {
 
         await handler({ limit: 10 })
 
-        expect(context.db.getRecentEntries).toHaveBeenCalledWith(10)
+        expect(context.db.getRecentEntries).toHaveBeenCalledWith(10, undefined, undefined, undefined, undefined, 'default')
     })
 
     // ========================================================================
@@ -193,7 +193,7 @@ describe('getIoTools', () => {
             { id: 3, timestamp: '2025-01-13', entryType: 'note', content: 'Another note' },
         ]
         const context = createMockContext({
-            searchByDateRange: vi.fn().mockReturnValue(entries),
+            searchByDateRange: vi.fn().mockReturnValue({ entries }),
         })
         const tools = getIoTools(context as never)
         const handler = tools[0]!.handler

@@ -32,6 +32,8 @@ export interface PoolOptions {
     maxInstances?: number
     /** Idle timeout before disposing instance (default: 60000ms) */
     idleTimeoutMs?: number
+    /** Maximum age of a worker before recycling (default: 300000ms = 5 min) */
+    maxWorkerAgeMs?: number
 }
 
 /**
@@ -49,7 +51,8 @@ export const DEFAULT_SANDBOX_OPTIONS: Required<SandboxOptions> = {
 export const DEFAULT_POOL_OPTIONS: Required<PoolOptions> = {
     minInstances: 2,
     maxInstances: 10,
-    idleTimeoutMs: 60000,
+    idleTimeoutMs: 60_000,
+    maxWorkerAgeMs: 300_000,
 }
 
 // =============================================================================
@@ -112,9 +115,11 @@ export const DEFAULT_SECURITY_CONFIG: SecurityConfig = {
     blockedPatterns: [
         /\brequire\s*\(/, // No require()
         /\bimport\s*\(/, // No dynamic import()
-        /(?<![.-])\bprocess\./, // No process access
-        /(?<![.-])\bglobal\./, // No global access
-        /(?<![.-])\bglobalThis\./, // No globalThis access
+        /\bimport\s+[\s\S]*?\bfrom\b/, // No static ES module import from
+        /\bimport\s*[{*]/, // No static ES module import statement
+        /\bprocess\./, // No process access
+        /\bglobal\./, // No global access
+        /\bglobalThis\./, // No globalThis access
         /\beval\s*\(/, // No eval()
         /\bFunction\s*\(/, // No Function constructor
         /\b__proto__\b/, // No prototype pollution
@@ -123,11 +128,11 @@ export const DEFAULT_SECURITY_CONFIG: SecurityConfig = {
         /\bReflect\s*\./i, // No Reflect API access (getPrototypeOf, ownKeys, construct, etc.)
         /\bSymbol\s*\./i, // No Symbol access (hasInstance, toPrimitive, etc.)
         /\bnew\s+Proxy\s*\(/i, // No Proxy construction
-        /(?<![.-])\bchild_process/, // No child processes
-        /(?<![.-])\bfs\./, // No filesystem
-        /(?<![.-])\bnet\./, // No networking
-        /(?<![.-])\bhttp\./, // No HTTP
-        /(?<![.-])\bhttps\./, // No HTTPS
+        /\bchild_process\b/, // No child processes
+        /\bfs\./, // No filesystem
+        /\bnet\./, // No networking
+        /\bhttp\./, // No HTTP
+        /\bhttps\./, // No HTTPS
     ],
 }
 

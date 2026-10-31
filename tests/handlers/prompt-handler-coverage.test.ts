@@ -11,7 +11,7 @@ import { getPrompts, getPrompt } from '../../src/handlers/prompts/index.js'
 
 describe('Prompt Handlers - Coverage', () => {
     let db: DatabaseAdapter
-    const testDbPath = './test-prompts-cov.db'
+    const testDbPath = './.test-output/vitest/test-prompts-cov.db'
 
     beforeAll(async () => {
         db = new DatabaseAdapter(testDbPath)
@@ -59,16 +59,16 @@ describe('Prompt Handlers - Coverage', () => {
             )
         })
 
-        it('should throw ConfigurationError if teamDb is missing for team-session-summary', () => {
-            expect(() => getPrompt('team-session-summary', {}, db)).toThrow(
+        it('should throw ConfigurationError if teamDb is missing for team-session-summary', async () => {
+            await expect(getPrompt('team-session-summary', {}, db)).rejects.toThrow(
                 'Team database not configured'
             )
         })
 
-        it('should return messages for a valid prompt', () => {
+        it('should return messages for a valid prompt', async () => {
             const prompts = getPrompts()
             const firstName = (prompts[0] as { name: string }).name
-            const result = getPrompt(firstName, {}, db)
+            const result = await getPrompt(firstName, { pr_number: '123' }, db)
             expect(result.messages).toBeDefined()
             expect(result.messages.length).toBeGreaterThan(0)
         })

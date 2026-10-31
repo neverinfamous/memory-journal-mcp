@@ -3,14 +3,18 @@ import { defineConfig } from 'vitest/config'
 export default defineConfig({
     test: {
         globals: true,
+        isolate: true,
         environment: 'node',
         env: {
             TEAM_AUTHOR: 'test-author',
+            DB_PATH: ':memory:',
+            TEAM_DB_PATH: ':memory:',
         },
+        globalSetup: ['./tests/global-teardown.ts'],
         include: ['tests/**/*.test.ts'],
         coverage: {
             provider: 'v8',
-            reporter: ['text', 'html', 'json-summary'],
+            reporter: ['text', 'text-summary', 'html', 'json-summary', 'lcov'],
             reportsDirectory: '.test-output/coverage',
             include: ['src/**/*.ts'],
             exclude: [
@@ -20,8 +24,14 @@ export default defineConfig({
                 'src/codemode/worker-script.ts',
                 'src/handlers/tools/core/fields-mixin.ts',
                 'src/types/**',
+                'src/**/types.ts',
+                'src/database/core/interfaces.ts',
+                'src/vendor/**',
             ],
         },
-        hookTimeout: 30_000,
+        hookTimeout: 30000,
+        testTimeout: 10000,
+        pool: 'threads',
+        fileParallelism: true,
     },
 })

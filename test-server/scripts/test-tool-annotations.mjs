@@ -32,8 +32,8 @@ import { spawn } from 'child_process'
 
 const projectDir = 'C:\\Users\\chris\\Desktop\\memory-journal-mcp'
 
-/** Expected total tool count: 73 (10 groups + codemode) */
-const EXPECTED_TOOL_COUNT = 73
+/** Expected total tool count: 100 (10 groups + codemode) */
+const EXPECTED_TOOL_COUNT = 100
 
 /**
  * Exact allowlist of tools that legitimately need openWorldHint=true.
@@ -43,6 +43,7 @@ const OPEN_WORLD_ALLOWLIST = new Set([
     // IO tools — filesystem interaction
     'export_markdown', // Writes .md files to filesystem
     'import_markdown', // Reads .md files from filesystem
+    'import_external',
     // GitHub read tools — external API
     'get_github_issues', // GitHub REST API
     'get_github_prs', // GitHub REST API
@@ -70,6 +71,9 @@ const OPEN_WORLD_ALLOWLIST = new Set([
     // Team IO tools — filesystem interaction
     'team_export_markdown', // Writes .md files to filesystem
     'team_import_markdown', // Reads .md files from filesystem
+    'team_import_external',
+    // Code execution
+    'mj_execute_code',
 ])
 
 /**
@@ -78,9 +82,14 @@ const OPEN_WORLD_ALLOWLIST = new Set([
  */
 const DESTRUCTIVE_ALLOWLIST = new Set([
     'delete_entry', // Soft/hard delete journal entry
+    'batch_delete_entries', // Bulk delete journal entries
     'delete_github_milestone', // Permanently deletes GitHub milestone
     'restore_backup', // Replaces entire database with backup
-    'team_delete_entry', // Soft/hard delete team entry
+    'team_delete_entry', // Soft delete team entry
+    'team_batch_delete_entries', // Bulk soft delete team entries
+    'team_remove_member', // Remove a member from the team
+    'team_remove_author_alias', // Remove an author alias
+    'team_consolidate_authors', // Consolidate aliases and retroactively update entries
 ])
 
 /**
@@ -91,16 +100,21 @@ const READ_ONLY_ALLOWLIST = new Set([
     // Core reads
     'get_entry_by_id',
     'get_recent_entries',
+    'get_entry_history',
     'test_simple',
     'list_tags',
+    'trigger_progress',
+    'test_error_handling',
     // Search reads
     'search_entries',
     'search_by_date_range',
     'semantic_search',
     'get_vector_index_stats',
+    'list_deleted_entries',
     // Analytics reads
     'get_statistics',
     'get_cross_project_insights',
+    'search_audit_log',
     // Relationships reads
     'visualize_relationships',
     // IO reads (export_entries reads DB but doesn't write to filesystem)
@@ -124,12 +138,18 @@ const READ_ONLY_ALLOWLIST = new Set([
     'team_list_tags',
     'team_search',
     'team_search_by_date_range',
+    'team_list_deleted_entries',
+    'cross_team_search',
     'team_get_statistics',
     'team_get_cross_project_insights',
     'team_get_collaboration_matrix',
     'team_visualize_relationships',
     'team_export_entries',
     'team_list_backups',
+    'team_list_members',
+    'team_get_member',
+    'team_list_author_aliases',
+    'team_resolve_author',
     // Team vector reads
     'team_semantic_search',
     'team_get_vector_index_stats',

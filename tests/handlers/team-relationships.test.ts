@@ -55,8 +55,8 @@ vi.mock('../../src/auth/auth-context.js', async (importOriginal: any) => {
 describe('Team Relationship Tool Handlers', () => {
     let personalDb: DatabaseAdapter
     let teamDb: DatabaseAdapter
-    const personalDbPath = './test-team-relationships-personal.db'
-    const teamDbPath = './test-team-relationships-team.db'
+    const personalDbPath = './.test-output/vitest/test-team-relationships-personal.db'
+    const teamDbPath = './.test-output/vitest/test-team-relationships-team.db'
 
     let e1: number, e2: number, e3: number
 
@@ -77,7 +77,7 @@ describe('Team Relationship Tool Handlers', () => {
         // Seed entries for linking
         const res1 = (await callTool(
             'team_create_entry',
-            {
+            { workspace_id: 'default', 
                 project_number: 1,
                 content: 'Node A',
                 tags: ['node-tag'],
@@ -91,7 +91,7 @@ describe('Team Relationship Tool Handlers', () => {
         )) as any
         const res2 = (await callTool(
             'team_create_entry',
-            {
+            { workspace_id: 'default', 
                 project_number: 1,
                 content: 'Node B',
                 tags: ['node-tag'],
@@ -105,7 +105,7 @@ describe('Team Relationship Tool Handlers', () => {
         )) as any
         const res3 = (await callTool(
             'team_create_entry',
-            {
+            { workspace_id: 'default', 
                 project_number: 1,
                 content: 'Node C',
             },

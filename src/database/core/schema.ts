@@ -21,6 +21,8 @@ CREATE TABLE IF NOT EXISTS memory_journal (
     significance_type TEXT,
     auto_context TEXT,
     deleted_at TEXT,
+    is_archived INTEGER DEFAULT 0,
+    version INTEGER NOT NULL DEFAULT 1,
     -- GitHub integration fields
     project_number INTEGER,
     project_owner TEXT,
@@ -31,8 +33,27 @@ CREATE TABLE IF NOT EXISTS memory_journal (
     pr_status TEXT,
     workflow_run_id INTEGER,
     workflow_name TEXT,
-    workflow_status TEXT
+    workflow_status TEXT,
+    workspace_id TEXT DEFAULT 'default',
+    trust_score REAL DEFAULT 0.5,
+    validation_status TEXT DEFAULT 'none',
+    impact_score REAL DEFAULT 0.0,
+    session_id TEXT
 );
+
+-- Anchor references table
+CREATE TABLE IF NOT EXISTS entry_anchors (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    entry_id INTEGER NOT NULL,
+    anchor_path TEXT NOT NULL,
+    anchor_type TEXT NOT NULL,
+    status TEXT DEFAULT 'pending',
+    last_checked_at TEXT,
+    FOREIGN KEY (entry_id) REFERENCES memory_journal(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_entry_anchors_entry_id ON entry_anchors(entry_id);
+CREATE INDEX IF NOT EXISTS idx_entry_anchors_anchor_path ON entry_anchors(anchor_path);
 
 -- Tags table
 CREATE TABLE IF NOT EXISTS tags (
@@ -62,6 +83,17 @@ CREATE TABLE IF NOT EXISTS relationships (
     FOREIGN KEY (to_entry_id) REFERENCES memory_journal(id) ON DELETE CASCADE
 );
 
+-- Entry revisions for history tracking
+CREATE TABLE IF NOT EXISTS entry_revisions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    entry_id INTEGER NOT NULL,
+    revision_number INTEGER NOT NULL,
+    content_snapshot TEXT NOT NULL,
+    changed_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    changed_by TEXT,
+    FOREIGN KEY (entry_id) REFERENCES memory_journal(id) ON DELETE CASCADE
+);
+
 -- Legacy embeddings table (active embeddings use sqlite-vec vec0 virtual table)
 CREATE TABLE IF NOT EXISTS embeddings (
     entry_id INTEGER PRIMARY KEY,
@@ -83,9 +115,21 @@ CREATE INDEX IF NOT EXISTS idx_entry_tags_entry ON entry_tags(entry_id);
 CREATE INDEX IF NOT EXISTS idx_entry_tags_tag ON entry_tags(tag_id);
 CREATE INDEX IF NOT EXISTS idx_relationships_from ON relationships(from_entry_id);
 CREATE INDEX IF NOT EXISTS idx_relationships_to ON relationships(to_entry_id);
+CREATE INDEX IF NOT EXISTS idx_entry_revisions_entry_id ON entry_revisions(entry_id, revision_number DESC);
 
 -- Composite covering index for getRecentEntries (WHERE deleted_at IS NULL ORDER BY timestamp DESC, id DESC)
 CREATE INDEX IF NOT EXISTS idx_memory_journal_recent ON memory_journal(deleted_at, timestamp DESC, id DESC);
+
+-- Partial index on active entries to speed up timestamp queries without indexing deleted rows
+CREATE INDEX IF NOT EXISTS idx_memory_journal_active_timestamp ON memory_journal(timestamp DESC) WHERE deleted_at IS NULL;
+
+-- Composite partial index for the most common query pattern (active & non-archived sorted by timestamp)
+CREATE INDEX IF NOT EXISTS idx_memory_journal_ws_active_recent ON memory_journal(workspace_id, timestamp DESC, id DESC) WHERE deleted_at IS NULL AND is_archived = 0;
+
+CREATE INDEX IF NOT EXISTS idx_memory_journal_workspace ON memory_journal(workspace_id);
+
+-- Composite partial index for entry type searches sorted/grouped by timestamp
+CREATE INDEX IF NOT EXISTS idx_memory_journal_type_timestamp ON memory_journal(entry_type, timestamp DESC) WHERE deleted_at IS NULL;
 
 -- Analytics snapshots for persisted digest data across server restarts
 CREATE TABLE IF NOT EXISTS analytics_snapshots (
@@ -137,6 +181,7 @@ export interface CreateEntryInput {
     isPersonal?: boolean
     significanceType?: SignificanceType
     autoContext?: string
+    isArchived?: boolean
     /** Optional ISO 8601 timestamp override (defaults to current time) */
     timestamp?: string
     projectNumber?: number
@@ -150,6 +195,12 @@ export interface CreateEntryInput {
     workflowName?: string
     workflowStatus?: 'queued' | 'in_progress' | 'completed'
     author?: string
+    workspaceId?: string
+    trustScore?: number
+    impactScore?: number
+    validationStatus?: 'passed' | 'failed' | 'none'
+    anchors?: { anchorPath: string; anchorType: string }[]
+    sessionId?: string
 }
 
 /**
@@ -162,9 +213,46 @@ ALTER TABLE memory_journal ADD COLUMN author TEXT;
 `
 
 /**
+ * SQL migration to add the team_members table for team databases.
+ * Applied after TEAM_SCHEMA_SQL when initializing a team database.
+ */
+export const TEAM_MEMBERS_SQL = `
+CREATE TABLE IF NOT EXISTS team_members (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    author TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    role TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('admin', 'member', 'viewer')),
+    display_name TEXT,
+    added_by TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_team_members_author ON team_members(author COLLATE NOCASE);
+CREATE INDEX IF NOT EXISTS idx_team_members_role ON team_members(role);
+`
+
+/**
+ * SQL migration to add the author_aliases table for team databases.
+ * Applied after TEAM_MEMBERS_SQL when initializing a team database.
+ */
+export const AUTHOR_ALIASES_SQL = `
+CREATE TABLE IF NOT EXISTS author_aliases (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    alias TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    canonical_author TEXT NOT NULL COLLATE NOCASE,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    created_by TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_author_aliases_alias ON author_aliases(alias COLLATE NOCASE);
+CREATE INDEX IF NOT EXISTS idx_author_aliases_canonical ON author_aliases(canonical_author COLLATE NOCASE);
+`
+
+/**
  * Input for creating a team entry (extends standard entry with author)
  */
 export interface CreateTeamEntryInput extends CreateEntryInput {
     /** Author name (auto-detected from git config or TEAM_AUTHOR env) */
     author?: string
+    workspaceId?: string
 }

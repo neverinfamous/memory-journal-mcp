@@ -1,0 +1,174 @@
+name: mj-infrastructure
+services:
+  # ==========================================
+  # MONITORING & TOOLS
+  # ==========================================
+  dozzle:
+    image: amir20/dozzle:v10.7.2
+    container_name: mj-dozzle
+    restart: unless-stopped
+    ports:
+      - "8082:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    stop_grace_period: 15s
+    mem_limit: 256m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  prometheus:
+    image: prom/prometheus:v3.13.1
+    container_name: mj-prometheus
+    restart: unless-stopped
+    ports:
+      - "9091:9090"
+    volumes:
+      - ./config/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    extra_hosts:
+      - "host.docker.internal:${WINDOWS_HOST_IP:-192.168.1.70}"
+    stop_grace_period: 15s
+    mem_limit: 256m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: [ "CMD", "wget", "--spider", "-q", "http://localhost:9090/-/healthy" ]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  grafana:
+    image: grafana/grafana:13.1.1
+    container_name: mj-grafana
+    restart: unless-stopped
+    ports:
+      - "3002:3000"
+    volumes:
+      - ./config/grafana/provisioning:/etc/grafana/provisioning
+      - ./config/grafana/dashboards:/var/lib/grafana/dashboards
+    stop_grace_period: 15s
+    mem_limit: 384m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: [ "CMD", "curl", "-s", "--fail", "http://localhost:3000/api/health" ]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  loki:
+    image: grafana/loki:3.6.13
+    container_name: mj-loki
+    restart: unless-stopped
+    ports:
+      - "3102:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    stop_grace_period: 15s
+    mem_limit: 256m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  alloy:
+    image: grafana/alloy:v1.18.0
+    container_name: mj-alloy
+    restart: unless-stopped
+    volumes:
+      - ./config/alloy/alloy-config.alloy:/etc/alloy/config.alloy:ro
+      - ../../../memory-journal-mcp/logs:/var/log/memory-journal-mcp:ro
+    command: run --server.http.listen-addr=0.0.0.0:12345 /etc/alloy/config.alloy
+    stop_grace_period: 15s
+    mem_limit: 128m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD-SHELL", "grep -q ':3039 ' /proc/net/tcp /proc/net/tcp6 2>/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  datadog-unified:
+    image: gcr.io/datadoghq/agent:7.81.2
+    container_name: mj-datadog-unified
+    restart: unless-stopped
+    pid: host
+    cgroup: host
+    cap_add:
+      - SYS_ADMIN
+      - SYS_RESOURCE
+      - SYS_PTRACE
+      - NET_ADMIN
+      - NET_RAW
+      - IPC_LOCK
+    security_opt:
+      - apparmor:unconfined
+    extra_hosts:
+      - "host.docker.internal:${WINDOWS_HOST_IP:-192.168.1.70}"
+    env_file:
+      - .env
+    environment:
+      - DD_API_KEY=${DD_API_KEY}
+      - DD_SITE=datadoghq.com
+      - DD_HOSTNAME=adamic-wsl2
+      - DD_TAGS=env:development source:wsl2
+      # Logs
+      - DD_LOGS_ENABLED=true
+      - DD_CONTAINER_EXCLUDE=name:proxysql name:mysql-router name:mysql-node1 name:mysql-node2 name:mysql-node3 name:cluster-healer name:redis-server name:datadog-unified
+      - DD_LOGS_CONFIG_CONTAINER_COLLECT_ALL=true
+      # Process monitoring
+      - DD_PROCESS_CONFIG_CONTAINER_COLLECTION_ENABLED=true
+      - DD_PROCESS_CONFIG_PROCESS_COLLECTION_ENABLED=true
+      # Container monitoring
+      # System probe (eBPF network performance monitoring)
+      - DD_SYSTEM_PROBE_ENABLED=true
+      # APM tracing
+      - DD_APM_ENABLED=true
+      - DD_APM_NON_LOCAL_TRAFFIC=true
+      # DogStatsD
+      - DD_DOGSTATSD_NON_LOCAL_TRAFFIC=true
+      # Disable Kubernetes (not applicable)
+      - DD_KUBERNETES_COLLECT_METADATA_TAGS=false
+      - DD_COLLECT_KUBERNETES_EVENTS=false
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /proc/:/host/proc/:ro
+      - /sys/fs/cgroup/:/host/sys/fs/cgroup:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /etc/passwd:/etc/passwd:ro
+      - /etc/os-release:/host/etc/os-release:ro
+      - /sys/kernel/debug:/sys/kernel/debug
+      - ./config/datadog-integration-configs:/etc/datadog-agent/conf.d:ro
+      - ../../../memory-journal-mcp/logs:/var/log/memory-journal-mcp:ro
+    networks:
+      - default
+    stop_grace_period: 30s
+    mem_limit: 1024m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: [ "CMD-SHELL", "agent health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  prometheus_data:
+networks: {}

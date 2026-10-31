@@ -2,38 +2,33 @@
 
 <!-- mcp-name: io.github.neverinfamous/memory-journal-mcp -->
 
-[![GitHub](https://img.shields.io/badge/GitHub-neverinfamous/memory--journal--mcp-blue?logo=github)](https://github.com/neverinfamous/memory-journal-mcp)
-[![npm](https://img.shields.io/npm/v/memory-journal-mcp)](https://www.npmjs.com/package/memory-journal-mcp)
-[![Docker Pulls](https://img.shields.io/docker/pulls/writenotenow/memory-journal-mcp)](https://hub.docker.com/r/writenotenow/memory-journal-mcp)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-![Status](https://img.shields.io/badge/status-Production%2FStable-brightgreen)
-[![MCP Registry](https://img.shields.io/badge/MCP_Registry-Published-green)](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.neverinfamous/memory-journal-mcp)
-[![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](SECURITY.md)
-[![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
-![Coverage](https://img.shields.io/badge/Coverage-90.53%25-green.svg)
-![Tests](https://img.shields.io/badge/Tests-1782_passed-brightgreen.svg)
-![E2E Tests](https://img.shields.io/badge/E2E_Tests-391_passed-brightgreen.svg)
-[![CI](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml/badge.svg)](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml)
+[![GitHub](https://img.shields.io/badge/GitHub-neverinfamous/memory--journal--mcp-blue?logo=github)](https://github.com/neverinfamous/memory-journal-mcp) [![npm](https://img.shields.io/npm/v/memory-journal-mcp)](https://www.npmjs.com/package/memory-journal-mcp) [![Docker Pulls](https://img.shields.io/docker/pulls/writenotenow/memory-journal-mcp)](https://hub.docker.com/r/writenotenow/memory-journal-mcp)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT) ![Status](https://img.shields.io/badge/status-Production%2FStable-brightgreen)
+[![MCP Registry](https://img.shields.io/badge/MCP_Registry-Published-green)](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.neverinfamous/memory-journal-mcp) [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](SECURITY.md) [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
+![Coverage](https://img.shields.io/badge/Coverage-81.06%25-yellowgreen.svg) ![E2E](https://img.shields.io/badge/E2E-448%20passing%20%C2%B7%200%20skipped-blue.svg) ![Tests](https://img.shields.io/badge/Tests-1782_passed-brightgreen.svg)
+![E2E Tests](https://img.shields.io/badge/E2E_Tests-391_passed-brightgreen.svg) [![CI](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml/badge.svg)](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml)
 
 **[📚 Full Documentation (Wiki)](https://github.com/neverinfamous/memory-journal-mcp/wiki)** • **[Changelog](CHANGELOG.md)** • **[Security](SECURITY.md)** • **[Release Article](https://adamic.tech/articles/memory-journal-mcp-server)**
 
-🎯 **AI Context + Project Intelligence:** Bridge disconnected AI sessions with persistent project memory and **automatic session handoff** — with full GitHub workflow integration.
+> [!TIP]
+> **Value Proposition**
+> Bridge disconnected AI sessions seamlessly. Enable persistent project memory instantly. Automate handoffs with robust GitHub integration. Eliminate AI amnesia today.
 
 **🚀 Quick Deploy:**
 
-- **[npm Package](https://www.npmjs.com/package/memory-journal-mcp)** - `npm install -g memory-journal-mcp`
+- **[npm Package](https://www.npmjs.com/package/memory-journal-mcp)** - `npm install -g memory-journal-mcp` (or `pnpm add -g memory-journal-mcp`)
 - **[Docker Hub](https://hub.docker.com/r/writenotenow/memory-journal-mcp)** - Alpine-based with full semantic search
 
-## 🧠 Stop Experiencing AI Amnesia
+## 🧠 Eliminate AI Amnesia
 
-When managing large projects with AI assistance, you face a critical challenge:
+Large projects face a critical challenge. You lose context between sessions.
 
-- **Thread Amnesia** - Each new AI conversation starts from zero, unaware of previous work.
-- **Lost Context** - Decisions, implementations, and learnings scattered across disconnected threads.
-- **Repeated Work** - AI suggests solutions you've already tried or abandoned.
-- **Context Overload** - Manually copying project history into every new conversation.
+- **Stop Thread Amnesia** - AI conversations start fresh. They ignore previous work.
+- **Retain Deep Context** - You scatter decisions and code across threads. We save them.
+- **End Repeated Work** - AI repeats failed solutions. We remember your attempts.
+- **Prevent Context Overload** - You copy history manually. We automate context delivery.
 
-Memory Journal solves this by acting as your project's **long-term memory**, bridging the gap between fragmented AI sessions.
+Memory Journal builds your project's long-term memory. It bridges fragmented AI sessions seamlessly.
 
 ---
 
@@ -42,38 +37,48 @@ Memory Journal solves this by acting as your project's **long-term memory**, bri
 - _"Why did we choose SQLite over Postgres for this service last month?"_ (Semantic search)
 - _"Run the `/issue-triage` workflow on the top priority ticket in the Kanban board."_ (GitHub operations)
 - _"Who has been touching the auth module recently, and what's our team collaboration density?"_ (Team analytics)
-- _"I'm stuck on this database error. Raise a 'blocker' flag for @sarah so her agent sees it next session."_ (Hush Protocol)
-- _"Close issue #42 and log an entry explaining our architectural fix for the parsing bug."_ (Context lifecycles)
+- _"Commit the changes and automatically generate a structured journal entry using the \`--journal\` wrapper flag."_ (Automated lifecycles)
 - _"Draw a visual graph showing how my last 10 architectural decisions relate to each other."_ (Knowledge graph)
 
-**[See complete examples & prompts →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Examples)**
+**Comprehensive access to internal state via resources (`memory://briefing`, `memory://workflows`, `memory://rules`, `memory://health`, `memory://help`, `memory://staleness`, GitHub status/insights, team stats, metrics/latency, and more) plus dynamic repo variants for cross-repo targeting (like `memory://briefing/{repo}` or `memory://kanban/{repo}/{project_number}`).** **[Resources documentation →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Resources)**
 
 ---
 
 ## 🎯 What Sets Us Apart
 
-**73 MCP Tools** · **19 Workflow Prompts** · **46 Resources** · **10 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights, Hush Protocol Flags)
+**MCP Tools** · **Workflow Prompts** · **Resources** · **Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights)
 
-| Feature                       | Description                                                                                                                                                                                         |
-| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Session Intelligence**      | Agents auto-query project history, create entries at checkpoints, and hand off context between sessions via `/session-summary` and `team-session-summary`                                           |
-| **GitHub Integration**        | 18 tools for Issues, PRs, Actions, Kanban, Milestones (%), Copilot Reviews, and 14-day Insights                                                                                                     |
-| **Dynamic Project Routing**   | Seamlessly switch contexts and access CI/Issue tracking across multiple repositories using a single server instance via `PROJECT_REGISTRY`                                                          |
-| **Knowledge Graphs**          | 8 relationship types linking specs → implementations → tests → PRs with Mermaid visualization                                                                                                       |
-| **Hybrid Search**             | Reciprocal Rank Fusion combining FTS5 keywords, semantic vector similarity, auto-heuristics, and date-range filters                                                                                 |
-| **Code Mode**                 | Execute multi-step operations in a trusted-admin execution environment — up to 90% token savings via `mj.*` API                                                                                     |
-| **Adaptive Session Briefing** | `memory://briefing` dynamically adapts to deliver real-time workspace context — including live CI health, local Git status, dynamic path routing, and unreleased changes — in ~350 optimized tokens |
-| **Reports & Analytics**       | Standups, retrospectives, PR summaries, digests, period analyses, and milestone tracking                                                                                                            |
-| **Hush Protocol (Flags)**     | Replace Slack/Teams noise with structured, actionable, and searchable AI flags (blockers, reviews) that automatically surface in session briefings                                                  |
-| **Team Collaboration**        | 28 tools with full parity — CRUD, vector search, relationship graphs, cross-project insights, author attribution, Hush Protocol flags (list, update, reopen, analytics)                             |
-| **Data Interoperability**     | Bidirectional Markdown roundtripping, unified IO namespace, and schema-safe JSON exports with hard bounds-checked path traversal defenses                                                           |
-| **Backup & Restore**          | One-command backup/restore with automated scheduling, retention policies, and safety-net auto-backups                                                                                               |
-| **Auto-Pruning**              | Smart garbage collection based on significance scores to soft-delete low-value entries and maintain vector relevance over long-running projects                                                     |
-| **Security & Transport**      | OAuth 2.1 (RFC 9728/8414, JWT/JWKS, scopes), Streamable HTTP + SSE, rate limiting, CORS, SQL injection prevention, non-root Docker                                                                  |
-| **Structured Error Handling** | Every tool returns `{success, error, code, category, suggestion, recoverable}` — agents get classification, remediation hints, and recoverability signals                                           |
-| **Agent Collaboration**       | IDE agents and Copilot share context; review findings become searchable knowledge; agents suggest reusable rules and skills ([setup](docs/copilot-setup.md))                                        |
-| **Native Agent Skills**       | Bundled foundational coding paradigms (`autonomous-dev`, `python`, `docker`, `tailwind-css`, `golang`, `playwright-standard`, etc.) establishing permanent AI behavior and architecture rules       |
-| **GitHub Commander**          | Pipeline skills for issue triage, PR reviews, sprint milestones, and security/quality/performance audits with journal trails ([docs](skills/github-commander/SKILL.md))                             |
+| Feature                       | Description                                                                                                                                                                                          |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Session Intelligence**      | Auto-query project history, create checkpoints, and hand off context between sessions automatically.                                                                                                 |
+| **GitHub Integration**        | Manage Issues, PRs, Actions, Kanban boards, and milestones. Access Copilot reviews and repository insights.                                                                                          |
+| **Dynamic Project Routing**   | Switch contexts seamlessly and access CI/Issue tracking across multiple repositories from a single server instance.                                                                                  |
+| **Knowledge Graphs**          | Link specifications, implementations, tests, and PRs visually using Mermaid diagrams.                                                                                                                |
+| **Hybrid Search**             | Find entries instantly using a blend of keyword, semantic, and date-range searches.                                                                                                                  |
+| **Code Mode**                 | Execute multi-step operations efficiently in a sandboxed environment to reduce token usage.                                                                                                          |
+| **Adaptive Session Briefing** | Deliver real-time workspace context dynamically, including live CI health, local Git status, and unreleased changes.                                                                                 |
+| **Reports & Analytics**       | Generate standups, retrospectives, PR summaries, digests, and period analyses.                                                                                                                       |
+| **Heuristic Scoring**         | Optimize context delivery by scoring entries based on veracity and impact.                                                                                                                           |
+| **Team Collaboration**        | Share databases across teams with cross-project insights, author attribution, and role-based access control.                                                                                         |
+| **Data Interoperability**     | Export schemas safely, sync Markdown directories, and maintain a unified IO namespace.                                                                                                               |
+| **Backup & Restore**          | Secure data with automated scheduling, retention policies, and one-command restores.                                                                                                                 |
+| **Auto-Pruning**              | Soft-delete low-value entries automatically to maintain search relevance over long-running projects.                                                                                                 |
+| **Security & Transport**      | Ensure secure connections with OAuth 2.1, Streamable HTTP, rate limiting, and SQL injection prevention.                                                                                              |
+| **Structured Error Handling** | Provide agents with classification, remediation hints, and recoverability signals on every tool call.                                                                                                |
+| **Agent Collaboration**       | Share context between IDE agents and Copilot. Search review findings and let agents suggest reusable rules.                                                                                          |
+| **Native Agent Skills**       | Establish permanent AI behavior and architecture rules using bundled foundational coding paradigms.                                                                                                  |
+| **GitHub Commander**          | Audit code, triage issues, review PRs, and run sprint milestones via automated pipeline skills.                                                                                                      |
+
+---
+
+### Isolate Environments with Multi-Tenancy
+
+Memory Journal supports multi-tenancy out of the box via the `workspace_id` construct, acting as a strict isolation barrier for multiple journals sharing the same SQLite database file.
+
+- **Default Isolation:** If omitted, all entries are created in and retrieved from the `default` workspace.
+- **Data Partitioning:** Core CRUD, Search, and Analytics tools accept a `workspace_id` parameter (e.g., `workspace_id: "alpha"`) to scope operations strictly to that workspace.
+- **Immutability:** A `workspace_id` is permanently assigned upon entry creation and **cannot be changed** afterward.
+- **Server Config:** Set `--default-workspace-id` (or the `DEFAULT_WORKSPACE_ID` environment variable) to configure the default fallback workspace for the server instance, allowing you to run multiple isolated journal interfaces on a single physical database.
 
 ---
 
@@ -122,140 +127,77 @@ flowchart TB
 _Suggested Rule (Add to AGENTS.md, GEMINI.md, system prompts, etc.)_
 
 <details>
-<summary><strong>View Mandatory Session Start Routine</strong></summary>
+<summary><strong>View Session Initialization Routine</strong></summary>
 
-🛑 MANDATORY SESSION START ROUTINE
+🛑 Session Initialization Routine
 
-Before addressing the user's first request in a session/thread, complete these steps:
+When the user initializes the session context by executing the `load-briefing` prompt:
 
-1. Read the briefing using the `read_resource` tool: `memory://briefing/{repo_name}`.
-   - Infer `repo_name` from context of user's prompt. Use `memory://briefing` as fallback only if necessary.
-2. Your first response MUST begin with the entire briefing content. Use this format:
-
+1. You will receive the output of the `memory://briefing/{repo_name}` resource.
+2. Prepend your response EXACTLY as:
    > **📋 Briefing loaded** — `{repo_name}`
-   >
-   > _{paste **ENTIRE** briefing here}_ (It isn't always easy for users to access in IDEs)
-
-3. Then address the user's request below the briefing.
-4. Do NOT autonomously resume work on issues mentioned in the briefing.
+   > _{paste ENTIRE briefing here}_
+3. Address the user's request below the briefing.
+4. NEVER autonomously execute tasks listed in the briefing.
+5. Do NOT proactively ask the user to load the briefing. Wait for them to use the prompt.
 </details>
 
 ---
 
-### Tool Filtering
+### Control Access with Tool Filtering
 
 > [!IMPORTANT]
 > All shortcuts and tool groups include **Code Mode** (`mj_execute_code`) by default for token-efficient operations. To exclude it, add `-codemode` to your filter: `--tool-filter starter,-codemode`
 
 Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `--tool-filter`):
 
-| Filter               | Tools | Use Case                 |
-| -------------------- | ----- | ------------------------ |
-| `full`               | 73    | All tools (default)      |
-| `starter`            | ~11   | Core + search + codemode |
-| `essential`          | ~7    | Minimal footprint        |
-| `readonly`           | 17    | Disable all mutations    |
-| `-github`            | 52    | Exclude a group          |
-| `-github,-analytics` | 50    | Exclude multiple groups  |
+| Filter               | Use Case                 |
+| -------------------- | ------------------------ |
+| `full`               | All tools (default)      |
+| `starter`            | Core + search + codemode |
+| `essential`          | Minimal footprint        |
+| `readonly`           | Disable all mutations    |
+| `-github`            | Exclude a group          |
+| `-github,-analytics` | Exclude multiple groups  |
 
 **Filter Syntax:** `shortcut` or `group` or `tool_name` (whitelist mode) · `-group` (disable group) · `-tool` (disable tool) · `+tool` (re-enable after group disable)
 
 **Custom Selection:** List individual tool names to create your own whitelist: `--tool-filter "create_entry,search_entries,semantic_search"`
 
-**Groups:** `core`, `search`, `analytics`, `relationships`, `io`, `admin`, `github`, `backup`, `team`, `codemode`
+**Groups:** `core`, `search`, `analytics`, `relationships`, `io`, `admin`, `github`, `git`, `backup`, `team`, `codemode`
 
 **[Complete tool filtering guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tool-Filtering)**
 
 ---
 
-## 📋 Core Capabilities
+## 📋 Unlock Core Capabilities
 
-### 🛠️ **73 MCP Tools** (10 Groups)
+### 🛠️ **MCP Tools**
 
-| Group           | Tools | Description                                                                                                                                                               |
-| --------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `codemode`      | 1     | Code Mode (sandboxed code execution) 🌟 **Recommended**                                                                                                                   |
-| `core`          | 6     | Entry CRUD, tags, test                                                                                                                                                    |
-| `search`        | 4     | Text search, date range, semantic, vector stats                                                                                                                           |
-| `analytics`     | 2     | Statistics, cross-project insights                                                                                                                                        |
-| `relationships` | 2     | Link entries, visualize graphs                                                                                                                                            |
-| `io`            | 3     | JSON/Markdown export and File-level Markdown Data Integration Interoperability (Import/Export)                                                                            |
-| `admin`         | 5     | Update, delete, rebuild/add to vector index, merge tags                                                                                                                   |
-| `github`        | 18    | Issues, PRs, context, Kanban, **Milestones**, **Insights**, **issue lifecycle**, **Copilot Reviews**                                                                      |
-| `backup`        | 4     | Backup, list, restore, cleanup                                                                                                                                            |
-| `team`          | 28    | CRUD, search, stats, relationships, IO (Markdown import/export), backup, vector search, cross-project insights, matrix, **Hush Protocol flags** (requires `TEAM_DB_PATH`) |
+| Group           | Description                                                                                                                                                                                       |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `codemode`      | Code Mode (sandboxed code execution) 🌟 **Recommended**                                                                                                                                           |
+| `core`          | Entry CRUD, tags, test, staleness                                                                                                                                                                 |
+| `search`        | Text search, date range, semantic, vector stats, cross-team                                                                                                                                       |
+| `analytics`     | Statistics, cross-project insights                                                                                                                                                                |
+| `relationships` | Link entries, visualize graphs                                                                                                                                                                    |
+| `io`            | JSON/Markdown export and File-level Markdown Data Integration Interoperability (Import/Export)                                                                                                    |
+| `admin`         | Update configuration, update, delete, restore, rebuild/add to vector index, merge tags, search audit log, bulk operations (batch create/update/delete)                                            |
+| `github`        | Issues, PRs, context, Kanban, **Milestones**, **Insights**, **issue lifecycle**, **Copilot Reviews**                                                                                              |
+| `git`           | Commit history, search, release info, patterns, staleness checks                                                                                                                                  |
+| `backup`        | Backup, list, restore, cleanup                                                                                                                                                                    |
+| `team`          | CRUD, search, stats, relationships, IO (Markdown import/export), backup, vector search, cross-project insights, matrix, RBAC member management (requires `TEAM_DB_PATH`) |
 
 **[Complete tools reference →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tools)**
 
-### 🎯 **19 Workflow Prompts**
+### 🎯 **Workflow Prompts**
 
-- `find-related` - Discover connected entries via semantic similarity
-- `prepare-standup` - Daily standup summaries
-- `prepare-retro` - Sprint retrospectives
-- `weekly-digest` - Day-by-day weekly summaries
-- `analyze-period` - Deep period analysis with insights
-- `goal-tracker` - Milestone and achievement tracking
-- `get-context-bundle` - Project context with Git/GitHub/Kanban
-- `get-recent-entries` - Formatted recent entries
-- `project-status-summary` - GitHub Project status reports
-- `pr-summary` - Pull request journal activity summary
-- `code-review-prep` - Comprehensive PR review preparation
-- `pr-retrospective` - Completed PR analysis with learnings
-- `actions-failure-digest` - CI/CD failure analysis
-- `project-milestone-tracker` - Milestone progress tracking
-- `confirm-briefing` - Acknowledge session context to user
-- `session-summary` - Create a session summary entry with accomplishments, pending items, and next-session context
-- `team-session-summary` - Create a retrospective team session summary entry securely isolated to the team database
-- `adversarial-plan-review` - Multi-pass adversarial plan review with structured dimensions, scoring rubric, and prior plan context
-- `flag-dashboard` - Triage active flags with priority assessment and resolution guidance
+Session briefing, time period analysis, goal tracking, PR & issue command, session summaries, adversarial plan reviews, exhaustive code & security audits, secure commit workflows, anti-hallucination healing. **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
-**[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
+### 📡 **Resources**
+See the **[Complete resources guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Resources)** for the full list of dynamic context resources, including `memory://briefing`, `memory://instructions`, GitHub integration endpoints, telemetry metrics, and templated views.
 
-### 📡 **46 Resources** (29 Static + 17 Template)
-
-**29 Static Resources** (appear in resource lists):
-
-- `memory://briefing` - **Session initialization**: compact context for AI agents (~350 tokens) — includes server version, surface area (tools/resources/prompts), test health, unreleased changes, analytics, `localTime`, and optional `activeFlags`
-- `memory://instructions` - **Behavioral guidance**: complete server instructions for AI agents
-- `memory://recent` - 10 most recent entries
-- `memory://significant` - Significant milestones and breakthroughs
-- `memory://graph/recent` - Live Mermaid diagram of recent relationships
-- `memory://health` - Server health & diagnostics
-- `memory://graph/actions` - CI/CD narrative graph
-- `memory://actions/recent` - Recent workflow runs
-- `memory://tags` - All tags with usage counts
-- `memory://statistics` - Journal statistics
-- `memory://rules` - User rules file content for agent awareness
-- `memory://workflows` - Available agent workflows summary
-- `memory://skills` - Agent skills index (names, paths, excerpts)
-- `memory://github/status` - GitHub repository status overview
-- `memory://github/insights` - Repository stars, forks, and 14-day traffic summary
-- `memory://github/milestones` - Open milestones with completion percentages
-- `memory://team/recent` - Recent team entries with author attribution
-- `memory://team/statistics` - Team entry counts, types, and author breakdown
-- `memory://help` - Tool group index with descriptions and tool counts
-- `memory://metrics/summary` - Aggregate tool call metrics since server start (calls, errors, token estimates, duration) — HIGH priority
-- `memory://metrics/tokens` - Per-tool token usage breakdown sorted by output token cost — MEDIUM priority
-- `memory://metrics/system` - Process-level metrics: memory (MB), uptime (s), Node.js version, platform — MEDIUM priority
-- `memory://metrics/users` - Per-user call counts (populated when OAuth user identifiers are present) — LOW priority
-- `memory://audit` - Last 50 write/admin tool call entries from the JSONL operational telemetry log (requires `AUDIT_LOG_PATH`)
-- `memory://flags` - Active (unresolved) team flags dashboard (requires `TEAM_DB_PATH`)
-- `memory://flags/vocabulary` - Configured flag vocabulary terms
-- `memory://flags/history` - Recently resolved flags with resolution details and avg time-to-resolution (last 7 days)
-
-**17 Template Resources** (9 base templates + 8 dynamic `{repo}` variants):
-
-- `memory://projects/{number}/timeline` - Project activity timeline
-- `memory://issues/{issue_number}/entries` - Entries linked to issue
-- `memory://prs/{pr_number}/entries` - Entries linked to PR
-- `memory://prs/{pr_number}/timeline` - Combined PR + journal timeline
-- `memory://kanban/{project_number}` - GitHub Project Kanban board
-- `memory://kanban/{project_number}/diagram` - Kanban Mermaid visualization
-- `memory://milestones/{number}` - Milestone detail with completion progress
-- `memory://help/{group}` - Per-group tool reference with parameters and annotations
-- `memory://briefing/{repo}` - Context targeted to a specific repository
-
-_Note: The `memory://github/status`, `memory://github/insights`, `memory://github/milestones`, and `memory://milestones/{number}` resources also accept an optional `/{repo}` path suffix for cross-repo targeting._
+_Note: The `memory://briefing`, `memory://graph/actions`, `memory://actions/recent`, `memory://github/status`, `memory://github/insights`, `memory://github/milestones`, `memory://milestones/{number}`, `memory://kanban/{project_number}`, and `memory://kanban/{project_number}/diagram` resources also accept an optional `/{repo}` path suffix for cross-repo targeting._
 
 ---
 
@@ -267,18 +209,18 @@ Code executes in a **worker_threads sandbox** designed as a secure multi-tenant 
 
 - **V8 code generation restrictions** — `eval()` and `Function()` construction from strings disabled at the V8 engine level via `codeGeneration: { strings: false, wasm: false }`
 - **Frozen prototypes** — all built-in prototypes (Object, Function, Array, Error, etc.) frozen inside the vm context to prevent dynamic constructor chain escapes
-- **Static code validation** — 18 regex rules blocking `require()`, `process`, `eval()`, `Reflect.*`, `Symbol.*`, `new Proxy()`, and filesystem/network access
+- **Static code validation** — Multiple static regex rules blocking `require()`, `process`, `eval()`, `Reflect.*`, `Symbol.*`, `new Proxy()`, and filesystem/network access
 - **Proxy constructor nullified** — `Proxy: undefined` in the sandbox prevents meta-object protocol abuse
 - **RPC allowlist** — host-side validation prevents workers from invoking unauthorized API methods
 - **Rate limiting** — 60 executions per minute per client
 - **Hard timeouts** — configurable execution limit (default 30s)
 - **Egress boundary enforcement** — result serialization capped to prevent OOM via oversized payloads
-- **Full API access** — all 10 tool groups are available via `mj.*` (e.g., `mj.core.createEntry()`, `mj.search.searchEntries()`, `mj.github.getGithubIssues()`, `mj.team.passTeamFlag()`)
+- **Full API access** — all tool groups are available via `mj.*` (e.g., `mj.core.createEntry()`, `mj.search.searchEntries()`, `mj.github.getGithubIssues()`)
 - **Strict Readonly Contract** — Calling any mutation method under `--tool-filter readonly` safely halts the sandbox to prevent execution, returning a structured `{ success: false, error: "..." }` response to the agent instead of a raw MCP protocol exception.
 
 ### ⚡ Code Mode Only (Maximum Token Savings)
 
-Run with **only Code Mode enabled** — a single tool that provides access to all 69 tools' worth of capability through the `mj.*` API:
+Run with **only Code Mode enabled** — a single tool that provides access to its full capability through the `mj.*` API:
 
 ```json
 {
@@ -291,7 +233,7 @@ Run with **only Code Mode enabled** — a single tool that provides access to al
 }
 ```
 
-This exposes just `mj_execute_code`. The agent writes JavaScript against the typed `mj.*` SDK — composing operations across all 10 tool groups and returning exactly the data it needs — in one execution. This mirrors the [Code Mode pattern](https://blog.cloudflare.com/code-mode-mcp/) pioneered by Cloudflare for their entire API: fixed token cost regardless of how many capabilities exist.
+This exposes just `mj_execute_code`. The agent writes JavaScript against the typed `mj.*` SDK — composing operations across all tool groups and returning exactly the data it needs — in one execution. This mirrors the [Code Mode pattern](https://blog.cloudflare.com/code-mode-mcp/) pioneered by Cloudflare for their entire API: fixed token cost regardless of how many capabilities exist.
 
 #### Disabling Code Mode
 
@@ -305,46 +247,13 @@ If you prefer individual tool calls, exclude codemode:
 
 ---
 
-## 🤫 Hush Protocol: Asynchronous Team Collaboration
+_Note: Configuration is resolved using strict precedence: `CLI flags > Environment Variables > Config File > Defaults`._
 
-The **Hush Protocol** reimagines team collaboration for AI-augmented workflows by replacing noisy Slack/Teams messages with structured, machine-actionable flags.
+> 🛠️ **Debugging Configuration:** Run `memory-journal-mcp --dump-config` (or pass `--dump-config` as an arg) to print the fully resolved configuration payload with automatically redacted secrets. This is the primary method for diagnosing overriding issues.
 
-When you encounter a blocker, need a review, or want to broadcast a milestone, your AI agent can raise a flag in the shared Team Database:
+### Configure Basics Quickly
 
-- **Actionable Visibility**: Active flags automatically surface at the very top of the `memory://briefing` payload for all team members. When another developer's agent starts a session, it immediately sees your blockers and can help resolve them autonomously.
-- **Structured Types**: Raise specific flag types (`blocker`, `needs_review`, `help_requested`, `fyi`). You can customize your team's vocabulary via the `--flag-vocabulary` configuration.
-- **Searchable History**: Unlike chat messages that disappear into the void, Hush flags are permanent, query-able AI journal entries. Your agents can search past `needs_review` flags to understand how architectural blockers were conquered.
-- **Integrated Standup & Retro Signals**: Active flags automatically appear as contextual signals in the `prepare-standup` and `prepare-retro` prompts, so your daily standups and sprint retrospectives always surface outstanding blockers.
-- **Full Lifecycle Management**: List and filter flags by status, type, or assignee via `team_list_flags`. Update metadata (escalate severity, reassign, add links) or reopen resolved flags via `team_update_flag`. Track resolution velocity, per-user workload, and trends with `team_get_flag_analytics`.
-
-**Dashboard & Operations**: Read `memory://flags` for an active dashboard, `memory://flags/history` for recently resolved flags, use the `/flag-dashboard` prompt for guided triage with severity grouping and staleness detection, and use `mj.team.passTeamFlag()` / `mj.team.resolveTeamFlag()` / `mj.team.teamListFlags()` / `mj.team.teamUpdateFlag()` / `mj.team.teamGetFlagAnalytics()` to manage flags programmatically in Code Mode.
-
-**[Complete Hush Protocol guide and Mermaid sequence diagrams →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Hush-Protocol)**
-
----
-
-## 🚀 Quick Start
-
-### Option 1: npm (Recommended)
-
-```bash
-npm install -g memory-journal-mcp
-```
-
-### Option 2: From Source
-
-```bash
-git clone https://github.com/neverinfamous/memory-journal-mcp.git
-cd memory-journal-mcp
-npm install
-npm run build
-```
-
-### Add to MCP Config
-
-Add this to your `~/.cursor/mcp.json`, Claude Desktop config, or equivalent:
-
-### Basic Configuration
+> 💡 **Tip:** Don't want to manually escape JSON strings for `PROJECT_REGISTRY`? Run `npx memory-journal-mcp project create` in your terminal to automatically bootstrap and update your MCP configuration!
 
 ```json
 {
@@ -361,9 +270,11 @@ Add this to your `~/.cursor/mcp.json`, Claude Desktop config, or equivalent:
 }
 ```
 
-### Advanced Configuration (Recommended)
+### Power Up with Advanced Configuration
 
 Showcasing the full power of the server, including Multi-Project Routing, Team Collaboration, Copilot awareness, and Context Injections.
+
+> 💡 **Tip:** Use `npx memory-journal-mcp project create` to easily configure multiple repositories into your `PROJECT_REGISTRY` without manual JSON escaping!
 
 ```json
 {
@@ -407,13 +318,13 @@ The `memory://briefing` resource is **dynamically assembled** at each session st
 
 - **System State:** Server version, capability statuses, resource/tool counts, test health, and `memory://metrics/summary` breadcrumbs.
 - **Repository Context:** Git working tree status, unreleased changes, exact code-map paths, and prioritized gatekeeper CI workflows.
-- **Ambient Context:** Active workspace paths, local time, analytics, and active Hush Protocol flags.
+- **Ambient Context:** Active workspace paths, local time, analytics.
 
 You control exactly what additional content your agent sees across three dimensions:
 
 | Dimension             | Variables                                                                                                                                                                        | What It Controls                                                                    |
 | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| **Depth**             | `INSTRUCTION_LEVEL`                                                                                                                                                              | Behavioral guidance verbosity: `essential`, `standard` (default), `full`            |
+| **Focus**             | `TOOL_FILTER`                                                                                                                                                                    | Control tool exposure: `full` (default), `starter`, `essential`                     |
 | **Journal Content**   | `BRIEFING_ENTRY_COUNT`, `BRIEFING_SUMMARY_COUNT`, `BRIEFING_INCLUDE_TEAM`                                                                                                        | How many recent entries, session summaries, and whether team entries appear         |
 | **GitHub Enrichment** | `BRIEFING_ISSUE_COUNT`, `BRIEFING_PR_COUNT`, `BRIEFING_PR_STATUS`, `BRIEFING_MILESTONE_COUNT`, `BRIEFING_WORKFLOW_COUNT`, `BRIEFING_WORKFLOW_STATUS`, `BRIEFING_COPILOT_REVIEWS` | Issues, PRs, milestones, CI runs, and Copilot review state surfaced in the briefing |
 
@@ -429,7 +340,7 @@ You control exactly what additional content your agent sees across three dimensi
 ```json
 "BRIEFING_ENTRY_COUNT": "1",
 "BRIEFING_SUMMARY_COUNT": "0",
-"INSTRUCTION_LEVEL": "essential"
+"TOOL_FILTER": "essential"
 ```
 
 **Full Context (onboarding agents)** — Maximize context for agents unfamiliar with the project:
@@ -442,7 +353,7 @@ You control exactly what additional content your agent sees across three dimensi
 "BRIEFING_PR_COUNT": "3",
 "BRIEFING_PR_STATUS": "true",
 "BRIEFING_COPILOT_REVIEWS": "true",
-"INSTRUCTION_LEVEL": "full"
+"TOOL_FILTER": "full"
 ```
 
 **DevOps-Heavy** — Emphasize CI/CD and GitHub state for infrastructure workflows:
@@ -473,7 +384,7 @@ You control exactly what additional content your agent sees across three dimensi
 
 Restart your MCP client and start journaling!
 
-### Option 3: HTTP/SSE Transport (Remote Access)
+### Connect Remotely with HTTP/SSE Transport
 
 > 🔒 **Security Posture: Stdio vs HTTP**
 >
@@ -504,12 +415,13 @@ memory-journal-mcp --transport http --port 3000 --server-host 0.0.0.0 --digest-i
 | `GET /sse`                                  | Legacy SSE connection (MCP 2024-11-05)           | Stateful |
 | `POST /messages`                            | Legacy SSE message endpoint                      | Stateful |
 | `GET /health`                               | Health check (`{ status, timestamp }`)           | Both     |
+| `GET /metrics`                              | Prometheus metrics export (requires flag)        | Both     |
 | `GET /.well-known/oauth-protected-resource` | RFC 9728 Protected Resource Metadata             | Both     |
 
 **Session Management:** The server uses stateful sessions by default. Include the `mcp-session-id` header (returned from initialization) in subsequent requests.
 
 - **OAuth 2.1** — RFC 9728/8414, JWT/JWKS, granular scopes (opt-in via `--oauth-enabled`)
-- **7 Security Headers** — CSP, HSTS (opt-in), X-Frame-Options, and more
+- **Comprehensive Security Headers** — CSP, HSTS (opt-in), X-Frame-Options, and more
 - **Rate Limiting** — 100 req/min per IP · **CORS** — configurable multi-origin (exact-match) · **1MB body limit**
 - **Server Timeouts** — Request (120s), keep-alive (65s), headers (66s) · **404 handler** · **Cross-protocol guard**
 - **Build Provenance** · **SBOM** · **Supply Chain Attestations** · **Non-root execution**
@@ -567,73 +479,17 @@ memory-journal-mcp --transport http --port 3000 \
 | `--keep-backups <count>`         | 5       | Max backups retained during automated cleanup                        |
 | `--vacuum-interval <min>`        | 0 (off) | Run `PRAGMA optimize` and flush database to disk                     |
 | `--rebuild-index-interval <min>` | 0 (off) | Full vector index rebuild to maintain semantic search quality        |
+| `--report-interval <min>`        | 0 (off) | Scheduled report generation interval in minutes                      |
+| `--digest-interval <min>`        | 0 (off) | Scheduled periodic digest analysis report                            |
 
 Each job is error-isolated — a failure in one job won't affect the others. Scheduler status (last run, result, next run) is visible via `memory://health`.
 
-### GitHub Integration Configuration
+### Integrate Seamlessly with GitHub
 
 The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) auto-detect the repository from your git context when `PROJECT_REGISTRY` is configured or the MCP server is run inside a git repository.
 
-| Environment Variable              | Description                                                                                                                                           |
-| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `DB_PATH`                         | Database file location (CLI: `--db`; default: `./memory_journal.db`)                                                                                  |
-| `TEAM_DB_PATH`                    | Team database file location (CLI: `--team-db`)                                                                                                        |
-| `TEAM_AUTHOR`                     | Override author name for team entries (default: `git config user.name`)                                                                               |
-| `GITHUB_TOKEN`                    | GitHub personal access token for API access                                                                                                           |
-| `DEFAULT_PROJECT_NUMBER`          | Default GitHub Project number for auto-assignment when creating issues                                                                                |
-| `PROJECT_REGISTRY`                | JSON map of repos to `{ path, project_number }` for multi-project auto-detection and routing                                                          |
-| `AUTO_REBUILD_INDEX`              | Set to `true` to rebuild vector index on server startup                                                                                               |
-| `MCP_HOST`                        | Server bind host (`0.0.0.0` for containers, default: `localhost`)                                                                                     |
-| `MCP_AUTH_TOKEN`                  | Bearer token for HTTP transport authentication (CLI: `--auth-token`). Must NOT be the default placeholder token.                                      |
-| `ALLOWED_IO_ROOTS`                | **Critical Security Boundary**: Comma-separated absolute paths granting filesystem access to Code Mode and export tools (default: none / fail-closed) |
-| `MCP_CORS_ORIGIN`                 | Allowed CORS origins for HTTP transport, comma-separated (default: blank, strict opt-in)                                                              |
-| `TRUST_PROXY`                     | Trust proxy headers for rate limiting and origin checks (CLI: `--trust-proxy`; default: `false`)                                                      |
-| `PUBLIC_ORIGIN`                   | Public origin URL for OAuth redirect URIs (CLI: `--public-origin`)                                                                                    |
-| `MCP_RATE_LIMIT_MAX`              | Max requests per minute per client IP, HTTP only (default: `100`)                                                                                     |
-| `LOG_LEVEL`                       | Log verbosity: `error`, `warn`, `info`, `debug` (default: `info`; CLI: `--log-level`)                                                                 |
-| `MCP_ENABLE_HSTS`                 | Enable HSTS security header on HTTP responses (CLI: `--enable-hsts`; default: `false`)                                                                |
-| `OAUTH_ENABLED`                   | Set to `true` to enable OAuth 2.1 authentication (HTTP only)                                                                                          |
-| `OAUTH_ISSUER`                    | OAuth issuer URL (e.g., `https://auth.example.com/realms/mcp`)                                                                                        |
-| `OAUTH_AUDIENCE`                  | Expected JWT audience claim                                                                                                                           |
-| `OAUTH_JWKS_URI`                  | JWKS endpoint for token signature verification                                                                                                        |
-| `OAUTH_ALLOW_PLAINTEXT_LOOPBACK`  | Allow plaintext HTTP loopback redirect URIs for local OAuth clients (CLI: `--oauth-allow-plaintext-loopback`; default: `false`)                       |
-| `OAUTH_CLOCK_TOLERANCE`           | Allowed clock skew tolerance in seconds for JWT verification (default: `5`)                                                                           |
-| `CODE_MODE_MAX_RESULT_SIZE`       | Maximum size in bytes for mj_execute_code result payload (CLI: `--codemode-max-result-size`; default: `102400`)                                       |
-| `CODEMODE_INTERNAL_FULL_ACCESS`   | Bypass tool filter constraints within the Code Mode sandbox (CLI: `--codemode-internal-full-access`; default: `false`)                                |
-| `BRIEFING_ENTRY_COUNT`            | Journal entries in briefing (CLI: `--briefing-entries`; default: `3`)                                                                                 |
-| `BRIEFING_SUMMARY_COUNT`          | Session summaries to list in briefing (CLI: `--briefing-summaries`; default: `1`)                                                                     |
-| `BRIEFING_INCLUDE_TEAM`           | Include team DB entries in briefing (`true`/`false`; default: `false`)                                                                                |
-| `BRIEFING_ISSUE_COUNT`            | Issues to list in briefing; `0` = count only (default: `0`)                                                                                           |
-| `BRIEFING_PR_COUNT`               | PRs to list in briefing; `0` = count only (default: `0`)                                                                                              |
-| `BRIEFING_PR_STATUS`              | Show PR status breakdown (open/merged/closed; default: `false`)                                                                                       |
-| `BRIEFING_MILESTONE_COUNT`        | Milestones to list in briefing; `0` = hide entirely (CLI: `--briefing-milestones`; default: `3`)                                                      |
-| `BRIEFING_WORKFLOW_COUNT`         | Workflow runs to list in briefing; `0` = status only (default: `0`)                                                                                   |
-| `BRIEFING_WORKFLOW_STATUS`        | Show workflow status breakdown in briefing (default: `false`)                                                                                         |
-| `BRIEFING_COPILOT_REVIEWS`        | Aggregate Copilot review state in briefing (default: `false`)                                                                                         |
-| `RULES_FILE_PATH`                 | Path to user rules file for agent awareness (CLI: `--rules-file`)                                                                                     |
-| `SKILLS_DIR_PATH`                 | Path to skills directory for agent awareness (CLI: `--skills-dir`)                                                                                    |
-| `MEMORY_JOURNAL_WORKFLOW_SUMMARY` | Free-text workflow summary for `memory://workflows` (CLI: `--workflow-summary`)                                                                       |
-| `INSTRUCTION_LEVEL`               | Briefing depth: `essential`, `standard`, `full` (CLI: `--instruction-level`; default: `standard`)                                                     |
-| `PROJECT_LINT_CMD`                | Project lint command for GitHub Commander validation gates (default: `npm run lint`)                                                                  |
-| `PROJECT_TYPECHECK_CMD`           | Project typecheck command (default: `npm run typecheck`; empty = skip)                                                                                |
-| `PROJECT_BUILD_CMD`               | Project build command (default: `npm run build`; empty = skip)                                                                                        |
-| `PROJECT_TEST_CMD`                | Project test command (default: `npm run test`)                                                                                                        |
-| `PROJECT_E2E_CMD`                 | Project E2E test command (default: empty = skip)                                                                                                      |
-| `PROJECT_PACKAGE_MANAGER`         | Package manager override: `npm`, `yarn`, `pnpm`, `bun` (default: auto-detect from lockfile)                                                           |
-| `PROJECT_HAS_DOCKERFILE`          | Enable Docker audit steps (default: auto-detect)                                                                                                      |
-| `COMMANDER_HITL_FILE_THRESHOLD`   | Human-in-the-loop checkpoint if changes touch > N files (default: `10`)                                                                               |
-| `COMMANDER_SECURITY_TOOLS`        | Override security tool auto-detection (comma-separated; default: auto-detect)                                                                         |
-| `COMMANDER_BRANCH_PREFIX`         | Branch naming prefix for PRs (default: `fix`)                                                                                                         |
-| `AUDIT_LOG_PATH`                  | Path for the JSONL operational telemetry log of write/admin tool calls. Rotates at 10 MB (keeps 5 archives). Omit to disable telemetry logging.       |
-| `AUDIT_REDACT`                    | Set to `false` to include tool arguments in telemetry log entries (default: `true`)                                                                   |
-| `AUDIT_READS`                     | Log read-scoped tool calls in addition to write/admin (CLI: `--audit-reads`; default: `false`)                                                        |
-| `AUDIT_LOG_MAX_SIZE`              | Maximum operational telemetry file size in bytes before rotation (CLI: `--audit-log-max-size`; default: `10485760`)                                   |
-| `MCP_METRICS_ENABLED`             | Set to `false` to disable in-memory tool call metrics accumulation (default: `true`)                                                                  |
-| `FLAG_VOCABULARY`                 | Comma-separated flag types for Hush Protocol (CLI: `--flag-vocabulary`; default: `blocker,needs_review,help_requested,fyi`)                           |
-| `PRUNE_OLDER_THAN_DAYS`           | Soft-delete entries older than N days with importance below threshold on startup; `0` = disabled (CLI: `--prune-older-than-days`; default: `0`)       |
-| `PRUNE_IMPORTANCE_THRESHOLD`      | Importance score threshold (0.0–1.0) — entries scoring below this are pruned (CLI: `--prune-importance-threshold`; default: `0.15`)                   |
 
-**Multi-Project Workflows**: For agents to seamlessly support multiple projects, provide **`PROJECT_REGISTRY`**.
+**Multi-Project Workflows**: For agents to seamlessly support multiple projects, configure your **`PROJECT_REGISTRY`** (tip: use `npx memory-journal-mcp project create`).
 
 #### Dynamic Context Resolution & Auto-Detection
 
@@ -641,7 +497,7 @@ When executing GitHub tools (issues, PRs, context, etc.), the server resolves re
 
 1. **Dynamic Project Routing**: If the agent passes a `repo` string that matches a key in your `PROJECT_REGISTRY`, the server dynamically mounts the physical directory mapped to that project. It executes git commands locally and automatically infers the `owner`.
 2. **Explicit Override**: If the agent provides both `owner` and `repo` explicitly, those values override auto-detection for API calls.
-3. **Missing Context**: Without `PROJECT_REGISTRY` or explicit parameters, the server blocks execution and returns `{requiresUserInput: true}` to prompt the agent.
+3. **Missing Context**: Without `PROJECT_REGISTRY` or explicit parameters, the server blocks execution and returns `{requiresUserInput: true}` to prompt the agent. If an agent encounters this blocked state, it can seamlessly recover by invoking the `mj.admin.registerProject()` method via Code Mode to auto-configure the project registry on the fly.
 
 #### Automatic Project Routing (Kanban / Issues)
 
@@ -701,6 +557,39 @@ memory-journal-mcp --transport http --port 3000
 
 ## 🔧 Configuration
 
+### Environment Variables
+
+| Variable                                       | Description                                                |
+| ---------------------------------------------- | ---------------------------------------------------------- |
+| **Core Database** | |
+| `DB_PATH`                                      | Path to the personal journal SQLite database               |
+| `TEAM_DB_PATH`                                 | Path to the shared team SQLite database                    |
+| `GITHUB_TOKEN`                                 | Personal access token for GitHub integrations              |
+| `PROJECT_REGISTRY`                             | JSON map of repo names to local paths and project numbers  |
+| **Security & Tooling** | |
+| `ALLOWED_IO_ROOTS`                             | Comma-separated paths for Code Mode filesystem boundaries  |
+| `TOOL_FILTER`                                  | Control tool exposure (`full`, `starter`, `readonly`, `-github`) |
+| `CODE_MODE_MAX_RESULT_SIZE`                    | Max execution payload buffer size in Code Mode (bytes)     |
+| `CODEMODE_INTERNAL_FULL_ACCESS`                | Allow Code Mode to bypass tool filters internally          |
+| `MCP_AGENT_HEALING`                            | Enable/disable autonomous tool & parameter healing (`true`/`false`, CLI: `--no-agent-healing`) |
+| `MAX_TOOL_INPUT_ELEMENTS`                      | Max array/object elements in tool inputs (default: `25000`, `0` = disabled) |
+| **Briefing & Context** | |
+| `BRIEFING_ENTRY_COUNT`                         | Number of granular journal entries in briefing (default: 3)|
+| `BRIEFING_SUMMARY_COUNT`                       | Number of session summaries in briefing (default: 1)       |
+| `BRIEFING_INCLUDE_TEAM`                        | Include entries from the team database (default: false)    |
+| `BRIEFING_ISSUE_COUNT` / `BRIEFING_PR_COUNT`   | GitHub Issues and PRs to list with titles                  |
+| `BRIEFING_MILESTONE_COUNT`                     | GitHub Milestones to list with titles                      |
+| `BRIEFING_WORKFLOW_COUNT`                      | CI workflow runs to list                                   |
+| `RULES_FILE_PATH` / `SKILLS_DIR_PATH`          | Injected behavioral rules and skills boundaries            |
+| **OAuth (HTTP Mode)** | |
+| `OAUTH_ENABLED`                                | Enable OAuth 2.1 authentication (default: false)           |
+| `OAUTH_ISSUER` / `OAUTH_AUDIENCE`              | OAuth token verification parameters                        |
+| **Telemetry & Administration** | |
+| `AUDIT_LOG_PATH` / `AUDIT_REDACT`              | File path for JSONL telemetry and argument redaction       |
+| `MCP_METRICS_ENABLED` / `PERSIST_METRICS`      | In-memory and disk-persisted operational metrics           |
+| `PRUNE_OLDER_THAN_DAYS` / `PRUNE_EXCLUDE_TAGS` | Auto-prune settings and exclusion tags                     |
+| `REPORT_INTERVAL` / `REPORT_WEBHOOK_URL`       | Scheduled HTTP reports                                     |
+
 ### GitHub Integration (Optional)
 
 ```bash
@@ -709,7 +598,7 @@ export GITHUB_TOKEN="your_token"              # For Projects/Issues/PRs
 
 **Scopes:** `repo`, `project`, `read:org` (org-level project discovery only)
 
-### GitHub Management Capabilities
+### Manage GitHub Seamlessly
 
 Memory Journal provides a **hybrid approach** to GitHub management:
 
@@ -720,22 +609,15 @@ Memory Journal provides a **hybrid approach** to GitHub management:
 
 **MCP Server Tools (Read + Kanban + Milestones + Issue Lifecycle):**
 
-- `get_github_issues` / `get_github_issue` - Query issues
-- `get_github_prs` / `get_github_pr` - Query pull requests
-- `get_github_context` - Full repository context
-- `get_kanban_board` / `add_kanban_item` / `move_kanban_item` / `delete_kanban_item` - **Kanban management**
-- `get_github_milestones` / `get_github_milestone` - **Milestone tracking with completion %**
-- `create_github_milestone` / `update_github_milestone` / `delete_github_milestone` - **Milestone CRUD**
-- `get_repo_insights` - **Repository traffic & analytics** (stars, clones, views, referrers, popular paths)
-- `create_github_issue_with_entry` / `close_github_issue_with_entry` - **Issue lifecycle with journal linking**
+See the **[Complete tools reference](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tools)** for all supported GitHub integration capabilities, including query commands, Kanban management, milestone tracking, analytics, and issue lifecycle events.
 
 > **Why this design?** The MCP server focuses on value-added features that integrate journal entries with GitHub (Kanban views, Milestones, timeline resources, context linking). Standard GitHub mutations (create/close issues, merge PRs, manage releases) are handled directly by agents via `gh` CLI.
 
 **[Complete GitHub integration guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Git-Integration)**
 
-### GitHub Commander Workflows
+### Automate with GitHub Commander Workflows
 
-The server natively bundles the `github-commander` agent skill (accessible via `memory://skills/github-commander`). This extends your AI assistant with 9 autonomous DevOps workflows for repository stewardship: **Issue Triage**, **Milestone Sprints**, **PR Reviews**, **Copilot Audits**, **Security Audits**, **Code Quality Audits**, **Performance Audits**, **Roadmap Kickoffs**, and **Dependency Updates**. Configure validation layers using the `PROJECT_*` environment overrides to enforce CI-matching execution locally during agent tasks!
+The server natively bundles the `github-commander` agent skill (accessible via `memory://skills/github-commander`). This extends your AI assistant with autonomous DevOps workflows for repository stewardship: **Issue Triage**, **Milestone Sprints**, **PR Reviews**, **Copilot Audits**, **Security Audits**, **Code Quality Audits**, **Performance Audits**, **Roadmap Kickoffs**, and **Dependency Updates**. Configure validation layers using the `PROJECT_*` environment overrides to enforce CI-matching execution locally during agent tasks!
 
 ## 🏗️ Architecture
 
@@ -745,10 +627,11 @@ The server natively bundles the `github-commander` agent skill (accessible via `
 flowchart TB
     AI["🤖 AI Agent<br/>(Cursor, Windsurf, Claude)"]
 
-    subgraph MCP["Memory Journal MCP Server"]
-        Tools["🛠️ 73 Tools"]
-        Resources["📡 46 Resources"]
-        Prompts["💬 19 Prompts"]
+    subgraph MCP["MCP Server Capabilities"]
+        direction LR
+        Tools["🛠️ MCP Tools"]
+        Resources["📡 Resources"]
+        Prompts["💬 Prompts"]
     end
 
     subgraph Storage["Persistence Layer"]
@@ -775,8 +658,7 @@ flowchart TB
 ┌─────────────────────────────────────────────────────────────┐
 │ MCP Server Layer (TypeScript)                               │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐  │
-│  │ Tools (73)      │  │ Resources (47)  │  │ Prompts (19)│  │
-│  │ with Annotations│  │ with Annotations│  │             │  │
+│  │ Tools            │  │ Resources       │  │ Prompts       │  │
 │  └─────────────────┘  └─────────────────┘  └─────────────┘  │
 ├─────────────────────────────────────────────────────────────┤
 │ Native SQLite Engine                                        │
@@ -814,31 +696,33 @@ Memory Journal is designed for extremely low overhead during AI task execution. 
 To run the benchmarking suite locally:
 
 ```bash
-npm run bench
+pnpm run bench
 ```
 
 ### Testing
 
 Extensively tested across two frameworks:
 
-| Suite                     | Command            | Covers                                                                          |
-| ------------------------- | ------------------ | ------------------------------------------------------------------------------- |
-| Vitest (unit/integration) | `npm test`         | Database, tools, resources, handlers, security, GitHub, vector search, codemode |
-| Playwright (e2e)          | `npm run test:e2e` | HTTP/SSE transport, auth, sessions, CORS, security headers, scheduler           |
+| Suite                     | Command             | Covers                                                                          |
+| ------------------------- | ------------------- | ------------------------------------------------------------------------------- |
+| Vitest (unit/integration) | `pnpm test`         | Database, tools, resources, handlers, security, GitHub, vector search, codemode |
+| Playwright (e2e)          | `pnpm run test:e2e` | HTTP/SSE transport, auth, sessions, CORS, security headers, scheduler           |
 
 ```bash
-npm test          # Unit + integration tests
-npm run test:e2e  # End-to-end HTTP/SSE transport tests
+pnpm test          # Unit + integration tests
+pnpm run test:e2e  # End-to-end HTTP/SSE transport tests
 ```
 
 ### Security
+
+> **Note**: When updating schemas or validation logic, please refer to the `/zod` skill for best practices on Standard Schema and Safe Parsing.
 
 - **Deterministic error handling** - Every tool returns structured `{success, error, code, category, suggestion, recoverable}` responses with actionable context — no raw exceptions, no silent failures, no misleading messages
 - **Local-first** - All data stored locally, no external API calls (except optional GitHub)
 - **Input validation** - Zod schemas, content size limits, SQL injection prevention
 - **Path traversal protection** - Backup filenames validated
 - **MCP 2025-03-26 annotations** - Behavioral hints (`readOnlyHint`, `destructiveHint`, etc.)
-- **HTTP transport hardening** - 7 security headers, configurable multi-origin CORS, 1MB body limit, built-in rate limiting (100 req/min), server timeouts, HSTS (opt-in), 30-min session timeout, 404 handler, cross-protocol guard
+- **HTTP transport hardening** - comprehensive security headers, configurable multi-origin CORS, 1MB body limit, built-in rate limiting (100 req/min), server timeouts, HSTS (opt-in), 30-min session timeout, 404 handler, cross-protocol guard
 - **Token scrubbing** - GitHub tokens and credentials automatically redacted from error logs
 
 ### Data & Privacy
@@ -853,8 +737,8 @@ npm run test:e2e  # End-to-end HTTP/SSE transport tests
 ## 📚 Documentation & Resources
 
 - **[GitHub Wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki)** - Complete documentation
-- **[Copilot Setup Guide](docs/copilot-setup.md)** - Cross-agent memory bridge between IDE agents and GitHub Copilot
-- **[Deployment Guide](docs/deployment.md)** - CI/CD pipeline, environments, and version bump checklist
+- **[Copilot Setup Guide](https://github.com/neverinfamous/memory-journal-mcp/wiki)** - Cross-agent memory bridge between IDE agents and GitHub Copilot
+- **[Deployment Guide](https://github.com/neverinfamous/memory-journal-mcp/wiki/Deployment)** - CI/CD pipeline, environments, and version bump checklist
 - **[Docker Hub](https://hub.docker.com/r/writenotenow/memory-journal-mcp)** - Container images
 - **[npm Package](https://www.npmjs.com/package/memory-journal-mcp)** - Node.js distribution
 - **[Issues](https://github.com/neverinfamous/memory-journal-mcp/issues)** - Bug reports & feature requests

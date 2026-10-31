@@ -12,7 +12,7 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import { callTool as _callTool, getTools } from '../../src/handlers/tools/index.js'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
-import type { VectorSearchManager } from '../../src/vector/vector-search-manager.js'
+import type { VectorSearchManager } from '../../src/vector/vector-search-manager/index.js'
 
 const callTool = (
     name: any,
@@ -67,7 +67,7 @@ function createMockVector(overrides: Partial<Record<string, unknown>> = {}): Vec
 
 describe('Handler Error Branches', () => {
     let db: DatabaseAdapter
-    const testDbPath = './test-handler-branches.db'
+    const testDbPath = './.test-output/vitest/test-handler-branches.db'
 
     beforeAll(async () => {
         db = new DatabaseAdapter(testDbPath)

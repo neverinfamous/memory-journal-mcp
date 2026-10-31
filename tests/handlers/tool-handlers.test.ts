@@ -44,7 +44,7 @@ const callTool = (
 
 describe('Tool Handlers', () => {
     let db: DatabaseAdapter
-    const testDbPath = './test-tools.db'
+    const testDbPath = './.test-output/vitest/test-tools.db'
 
     beforeAll(async () => {
         db = new DatabaseAdapter(testDbPath)
@@ -117,7 +117,7 @@ describe('Tool Handlers', () => {
         it('should create a basic entry', async () => {
             const result = (await callTool(
                 'create_entry',
-                { project_number: 1, content: 'Tool handler test entry' },
+                { workspace_id: 'default',  project_number: 1, content: 'Tool handler test entry' },
                 db
             )) as { success: boolean; entry: { id: number; content: string } }
 
@@ -130,28 +130,45 @@ describe('Tool Handlers', () => {
         it('should create entry with all fields', async () => {
             const result = (await callTool(
                 'create_entry',
-                {
+                { workspace_id: 'default', 
                     project_number: 1,
                     content: 'Full tool entry',
                     entry_type: 'project_decision',
                     tags: ['tool-tag-a', 'tool-tag-b'],
                     is_personal: false,
                     significance_type: 'milestone',
+                    trust_score: 0.9,
+                    impact_score: 0.5,
+                    validation_status: 'passed',
                 },
                 db
-            )) as { success: boolean; entry: { entryType: string; tags: string[] } }
+            )) as { success: boolean; entry: { entryType: string; tags: string[]; trustScore: number; impactScore: number; validationStatus: string } }
 
             expect(result.success).toBe(true)
             expect(result.entry.entryType).toBe('project_decision')
             expect(result.entry.tags).toContain('tool-tag-a')
+            expect(result.entry.trustScore).toBe(0.9)
+            expect(result.entry.impactScore).toBe(0.5)
+            expect(result.entry.validationStatus).toBe('passed')
+        })
+
+        it('should create entry in specific workspace', async () => {
+            const result = (await callTool(
+                'create_entry',
+                { content: 'Workspace entry', workspace_id: 'test-ws-1', project_number: 1 },
+                db
+            )) as { success: boolean; entry: { id: number; workspaceId: string } }
+
+            expect(result.success).toBe(true)
+            expect(result.entry.workspaceId).toBe('test-ws-1')
         })
     })
 
-    describe('callTool - create_entry_minimal', () => {
+    describe('callTool - create_entry', () => {
         it('should create a minimal entry', async () => {
             const result = (await callTool(
-                'create_entry_minimal',
-                { content: 'Quick note' },
+                'create_entry',
+                { workspace_id: 'default',  content: 'Quick note', project_number: 1 },
                 db
             )) as { success: boolean; entry: { content: string } }
 
@@ -164,7 +181,7 @@ describe('Tool Handlers', () => {
         it('should retrieve an entry by ID', async () => {
             const created = (await callTool(
                 'create_entry',
-                { project_number: 1, content: 'Retrievable entry' },
+                { workspace_id: 'default',  project_number: 1, content: 'Retrievable entry' },
                 db
             )) as { entry: { id: number } }
 
@@ -175,7 +192,6 @@ describe('Tool Handlers', () => {
             )) as { entry: { content: string }; importance: number }
 
             expect(result.entry.content).toBe('Retrievable entry')
-            expect(typeof result.importance).toBe('number')
         })
 
         it('should return error for nonexistent entry', async () => {
@@ -197,6 +213,17 @@ describe('Tool Handlers', () => {
             expect(result.entries.length).toBeLessThanOrEqual(3)
             expect(result.count).toBeGreaterThan(0)
         })
+
+        it('should filter by workspace_id and use default if omitted', async () => {
+            await callTool('create_entry', { content: 'WS-Alpha entry', workspace_id: 'ws-alpha', project_number: 1 }, db)
+            
+            const alphaResult = (await callTool('get_recent_entries', { limit: 10, workspace_id: 'ws-alpha' }, db)) as { entries: { content: string }[] }
+            expect(alphaResult.entries.some(e => e.content === 'WS-Alpha entry')).toBe(true)
+            expect(alphaResult.entries.some(e => e.content === 'Workspace entry')).toBe(false) // from other test
+
+            const defaultResult = (await callTool('get_recent_entries', { limit: 10 }, db)) as { entries: { content: string }[] }
+            expect(defaultResult.entries.some(e => e.content === 'WS-Alpha entry')).toBe(false)
+        })
     })
 
     describe('callTool - test_simple', () => {
@@ -217,7 +244,7 @@ describe('Tool Handlers', () => {
         it('should search by content', async () => {
             await callTool(
                 'create_entry',
-                { project_number: 1, content: 'Unique unicorn xyz99' },
+                { workspace_id: 'default',  project_number: 1, content: 'Unique unicorn xyz99' },
                 db
             )
 
@@ -251,7 +278,7 @@ describe('Tool Handlers', () => {
             // Ensure an entry exists today
             await callTool(
                 'create_entry',
-                { project_number: 1, content: 'Date range test entry' },
+                { workspace_id: 'default',  project_number: 1, content: 'Date range test entry' },
                 db
             )
 
@@ -297,14 +324,14 @@ describe('Tool Handlers', () => {
         it('should link two entries', async () => {
             const e1 = (await callTool(
                 'create_entry',
-                { project_number: 1, content: 'Link source' },
+                { workspace_id: 'default',  project_number: 1, content: 'Link source' },
                 db
             )) as {
                 entry: { id: number }
             }
             const e2 = (await callTool(
                 'create_entry',
-                { project_number: 1, content: 'Link target' },
+                { workspace_id: 'default',  project_number: 1, content: 'Link target' },
                 db
             )) as {
                 entry: { id: number }
@@ -348,13 +375,13 @@ describe('Tool Handlers', () => {
         it('should update entry content', async () => {
             const created = (await callTool(
                 'create_entry',
-                { project_number: 1, content: 'Original content' },
+                { workspace_id: 'default',  project_number: 1, content: 'Original content' },
                 db
             )) as { entry: { id: number } }
 
             const result = (await callTool(
                 'update_entry',
-                { entry_id: created.entry.id, content: 'Updated content' },
+                { entry_id: created.entry.id, project_number: 1, content: 'Updated content' },
                 db
             )) as { success: boolean; entry: { content: string } }
 
@@ -365,7 +392,7 @@ describe('Tool Handlers', () => {
         it('should update project_number on an existing entry', async () => {
             const created = (await callTool(
                 'create_entry',
-                { project_number: 1, content: 'Needs project reassignment' },
+                { workspace_id: 'default',  project_number: 1, content: 'Needs project reassignment' },
                 db
             )) as { entry: { id: number; projectNumber: number | null } }
 
@@ -384,7 +411,7 @@ describe('Tool Handlers', () => {
         it('should update multiple GitHub metadata fields', async () => {
             const created = (await callTool(
                 'create_entry',
-                { project_number: 1, content: 'Metadata update test' },
+                { workspace_id: 'default',  project_number: 1, content: 'Metadata update test' },
                 db
             )) as { entry: { id: number } }
 
@@ -421,20 +448,20 @@ describe('Tool Handlers', () => {
         it('should clear a metadata field when null is passed', async () => {
             const created = (await callTool(
                 'create_entry',
-                { content: 'Clear test', project_number: 99 },
+                { workspace_id: 'default',  content: 'Clear test', project_number: 99, issue_number: 123 },
                 db
-            )) as { entry: { id: number; projectNumber: number } }
+            )) as { entry: { id: number; projectNumber: number; issueNumber: number | null } }
 
-            expect(created.entry.projectNumber).toBe(99)
+            expect(created.entry.issueNumber).toBe(123)
 
             const result = (await callTool(
                 'update_entry',
-                { entry_id: created.entry.id, project_number: null },
+                { entry_id: created.entry.id, project_number: 99, issue_number: null },
                 db
-            )) as { success: boolean; entry: { projectNumber: number | null } }
+            )) as { success: boolean; entry: { issueNumber: number | null } }
 
             expect(result.success).toBe(true)
-            expect(result.entry.projectNumber).toBeNull()
+            expect(result.entry.issueNumber).toBeNull()
         })
     })
 
@@ -442,13 +469,13 @@ describe('Tool Handlers', () => {
         it('should soft delete an entry', async () => {
             const created = (await callTool(
                 'create_entry',
-                { project_number: 1, content: 'To be deleted' },
+                { workspace_id: 'default',  project_number: 1, content: 'To be deleted' },
                 db
             )) as {
                 entry: { id: number }
             }
 
-            const result = (await callTool('delete_entry', { entry_id: created.entry.id }, db)) as {
+            const result = (await callTool('delete_entry', { entry_id: created.entry.id, expected_version: 1 }, db)) as {
                 success: boolean
                 entryId: number
             }
@@ -458,7 +485,7 @@ describe('Tool Handlers', () => {
         })
 
         it('should return error for nonexistent entry', async () => {
-            const result = (await callTool('delete_entry', { entry_id: 99999 }, db)) as {
+            const result = (await callTool('delete_entry', { entry_id: 99999, expected_version: 1 }, db)) as {
                 success: boolean
                 error: string
             }
@@ -488,7 +515,7 @@ describe('Tool Handlers', () => {
         it('should merge tags', async () => {
             await callTool(
                 'create_entry',
-                { project_number: 1, content: 'Merge tag source', tags: ['merge-src'] },
+                { workspace_id: 'default',  project_number: 1, content: 'Merge tag source', tags: ['merge-src'] },
                 db
             )
 
@@ -593,14 +620,14 @@ describe('Tool Handlers', () => {
         it('should generate mermaid diagram', async () => {
             const e1 = (await callTool(
                 'create_entry',
-                { project_number: 1, content: 'Viz entry A' },
+                { workspace_id: 'default',  project_number: 1, content: 'Viz entry A' },
                 db
             )) as {
                 entry: { id: number }
             }
             const e2 = (await callTool(
                 'create_entry',
-                { project_number: 1, content: 'Viz entry B' },
+                { workspace_id: 'default',  project_number: 1, content: 'Viz entry B' },
                 db
             )) as {
                 entry: { id: number }
@@ -628,21 +655,21 @@ describe('Tool Handlers', () => {
         it('should filter by relationship_type', async () => {
             const e1 = (await callTool(
                 'create_entry',
-                { project_number: 1, content: 'Node X' },
+                { workspace_id: 'default',  project_number: 1, content: 'Node X' },
                 db
             )) as {
                 entry: { id: number }
             }
             const e2 = (await callTool(
                 'create_entry',
-                { project_number: 1, content: 'Node Y' },
+                { workspace_id: 'default',  project_number: 1, content: 'Node Y' },
                 db
             )) as {
                 entry: { id: number }
             }
             const e3 = (await callTool(
                 'create_entry',
-                { project_number: 1, content: 'Node Z' },
+                { workspace_id: 'default',  project_number: 1, content: 'Node Z' },
                 db
             )) as {
                 entry: { id: number }
@@ -689,12 +716,44 @@ describe('Tool Handlers', () => {
     // callTool - cross project insights
     // ========================================================================
 
+    describe('callTool - mark_anchors_stale', () => {
+        it('should update anchor status', async () => {
+            const entry = (await callTool(
+                'create_entry',
+                { workspace_id: 'default',  project_number: 1, content: 'Anchor test entry' },
+                db
+            )) as { entry: { id: number } }
+
+            // Directly add an anchor to the db since there is no standard tool to create anchors (only happens via git hooks typically)
+            db.executeInTransaction(() => {
+                const nativeDb = (db as any).connection.getNativeDb();
+                nativeDb.prepare('INSERT INTO entry_anchors (entry_id, anchor_type, anchor_path, status) VALUES (?, ?, ?, ?)').run(entry.entry.id, 'file', 'src/test.ts', 'valid')
+            })
+
+            const anchors = db.getAnchorsByEntryId(entry.entry.id)
+            expect(anchors.length).toBe(1)
+            const anchorId = anchors[0]!.id
+
+            const result = (await callTool(
+                'mark_anchors_stale',
+                { updates: [{ id: anchorId, status: 'stale' }] },
+                db
+            )) as { success: boolean; updated_count: number }
+
+            expect(result.success).toBe(true)
+            expect(result.updated_count).toBe(1)
+
+            const updatedAnchors = db.getAnchorsByEntryId(entry.entry.id)
+            expect(updatedAnchors[0]!.status).toBe('stale')
+        })
+    })
+
     describe('callTool - get_cross_project_insights', () => {
         it('should return insights structure', async () => {
             // Need project entries for insights
-            await callTool('create_entry', { content: 'Insight entry 1', project_number: 100 }, db)
-            await callTool('create_entry', { content: 'Insight entry 2', project_number: 100 }, db)
-            await callTool('create_entry', { content: 'Insight entry 3', project_number: 100 }, db)
+            await callTool('create_entry', { content: 'Insight entry 1', project_number: 100, workspace_id: 'default' }, db)
+            await callTool('create_entry', { content: 'Insight entry 2', project_number: 100, workspace_id: 'default' }, db)
+            await callTool('create_entry', { content: 'Insight entry 3', project_number: 100, workspace_id: 'default' }, db)
 
             const result = (await callTool(
                 'get_cross_project_insights',

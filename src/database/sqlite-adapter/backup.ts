@@ -42,9 +42,12 @@ export class BackupManager {
                 operation: 'exportToFile',
                 error: err,
             })
-            throw new Error(`WAL checkpoint failed, backup aborted to prevent stale data: ${err}`, {
-                cause: checkpointErr,
-            })
+            throw new Error(
+                `WAL checkpoint failed, backup aborted to prevent stale data: ${err}`,
+                {
+                    cause: checkpointErr,
+                }
+            )
         }
         await fs.promises.copyFile(this.ctx.getDbPath(), backupPath)
 
@@ -171,9 +174,20 @@ export class BackupManager {
         }
 
         try {
-            // Dynamically import better-sqlite3 to avoid top-level require errors if mocked
             const Database = (await import('better-sqlite3')).default
             const tempDb = new Database(backupPath, { fileMustExist: true, readonly: true })
+            
+            // Apply encryption key if present
+            const rawKey = process.env['MJ_DB_ENCRYPTION_KEY'] || process.env['DB_ENCRYPTION_KEY']
+            if (rawKey) {
+                const key = rawKey
+                if (key.startsWith("x'") && key.endsWith("'")) {
+                    tempDb.pragma(`key = "${key}"`)
+                } else {
+                    tempDb.pragma(`key = '${key}'`)
+                }
+            }
+            
             const tempStmt = tempDb.prepare('PRAGMA integrity_check')
             const result = tempStmt.get() as Record<string, unknown>
             const integrityResult = Object.values(result ?? {})[0]
@@ -274,8 +288,16 @@ export class BackupManager {
                             }
                         }
                     }
-                } catch {
-                    // Ignore read errors
+                } catch (readErr: unknown) {
+                    // If the directory exists but the lock file is missing, it's an orphaned lock
+                    if (
+                        typeof readErr === 'object' &&
+                        readErr !== null &&
+                        'code' in readErr &&
+                        (readErr as NodeJS.ErrnoException).code === 'ENOENT'
+                    ) {
+                        isStale = true
+                    }
                 }
 
                 if (isStale) {
@@ -286,14 +308,27 @@ export class BackupManager {
                     try {
                         fs.renameSync(lockDir, `${lockDir}.${randomUUID()}.stale`)
                     } catch (renameErr) {
-                        // If rename fails, another process likely beat us to it.
-                        throw new Error(
-                            `Another process is currently holding the database lock at ${lockDir}. Backup restore cannot safely proceed.`,
-                            { cause: renameErr }
-                        )
+                        // On Windows or concurrent environments, renaming a directory with files can throw EPERM/EBUSY.
+                        // Fall back to safely removing the stale lock directory.
+                        try {
+                            fs.rmSync(lockDir, {
+                                recursive: true,
+                                force: true,
+                                maxRetries: 5,
+                                retryDelay: 50,
+                            })
+                        } catch {
+                            // If rename and rmSync fail, another process likely beat us to it.
+                            throw new Error(
+                                `Another process is currently holding the database lock at ${lockDir}. Backup restore cannot safely proceed.`,
+                                { cause: renameErr }
+                            )
+                        }
                     }
                     // Retry acquiring the lock
-                    fs.mkdirSync(lockDir)
+                    if (!fs.existsSync(lockDir)) {
+                        fs.mkdirSync(lockDir, { recursive: true })
+                    }
                     fs.writeFileSync(
                         lockFile,
                         JSON.stringify({ pid: process.pid, timestamp: Date.now(), nonce })
@@ -332,6 +367,17 @@ export class BackupManager {
                 } catch {
                     // Fallback to copyFile if atomic rename fails (e.g., Windows EBUSY or cross-device links)
                     await fs.promises.copyFile(tempDbPath, this.ctx.getDbPath())
+                }
+
+                try {
+                    await fs.promises.unlink(`${this.ctx.getDbPath()}-wal`)
+                } catch {
+                    // Ignore missing files
+                }
+                try {
+                    await fs.promises.unlink(`${this.ctx.getDbPath()}-shm`)
+                } catch {
+                    // Ignore missing files
                 }
 
                 // Re-initialize using the connection's standard initialize method

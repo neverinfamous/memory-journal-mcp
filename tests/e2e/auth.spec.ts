@@ -5,16 +5,16 @@
  * on port 3101 to avoid conflicting with the main webServer.
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test-fixture.js'
 import { startServer, stopServer } from './helpers.js'
 
 const AUTH_TOKEN = 'test-secret-token-e2e'
-const AUTH_PORT = 3101
+const AUTH_PORT = 6100 + Number(process.env.TEST_PARALLEL_INDEX || 0)
 const AUTH_BASE = `http://localhost:${AUTH_PORT}`
 
 test.describe('Bearer Token Authentication', () => {
     test.beforeAll(async () => {
-        await startServer(AUTH_PORT, ['--auth-token', AUTH_TOKEN], 'auth')
+        await startServer(AUTH_PORT, ['--auth-token', AUTH_TOKEN])
     })
 
     test.afterAll(() => {
@@ -35,6 +35,7 @@ test.describe('Bearer Token Authentication', () => {
             headers: {
                 'Content-Type': 'application/json',
                 Accept: 'application/json, text/event-stream',
+                    'mcp-protocol-version': '2024-11-05',
             },
             body: JSON.stringify({
                 jsonrpc: '2.0',
@@ -59,6 +60,7 @@ test.describe('Bearer Token Authentication', () => {
             headers: {
                 'Content-Type': 'application/json',
                 Accept: 'application/json, text/event-stream',
+                    'mcp-protocol-version': '2024-11-05',
                 Authorization: 'Bearer wrong-token',
             },
             body: JSON.stringify({
@@ -82,6 +84,7 @@ test.describe('Bearer Token Authentication', () => {
             headers: {
                 'Content-Type': 'application/json',
                 Accept: 'application/json, text/event-stream',
+                    'mcp-protocol-version': '2024-11-05',
                 Authorization: `Bearer ${AUTH_TOKEN}`,
             },
             body: JSON.stringify({

@@ -16,13 +16,13 @@
  * Uses dedicated server ports 3110, 3111.
  */
 
-import { test, expect } from '@playwright/test'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+import { test, expect } from './test-fixture.js'
+import { Client } from '@modelcontextprotocol/client'
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 import { startServer, stopServer } from './helpers.js'
 
-const CORE_ONLY_PORT = 3110 // --tool-filter core  (no codemode, no github, no search)
-const NO_GITHUB_PORT = 3111 // --tool-filter -github (all except github)
+const CORE_ONLY_PORT = 5110 + (Number(process.env.TEST_PARALLEL_INDEX || 0) * 100) // --tool-filter core  (no codemode, no github, no search)
+const NO_GITHUB_PORT = 5111 + (Number(process.env.TEST_PARALLEL_INDEX || 0) * 100) // --tool-filter -github (all except github)
 
 /** Read memory://instructions text from a client */
 async function readInstructions(client: Client): Promise<string> {
@@ -43,7 +43,7 @@ test.describe('memory://instructions: core-only filter gating', () => {
         await startServer(CORE_ONLY_PORT, ['--tool-filter', 'core'], 'instr-core-only')
         const transport = new StreamableHTTPClientTransport(
             new URL(`http://localhost:${CORE_ONLY_PORT}/mcp`)
-        )
+        , { protocolVersion: '2024-11-05' })
         client = new Client(
             { name: 'instr-core-only-test', version: '1.0.0' },
             { capabilities: {} }
@@ -56,9 +56,9 @@ test.describe('memory://instructions: core-only filter gating', () => {
         stopServer(CORE_ONLY_PORT)
     })
 
-    test('core-only: core section (Essential Session Start) is always present', async () => {
+    test('core-only: core section (Essential Behaviors) is always present', async () => {
         const text = await readInstructions(client)
-        expect(text).toContain('Essential Session Start')
+        expect(text).toContain('Essential Behaviors')
     })
 
     test('core-only: Active Tools section lists only core group', async () => {
@@ -68,9 +68,9 @@ test.describe('memory://instructions: core-only filter gating', () => {
         expect(text).toContain('core')
     })
 
-    test('core-only: Code Mode section is absent (codemode group disabled)', async () => {
+    test('core-only: Code Mode section is always present (mj_execute_code is escape-hatch)', async () => {
         const text = await readInstructions(client)
-        expect(text).not.toContain('## Code Mode')
+        expect(text).toContain('## Code Mode')
     })
 
     test('core-only: GitHub Integration section is absent (github group disabled)', async () => {
@@ -100,7 +100,7 @@ test.describe('memory://instructions: -github filter gating', () => {
         await startServer(NO_GITHUB_PORT, ['--tool-filter', '-github'], 'instr-no-github')
         const transport = new StreamableHTTPClientTransport(
             new URL(`http://localhost:${NO_GITHUB_PORT}/mcp`)
-        )
+        , { protocolVersion: '2024-11-05' })
         client = new Client(
             { name: 'instr-no-github-test', version: '1.0.0' },
             { capabilities: {} }
@@ -115,7 +115,7 @@ test.describe('memory://instructions: -github filter gating', () => {
 
     test('-github: core section is present', async () => {
         const text = await readInstructions(client)
-        expect(text).toContain('Essential Session Start')
+        expect(text).toContain('Essential Behaviors')
     })
 
     test('-github: Code Mode section is present (codemode group enabled)', async () => {
@@ -123,23 +123,54 @@ test.describe('memory://instructions: -github filter gating', () => {
         expect(text).toContain('## Code Mode')
     })
 
-    test('-github: GitHub Integration section is absent (github group removed)', async () => {
+    test('-github: GitHub help pointer is absent (github group removed)', async () => {
         const text = await readInstructions(client)
-        expect(text).not.toContain('## GitHub Integration')
-    })
-
-    test('-github: Copilot Review Patterns section is absent (github group removed)', async () => {
-        const text = await readInstructions(client)
-        expect(text).not.toContain('Copilot Review Patterns')
-    })
-
-    test('-github: semantic_search is present in Active Tools (search group enabled)', async () => {
-        const text = await readInstructions(client)
-        expect(text).toContain('semantic_search')
+        expect(text).not.toContain('memory://help/github')
     })
 
     test('-github: Active Tools section does not list github tools', async () => {
         const text = await readInstructions(client)
         expect(text).not.toContain('get_github_issues')
+    })
+})
+
+// ============================================================================
+// codemode-only filter: Code Mode API injection
+// ============================================================================
+
+const CODEMODE_ONLY_PORT = 5112 + (Number(process.env.TEST_PARALLEL_INDEX || 0) * 100)
+
+test.describe('memory://instructions: codemode-only filter gating', () => {
+    let client: Client
+
+    test.beforeAll(async () => {
+        await startServer(CODEMODE_ONLY_PORT, ['--tool-filter', 'codemode'], 'instr-codemode')
+        const transport = new StreamableHTTPClientTransport(
+            new URL(`http://localhost:${CODEMODE_ONLY_PORT}/mcp`)
+        , { protocolVersion: '2024-11-05' })
+        client = new Client(
+            { name: 'instr-codemode-test', version: '1.0.0' },
+            { capabilities: {} }
+        )
+        await client.connect(transport)
+    })
+
+    test.afterAll(async () => {
+        await client.close()
+        stopServer(CODEMODE_ONLY_PORT)
+    })
+
+    test('codemode-only: injects full Code Mode API Reference', async () => {
+        const text = await readInstructions(client)
+        expect(text).toContain('# Code Mode API Reference')
+        expect(text).toContain('## API Namespace Map')
+        expect(text).toContain('mj.core')
+        expect(text).toContain('mj.github')
+    })
+
+    test('codemode-only: Active Tools section lists only codemode group', async () => {
+        const text = await readInstructions(client)
+        expect(text).toContain('**codemode**: `mj_execute_code`')
+        expect(text).not.toContain('**core**:')
     })
 })

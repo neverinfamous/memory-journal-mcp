@@ -11,8 +11,7 @@
  * - startServer() / stopServer() — managed child-process server lifecycle
  */
 
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 import type { TestInfo } from '@playwright/test'
 import { expect } from '@playwright/test'
 import { ChildProcess, spawn } from 'node:child_process'
@@ -20,35 +19,52 @@ import { createWriteStream } from 'node:fs'
 import { setTimeout as delay } from 'node:timers/promises'
 import { join } from 'node:path'
 
-const DEFAULT_PORT = 3100
+export const DEFAULT_PORT = 3105
 
 // ─── Base URL resolution ────────────────────────────────────────────────────
 
 /**
  * Resolve the base URL from Playwright test info.
- * Falls back to http://localhost:3100 if not set in project config.
+ * Falls back to http://localhost:3105 if not set in project config.
  */
 export function getBaseURL(testInfo: TestInfo): string {
-    return (
-        (testInfo.project.use as { baseURL?: string }).baseURL ?? `http://localhost:${DEFAULT_PORT}`
-    )
+    const customBaseURL = (testInfo.project.use as { baseURL?: string }).baseURL
+    if (customBaseURL) return customBaseURL
+
+    const workerIndex = testInfo.parallelIndex ?? Number(process.env.TEST_PARALLEL_INDEX || 0)
+    return `http://localhost:${DEFAULT_PORT + workerIndex}`
+}
+
+/**
+ * Get the server URL based on the current worker's port assignment.
+ * Useful for tests that need to construct their own URLs outside of Playwright's native baseURL.
+ */
+export function getServerUrl(path = ''): URL {
+    const workerIndex = Number(process.env.TEST_PARALLEL_INDEX || 0)
+    return new URL(`http://localhost:${DEFAULT_PORT + workerIndex}${path}`)
 }
 
 /**
  * Create and connect a Streamable HTTP MCP client.
  * Caller is responsible for calling client.close() in afterAll.
  */
-export async function createClient(port = 3100, authToken?: string): Promise<Client> {
-    const transportOptions = authToken
-        ? { requestInit: { headers: { Authorization: `Bearer ${authToken}` } } }
-        : undefined
+export async function createClient(port?: number, authToken?: string): Promise<Client> {
+    const workerIndex = Number(process.env.TEST_PARALLEL_INDEX || 0)
+    const resolvedPort = port ?? (DEFAULT_PORT + workerIndex)
+
     const transport = new StreamableHTTPClientTransport(
-        new URL(`http://localhost:${port}/mcp`),
-        transportOptions
+        new URL(`http://localhost:${resolvedPort}/mcp`),
+        {
+            requestInit: {
+                headers: {
+                    ...(authToken ? { Authorization: `Bearer ${authToken}` } : {})
+                }
+            }
+        }
     )
     const client = new Client(
         { name: 'payload-contract-test', version: '1.0.0' },
-        { capabilities: {} }
+        { capabilities: { experimental: { progress: {} }, progress: {} } }
     )
     await client.connect(transport)
     return client
@@ -63,6 +79,10 @@ export async function callToolAndParse(
     toolName: string,
     args: Record<string, unknown>
 ): Promise<Record<string, unknown>> {
+    const entryTools = ['create_entry', 'update_entry', 'get_recent_entries', 'search_entries', 'search_by_date_range', 'semantic_search', 'link_entries', 'export_entries', 'team_create_entry', 'team_update_entry', 'batch_create_entries', 'team_get_recent_entries', 'team_search_entries', 'team_search_by_date_range', 'team_semantic_search', 'team_link_entries', 'team_export_entries'];
+    if (entryTools.includes(toolName) && !('workspace_id' in args)) {
+        args.workspace_id = 'default';
+    }
     const response = await client.callTool({ name: toolName, arguments: args })
 
     if (response.isError) {
@@ -118,6 +138,10 @@ export async function callToolRaw(
     content: Array<{ type: string; text: string }>
     isError?: boolean
 }> {
+    const entryTools = ['create_entry', 'update_entry', 'get_recent_entries', 'search_entries', 'search_by_date_range', 'semantic_search', 'link_entries', 'export_entries', 'team_create_entry', 'team_update_entry', 'batch_create_entries', 'team_get_recent_entries', 'team_search_entries', 'team_search_by_date_range', 'team_semantic_search', 'team_link_entries', 'team_export_entries'];
+    if (entryTools.includes(toolName) && !('workspace_id' in args)) {
+        args.workspace_id = 'default';
+    }
     const response = await client.callTool({ name: toolName, arguments: args })
     return response as {
         content: Array<{ type: string; text: string }>
@@ -172,7 +196,7 @@ export async function startServer(
     dbSuffix?: string,
     options?: { cwd?: string; env?: Record<string, string | undefined> }
 ): Promise<void> {
-    const suffix = dbSuffix ?? String(port)
+    const suffix = dbSuffix ? `${dbSuffix}-${port}` : String(port)
     const serverProcess = spawn(
         'node',
         [
@@ -195,13 +219,17 @@ export async function startServer(
             env: Object.fromEntries(
                 Object.entries({
                     ...process.env,
+                    GITHUB_TOKEN: '',
+                    GITHUB_PERSONAL_ACCESS_TOKEN: '',
                     ALLOWED_IO_ROOTS: process.cwd(),
+                    MEMORY_JOURNAL_CONFIG: join(process.cwd(), 'tests', 'e2e', 'empty-config.json'),
                     MCP_RATE_LIMIT_MAX: args.some((a) => a === '--rate-limit-max')
                         ? undefined
                         : '10000',
                     ...options?.env,
                 }).filter(([, v]) => v !== undefined)
-            ),
+            ) as Record<string, string>,
+            windowsHide: true,
         }
     )
 
@@ -213,7 +241,7 @@ export async function startServer(
 
     managedServers.set(port, { process: serverProcess, port })
 
-    const maxAttempts = 180
+    const maxAttempts = 600
     for (let i = 0; i < maxAttempts; i++) {
         try {
             const res = await fetch(`http://localhost:${port}/health`)
@@ -221,7 +249,7 @@ export async function startServer(
         } catch {
             // Server not ready yet
         }
-        await delay(500)
+        await delay(50)
     }
 
     serverProcess.kill()

@@ -12,7 +12,7 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { JournalApi, toolNameToMethodName, createJournalApi } from '../../src/codemode/api.js'
+import { JournalApi, toolNameToMethodName, createJournalApi } from '../../src/codemode/api/index.js'
 import type { ToolDefinition } from '../../src/types/index.js'
 
 // =============================================================================
@@ -39,7 +39,7 @@ function createMockTool(
 function createMinimalToolSet(): ToolDefinition[] {
     return [
         createMockTool('create_entry', 'core'),
-        createMockTool('create_entry_minimal', 'core'),
+        createMockTool('create_entry', 'core'),
         createMockTool('get_entry_by_id', 'core'),
         createMockTool('get_recent_entries', 'core'),
         createMockTool('search_entries', 'search'),

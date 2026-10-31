@@ -1,0 +1,7 @@
+name: "Memory Journal MCP CodeQL Config"
+
+paths-ignore:
+  - "src/vendor/**"
+  - "tests/**"
+  - "test-server/**"
+  - "scripts/**"

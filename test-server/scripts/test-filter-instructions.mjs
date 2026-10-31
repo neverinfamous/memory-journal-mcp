@@ -3,16 +3,8 @@
  *
  * Starts the server with various --tool-filter configs and verifies that
  * each instruction section is correctly included or excluded based on enabled
- * tool groups. Also reports char counts and token estimates per configuration.
- *
- * Validated sections:
- *   CORE         — always present (Essential Session Start, Behaviors)
- *   CODE_MODE    — only when `codemode` group is enabled
- *   HELP_POINTERS — dynamic help pointers at standard+ level
- *
- * Note: GitHub Integration, Copilot Review Patterns, and the Semantic search
- * Quick Access row have been moved to on-demand help (memory://help/{group})
- * and are no longer part of the init payload.
+ * tool groups. Also verifies that the dynamic index at memory://help properly
+ * reflects the enabled groups.
  *
  * Usage:
  *   npm run build && node test-server/scripts/test-filter-instructions.mjs
@@ -25,140 +17,138 @@ import { fileURLToPath } from 'url'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const PROJECT_DIR = resolve(__dirname, '../..')
 
-// Section markers — substrings we check for presence/absence in instructions
 const SECTIONS = {
-    CORE: 'Essential Session Start', // Always present
-    CODE_MODE: '## Code Mode', // codemode group only
-    HELP_POINTERS: 'Available Help', // standard+ level only
+    CORE: 'Essential Behaviors',
+    CODE_MODE: '## Code Mode',
+    HELP_POINTERS: 'Available Help',
 }
 
-// Test matrix: each entry defines a filter config and expected section presence
+const ALL_GROUPS = [
+    'core',
+    'codemode',
+    'github',
+    'search',
+    'analytics',
+    'relationships',
+    'io',
+    'team',
+    'admin',
+    'backup',
+    'git'
+]
+
 const TEST_CONFIGS = [
     {
         label: 'full (all groups)',
         filter: null, // default
-        level: 'standard',
-        expect: {
-            CORE: true,
-            CODE_MODE: true,
-            HELP_POINTERS: true,
-        },
+        expect: { CORE: true, CODE_MODE: true, HELP_POINTERS: true },
+        expectedGroups: ALL_GROUPS
     },
     {
         label: 'codemode only',
         filter: 'codemode',
-        level: 'standard',
-        expect: {
-            CORE: true,
-            CODE_MODE: true,
-            HELP_POINTERS: true,
-        },
+        expect: { CORE: true, CODE_MODE: true, HELP_POINTERS: true },
+        expectedGroups: ALL_GROUPS
     },
     {
         label: 'essential (core+codemode — no github)',
         filter: 'essential',
-        level: 'standard',
-        // META_GROUPS.essential = ['core', 'codemode'] — no github, no search
-        expect: {
-            CORE: true,
-            CODE_MODE: true,
-            HELP_POINTERS: true,
-        },
+        expect: { CORE: true, CODE_MODE: true, HELP_POINTERS: true },
+        expectedGroups: ALL_GROUPS
     },
     {
         label: 'starter (core+search+codemode — no github)',
         filter: 'starter',
-        level: 'standard',
-        // META_GROUPS.starter = ['core', 'search', 'codemode']
-        expect: {
-            CORE: true,
-            CODE_MODE: true,
-            HELP_POINTERS: true,
-        },
+        expect: { CORE: true, CODE_MODE: true, HELP_POINTERS: true },
+        expectedGroups: ALL_GROUPS
     },
     {
         label: 'core only (no codemode, no github, no search)',
         filter: 'core',
-        level: 'standard',
-        expect: {
-            CORE: true,
-            CODE_MODE: false,
-            HELP_POINTERS: true,
-        },
+        expect: { CORE: true, CODE_MODE: false, HELP_POINTERS: true },
+        expectedGroups: ['core']
     },
     {
         label: 'full -codemode (github present, no code mode)',
         filter: '-codemode',
-        level: 'standard',
-        expect: {
-            CORE: true,
-            CODE_MODE: false,
-            HELP_POINTERS: true,
-        },
+        expect: { CORE: true, CODE_MODE: false, HELP_POINTERS: true },
+        expectedGroups: ALL_GROUPS.filter(g => g !== 'codemode')
     },
     {
         label: 'full -github (no github, no copilot)',
         filter: '-github',
-        level: 'standard',
-        expect: {
-            CORE: true,
-            CODE_MODE: true,
-            HELP_POINTERS: true,
-        },
+        expect: { CORE: true, CODE_MODE: true, HELP_POINTERS: true },
+        expectedGroups: ALL_GROUPS
     },
     {
-        label: 'readonly (core+search+analytics+relationships+io+codemode — no github)',
+        label: 'readonly (core+search+analytics+relationships+io+codemode)',
         filter: 'readonly',
-        level: 'standard',
-        // META_GROUPS.readonly excludes github but includes codemode
-        expect: {
-            CORE: true,
-            CODE_MODE: true,
-            HELP_POINTERS: true,
-        },
-    },
-    {
-        label: 'full — essential level (no help pointers at essential level)',
-        filter: null,
-        level: 'essential',
-        expect: {
-            CORE: true,
-            CODE_MODE: true,
-            HELP_POINTERS: false,
-        },
+        expect: { CORE: true, CODE_MODE: true, HELP_POINTERS: true },
+        expectedGroups: ALL_GROUPS
     },
 ]
 
-/** Spawn server with given filter/level, send initialize, capture instructions */
-function runConfig(filter, level) {
+function runConfig(config) {
     return new Promise((resolve, reject) => {
-        const args = ['dist/cli.js']
-        if (filter) args.push('--tool-filter', filter)
-        if (level) args.push('--instruction-level', level)
+        const args = ['dist/cli.js', 'serve', '--db', ':memory:', '--team-db', ':memory:']
+        if (config.filter) args.push('--tool-filter', config.filter)
 
         const proc = spawn('node', args, {
             cwd: PROJECT_DIR,
             stdio: ['pipe', 'pipe', 'pipe'],
+            env: {
+                ...process.env,
+                TEST_DB_PATH: ':memory:',
+                TEST_TEAM_DB_PATH: ':memory:',
+                DB_ENCRYPTION_KEY: '',
+                MJ_DB_ENCRYPTION_KEY: '',
+                GITHUB_DB_PATH: ':memory:'
+            }
         })
 
         let buffer = ''
+        let instructions = ''
+        let availableGroups = []
 
         proc.stdout.on('data', (chunk) => {
             buffer += chunk.toString()
             const lines = buffer.split('\n')
+            buffer = lines.pop() // keep incomplete line
+
             for (const line of lines) {
                 const trimmed = line.trim()
                 if (!trimmed) continue
                 try {
                     const msg = JSON.parse(trimmed)
                     if (msg.id === 1 && msg.result) {
-                        const instructions =
+                        instructions =
                             msg.result?.serverInfo?.instructions ||
                             msg.result?.instructions ||
                             msg.result?.capabilities?.instructions ||
                             ''
+                        
+                        proc.stdin.write(
+                            JSON.stringify({
+                                jsonrpc: '2.0',
+                                id: 2,
+                                method: 'resources/read',
+                                params: { uri: 'memory://help' },
+                            }) + '\n'
+                        )
+                    } else if (msg.id === 2 && msg.result) {
+                        try {
+                            const content = msg.result.contents[0].text
+                            const parsed = JSON.parse(content)
+                            availableGroups = parsed.groups.map(g => g.name)
+                        } catch {
+                            // parse error
+                        }
                         proc.kill()
-                        resolve(instructions)
+                        resolve({ instructions, availableGroups })
+                    } else if (msg.id === 2 && msg.error) {
+                         console.error('Resource read error:', msg.error)
+                         proc.kill()
+                         resolve({ instructions, availableGroups: [] })
                     }
                 } catch {
                     // Incomplete JSON, keep buffering
@@ -206,10 +196,22 @@ function checkSections(instructions, expect) {
     return results
 }
 
+function checkGroups(actualGroups, expectedGroups, configLabel) {
+    let expected = [...expectedGroups];
+
+    const missing = expected.filter(g => !actualGroups.includes(g))
+    const unexpected = actualGroups.filter(g => !expected.includes(g))
+    return {
+        pass: missing.length === 0 && unexpected.length === 0,
+        missing,
+        unexpected
+    }
+}
+
 async function main() {
     console.log('=== Filter-Aware Instruction Validation ===\n')
     console.log('Checking that instruction sections are correctly included/excluded')
-    console.log('per enabled tool groups.\n')
+    console.log('and dynamic index groups are correctly registered.\n')
 
     let totalPassed = 0
     let totalFailed = 0
@@ -217,21 +219,23 @@ async function main() {
 
     for (const config of TEST_CONFIGS) {
         process.stdout.write(`  Testing: ${config.label} ... `)
-        let instructions
+        let result
         try {
-            instructions = await runConfig(config.filter, config.level)
+            result = await runConfig(config)
         } catch (err) {
             console.log(`❌ ERROR: ${err.message}`)
             totalFailed++
             continue
         }
 
+        const { instructions, availableGroups } = result
         const chars = instructions.length
         const tokens = tokenEstimate(instructions)
         const sectionResults = checkSections(instructions, config.expect)
+        const groupResults = checkGroups(availableGroups, config.expectedGroups, config.label)
 
-        const failures = Object.entries(sectionResults).filter(([, r]) => !r.pass)
-        const allPass = failures.length === 0
+        const sectionFailures = Object.entries(sectionResults).filter(([, r]) => !r.pass)
+        const allPass = sectionFailures.length === 0 && groupResults.pass
 
         if (allPass) {
             console.log(`✅ (${chars} chars, ~${tokens} tokens)`)
@@ -239,12 +243,15 @@ async function main() {
         } else {
             console.log(`❌ (${chars} chars, ~${tokens} tokens)`)
             totalFailed++
-            for (const [section, result] of failures) {
-                const action = result.expected ? 'MISSING' : 'UNEXPECTED'
-                console.log(
-                    `      [${action}] ${section} — expected ${result.expected ? 'present' : 'absent'}, got ${result.present ? 'present' : 'absent'}`
-                )
-                console.log(`        marker: "${SECTIONS[section]}"`)
+            for (const [section, r] of sectionFailures) {
+                const action = r.expected ? 'MISSING' : 'UNEXPECTED'
+                console.log(`      [${action}] SECTION ${section}`)
+            }
+            for (const g of groupResults.missing) {
+                console.log(`      [MISSING] GROUP ${g}`)
+            }
+            for (const g of groupResults.unexpected) {
+                console.log(`      [UNEXPECTED] GROUP ${g}`)
             }
         }
 
@@ -253,18 +260,14 @@ async function main() {
 
     // Token summary table
     console.log('\n=== Token Estimates by Filter ===\n')
-    console.log(
-        `  ${'Filter'.padEnd(52)} ${'Chars'.padStart(6)} ${'~Tokens'.padStart(8)} ${'Sections'.padStart(30)}`
-    )
-    console.log(`  ${'-'.repeat(52)} ${'-'.repeat(6)} ${'-'.repeat(8)} ${'-'.repeat(30)}`)
+    console.log(`  ${'Filter'.padEnd(62)} ${'Chars'.padStart(6)} ${'~Tokens'.padStart(8)} ${'Sections'.padStart(30)}`)
+    console.log(`  ${'-'.repeat(62)} ${'-'.repeat(6)} ${'-'.repeat(8)} ${'-'.repeat(30)}`)
     for (const row of rows) {
         const sectionSummary = Object.entries(row.sectionResults)
             .map(([k, r]) => (r.present ? k.toLowerCase().replace('_', '-').slice(0, 5) : null))
             .filter(Boolean)
             .join('+')
-        console.log(
-            `  ${row.label.padEnd(52)} ${String(row.chars).padStart(6)} ${String(row.tokens).padStart(8)}   ${sectionSummary}`
-        )
+        console.log(`  ${row.label.padEnd(62)} ${String(row.chars).padStart(6)} ${String(row.tokens).padStart(8)}   ${sectionSummary}`)
     }
 
     console.log(`\n=== Results: ${totalPassed} passed, ${totalFailed} failed ===\n`)

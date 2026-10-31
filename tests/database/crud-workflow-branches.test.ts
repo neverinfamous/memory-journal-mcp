@@ -24,6 +24,7 @@ import {
 } from '../../src/database/sqlite-adapter/entries/crud.js'
 import { TagsManager } from '../../src/database/sqlite-adapter/tags.js'
 import { getWorkflowPromptDefinitions } from '../../src/handlers/prompts/workflow.js'
+import { getAnalyticsPromptDefinitions } from '../../src/handlers/prompts/analytics.js'
 import type { IDatabaseAdapter } from '../../src/database/core/interfaces.js'
 import type { JournalEntry } from '../../src/types/index.js'
 
@@ -52,11 +53,37 @@ function createTestDb() {
             workflow_name TEXT DEFAULT NULL,
             workflow_status TEXT DEFAULT NULL,
             significance_type TEXT DEFAULT NULL,
+            impact_score REAL DEFAULT NULL,
+            trust_score REAL DEFAULT NULL,
+            validation_status TEXT DEFAULT 'none',
             auto_context TEXT DEFAULT NULL,
-            share_with_team INTEGER DEFAULT 0
+            share_with_team INTEGER DEFAULT 0,
+            is_archived INTEGER DEFAULT 0,
+            version INTEGER DEFAULT 1,
+            workspace_id TEXT DEFAULT 'default',
+            session_id TEXT DEFAULT NULL
+        );
+        CREATE TABLE entry_anchors (
+            id INTEGER PRIMARY KEY,
+            entry_id INTEGER NOT NULL,
+            anchor_path TEXT NOT NULL,
+            anchor_type TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending',
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (entry_id) REFERENCES memory_journal (id) ON DELETE CASCADE
         );
         CREATE TABLE tags (id INTEGER PRIMARY KEY, name TEXT UNIQUE NOT NULL, usage_count INTEGER DEFAULT 0);
         CREATE TABLE entry_tags (entry_id INTEGER, tag_id INTEGER);
+        CREATE TABLE entry_revisions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            entry_id INTEGER NOT NULL,
+            revision_number INTEGER NOT NULL,
+            content_snapshot TEXT NOT NULL,
+            changed_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            changed_by TEXT,
+            FOREIGN KEY (entry_id) REFERENCES memory_journal(id) ON DELETE CASCADE
+        );
         CREATE TABLE relationships (
             id INTEGER PRIMARY KEY,
             from_entry_id INTEGER,
@@ -78,8 +105,9 @@ function makeCtx(db: InstanceType<typeof Database>) {
 }
 
 function createContext(db: InstanceType<typeof Database>) {
-    const tagsMgr = new TagsManager(makeCtx(db))
-    return { db, tagsMgr }
+    const ctx = makeCtx(db)
+    const tagsMgr = new TagsManager(ctx)
+    return { ctx, db, tagsMgr }
 }
 
 // ============================================================================
@@ -129,13 +157,13 @@ describe('CRUD — branch coverage', () => {
                 prStatus: 'open',
                 workflowRunId: 100,
                 workflowName: 'CI',
-                workflowStatus: 'success',
+                workflowStatus: 'completed',
                 significanceType: 'decision',
                 autoContext: '1.0',
                 isPersonal: false,
-                entryType: 'decision',
+                entryType: 'project_decision',
             })
-            expect(entry.entryType).toBe('decision')
+            expect(entry.entryType).toBe('project_decision')
             expect(entry.isPersonal).toBe(false)
         })
     })
@@ -204,8 +232,8 @@ describe('CRUD — branch coverage', () => {
 
         it('should update entryType', () => {
             const entry = createEntry(context, { content: 'test' })
-            const updated = updateEntry(context, entry.id, { entryType: 'decision' })
-            expect(updated!.entryType).toBe('decision')
+            const updated = updateEntry(context, entry.id, { entryType: 'project_decision' })
+            expect(updated!.entryType).toBe('project_decision')
         })
 
         it('should update isPersonal', () => {
@@ -302,7 +330,7 @@ describe('Workflow prompts — branch coverage', () => {
 
     function createMockDb(entries: JournalEntry[] = []): IDatabaseAdapter {
         return {
-            searchByDateRange: vi.fn().mockReturnValue(entries),
+            searchByDateRange: vi.fn().mockReturnValue({ entries }),
             getStatistics: vi.fn().mockReturnValue({
                 totalEntries: entries.length,
                 entriesByType: {},
@@ -312,8 +340,8 @@ describe('Workflow prompts — branch coverage', () => {
                 activityTrend: { currentPeriod: '', previousPeriod: '', growthPercent: null },
                 causalMetrics: {},
             }),
-            searchEntries: vi.fn().mockReturnValue(entries),
-            getRecentEntries: vi.fn().mockReturnValue(entries),
+            searchEntries: vi.fn().mockReturnValue({ entries }),
+            getRecentEntries: vi.fn().mockReturnValue({ entries }),
             getSignificantEntries: vi.fn().mockReturnValue(
                 entries.map((e) => ({
                     id: e.id,
@@ -326,93 +354,36 @@ describe('Workflow prompts — branch coverage', () => {
         } as unknown as IDatabaseAdapter
     }
 
-    it('should generate prepare-standup prompt', () => {
-        const prompts = getWorkflowPromptDefinitions()
-        const standup = prompts.find((p) => p.name === 'prepare-standup')!
-        const db = createMockDb([mockEntry({ content: 'worked on auth' })])
-        const result = standup.handler({}, db)
+    it('should generate prepare-standup prompt for standup', () => {
+        const prompts = [...getWorkflowPromptDefinitions(), ...getAnalyticsPromptDefinitions()]
+        const analysis = prompts.find((p) => p.name === 'prepare-standup')!
+        const db = createMockDb()
+        const result = analysis.handler({}, db)
         expect(result.messages[0]!.content.text).toContain('standup')
     })
 
-    it('should generate prepare-retro prompt with default 14 days', () => {
-        const prompts = getWorkflowPromptDefinitions()
-        const retro = prompts.find((p) => p.name === 'prepare-retro')!
-        const db = createMockDb([mockEntry()])
-        const result = retro.handler({}, db)
-        expect(result.messages[0]!.content.text).toContain('14 days')
-    })
-
-    it('should generate prepare-retro prompt with custom days', () => {
-        const prompts = getWorkflowPromptDefinitions()
-        const retro = prompts.find((p) => p.name === 'prepare-retro')!
+    it('should generate prepare-retro prompt for retro', () => {
+        const prompts = [...getWorkflowPromptDefinitions(), ...getAnalyticsPromptDefinitions()]
+        const analysis = prompts.find((p) => p.name === 'prepare-retro')!
         const db = createMockDb()
-        const result = retro.handler({ days: '7' }, db)
-        expect(result.messages[0]!.content.text).toContain('7 days')
-    })
-
-    it('should generate weekly-digest prompt', () => {
-        const prompts = getWorkflowPromptDefinitions()
-        const digest = prompts.find((p) => p.name === 'weekly-digest')!
-        const db = createMockDb([mockEntry()])
-        const result = digest.handler({}, db)
-        expect(result.messages[0]!.content.text).toContain('weekly')
-    })
-
-    it('should generate analyze-period prompt with dates', () => {
-        const prompts = getWorkflowPromptDefinitions()
-        const analyze = prompts.find((p) => p.name === 'analyze-period')!
-        const db = createMockDb()
-        // Uses start_date and end_date arg names
-        const result = analyze.handler({ start_date: '2025-01-01', end_date: '2025-02-01' }, db)
-        expect(result.messages[0]!.content.text).toContain('2025-01-01')
-        expect(result.messages[0]!.content.text).toContain('2025-02-01')
-    })
-
-    it('should generate analyze-period prompt without dates', () => {
-        const prompts = getWorkflowPromptDefinitions()
-        const analyze = prompts.find((p) => p.name === 'analyze-period')!
-        const db = createMockDb()
-        const result = analyze.handler({}, db)
-        expect(result.messages[0]!.content.text).toContain('Analyze')
+        const result = analysis.handler({}, db)
+        expect(result.messages[0]!.content.text).toContain('retrospective')
     })
 
     it('should generate goal-tracker prompt', () => {
-        const prompts = getWorkflowPromptDefinitions()
+        const prompts = [...getWorkflowPromptDefinitions(), ...getAnalyticsPromptDefinitions()]
         const goal = prompts.find((p) => p.name === 'goal-tracker')!
         const db = createMockDb([mockEntry({ content: 'goal: ship v2' })])
         const result = goal.handler({}, db)
         expect(result.messages[0]!.content.text).toContain('progress')
     })
 
-    it('should generate get-context-bundle prompt', () => {
-        const prompts = getWorkflowPromptDefinitions()
-        const bundle = prompts.find((p) => p.name === 'get-context-bundle')!
-        const db = createMockDb()
-        const result = bundle.handler({}, db)
-        expect(result.messages[0]!.content.text).toContain('Project context bundle')
-    })
 
-    it('should generate get-recent-entries prompt', () => {
-        const prompts = getWorkflowPromptDefinitions()
-        const recent = prompts.find((p) => p.name === 'get-recent-entries')!
-        const db = createMockDb([mockEntry()])
-        const result = recent.handler({}, db)
-        expect(result.messages[0]!.content.text).toContain('entries')
-    })
-
-    it('should generate confirm-briefing prompt', () => {
-        const prompts = getWorkflowPromptDefinitions()
-        const confirm = prompts.find((p) => p.name === 'confirm-briefing')!
-        const db = createMockDb([mockEntry()])
-        const result = confirm.handler({}, db)
-        expect(result.messages.length).toBeGreaterThan(0)
-    })
-
-    it('should generate session-summary prompt', () => {
-        const prompts = getWorkflowPromptDefinitions()
+    it('should generate session-summary prompt', async () => {
+        const prompts = [...getWorkflowPromptDefinitions(), ...getAnalyticsPromptDefinitions()]
         const summary = prompts.find((p) => p.name === 'session-summary')!
         const db = createMockDb([mockEntry({ content: 'debug session' })])
-        const result = summary.handler({}, db)
+        const result = await summary.handler({}, db)
         expect(result.messages[0]!.content.text).toContain('session summary')
     })
 })

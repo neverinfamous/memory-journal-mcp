@@ -5,10 +5,11 @@
  * on port 3102 to avoid conflicting with the main webServer.
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test-fixture.js'
 import { startServer, stopServer } from './helpers.js'
 
-const STATELESS_PORT = 3102
+const workerIndex = Number(process.env.TEST_PARALLEL_INDEX || 0)
+const STATELESS_PORT = 4200 + (workerIndex * 10)
 const STATELESS_BASE = `http://localhost:${STATELESS_PORT}`
 
 test.describe('Stateless HTTP Mode', () => {
@@ -25,26 +26,33 @@ test.describe('Stateless HTTP Mode', () => {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                Accept: 'application/json, text/event-stream',
+                Accept: 'application/json',
+                'mcp-protocol-version': '2026-07-28',
+                'mcp-method': 'tools/list'
             },
             body: JSON.stringify({
                 jsonrpc: '2.0',
                 id: 1,
-                method: 'initialize',
+                method: 'tools/list',
                 params: {
-                    protocolVersion: '2025-03-26',
-                    capabilities: {},
-                    clientInfo: { name: 'stateless-test', version: '1.0' },
-                },
+                    _meta: {
+                        'io.modelcontextprotocol/protocolVersion': '2026-07-28',
+                        'io.modelcontextprotocol/clientCapabilities': {}
+                    }
+                }
             }),
         })
 
+        const text = await response.text()
+        if (response.status !== 200) {
+            console.error('SERVER RESPONDED WITH:', response.status, text)
+        }
+        
         expect(response.status).toBe(200)
-        const body = await response.json()
+        const body = JSON.parse(text)
         expect(body).toHaveProperty('jsonrpc', '2.0')
         expect(body).toHaveProperty('id', 1)
         expect(body.result).toBeDefined()
-        expect(body.result.serverInfo.name).toBe('memory-journal-mcp')
     })
 
     test('GET /mcp should return 405 (SSE not available in stateless)', async () => {

@@ -352,180 +352,31 @@ describe('formatUserMessage', () => {
         expect(result).not.toContain('comments')
     })
 
+
+
     // ========================================================================
-    // Rules & Skills
+    // Git History
     // ========================================================================
 
-    it('should include rules file info', () => {
+    it('should include git history in Analytics', () => {
         const result = formatUserMessage({
             ...baseOpts(),
-            rulesFile: {
-                path: '/path/to/.rules',
-                name: '.rules',
-                sizeKB: 4,
-                lastModified: '2h ago',
+            gitHistory: {
+                commits: [
+                    { hash: 'abc1234', category: 'Feature', entry: 'New cool feature', message: 'feat: add stuff' },
+                    { hash: 'def5678', message: 'fix: annoying bug' }
+                ]
             },
         })
 
-        expect(result).toContain('.rules')
-        expect(result).toContain('4 KB')
+        expect(result).toContain('**Git History**')
+        expect(result).toContain('`abc1234`')
+        expect(result).toContain('`def5678`')
     })
 
-    it('should include skills directory info', () => {
-        const result = formatUserMessage({
-            ...baseOpts(),
-            skillsDir: {
-                path: '/path/to/skills',
-                count: 3,
-                names: ['cloudflare', 'mcp-builder', 'next'],
-            },
-        })
-
-        expect(result).toContain('3 skills')
-    })
-
-    it('should use singular "skill" for count of 1', () => {
-        const result = formatUserMessage({
-            ...baseOpts(),
-            skillsDir: {
-                path: '/path/to/skills',
-                count: 1,
-                names: ['cloudflare'],
-            },
-        })
-
-        expect(result).toContain('1 skill')
-        expect(result).not.toContain('1 skills')
-    })
-
-    it('should combine rules and skills on one line with · separator', () => {
-        const result = formatUserMessage({
-            ...baseOpts(),
-            rulesFile: {
-                path: '/path/to/GEMINI.md',
-                name: 'GEMINI.md',
-                sizeKB: 7,
-                lastModified: '3h ago',
-            },
-            skillsDir: {
-                path: '/path/to/skills',
-                count: 41,
-                names: [],
-            },
-        })
-
-        // Both should appear in the same System table row, joined by ·
-        expect(result).toContain('GEMINI.md')
-        expect(result).toContain('41 skills')
-        expect(result).toContain('·')
-    })
-
-    // ========================================================================
-    // Version & Surface Area
-    // ========================================================================
-
-    it('should include version in System row', () => {
-        const result = formatUserMessage({
-            ...baseOpts(),
-            version: '8.0.0',
-        })
-
-        expect(result).toContain('v8.0.0')
-    })
-
-    it('should include surface area counts', () => {
-        const result = formatUserMessage({
-            ...baseOpts(),
-            toolCount: 70,
-            resourceCount: 36,
-            promptCount: 17,
-        })
-
-        expect(result).toContain('70 tools')
-        expect(result).toContain('36 resources')
-        expect(result).toContain('17 prompts')
-    })
-
-    it('should combine version and surface area on one line', () => {
-        const result = formatUserMessage({
-            ...baseOpts(),
-            version: '8.0.0',
-            toolCount: 70,
-            resourceCount: 36,
-            promptCount: 17,
-        })
-
-        // Version, resources, and prompts on one line. Tools on a separate line.
-        expect(result).toContain('v8.0.0 · 36 resources · 17 prompts')
-        expect(result).toContain('70 tools')
-    })
-
-    // ========================================================================
-    // Test Health
-    // ========================================================================
-
-    it('should include test health', () => {
-        const result = formatUserMessage({
-            ...baseOpts(),
-            testHealth: { unitTests: 1782, e2eTests: 391, coverage: 91.07 },
-        })
-
-        expect(result).toContain('Tests: 1782+391 E2E')
-        expect(result).toContain('91%')
-    })
-
-    it('should omit coverage when zero', () => {
-        const result = formatUserMessage({
-            ...baseOpts(),
-            testHealth: { unitTests: 500, e2eTests: 100, coverage: 0 },
-        })
-
-        expect(result).toContain('Tests: 500+100 E2E')
-        expect(result).not.toContain('%')
-    })
-
-    // ========================================================================
-    // Local Time
-    // ========================================================================
-
-    it('should include localTime in System row', () => {
-        const result = formatUserMessage({
-            ...baseOpts(),
-            localTime: '2026-05-25 06:12 EDT',
-        })
-
-        expect(result).toContain('2026-05-25 06:12 EDT')
-    })
-
-    // ========================================================================
-    // Unreleased Summary
-    // ========================================================================
-
-    it('should include unreleased summary in Analytics', () => {
-        const result = formatUserMessage({
-            ...baseOpts(),
-            unreleasedSummary: {
-                added: 5,
-                changed: 3,
-                fixed: 2,
-                security: 1,
-                removed: 0,
-                keyItems: ['feature-a', 'config'],
-            },
-        })
-
-        expect(result).toContain('**Unreleased**')
-        expect(result).toContain('5 added')
-        expect(result).toContain('3 changed')
-        expect(result).toContain('2 fixed')
-        expect(result).toContain('1 security')
-        expect(result).not.toContain('removed')
-        expect(result).toContain('Recent focus: feature-a, config')
-    })
-
-    it('should omit unreleased when not provided', () => {
+    it('should omit git history when not provided', () => {
         const result = formatUserMessage(baseOpts())
-        expect(result).not.toContain('**Unreleased**')
+        expect(result).not.toContain('**Git History**')
     })
 
     // ========================================================================
@@ -539,6 +390,7 @@ describe('formatUserMessage', () => {
                 totalRelationships: 0,
                 density: 0,
                 causalMetrics: {},
+                topHubs: [],
             },
         })
 
@@ -552,6 +404,7 @@ describe('formatUserMessage', () => {
                 totalRelationships: 15,
                 density: 1.5,
                 causalMetrics: { evolves_from: 8, implements: 7 },
+                topHubs: [],
             },
         })
 

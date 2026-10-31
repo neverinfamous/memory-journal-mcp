@@ -50,3 +50,15 @@ export function fetchAuthor(
     const authorMap = teamDb.getAuthorsForEntries([entryId])
     return authorMap.get(entryId) ?? null
 }
+
+/**
+ * Trigger MCP resource subscriptions for team resources.
+ */
+export function triggerTeamNotifications(context: ToolContext): void {
+    if (context.config?.subscriptionManager) {
+        void context.config.subscriptionManager.notifyResourceUpdated('memory://team/recent')
+        void context.config.subscriptionManager.notifyResourceUpdated('memory://flags')
+        void context.config.subscriptionManager.notifyResourceUpdated('memory://briefing')
+    }
+}
+

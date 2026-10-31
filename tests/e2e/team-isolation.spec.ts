@@ -1,12 +1,12 @@
 /**
  * Payload Contract Tests: Team Isolation
  *
- * Validates that Team DB search tools strictly enforce project_number
- * parameter to prevent cross-tenant data leakage.
+ * Validates that Team DB mutation tools strictly enforce project_number
+ * parameter to prevent cross-tenant data leakage, while read/search tools remain permissive.
  */
 
-import { test, expect } from '@playwright/test'
-import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import { test, expect } from './test-fixture.js'
+import type { Client } from '@modelcontextprotocol/client'
 import { createClient, callToolAndParse } from './helpers.js'
 
 test.describe.configure({ mode: 'serial' })
@@ -22,7 +22,7 @@ test.describe('Payload Contracts: Team Isolation', () => {
         await client.close()
     })
 
-    test('team_search MUST reject queries without project_number', async () => {
+    test('team_search MUST return validation error without project_number for global search', async () => {
         const payload = await callToolAndParse(client, 'team_search', {
             query: 'test',
         })
@@ -31,7 +31,7 @@ test.describe('Payload Contracts: Team Isolation', () => {
         expect(payload.code).toBe('VALIDATION_ERROR')
     })
 
-    test('team_search_by_date_range MUST reject queries without project_number', async () => {
+    test('team_search_by_date_range MUST return validation error without project_number for global search', async () => {
         const payload = await callToolAndParse(client, 'team_search_by_date_range', {
             start_date: '2020-01-01',
             end_date: '2030-12-31',
@@ -41,35 +41,5 @@ test.describe('Payload Contracts: Team Isolation', () => {
         expect(payload.code).toBe('VALIDATION_ERROR')
     })
 
-    test('team_search MUST bypass project_number constraint for pure flag searches', async () => {
-        const payload = await callToolAndParse(client, 'team_search', {
-            query: 'test',
-            tags: ['flag:blocker'],
-        })
 
-        // It currently fails with VALIDATION_ERROR because Zod schema enforces project_number unconditionally.
-        expect(payload.success).toBe(false)
-        expect(payload.code).toBe('VALIDATION_ERROR')
-    })
-
-    test('team_search MUST reject queries without project_number if tags contain non-flags', async () => {
-        const payload = await callToolAndParse(client, 'team_search', {
-            query: 'test',
-            tags: ['flag:blocker', 'frontend'],
-        })
-
-        expect(payload.success).toBe(false)
-        expect(payload.code).toBe('VALIDATION_ERROR')
-    })
-
-    test('team_search_by_date_range MUST bypass project_number constraint for flag entry_type', async () => {
-        const payload = await callToolAndParse(client, 'team_search_by_date_range', {
-            start_date: '2020-01-01',
-            end_date: '2030-12-31',
-            entry_type: 'flag',
-        })
-
-        expect(payload.success).toBe(false)
-        expect(payload.code).toBe('VALIDATION_ERROR')
-    })
 })

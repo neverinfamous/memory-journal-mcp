@@ -53,6 +53,16 @@ export interface AuditEntry {
     tokenEstimate?: number | undefined
 }
 
+/** Filters for searching the audit log */
+export interface AuditSearchFilters {
+    tool_name?: string
+    user?: string
+    date_range?: { start?: string; end?: string }
+    status?: boolean
+    category?: AuditCategory
+    limit?: number
+}
+
 /** Audit log configuration */
 export interface AuditConfig {
     /** Master switch — false means no interceptor is created */

@@ -1,0 +1,697 @@
+{
+  "author_handle": "admin@adamic.tech",
+  "author_name": "Christopher David LeRoux",
+  "created_at": "2026-07-19T06:24:43.774855Z",
+  "description": "AI Efficiency metrics for memory-journal-mcp server (Opus 4.8 Standard pricing)\n\n*Note: Datadog automatically formats values less than 0.01 in scientific notation. During low-traffic periods, micro-costs may appear in scientific format (e.g., 5e-5 $) until the accumulated cost exceeds $0.01.*",
+  "id": "79q-b3r-jhu",
+  "layout_type": "ordered",
+  "modified_at": "2026-07-19T07:31:31.698519Z",
+  "notify_list": [],
+  "reflow_type": "fixed",
+  "restricted_roles": [],
+  "template_variables": [],
+  "title": "memory-journal-mcp AI Efficiency",
+  "url": "/dashboard/79q-b3r-jhu/memory-journal-mcp-ai-efficiency",
+  "widgets": [
+    {
+      "definition": {
+        "autoscale": true,
+        "description": "Amounts under a penny will show in scientific notation.",
+        "precision": 2,
+        "requests": [
+          {
+            "aggregator": "sum",
+            "conditional_formats": [
+              {
+                "comparator": ">=",
+                "custom_bg_color": "#063d05",
+                "palette": "custom_bg",
+                "value": 0
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "(((default_zero(query1)) / 1000000) * 2)"
+              }
+            ],
+            "queries": [
+              {
+                "aggregator": "sum",
+                "data_source": "metrics",
+                "name": "query1",
+                "query": "sum:memory_journal_mcp.mcp_tool_tokens_by_name.count{*}.as_count()"
+              }
+            ],
+            "response_format": "scalar"
+          }
+        ],
+        "title": "Total Cost (Gemini 3.1) ($)",
+        "title_align": "left",
+        "title_size": "16",
+        "type": "query_value"
+      },
+      "id": 74868358445735,
+      "layout": {
+        "height": 2,
+        "width": 2,
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "definition": {
+        "autoscale": true,
+        "description": "Amounts under a penny will show in scientific notation.",
+        "precision": 2,
+        "requests": [
+          {
+            "aggregator": "sum",
+            "conditional_formats": [
+              {
+                "comparator": ">=",
+                "custom_bg_color": "#063c11",
+                "palette": "custom_bg",
+                "value": 0
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "(((default_zero(query1)) / 1000000) * 5)"
+              }
+            ],
+            "queries": [
+              {
+                "aggregator": "sum",
+                "data_source": "metrics",
+                "name": "query1",
+                "query": "sum:memory_journal_mcp.mcp_tool_tokens_by_name.count{*}.as_count()"
+              }
+            ],
+            "response_format": "scalar"
+          }
+        ],
+        "title": "Total Cost (Claude 4.8) ($)",
+        "title_align": "left",
+        "title_size": "16",
+        "type": "query_value"
+      },
+      "id": 1108273956124995,
+      "layout": {
+        "height": 2,
+        "width": 2,
+        "x": 2,
+        "y": 0
+      }
+    },
+    {
+      "definition": {
+        "autoscale": true,
+        "description": "Amounts under a penny will show in scientific notation.",
+        "precision": 2,
+        "requests": [
+          {
+            "aggregator": "sum",
+            "conditional_formats": [
+              {
+                "comparator": ">=",
+                "custom_bg_color": "#083f0f",
+                "palette": "custom_bg",
+                "value": 0
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "(((default_zero(query1)) / 1000000) * 5)"
+              }
+            ],
+            "queries": [
+              {
+                "aggregator": "sum",
+                "data_source": "metrics",
+                "name": "query1",
+                "query": "sum:memory_journal_mcp.mcp_tool_tokens_by_name.count{*}.as_count()"
+              }
+            ],
+            "response_format": "scalar"
+          }
+        ],
+        "title": "Total Cost (GPT-5.5) ($)",
+        "title_align": "left",
+        "title_size": "16",
+        "type": "query_value"
+      },
+      "id": 504802242786021,
+      "layout": {
+        "height": 2,
+        "width": 2,
+        "x": 4,
+        "y": 0
+      }
+    },
+    {
+      "definition": {
+        "autoscale": true,
+        "description": "Amounts under a penny will show in scientific notation.",
+        "precision": 2,
+        "requests": [
+          {
+            "aggregator": "sum",
+            "conditional_formats": [
+              {
+                "comparator": ">=",
+                "custom_bg_color": "#083f09",
+                "palette": "custom_bg",
+                "value": 0
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "(((default_zero(query1)) / 1000000) * 6)"
+              }
+            ],
+            "queries": [
+              {
+                "aggregator": "sum",
+                "data_source": "metrics",
+                "name": "query1",
+                "query": "sum:memory_journal_mcp.mcp_tool_tokens_by_name.count{*}.as_count()"
+              }
+            ],
+            "response_format": "scalar"
+          }
+        ],
+        "title": "Total Cost (Claude Sonnet 5) ($)",
+        "title_align": "left",
+        "title_size": "16",
+        "type": "query_value"
+      },
+      "id": 3867370951191716,
+      "layout": {
+        "height": 2,
+        "width": 2,
+        "x": 6,
+        "y": 0
+      }
+    },
+    {
+      "definition": {
+        "autoscale": true,
+        "description": "Amounts under a penny will show in scientific notation.",
+        "precision": 2,
+        "requests": [
+          {
+            "aggregator": "sum",
+            "conditional_formats": [
+              {
+                "comparator": ">=",
+                "custom_bg_color": "#0c4008",
+                "palette": "custom_bg",
+                "value": 0
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "(((default_zero(query1)) / 1000000) * 30)"
+              }
+            ],
+            "queries": [
+              {
+                "aggregator": "sum",
+                "data_source": "metrics",
+                "name": "query1",
+                "query": "sum:memory_journal_mcp.mcp_tool_tokens_by_name.count{*}.as_count()"
+              }
+            ],
+            "response_format": "scalar"
+          }
+        ],
+        "title": "Total Cost (Claude Fable 5) ($)",
+        "title_align": "left",
+        "title_size": "16",
+        "type": "query_value"
+      },
+      "id": 8963360244781651,
+      "layout": {
+        "height": 2,
+        "width": 2,
+        "x": 8,
+        "y": 0
+      }
+    },
+    {
+      "definition": {
+        "autoscale": true,
+        "precision": 2,
+        "requests": [
+          {
+            "aggregator": "sum",
+            "conditional_formats": [
+              {
+                "comparator": ">=",
+                "custom_bg_color": "#0b4107",
+                "palette": "custom_bg",
+                "value": 0
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "default_zero(query1)"
+              }
+            ],
+            "queries": [
+              {
+                "aggregator": "sum",
+                "data_source": "metrics",
+                "name": "query1",
+                "query": "sum:memory_journal_mcp.mcp_tool_tokens_by_name.count{*}.as_count()"
+              }
+            ],
+            "response_format": "scalar"
+          }
+        ],
+        "title": "Total Tokens Used",
+        "title_align": "left",
+        "title_size": "16",
+        "type": "query_value"
+      },
+      "id": 3208252485683038,
+      "layout": {
+        "height": 2,
+        "width": 2,
+        "x": 10,
+        "y": 0
+      }
+    },
+    {
+      "definition": {
+        "requests": [
+          {
+            "formulas": [
+              {
+                "cell_display_mode": "bar",
+                "formula": "default_zero(calls) * default_zero(latency)"
+              }
+            ],
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "calls",
+                "query": "sum:memory_journal_mcp.mcp_tool_calls_by_name.count{*} by {tool}.as_count()"
+              },
+              {
+                "data_source": "metrics",
+                "name": "latency",
+                "query": "avg:memory_journal_mcp.mcp_tool_latency_ms_p50{*} by {tool}"
+              }
+            ],
+            "response_format": "scalar",
+            "sort": {
+              "order_by": [
+                {
+                  "index": 0,
+                  "order": "desc",
+                  "type": "formula"
+                }
+              ]
+            }
+          }
+        ],
+        "title": "Optimization Target (Total Gross Latency)",
+        "title_align": "left",
+        "title_size": "16",
+        "type": "query_table"
+      },
+      "id": 115532157614989,
+      "layout": {
+        "height": 4,
+        "width": 4,
+        "x": 0,
+        "y": 2
+      }
+    },
+    {
+      "definition": {
+        "requests": [
+          {
+            "formulas": [
+              {
+                "cell_display_mode": "bar",
+                "formula": "default_zero(query1)"
+              }
+            ],
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "query1",
+                "query": "sum:memory_journal_mcp.mcp_tool_tokens_by_name.count{*} by {tool}.as_count()"
+              }
+            ],
+            "response_format": "scalar",
+            "sort": {
+              "order_by": [
+                {
+                  "index": 0,
+                  "order": "desc",
+                  "type": "formula"
+                }
+              ]
+            }
+          }
+        ],
+        "title": "Top Tools by Tokens",
+        "title_align": "left",
+        "title_size": "16",
+        "type": "query_table"
+      },
+      "id": 1070403684560322,
+      "layout": {
+        "height": 4,
+        "width": 4,
+        "x": 4,
+        "y": 2
+      }
+    },
+    {
+      "definition": {
+        "has_search_bar": "auto",
+        "requests": [
+          {
+            "formulas": [
+              {
+                "cell_display_mode": "bar",
+                "formula": "default_zero(query1)"
+              }
+            ],
+            "queries": [
+              {
+                "aggregator": "sum",
+                "data_source": "metrics",
+                "name": "query1",
+                "query": "sum:memory_journal_mcp.mcp_tool_calls_by_name.count{*} by {tool}.as_count()"
+              }
+            ],
+            "response_format": "scalar",
+            "sort": {
+              "count": 500,
+              "order_by": [
+                {
+                  "index": 0,
+                  "order": "desc",
+                  "type": "formula"
+                }
+              ]
+            }
+          }
+        ],
+        "title": "Tool Call Volume",
+        "title_align": "left",
+        "title_size": "16",
+        "type": "query_table"
+      },
+      "id": 5704902594105579,
+      "layout": {
+        "height": 4,
+        "width": 4,
+        "x": 8,
+        "y": 2
+      }
+    },
+    {
+      "definition": {
+        "autoscale": true,
+        "precision": 0,
+        "requests": [
+          {
+            "conditional_formats": [
+              {
+                "comparator": ">=",
+                "custom_bg_color": "#173b07",
+                "palette": "custom_bg",
+                "value": 0
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "default_zero(a) / (default_zero(b) + 0.0000001)"
+              }
+            ],
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "a",
+                "query": "sum:memory_journal_mcp.mcp_tool_tokens_by_name.count{*}.as_count()"
+              },
+              {
+                "data_source": "metrics",
+                "name": "b",
+                "query": "sum:memory_journal_mcp.mcp_tool_calls.count{*}.as_count()"
+              }
+            ],
+            "response_format": "scalar"
+          }
+        ],
+        "title": "Avg Tokens / Call",
+        "title_align": "left",
+        "title_size": "16",
+        "type": "query_value"
+      },
+      "id": 4078349398291238,
+      "layout": {
+        "height": 2,
+        "is_column_break": true,
+        "width": 2,
+        "x": 0,
+        "y": 6
+      }
+    },
+    {
+      "definition": {
+        "autoscale": true,
+        "precision": 2,
+        "requests": [
+          {
+            "conditional_formats": [
+              {
+                "comparator": ">=",
+                "custom_bg_color": "#841010",
+                "palette": "custom_bg",
+                "value": 5
+              },
+              {
+                "comparator": ">=",
+                "palette": "white_on_yellow",
+                "value": 2
+              },
+              {
+                "comparator": "<",
+                "custom_bg_color": "#104409",
+                "palette": "custom_bg",
+                "value": 2
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "(default_zero(a) / (default_zero(b) + 0.0000001)) * 100"
+              }
+            ],
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "a",
+                "query": "sum:memory_journal_mcp.mcp_tool_errors_by_name.count{*}.as_count()"
+              },
+              {
+                "data_source": "metrics",
+                "name": "b",
+                "query": "sum:memory_journal_mcp.mcp_tool_calls.count{*}.as_count()"
+              }
+            ],
+            "response_format": "scalar"
+          }
+        ],
+        "title": "Global Error Rate (%)",
+        "title_align": "left",
+        "title_size": "16",
+        "type": "query_value"
+      },
+      "id": 12938475619283,
+      "layout": {
+        "height": 2,
+        "width": 2,
+        "x": 2,
+        "y": 6
+      }
+    },
+    {
+      "definition": {
+        "anomaly_detection": {
+          "detection_sensitivity": "never_detect"
+        },
+        "legend_columns": [
+          "avg",
+          "min",
+          "max",
+          "value",
+          "sum"
+        ],
+        "legend_layout": "auto",
+        "requests": [
+          {
+            "display_type": "line",
+            "formulas": [
+              {
+                "alias": "Cache Hits",
+                "formula": "default_zero(query1)"
+              }
+            ],
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "query1",
+                "query": "sum:memory_journal_mcp.memory_journal_mcp_cache_hits.count{*}.as_count()"
+              }
+            ],
+            "response_format": "timeseries",
+            "style": {
+              "palette": "green"
+            }
+          },
+          {
+            "display_type": "line",
+            "formulas": [
+              {
+                "alias": "Cache Misses",
+                "formula": "default_zero(query2)"
+              }
+            ],
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "query2",
+                "query": "sum:memory_journal_mcp.memory_journal_mcp_cache_misses.count{*}.as_count()"
+              }
+            ],
+            "response_format": "timeseries",
+            "style": {
+              "palette": "red"
+            }
+          }
+        ],
+        "show_legend": true,
+        "title": "Cache Performance",
+        "title_align": "left",
+        "title_size": "16",
+        "type": "timeseries"
+      },
+      "id": 61728394058271,
+      "layout": {
+        "height": 6,
+        "width": 4,
+        "x": 4,
+        "y": 6
+      }
+    },
+    {
+      "definition": {
+        "anomaly_detection": {
+          "detection_sensitivity": "never_detect"
+        },
+        "legend_columns": [
+          "avg",
+          "min",
+          "max",
+          "value",
+          "sum"
+        ],
+        "legend_layout": "auto",
+        "requests": [
+          {
+            "display_type": "bars",
+            "formulas": [
+              {
+                "formula": "default_zero(query1)"
+              }
+            ],
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "query1",
+                "query": "sum:memory_journal_mcp.mcp_tool_errors_by_name.count{*} by {error_type}.as_count()"
+              }
+            ],
+            "response_format": "timeseries"
+          }
+        ],
+        "show_legend": false,
+        "title": "Agent Quality (Error Classification)",
+        "title_align": "left",
+        "title_size": "16",
+        "type": "timeseries"
+      },
+      "id": 203565609753226,
+      "layout": {
+        "height": 6,
+        "width": 4,
+        "x": 8,
+        "y": 6
+      }
+    },
+    {
+      "definition": {
+        "sizing": "zoom",
+        "type": "image",
+        "url": "/static/images/logos/proxysql_large.svg"
+      },
+      "id": 2524995767004926,
+      "layout": {
+        "height": 2,
+        "width": 4,
+        "x": 0,
+        "y": 8
+      }
+    },
+    {
+      "definition": {
+        "check": "proxysql.can_connect",
+        "group": "proxysql_port:6032,proxysql_server:localhost,host:adamic-wsl2",
+        "group_by": [
+          "proxysql_server",
+          "proxysql_port"
+        ],
+        "grouping": "cluster",
+        "tags": [],
+        "title": "Monitored instances status",
+        "title_align": "center",
+        "title_size": "16",
+        "type": "check_status"
+      },
+      "id": 4740005024234863,
+      "layout": {
+        "height": 1,
+        "width": 4,
+        "x": 0,
+        "y": 10
+      }
+    },
+    {
+      "definition": {
+        "check": "proxysql.backend.status",
+        "group": "*",
+        "group_by": [],
+        "grouping": "cluster",
+        "tags": [],
+        "title": "Backends status",
+        "title_align": "center",
+        "title_size": "16",
+        "type": "check_status"
+      },
+      "id": 2452699725061914,
+      "layout": {
+        "height": 1,
+        "width": 4,
+        "x": 0,
+        "y": 11
+      }
+    }
+  ]
+}

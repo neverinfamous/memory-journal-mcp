@@ -10,7 +10,7 @@
  * Ported from db-mcp/tests/e2e/errors-extended.spec.ts — adapted for memory-journal-mcp.
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test-fixture.js'
 import {
     createClient,
     callToolAndParse,
@@ -58,7 +58,7 @@ test.describe('Errors: Core', () => {
     test('create_entry with empty content → structured error', async () => {
         const client = await createClient()
         try {
-            const p = await callToolAndParse(client, 'create_entry', {
+            const p = await callToolAndParse(client, 'create_entry', { workspace_id: 'default', 
                 project_number: 1,
                 content: '',
                 entry_type: 'test_entry',
@@ -69,10 +69,12 @@ test.describe('Errors: Core', () => {
         }
     })
 
-    test('create_entry with invalid entry_type → structured error or Zod error', async () => {
+    test('create_entry with invalid entry_type → heals to other', async () => {
         const client = await createClient()
         try {
             const response = await callToolRaw(client, 'create_entry', {
+                workspace_id: 'default',
+                project_number: 1,
                 content: 'Valid content',
                 entry_type: '_e2e_invalid_type_xyz',
             })
@@ -80,19 +82,17 @@ test.describe('Errors: Core', () => {
             const structural =
                 'structuredContent' in response ? response.structuredContent : undefined
 
-            // Use structured object if present
+            // Verify that the invalid entry type was healed
             if (text === '[Structured output attached]' && structural) {
                 const parsed = structural as any
-                expect(parsed.success).toBe(false)
+                expect(parsed.success).toBe(true)
+                expect(parsed.entry.entryType).toBe('other')
+                expect(parsed.entry.tags).toContain('e2e-invalid-type-xyz')
             } else {
-                // Try JSON, fallback to raw text verification
-                try {
-                    const parsed = JSON.parse(text)
-                    expect(parsed.success).toBe(false)
-                } catch {
-                    expect(text).not.toContain('-32602')
-                    expect(text.toLowerCase()).toContain('error')
-                }
+                const parsed = JSON.parse(text)
+                expect(parsed.success).toBe(true)
+                expect(parsed.entry.entryType).toBe('other')
+                expect(parsed.entry.tags).toContain('e2e-invalid-type-xyz')
             }
         } finally {
             await client.close()
@@ -201,7 +201,7 @@ test.describe('Errors: Admin', () => {
             const p = await callToolAndParse(client, 'delete_entry', {
                 project_number: 1,
                 entry_id: 999999999,
-            })
+                expected_version: 1 })
             // May soft-succeed on missing rows or return structured error
             if (p.success === false) {
                 expect(typeof p.error).toBe('string')
@@ -301,8 +301,8 @@ test.describe('Errors: Backup', () => {
 // =============================================================================
 
 test.describe('Errors: Team', () => {
-    const TEAM_EXT_PORT = 3122
-    let client: import('@modelcontextprotocol/sdk/client/index.js').Client
+    const TEAM_EXT_PORT = 5125 + (Number(process.env.TEST_PARALLEL_INDEX || 0) * 100)
+    let client: import('@modelcontextprotocol/client').Client
 
     test.beforeAll(async () => {
         await startServer(TEAM_EXT_PORT, ['--auth-token', 'test-token'], 'errors-extended-team', {
@@ -340,7 +340,7 @@ test.describe('Errors: Team', () => {
     test('team_link_entries self-loop → structured error', async () => {
         // Create a team entry so the self-loop test hits the domain check,
         // not a "not found" error
-        const create = await callToolAndParse(client, 'team_create_entry', {
+        const create = await callToolAndParse(client, 'team_create_entry', { workspace_id: 'default', 
             project_number: 1,
             content: 'Team self-loop test entry',
             entry_type: 'test_entry',

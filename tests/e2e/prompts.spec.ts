@@ -4,9 +4,9 @@
  * Validates prompt listing and retrieval via the Streamable HTTP transport.
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test-fixture.js'
 import { createClient } from './helpers.js'
-import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import type { Client } from '@modelcontextprotocol/client'
 
 test.describe.configure({ mode: 'serial' })
 
@@ -26,15 +26,15 @@ test.describe('E2E Prompts (via MCP SDK Client)', () => {
 
         expect(response.prompts).toBeDefined()
         expect(Array.isArray(response.prompts)).toBe(true)
-        expect(response.prompts.length).toBeGreaterThanOrEqual(17)
+        expect(response.prompts.length).toBeGreaterThanOrEqual(8)
 
         const promptNames = response.prompts.map((p) => p.name)
         expect(promptNames).toContain('prepare-standup')
         expect(promptNames).toContain('session-summary')
-        expect(promptNames).toContain('weekly-digest')
-        expect(promptNames).toContain('find-related')
-        expect(promptNames).toContain('confirm-briefing')
-        expect(promptNames).toContain('team-session-summary')
+        expect(promptNames).toContain('issue-commander')
+        expect(promptNames).toContain('pr-commander')
+        expect(promptNames).toContain('actions-failure-digest')
+        expect(promptNames).toContain('adversarial-plan-review')
     })
 
     test('should get a specific prompt (prepare-standup)', async () => {
@@ -50,10 +50,10 @@ test.describe('E2E Prompts (via MCP SDK Client)', () => {
         expect(firstMessage).toHaveProperty('content')
     })
 
-    test('should get a parameterized prompt (find-related)', async () => {
+    test('should get a parameterized prompt (session-summary)', async () => {
         const response = await client.getPrompt({
-            name: 'find-related',
-            arguments: { query: 'performance optimization' },
+            name: 'session-summary',
+            arguments: { target: 'personal' },
         })
 
         expect(response.messages).toBeDefined()

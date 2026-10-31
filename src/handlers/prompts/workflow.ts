@@ -3,18 +3,260 @@
  *
  * Prompts: find-related, prepare-standup, prepare-retro, weekly-digest,
  * analyze-period, goal-tracker, get-context-bundle, get-recent-entries, confirm-briefing,
- * session-summary
+ * analyze-period, goal-tracker, get-context-bundle, get-recent-entries, confirm-briefing,
+ * session-summary, team-session-summary, create-entry, create-team-entry,
+ * update-entry, update-team-entry
  */
 
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import { ICON_PROMPT } from '../../constants/icons.js'
-import type { InternalPromptDef } from './index.js'
+import type { InternalPromptDef, PromptMessage } from './index.js'
 import { ConfigurationError } from '../../types/errors.js'
-import { markUntrustedContent, markUntrustedContentInline } from '../../utils/security-utils.js'
-import { parseFlagContext } from '../../types/auto-context.js'
+import { markUntrustedContent } from '../../utils/security-utils.js'
 
-/** Milliseconds in one day */
-const MS_PER_DAY = 86_400_000
+
+import { spawn } from 'node:child_process'
+import { readFileSync, existsSync } from 'node:fs'
+import * as path from 'node:path'
+import * as os from 'node:os'
+import { fileURLToPath } from 'node:url'
+
+let isGeneratingCodeMap = false
+
+function getProjectRegistryHint(): string {
+    try {
+        const configPath = path.resolve(os.homedir(), '.gemini', 'config', 'memory-journal.config.json')
+        if (existsSync(configPath)) {
+            const config = JSON.parse(readFileSync(configPath, 'utf-8')) as Record<string, unknown>
+            if ('projectRegistry' in config && config['projectRegistry'] != null) {
+                const projects = Object.entries(config['projectRegistry'] as Record<string, unknown>)
+                    .map(([name, data]: [string, unknown]) => `${name} (${String((data as Record<string, unknown>)['project_number'])})`)
+                    .join(', ')
+                if (projects) {
+                    return `\n**Projects:** ${projects} (Use these IDs instead of memory://agent-context/{repo} if applicable)\n`
+                }
+            }
+        }
+    } catch {
+        // fail silently
+    }
+    return ''
+}
+
+function generateSummaryPrompt(
+    db: IDatabaseAdapter, 
+    teamDb: IDatabaseAdapter | undefined, 
+    target: 'personal' | 'team'
+): { messages: PromptMessage[] } {
+    if (target === 'team' && !teamDb) {
+        throw new ConfigurationError('Team database not configured')
+    }
+
+    const targetDb = target === 'team' && teamDb ? teamDb : db
+    const { entries: recent } = targetDb.getRecentEntries(5)
+
+    const entrySummary =
+        recent.length > 0
+            ? recent
+                  .map(
+                      (e) =>
+                          `- #${String(e.id)} (${e.entryType}) ${e.content.slice(0, 80)}${e.content.length > 80 ? '...' : ''}`
+                  )
+                  .join('\n')
+            : '- No entries yet'
+
+
+    try {
+        if (!isGeneratingCodeMap) {
+            const packageJsonUrl = new URL('../../../package.json', import.meta.url)
+            const packageJsonPath = fileURLToPath(packageJsonUrl)
+            
+            if (existsSync(packageJsonPath)) {
+                const pkg: unknown = JSON.parse(readFileSync(packageJsonPath, 'utf-8'))
+                if (pkg !== null && typeof pkg === 'object' && 'name' in pkg && pkg.name === 'memory-journal-mcp') {
+                    isGeneratingCodeMap = true
+                    const scriptUrl = new URL('../../../scripts/update-code-map.ts', import.meta.url)
+                    const absoluteScriptPath = fileURLToPath(scriptUrl)
+                    const cmd = process.platform === 'win32' ? 'npx.cmd' : 'npx'
+                    const child = spawn(cmd, ['tsx', absoluteScriptPath], { 
+                        stdio: 'ignore', 
+                        shell: process.platform === 'win32',
+                        windowsHide: true
+                    })
+                    child.on('exit', () => { isGeneratingCodeMap = false })
+                    child.on('error', () => { isGeneratingCodeMap = false })
+                    child.unref()
+                }
+            }
+        }
+    } catch {
+        // Fail silently so we don't break the prompt fetch
+        isGeneratingCodeMap = false
+    }
+
+    const registryHint = getProjectRegistryHint()
+
+    return {
+        messages: [
+            {
+                role: 'user',
+                content: {
+                    type: 'text',
+                    text: `Create a ${target === 'team' ? 'team ' : ''}session summary journal entry using EXACTLY this template:
+
+**Required YAML Frontmatter:**
+At the top of your markdown file, include a YAML frontmatter block with the following keys:
+\`\`\`yaml
+---
+type: "retrospective"
+tags: ["session-summary", "your-tag-1", "your-tag-2"]
+project: <Integer ID or repository name - OPTIONAL, auto-resolved from active workspace>
+impact: <Decimal score analyzing blast radius (e.g., 0.9+ for core architecture, 0.1 for docs)>
+trust: <Decimal score analyzing testing rigor. 0.3-0.5 for unverified, 0.8-1.0 if rigorously tested>
+validation_status: "passed" # or "none", or "failed"
+auto_context: 
+  type: "session-commits"
+  commits: ["<sha>"]
+  branch: "<branch_name>"
+  pr: <number>
+relationships: 
+  - target_id: 123
+    relation_type: "resolves" # 'resolves', 'depends_on', 'implements', 'relates_to'
+---
+\`\`\`
+
+**Required Content Structure (use EXACTLY these section headers):**
+\`\`\`
+## Accomplished
+- [List non-code strategic items, decisions, and research. Do NOT list routine code changes or commits, as those belong in Git]
+
+## Unfinished / Blocked
+- [List pending items, blockers, open questions — or "None" if everything is complete]
+
+## Context for Next Session
+- [List key context: relevant entry IDs, branch names, PR numbers, pending decisions]
+\`\`\`
+
+**Rules:**
+- Do NOT add extra top-level sections (no "## Summary", "## Overview", "## Notes", etc.)
+- Do NOT omit any of the three required sections
+- Use bullet points within each section
+- Reference specific entry IDs, file names, and PR numbers where relevant
+- To populate \`auto_context.commits\`, use \`bun .\\.agents\\scripts\\get-git-history-json.ts --summary -n 20\` to retrieve recent commit SHAs. Do NOT use raw \`git log\`.
+- Note: \`workspace_id\` and \`project_number\` are automatically resolved from your active workspace context if omitted.
+${registryHint}- If you lose track of your project number, workspace, or agent ID, read the \`memory://agent-context/{repo}\` resource to retrieve it instead of reloading the full briefing (which wastes tokens)
+
+**Recent Entries (for context):**
+${markUntrustedContent(entrySummary)}
+
+**Execution:**
+- **Option 1 (Code Mode / MCP Tool - Recommended):** Execute directly via \`mj.core.createEntry({ content: "...", entry_type: "retrospective", tags: ["session-summary"], auto_context: { commits: ["<sha>"] }${target === 'team' ? ', share_with_team: true' : ''} })\`.
+- **Option 2 (CLI Scratch File):** Write markdown file (with YAML frontmatter) to your scratch directory (e.g. \`<appDataDir>\\brain\\<conversation-id>\\scratch\\\`) then execute: \`memory-journal-mcp entry create ${target === 'team' ? '--team ' : ''}--file <scratch_dir>/session.md\``,
+                },
+            },
+        ],
+    }
+}
+
+function generateEntryPrompt(_db: IDatabaseAdapter, _teamDb: IDatabaseAdapter | undefined, target: 'personal' | 'team'): { messages: PromptMessage[] } {
+    const registryHint = getProjectRegistryHint()
+
+    return {
+        messages: [
+            {
+                role: 'user',
+                content: {
+                    type: 'text',
+                    text: `Create a ${target === 'team' ? 'team ' : ''}mid-thread journal entry using EXACTLY this template:
+
+**Required YAML Frontmatter:**
+At the top of your markdown file, include a YAML frontmatter block with the following keys:
+\`\`\`yaml
+---
+type: "architecture" # MUST be "decision", "bug_fix", "milestone", or "architecture" (do NOT use "retrospective")
+tags: ["domain-tag", "another-tag"]
+project: <Integer ID or repository name - OPTIONAL, auto-resolved from active workspace>
+impact: <Decimal score analyzing blast radius (e.g., 0.9+ for core architecture, 0.1 for docs)>
+trust: <Decimal score analyzing testing rigor. 0.3-0.5 for unverified, 0.8-1.0 if rigorously tested>
+validation_status: "passed" # or "none", or "failed"
+relationships: 
+  - target_id: 123
+    relation_type: "resolves" # 'resolves', 'depends_on', 'implements', 'relates_to'
+---
+\`\`\`
+
+**Required Content Structure:**
+Just provide a concise markdown description of the specific architectural decision, strategic pivot, or blocker. Do NOT log routine code changes or bug fixes here; those belong strictly in Git. Keep it under 150 words. No top-level headers required.
+
+**Rules:**
+- Note: \`workspace_id\` and \`project_number\` are automatically resolved from your active workspace context if omitted.
+${registryHint}- If you lose track of your project number, workspace, or agent ID, read the \`memory://agent-context/{repo}\` resource to retrieve it instead of reloading the full briefing (which wastes tokens)
+
+**Execution:**
+- **Option 1 (Code Mode / MCP Tool - Recommended):** Execute directly via \`mj.core.createEntry({ content: "...", entry_type: "architecture", tags: ["tag1"]${target === 'team' ? ', share_with_team: true' : ''} })\`.
+- **Option 2 (CLI Scratch File):** Write markdown file (with YAML frontmatter) to your scratch directory (e.g. \`<appDataDir>\\brain\\<conversation-id>\\scratch\\\`) then execute: \`memory-journal-mcp entry create ${target === 'team' ? '--team ' : ''}--file <scratch_dir>/entry.md\``
+                }
+            }
+        ]
+    }
+}
+
+function generateUpdateEntryPrompt(db: IDatabaseAdapter, teamDb: IDatabaseAdapter | undefined, target: 'personal' | 'team'): { messages: PromptMessage[] } {
+    const targetDb = target === 'team' && teamDb ? teamDb : db
+    let entryContext = ''
+    try {
+        const recentRes = targetDb.getRecentEntries(1) as { entries?: unknown[] } | unknown[]
+        const recent = (Array.isArray(recentRes) ? recentRes[0] : recentRes.entries?.[0]) as Record<string, unknown> | undefined
+        if (recent) {
+            entryContext = `
+**Target Entry Details (Pre-fetched for your convenience):**
+- **ID:** ${String(recent['id'])}
+- **Version:** ${String(recent['version'])}
+- **Type:** ${String(recent['entryType'])}
+- **Tags:** ${recent['tags'] != null ? JSON.stringify(recent['tags']) : '[]'}
+- **Content:**
+\`\`\`markdown
+${String(recent['content'])}
+\`\`\`
+`
+        }
+    } catch {
+        // fail silently
+    }
+
+    return {
+        messages: [
+            {
+                role: 'user',
+                content: {
+                    type: 'text',
+                    text: `Update an existing ${target === 'team' ? 'team ' : ''}journal entry safely.
+
+**Step 1: Identify the Target Entry**
+- The most recent entry has been pre-fetched below for your convenience. If the user did not specify an ID, you MUST update this pre-fetched entry.
+- You do NOT need to fetch it using mj.core.getEntryById unless the user asks to update a DIFFERENT entry ID.
+${entryContext}
+
+**Step 2: Apply Conditional Formatting Rules**
+Look at the tags and structure of the target entry:
+- If it has the \`session-summary\` tag: You MUST preserve the exact 3-header structure (\`## Accomplished\`, \`## Unfinished / Blocked\`, \`## Context for Next Session\`). Do not flatten the text; only append or modify the relevant bullet points.
+- If it is a standard entry: Keep your modifications concise and under 150 words.
+
+**Step 3: Execute the Update**
+- You MUST pass the existing \`version\` as the \`expected_version\` parameter to prevent concurrent overwrites.
+- Ensure you write the full updated \`content\` string to a markdown file in your scratch directory.
+- If you want to modify fields like tags, trust, or impact, simply add a YAML frontmatter block (\`---\`... \`---\`) to the top of your markdown file. Otherwise, omit it to preserve existing values.
+
+**Rules:**
+${getProjectRegistryHint()}- If you lose track of your project number, workspace, or agent ID, read the \`memory://agent-context/{repo}\` resource to retrieve it instead of reloading the full briefing (which wastes tokens)
+
+**Execution:**
+Write your updated markdown file to your scratch directory (e.g. \`<appDataDir>\\brain\\<conversation-id>\\scratch\\\`) to avoid shell quotes. Then execute: \`memory-journal-mcp entry update ${target === 'team' ? '--team ' : ''}--id <ENTRY_ID> --expected-version <VERSION> --file <scratch_dir>/updated_entry.md\``
+                }
+            }
+        ]
+    }
+}
 
 /**
  * Get workflow prompt definitions
@@ -22,431 +264,206 @@ const MS_PER_DAY = 86_400_000
 export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
     return [
         {
-            name: 'find-related',
-            description: 'Discover connected entries via semantic similarity',
-            icons: [ICON_PROMPT],
-            arguments: [
-                {
-                    name: 'query',
-                    description: 'Search query for finding related entries',
-                    required: true,
-                },
-            ],
-            handler: (args: Record<string, string>, db: IDatabaseAdapter) => {
-                const query = args['query'] ?? ''
-                const entries = db.searchEntries(query, { limit: 5 })
-
-                return {
-                    messages: [
-                        {
-                            role: 'user',
-                            content: {
-                                type: 'text',
-                                text: `Find entries related to: "${query}"
-
-Recent matching entries:
-${markUntrustedContent(entries.map((e) => `- [${String(e.id)}] ${e.content.slice(0, 100)}...`).join('\n'))}`,
-                            },
-                        },
-                    ],
-                }
-            },
-        },
-        {
-            name: 'prepare-standup',
-            description: 'Daily standup summaries',
-            icons: [ICON_PROMPT],
-            arguments: [],
-            handler: (
-                _args: Record<string, string>,
-                db: IDatabaseAdapter,
-                teamDb?: IDatabaseAdapter
-            ) => {
-                const today = new Date().toISOString().split('T')[0] ?? ''
-                const yesterday =
-                    new Date(Date.now() - MS_PER_DAY).toISOString().split('T')[0] ?? ''
-
-                const entries = db.searchByDateRange(yesterday, today)
-
-                // Inject digest signals when available
-                const digestSignal = buildDigestSignalForPrompt(db)
-                const flagSignal = buildFlagSignalForPrompt(teamDb)
-
-                return {
-                    messages: [
-                        {
-                            role: 'user',
-                            content: {
-                                type: 'text',
-                                text: `${digestSignal}${flagSignal}Prepare a standup summary based on these recent entries.
-Format as:
-- Yesterday: <summary>
-- Today: <planned work>
-- Blockers: <any blockers>
-
-Sources:
-${markUntrustedContent(entries.map((e) => `[${e.timestamp}] ${e.entryType}: ${e.content}`).join('\n\n'))}`,
-                            },
-                        },
-                    ],
-                }
-            },
-        },
-        {
-            name: 'prepare-retro',
-            description: 'Sprint retrospectives',
-            icons: [ICON_PROMPT],
-            arguments: [
-                {
-                    name: 'days',
-                    description: 'Number of days to include (default: 14)',
-                    required: false,
-                },
-            ],
-            handler: (
-                args: Record<string, string>,
-                db: IDatabaseAdapter,
-                teamDb?: IDatabaseAdapter
-            ) => {
-                const days = parseInt(args['days'] ?? '14', 10)
-                const endDate = new Date().toISOString().split('T')[0] ?? ''
-                const startDate =
-                    new Date(Date.now() - days * MS_PER_DAY).toISOString().split('T')[0] ?? ''
-
-                const entries = db.searchByDateRange(startDate, endDate)
-
-                // Inject digest signals when available
-                const digestSignal = buildDigestSignalForPrompt(db)
-                const flagSignal = buildFlagSignalForPrompt(teamDb)
-
-                return {
-                    messages: [
-                        {
-                            role: 'user',
-                            content: {
-                                type: 'text',
-                                text: `${digestSignal}${flagSignal}Prepare a retrospective for the last ${String(days)} days based on these entries.
-Format as:
-- What went well
-- What could improve
-- Action items
-
-Sources:
-${markUntrustedContent(
-    entries
-        .slice(0, 20)
-        .map((e) => `[${e.timestamp}] ${e.entryType}: ${e.content.slice(0, 200)}`)
-        .join('\n\n')
-)}`,
-                            },
-                        },
-                    ],
-                }
-            },
-        },
-        {
-            name: 'weekly-digest',
-            description: 'Day-by-day weekly summaries',
-            icons: [ICON_PROMPT],
-            arguments: [],
-            handler: (_args: Record<string, string>, db: IDatabaseAdapter) => {
-                const endDate = new Date().toISOString().split('T')[0] ?? ''
-                const startDate =
-                    new Date(Date.now() - 7 * MS_PER_DAY).toISOString().split('T')[0] ?? ''
-
-                const entries = db.searchByDateRange(startDate, endDate)
-
-                return {
-                    messages: [
-                        {
-                            role: 'user',
-                            content: {
-                                type: 'text',
-                                text: `Create a weekly digest from these entries.
-Format as day-by-day summary with highlights.
-
-Sources:
-${markUntrustedContent(entries.map((e) => `[${e.timestamp}] ${e.entryType}: ${e.content.slice(0, 150)}`).join('\n\n'))}`,
-                            },
-                        },
-                    ],
-                }
-            },
-        },
-        {
-            name: 'analyze-period',
-            description: 'Deep period analysis with insights',
-            icons: [ICON_PROMPT],
-            arguments: [
-                { name: 'start_date', description: 'Start date (YYYY-MM-DD)', required: true },
-                { name: 'end_date', description: 'End date (YYYY-MM-DD)', required: true },
-            ],
-            handler: (args: Record<string, string>, db: IDatabaseAdapter) => {
-                const startDate = args['start_date'] ?? ''
-                const endDate = args['end_date'] ?? ''
-
-                const entries = db.searchByDateRange(startDate, endDate)
-                const stats = db.getStatistics('day')
-
-                return {
-                    messages: [
-                        {
-                            role: 'user',
-                            content: {
-                                type: 'text',
-                                text: `Analyze the period ${startDate} to ${endDate}:
-
-Statistics: ${JSON.stringify(stats, null, 2)}
-
-Provide insights on patterns, productivity, and recommendations.
-
-Sources (${String(entries.length)} total):
-${markUntrustedContent(
-    entries
-        .slice(0, 15)
-        .map((e) => `[${e.timestamp}] ${e.entryType}: ${e.content.slice(0, 100)}`)
-        .join('\n')
-)}`,
-                            },
-                        },
-                    ],
-                }
-            },
-        },
-        {
-            name: 'goal-tracker',
-            description: 'Milestone and achievement tracking',
-            icons: [ICON_PROMPT],
-            arguments: [],
-            handler: (_args: Record<string, string>, db: IDatabaseAdapter) => {
-                const entries = db.getSignificantEntries(20)
-
-                const mappedEntries = entries.map((e) => ({
-                    id: e.id,
-                    type: e.entryType,
-                    timestamp: e.timestamp,
-                    content: markUntrustedContentInline(
-                        e.content.length > 250 ? e.content.slice(0, 250) + '...' : e.content
-                    ),
-                }))
-
-                return {
-                    messages: [
-                        {
-                            role: 'user',
-                            content: {
-                                type: 'text',
-                                text: `Track goals and milestones based on significant entries.
-Summarize progress toward goals and highlight achievements.
-
-Sources:
-${JSON.stringify(mappedEntries, null, 2)}`,
-                            },
-                        },
-                    ],
-                }
-            },
-        },
-        {
-            name: 'get-context-bundle',
-            description: 'Project context with recent entries, statistics, and GitHub status hints',
-            icons: [ICON_PROMPT],
-            arguments: [],
-            handler: (_args: Record<string, string>, db: IDatabaseAdapter) => {
-                const recent = db.getRecentEntries(5)
-                const stats = db.getStatistics('week')
-
-                const entrySummaries = recent.map((e) => ({
-                    id: e.id,
-                    type: e.entryType,
-                    timestamp: e.timestamp,
-                    preview: e.content.slice(0, 60) + (e.content.length > 60 ? '...' : ''),
-                }))
-
-                return {
-                    messages: [
-                        {
-                            role: 'user',
-                            content: {
-                                type: 'text',
-                                text: `Project context bundle:
-
-**Statistics:** ${JSON.stringify(stats)}
-
-**For full GitHub status:** Fetch \`memory://github/status\`
-**For full entry details:** Use \`get_entry_by_id\` with entry ID
-
-**Recent Entries (${String(recent.length)}):**
-${markUntrustedContent(entrySummaries.map((e) => `- #${String(e.id)} (${e.type}) ${e.preview}`).join('\n'))}`,
-                            },
-                        },
-                    ],
-                }
-            },
-        },
-        {
-            name: 'get-recent-entries',
-            description: 'Formatted recent entries',
-            icons: [ICON_PROMPT],
-            arguments: [
-                { name: 'limit', description: 'Number of entries (default: 10)', required: false },
-            ],
-            handler: (args: Record<string, string>, db: IDatabaseAdapter) => {
-                const limit = parseInt(args['limit'] ?? '10', 10)
-                const entries = db.getRecentEntries(limit)
-
-                return {
-                    messages: [
-                        {
-                            role: 'user',
-                            content: {
-                                type: 'text',
-                                text: `Recent ${String(limit)} entries:
-
-${markUntrustedContent(entries.map((e) => `## ${e.timestamp} (${e.entryType})\n\n${e.content}\n\nTags: ${e.tags.join(', ') || 'none'}`).join('\n\n---\n\n'))}`,
-                            },
-                        },
-                    ],
-                }
-            },
-        },
-        {
-            name: 'confirm-briefing',
-            description:
-                'Acknowledge session context received from memory://briefing to inform the user',
-            icons: [ICON_PROMPT],
-            arguments: [],
-            handler: (_args: Record<string, string>, db: IDatabaseAdapter) => {
-                const recent = db.getRecentEntries(3)
-                const stats = db.getStatistics('week')
-                const totalEntries = (stats as { totalEntries?: number }).totalEntries ?? 0
-
-                const entrySummary =
-                    recent.length > 0
-                        ? recent
-                              .map(
-                                  (e) =>
-                                      `  - #${String(e.id)} (${e.entryType}) ${e.content.slice(0, 40)}...`
-                              )
-                              .join('\n')
-                        : '  - No entries yet'
-
-                return {
-                    messages: [
-                        {
-                            role: 'user',
-                            content: {
-                                type: 'text',
-                                text: `Generate a briefing acknowledgment for the user with this context:
-
-**Session Context Received:**
-- **Journal**: ${String(totalEntries)} total entries
-- **Latest Entries**:
-${markUntrustedContent(entrySummary)}
-
-**My Behaviors:**
-- Create entries for: implementations, decisions, bug fixes, milestones
-- Search before: major decisions, referencing prior work
-- Link entries: implementation→spec, bugfix→issue
-
-**For More Context:**
-- Full entries: \`memory://recent\` or \`get_entry_by_id(ID)\`
-- GitHub status: \`memory://github/status\`
-- Repo insights: \`memory://github/insights\` (stars, traffic, clones)
-- Full health: \`memory://health\`
-
-Please confirm this context to the user in a concise, friendly format. Use a table if helpful.`,
-                            },
-                        },
-                    ],
-                }
-            },
-        },
-        {
             name: 'session-summary',
-            description:
-                'Create a session summary entry capturing what was accomplished, pending items, and context for the next session',
+            description: 'Create a formatted session summary entry',
             icons: [ICON_PROMPT],
-            arguments: [],
-            handler: (_args: Record<string, string>, db: IDatabaseAdapter) => {
-                const recent = db.getRecentEntries(5)
-
-                const entrySummary =
-                    recent.length > 0
-                        ? recent
-                              .map(
-                                  (e) =>
-                                      `- #${String(e.id)} (${e.entryType}) ${e.content.slice(0, 80)}${e.content.length > 80 ? '...' : ''}`
-                              )
-                              .join('\n')
-                        : '- No entries yet'
-
-                return {
-                    messages: [
-                        {
-                            role: 'user',
-                            content: {
-                                type: 'text',
-                                text: `Create a session summary journal entry based on this context:
-
-**Instructions:**
-1. Summarize what was accomplished in this session (key changes, decisions, files modified)
-2. Note what's unfinished or blocked (pending items, open questions)
-3. Include context for the next session (relevant entry IDs, branch names, PR numbers)
-4. Use \`entry_type: "retrospective"\` and tag with \`session-summary\` (If in Code Mode, use \`await mj.core.createEntry(...)\` via \`mj_execute_code\`)
-
-**Recent Entries:**
-${markUntrustedContent(entrySummary)}`,
-                            },
-                        },
-                    ],
-                }
+            handler: async (
+                _args: Record<string, string> | undefined,
+                db: IDatabaseAdapter,
+                teamDb?: IDatabaseAdapter,
+                _github?: unknown
+            ) => {
+                await Promise.resolve()
+                return generateSummaryPrompt(db, teamDb, 'personal')
             },
         },
         {
             name: 'team-session-summary',
-            description:
-                'Create a session summary entry for the team capturing what was accomplished, pending items, and context for the next team session',
+            description: 'Create a formatted team session summary entry',
             icons: [ICON_PROMPT],
-            arguments: [],
-            handler: (
-                _args: Record<string, string>,
-                _db: IDatabaseAdapter,
+            handler: async (
+                _args: Record<string, string> | undefined,
+                db: IDatabaseAdapter,
+                teamDb?: IDatabaseAdapter,
+                _github?: unknown
+            ) => {
+                await Promise.resolve()
+                return generateSummaryPrompt(db, teamDb, 'team')
+            },
+        },
+        {
+            name: 'create-entry',
+            description: 'Create a structured mid-thread journal entry',
+            icons: [ICON_PROMPT],
+            handler: async (
+                _args: Record<string, string> | undefined,
+                db: IDatabaseAdapter,
                 teamDb?: IDatabaseAdapter
             ) => {
-                if (!teamDb) {
-                    throw new ConfigurationError('Team database not configured')
-                }
-
-                const recent = teamDb.getRecentEntries(5)
-
-                const entrySummary =
-                    recent.length > 0
-                        ? recent
-                              .map(
-                                  (e) =>
-                                      `- #${String(e.id)} (${e.entryType}) ${e.content.slice(0, 80)}${e.content.length > 80 ? '...' : ''}`
-                              )
-                              .join('\n')
-                        : '- No entries yet'
-
+                await Promise.resolve()
+                return generateEntryPrompt(db, teamDb, 'personal')
+            },
+        },
+        {
+            name: 'create-team-entry',
+            description: 'Create a structured mid-thread team journal entry',
+            icons: [ICON_PROMPT],
+            handler: async (
+                _args: Record<string, string> | undefined,
+                db: IDatabaseAdapter,
+                teamDb?: IDatabaseAdapter
+            ) => {
+                await Promise.resolve()
+                return generateEntryPrompt(db, teamDb, 'team')
+            },
+        },
+        {
+            name: 'update-entry',
+            description: 'Safely update an existing mid-thread entry or session summary',
+            icons: [ICON_PROMPT],
+            handler: async (
+                _args: Record<string, string> | undefined,
+                db: IDatabaseAdapter,
+                teamDb?: IDatabaseAdapter
+            ) => {
+                await Promise.resolve()
+                return generateUpdateEntryPrompt(db, teamDb, 'personal')
+            },
+        },
+        {
+            name: 'update-team-entry',
+            description: 'Safely update an existing team entry or team session summary',
+            icons: [ICON_PROMPT],
+            handler: async (
+                _args: Record<string, string> | undefined,
+                db: IDatabaseAdapter,
+                teamDb?: IDatabaseAdapter
+            ) => {
+                await Promise.resolve()
+                return generateUpdateEntryPrompt(db, teamDb, 'team')
+            },
+        },
+        {
+            name: 'mcp-heal',
+            description: 'Guide for modifying MCP codebase to proactively prevent, mitigate, and heal LLM hallucinations',
+            icons: [ICON_PROMPT],
+            handler: () => {
                 return {
                     messages: [
                         {
                             role: 'user',
                             content: {
                                 type: 'text',
-                                text: `Create a team session summary journal entry based on this context:
+                                text: `# MCP Server Optimization & Anti-Hallucination Guardrails
 
-**Instructions:**
-1. Summarize what the team accomplished in this session (key changes, decisions, files modified)
-2. Note what's unfinished or blocked for the team (pending items, open questions)
-3. Include context for the next team session (relevant entry IDs, branch names, PR numbers)
-4. Use \`entry_type: "retrospective"\` and tag with \`session-summary\` (If in Code Mode, use \`await mj.team.teamCreateEntry(...)\` via \`mj_execute_code\`)
-5. YOU MUST USE \`team_create_entry\` OR \`mj.team.create\` TO SAVE THIS ENTRY.
+The primary philosophy of this workflow is: **Automate away as many problems as possible.** When you (the agent) encounter a hallucination, confusion, or an artificial roadblock, DO NOT just work around it or settle for throwing a "good error message".
 
-**Recent Team Entries:**
-${markUntrustedContent(entrySummary)}`,
+You MUST modify the underlying infrastructure (codebase, environment profiles, wrappers) to ensure execution succeeds seamlessly without the agent even noticing.
+
+## 1. Workflow Initialization
+
+1. Identify the specific hallucination, confusion error, or roadblock that occurred.
+2. Formulate a plan to heal the codebase using the strict hierarchy below.
+
+## 2. Phase 1: Determine the Layer of Healing
+
+There is a strict hierarchy of how you should heal the codebase:
+1. **Prevent (Highest Preference - Frictionless Recovery):** Automate the problem away. Modify the API schemas, dispatchers, environment profiles, or interceptors to silently catch, transform, or permit the hallucinatory payload so the execution succeeds automatically.
+2. **Mitigate (Fallback Only):** ONLY if the input cannot be safely inferred, coerced, or permitted without causing data destruction, intercept it and throw a highly actionable custom error explicitly guiding the agent on how to fix it immediately.
+
+Determine which of the 4 layers needs modification:
+
+### Layer 1: Schema & Instruction Hardening (The First Line of Defense)
+The most robust way to prevent a hallucination is to explicitly instruct the agent via the tools list or initialization payload.
+
+* **Schema \`.describe()\` Tags:** When an agent hallucinates a property, update the Zod schema. Add an explicit "Anti-Hallucination Hint" in the \`.describe()\` string. These surface directly in the JSON Schema that agents see on \`tools/list\`.
+* **Server Instructions:** If a structural hallucination persists, update the markdown fragments in \`src/constants/instructions/markdown/\` and run the generator script (\`pnpm run generate:instructions\`). **DO NOT** edit \`src/constants/server-instructions.ts\` directly, as it is auto-generated and your changes will be overwritten!
+
+### Layer 2: Dispatcher Healing (Frictionless Recovery)
+If agents consistently hallucinate inputs that can be logically inferred or normalized, heal them silently in the dispatcher (\`src/codemode/api/group-factory.ts\` or \`param-normalizer.ts\`) before they reach Zod validation.
+
+* **Type Coercion:** If agents pass strings instead of numbers, auto-resolve them.
+* **Case Normalization:** Catch and heal \`camelCase\` variations automatically.
+* **Explicit Interception:** If a string cannot be coerced, intercept it before validation and throw a highly actionable custom error prefixed with \`🛠️ AUTONOMOUS HEALING: \` to trigger an immediate agent hard-stop.
+
+### Layer 3: Sandbox Proxy Interceptors (Actionable Errors)
+When agents execute code in Code Mode, they often make standard Javascript mistakes. Instead of cryptic V8 runtime failures, add Proxy interceptors (e.g., \`worker-api-proxy.ts\`, \`worker-result-proxy.ts\`) to throw explicit guidance.
+
+* **Missing \`await\` Catching:** Wrap all RPC Promise returns in an additional Proxy to catch synchronous access to async properties.
+* **Array Method Healing:** Bind array methods dynamically to inner arrays if tools return objects containing arrays.
+
+### Layer 4: Alias Management (The Shadowing Trap)
+Agents commonly extrapolate method names based on patterns (e.g., trying to call \`mj.listEntries()\` instead of \`mj.searchEntries()\`).
+
+* **Adding Aliases:** Add entries to the \`METHOD_ALIASES\` constant in \`src/codemode/api-constants.ts\`.
+* **CRITICAL:** \`METHOD_ALIASES\` entries must point to either (a) a real tool method in the same group, or (b) another alias that eventually resolves to a real tool in the same group.
+
+### Layer 5: CLI Guardrails & Help Injection
+When an agent hallucinates CLI flags or usage patterns for standalone scripts or the commander CLI:
+* **Option Aliasing:** Add hardcoded aliases for commonly truncated flags in commander (e.g., \`.option('--impact, --impact-score')\`) so execution naturally succeeds.
+* **Dummy Command Interception:** When creating dummy commands to intercept agent hallucinations, ALWAYS use \`[args...]\` in the signature (e.g., \`.command('project [args...]')\`) to prevent Commander from throwing a "too many arguments" error before the action can execute.
+* **Help Meta-Prompting:** Use Commander's \`addHelpText('after', ...)\` or append to manual help scripts to inject explicit \`🤖 AI AGENT INSTRUCTIONS\` directly into the \`--help\` output, forcing subsequent agents to read explicit guardrails before execution.
+* **Actionable Errors:** Ensure that all CLI validation failures and process exits are prefixed with \`🛠️ AUTONOMOUS HEALING: \` to prevent agent loop retries.
+
+### Layer 6: Environment & Tooling Guardrails (The Meta-Trap)
+Agents often run into environment-level interceptors (like global PowerShell profiles, \`.bashrc\`, or global Git hooks) that throw hallucinatory errors or break command execution. 
+
+* **Fragile Native Tools:** When attempting to heal global environment files (which are usually NOT version controlled by Git), **DO NOT** use the agent-native \`replace_file_content\` tool on large, ambiguous code blocks, as it uses loose heuristics that can permanently butcher files.
+* **Safe Rewrites:** Instead, heal environment files by using precise \`multi_replace_file_content\` targeting single lines, or write a dedicated deterministic script to parse and rebuild the file safely.
+* **Native Tool Priority:** If you trigger a system interceptor for using shell commands like \`cat\`, \`grep\`, or \`ls\`, you MUST autonomously switch to native tools (e.g., \`view_file\`, \`grep_search\`, \`list_dir\`). DO NOT ask the user for help or wait for permission.
+* **Transient IDE Errors:** If shifting lines via code edits triggers IDE typing errors (e.g., "Unsafe argument of type error typed"), ALWAYS verify with \`tsc --noEmit\` before attempting complex type refactoring, as it may just be a stale ESLint cache.
+* **Interceptor Awareness:** If an agent encounters a global interceptor that contradicts autonomous healing (e.g., telling the agent to "Stop and notify the user IMMEDIATELY"), that global profile itself must be healed to instruct the agent to autonomously recover instead.
+* **Command Verification Trap:** In environments utilizing PowerShell proxy functions (like \`lib-agent-exec\`), native tools (e.g., \`pnpm\`, \`bun\`, \`git\`) exist as Aliases or Functions rather than traditional executables. DO NOT use \`Get-Command <tool> -CommandType Application\` to verify existence, as this explicitly filters out aliases and will falsely report the tool as missing. Use \`Get-Command <tool>\` without the \`-CommandType\` filter.
+
+## 3. Phase 2: Implementation
+
+1. Update the necessary files (e.g. schemas, instructions, normalizers, aliases).
+2. Validate the integrity of your code changes by running the project's native validation tooling (analogous to the semantic validation tiers).
+3. **Agent-First Validation (CRITICAL):** Programmatic tests cannot verify if an AI agent is actually healed. You MUST verify the fix against an actual agent by running the usability coordinator workflows (e.g., \`test-server/codemode/coordinator-workflow.md\` or \`test-server/standard/coordinator-workflow.md\`).
+4. Commit the changes locally.`
+                            },
+                        },
+                    ],
+                }
+            },
+        },
+        {
+            name: 'project-setup',
+            description: 'Guide for initializing and registering a new project in the memory-journal-mcp global registry',
+            icons: [ICON_PROMPT],
+            handler: () => {
+                return {
+                    messages: [
+                        {
+                            role: 'user',
+                            content: {
+                                type: 'text',
+                                text: `# Project Initialization Workflow
+
+When initializing a new project into the \`memory-journal-mcp\` global registry, you must follow these exact steps to ensure it is registered and tracked correctly.
+
+## Primary Method: MCP Code Mode (Recommended)
+You can natively register and initialize the project directly in the sandbox without needing to orchestrate shell commands.
+
+1. Invoke the \`mj_execute_code\` tool.
+2. Call the \`mj.admin.registerProject\` method:
+\`\`\`javascript
+const res = await mj.admin.registerProject("my-project", "C:/path/to/my-project", 123);
+return res;
+\`\`\`
+This method automatically parses the config, registers the path, and securely initializes the database entry in one transaction.
+
+## Fallback Method: Global CLI
+If you prefer to use terminal commands, you can use the global CLI wrapper.
+
+\`\`\`bash
+memory-journal-mcp project create <project-name> --path <absolute-path-to-repo> --number <github-project-number>
+\`\`\`
+
+*Note: The CLI now AUTOMATICALLY initializes the project database entry under the hood. You no longer need to run a secondary \`memory-journal-mcp entry create\` command unless you explicitly pass the \`--skip-init\` flag.*
+
+## Verify
+Once the command or Code Mode execution succeeds, the project is officially registered and you may proceed with any further initialization tasks (e.g., scaffolding files, setting up CI/CD).`
                             },
                         },
                     ],
@@ -454,107 +471,4 @@ ${markUntrustedContent(entrySummary)}`,
             },
         },
     ]
-}
-
-/**
- * Build a concise analytics signal string for injection into standup/retro prompts.
- * Returns empty string when no digest is available (graceful degradation).
- */
-function buildDigestSignalForPrompt(db: IDatabaseAdapter): string {
-    const snapshot = db.getLatestAnalyticsSnapshot?.('digest')
-    if (!snapshot) return ''
-
-    const data = snapshot.data
-    const lines: string[] = ['[Analytics Context]']
-
-    // Activity trend
-    const growth = data['activityGrowthPercent'] as number | null | undefined
-    const currentEntries = data['currentPeriodEntries'] as number | undefined
-    if (growth !== null && growth !== undefined) {
-        const sign = growth >= 0 ? '+' : ''
-        lines.push(
-            `Activity: ${sign}${String(growth)}% vs. last period (${String(currentEntries)} entries)`
-        )
-    }
-
-    // Significance spike
-    const sigMultiplier = data['significanceMultiplier'] as number | null | undefined
-    const sigCount = data['currentPeriodSignificant'] as number | undefined
-    if (sigMultiplier !== null && sigMultiplier !== undefined && sigMultiplier > 1.5) {
-        lines.push(
-            `Significance: ${String(sigCount)} significant entries (${String(sigMultiplier)}× historical avg)`
-        )
-    }
-
-    // Stale projects
-    const stale = data['staleProjects'] as
-        | { projectNumber: number; daysSilent: number }[]
-        | undefined
-    if (stale && stale.length > 0) {
-        const staleStr = stale
-            .map((p) => `P${String(p.projectNumber)} (${String(p.daysSilent)}d silent)`)
-            .join(', ')
-        lines.push(`⚠ Stale: ${staleStr}`)
-    }
-
-    // Only return if we have actual signals beyond the header
-    if (lines.length <= 1) return ''
-    return lines.join('\\n') + '\\n\\n'
-}
-
-/**
- * Build a concise active-flags signal string for injection into standup/retro prompts.
- * Returns empty string when team DB is not configured or no active flags exist.
- */
-function buildFlagSignalForPrompt(teamDb?: IDatabaseAdapter): string {
-    if (!teamDb) return ''
-
-    try {
-        const flagEntries = teamDb.searchEntries('', {
-            entryType: 'flag',
-            limit: 20,
-        })
-
-        const now = Date.now()
-        const activeFlags: {
-            flag_type: string
-            preview: string
-            target_user: string | null
-            age: string
-        }[] = []
-
-        for (const entry of flagEntries) {
-            const ctx = parseFlagContext(entry.autoContext)
-            if (!ctx || ctx.resolved) continue
-
-            const ageMs = now - new Date(entry.timestamp).getTime()
-            const hours = Math.floor(ageMs / 3_600_000)
-            const days = Math.floor(ageMs / 86_400_000)
-            const age =
-                days > 0 ? `${String(days)}d ago` : hours > 0 ? `${String(hours)}h ago` : 'just now'
-
-            const preview =
-                entry.content.length > 80 ? entry.content.slice(0, 80) + '…' : entry.content
-
-            activeFlags.push({
-                flag_type: ctx.flag_type,
-                preview,
-                target_user: ctx.target_user ?? null,
-                age,
-            })
-        }
-
-        if (activeFlags.length === 0) return ''
-
-        const lines: string[] = ['[Active Flags]']
-        for (const f of activeFlags) {
-            const target = f.target_user ? ` → @${f.target_user}` : ''
-            lines.push(`🚩 ${f.flag_type}${target}: ${f.preview} (${f.age})`)
-        }
-
-        return lines.join('\\n') + '\\n\\n'
-    } catch {
-        // Graceful degradation — flags are supplementary context
-        return ''
-    }
 }

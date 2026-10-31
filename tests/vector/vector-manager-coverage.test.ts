@@ -1,16 +1,20 @@
 import { describe, it, expect, vi } from 'vitest'
-import { VectorSearchManager } from '../../src/vector/vector-search-manager.js'
+
+vi.mock('@huggingface/transformers', () => ({
+    pipeline: vi.fn(),
+    env: { allowRemoteModels: false, localModelPath: '' }
+}))
+
+import { VectorSearchManager } from '../../src/vector/vector-search-manager/index.js'
 import type { IDatabaseAdapter } from '../../src/database/core/interfaces.js'
 
 describe('VectorSearchManager - error coverage', () => {
     it('covers initError path in addEntry', async () => {
-        const mockDb = { getRawDb: vi.fn() } as unknown as IDatabaseAdapter
+        const mockDb = { getRawDb: vi.fn(), db: {} } as unknown as IDatabaseAdapter
         const manager = new VectorSearchManager(mockDb)
         // Force initialization to fail by mocking initialize
         vi.spyOn(manager, 'initialize').mockRejectedValue(new Error('init err'))
-        const res = await manager.addEntry(1, 'content')
-        expect(res.success).toBe(false)
-        expect(res.error).toContain('init err')
+        await expect(manager.addEntry({ id: 1, content: 'content' } as any)).rejects.toThrow('init err')
     })
 
     it('covers DB insertion error in addEntry', async () => {
@@ -24,9 +28,8 @@ describe('VectorSearchManager - error coverage', () => {
         vi.spyOn(manager, 'generateEmbedding').mockResolvedValue([0.1])
         ;(manager as any).initialized = true
 
-        const res = await manager.addEntry(1, 'content')
-        expect(res.success).toBe(false)
-        expect(res.error).toContain('db error')
+        const res = manager.addEntry({ id: 1, content: 'content' } as any)
+        await expect(res).rejects.toThrow('db error')
     })
 
     it('covers error path in search', async () => {
@@ -63,9 +66,7 @@ describe('VectorSearchManager - error coverage', () => {
         } as unknown as IDatabaseAdapter
         const manager = new VectorSearchManager(mockDb)
         vi.spyOn(manager, 'initialize').mockRejectedValue(new Error('init reb err'))
-        const res = await manager.rebuildIndex(mockDb)
-        expect(res.failed).toBe(0)
-        expect(res.firstError).toContain('init reb err')
+        await expect(manager.rebuildIndex()).rejects.toThrow('init reb err')
     })
 
     it('covers insertion and embedding errors in rebuildIndex', async () => {
@@ -76,21 +77,21 @@ describe('VectorSearchManager - error coverage', () => {
                 if (calls++ === 0) throw new Error('insert err first')
             }),
             getActiveEntryCount: vi.fn().mockReturnValue(2),
-            getEntriesPage: vi.fn().mockReturnValue([
+            getEntriesPage: vi.fn().mockReturnValue({ entries: [
                 { id: 1, content: 'fail db' },
                 { id: 2, content: 'fail embed' },
-            ]),
+            ]}),
             executeInTransaction: vi.fn().mockImplementation((cb) => cb()),
         } as unknown as IDatabaseAdapter
         const manager = new VectorSearchManager(mockDb)
         vi.spyOn(manager, 'initialize').mockResolvedValue()
         vi.spyOn(manager, 'generateEmbedding').mockImplementation(async (content) => {
-            if (content === 'fail embed') throw new Error('embed err')
+            if (content.includes('fail embed')) throw new Error('embed err')
             return [0.1]
         })
         ;(manager as any).initialized = true
 
-        const res = await manager.rebuildIndex(mockDb)
+        const res = await manager.rebuildIndex()
         expect(res.failed).toBe(2) // 1 failed insert, 1 failed embed
         expect(res.firstError).toContain('embed err') // embed errors are processed in the first loop
     })

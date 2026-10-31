@@ -5,45 +5,50 @@
 /**
  * Entry types for journal entries
  */
-export type EntryType =
-    | 'personal_reflection'
-    | 'project_decision'
-    | 'technical_achievement'
-    | 'bug_fix'
-    | 'feature_implementation'
-    | 'code_review'
-    | 'meeting_notes'
-    | 'learning'
-    | 'research'
-    | 'planning'
-    | 'retrospective'
-    | 'standup'
-    | 'technical_note'
-    | 'development_note'
-    | 'enhancement'
-    | 'milestone'
-    | 'flag'
-    | 'system_integration_test'
-    | 'test_entry'
-    | 'plan_draft'
-    | 'adversarial_review'
-    | 'plan_refinement'
-    | 'copilot_validation'
-    | 'other'
+export const ENTRY_TYPES = [
+    'personal_reflection',
+    'project_decision',
+    'technical_achievement',
+    'bug_fix',
+    'feature_implementation',
+    'code_review',
+    'meeting_notes',
+    'learning',
+    'research',
+    'planning',
+    'retrospective',
+    'standup',
+    'technical_note',
+    'development_note',
+    'enhancement',
+    'milestone',
+    'system_integration_test',
+    'test_entry',
+    'plan_draft',
+    'adversarial_review',
+    'plan_refinement',
+    'plan_finalized',
+    'copilot_validation',
+    'other',
+] as const
+
+export type EntryType = typeof ENTRY_TYPES[number]
 
 /**
  * Significance types for important entries
  */
-export type SignificanceType =
-    | 'milestone'
-    | 'breakthrough'
-    | 'decision'
-    | 'architecture'
-    | 'lesson_learned'
-    | 'blocker_resolved'
-    | 'release'
-    | 'security'
-    | null
+export const SIGNIFICANCE_TYPES = [
+    'milestone',
+    'breakthrough',
+    'decision',
+    'architecture',
+    'lesson_learned',
+    'blocker_resolved',
+    'release',
+    'security',
+] as const
+
+export type SignificanceType = typeof SIGNIFICANCE_TYPES[number] | null
 
 /**
  * Relationship types between entries
@@ -60,15 +65,18 @@ export type SignificanceType =
  * - resolved: Entry resolved/fixed an issue from another
  * - caused: Entry caused or led to another outcome
  */
-export type RelationshipType =
-    | 'evolves_from'
-    | 'references'
-    | 'implements'
-    | 'clarifies'
-    | 'response_to'
-    | 'blocked_by'
-    | 'resolved'
-    | 'caused'
+export const RELATIONSHIP_TYPES = [
+    'evolves_from',
+    'references',
+    'implements',
+    'clarifies',
+    'response_to',
+    'blocked_by',
+    'resolved',
+    'caused',
+] as const
+
+export type RelationshipType = typeof RELATIONSHIP_TYPES[number]
 
 /**
  * Journal entry entity
@@ -82,6 +90,7 @@ export interface JournalEntry {
     significanceType: SignificanceType
     autoContext: string | null
     deletedAt: string | null
+    isArchived: boolean
     tags: string[]
     // GitHub integration fields
     projectNumber?: number | null
@@ -96,6 +105,42 @@ export interface JournalEntry {
     workflowStatus?: string | null
     // Analytics & search
     importanceScore?: number
+    trustScore?: number
+    impactScore?: number
+    validationStatus?: 'passed' | 'failed' | 'none'
+    // Concurrency versioning
+    version: number
+    workspaceId?: string
+    sessionId?: string | null
+}
+
+/**
+ * Anchor status representing the validity of an external reference
+ */
+export type AnchorStatus = 'pending' | 'valid' | 'stale' | 'invalidated' | 'unresolvable'
+
+/**
+ * Anchor entity representing a referenced file or dependency
+ */
+export interface Anchor {
+    id?: number
+    entryId: number
+    anchorPath: string
+    anchorType: string
+    status: AnchorStatus
+    lastCheckedAt?: string
+}
+
+/**
+ * Entry revision entity for history tracking
+ */
+export interface EntryRevision {
+    id: number
+    entryId: number
+    revisionNumber: number
+    contentSnapshot: string
+    changedAt: string
+    changedBy: string | null
 }
 
 /**
@@ -132,7 +177,7 @@ export interface Embedding {
  * Importance scoring breakdown showing weighted component contributions
  */
 export interface ImportanceBreakdown {
-    /** Significance type contribution (weight: 0.30) */
+    /** Significance type and impact contribution (weight: 0.30) */
     significance: number
     /** Relationship count contribution (weight: 0.35) */
     relationships: number
@@ -140,6 +185,8 @@ export interface ImportanceBreakdown {
     causal: number
     /** Recency decay contribution (weight: 0.15) */
     recency: number
+    /** Trust and anchor validity contribution (weight modifier) */
+    trustModifier?: number
 }
 
 /**

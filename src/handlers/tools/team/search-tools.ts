@@ -14,6 +14,8 @@ import {
     TeamSearchByDateRangeSchema,
     TeamSearchByDateRangeSchemaMcp,
     TeamEntriesListOutputSchema,
+    TeamListDeletedEntriesSchema,
+    TeamListDeletedEntriesSchemaMcp,
 } from './schemas.js'
 
 // ============================================================================
@@ -44,28 +46,20 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
-                    const { query, tags, limit, sort_by, project_number } =
+                    const { query, tags, limit, cursor, sort_by, project_number, include_archived, fuzzy_match, auto_correct, workspace_id } =
                         TeamSearchSchema.parse(params)
 
-                    // Security: To bypass project_number, the search must explicitly be for flags only.
-                    // Prevent mixed tag arrays (e.g. ['flag:blocker', 'frontend']) from leaking non-flag entries
-                    // because tag filtering is an OR/IN operation.
-                    const isGlobalFlagSearch =
-                        tags !== undefined &&
-                        tags.length > 0 &&
-                        tags.every((t) => t.startsWith('flag:'))
 
-                    if (project_number == null && !isGlobalFlagSearch) {
+                    const projectNumber = project_number
+
+                    if (projectNumber == null) {
                         return {
                             success: false,
-                            error: 'Cross-tenant search is disabled. You MUST specify a project_number to isolate results.',
-                            code: 'PERMISSION_DENIED',
-                            category: 'auth',
-                            suggestion: 'Provide a valid project_number in the tool parameters.',
-                            recoverable: false,
-                            entries: [],
-                            count: 0,
-                            degraded: false,
+                            error: 'Missing project_number. Cross-tenant searches without project_number are not allowed.',
+                            code: 'VALIDATION_ERROR',
+                            category: 'validation',
+                            suggestion: 'Specify a project_number.',
+                            recoverable: true,
                         }
                     }
 
@@ -74,16 +68,19 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                             ? Math.min(Math.max(limit * 5, 50), MAX_QUERY_LIMIT)
                             : limit
 
-                    let entries = teamDb.searchEntries(query ?? '', {
+                    const result = teamDb.searchEntries(query ?? '', {
                         limit: searchLimit,
+                        cursor,
                         sortBy: sort_by,
-                        projectNumber: project_number,
+                        projectNumber: projectNumber,
+                        includeArchived: include_archived,
+                        fuzzy_match,
+                        auto_correct,
+                        workspaceId: workspace_id,
                     })
+                    let entries = result.entries
 
-                    // Security: Enforce entryType constraint for cross-tenant searches
-                    if (project_number == null) {
-                        entries = entries.filter((e) => e.entryType === 'flag')
-                    }
+                    // Security: projectNumber is required for all searches now
 
                     // Filter by tags if provided (batch query instead of N+1)
                     if (tags && tags.length > 0) {
@@ -109,12 +106,14 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         ...e,
                         author: authorMap.get(e.id) ?? null,
                     }))
-
                     return {
                         success: true,
                         entries: enriched,
                         count: enriched.length,
                         degraded: false,
+                        next_cursor: result.nextCursor,
+                        suggestions: (result as { suggestions?: string[] }).suggestions,
+                        correctedQuery: (result as { correctedQuery?: string }).correctedQuery,
                     }
                 } catch (err) {
                     return formatHandlerError(err)
@@ -147,28 +146,24 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         entry_type,
                         tags,
                         limit,
+                        cursor,
                         sort_by,
                         project_number,
+                        include_archived,
+                        workspace_id,
                     } = TeamSearchByDateRangeSchema.parse(params)
 
-                    // Security: To bypass project_number, the search must explicitly be for flags only.
-                    const isGlobalFlagSearch =
-                        entry_type === 'flag' ||
-                        (tags !== undefined &&
-                            tags.length > 0 &&
-                            tags.every((t) => t.startsWith('flag:')))
 
-                    if (project_number == null && !isGlobalFlagSearch) {
+                    const projectNumber = project_number
+
+                    if (projectNumber == null) {
                         return {
                             success: false,
-                            error: 'Cross-tenant search is disabled. You MUST specify a project_number to isolate results.',
-                            code: 'PERMISSION_DENIED',
-                            category: 'auth',
-                            suggestion: 'Provide a valid project_number in the tool parameters.',
-                            recoverable: false,
-                            entries: [],
-                            count: 0,
-                            degraded: false,
+                            error: 'Missing project_number. Cross-tenant searches without project_number are not allowed.',
+                            code: 'VALIDATION_ERROR',
+                            category: 'validation',
+                            suggestion: 'Specify a project_number.',
+                            recoverable: true,
                         }
                     }
 
@@ -184,14 +179,17 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    const entries = teamDb.searchByDateRange(start_date, end_date, {
-                        // Security: Enforce entryType constraint for cross-tenant searches
-                        entryType: project_number == null ? 'flag' : entry_type,
+                    const result = teamDb.searchByDateRange(start_date, end_date, {
+                        entryType: entry_type,
                         tags,
                         limit,
+                        cursor,
                         sortBy: sort_by,
-                        projectNumber: project_number,
+                        projectNumber: projectNumber,
+                        includeArchived: include_archived,
+                        workspaceId: workspace_id,
                     })
+                    const entries = result.entries
 
                     // Batch-fetch authors
                     const authorMap = batchFetchAuthors(
@@ -208,7 +206,42 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         entries: enriched,
                         count: enriched.length,
                         degraded: false,
+                        next_cursor: result.nextCursor,
                     }
+                } catch (err) {
+                    return formatHandlerError(err)
+                }
+            },
+        },
+        {
+            name: 'team_list_deleted_entries',
+            title: 'List Deleted Team Entries',
+            description: 'List recently soft-deleted team entries that can be restored. Requires TEAM_DB_PATH.',
+            group: 'team',
+            inputSchema: TeamListDeletedEntriesSchemaMcp,
+            outputSchema: TeamEntriesListOutputSchema,
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
+            handler: (params: unknown) => {
+                try {
+                    if (!teamDb) return { ...TEAM_DB_ERROR_RESPONSE }
+                    const { limit, offset, project_number, workspace_id } = TeamListDeletedEntriesSchema.parse(params)
+                    const projectNumber = project_number
+                    const result = teamDb.getDeletedEntries({ limit, offset, workspaceId: workspace_id })
+                    let entries = result.entries
+                    if (projectNumber != null) {
+                        entries = entries.filter((e) => e.projectNumber === projectNumber)
+                    }
+                    const authorMap = batchFetchAuthors(teamDb, entries.map((e) => e.id))
+                    const enriched = entries.map((e) => ({
+                        ...e,
+                        author: authorMap.get(e.id) ?? null,
+                    }))
+                    return { success: true, entries: enriched, count: enriched.length }
                 } catch (err) {
                     return formatHandlerError(err)
                 }
@@ -216,3 +249,4 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
         },
     ]
 }
+

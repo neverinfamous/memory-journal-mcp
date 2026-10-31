@@ -9,6 +9,7 @@
 import { ICON_ANALYTICS } from '../../constants/icons.js'
 import { withPriority, ASSISTANT_FOCUSED } from '../../utils/resource-annotations.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from './shared.js'
+import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server'
 
 // ============================================================================
 // memory://insights/digest
@@ -31,8 +32,10 @@ export const digestInsightsResource: InternalResourceDef = {
         // Try scheduler first, then persisted DB snapshot
         const schedulerDigest = context.scheduler?.getLatestDigest?.()
         if (schedulerDigest) {
+            const data = { success: true, snapshot: schedulerDigest }
+            const tokenEstimate = Math.ceil(JSON.stringify(data).length / 4)
             return {
-                data: { success: true, snapshot: schedulerDigest },
+                data: { ...data, _meta: { tokenEstimate } },
                 annotations: { lastModified },
             }
         }
@@ -41,12 +44,14 @@ export const digestInsightsResource: InternalResourceDef = {
         try {
             const liveDigest = context.db?.computeDigest?.()
             if (liveDigest !== undefined) {
+                const data = {
+                    success: true,
+                    snapshot: liveDigest,
+                    source: 'computed',
+                }
+                const tokenEstimate = Math.ceil(JSON.stringify(data).length / 4)
                 return {
-                    data: {
-                        success: true,
-                        snapshot: liveDigest,
-                        source: 'computed',
-                    },
+                    data: { ...data, _meta: { tokenEstimate } },
                     annotations: { lastModified },
                 }
             }
@@ -56,26 +61,22 @@ export const digestInsightsResource: InternalResourceDef = {
 
         const dbSnapshot = context.db?.getLatestAnalyticsSnapshot?.('digest')
         if (dbSnapshot) {
+            const data = {
+                success: true,
+                snapshot: dbSnapshot.data,
+                computedAt: dbSnapshot.createdAt,
+                source: 'persisted',
+            }
+            const tokenEstimate = Math.ceil(JSON.stringify(data).length / 4)
             return {
-                data: {
-                    success: true,
-                    snapshot: dbSnapshot.data,
-                    computedAt: dbSnapshot.createdAt,
-                    source: 'persisted',
-                },
+                data: { ...data, _meta: { tokenEstimate } },
                 annotations: { lastModified: dbSnapshot.createdAt },
             }
         }
 
-        return {
-            data: {
-                success: true,
-                snapshot: null,
-                message:
-                    'No digest available — enable with --digest-interval <minutes> (HTTP transport only)',
-            },
-            annotations: { lastModified },
-        }
+        throw new ProtocolError(ProtocolErrorCode.InternalError, 
+            'No digest available — enable with --digest-interval <minutes> (HTTP transport only)'
+        )
     },
 }
 
@@ -98,14 +99,7 @@ export const teamCollaborationResource: InternalResourceDef = {
         const lastModified = new Date().toISOString()
 
         if (!context.teamDb) {
-            return {
-                data: {
-                    success: true,
-                    matrix: null,
-                    message: 'Team database not configured — set TEAM_DB_PATH to enable.',
-                },
-                annotations: { lastModified },
-            }
+            throw new ProtocolError(ProtocolErrorCode.InternalError,  'Team database not configured — set TEAM_DB_PATH to enable.')
         }
 
         // Compute collaboration matrix live from team DB
@@ -114,18 +108,56 @@ export const teamCollaborationResource: InternalResourceDef = {
                 period: 'month',
                 limit: 100,
             })
+            const data = { success: true, matrix }
+            const tokenEstimate = Math.ceil(JSON.stringify(data).length / 4)
             return {
-                data: { success: true, matrix },
+                data: { ...data, _meta: { tokenEstimate } },
                 annotations: { lastModified },
             }
         } catch (error) {
+            throw new ProtocolError(ProtocolErrorCode.InternalError,  error instanceof Error ? error.message : String(error))
+        }
+    },
+}
+
+// ============================================================================
+// memory://insights/reports
+// ============================================================================
+
+export const reportHistoryResource: InternalResourceDef = {
+    uri: 'memory://insights/reports',
+    name: 'Report History',
+    title: 'Recent Scheduled Digest Reports',
+    description:
+        'The last 5 generated digest report snapshots. Updated by the scheduled report job.',
+    mimeType: 'application/json',
+    icons: [ICON_ANALYTICS],
+    annotations: {
+        ...withPriority(0.3, ASSISTANT_FOCUSED),
+    },
+    handler: (_uri: string, context: ResourceContext): ResourceResult => {
+        const lastModified = new Date().toISOString()
+
+        try {
+            const snapshots = context.db.getAnalyticsSnapshots?.('report', 5) ?? []
+            
+            const reports = snapshots.map(snapshot => {
+                const data = snapshot.data
+                const topEntries = data['topImportanceEntries'] as { preview?: string }[] | undefined
+                return {
+                    computedAt: snapshot.createdAt,
+                    preview: (data['preview'] as string | undefined) ?? topEntries?.[0]?.preview?.substring(0, 200) ?? 'No preview available'
+                }
+            })
+
+            const data = { success: true, reports }
+            const tokenEstimate = Math.ceil(JSON.stringify(data).length / 4)
             return {
-                data: {
-                    success: false,
-                    error: error instanceof Error ? error.message : String(error),
-                },
-                annotations: { lastModified },
+                data: { ...data, _meta: { tokenEstimate } },
+                annotations: { lastModified: reports[0]?.computedAt ?? lastModified },
             }
+        } catch (error) {
+            throw new ProtocolError(ProtocolErrorCode.InternalError,  error instanceof Error ? error.message : String(error))
         }
     },
 }
@@ -138,5 +170,5 @@ export const teamCollaborationResource: InternalResourceDef = {
  * Get all insight resource definitions
  */
 export function getInsightResourceDefinitions(): InternalResourceDef[] {
-    return [digestInsightsResource, teamCollaborationResource]
+    return [digestInsightsResource, teamCollaborationResource, reportHistoryResource]
 }

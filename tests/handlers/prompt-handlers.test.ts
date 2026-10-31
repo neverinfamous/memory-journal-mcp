@@ -11,8 +11,8 @@ import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
 describe('Prompt Handlers', () => {
     let db: DatabaseAdapter
     let teamDb: DatabaseAdapter
-    const testDbPath = './test-prompts.db'
-    const testTeamDbPath = './test-team-prompts.db'
+    const testDbPath = './.test-output/vitest/test-prompts.db'
+    const testTeamDbPath = './.test-output/vitest/test-team-prompts.db'
 
     beforeAll(async () => {
         db = new DatabaseAdapter(testDbPath)
@@ -99,12 +99,12 @@ describe('Prompt Handlers', () => {
     // ========================================================================
 
     describe('getPrompt', () => {
-        it('should return messages for each known prompt', () => {
+        it('should return messages for each known prompt', async () => {
             const prompts = getPrompts()
             const names = prompts.map((p) => (p as { name: string }).name)
 
             for (const name of names) {
-                const result = getPrompt(
+                const result = await getPrompt(
                     name,
                     { pr_number: '42', project_number: '42' },
                     db,
@@ -126,106 +126,38 @@ describe('Prompt Handlers', () => {
             expect(() => getPrompt('nonexistent_prompt_xyz', {}, db)).toThrow()
         })
 
-        it('should return messages for analyze-period with date arguments', () => {
-            const today = new Date().toISOString().split('T')[0]!
-            const result = getPrompt('analyze-period', { start_date: today, end_date: today }, db)
+        it('should return messages for prepare-standup', async () => {
+            const result = await getPrompt('prepare-standup', {}, db)
 
             expect(result.messages).toBeDefined()
             expect(result.messages.length).toBeGreaterThan(0)
             const text = (result.messages[0]?.content as { text: string }).text
-            expect(text).toContain(today)
+            expect(text).toContain('standup')
         })
 
-        it('should return messages for find-related with query argument', () => {
-            const result = getPrompt('find-related', { query: 'test' }, db)
-
-            expect(result.messages).toBeDefined()
-            expect(result.messages.length).toBeGreaterThan(0)
-            const text = (result.messages[0]?.content as { text: string }).text
-            expect(text).toContain('test')
-        })
-
-        it('should return messages for get-context-bundle prompt', () => {
-            const result = getPrompt('get-context-bundle', {}, db)
+        it('should return messages for goal-tracker prompt', async () => {
+            const result = await getPrompt('goal-tracker', {}, db)
 
             expect(result.messages).toBeDefined()
             expect(result.messages.length).toBeGreaterThan(0)
         })
 
-        it('should return messages for goal-tracker prompt', () => {
-            const result = getPrompt('goal-tracker', {}, db)
-
-            expect(result.messages).toBeDefined()
-            expect(result.messages.length).toBeGreaterThan(0)
-        })
-
-        it('should return messages for prepare-retro with days argument', () => {
-            const result = getPrompt('prepare-retro', { days: '14' }, db)
-
-            expect(result.messages).toBeDefined()
-            expect(result.messages.length).toBeGreaterThan(0)
-        })
-
-        it('should return messages for team-session-summary prompt', () => {
-            const result = getPrompt('team-session-summary', {}, db, teamDb)
+        it('should return messages for team-session-summary prompt with team target', async () => {
+            const result = await getPrompt('team-session-summary', undefined, db, teamDb)
 
             expect(result.messages).toBeDefined()
             expect(result.messages.length).toBeGreaterThan(0)
             const text = (result.messages[0]?.content as { text: string }).text
             expect(text).toContain('Team test entry')
-            expect(text).toContain('mj.team.create')
+            expect(text).toContain('memory-journal-mcp entry create --team')
         })
 
-        it('should throw ConfigurationError if teamDb is omitted for team-session-summary', () => {
-            expect(() => getPrompt('team-session-summary', {}, db)).toThrow(
+        it('should throw ConfigurationError if teamDb is omitted for team-session-summary', async () => {
+            await expect(getPrompt('team-session-summary', undefined, db)).rejects.toThrow(
                 'Team database not configured'
             )
         })
 
-        it('should return messages for flag-dashboard prompt with flag_type filter', () => {
-            // Add some flags to teamDb
-            teamDb.createEntry({
-                content: 'Blocker flag',
-                entryType: 'flag',
-                autoContext: JSON.stringify({
-                    flag_type: 'blocker',
-                    target_user: 'alice',
-                    resolved: false,
-                }),
-            })
-            teamDb.createEntry({
-                content: 'FYI flag',
-                entryType: 'flag',
-                autoContext: JSON.stringify({ flag_type: 'fyi', resolved: false }),
-            })
-            // Resolved flag
-            teamDb.createEntry({
-                content: 'Resolved blocker',
-                entryType: 'flag',
-                autoContext: JSON.stringify({
-                    flag_type: 'blocker',
-                    resolved: true,
-                    resolved_at: new Date().toISOString(),
-                }),
-            })
-            // Missing context flag
-            teamDb.createEntry({
-                content: 'No context',
-                entryType: 'flag',
-            })
 
-            const result = getPrompt('flag-dashboard', { flag_type: 'blocker' }, db, teamDb)
-
-            expect(result.messages).toBeDefined()
-            const text = (result.messages[0]?.content as { text: string }).text
-            expect(text).toContain('Blocker flag')
-            expect(text).not.toContain('FYI flag') // Filtered out
-        })
-
-        it('should throw ConfigurationError if teamDb is omitted for flag-dashboard', () => {
-            expect(() => getPrompt('flag-dashboard', {}, db)).toThrow(
-                'Team database not configured'
-            )
-        })
     })
 })

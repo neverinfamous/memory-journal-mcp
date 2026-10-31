@@ -10,8 +10,9 @@ import { opendir, open } from 'node:fs/promises'
 import { join } from 'node:path'
 import { constants } from 'node:fs'
 import type { IDatabaseAdapter } from '../database/core/interfaces.js'
-import type { VectorSearchManager } from '../vector/vector-search-manager.js'
+import type { VectorSearchManager } from '../vector/vector-search-manager/index.js'
 import type { EntryType, RelationshipType, SignificanceType } from '../types/index.js'
+import { ENTRY_TYPES, RELATIONSHIP_TYPES } from '../types/index.js'
 import { parseFrontmatter } from './frontmatter.js'
 import { assertSafeDirectoryPath, assertSafeFilePath } from '../utils/security-utils.js'
 
@@ -29,6 +30,8 @@ export interface ImportOptions {
     author?: string
     /** Associate imported entries with a specific GitHub project number */
     project_number?: number
+    /** Workspace isolation identifier */
+    workspaceId?: string
 }
 
 /** Result of an import operation */
@@ -44,43 +47,10 @@ export interface ImportResult {
 }
 
 /** Supported relationship types for validation */
-const VALID_RELATIONSHIP_TYPES = new Set<string>([
-    'evolves_from',
-    'references',
-    'implements',
-    'clarifies',
-    'response_to',
-    'blocked_by',
-    'resolved',
-    'caused',
-])
+const VALID_RELATIONSHIP_TYPES = new Set<string>(RELATIONSHIP_TYPES)
 
 /** Valid entry types for casting */
-const VALID_ENTRY_TYPES = new Set<string>([
-    'personal_reflection',
-    'project_decision',
-    'technical_achievement',
-    'bug_fix',
-    'feature_implementation',
-    'code_review',
-    'meeting_notes',
-    'learning',
-    'research',
-    'planning',
-    'retrospective',
-    'standup',
-    'technical_note',
-    'development_note',
-    'enhancement',
-    'milestone',
-    'system_integration_test',
-    'test_entry',
-    'plan_draft',
-    'adversarial_review',
-    'plan_refinement',
-    'copilot_validation',
-    'other',
-])
+const VALID_ENTRY_TYPES = new Set<string>(ENTRY_TYPES)
 
 /**
  * Safely cast a string to EntryType, returning undefined for invalid values.
@@ -118,6 +88,18 @@ function toEntryType(value: string | undefined): EntryType | undefined {
  * @param vectorManager - Optional vector search manager for re-indexing
  * @returns Import result with counts and errors
  */
+
+export interface ParsedFile {
+    filename: string
+    body: string
+    metadata: {
+        mj_id?: number
+        entry_type?: string
+        tags?: string[]
+        significance?: string
+        relationships?: { type: string; target_id: number }[]
+    }
+}
 export async function importMarkdownEntries(
     sourceDir: string,
     db: IDatabaseAdapter,
@@ -125,7 +107,7 @@ export async function importMarkdownEntries(
     vectorManager: VectorSearchManager | undefined,
     allowedRoots: string[]
 ): Promise<ImportResult> {
-    const { dry_run = false, limit = 100, author, project_number } = options
+    const { dry_run = false, limit = 100 } = options
 
     // Dynamically enforce bounded root
     assertSafeDirectoryPath(sourceDir, allowedRoots)
@@ -152,17 +134,6 @@ export async function importMarkdownEntries(
     }
 
     // Phase 1: Read files and parse asynchronously
-    interface ParsedFile {
-        filename: string
-        body: string
-        metadata: {
-            mj_id?: number
-            entry_type?: string
-            tags?: string[]
-            significance?: string
-            relationships?: { type: string; target_id: number }[]
-        }
-    }
     const parsedFiles: ParsedFile[] = []
 
     for (const filename of mdFiles) {
@@ -224,6 +195,47 @@ export async function importMarkdownEntries(
         }
     }
 
+    const batchResult = await processImportBatch(parsedFiles, db, options, vectorManager)
+    
+    // Merge batch results into our initial result tracking
+    result.success = result.success && batchResult.success
+    result.created += batchResult.created
+    result.updated += batchResult.updated
+    result.relationshipsLinked += batchResult.relationshipsLinked
+    result.vectorsIndexed += batchResult.vectorsIndexed
+    result.errors.push(...batchResult.errors)
+
+    return result
+}
+
+/**
+ * Process a batch of parsed markdown files and upsert them into the database.
+ * 
+ * @param parsedFiles Files to import
+ * @param db Database adapter
+ * @param options Import options
+ * @param vectorManager Optional vector search manager
+ * @returns Import result with counts and errors
+ */
+export async function processImportBatch(
+    parsedFiles: ParsedFile[],
+    db: IDatabaseAdapter,
+    options: ImportOptions = {},
+    vectorManager: VectorSearchManager | undefined
+): Promise<ImportResult> {
+    const { dry_run = false, author, project_number, workspaceId } = options
+
+    const result: ImportResult = {
+        success: true,
+        created: 0,
+        updated: 0,
+        skipped: 0,
+        relationshipsLinked: 0,
+        vectorsIndexed: 0,
+        errors: [],
+        dry_run,
+    }
+
     // Phase 2: Perform DB operations in a transaction
     const vectorQueue: { entryId: number; body: string; filename: string }[] = []
 
@@ -234,7 +246,7 @@ export async function importMarkdownEntries(
             if (dry_run) {
                 // In dry-run mode, just classify what would happen
                 if (metadata.mj_id !== undefined) {
-                    const existing = db.getEntryById(metadata.mj_id)
+                    const existing = db.getEntryById(metadata.mj_id, workspaceId)
                     if (existing) {
                         result.updated++
                     } else {
@@ -250,13 +262,14 @@ export async function importMarkdownEntries(
             const entryType: EntryType = toEntryType(metadata.entry_type) ?? 'personal_reflection'
 
             if (metadata.mj_id !== undefined) {
-                const existing = db.getEntryById(metadata.mj_id)
+                const existing = db.getEntryById(metadata.mj_id, workspaceId)
                 if (existing) {
                     // UPDATE existing entry
                     db.updateEntry(metadata.mj_id, {
                         content: body,
                         entryType: toEntryType(metadata.entry_type),
                         tags: metadata.tags,
+                        workspaceId,
                     })
                     entryId = metadata.mj_id
                     result.updated++
@@ -272,6 +285,7 @@ export async function importMarkdownEntries(
                         // SEC-2.4: Preserve author attribution from team import options
                         ...(author !== undefined && { author }),
                         ...(project_number !== undefined && { projectNumber: project_number }),
+                        workspaceId,
                     })
                     entryId = newEntry.id
                     result.created++
@@ -288,6 +302,7 @@ export async function importMarkdownEntries(
                     // SEC-2.4: Preserve author attribution from team import options
                     ...(author !== undefined && { author }),
                     ...(project_number !== undefined && { projectNumber: project_number }),
+                    workspaceId,
                 })
                 entryId = newEntry.id
                 result.created++
@@ -299,7 +314,7 @@ export async function importMarkdownEntries(
                     if (!VALID_RELATIONSHIP_TYPES.has(rel.type)) continue
 
                     // Only link if target entry exists
-                    const targetExists = db.getEntryById(rel.target_id)
+                    const targetExists = db.getEntryById(rel.target_id, workspaceId)
                     if (targetExists) {
                         db.linkEntries(entryId, rel.target_id, rel.type as RelationshipType)
                         result.relationshipsLinked++
@@ -314,17 +329,12 @@ export async function importMarkdownEntries(
     // Phase 3: Perform vector indexing asynchronously (outside transaction)
     if (!dry_run && vectorManager) {
         let hasVectorErrors = false
-        for (const { entryId, body, filename } of vectorQueue) {
+        for (const { entryId, filename } of vectorQueue) {
             try {
-                const vectorResult = await vectorManager.addEntry(entryId, body)
-                if (vectorResult.success) {
+                const entry = db.getEntryById(entryId, workspaceId)
+                if (entry) {
+                    await vectorManager.addEntry(entry)
                     result.vectorsIndexed++
-                } else {
-                    hasVectorErrors = true
-                    result.errors.push({
-                        file: filename,
-                        error: `Vector indexing failed: ${vectorResult.error || 'Unknown error'}`,
-                    })
                 }
             } catch (err) {
                 hasVectorErrors = true

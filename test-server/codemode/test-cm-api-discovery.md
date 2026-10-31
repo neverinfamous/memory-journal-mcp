@@ -6,19 +6,22 @@ Test the `mj.*` API bridge discoverability: top-level help, per-group help, meth
 
 **Prerequisites:**
 
+- **Validation:** Ensure the test agent validates strict mode and boundary limits on newly hardened schemas.
+> **Note**: When updating schemas or validation logic, please refer to the `/zod` skill for best practices on Standard Schema and Safe Parsing.
 - Confirm MCP server instructions were auto-received before starting.
 - **Use codemode directly for all tests, NOT the terminal or scripts!**
 - Code Mode is included in all tool filtering presets by default.
+- Seed data from `test-seed.md` must be present.
 
 **Workflow after testing:**
 
-1. Create a plan to fix any issues found or potential improvement opportunities, including changes to `constants/server-instructions.ts` or this file. **If you encounter parameter or tool hallucinations during testing, intercept them gracefully in the server code (e.g., `codemode.ts`) so future agents succeed automatically.**
-2. Use `code-map.md` as a source of truth and ensure fixes comply with the `mcp-builder` skill.
-3. If you made code changes/fixes, update `UNRELEASED.md` and commit without pushing. If tests pass cleanly, do NOT update `UNRELEASED.md`. Then, stop so the **USER** can verify with `npm run lint`, `npm run typecheck`, `npm run test`, and `npm run test:e2e`.
-4. After user completes verification, re-test fixes with direct MCP calls.
+1. Create a plan to fix any issues found or potential improvement opportunities, including changes to `src/constants/server-instructions.ts`. **Do NOT edit this test prompt file directly.** **If you encounter parameter or tool hallucinations during testing, intercept them gracefully in the server code (e.g., `src/filtering/tool-filter.ts`) so future agents succeed automatically.**
+2. Use `test-server/tool-reference.md` and `test-server/scripts/tool-map.json` as sources of truth and ensure fixes comply with the `mcp-builder` skill.
+3. **Local Verification**: If you or a subagent modifies the codebase, you MUST run the linter and typechecker (`pnpm run lint` and `npx tsc --noEmit`) locally and fix any issues BEFORE committing. Pay strict attention to ESLint and TypeScript compiler outputs. You MUST fix all validation issues prior to committing. Do NOT ignore warnings or errors. Follow strict TypeScript guidelines: NEVER use `any` (use `unknown` with type guards), avoid unsafe typecasts, and ensure explicit return types.
+   - DO NOT perform live server verification. DO NOT wait for a server restart. DO NOT pause or send a message asking the user to refresh the server.
+4. **Commit**: Immediately commit passing changes using the `bun ./.agents/scripts/commit.ts --msg "type(scope): message" --impact <0.1-1.0> --confidence <0.1-1.0> --validation passed --journal --add <path>` utility. Do NOT use raw `git commit`. WARNING: Do NOT commit your code and then attempt to use `git commit --amend` to fix a lingering lint or test issue later. Amending a commit rewrites the commit SHA, which will permanently break the changelog tracking workflow. DO NOT stop to ask the USER to verify—you must run `pnpm run lint` and `npx tsc --noEmit` yourself, you are autonomous.
 5. Provide a very brief final summary.
    - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total estimated tokens that actually entered the context window during this test pass.
-
 ---
 
 ## Phase 17: API Discoverability
@@ -45,10 +48,10 @@ Test the `mj.*` API bridge discoverability: top-level help, per-group help, meth
 
 | Test                        | Code                                                                                                                                                             | Expected Result                                   |
 | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
-| Alias: mj.core.recent()     | `const r = await mj.core.recent(2); return { count: r.entries?.length ?? r.count };`                                                                             | Returns entries (alias for `getRecentEntries`)    |
+| Alias: mj.core.getRecentEntries()     | `const r = await mj.core.getRecentEntries(2); return { count: r.entries?.length ?? r.count };`                                                                             | Returns entries (alias for `getRecentEntries`)    |
 | Alias: mj.core.getRecent()  | `const r = await mj.core.getRecent({limit: 2}); return { count: r.entries?.length ?? r.count };`                                                                 | Returns entries (alias for `getRecentEntries`)    |
-| Alias: mj.analytics.stats() | `const s = await mj.analytics.stats(); return typeof s.totalEntries;`                                                                                            | Returns `"number"` (alias for `getStatistics`)    |
-| Positional: mj.core.get(id) | `const r = await mj.core.getRecentEntries({project_number: 5, limit:1}); const id = r.entries[0].id; const e = await mj.core.get(id); return { hasEntry: !!e };` | Returns the entry (positional for `getEntryById`) |
+| Alias: mj.analytics.getStatistics() | `const s = await mj.analytics.getStatistics(); return typeof s.totalEntries;`                                                                                            | Returns `"number"` (alias for `getStatistics`)    |
+| Positional: mj.core.getEntryById(id) | `const r = await mj.core.getRecentEntries({workspace_id: "test-ws", limit:1}); const id = r.entries[0].id; const e = await mj.core.getEntryById(id); return { hasEntry: !!e };` | Returns the entry (positional for `getEntryById`) |
 
 ---
 
@@ -58,5 +61,5 @@ Test the `mj.*` API bridge discoverability: top-level help, per-group help, meth
 
 - `mj.help()` returns all 10 groups with correct `totalMethods` count
 - Per-group `help()` returns method names for each group
-- Method aliases work (e.g., `mj.core.recent()`, `mj.analytics.stats()`)
-- Positional arguments work (e.g., `mj.core.get(id)`)
+- Method aliases work (e.g., `mj.core.getRecentEntries()`, `mj.analytics.getStatistics()`)
+- Positional arguments work (e.g., `mj.core.getEntryById(id)`)

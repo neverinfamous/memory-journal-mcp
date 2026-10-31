@@ -5,8 +5,8 @@
  * security rejection, and timeout enforcement via E2E.
  */
 
-import { test, expect } from '@playwright/test'
-import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import { test, expect } from './test-fixture.js'
+import type { Client } from '@modelcontextprotocol/client'
 import { createClient, callToolAndParse } from './helpers.js'
 
 test.describe.configure({ mode: 'serial' })
@@ -25,7 +25,7 @@ test.describe('Payload Contracts: Code Mode', () => {
     test('should execute basic code via mj_execute_code', async () => {
         const payload = await callToolAndParse(client, 'mj_execute_code', {
             code: `
-                const result = await mj.core.testSimple({ message: 'code-mode-e2e' });
+                const result = await mj.core.test_simple({ message: 'code-mode-e2e' });
                 return result;
             `,
         })
@@ -39,14 +39,14 @@ test.describe('Payload Contracts: Code Mode', () => {
         const payload = await callToolAndParse(client, 'mj_execute_code', {
             code: `
                 // Step 1: Create an entry
-                const created = await mj.core.createEntry({
+                const created = await mj.core.create_entry({
                     content: 'Code mode multi-step test',
                     entry_type: 'test_entry',
                     tags: ['codemode-test'],
                 });
 
                 // Step 2: Retrieve recent entries
-                const recent = await mj.core.getRecentEntries({ limit: 1 });
+                const recent = await mj.core.get_recent_entries({ limit: 1 });
 
                 return {
                     created: created.success,
@@ -62,7 +62,7 @@ test.describe('Payload Contracts: Code Mode', () => {
         const response = await client.callTool({
             name: 'mj_execute_code',
             arguments: {
-                code: `const fs = require('fs'); return fs.readFileSync('/etc/passwd');`,
+                code: `return require('fs').writeFileSync('/etc/passwd', '...');`,
             },
         })
 
@@ -81,7 +81,7 @@ test.describe('Payload Contracts: Code Mode', () => {
         const response = await client.callTool({
             name: 'mj_execute_code',
             arguments: {
-                code: `return process.env;`,
+                code: `return process.cwd();`,
             },
         })
 
@@ -100,7 +100,7 @@ test.describe('Payload Contracts: Code Mode', () => {
             name: 'mj_execute_code',
             arguments: {
                 code: `while (true) {}`,
-                timeout: 1,
+                timeout_ms: 50,
             },
         })
 

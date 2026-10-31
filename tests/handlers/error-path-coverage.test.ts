@@ -48,7 +48,7 @@ const callTool = (
 
 describe('Error Path Coverage', () => {
     let db: DatabaseAdapter
-    const testDbPath = './test-error-paths.db'
+    const testDbPath = './.test-output/vitest/test-error-paths.db'
 
     beforeAll(async () => {
         db = new DatabaseAdapter(testDbPath)
@@ -287,7 +287,7 @@ describe('Error Path Coverage', () => {
         it('should ignore share_with_team when teamDb is missing', async () => {
             const result = (await callTool(
                 'create_entry',
-                {
+                { workspace_id: 'default', 
                     project_number: 1,
                     content: 'Test share without team',
                     share_with_team: true,
@@ -331,7 +331,7 @@ describe('Error Path Coverage', () => {
         })
 
         it('delete_entry should fail for nonexistent entry', async () => {
-            const result = (await callTool('delete_entry', { entry_id: 99999 }, db)) as {
+            const result = (await callTool('delete_entry', { entry_id: 99999 , expected_version: 1 }, db)) as {
                 error: string
             }
 

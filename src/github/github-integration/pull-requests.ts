@@ -54,6 +54,7 @@ export class PullRequestsManager {
                     : pr.state === 'open'
                       ? ('OPEN' as const)
                       : ('CLOSED' as const),
+                headRef: pr.head?.ref,
             }))
 
             this.client.setCache(cacheKey, result)

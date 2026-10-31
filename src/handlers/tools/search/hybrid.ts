@@ -10,7 +10,7 @@
 
 import type { JournalEntry, EntryType } from '../../../types/index.js'
 import type { IDatabaseAdapter } from '../../../database/core/interfaces.js'
-import type { VectorSearchManager } from '../../../vector/vector-search-manager.js'
+import type { VectorSearchManager } from '../../../vector/vector-search-manager/index.js'
 import { passMetadataFilters, type ISearchFilters, type EntryWithSource } from './helpers.js'
 import { logger } from '../../../utils/logger.js'
 
@@ -39,14 +39,18 @@ export interface RRFResult {
  * Each input list is an array of entry IDs in rank order (best first).
  * The output is a map of entry ID → cumulative RRF score.
  */
-export function computeRRFScores(rankedLists: number[][]): Map<number, number> {
+export function computeRRFScores(rankedLists: number[][], weights?: number[]): Map<number, number> {
     const scores = new Map<number, number>()
 
-    for (const list of rankedLists) {
+    for (let i = 0; i < rankedLists.length; i++) {
+        const list = rankedLists[i]
+        const weight = weights?.[i] ?? 1.0
+        if (!list) continue
+        
         for (let rank = 0; rank < list.length; rank++) {
             const entryId = list[rank]
             if (entryId === undefined) continue
-            const rrfScore = 1 / (RRF_K + rank + 1) // rank is 0-indexed, formula uses 1-indexed
+            const rrfScore = weight * (1 / (RRF_K + rank + 1)) // rank is 0-indexed, formula uses 1-indexed
             scores.set(entryId, (scores.get(entryId) ?? 0) + rrfScore)
         }
     }
@@ -69,6 +73,8 @@ export async function hybridSearch(
     vectorManager: VectorSearchManager | undefined,
     options: ISearchFilters & {
         limit: number
+        ftsWeight?: number
+        semanticWeight?: number
     }
 ): Promise<{ entries: EntryWithSource[]; fusionScores: Map<number, number>; degraded?: boolean }> {
     const overfetchLimit = Math.min(options.limit * OVERFETCH_MULTIPLIER, 500)
@@ -91,6 +97,7 @@ export async function hybridSearch(
                 entryType: options.entryType as EntryType,
                 startDate: options.startDate,
                 endDate: options.endDate,
+                workspaceId: options.workspaceId,
             })
         ),
         // Semantic search (returns [] if vectorManager is unavailable)
@@ -107,11 +114,14 @@ export async function hybridSearch(
     ])
 
     // Build ranked ID lists
-    const ftsRanked = ftsResults.map((e) => e.id)
+    const ftsRanked = ftsResults.entries.map((e) => e.id)
     const semanticRanked = semanticResults.map((r) => r.entryId)
 
-    // Compute RRF scores
-    const fusionScores = computeRRFScores([ftsRanked, semanticRanked])
+    // Compute RRF scores with configured weights
+    const fusionScores = computeRRFScores(
+        [ftsRanked, semanticRanked],
+        [options.ftsWeight ?? 1.0, options.semanticWeight ?? 1.0]
+    )
 
     // Sort by fusion score descending
     const sortedIds = [...fusionScores.entries()]
@@ -140,8 +150,7 @@ export async function hybridSearch(
         entries.push({ ...entry, source: 'personal' as const })
     }
 
-    const isDegraded =
-        (ftsResults as unknown as { degraded?: boolean }).degraded === true || semanticDegraded
+    const isDegraded = ftsResults.degraded === true || semanticDegraded
 
     return { entries, fusionScores, degraded: isDegraded }
 }

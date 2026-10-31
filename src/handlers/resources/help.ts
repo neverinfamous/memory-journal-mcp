@@ -15,6 +15,7 @@ import { ASSISTANT_FOCUSED } from '../../utils/resource-annotations.js'
 import { logger } from '../../utils/logger.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from './shared.js'
 import type { getTools } from '../../handlers/tools/index.js'
+import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server'
 
 // ============================================================================
 // Group Metadata
@@ -138,6 +139,13 @@ export function extractParameters(inputSchema: unknown): ParameterInfo[] {
     ) {
         schema = (schema['_def'] as Record<string, unknown>)['schema'] as Record<string, unknown>
     } else if (
+        schema['out'] !== undefined &&
+        schema['out'] !== null &&
+        typeof schema['out'] === 'object' &&
+        'shape' in schema['out']
+    ) {
+        schema = schema['out']
+    } else if (
         schema['in'] !== undefined &&
         schema['in'] !== null &&
         typeof schema['in'] === 'object'
@@ -193,7 +201,16 @@ export function getHelpResourceDefinitions(): InternalResourceDef[] {
             icons: [ICON_BRIEFING],
             annotations: ASSISTANT_FOCUSED,
             handler: async (_uri: string, context: ResourceContext): Promise<ResourceResult> => {
-                const tools = await getAllToolDefinitionsAsync(context)
+                const rawTools = await getAllToolDefinitionsAsync(context)
+
+                // Filter out tools disabled by --tool-filter, UNLESS codemode is enabled.
+                // Code Mode exposes the full API surface area via the sandbox,
+                // so we must register all help resources for the agent to reference.
+                const hasCodeMode = context.filterConfig?.enabledTools.has('mj_execute_code') ?? false;
+                const tools = rawTools.filter(t => {
+                    if (!context.filterConfig || hasCodeMode) return true;
+                    return context.filterConfig.enabledTools.has(t.name);
+                });
 
                 // Group tools by their group field
                 const groups = new Map<string, { names: string[]; readOnly: boolean }>()
@@ -222,13 +239,15 @@ export function getHelpResourceDefinitions(): InternalResourceDef[] {
                         helpUri: `memory://help/${name}`,
                     }))
 
+                const data = {
+                    totalTools: tools.length,
+                    totalGroups: groupList.length,
+                    groups: groupList,
+                    hint: 'Read memory://help/{group} for detailed parameter info on each tool.',
+                }
+                const tokenEstimate = Math.ceil(JSON.stringify(data).length / 4)
                 return {
-                    data: {
-                        totalTools: tools.length,
-                        totalGroups: groupList.length,
-                        groups: groupList,
-                        hint: 'Read memory://help/{group} for detailed parameter info on each tool.',
-                    },
+                    data: { ...data, _meta: { tokenEstimate } }
                 }
             },
         },
@@ -246,19 +265,19 @@ export function getHelpResourceDefinitions(): InternalResourceDef[] {
                 const groupName = match?.[1]
 
                 if (!groupName) {
-                    return {
-                        data: {
-                            error: 'Invalid group name in URI',
-                            hint: 'Read memory://help for a list of available groups.',
-                        },
-                    }
+                    throw new ProtocolError(ProtocolErrorCode.InvalidParams,  'Invalid group name in URI. Read memory://help for a list of available groups.')
                 }
 
                 // Resolve dynamic tool data for this group
-                const tools = await getAllToolDefinitionsAsync(context)
+                const rawTools = await getAllToolDefinitionsAsync(context)
+                const hasCodeMode = context.filterConfig?.enabledTools.has('mj_execute_code') ?? false;
+                const tools = rawTools.filter(t => {
+                    if (!context.filterConfig || hasCodeMode) return true;
+                    return context.filterConfig.enabledTools.has(t.name);
+                });
                 const groupTools = tools.filter((t) => t.group === groupName)
 
-                // Check for static help content (codemode, github, hush-protocol, etc.)
+                // Check for static help content (codemode, github, etc.)
                 const staticContent = HELP_CONTENT.get(groupName)
 
                 // If the group has dynamic tools, always return JSON (with optional helpContent)
@@ -305,6 +324,9 @@ export function getHelpResourceDefinitions(): InternalResourceDef[] {
                         result['helpContent'] = staticContent
                     }
 
+                    const tokenEstimate = Math.ceil(JSON.stringify(result).length / 4)
+                    result['_meta'] = { tokenEstimate }
+
                     return { data: result }
                 }
 
@@ -316,14 +338,9 @@ export function getHelpResourceDefinitions(): InternalResourceDef[] {
                 // Not found
                 const availableGroups = [...new Set(tools.map((t) => t.group))].sort()
                 const staticKeys = [...HELP_CONTENT.keys()]
-                return {
-                    data: {
-                        error: `Group "${groupName}" not found`,
-                        availableGroups,
-                        staticHelpKeys: staticKeys,
-                        hint: 'Read memory://help for a list of available groups.',
-                    },
-                }
+                throw new ProtocolError(ProtocolErrorCode.InternalError, 
+                    `Group "${groupName}" not found. Available groups: ${availableGroups.join(', ')}. Static help: ${staticKeys.join(', ')}.`
+                )
             },
         },
     ]
@@ -366,7 +383,15 @@ async function getAllToolDefinitionsAsync(context: ResourceContext): Promise<Min
         toolIndexModule ??= await import('../../handlers/tools/index.js')
         if (toolIndexModule === null) return []
 
-        const tools = toolIndexModule.getTools(context.db, null)
+        const tools = toolIndexModule.getTools(
+            context.db,
+            null,
+            context.vectorManager,
+            context.github ?? undefined,
+            undefined,
+            context.teamDb,
+            undefined
+        )
         return tools.map((t) => ({
             name: t.name,
             title: t.title ?? t.name,
@@ -386,42 +411,52 @@ async function getAllToolDefinitionsAsync(context: ResourceContext): Promise<Min
 
 /**
  * Infer tool group from the tool name.
- * Exhaustive map of all 70 tools — team_ and mj_ prefixes handled first,
- * then explicit lookup for the remaining 44 tools.
+ * Exhaustive map of all 99 tools — team_ and mj_ prefixes handled first,
+ * then explicit lookup for the remaining 54 tools.
  */
 function inferGroupFromName(name: string): string {
     if (name.startsWith('team_')) return 'team'
     if (name.startsWith('mj_')) return 'codemode'
 
     const groupMap: Record<string, string> = {
-        // core (6)
+        // core (7)
         create_entry: 'core',
         create_entry_minimal: 'core',
         get_entry_by_id: 'core',
         get_recent_entries: 'core',
+        get_entry_history: 'core',
         test_simple: 'core',
         list_tags: 'core',
-        // search (4)
+        // search (6)
         search_entries: 'search',
         search_by_date_range: 'search',
         semantic_search: 'search',
         get_vector_index_stats: 'search',
+        list_deleted_entries: 'search',
+        cross_team_search: 'search',
         // analytics (2)
         get_statistics: 'analytics',
         get_cross_project_insights: 'analytics',
         // relationships (2)
         link_entries: 'relationships',
         visualize_relationships: 'relationships',
-        // io (3)
+        // io (4)
         export_entries: 'io',
         export_markdown: 'io',
         import_markdown: 'io',
-        // admin (5)
+        import_external: 'io',
+        // admin (11)
+        update_configuration: 'admin',
         update_entry: 'admin',
         delete_entry: 'admin',
+        restore_entry: 'admin',
         merge_tags: 'admin',
         rebuild_vector_index: 'admin',
         add_to_vector_index: 'admin',
+        batch_create_entries: 'admin',
+        batch_update_entries: 'admin',
+        batch_delete_entries: 'admin',
+        search_audit_log: 'admin',
         // backup (4)
         backup_journal: 'backup',
         list_backups: 'backup',
@@ -446,6 +481,12 @@ function inferGroupFromName(name: string): string {
         close_github_issue_with_entry: 'github',
         get_repo_insights: 'github',
         get_copilot_reviews: 'github',
+        // git (5)
+        get_commit_history: 'git',
+        search_commits: 'git',
+        get_release_info: 'git',
+        get_unreleased_commits: 'git',
+        analyze_commit_patterns: 'git',
     }
 
     return groupMap[name] ?? 'core'

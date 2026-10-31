@@ -2,6 +2,7 @@ import { Octokit } from '@octokit/rest'
 import { graphql } from '@octokit/graphql'
 import * as simpleGitImport from 'simple-git'
 import { logger } from '../../utils/logger.js'
+import type { RateLimitSnapshot } from './types.js'
 
 export const CACHE_TTL_MS = 5 * 60 * 1000
 export const TRAFFIC_CACHE_TTL_MS = 10 * 60 * 1000
@@ -19,6 +20,7 @@ export class GitHubClient {
     public octokit: Octokit | null = null
     public graphqlWithAuth: typeof graphql | null = null
     public git: simpleGitImport.SimpleGit
+    public latestRateLimit: RateLimitSnapshot | null = null
 
     public readonly apiCache = new Map<string, CacheEntry<unknown>>()
     private totalCacheBytes = 0
@@ -39,10 +41,30 @@ export class GitHubClient {
             cwd: process.cwd(),
         })
 
-        this.git = simpleGit(effectiveDir)
+        const gitOptions = {
+            baseDir: effectiveDir,
+            spawnOptions: { windowsHide: true }
+        } as unknown as simpleGitImport.SimpleGitOptions
+        this.git = simpleGit(gitOptions)
 
         if (resolvedToken) {
             this.octokit = new Octokit({ auth: resolvedToken })
+            
+            // Passively capture rate limit state from all REST API responses
+            this.octokit.hook.after('request', (response) => {
+                const headers = response.headers
+                if (headers['x-ratelimit-remaining'] !== undefined) {
+                    this.latestRateLimit = {
+                        limit: Number(headers['x-ratelimit-limit']),
+                        remaining: Number(headers['x-ratelimit-remaining']),
+                        used: Number(headers['x-ratelimit-used']),
+                        reset: Number(headers['x-ratelimit-reset']),
+                        resource: String(headers['x-ratelimit-resource'] ?? 'core'),
+                        capturedAt: new Date().toISOString(),
+                    }
+                }
+            })
+
             this.graphqlWithAuth = graphql.defaults({
                 headers: { authorization: `token ${resolvedToken}` },
             })

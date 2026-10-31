@@ -9,6 +9,14 @@ import { readResource } from '../../src/handlers/resources/index.js'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
 import type { GitHubIntegration } from '../../src/github/github-integration/index.js'
 
+vi.mock('../../src/git/index.js', () => ({
+    GitHistoryClient: vi.fn().mockImplementation(() => ({
+        getCommitHistory: vi.fn().mockResolvedValue([]),
+        getReleaseInfo: vi.fn().mockResolvedValue([]),
+        getUnreleasedChangelog: vi.fn().mockRejectedValue(new Error('unreleased not supported')),
+    })),
+}))
+
 /**
  * Creates a minimal mock GitHubIntegration with sensible defaults.
  */
@@ -125,7 +133,7 @@ function createMockGitHub(overrides: Partial<Record<string, unknown>> = {}): Git
 
 describe('GitHub Resource Handlers', () => {
     let db: DatabaseAdapter
-    const testDbPath = './test-gh-resources.db'
+    const testDbPath = './.test-output/vitest/test-gh-resources.db'
 
     beforeAll(async () => {
         db = new DatabaseAdapter(testDbPath)
@@ -321,16 +329,13 @@ describe('GitHub Resource Handlers', () => {
 
         it('should return error when project not found', async () => {
             const github = createMockGitHub()
-            const result = await readResource(
+            await expect(readResource(
                 'memory://kanban/999',
                 db,
                 undefined,
                 undefined,
                 github
-            )
-
-            const data = result.data as { error: string }
-            expect(data.error).toContain('not found')
+            )).rejects.toThrow('not found')
         })
 
         it('should return error when no github', async () => {
@@ -338,63 +343,6 @@ describe('GitHub Resource Handlers', () => {
 
             const data = result.data as { error: string }
             expect(data.error).toContain('GitHub integration not available')
-        })
-    })
-
-    // ========================================================================
-    // memory://kanban/{project_number}/diagram
-    // ========================================================================
-
-    describe('memory://kanban/{project_number}/diagram', () => {
-        it('should return mermaid diagram', async () => {
-            const github = createMockGitHub({
-                getProjectKanban: vi.fn().mockResolvedValue({
-                    projectId: 'PVT_1',
-                    projectTitle: 'Board',
-                    columns: [
-                        {
-                            status: 'Done',
-                            items: [
-                                {
-                                    id: 'PVTITEM_A1B2C3D4',
-                                    type: 'ISSUE',
-                                    title: 'Completed task',
-                                    number: 5,
-                                },
-                            ],
-                        },
-                    ],
-                    statusOptions: [],
-                    totalItems: 1,
-                }),
-            })
-
-            const result = await readResource(
-                'memory://kanban/1/diagram',
-                db,
-                undefined,
-                undefined,
-                github
-            )
-
-            const data = result.data as string
-
-            expect(typeof data).toBe('string')
-            expect(data).toContain('graph LR')
-            expect(data).toContain('Done')
-        })
-
-        it('should show fallback when no github', async () => {
-            const result = await readResource(
-                'memory://kanban/1/diagram',
-                db,
-                undefined,
-                undefined,
-                null
-            )
-
-            expect(typeof result.data).toBe('string')
-            expect(result.data as string).toContain('GitHub integration not available')
         })
     })
 
@@ -440,158 +388,6 @@ describe('GitHub Resource Handlers', () => {
             const text = result.data as string
 
             expect(text).not.toContain('⭐')
-        })
-    })
-
-    // ========================================================================
-    // memory://github/insights
-    // ========================================================================
-
-    describe('memory://github/insights', () => {
-        it('should return insights with stars and traffic', async () => {
-            const github = createMockGitHub()
-            const result = await readResource(
-                'memory://github/insights',
-                db,
-                undefined,
-                undefined,
-                github
-            )
-
-            const data = result.data as {
-                repository: string
-                stars: number
-                forks: number
-                clones14d?: number
-                views14d?: number
-            }
-
-            expect(data.repository).toBe('testowner/testrepo')
-            expect(data.stars).toBe(42)
-            expect(data.forks).toBe(7)
-            expect(data.clones14d).toBe(120)
-            expect(data.views14d).toBe(500)
-        })
-
-        it('should return error when no github', async () => {
-            const result = await readResource(
-                'memory://github/insights',
-                db,
-                undefined,
-                undefined,
-                null
-            )
-
-            const data = result.data as { error: string }
-            expect(data.error).toContain('GitHub integration not available')
-        })
-
-        it('should return error when no owner/repo', async () => {
-            const github = createMockGitHub({
-                getRepoInfo: vi.fn().mockResolvedValue({ owner: null, repo: null, branch: null }),
-            })
-
-            const result = await readResource(
-                'memory://github/insights',
-                db,
-                undefined,
-                undefined,
-                github
-            )
-
-            const data = result.data as { error: string }
-            expect(data.error).toContain('Could not detect repository')
-        })
-
-        it('should handle traffic data failure gracefully', async () => {
-            const github = createMockGitHub({
-                getTrafficData: vi.fn().mockRejectedValue(new Error('403')),
-            })
-
-            const result = await readResource(
-                'memory://github/insights',
-                db,
-                undefined,
-                undefined,
-                github
-            )
-
-            const data = result.data as {
-                stars: number
-                hint?: string
-            }
-
-            expect(data.stars).toBe(42)
-            expect(data.hint).toBeDefined()
-        })
-    })
-
-    // ========================================================================
-    // memory://graph/actions
-    // ========================================================================
-
-    describe('memory://graph/actions', () => {
-        it('should return mermaid diagram with workflow runs', async () => {
-            const github = createMockGitHub()
-            const result = await readResource(
-                'memory://graph/actions',
-                db,
-                undefined,
-                undefined,
-                github
-            )
-
-            const data = result.data as string
-
-            expect(typeof data).toBe('string')
-            expect(data).toContain('graph LR')
-        })
-
-        it('should return fallback when no github', async () => {
-            const result = await readResource(
-                'memory://graph/actions',
-                db,
-                undefined,
-                undefined,
-                null
-            )
-
-            expect(typeof result.data).toBe('string')
-            expect(result.data as string).toContain('NoGitHub')
-        })
-
-        it('should return fallback when no repo detected', async () => {
-            const github = createMockGitHub({
-                getRepoInfo: vi.fn().mockResolvedValue({ owner: null, repo: null, branch: null }),
-            })
-
-            const result = await readResource(
-                'memory://graph/actions',
-                db,
-                undefined,
-                undefined,
-                github
-            )
-
-            expect(typeof result.data).toBe('string')
-            expect(result.data as string).toContain('NoRepo')
-        })
-
-        it('should return fallback when no workflow runs', async () => {
-            const github = createMockGitHub({
-                getWorkflowRuns: vi.fn().mockResolvedValue([]),
-            })
-
-            const result = await readResource(
-                'memory://graph/actions',
-                db,
-                undefined,
-                undefined,
-                github
-            )
-
-            expect(typeof result.data).toBe('string')
-            expect(result.data as string).toContain('NoRuns')
         })
     })
 
@@ -712,16 +508,13 @@ describe('GitHub Resource Handlers', () => {
         })
 
         it('should return error for invalid PR number', async () => {
-            const result = await readResource(
+            await expect(readResource(
                 'memory://prs/abc/timeline',
                 db,
                 undefined,
                 undefined,
                 null
-            )
-
-            const data = result.data as { error: string }
-            expect(data.error).toContain('Invalid PR number')
+            )).rejects.toThrow('Invalid PR number')
         })
     })
 

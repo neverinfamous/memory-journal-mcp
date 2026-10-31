@@ -1,0 +1,61 @@
+{
+  "libs": {
+    "lib-git-history": {
+      "source": ".agents/scripts/lib-git-history",
+      "syncedAt": "2026-10-31T13:04:39.496Z",
+      "syncedFromCommit": "fdc1352a3e4a41c26ec248d66c872b516261775a",
+      "files": [
+        "cache.ts",
+        "cli.ts",
+        "constants.ts",
+        "git-numstat.ts",
+        "git-patch.ts",
+        "git-runner.ts",
+        "parser-batch.ts",
+        "parser-metadata.ts",
+        "parser-record.ts",
+        "parser-utils.ts",
+        "parser.ts",
+        "schema.ts",
+        "AGENT_README.md"
+      ]
+    },
+    "lib-agent-exec": {
+      "source": ".agents/scripts/lib-agent-exec",
+      "syncedAt": "2026-10-31T13:04:39.567Z",
+      "syncedFromCommit": "fdc1352a3e4a41c26ec248d66c872b516261775a",
+      "files": [
+        "schema.ts",
+        "environment.ts",
+        "command-builder.ts",
+        "stream-manager.ts",
+        "process-manager.ts",
+        "io-controller.ts",
+        "prompt-detector.ts",
+        "agent-exec.ts",
+        "execution-engine.ts",
+        "process-controller.ts",
+        "help.ts",
+        "utils.ts",
+        "webhook-template.ts",
+        "command-utils.ts",
+        "eval-healer.ts",
+        "io-utils.ts",
+        "path-healer.ts",
+        "interceptors/index.ts",
+        "interceptors/types.ts",
+        "interceptors/utils.ts",
+        "interceptors/git-interceptor.ts",
+        "interceptors/docker-interceptor.ts",
+        "interceptors/package-manager-interceptor.ts",
+        "interceptors/cloud-cli-interceptor.ts",
+        "interceptors/repl-tui-interceptor.ts",
+        "interceptors/search-interceptor.ts",
+        "interceptors/mutating-interceptors.ts",
+        "interceptors/structural-interceptors.ts",
+        "interceptors/system-interceptor.ts",
+        "AGENT_README.md"
+      ]
+    }
+  }
+}

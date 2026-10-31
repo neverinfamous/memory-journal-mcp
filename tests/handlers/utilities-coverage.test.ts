@@ -2,8 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import {
     rulesResource,
     workflowsResource,
-    statisticsResource,
-    tagsResource,
 } from '../../src/handlers/resources/core/utilities.js'
 import * as fs from 'node:fs'
 
@@ -43,8 +41,7 @@ describe('utilities coverage', () => {
             // 3. Error handling (cache expired)
             time += 10 * 60 * 1000
             fileMock.readFile.mockRejectedValue('String error read')
-            const errResult = (await rulesResource.handler('mem', dummyAllowedContext)) as any
-            expect(errResult.data.error).toContain('String error read')
+            await expect(rulesResource.handler('mem', dummyAllowedContext)).rejects.toThrow('String error read')
         } finally {
             if (previousRulesFilePath === undefined) {
                 delete process.env['RULES_FILE_PATH']
@@ -54,7 +51,7 @@ describe('utilities coverage', () => {
         }
     })
 
-    it('covers workflowsResource when fallback to process.env is needed', () => {
+    it('covers workflowsResource when fallback to process.env is needed', async () => {
         const previousWorkflowSummary = process.env['MEMORY_JOURNAL_WORKFLOW_SUMMARY']
         try {
             process.env['MEMORY_JOURNAL_WORKFLOW_SUMMARY'] = 'test workflow summary'
@@ -62,8 +59,7 @@ describe('utilities coverage', () => {
             expect(result.data.summary).toBe('test workflow summary')
 
             delete process.env['MEMORY_JOURNAL_WORKFLOW_SUMMARY']
-            const result2 = workflowsResource.handler('mem', {} as any) as any
-            expect(result2.data.configured).toBe(false)
+            expect(() => workflowsResource.handler('mem', {} as any)).toThrow()
         } finally {
             if (previousWorkflowSummary === undefined) {
                 delete process.env['MEMORY_JOURNAL_WORKFLOW_SUMMARY']
@@ -73,18 +69,4 @@ describe('utilities coverage', () => {
         }
     })
 
-    it('covers statisticsResource', () => {
-        const mockDb = { getStatistics: vi.fn().mockReturnValue({ total: 5 }) }
-        const result = statisticsResource.handler('mem', { db: mockDb } as any)
-        expect((result as any).total).toBe(5)
-    })
-
-    it('covers tagsResource', () => {
-        const mockDb = {
-            listTags: vi.fn().mockReturnValue([{ id: 1, name: 'tag1', usageCount: 5 }]),
-        }
-        const result = tagsResource.handler('mem', { db: mockDb } as any)
-        expect((result as any).count).toBe(1)
-        expect((result as any).tags[0].name).toBe('tag1')
-    })
 })

@@ -10,6 +10,9 @@ import { ICON_ISSUE, ICON_PR } from '../../constants/icons.js'
 import { ASSISTANT_FOCUSED, MEDIUM_PRIORITY } from '../../utils/resource-annotations.js'
 import type { InternalResourceDef, ResourceContext } from './shared.js'
 import { resolveGitHubRepo, isResourceError } from './shared.js'
+import { parseSessionCommitContext } from '../../types/auto-context.js'
+import { enrichCommits } from '../../github/commit-references/index.js'
+import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server'
 
 /**
  * Get template resource definitions
@@ -28,11 +31,13 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                 const projectNumber = match?.[1] ? parseInt(match[1], 10) : null
 
                 if (projectNumber === null) {
-                    return { error: 'Invalid project number' }
+                    throw new ProtocolError(ProtocolErrorCode.InvalidParams,  'Invalid project number')
                 }
 
-                const entries = context.db.searchEntries('', { projectNumber, limit: 50 })
-                return { projectNumber, entries, count: entries.length }
+                const { entries } = context.db.searchEntries('', { projectNumber, limit: 50 })
+                const data = { projectNumber, entries, count: entries.length }
+                const tokenEstimate = Math.ceil(JSON.stringify(data).length / 4)
+                return { ...data, _meta: { tokenEstimate } }
             },
         },
         {
@@ -48,11 +53,13 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                 const issueNumber = match?.[1] ? parseInt(match[1], 10) : null
 
                 if (issueNumber === null) {
-                    return { error: 'Invalid issue number' }
+                    throw new ProtocolError(ProtocolErrorCode.InvalidParams,  'Invalid issue number')
                 }
 
-                const entries = context.db.searchEntries('', { issueNumber, limit: 100 })
-                return { issueNumber, entries, count: entries.length }
+                const { entries } = context.db.searchEntries('', { issueNumber, limit: 100 })
+                const data = { issueNumber, entries, count: entries.length }
+                const tokenEstimate = Math.ceil(JSON.stringify(data).length / 4)
+                return { ...data, _meta: { tokenEstimate } }
             },
         },
         {
@@ -68,11 +75,11 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                 const prNumber = match?.[1] ? parseInt(match[1], 10) : null
 
                 if (prNumber === null) {
-                    return { error: 'Invalid PR number' }
+                    throw new ProtocolError(ProtocolErrorCode.InvalidParams,  'Invalid PR number')
                 }
 
-                const entries = context.db.searchEntries('', { prNumber, limit: 100 })
-                return {
+                const { entries } = context.db.searchEntries('', { prNumber, limit: 100 })
+                const data = {
                     prNumber,
                     entries,
                     count: entries.length,
@@ -82,6 +89,8 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                           }
                         : {}),
                 }
+                const tokenEstimate = Math.ceil(JSON.stringify(data).length / 4)
+                return { ...data, _meta: { tokenEstimate } }
             },
         },
         {
@@ -97,7 +106,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                 const prNumber = match?.[1] ? parseInt(match[1], 10) : null
 
                 if (prNumber === null) {
-                    return { error: 'Invalid PR number' }
+                    throw new ProtocolError(ProtocolErrorCode.InvalidParams,  'Invalid PR number')
                 }
 
                 // Fetch live PR metadata from GitHub if available
@@ -139,7 +148,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                     }
                 }
 
-                const entries = context.db.searchEntries('', { prNumber, limit: 100 })
+                const { entries } = context.db.searchEntries('', { prNumber, limit: 100 })
 
                 let timelineNote: string
                 if (prMetadata) {
@@ -152,7 +161,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                         'GitHub integration unavailable for live PR status. Entry timestamps show journal activity.'
                 }
 
-                return {
+                const data = {
                     prNumber,
                     prMetadata,
                     entries,
@@ -164,6 +173,220 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                           }
                         : {}),
                 }
+                const tokenEstimate = Math.ceil(JSON.stringify(data).length / 4)
+                return { ...data, _meta: { tokenEstimate } }
+            },
+        },
+        {
+            uri: 'memory://commits/{project_number}',
+            name: 'Project Commits',
+            title: 'Project Commits from Summaries',
+            description: 'Aggregates all commit SHAs from session summary auto_context',
+            mimeType: 'application/json',
+            annotations: { ...MEDIUM_PRIORITY, audience: ['assistant'] },
+            handler: async (uri: string, context: ResourceContext) => {
+                const match = /memory:\/\/commits\/(\d+)$/.exec(uri)
+                const projectNumber = match?.[1] ? parseInt(match[1], 10) : null
+
+                if (projectNumber === null) {
+                    throw new ProtocolError(ProtocolErrorCode.InvalidParams,  'Invalid project number')
+                }
+
+                const { entries } = context.db.searchEntries('', { projectNumber, limit: 200 })
+
+                const commits: string[] = []
+                const metadata: Record<string, unknown>[] = []
+
+                for (const entry of entries) {
+                    if (entry.tags.includes('session-summary') || entry.tags.includes('commit-narrative')) {
+                        const ctx = parseSessionCommitContext(entry.autoContext)
+                        if (ctx && ctx.commits.length > 0) {
+                            commits.push(...ctx.commits)
+                            metadata.push({
+                                entryId: entry.id,
+                                timestamp: entry.timestamp,
+                                commits: ctx.commits,
+                                branch: ctx.branch,
+                                pr: ctx.pr,
+                                repo: ctx.repo,
+                            })
+                        }
+                    }
+                }
+
+                const uniqueCommits = Array.from(new Set(commits))
+
+                let enrichedCommits: Awaited<ReturnType<typeof enrichCommits>> = []
+                const cwd = process.cwd()
+                if (uniqueCommits.length > 0) {
+                    enrichedCommits = await enrichCommits(
+                        cwd,
+                        uniqueCommits,
+                        context.github ?? undefined
+                    )
+                }
+
+                const data = {
+                    projectNumber,
+                    commits: uniqueCommits,
+                    metadata,
+                    enrichedCommits,
+                    count: uniqueCommits.length,
+                }
+                const tokenEstimate = Math.ceil(JSON.stringify(data).length / 4)
+                return { ...data, _meta: { tokenEstimate } }
+            },
+        },
+        {
+            uri: 'memory://commits/{project_number}/by-issue',
+            name: 'Commits by Issue',
+            title: 'Project Commits Grouped by Issue',
+            description: 'Groups project commits by referenced GitHub issues',
+            mimeType: 'application/json',
+            annotations: { ...MEDIUM_PRIORITY, audience: ['assistant'] },
+            handler: async (uri: string, context: ResourceContext) => {
+                const match = /memory:\/\/commits\/(\d+)\/by-issue$/.exec(uri)
+                const projectNumber = match?.[1] ? parseInt(match[1], 10) : null
+
+                if (projectNumber === null) {
+                    throw new ProtocolError(ProtocolErrorCode.InvalidParams,  'Invalid project number')
+                }
+
+                const { entries } = context.db.searchEntries('', { projectNumber, limit: 200 })
+                const commits: string[] = []
+
+                for (const entry of entries) {
+                    if (entry.tags.includes('session-summary') || entry.tags.includes('commit-narrative')) {
+                        const ctx = parseSessionCommitContext(entry.autoContext)
+                        if (ctx && ctx.commits.length > 0) {
+                            commits.push(...ctx.commits)
+                        }
+                    }
+                }
+
+                const uniqueCommits = Array.from(new Set(commits))
+                interface IssueGroup {
+                    number: number;
+                    title?: string;
+                    state?: string;
+                    milestone?: { number: number; title: string };
+                    commits: { hash: string; subject: string; authorName: string; date: string; }[];
+                }
+                const issues: Record<number, IssueGroup> = {}
+                const cwd = process.cwd()
+
+                if (uniqueCommits.length > 0) {
+                    const enrichedCommits = await enrichCommits(
+                        cwd,
+                        uniqueCommits,
+                        context.github ?? undefined
+                    )
+
+                    for (const commit of enrichedCommits) {
+                        for (const ref of commit.references) {
+                            if (ref.type === 'issue') {
+                                issues[ref.number] ??= {
+                                    number: ref.number,
+                                    title: ref.title,
+                                    state: ref.state,
+                                    milestone: ref.milestone,
+                                    commits: [],
+                                }
+                                const group = issues[ref.number]
+                                if (group) {
+                                    group.commits.push({
+                                        hash: commit.hash,
+                                        subject: commit.subject,
+                                        authorName: commit.authorName,
+                                        date: commit.date,
+                                    })
+                                }
+                            }
+                        }
+                    }
+                }
+
+                const data = {
+                    projectNumber,
+                    issues: Object.values(issues),
+                }
+                const tokenEstimate = Math.ceil(JSON.stringify(data).length / 4)
+                return { ...data, _meta: { tokenEstimate } }
+            },
+        },
+        {
+            uri: 'memory://commits/{project_number}/by-pr',
+            name: 'Commits by PR',
+            title: 'Project Commits Grouped by PR',
+            description: 'Groups project commits by referenced GitHub pull requests',
+            mimeType: 'application/json',
+            annotations: { ...MEDIUM_PRIORITY, audience: ['assistant'] },
+            handler: async (uri: string, context: ResourceContext) => {
+                const match = /memory:\/\/commits\/(\d+)\/by-pr$/.exec(uri)
+                const projectNumber = match?.[1] ? parseInt(match[1], 10) : null
+
+                if (projectNumber === null) {
+                    throw new ProtocolError(ProtocolErrorCode.InvalidParams,  'Invalid project number')
+                }
+
+                const { entries } = context.db.searchEntries('', { projectNumber, limit: 200 })
+                const commits: string[] = []
+
+                for (const entry of entries) {
+                    if (entry.tags.includes('session-summary') || entry.tags.includes('commit-narrative')) {
+                        const ctx = parseSessionCommitContext(entry.autoContext)
+                        if (ctx && ctx.commits.length > 0) {
+                            commits.push(...ctx.commits)
+                        }
+                    }
+                }
+
+                const uniqueCommits = Array.from(new Set(commits))
+                interface PRGroup {
+                    number: number;
+                    title?: string;
+                    state?: string;
+                    commits: { hash: string; subject: string; authorName: string; date: string; }[];
+                }
+                const prs: Record<number, PRGroup> = {}
+                const cwd = process.cwd()
+
+                if (uniqueCommits.length > 0) {
+                    const enrichedCommits = await enrichCommits(
+                        cwd,
+                        uniqueCommits,
+                        context.github ?? undefined
+                    )
+
+                    for (const commit of enrichedCommits) {
+                        for (const ref of commit.references) {
+                            if (ref.type === 'pull_request') {
+                                prs[ref.number] ??= {
+                                    number: ref.number,
+                                    title: ref.title,
+                                    state: ref.state,
+                                    commits: [],
+                                }
+                                const group = prs[ref.number]
+                                if (group) {
+                                    group.commits.push({
+                                        hash: commit.hash,
+                                        subject: commit.subject,
+                                        authorName: commit.authorName,
+                                        date: commit.date,
+                                    })
+                                }
+                            }
+                        }
+                    }
+                }
+
+                const data = {
+                    projectNumber,
+                    pullRequests: Object.values(prs),
+                }
+                const tokenEstimate = Math.ceil(JSON.stringify(data).length / 4)
+                return { ...data, _meta: { tokenEstimate } }
             },
         },
         // Kanban board resources (GitHub Projects v2)
@@ -180,7 +403,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                 const projectNumber = match?.[2] ? parseInt(match[2], 10) : null
 
                 if (projectNumber === null) {
-                    return { error: 'Invalid project number' }
+                    throw new ProtocolError(ProtocolErrorCode.InvalidParams,  'Invalid project number')
                 }
 
                 const resolved = await resolveGitHubRepo(
@@ -194,12 +417,9 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
 
                 const board = await github.getProjectKanban(owner, projectNumber, repo)
                 if (!board) {
-                    return {
-                        error: `Project #${String(projectNumber)} not found or Status field not configured`,
-                        projectNumber,
-                        owner,
-                        hint: 'Projects can be at user, repository, or organization level.',
-                    }
+                    throw new ProtocolError(ProtocolErrorCode.InternalError, 
+                        `Project #${String(projectNumber)} not found or Status field not configured`
+                    )
                 }
 
                 // Strip 'body' from all items to mitigate massive payload size
@@ -211,88 +431,11 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                     }
                 }
 
-                return board
+                const tokenEstimate = Math.ceil(JSON.stringify(board).length / 4)
+                return { ...board, _meta: { tokenEstimate } }
             },
         },
-        {
-            uri: 'memory://kanban/{project_number}/diagram',
-            name: 'Kanban Diagram',
-            title: 'Kanban Board Mermaid Diagram',
-            description: 'Mermaid diagram visualization of a GitHub Project Kanban board',
-            mimeType: 'text/plain',
-            annotations: MEDIUM_PRIORITY,
-            handler: async (uri: string, context: ResourceContext) => {
-                const match = /memory:\/\/kanban\/(?:(.*)\/)?(\d+)\/diagram$/.exec(uri)
-                const targetRepo = match?.[1] ? decodeURIComponent(match[1]) : undefined
-                const projectNumber = match?.[2] ? parseInt(match[2], 10) : null
 
-                if (projectNumber === null) {
-                    return { error: 'Invalid project number' }
-                }
-
-                const resolved = await resolveGitHubRepo(
-                    context.github,
-                    context.briefingConfig,
-                    targetRepo,
-                    context.runtime
-                )
-                if (isResourceError(resolved)) {
-                    // It returns a mermaid graph because the MIME type is text/plain.
-                    const errObj = resolved.data as { error: string; hint?: string }
-                    return `graph LR\n  Error["${errObj.error.replace(/["[\]]/g, "'")} \u2014 ${
-                        errObj.hint ? errObj.hint.replace(/["[\]]/g, "'") : ''
-                    }"]`
-                }
-                const { owner, repo, github } = resolved
-
-                const board = await github.getProjectKanban(owner, projectNumber, repo)
-                if (!board) {
-                    return `graph LR\n  NotFound["Project #${String(projectNumber)} not found \u2014 ensure project exists with a Status field"]`
-                }
-
-                // Build Mermaid diagram with subgraphs for each column
-                const lines: string[] = ['graph LR']
-
-                lines.push('  classDef issue fill:#28a745,color:#fff')
-                lines.push('  classDef pr fill:#6f42c1,color:#fff')
-                lines.push('  classDef draft fill:#6c757d,color:#fff')
-
-                for (const column of board.columns) {
-                    const safeStatus = column.status.replace(/["\s]/g, '_')
-                    lines.push(
-                        `  subgraph ${safeStatus}["${column.status} (${String(column.items.length)})"]`
-                    )
-
-                    for (const item of column.items) {
-                        const safeId = item.id.replace(/[^a-zA-Z0-9]/g, '').slice(-8)
-                        const label = item.title.slice(0, 25).replace(/["[\]]/g, "'")
-                        const typeIcon =
-                            item.type === 'ISSUE'
-                                ? '🔵'
-                                : item.type === 'PULL_REQUEST'
-                                  ? '🟣'
-                                  : '⚪'
-                        const numberStr =
-                            item.number !== undefined && item.number !== 0
-                                ? `#${String(item.number)}`
-                                : ''
-                        lines.push(`    I${safeId}["${typeIcon} ${numberStr} ${label}..."]`)
-
-                        const typeClass =
-                            item.type === 'ISSUE'
-                                ? 'issue'
-                                : item.type === 'PULL_REQUEST'
-                                  ? 'pr'
-                                  : 'draft'
-                        lines.push(`    class I${safeId} ${typeClass}`)
-                    }
-
-                    lines.push('  end')
-                }
-
-                return lines.join('\n')
-            },
-        },
     ]
 
     // Generate dynamic `{repo}` variants for multi-project registry support

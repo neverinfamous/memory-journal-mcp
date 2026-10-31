@@ -10,19 +10,21 @@
  * Ported from db-mcp/tests/e2e/streamable-http.spec.ts — adapted for memory-journal-mcp.
  */
 
-import { test, expect } from '@playwright/test'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+import { test, expect } from './test-fixture.js'
+import { Client } from '@modelcontextprotocol/client'
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 import { startServer, stopServer } from './helpers.js'
 
 test.describe.configure({ mode: 'serial' })
 
-const STREAM_PORT = 3108
+const STREAM_PORT = 5108 + (Number(process.env.TEST_PARALLEL_INDEX || 0) * 100)
 const STREAM_BASE = `http://localhost:${STREAM_PORT}`
 
 test.describe('Streamable HTTP Transport (MCP 2025-03-26)', () => {
     async function createStreamableClient() {
-        const transport = new StreamableHTTPClientTransport(new URL(`${STREAM_BASE}/mcp`))
+        const transport = new StreamableHTTPClientTransport(new URL(`${STREAM_BASE}/mcp`), {
+            requestInit: { headers: { Authorization: 'Bearer test-token' } }
+        })
         const client = new Client(
             { name: 'playwright-streamable-test', version: '1.0.0' },
             { capabilities: {} }

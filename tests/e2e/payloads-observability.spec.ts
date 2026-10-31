@@ -1,17 +1,19 @@
 /**
  * Payload Contract Tests: Observability & Audit (Phase 2)
  *
- * Validates the 5 new resources introduced in Phase 2:
+ * Validates the 6 new resources introduced in Phase 2:
  *   memory://metrics/summary  — aggregate call/error/token stats (YAML text)
  *   memory://metrics/tokens   — per-tool token breakdown (YAML text)
  *   memory://metrics/system   — process-level system metrics (YAML text)
  *   memory://metrics/users    — per-user call counts (YAML text, may be empty)
+ *   memory://metrics/latency  — per-tool latency percentiles p50/p95/p99 (YAML text)
+ *   memory://metrics/resources — per-URI resource read counts and error counts (YAML text)
  *   memory://audit            — last 50 audit entries (YAML text, unconfigured in test env)
  *
  * Also verifies that _meta.tokenEstimate is injected on tool call responses
  * after the metrics interceptor is wired into callTool() dispatch.
  *
- * All five resources return text/plain YAML-style payloads (not JSON).
+ * All six resources return text/plain YAML-style payloads (not JSON).
  * Tests use substring key checks appropriate for this format.
  *
  * Notes on test environment:
@@ -20,10 +22,10 @@
  *   - Metrics accumulate across tests within this describe block (serial mode).
  */
 
-import { test, expect } from '@playwright/test'
-import type { ReadResourceResult } from '@modelcontextprotocol/sdk/types.js'
+import { test, expect } from './test-fixture.js'
+import type { ReadResourceResult } from '@modelcontextprotocol/types'
 import { createClient, callToolAndParse, expectSuccess } from './helpers.js'
-import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import type { Client } from '@modelcontextprotocol/client'
 
 // ─── Helper ─────────────────────────────────────────────────────────────────
 
@@ -58,7 +60,7 @@ test.describe('Payload Contracts: Observability & Audit', () => {
     // =========================================================================
 
     test('warm-up: create_entry to seed metrics accumulator', async () => {
-        const payload = await callToolAndParse(client, 'create_entry', {
+        const payload = await callToolAndParse(client, 'create_entry', { workspace_id: 'default', 
             project_number: 1,
             content: 'Observability E2E warm-up entry',
             entry_type: 'test_entry',
@@ -72,7 +74,7 @@ test.describe('Payload Contracts: Observability & Audit', () => {
     // Resource list
     // =========================================================================
 
-    test('resource list includes all 5 observability/audit URIs', async () => {
+    test('resource list includes all 6 observability/audit URIs', async () => {
         const listResponse = await client.listResources()
         const uris = listResponse.resources.map((r) => r.uri)
 
@@ -80,6 +82,8 @@ test.describe('Payload Contracts: Observability & Audit', () => {
         expect(uris).toContain('memory://metrics/tokens')
         expect(uris).toContain('memory://metrics/system')
         expect(uris).toContain('memory://metrics/users')
+        expect(uris).toContain('memory://metrics/latency')
+        expect(uris).toContain('memory://metrics/resources')
         expect(uris).toContain('memory://audit')
     })
 
@@ -226,6 +230,84 @@ test.describe('Payload Contracts: Observability & Audit', () => {
     })
 
     // =========================================================================
+    // Resource: memory://metrics/latency
+    // =========================================================================
+
+    test('memory://metrics/latency — returns YAML text with latency_percentiles key', async () => {
+        const response = await client.readResource({ uri: 'memory://metrics/latency' })
+
+        expect(response.contents).toBeDefined()
+        expect(response.contents.length).toBeGreaterThan(0)
+
+        const text = getResourceText(response)
+        expect(text).toContain('latency_percentiles:')
+        expect(text).toContain('as_of:')
+    })
+
+    test('memory://metrics/latency — contains per-tool percentile data after warm-up', async () => {
+        // After warm-up tool calls, latency data should be populated
+        const response = await client.readResource({ uri: 'memory://metrics/latency' })
+        const text = getResourceText(response)
+
+        // Should NOT be in the empty state
+        expect(text).not.toContain('No latency data recorded yet')
+
+        // Verify required per-tool percentile fields
+        expect(text).toContain('tool:')
+        expect(text).toContain('count:')
+        expect(text).toContain('p50_ms:')
+        expect(text).toContain('p95_ms:')
+        expect(text).toContain('p99_ms:')
+        expect(text).toContain('min_ms:')
+        expect(text).toContain('max_ms:')
+    })
+
+    test('memory://metrics/latency — percentile values are non-negative integers', async () => {
+        const response = await client.readResource({ uri: 'memory://metrics/latency' })
+        const text = getResourceText(response)
+
+        // Extract first p50_ms value and verify it is a non-negative number
+        const p50Match = /p50_ms:\s*(\d+)/.exec(text)
+        expect(p50Match).not.toBeNull()
+        const p50 = parseInt(p50Match![1]!, 10)
+        expect(p50).toBeGreaterThanOrEqual(0)
+
+        // p99 should be >= p50 (tail latency is always >= median)
+        const p99Match = /p99_ms:\s*(\d+)/.exec(text)
+        expect(p99Match).not.toBeNull()
+        const p99 = parseInt(p99Match![1]!, 10)
+        expect(p99).toBeGreaterThanOrEqual(p50)
+    })
+
+    // =========================================================================
+    // Resource: memory://metrics/resources
+    // =========================================================================
+
+    test('memory://metrics/resources — returns YAML text with resource_breakdown key', async () => {
+        const response = await client.readResource({ uri: 'memory://metrics/resources' })
+
+        expect(response.contents).toBeDefined()
+        expect(response.contents.length).toBeGreaterThan(0)
+
+        const text = getResourceText(response)
+        expect(text).toContain('resource_breakdown:')
+        expect(text).toContain('as_of:')
+    })
+
+    test('memory://metrics/resources — contains per-URI rows after warm-up reads', async () => {
+        // First read a resource to ensure it's tracked
+        await client.readResource({ uri: 'memory://health' })
+
+        const response = await client.readResource({ uri: 'memory://metrics/resources' })
+        const text = getResourceText(response)
+
+        expect(text).not.toContain('No resource reads recorded yet')
+        expect(text).toContain('uri: memory://health')
+        expect(text).toContain('read_count:')
+        expect(text).toContain('error_count:')
+    })
+
+    // =========================================================================
     // Resource: memory://audit
     // =========================================================================
 
@@ -257,7 +339,7 @@ test.describe('Payload Contracts: Observability & Audit', () => {
     // =========================================================================
 
     test('_meta.tokenEstimate is present on create_entry response', async () => {
-        const payload = await callToolAndParse(client, 'create_entry', {
+        const payload = await callToolAndParse(client, 'create_entry', { workspace_id: 'default', 
             project_number: 1,
             content: 'Token estimate injection test',
             entry_type: 'test_entry',
@@ -322,3 +404,4 @@ test.describe('Payload Contracts: Observability & Audit', () => {
         expect(typeof metrics.upSince).toBe('string')
     })
 })
+

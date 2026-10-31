@@ -5,15 +5,18 @@
  * session rejection, and invalid session ID handling.
  */
 
-import { test, expect } from '@playwright/test'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
-import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js'
+import { test, expect } from './test-fixture.js'
+import { Client } from '@modelcontextprotocol/client'
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
+
+import { getServerUrl } from './helpers.js'
 
 test.describe('Advanced Session Management', () => {
     test('should reject SSE session ID on /mcp (cross-protocol guard)', async () => {
         // Connect via Legacy SSE to get an SSE session ID
-        const sseTransport = new SSEClientTransport(new URL('http://localhost:3100/sse'))
+        const sseTransport = new StreamableHTTPClientTransport(new URL(getServerUrl('/sse')), {
+            protocolVersion: '2024-11-05',
+        })
         const sseClient = new Client(
             { name: 'cross-protocol-test', version: '1.0.0' },
             { capabilities: {} }
@@ -29,11 +32,12 @@ test.describe('Advanced Session Management', () => {
             // by trying to POST to /mcp with a session ID that doesn't exist in the
             // Streamable HTTP transport map.
 
-            const response = await fetch('http://localhost:3100/mcp', {
+            const response = await fetch(getServerUrl('/mcp').toString(), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     Accept: 'application/json, text/event-stream',
+                    'mcp-protocol-version': '2024-11-05',
                     'mcp-session-id': 'fake-sse-session-id',
                 },
                 body: JSON.stringify({
@@ -57,8 +61,8 @@ test.describe('Advanced Session Management', () => {
 
         for (let i = 0; i < 3; i++) {
             const transport = new StreamableHTTPClientTransport(
-                new URL('http://localhost:3100/mcp')
-            )
+                getServerUrl('/mcp')
+            , { protocolVersion: '2024-11-05' })
             const client = new Client(
                 { name: `sequential-test-${i}`, version: '1.0.0' },
                 { capabilities: {} }
@@ -87,11 +91,12 @@ test.describe('Advanced Session Management', () => {
     })
 
     test('should reject request with non-existent session ID', async () => {
-        const response = await fetch('http://localhost:3100/mcp', {
+        const response = await fetch(getServerUrl('/mcp').toString(), {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 Accept: 'application/json, text/event-stream',
+                    'mcp-protocol-version': '2024-11-05',
                 'mcp-session-id': '00000000-0000-4000-8000-000000000000',
             },
             body: JSON.stringify({
@@ -109,7 +114,8 @@ test.describe('Advanced Session Management', () => {
     test('should reject requests after session DELETE', async ({ request }) => {
         // Initialize a session
         const initResponse = await request.post('/mcp', {
-            headers: { Accept: 'application/json, text/event-stream' },
+            headers: { Accept: 'application/json, text/event-stream',
+                    'mcp-protocol-version': '2024-11-05', },
             data: {
                 jsonrpc: '2.0',
                 id: 1,
@@ -136,6 +142,7 @@ test.describe('Advanced Session Management', () => {
         const postDeleteResponse = await request.post('/mcp', {
             headers: {
                 Accept: 'application/json, text/event-stream',
+                    'mcp-protocol-version': '2024-11-05',
                 'mcp-session-id': sessionId!,
             },
             data: {

@@ -7,12 +7,12 @@
  * Uses a dedicated server on port 3104.
  */
 
-import { test, expect } from '@playwright/test'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+import { test, expect } from './test-fixture.js'
+import { Client } from '@modelcontextprotocol/client'
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 import { startServer, stopServer } from './helpers.js'
 
-const FILTER_PORT = 3104
+const FILTER_PORT = 5104 + (Number(process.env.TEST_PARALLEL_INDEX || 0) * 100)
 
 test.describe('Tool Filtering', () => {
     let client: Client
@@ -22,7 +22,7 @@ test.describe('Tool Filtering', () => {
 
         const transport = new StreamableHTTPClientTransport(
             new URL(`http://localhost:${FILTER_PORT}/mcp`)
-        )
+        , { protocolVersion: '2024-11-05' })
         client = new Client({ name: 'tool-filter-test', version: '1.0.0' }, { capabilities: {} })
         await client.connect(transport)
     })
@@ -37,8 +37,8 @@ test.describe('Tool Filtering', () => {
 
         expect(response.tools).toBeDefined()
         expect(Array.isArray(response.tools)).toBe(true)
-        // Starter preset has ~11 tools (core+search+codemode), not the full 44+
-        expect(response.tools.length).toBeLessThan(20)
+        // Starter preset has ~15 tools (core+search+codemode+always enabled), not the full 100+
+        expect(response.tools.length).toBeLessThan(30)
         expect(response.tools.length).toBeGreaterThan(3)
     })
 

@@ -9,8 +9,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import {
     buildJournalContext,
     buildTeamContext,
-    buildRulesFileInfo,
-    buildSkillsDirInfo,
 } from '../../src/handlers/resources/core/briefing/context-section.js'
 
 // Mock fs and logger
@@ -33,22 +31,30 @@ vi.mock('../../src/utils/logger.js', () => ({
 // ============================================================================
 
 function createMockDb(overrides: Partial<Record<string, unknown>> = {}) {
+    const mockEntries = { entries: [
+        {
+            id: 1,
+            timestamp: '2025-01-15T10:00:00Z',
+            entryType: 'note',
+            content: 'This is a sample entry for testing purposes.',
+            importanceScore: 0.5,
+        },
+        {
+            id: 2,
+            timestamp: '2025-01-14T09:00:00Z',
+            entryType: 'decision',
+            content: 'Decided to use TypeScript for the project.',
+            importanceScore: 0.5,
+        },
+    ] }
     return {
-        getRecentEntries: vi.fn().mockReturnValue([
-            {
-                id: 1,
-                timestamp: '2025-01-15T10:00:00Z',
-                entryType: 'note',
-                content: 'This is a sample entry for testing purposes.',
-            },
-            {
-                id: 2,
-                timestamp: '2025-01-14T09:00:00Z',
-                entryType: 'decision',
-                content: 'Decided to use TypeScript for the project.',
-            },
-        ]),
-        searchEntries: vi.fn().mockReturnValue([]),
+        getRecentEntries: vi.fn().mockReturnValue(mockEntries),
+        searchEntries: vi.fn().mockImplementation((queryStr: string, options: any) => {
+            if (options?.sortBy === 'timestamp' && !options?.tags?.includes('session-summary') && options?.entryType !== 'retrospective') {
+                return mockEntries
+            }
+            return { entries: [] }
+        }),
         getActiveEntryCount: vi.fn().mockReturnValue(42),
         ...overrides,
     }
@@ -96,14 +102,18 @@ describe('buildJournalContext', () => {
     it('should truncate long content previews with ellipsis', () => {
         const longContent = 'A'.repeat(200)
         const db = createMockDb({
-            getRecentEntries: vi.fn().mockReturnValue([
-                {
-                    id: 1,
-                    timestamp: '2025-01-15T10:00:00Z',
-                    entryType: 'note',
-                    content: longContent,
-                },
-            ]),
+            searchEntries: vi.fn().mockImplementation((queryStr: string, options: any) => {
+                if (options?.sortBy === 'timestamp' && !options?.tags?.includes('session-summary') && options?.entryType !== 'retrospective') return { entries: [
+                    {
+                        id: 1,
+                        timestamp: '2025-01-15T10:00:00Z',
+                        entryType: 'note',
+                        content: longContent,
+                        importanceScore: 0.5,
+                    },
+                ] }
+                return { entries: [] }
+            }),
         })
         const context = { db } as never
 
@@ -116,7 +126,7 @@ describe('buildJournalContext', () => {
 
     it('should handle empty database', () => {
         const db = createMockDb({
-            getRecentEntries: vi.fn().mockReturnValue([]),
+            searchEntries: vi.fn().mockReturnValue({ entries: [] }),
             getActiveEntryCount: vi.fn().mockReturnValue(0),
         })
         const context = { db } as never
@@ -131,14 +141,18 @@ describe('buildJournalContext', () => {
 
     it('should handle entries with null content', () => {
         const db = createMockDb({
-            getRecentEntries: vi.fn().mockReturnValue([
-                {
-                    id: 1,
-                    timestamp: '2025-01-15T10:00:00Z',
-                    entryType: 'note',
-                    content: null,
-                },
-            ]),
+            searchEntries: vi.fn().mockImplementation((queryStr: string, options: any) => {
+                if (options?.sortBy === 'timestamp' && !options?.tags?.includes('session-summary') && options?.entryType !== 'retrospective') return { entries: [
+                    {
+                        id: 1,
+                        timestamp: '2025-01-15T10:00:00Z',
+                        entryType: 'note',
+                        content: null,
+                        importanceScore: 0.5,
+                    },
+                ] }
+                return { entries: [] }
+            }),
         })
         const context = { db } as never
 
@@ -165,14 +179,14 @@ describe('buildTeamContext', () => {
 
     it('should return team info with latest preview', () => {
         const teamDb = createMockDb({
-            getRecentEntries: vi.fn().mockReturnValue([
+            getRecentEntries: vi.fn().mockReturnValue({ entries: [
                 {
                     id: 5,
                     timestamp: '2025-01-15T10:00:00Z',
                     entryType: 'note',
                     content: 'Team entry content',
                 },
-            ]),
+            ] }),
             getActiveEntryCount: vi.fn().mockReturnValue(10),
         })
         const context = { teamDb } as never
@@ -226,7 +240,7 @@ describe('buildTeamContext', () => {
 
     it('should handle team DB with no entries', () => {
         const teamDb = createMockDb({
-            getRecentEntries: vi.fn().mockReturnValue([]),
+            getRecentEntries: vi.fn().mockReturnValue({ entries: [] }),
             getActiveEntryCount: vi.fn().mockReturnValue(0),
         })
         const context = { teamDb } as never
@@ -241,14 +255,14 @@ describe('buildTeamContext', () => {
     it('should truncate long team content previews', () => {
         const longContent = 'B'.repeat(200)
         const teamDb = createMockDb({
-            getRecentEntries: vi.fn().mockReturnValue([
+            getRecentEntries: vi.fn().mockReturnValue({ entries: [
                 {
                     id: 1,
                     timestamp: '2025-01-15T10:00:00Z',
                     entryType: 'note',
                     content: longContent,
                 },
-            ]),
+            ] }),
             getActiveEntryCount: vi.fn().mockReturnValue(1),
         })
         const context = { teamDb } as never
@@ -263,129 +277,4 @@ describe('buildTeamContext', () => {
     })
 })
 
-// ============================================================================
-// buildRulesFileInfo
-// ============================================================================
 
-describe('buildRulesFileInfo', () => {
-    beforeEach(() => {
-        vi.clearAllMocks()
-    })
-
-    it('should return undefined for undefined path', () => {
-        expect(buildRulesFileInfo(undefined)).toBeUndefined()
-    })
-
-    it('should return file info for valid path', async () => {
-        const { statSync } = await import('node:fs')
-
-        // File modified 2 days ago
-        const twoHoursAgo = Date.now() - 2 * 3_600_000
-        vi.mocked(statSync).mockReturnValue({
-            size: 2048,
-            mtimeMs: twoHoursAgo,
-        } as never)
-
-        const result = buildRulesFileInfo('/path/to/.rules', ['/path/to'])
-
-        expect(result).toBeDefined()
-        expect(result!.name).toBe('.rules')
-        expect(result!.sizeKB).toBe(2)
-        expect(result!.lastModified).toBe('2h ago')
-        expect(result!.path).toBe('.rules')
-    })
-
-    it('should format age as days when > 1 day', async () => {
-        const { statSync } = await import('node:fs')
-
-        const threeDaysAgo = Date.now() - 3 * 86_400_000
-        vi.mocked(statSync).mockReturnValue({
-            size: 1024,
-            mtimeMs: threeDaysAgo,
-        } as never)
-
-        const result = buildRulesFileInfo('/path/to/.rules', ['/path/to'])
-
-        expect(result!.lastModified).toBe('3d ago')
-    })
-
-    it('should format age as "just now" when < 1 hour', async () => {
-        const { statSync } = await import('node:fs')
-
-        vi.mocked(statSync).mockReturnValue({
-            size: 512,
-            mtimeMs: Date.now() - 1000, // 1 second ago
-        } as never)
-
-        const result = buildRulesFileInfo('/path/to/.rules', ['/path/to'])
-
-        expect(result!.lastModified).toBe('just now')
-    })
-
-    it('should return undefined on file error', async () => {
-        const { statSync } = await import('node:fs')
-
-        vi.mocked(statSync).mockImplementation(() => {
-            throw new Error('ENOENT: no such file')
-        })
-
-        const result = buildRulesFileInfo('/nonexistent/.rules', ['/nonexistent'])
-        expect(result).toBeUndefined()
-    })
-})
-
-// ============================================================================
-// buildSkillsDirInfo
-// ============================================================================
-
-describe('buildSkillsDirInfo', () => {
-    beforeEach(() => {
-        vi.clearAllMocks()
-    })
-
-    it('should return undefined for undefined path', () => {
-        expect(buildSkillsDirInfo(undefined)).toBeUndefined()
-    })
-
-    it('should return skills directory info', async () => {
-        const { readdirSync } = await import('node:fs')
-
-        vi.mocked(readdirSync).mockReturnValue([
-            { name: 'skill-a', isDirectory: () => true, isFile: () => false },
-            { name: 'skill-b', isDirectory: () => true, isFile: () => false },
-            { name: 'readme.md', isDirectory: () => false, isFile: () => true },
-        ] as never)
-
-        const result = buildSkillsDirInfo('/path/to/skills', ['/path/to'])
-
-        expect(result).toBeDefined()
-        expect(result!.count).toBe(2)
-        expect(result!.names).toEqual(['skill-a', 'skill-b'])
-        expect(result!.path).toBe('skills')
-    })
-
-    it('should return empty when no directories', async () => {
-        const { readdirSync } = await import('node:fs')
-
-        vi.mocked(readdirSync).mockReturnValue([
-            { name: 'readme.md', isDirectory: () => false, isFile: () => true },
-        ] as never)
-
-        const result = buildSkillsDirInfo('/path/to/skills', ['/path/to'])
-
-        expect(result).toBeDefined()
-        expect(result!.count).toBe(0)
-        expect(result!.names).toEqual([])
-    })
-
-    it('should return undefined on directory error', async () => {
-        const { readdirSync } = await import('node:fs')
-
-        vi.mocked(readdirSync).mockImplementation(() => {
-            throw new Error('ENOENT: no such directory')
-        })
-
-        const result = buildSkillsDirInfo('/nonexistent/skills', ['/nonexistent'])
-        expect(result).toBeUndefined()
-    })
-})

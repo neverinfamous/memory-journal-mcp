@@ -55,8 +55,8 @@ vi.mock('../../src/auth/auth-context.js', async (importOriginal: any) => {
 describe('Team Admin Tool Handlers', () => {
     let personalDb: DatabaseAdapter
     let teamDb: DatabaseAdapter
-    const personalDbPath = './test-team-admin-personal.db'
-    const teamDbPath = './test-team-admin-team.db'
+    const personalDbPath = './.test-output/vitest/test-team-admin-personal.db'
+    const teamDbPath = './.test-output/vitest/test-team-admin-team.db'
 
     beforeAll(async () => {
         try {
@@ -89,7 +89,7 @@ describe('Team Admin Tool Handlers', () => {
         it('should update an existing team entry', async () => {
             const createResult = (await callTool(
                 'team_create_entry',
-                {
+                { workspace_id: 'default', 
                     project_number: 1,
                     content: 'Original content',
                     entry_type: 'technical_note',
@@ -169,7 +169,7 @@ describe('Team Admin Tool Handlers', () => {
         it('should update metadata fields on team entry', async () => {
             const createResult = (await callTool(
                 'team_create_entry',
-                {
+                { workspace_id: 'default', 
                     project_number: 1,
                     content: 'Team metadata test',
                 },
@@ -209,13 +209,137 @@ describe('Team Admin Tool Handlers', () => {
             expect(updateResult.entry.prNumber).toBe(7)
             expect(updateResult.entry.prStatus).toBe('merged')
         })
+
+        it('should successfully update an entry when project_number is omitted by falling back to its existing project number', async () => {
+            const createResult = (await callTool(
+                'team_create_entry',
+                { workspace_id: 'default', 
+                    project_number: 1,
+                    content: 'test',
+                },
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
+            )) as any
+
+            const customConfig = {
+                defaultProjectNumber: undefined,
+                runtime: {
+                    maintenanceManager: {
+                        withActiveJob: (fn: any) => fn(),
+                        acquireMaintenanceLock: async () => {},
+                        releaseMaintenanceLock: () => {},
+                    },
+                },
+                io: { allowedRoots: [process.cwd()] },
+            }
+
+            const result = (await callTool(
+                'team_update_entry',
+                {
+                    entry_id: createResult.entry.id,
+                    content: 'updated without project number parameter',
+                },
+                personalDb,
+                undefined,
+                undefined,
+                customConfig,
+                undefined,
+                teamDb
+            )) as any
+
+            expect(result.success).toBe(true)
+            expect(result.entry.projectNumber).toBe(1)
+        })
+
+        it('should successfully fallback to defaultProjectNumber on update', async () => {
+            const createResult = (await callTool(
+                'team_create_entry',
+                { workspace_id: 'default', 
+                    project_number: 1,
+                    content: 'test',
+                },
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
+            )) as any
+
+            const customConfig = {
+                defaultProjectNumber: 1,
+                runtime: {
+                    maintenanceManager: {
+                        withActiveJob: (fn: any) => fn(),
+                        acquireMaintenanceLock: async () => {},
+                        releaseMaintenanceLock: () => {},
+                    },
+                },
+                io: { allowedRoots: [process.cwd()] },
+            }
+
+            const result = (await callTool(
+                'team_update_entry',
+                {
+                    entry_id: createResult.entry.id,
+                    content: 'updated with default fallback',
+                },
+                personalDb,
+                undefined,
+                undefined,
+                customConfig,
+                undefined,
+                teamDb
+            )) as any
+
+            expect(result.success).toBe(true)
+            expect(result.entry.projectNumber).toBe(1)
+        })
+
+        it('should successfully change the project number of an entry', async () => {
+            const createResult = (await callTool(
+                'team_create_entry',
+                { workspace_id: 'default', 
+                    project_number: 1,
+                    content: 'project 1 entry',
+                },
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
+            )) as any
+
+            const result = (await callTool(
+                'team_update_entry',
+                {
+                    entry_id: createResult.entry.id,
+                    project_number: 2,
+                    content: 'trying to move to project 2',
+                },
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
+            )) as any
+
+            expect(result.success).toBe(true)
+            expect(result.entry.projectNumber).toBe(2)
+        })
     })
 
     describe('team_delete_entry', () => {
         it('should soft-delete an existing team entry', async () => {
             const createResult = (await callTool(
                 'team_create_entry',
-                {
+                { workspace_id: 'default', 
                     project_number: 1,
                     content: 'To be deleted',
                 },
@@ -234,6 +358,7 @@ describe('Team Admin Tool Handlers', () => {
                 {
                     project_number: 1,
                     entry_id: entryId,
+                    expected_version: 1,
                 },
                 personalDb,
                 undefined,
@@ -272,6 +397,7 @@ describe('Team Admin Tool Handlers', () => {
                 {
                     project_number: 1,
                     entry_id: 999,
+                    expected_version: 1,
                 },
                 personalDb
             )) as any
@@ -286,6 +412,7 @@ describe('Team Admin Tool Handlers', () => {
                 {
                     project_number: 1,
                     entry_id: 9999,
+                    expected_version: 1,
                 },
                 personalDb,
                 undefined,
@@ -305,7 +432,7 @@ describe('Team Admin Tool Handlers', () => {
             // Create entries with source tag
             await callTool(
                 'team_create_entry',
-                {
+                { workspace_id: 'default', 
                     project_number: 1,
                     content: '1',
                     tags: ['merge-source-tag'],
@@ -319,7 +446,7 @@ describe('Team Admin Tool Handlers', () => {
             )
             await callTool(
                 'team_create_entry',
-                {
+                { workspace_id: 'default', 
                     project_number: 1,
                     content: '2',
                     tags: ['merge-source-tag', 'other-tag'],
@@ -333,7 +460,7 @@ describe('Team Admin Tool Handlers', () => {
             )
             await callTool(
                 'team_create_entry',
-                {
+                { workspace_id: 'default', 
                     project_number: 1,
                     content: '3',
                     tags: ['merge-target-tag'],

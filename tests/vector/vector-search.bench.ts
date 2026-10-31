@@ -1,5 +1,5 @@
 import { bench, beforeAll, afterAll } from 'vitest'
-import { VectorSearchManager } from '../../src/vector/vector-search-manager.js'
+import { VectorSearchManager } from '../../src/vector/vector-search-manager/index.js'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
 import * as fs from 'node:fs'
 

@@ -1,0 +1,187 @@
+# Re-Test memory-journal-mcp — Code Mode: Core CRUD Advanced
+
+Test core CRUD operations through the Code Mode mj.* API bridge (Advanced cases).
+
+**Scope:** 1 tool (mj_execute_code), Phase 20B — ~9 test cases.
+
+**Prerequisites:**
+
+- **Validation:** Ensure the test agent validates strict mode and boundary limits on newly hardened schemas.
+> **Note**: When updating schemas or validation logic, please refer to the `/zod` skill for best practices on Standard Schema and Safe Parsing.
+- Confirm MCP server instructions were auto-received before starting.
+- **Use codemode directly for all tests, NOT the terminal or scripts!**
+- Code Mode is included in all tool filtering presets by default.
+- Seed data from `test-seed.md` must be present.
+
+**Workflow after testing:**
+
+1. Create a plan to fix any issues found or potential improvement opportunities, including changes to `src/constants/server-instructions.ts`. **Do NOT edit this test prompt file directly.** **If you encounter parameter or tool hallucinations during testing, intercept them gracefully in the server code (e.g., `src/filtering/tool-filter.ts`) so future agents succeed automatically.**
+2. Use `test-server/tool-reference.md` and `test-server/scripts/tool-map.json` as sources of truth and ensure fixes comply with the `mcp-builder` skill.
+3. **Local Verification**: If you or a subagent modifies the codebase, you MUST run the linter and typechecker (`pnpm run lint` and `npx tsc --noEmit`) locally and fix any issues BEFORE committing. Pay strict attention to ESLint and TypeScript compiler outputs. You MUST fix all validation issues prior to committing. Do NOT ignore warnings or errors. Follow strict TypeScript guidelines: NEVER use `any` (use `unknown` with type guards), avoid unsafe typecasts, and ensure explicit return types.
+   - DO NOT perform live server verification. DO NOT wait for a server restart. DO NOT pause or send a message asking the user to refresh the server.
+4. **Commit**: Immediately commit passing changes using the `bun ./.agents/scripts/commit.ts --msg "type(scope): message" --impact <0.1-1.0> --confidence <0.1-1.0> --validation passed --journal --add <path>` utility. Do NOT use raw `git commit`. WARNING: Do NOT commit your code and then attempt to use `git commit --amend` to fix a lingering lint or test issue later. Amending a commit rewrites the commit SHA, which will permanently break the changelog tracking workflow. DO NOT stop to ask the USER to verify—you must run `pnpm run lint` and `npx tsc --noEmit` yourself, you are autonomous.
+5. Provide a very brief final summary.
+   - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total estimated tokens that actually entered the context window during this test pass.
+---
+
+## Phase 20B: Core CRUD Advanced via Code Mode
+
+### 20.16 Sandbox Wrapper Pattern & Auto-Injection
+
+> **Note**: When updating schemas or validation logic, please refer to the `/zod` skill for best practices on Standard Schema and Safe Parsing.
+
+```javascript
+// Test code:
+// NOTE: To test this properly, you must provide `workspace_id: "test-ws"` as a parameter
+// to the OUTER `mj_execute_code` schema, NOT inside this javascript payload.
+
+const injected = await mj.core.createEntry({
+  // Deliberately omitting workspace_id here to test auto-injection from the wrapper
+  content: 'Sandbox wrapper injection test'
+})
+
+// Cleanup
+await mj.admin.deleteEntry({ id: injected.id, permanent: true })
+
+return {
+  injectedSuccess: injected.success,
+  injectedProjectNumber: injected.projectNumber === 5
+}
+```
+
+| Check                   | Expected |
+| ----------------------- | -------- |
+| `injectedSuccess`       | `true`   |
+| `injectedProjectNumber` | `true`   |
+
+### 20.17 Pagination Convenience (hasMore)
+
+```javascript
+// Test code:
+// Create some entries
+const b = await mj.admin.batchCreateEntries({
+  entries: [
+    { workspace_id: "test-ws", content: 'Pagination 1' },
+    { workspace_id: "test-ws", content: 'Pagination 2' }
+  ]
+})
+
+// Page 1 (limit 1)
+const page1 = await mj.core.getRecentEntries({ workspace_id: "test-ws", limit: 1 })
+// Page 2 (limit 10)
+const page2 = await mj.core.getRecentEntries({ workspace_id: "test-ws", cursor: page1.nextCursor, limit: 10 })
+
+// Cleanup
+await mj.admin.batchDeleteEntries({ entry_ids: b.entryIds })
+
+return {
+  page1HasMore: page1.hasMore,
+  page2HasMore: page2.hasMore
+}
+```
+
+| Check          | Expected |
+| -------------- | -------- |
+| `page1HasMore` | `true` (because nextCursor exists) |
+| `page2HasMore` | `false` (end of list) |
+
+### 20.18 Auto Version Opt-In
+
+```javascript
+// Test code:
+// NOTE: To test this properly, you must provide `auto_version: true` as a parameter
+// to the OUTER `mj_execute_code` schema.
+
+const entry = await mj.core.createEntry({ workspace_id: "test-ws", content: 'Auto version test' })
+
+// Update WITHOUT providing expectedVersion - should succeed because of outer `auto_version: true`
+const updated = await mj.admin.updateEntry({
+  id: entry.id,
+  content: 'Auto version updated'
+})
+
+// Cleanup
+await mj.admin.deleteEntry({ id: entry.id, permanent: true })
+
+return {
+  updatedSuccess: updated.success
+}
+```
+
+| Check            | Expected |
+| ---------------- | -------- |
+| `updatedSuccess` | `true`   |
+
+### 20.19 String workspace_id Auto-Resolve
+
+```javascript
+// Test code:
+// Provide workspace_id as a string instead of a number
+const entry = await mj.core.createEntry({
+  workspace_id: "test-ws",
+  content: 'String resolve test'
+})
+
+// Cleanup
+await mj.admin.deleteEntry({ id: entry.id, permanent: true })
+
+return {
+  stringResolveSuccess: entry.success,
+  resolvedProjectNumber: entry.projectNumber === 5
+}
+```
+
+| Check                   | Expected |
+| ----------------------- | -------- |
+| `stringResolveSuccess`  | `true`   |
+| `resolvedProjectNumber` | `true`   |
+
+---
+
+## Cleanup
+
+After testing, remove test entries created during Phase 20:
+
+| Cleanup Step             | Command/Action                                              |
+| ------------------------ | ----------------------------------------------------------- |
+| Delete full-params entry | `delete_entry(id: <full_params_id>, permanent: true)` |
+| Delete shared entry      | `delete_entry(id: <shared_id>, permanent: true)`      |
+| Delete update test entry | `delete_entry(id: <update_test_id>, permanent: true)` |
+| Delete owner test entry  | `delete_entry(id: <owner_test_id>, permanent: true)`  |
+| Delete toggle test entry | `delete_entry(id: <toggle_test_id>, permanent: true)` |
+| Delete issue link entry  | `delete_entry(id: <issue_link_id>, permanent: true)`  |
+| Delete history test entry| `delete_entry(id: <history_test_id>, permanent: true)`|
+| Delete recovery test entry| `delete_entry(id: <recovery_test_id>, permanent: true)`|
+| Delete locking test entry| `mj.admin.deleteEntry`   | N/A          | N/A         | `permanent: true`  | Yes (all temp test entries, including injected, auto-version, and string resolve) |
+
+---
+
+
+## Success Criteria
+
+> **Important:** Copy these success criteria into your internal task artifact and track your progress there. Do not check off items in this file.
+
+- `create_entry` persists all optional fields (PR, workflow, project) via Code Mode
+- `create_entry` with `share_with_team: true` creates entry with `sharedWithTeam` and `author`
+- `create_entry` rejects invalid `type` and `significance_type` with structured errors
+- `create_entry` rejects empty content with structured error
+- `create_entry` with `project_owner` persists the field
+- `create_entry` with `auto_context: false` creates entry without auto-generated context
+- `create_entry` with `issueNumber` auto-populates `issueUrl`
+- `get_entry_by_id` returns `entryType`, `content`, `tags` via Code Mode (note: `importance`/`importanceBreakdown` are available at the top level)
+- `get_entry_by_id` with `include_relationships: false` omits relationship data
+- `update_entry` updates content, tags, and type — verified via read-back
+- `update_entry` `isPersonal` toggle correctly changes personal status
+- `update_entry` correctly rejects stale versions via optimistic locking (`VERSION_CONFLICT`)
+- `update_entry` returns structured error for nonexistent IDs
+- `delete_entry` soft delete hides entry from search
+- `delete_entry` permanent delete and nonexistent ID both return structured responses
+- `get_recent_entries` with `isPersonal` filter returns correctly filtered entries
+- `get_entry_history` returns multiple historical snapshots successfully via Code Mode
+- `test_simple` callable via Code Mode
+- `restore_entry` and `list_deleted_entries` are functional and callable via Code Mode scripts
+- Keyset cursor pagination and `isArchived` status filters execute successfully via Code Mode scripts
+- `mj_execute_code` outer `workspace_id` parameter automatically injects into mutation tools inside the sandbox (Sandbox Wrapper Pattern)
+- `get_recent_entries` pagination exposes a correct `hasMore` convenience boolean
+- `mj_execute_code` outer `auto_version: true` parameter automatically prefetches and injects `expectedVersion` for updates
+- Number-based `workspace_id` parameters (`5`) auto-resolve to string safely without throwing VALIDATION_ERROR

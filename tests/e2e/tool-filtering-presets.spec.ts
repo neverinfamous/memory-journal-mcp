@@ -11,9 +11,9 @@
  * Uses dedicated server ports 3105, 3106, 3107.
  */
 
-import { test, expect } from '@playwright/test'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+import { test, expect } from './test-fixture.js'
+import { Client } from '@modelcontextprotocol/client'
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 import { startServer, stopServer } from './helpers.js'
 import { getAllToolNames, TOOL_GROUPS } from '../../src/filtering/tool-filter.js'
 
@@ -21,9 +21,9 @@ import { getAllToolNames, TOOL_GROUPS } from '../../src/filtering/tool-filter.js
 const TOTAL_TOOLS = getAllToolNames().length
 const GITHUB_TOOLS = TOOL_GROUPS.github.length
 
-const ESSENTIAL_PORT = 3120
-const CODEMODE_PORT = 3121
-const MINUS_GITHUB_PORT = 3122
+const ESSENTIAL_PORT = 5120 + (Number(process.env.TEST_PARALLEL_INDEX || 0) * 100)
+const CODEMODE_PORT = 5121 + (Number(process.env.TEST_PARALLEL_INDEX || 0) * 100)
+const MINUS_GITHUB_PORT = 5122 + (Number(process.env.TEST_PARALLEL_INDEX || 0) * 100)
 
 // ============================================================================
 // essential preset: core + codemode (no github, no team, no search)
@@ -37,7 +37,7 @@ test.describe('Tool Filter: essential preset', () => {
 
         const transport = new StreamableHTTPClientTransport(
             new URL(`http://localhost:${ESSENTIAL_PORT}/mcp`)
-        )
+        , { protocolVersion: '2024-11-05' })
         client = new Client(
             { name: 'filter-essential-test', version: '1.0.0' },
             { capabilities: {} }
@@ -50,9 +50,9 @@ test.describe('Tool Filter: essential preset', () => {
         stopServer(ESSENTIAL_PORT)
     })
 
-    test('essential: exposes fewer than 20 tools', async () => {
+    test('essential: exposes fewer than 30 tools', async () => {
         const response = await client.listTools()
-        expect(response.tools.length).toBeLessThan(20)
+        expect(response.tools.length).toBeLessThan(30)
         expect(response.tools.length).toBeGreaterThanOrEqual(2) // at least core + codemode
     })
 
@@ -97,7 +97,7 @@ test.describe('Tool Filter: codemode-only preset', () => {
 
         const transport = new StreamableHTTPClientTransport(
             new URL(`http://localhost:${CODEMODE_PORT}/mcp`)
-        )
+        , { protocolVersion: '2024-11-05' })
         client = new Client(
             { name: 'filter-codemode-test', version: '1.0.0' },
             { capabilities: {} }
@@ -110,10 +110,12 @@ test.describe('Tool Filter: codemode-only preset', () => {
         stopServer(CODEMODE_PORT)
     })
 
-    test('codemode: exposes exactly 1 tool', async () => {
+    test('codemode: exposes 2 tools (mj_execute_code and update_configuration)', async () => {
         const response = await client.listTools()
-        expect(response.tools.length).toBe(1)
-        expect(response.tools[0]!.name).toBe('mj_execute_code')
+        expect(response.tools.length).toBe(2)
+        const toolNames = response.tools.map(t => t.name)
+        expect(toolNames).toContain('mj_execute_code')
+        expect(toolNames).toContain('update_configuration')
     })
 
     test('codemode: mj_execute_code is callable and executes code', async () => {
@@ -153,7 +155,7 @@ test.describe('Tool Filter: -github subtractive filter', () => {
 
         const transport = new StreamableHTTPClientTransport(
             new URL(`http://localhost:${MINUS_GITHUB_PORT}/mcp`)
-        )
+        , { protocolVersion: '2024-11-05' })
         client = new Client(
             { name: 'filter-minus-github-test', version: '1.0.0' },
             { capabilities: {} }

@@ -119,7 +119,6 @@ dmypy.json
 
 # IDE files
 .cursor/
-.vscode/
 .idea/
 *.swp
 *.swo
@@ -189,3 +188,6 @@ logs/
 
 # Dependencies
 node_modules/
+
+# Adamic Workflows Copies
+.agents/

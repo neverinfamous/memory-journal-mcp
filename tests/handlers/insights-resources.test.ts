@@ -41,32 +41,27 @@ describe('Insights Resources', () => {
             expect(result.annotations?.lastModified).toBe('2026-04-11T12:00:00Z')
         })
 
-        it('should return no digest available if neither scheduler nor db has one', () => {
+        it('should return no digest available if neither scheduler nor db has one', async () => {
             const context = {
                 scheduler: {},
                 db: {
                     getLatestAnalyticsSnapshot: vi.fn().mockReturnValue(null),
                 } as any,
             } as unknown as ResourceContext
-            const result = digestInsightsResource.handler(
+            expect(() => digestInsightsResource.handler(
                 'memory://insights/digest',
                 context
-            ) as any
-            expect(result.data.success).toBe(true)
-            expect((result.data as any).snapshot).toBeNull()
-            expect((result.data as any).message).toContain('No digest available')
+            )).toThrow('No digest available')
         })
     })
 
     describe('memory://insights/team-collaboration', () => {
-        it('should return not configured if no teamDb', () => {
+        it('should return not configured if no teamDb', async () => {
             const context = {} as unknown as ResourceContext
-            const result = teamCollaborationResource.handler(
+            expect(() => teamCollaborationResource.handler(
                 'memory://insights/team-collaboration',
                 context
-            ) as any
-            expect(result.data.success).toBe(true)
-            expect((result.data as any).matrix).toBeNull()
+            )).toThrow('Team database not configured')
         })
 
         it('should return matrix if teamDb provides it', () => {
@@ -91,19 +86,17 @@ describe('Insights Resources', () => {
             expect((result.data as any).matrix.impactFactor).toBeDefined()
         })
 
-        it('should handle errors from computation', () => {
+        it('should handle errors from computation', async () => {
             const teamDb = {
                 getTeamCollaborationMatrix: vi.fn().mockImplementation(() => {
                     throw new Error('Database connection failed')
                 }),
             }
             const context = { teamDb: teamDb as any } as unknown as ResourceContext
-            const result = teamCollaborationResource.handler(
+            expect(() => teamCollaborationResource.handler(
                 'memory://insights/team-collaboration',
                 context
-            ) as any
-            expect(result.data.success).toBe(false)
-            expect((result.data as any).error).toBe('Database connection failed')
+            )).toThrow('Database connection failed')
         })
     })
 })

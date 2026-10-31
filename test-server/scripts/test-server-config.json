@@ -1,0 +1,4 @@
+{
+  "testDbPath": "test-prompts-test.db",
+  "testTeamDbPath": "test-team-prompts-test.db"
+}

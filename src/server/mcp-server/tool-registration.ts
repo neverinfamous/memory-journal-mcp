@@ -1,0 +1,1442 @@
+import { McpServer } from '@modelcontextprotocol/server'
+import type { z } from 'zod'
+import { getEnabledGroups } from '../../filtering/tool-filter.js'
+import { callTool } from '../../handlers/tools/index.js'
+import { getDummyHealingTools } from '../../handlers/tools/core/dummy-healing.js'
+import { readResource, validateResourceSubscription, getResources } from '../../handlers/resources/index.js'
+import { getPrompt, getPrompts } from '../../handlers/prompts/index.js'
+import { generateStandardInstructions, generateCodeModeInstructions } from '../../constants/server-instructions.js'
+import { TOOL_GROUPS } from '../../filtering/tool-constants.js'
+import type { ToolGroup } from '../../types/index.js'
+import { type DEFAULT_BRIEFING_CONFIG } from '../../handlers/resources/shared.js'
+import { registerResources, registerPrompts } from '../registration.js'
+import type { ResourceDefinition, PromptDefinition } from '../registration.js'
+import { VERSION } from '../../version.js'
+import { globalSubscriptionManager } from '../subscription-manager.js'
+import { type CallToolResult } from '@modelcontextprotocol/server'
+import { logAgentIssue } from '../../utils/issue-logger.js'
+import { applyArgInterceptions } from '../../codemode/param-normalizer.js'
+
+import type { ServerContext, ServerOptions } from './types.js'
+import type { ToolRegistration, ToolHandlerConfig } from '../../types/index.js'
+
+/**
+ * Default maximum number of array elements and object properties allowed across a
+ * single tool input payload before Zod validation runs.
+ */
+export const DEFAULT_MAX_TOOL_INPUT_ELEMENTS = 25_000
+
+/**
+ * Resolves the configured `maxToolInputElements` option into the value passed to `McpServer`.
+ * - `undefined` -> `DEFAULT_MAX_TOOL_INPUT_ELEMENTS` (25,000)
+ * - `0` or `Infinity` -> `Infinity` (disables the SDK's element limit check)
+ * - positive number -> passed through as-is
+ */
+export function resolveEffectiveMaxToolInputElements(
+    configured: number | undefined
+): number {
+    if (configured === undefined) {
+        return DEFAULT_MAX_TOOL_INPUT_ELEMENTS
+    }
+    if (configured === 0 || configured === Infinity) {
+        return Infinity
+    }
+    return configured
+}
+
+export function createServerInstance(
+    context: ServerContext,
+    options: ServerOptions,
+    prompts: PromptDefinition[],
+    resources: ResourceDefinition[],
+    allTools: ToolRegistration[],
+    allToolNames: Set<string>,
+    customToolHandlerConfig: ToolHandlerConfig
+): McpServer {
+    const { configManager, db, teamDb, vectorManager, teamVectorManager, github, scheduler, allowedIoRoots, runtime } = context;
+    const { defaultProjectNumber } = options;
+
+        // Generate dynamic instructions based on current config
+        const getInstructions = (): string => {
+            const currentConfig = configManager.getConfig()
+            const enabledSet = currentConfig.toolFilterConfig?.enabledTools ?? allToolNames
+            const groups = currentConfig.toolFilterConfig ? getEnabledGroups(currentConfig.toolFilterConfig.enabledTools) : undefined
+            
+            const isCodeModeOnly = enabledSet.size === 1 && enabledSet.has('mj_execute_code')
+            
+            if (isCodeModeOnly || currentConfig.toolFilterConfig?.raw === 'codemode') {
+                const finalGroups = currentConfig.codemodeInternalFullAccess === true
+                    ? new Set(Object.keys(TOOL_GROUPS) as ToolGroup[]) 
+                    : groups
+                const finalEnabledTools = currentConfig.codemodeInternalFullAccess === true
+                    ? allToolNames
+                    : enabledSet
+
+                return generateCodeModeInstructions(
+                    finalEnabledTools,
+                    prompts.map((p) => {
+                        const prompt = p as { name: string; description?: string }
+                        return { name: prompt.name, description: prompt.description }
+                    }),
+                    undefined,
+                    finalGroups,
+                    currentConfig.briefingConfig
+                )
+            }
+            
+            return generateStandardInstructions(
+                enabledSet,
+                prompts.map((p) => {
+                    const prompt = p as { name: string; description?: string }
+                    return { name: prompt.name, description: prompt.description }
+                }),
+                undefined,
+                groups,
+                currentConfig.briefingConfig
+            )
+        }
+
+        // Create MCP server
+        const server = new McpServer(
+            {
+                name: 'memory-journal-mcp',
+                version: VERSION,
+            },
+            {
+                capabilities: {
+                    logging: {},
+                    prompts: { listChanged: true },
+                    tools: { listChanged: true },
+                    resources: {
+                        subscribe: true,
+                        listChanged: true,
+                    },
+                    experimental: {
+                        progress: {},
+                    }
+                },
+                instructions: getInstructions(),
+                maxToolInputElements: resolveEffectiveMaxToolInputElements(options.maxToolInputElements),
+            }
+        )
+
+        if (context.skillCatalog && typeof server.isConnected === 'function') {
+            context.skillCatalog.attach(server)
+        }
+
+        for (const tool of allTools) {
+            // Build tool options matching MCP SDK expectations
+            interface McpToolOptions {
+                description?: string
+                title?: string
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                inputSchema?: any
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                outputSchema?: any
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                annotations?: any
+                icons?: { src: string }[]
+            }
+
+            const toolOptions: McpToolOptions = {
+                description: tool.description,
+            }
+
+            // MCP 2025-11-25: Pass title for human-readable display
+            if (tool.title) {
+                toolOptions.title = tool.title
+            }
+
+            if (tool.inputSchema !== undefined) {
+                const schema = tool.inputSchema
+                if (
+                    typeof schema === 'object' &&
+                    schema !== null &&
+                    'partial' in schema &&
+                    typeof schema.partial === 'function'
+                ) {
+                    // DOCUMENTATION (P3 #8): Two-Schema Pattern
+                    // We use a strict `inputSchema` for tool definitions so LLMs see exactly what is required.
+                    // However, the MCP SDK strictly validates incoming JSON against this schema before reaching our handlers.
+                    // By using `.partial().passthrough()` here, we relax the schema for the SDK, allowing our
+                    // own handler logic to perform the strict validation, sanitize data, and return structured error
+                    // messages instead of the SDK crashing or returning opaque generic errors.
+                    //
+                    // .partial() makes all fields optional so the SDK accepts `{}`.
+                    // .passthrough() preserves unrecognized keys so handler can normalize.
+                    // Wrapped in try/catch: if partial() returns something without passthrough()
+                    // (non-ZodObject wrapper), fall back to the original schema to avoid
+                    // a startup throw.
+                    try {
+                        const relaxed = (
+                            schema as { partial: () => { passthrough?: () => z.ZodType } }
+                        ).partial()
+                        toolOptions.inputSchema = (typeof relaxed.passthrough === 'function'
+                            ? relaxed.passthrough()
+                            : schema)
+                    } catch {
+                        toolOptions.inputSchema = schema
+                    }
+                } else {
+                    toolOptions.inputSchema = schema
+                }
+            }
+
+            // MCP 2025-11-25: Pass outputSchema for structured responses
+            if (tool.outputSchema !== undefined) {
+                const outSchema = tool.outputSchema
+                if (
+                    typeof outSchema === 'object' &&
+                    outSchema !== null &&
+                    'passthrough' in outSchema &&
+                    typeof outSchema.passthrough === 'function'
+                ) {
+                    try {
+                        toolOptions.outputSchema = (outSchema as { passthrough: () => z.ZodType }).passthrough()
+                    } catch {
+                        toolOptions.outputSchema = outSchema
+                    }
+                } else {
+                    toolOptions.outputSchema = outSchema
+                }
+            }
+
+            if (tool.annotations !== undefined) {
+                toolOptions.annotations = tool.annotations
+            }
+
+            // MCP 2025-11-25: Pass icons for visual representation
+            if (tool.icons) {
+                // Ensure tool.icons is handled correctly since getToolIcon returns a single object
+                toolOptions.icons = [{
+                    src: tool.icons.iconUrl,
+                }]
+            }
+
+            // Capture whether this tool has outputSchema for response handling
+            const hasOutputSchema = Boolean(tool.outputSchema)
+
+            // Use registerTool since the low-level Server API requires it for our full dynamic objects
+             
+            server.registerTool(
+                tool.name,
+                 
+                toolOptions,
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                async (args: any, extra: any): Promise<CallToolResult> => {
+                try {
+                    const extraMeta = extra as { mcpReq?: { _meta?: { progressToken?: string | number } } }
+                    const progressToken = extraMeta?.mcpReq?._meta?.progressToken
+                    
+                    const progressContext =
+                        progressToken !== undefined
+                            ? { server: server.server, progressToken }
+                            : undefined
+
+                    // Ensure the dispatch gets the latest filter config!
+                    const currentConfig = configManager.getConfig()
+                    customToolHandlerConfig.filterConfig = currentConfig.toolFilterConfig
+                    customToolHandlerConfig.briefingConfig = currentConfig.briefingConfig
+
+                    const toolArgs = args as Record<string, unknown>
+                    
+                    // (Global normalization is now handled in the tools/call interceptor)
+
+                    const result = await callTool(
+                        tool.name,
+                        toolArgs,
+                        db,
+                        vectorManager,
+                        github,
+                        customToolHandlerConfig,
+                        progressContext,
+                        teamDb ?? undefined,
+                        teamVectorManager ?? undefined
+                    )
+
+                    const isSuccess = typeof result === 'object' && result !== null && (result as Record<string, unknown>)['success'] === true
+
+                    if (isSuccess) {
+                        const mutatingTools = [
+                            'create_entry', 'update_entry', 'delete_entry', 'restore_entry',
+                            'batch_create_entries', 'batch_update_entries', 'batch_delete_entries',
+                            'add_team_member', 'update_team_member', 'remove_team_member'
+                        ]
+                        const isMutation = mutatingTools.includes(tool.name) || (tool.name.startsWith('team_') && tool.name !== 'team_search' && tool.name !== 'get_team_entry_by_id')
+                        
+                        if (isMutation) {
+                            void globalSubscriptionManager.notifyResourceUpdated('memory://briefing')
+                            void globalSubscriptionManager.notifyResourceUpdated('memory://recent')
+                            void globalSubscriptionManager.notifyResourceUpdated('memory://statistics')
+                            
+                            if (tool.name.startsWith('team_') || tool.name.includes('team_member')) {
+                                void globalSubscriptionManager.notifyResourceUpdated('memory://team/recent')
+                                void globalSubscriptionManager.notifyResourceUpdated('memory://team/statistics')
+                            }
+                        }
+                    }
+
+                    // MCP 2025-11-25: If tool has outputSchema, return both:
+                    // - structuredContent: validated JSON for clients that support it
+                    // - content: compact text fallback (~15-20% payload reduction per §3.1)
+                    const textContent =
+                        typeof result === 'string' ? result : JSON.stringify(result, null, 2)
+
+                    if (hasOutputSchema) {
+                        // Include both structured data for the UI and raw text for the LLM context
+                        return {
+                            content: [
+                                {
+                                    type: 'text' as const,
+                                    text: textContent,
+                                },
+                            ],
+                            structuredContent: result as Record<string, unknown>,
+                        }
+                    }
+
+                    // Otherwise, return just text content
+                    return {
+                        content: [
+                            {
+                                type: 'text' as const,
+                                text: textContent,
+                            },
+                        ],
+                    }
+                } catch (error) {
+                    let errorResult: Record<string, unknown>
+                    if (
+                        error instanceof Error &&
+                        'toResponse' in error &&
+                        typeof (error as { toResponse?: unknown }).toResponse === 'function'
+                    ) {
+                        errorResult = (
+                            error as { toResponse: () => Record<string, unknown> }
+                        ).toResponse()
+                    } else {
+                        const errorMessage = error instanceof Error ? error.message : String(error)
+                        errorResult = {
+                            success: false,
+                            error: errorMessage,
+                            code: 'INTERNAL_ERROR',
+                            category: 'internal',
+                            recoverable: false,
+                        }
+                    }
+
+                    logAgentIssue({
+                        source: 'MCP',
+                        action: tool.name,
+                        input: args,
+                        error: (errorResult['error'] as string) ?? 'Unknown error'
+                    })
+
+                    return {
+                        content: [
+                            {
+                                type: 'text' as const,
+                                text: JSON.stringify(errorResult, null, 2),
+                            },
+                        ],
+                        ...(hasOutputSchema ? { structuredContent: errorResult } : {}),
+                        isError: true,
+                    }
+                }
+            })
+        }
+
+        // Resource read handler shared by template and static branches (D2 fix)
+        const handleResourceRead = async (
+            uri: URL,
+            mimeType: string
+        ): Promise<{
+            contents: {
+                uri: string
+                mimeType: string
+                text: string
+                annotations?: Record<string, unknown>
+            }[]
+        }> => {
+            const currentConfig = configManager.getConfig()
+            const activeBriefingConfig: typeof DEFAULT_BRIEFING_CONFIG = {
+                ...(currentConfig.briefingConfig),
+                // Ensure defaultProjectNumber is available to resource handlers
+                // (may come via briefingConfig from CLI, or directly from server options)
+                defaultProjectNumber:
+                    currentConfig.briefingConfig.defaultProjectNumber ?? defaultProjectNumber,
+                projectRegistry: options.projectRegistry,
+
+                allowedIoRoots: allowedIoRoots,
+            }
+
+            try {
+                const result = await readResource(
+                    uri.href,
+                    db,
+                    vectorManager,
+                    currentConfig.toolFilterConfig,
+                    github,
+                    scheduler,
+                    teamDb ?? undefined,
+                    activeBriefingConfig,
+                    runtime
+                )
+
+                runtime.metrics.recordResourceRead(uri.href, false)
+
+                const dataStr =
+                    typeof result.data === 'string' ? result.data : JSON.stringify(result.data, null, 2)
+                return {
+                    contents: [
+                        {
+                            uri: uri.href,
+                            mimeType,
+                            text: dataStr,
+                            ...(result.annotations ? { annotations: result.annotations } : {}),
+                        },
+                    ],
+                }
+            } catch (error) {
+                runtime.metrics.recordResourceRead(uri.href, true)
+                throw error
+            }
+        }
+
+        // Register resources (reusing resources from instruction generation)
+        registerResources(server, resources, handleResourceRead, runtime)
+
+        // Register subscribe/unsubscribe handlers on the underlying server
+        server.server.setRequestHandler('resources/subscribe', (request, extra) => {
+            const transportSessionId = (extra as { sessionId?: string })?.sessionId || 'stdio'
+            
+            // Validate that the current session has authorization to subscribe to this resource
+            validateResourceSubscription(request.params.uri, runtime)
+            
+            globalSubscriptionManager.registerServer(transportSessionId, server)
+            globalSubscriptionManager.subscribe(request.params.uri, transportSessionId)
+            return {}
+        })
+
+        server.server.setRequestHandler('resources/unsubscribe', (request, extra) => {
+            const transportSessionId = (extra as { sessionId?: string })?.sessionId || 'stdio'
+            globalSubscriptionManager.unsubscribe(request.params.uri, transportSessionId)
+            return {}
+        })
+
+        // Register prompts (reusing prompts from instruction generation)
+        const briefingConfig = configManager.getConfig().briefingConfig
+        registerPrompts(server, prompts, db, teamDb ?? undefined, runtime, context.github, briefingConfig)
+
+        // Intercept SDK-level Zod validation errors to return structured error responses
+        const serverObj = server.server as unknown as {
+            _requestHandlers: Map<string, (req: unknown, ext: unknown) => Promise<unknown>>
+        }
+        const requestHandlers = serverObj._requestHandlers
+        
+        // Intercept tools/list for dynamic filtering
+        const listToolsHandler = requestHandlers?.get('tools/list')
+        if (listToolsHandler) {
+            requestHandlers.set('tools/list', async (request: unknown, extra: unknown) => {
+                const currentConfig = configManager.getConfig()
+                const enabledSet = currentConfig.toolFilterConfig?.enabledTools ?? allToolNames
+                
+                const result = await listToolsHandler(request, extra)
+                const res = result as { tools?: { name: string }[] } | undefined
+                if (Array.isArray(res?.tools)) {
+                    res.tools = res.tools.filter((t) => enabledSet.has(t.name))
+                }
+                return result
+            })
+        }
+
+        const originalHandler = requestHandlers?.get('tools/call')
+        if (originalHandler) {
+            requestHandlers.set('tools/call', async (request: unknown, extra: unknown) => {
+                try {
+                    const req = request as { params?: { name?: string; arguments?: Record<string, unknown> } }
+                    const healingEnabled = options.agentHealing !== false && customToolHandlerConfig.agentHealing !== false
+                    if (req?.params?.arguments && healingEnabled) {
+                        // Deep camelToSnake normalization for Native MCP tool calls
+                        const deepCamelToSnake = (obj: unknown): unknown => {
+                            if (Array.isArray(obj)) return obj.map(deepCamelToSnake)
+                            if (obj !== null && typeof obj === 'object') {
+                                const newObj: Record<string, unknown> = {}
+                                for (const [k, v] of Object.entries(obj)) {
+                                    const snakeKey = k
+                                        .replace(/^[A-Z]/, (letter) => letter.toLowerCase())
+                                        .replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
+                                    newObj[snakeKey] = deepCamelToSnake(v)
+                                }
+                                return newObj
+                            }
+                            return obj
+                        }
+                        req.params.arguments = deepCamelToSnake(req.params.arguments) as Record<string, unknown>
+                        
+                        const toolArgs = req.params.arguments
+                        
+                        // Check repo/project aliases first
+                        if (typeof toolArgs['project_number'] === 'undefined') {
+                            let repoStr: string | undefined
+                            if (typeof toolArgs['repo'] === 'string') repoStr = toolArgs['repo']
+                            else if (typeof toolArgs['project'] === 'string') repoStr = toolArgs['project']
+                            
+                            if (repoStr) {
+                                toolArgs['project_number'] = repoStr
+                            }
+                        }
+                        
+                        // Normalize string project_number
+                        if (typeof toolArgs['project_number'] === 'string') {
+                            const strVal = toolArgs['project_number']
+                            const parsed = Number(strVal)
+                            if (!Number.isNaN(parsed)) {
+                                toolArgs['project_number'] = parsed
+                            } else if (options.projectRegistry) {
+                                let entry = options.projectRegistry[strVal]
+                                if (!entry && strVal.includes('/')) {
+                                    const repoName = strVal.split('/').pop()
+                                    if (repoName) {
+                                        entry = options.projectRegistry[repoName]
+                                    }
+                                }
+                                if (entry?.project_number !== undefined) {
+                                    toolArgs['project_number'] = entry.project_number
+                                }
+                                // If it STILL doesn't resolve, we let it pass through as a string so Zod 
+                                // catches it and throws a strict validation error.
+                            }
+                        }
+                        
+                        // Intercept tool hallucination silently
+                        const ALIASED_EXECUTE_CODE_NAMES = new Set([
+                            'mysql_execute_code',
+                            'mysqlExecuteCode',
+                            'execute_code',
+                            'executeCode',
+                            'mjExecuteCode',
+                            'mj_eval',
+                            'eval_code',
+                            'run_code',
+                            'exec_code',
+                            'code_execute',
+                        ]);
+                        if (req.params.name && ALIASED_EXECUTE_CODE_NAMES.has(req.params.name)) {
+                            req.params.name = 'mj_execute_code';
+                        }
+
+                        if (req.params.name === 'create_entry_minimal') {
+                            req.params.name = 'create_entry';
+                            if (typeof toolArgs['entry_type'] === 'undefined') {
+                                toolArgs['entry_type'] = 'personal_reflection';
+                            }
+                        }
+
+                        const ALIASED_LIST_PROJECTS_NAMES = new Set([
+                            'listProjects',
+                            'list-projects',
+                            'get_projects',
+                            'getProjects',
+                            'get-projects',
+                            'mj_list_projects',
+                            'mjListProjects',
+                            'mj_get_projects',
+                            'mjGetProjects',
+                            'mj_admin_list_projects',
+                            'mj_admin_get_projects',
+                        ]);
+                        if (req.params.name && ALIASED_LIST_PROJECTS_NAMES.has(req.params.name)) {
+                            req.params.name = 'list_projects';
+                        }
+                        
+                        const ALIASED_GET_PROJECT_NAMES = new Set([
+                            'getProject',
+                            'get-project',
+                            'mj_get_project',
+                            'mjGetProject',
+                            'mj_admin_get_project',
+                        ]);
+                        if (req.params.name && ALIASED_GET_PROJECT_NAMES.has(req.params.name)) {
+                            req.params.name = 'get_project';
+                        }
+
+                        const ALIASED_GREP_SEARCH_NAMES = new Set([
+                            'grep_search',
+                            'grepSearch',
+                            'grep',
+                            'file_search',
+                            'fileSearch',
+                            'find_in_files',
+                            'findInFiles',
+                            'search_files',
+                            'searchFiles',
+                        ]);
+                        if (req.params.name && ALIASED_GREP_SEARCH_NAMES.has(req.params.name)) {
+                            req.params.name = 'grep_search';
+                        }
+
+                        const ALIASED_VIEW_FILE_NAMES = new Set([
+                            'view_file',
+                            'viewFile',
+                            'read_file',
+                            'readFile',
+                            'get_file',
+                            'getFile',
+                        ]);
+                        if (req.params.name && ALIASED_VIEW_FILE_NAMES.has(req.params.name)) {
+                            req.params.name = 'view_file';
+                        }
+
+                        const ALIASED_LIST_DIR_NAMES = new Set([
+                            'list_dir',
+                            'listDir',
+                            'read_dir',
+                            'readDir',
+                        ]);
+                        if (req.params.name && ALIASED_LIST_DIR_NAMES.has(req.params.name)) {
+                            req.params.name = 'list_dir';
+                        }
+
+                        // Apply global anti-hallucination parameter interceptions & smoothing
+                        if (req.params.name) {
+                            const intercept = applyArgInterceptions(req.params.name, [toolArgs])
+                            if ('error' in intercept) {
+                                const errorResult = intercept.error
+                                logAgentIssue({
+                                    source: 'MCP',
+                                    action: req.params.name,
+                                    input: toolArgs,
+                                    error: (errorResult['error'] as string) ?? 'Validation Error',
+                                })
+                                const enriched = JSON.stringify({
+                                    ...errorResult,
+                                    _meta: { tokenEstimate: 0 },
+                                })
+                                const tokenEstimate = Math.ceil(Buffer.byteLength(enriched, 'utf8') / 4)
+                                const finalText = enriched.replace('"tokenEstimate":0', `"tokenEstimate":${tokenEstimate}`)
+
+                                return {
+                                    content: [
+                                        {
+                                            type: 'text',
+                                            text: finalText,
+                                        },
+                                    ],
+                                    structuredContent: errorResult,
+                                }
+                            } else {
+                                const normalizedArgs = intercept.args?.[0]
+                                if (normalizedArgs !== null && typeof normalizedArgs === 'object' && !Array.isArray(normalizedArgs)) {
+                                    req.params.arguments = normalizedArgs as Record<string, unknown>
+                                }
+                            }
+                        }
+                    }
+
+                    if (req?.params?.name && !allToolNames.has(req.params.name)) {
+                        const requestedTool = req.params.name;
+                        const toolArgs = req.params.arguments ?? {};
+                        const normalized = requestedTool.replace(/^mj_/, '').replace(/_/g, '-');
+                        const matchingPrompt = prompts.find((p) => p.name === normalized || p.name === requestedTool || p.name === requestedTool.replace(/^mj_/, ''));
+
+                        // Catch hallucinated tool names BEFORE the SDK throws a generic validation error
+                        if (healingEnabled) {
+                            
+                            // Autonomous Prompt Healing Fallback
+                            if (matchingPrompt) {
+                                try {
+                                    const stringArgs: Record<string, string> = {};
+                                    for (const [k, v] of Object.entries(toolArgs)) {
+                                        if (typeof v === 'string') stringArgs[k] = v;
+                                        else if (typeof v === 'number' || typeof v === 'boolean') stringArgs[k] = String(v);
+                                    }
+                                    if ((matchingPrompt.name === 'load-briefing' || matchingPrompt.name === 'briefing') && !stringArgs['projects']) {
+                                        const fallbackProject = stringArgs['project'] ?? stringArgs['name'] ?? stringArgs['target'] ?? stringArgs['repo'] ?? stringArgs['workspace'] ?? '';
+                                        stringArgs['projects'] = fallbackProject;
+                                    }
+                                    const currentConfig = configManager.getConfig();
+                                    const promptResult = await getPrompt(
+                                        matchingPrompt.name,
+                                        stringArgs,
+                                        db,
+                                        teamDb ?? undefined,
+                                        github ?? undefined,
+                                        currentConfig.briefingConfig
+                                    );
+                                    const successPayload = {
+                                        success: true,
+                                        data: promptResult,
+                                        messages: promptResult.messages,
+                                        _healing_note: `🛠️ AUTONOMOUS HEALING: '${requestedTool}' is an MCP Prompt, but was invoked directly as an MCP tool. The prompt was evaluated and returned successfully.`
+                                    };
+                                    const enriched = JSON.stringify(successPayload, null, 2);
+                                    return {
+                                        content: [
+                                            {
+                                                type: 'text',
+                                                text: enriched,
+                                            },
+                                        ],
+                                        structuredContent: successPayload,
+                                    };
+                                } catch {
+                                    // Fall through to standard error reporting
+                                }
+                            }
+
+                            // Autonomous Resource Healing Fallback
+                            const isResource =
+                                requestedTool === 'read_resource' ||
+                                requestedTool === 'readResource' ||
+                                requestedTool === 'read-resource' ||
+                                requestedTool === 'mj_read_resource' ||
+                                requestedTool === 'mjReadResource' ||
+                                requestedTool === 'memory_read_resource' ||
+                                requestedTool === 'memoryReadResource' ||
+                                requestedTool === 'memory_journal_read_resource' ||
+                                requestedTool === 'get_resource' ||
+                                requestedTool === 'getResource' ||
+                                requestedTool === 'get-resource' ||
+                                requestedTool === 'memory_get_resource' ||
+                                requestedTool === 'memoryGetResource' ||
+                                requestedTool === 'mj_get_resource' ||
+                                requestedTool === 'mjGetResource' ||
+                                requestedTool === 'read_memory_resource' ||
+                                requestedTool.endsWith('_read_resource') ||
+                                requestedTool.endsWith('ReadResource') ||
+                                requestedTool.startsWith('memory://');
+                            if (isResource) {
+                                try {
+                                    let uri = typeof toolArgs['uri'] === 'string' ? toolArgs['uri'] : (typeof toolArgs['Uri'] === 'string' ? toolArgs['Uri'] : (typeof toolArgs['_uri'] === 'string' ? toolArgs['_uri'] : undefined));
+                                    if (!uri) {
+                                        for (const key of ['resourceUri', 'resource_uri', 'resource', 'Resource', 'url', 'Url', 'path', 'Path', 'name', 'Name', 'target', 'Target', 'ServerName', 'server_name']) {
+                                            const rawVal = toolArgs[key];
+                                            if (typeof rawVal === 'string' && rawVal.trim()) {
+                                                const val = rawVal.trim();
+                                                if (key === 'ServerName' || key === 'server_name') {
+                                                    if (val === 'memory-journal-mcp' || val === 'memory-journal') continue;
+                                                }
+                                                uri = val;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    if (!uri && requestedTool.startsWith('memory://')) {
+                                        uri = requestedTool;
+                                    }
+                                    if (uri && !uri.includes('://')) {
+                                        if (uri.startsWith('briefing') || uri.startsWith('recent') || uri.startsWith('agent-') || uri.startsWith('statistics') || uri.startsWith('insights') || uri.startsWith('help') || uri.startsWith('health') || uri.startsWith('team') || uri.startsWith('git') || uri.startsWith('tools')) {
+                                            uri = `memory://${uri}`;
+                                        } else {
+                                            uri = `memory://briefing/${uri}`;
+                                        }
+                                    }
+                                    if (!uri) {
+                                        uri = 'memory://briefing';
+                                    }
+                                    const currentConfig = configManager.getConfig();
+                                    const res = await readResource(
+                                        uri,
+                                        db,
+                                        vectorManager ?? undefined,
+                                        currentConfig.toolFilterConfig,
+                                        github ?? undefined,
+                                        undefined,
+                                        teamDb ?? undefined,
+                                        currentConfig.briefingConfig,
+                                        runtime
+                                    );
+                                    const successPayload = {
+                                        success: true,
+                                        data: res.data,
+                                        _healing_note: `🛠️ AUTONOMOUS HEALING: '${requestedTool}' was called as an MCP tool instead of an MCP resource read. The resource '${uri}' was resolved successfully.`
+                                    };
+                                    const enriched = JSON.stringify(successPayload, null, 2);
+                                    return {
+                                        content: [
+                                            {
+                                                type: 'text',
+                                                text: enriched,
+                                            },
+                                        ],
+                                        structuredContent: successPayload,
+                                    };
+                                } catch {
+                                    // Fall through to standard error reporting
+                                }
+                            }
+
+                            // Autonomous Resource Listing Fallback
+                            const isListResources =
+                                requestedTool === 'list_resources' ||
+                                requestedTool === 'listResources' ||
+                                requestedTool === 'list-resources' ||
+                                requestedTool === 'mj_list_resources' ||
+                                requestedTool === 'mjListResources' ||
+                                requestedTool === 'memory_list_resources' ||
+                                requestedTool === 'memoryListResources' ||
+                                requestedTool === 'memory_journal_list_resources' ||
+                                requestedTool === 'get_resources' ||
+                                requestedTool === 'getResources' ||
+                                requestedTool === 'get-resources' ||
+                                requestedTool === 'memory_get_resources' ||
+                                requestedTool === 'memoryGetResources' ||
+                                requestedTool.endsWith('_list_resources') ||
+                                requestedTool.endsWith('ListResources');
+                            if (isListResources) {
+                                try {
+                                    const resourceList = getResources();
+                                    const successPayload = {
+                                        success: true,
+                                        resources: resourceList,
+                                        _healing_note: `🛠️ AUTONOMOUS HEALING: '${requestedTool}' was called as an MCP tool instead of an MCP protocol request (resources/list). The available resources were returned successfully.`
+                                    };
+                                    const enriched = JSON.stringify(successPayload, null, 2);
+                                    return {
+                                        content: [
+                                            {
+                                                type: 'text',
+                                                text: enriched,
+                                            },
+                                        ],
+                                        structuredContent: successPayload,
+                                    };
+                                } catch {
+                                    // Fall through to standard error reporting
+                                }
+                            }
+
+                            // Autonomous Prompts Listing Fallback
+                            const isListPrompts =
+                                requestedTool === 'list_prompts' ||
+                                requestedTool === 'listPrompts' ||
+                                requestedTool === 'list-prompts' ||
+                                requestedTool === 'mj_list_prompts' ||
+                                requestedTool === 'mjListPrompts' ||
+                                requestedTool === 'memory_list_prompts' ||
+                                requestedTool === 'memoryListPrompts' ||
+                                requestedTool === 'memory_journal_list_prompts' ||
+                                requestedTool === 'get_prompts' ||
+                                requestedTool === 'getPrompts' ||
+                                requestedTool.endsWith('_list_prompts') ||
+                                requestedTool.endsWith('ListPrompts');
+                            if (isListPrompts) {
+                                try {
+                                    const promptList = getPrompts();
+                                    const successPayload = {
+                                        success: true,
+                                        prompts: promptList,
+                                        _healing_note: `🛠️ AUTONOMOUS HEALING: '${requestedTool}' was called as an MCP tool instead of an MCP protocol request (prompts/list). The available prompts were returned successfully.`
+                                    };
+                                    const enriched = JSON.stringify(successPayload, null, 2);
+                                    return {
+                                        content: [
+                                            {
+                                                type: 'text',
+                                                text: enriched,
+                                            },
+                                        ],
+                                        structuredContent: successPayload,
+                                    };
+                                } catch {
+                                    // Fall through to standard error reporting
+                                }
+                            }
+
+                            // Autonomous Tools Listing Fallback
+                            const isListTools =
+                                requestedTool === 'list_tools' ||
+                                requestedTool === 'listTools' ||
+                                requestedTool === 'list-tools' ||
+                                requestedTool === 'mj_list_tools' ||
+                                requestedTool === 'mjListTools' ||
+                                requestedTool === 'memory_list_tools' ||
+                                requestedTool === 'memoryListTools' ||
+                                requestedTool === 'memory_journal_list_tools' ||
+                                requestedTool === 'get_tools' ||
+                                requestedTool === 'getTools' ||
+                                requestedTool.endsWith('_list_tools') ||
+                                requestedTool.endsWith('ListTools');
+                            if (isListTools) {
+                                try {
+                                    const currentConfig = configManager.getConfig();
+                                    const enabledSet = currentConfig.toolFilterConfig?.enabledTools ?? allToolNames;
+                                    const toolsList = allTools
+                                        .filter((t) => enabledSet.has(t.name))
+                                        .map((t) => ({
+                                            name: t.name,
+                                            title: t.title,
+                                            description: t.description,
+                                            annotations: t.annotations,
+                                        }));
+                                    const successPayload = {
+                                        success: true,
+                                        tools: toolsList,
+                                        _healing_note: `🛠️ AUTONOMOUS HEALING: '${requestedTool}' was called as an MCP tool instead of an MCP protocol request (tools/list). The available tools were returned successfully.`
+                                    };
+                                    const enriched = JSON.stringify(successPayload, null, 2);
+                                    return {
+                                        content: [
+                                            {
+                                                type: 'text',
+                                                text: enriched,
+                                            },
+                                        ],
+                                        structuredContent: successPayload,
+                                    };
+                                } catch {
+                                    // Fall through to standard error reporting
+                                }
+                            }
+
+                            // Autonomous Prompt Fetching Fallback
+                            const isGetPrompt =
+                                requestedTool === 'get_prompt' ||
+                                requestedTool === 'getPrompt' ||
+                                requestedTool === 'mj_get_prompt' ||
+                                requestedTool === 'mjGetPrompt' ||
+                                requestedTool === 'memory_get_prompt' ||
+                                requestedTool === 'memoryGetPrompt' ||
+                                requestedTool === 'memory_journal_get_prompt' ||
+                                requestedTool === 'read_prompt' ||
+                                requestedTool === 'readPrompt' ||
+                                requestedTool.endsWith('_get_prompt') ||
+                                requestedTool.endsWith('GetPrompt');
+                            if (isGetPrompt) {
+                                try {
+                                    const targetPromptName = typeof toolArgs['name'] === 'string' ? toolArgs['name'] : (typeof toolArgs['prompt'] === 'string' ? toolArgs['prompt'] : (typeof toolArgs['prompt_name'] === 'string' ? toolArgs['prompt_name'] : 'load-briefing'));
+                                    const nestedArgs = (typeof toolArgs['arguments'] === 'object' && toolArgs['arguments'] !== null ? toolArgs['arguments'] : toolArgs) as Record<string, unknown>;
+                                    const stringArgs: Record<string, string> = {};
+                                    for (const [k, v] of Object.entries(nestedArgs)) {
+                                        if (k !== 'name' && k !== 'prompt' && k !== 'prompt_name' && k !== 'arguments') {
+                                            if (typeof v === 'string') stringArgs[k] = v;
+                                            else if (typeof v === 'number' || typeof v === 'boolean') stringArgs[k] = String(v);
+                                        }
+                                    }
+                                    const currentConfig = configManager.getConfig();
+                                    const promptResult = await getPrompt(
+                                        targetPromptName,
+                                        stringArgs,
+                                        db,
+                                        teamDb ?? undefined,
+                                        github ?? undefined,
+                                        currentConfig.briefingConfig
+                                    );
+                                    const successPayload = {
+                                        success: true,
+                                        data: promptResult,
+                                        messages: promptResult.messages,
+                                        _healing_note: `🛠️ AUTONOMOUS HEALING: '${requestedTool}' was called as an MCP tool instead of an MCP protocol request (prompts/get). The prompt '${targetPromptName}' was evaluated successfully.`
+                                    };
+                                    const enriched = JSON.stringify(successPayload, null, 2);
+                                    return {
+                                        content: [
+                                            {
+                                                type: 'text',
+                                                text: enriched,
+                                            },
+                                        ],
+                                        structuredContent: successPayload,
+                                    };
+                                } catch {
+                                    // Fall through to standard error reporting
+                                }
+                            }
+
+                            // Autonomous Server Info & Health Diagnostics Fallback
+                            const isServerInfo = [
+                                'server_info',
+                                'serverInfo',
+                                'server-info',
+                                'mj_server_info',
+                                'get_server_info',
+                                'getServerInfo',
+                                'server_health',
+                                'serverHealth',
+                                'server-health',
+                                'mj_server_health',
+                                'get_server_health',
+                                'getServerHealth',
+                                'health_check',
+                                'healthCheck',
+                                'health-check',
+                                'server_status',
+                                'serverStatus',
+                                'server-status',
+                                'status',
+                                'health',
+                            ].includes(requestedTool);
+                            if (isServerInfo) {
+                                try {
+                                    let healthData: Record<string, unknown> | undefined;
+                                    try {
+                                        const res = await readResource(
+                                            'memory://health',
+                                            db,
+                                            vectorManager ?? undefined,
+                                            configManager.getConfig().toolFilterConfig ?? undefined,
+                                            github ?? undefined,
+                                            undefined,
+                                            teamDb ?? undefined,
+                                            configManager.getConfig().briefingConfig,
+                                            runtime
+                                        );
+                                        if (typeof res.data === 'object' && res.data !== null) {
+                                            healthData = res.data as Record<string, unknown>;
+                                        }
+                                    } catch {
+                                        // Fallback to db health if readResource fails
+                                    }
+
+                                    const dbHealth = healthData ?? db.getHealthStatus();
+                                    const successPayload = {
+                                        success: true,
+                                        status: 'healthy',
+                                        server: {
+                                            name: 'memory-journal-mcp',
+                                            version: VERSION,
+                                            description: 'Memory Journal MCP Server with Code Mode & Semantic Search',
+                                        },
+                                        runtime: {
+                                            nodeVersion: process.version,
+                                            platform: process.platform,
+                                            uptimeSeconds: Math.floor(process.uptime()),
+                                        },
+                                        ...(healthData !== undefined ? { health: healthData } : {}),
+                                        ...(dbHealth !== undefined ? { database: dbHealth } : {}),
+                                        capabilities: {
+                                            codemode: true,
+                                            resources: true,
+                                            prompts: true,
+                                            tools: true,
+                                        },
+                                        _healing_note: `🛠️ AUTONOMOUS HEALING: '${requestedTool}' was called as an MCP tool. Returned server diagnostic information and health status successfully.`,
+                                    };
+                                    const enriched = JSON.stringify(successPayload, null, 2);
+                                    return {
+                                        content: [
+                                            {
+                                                type: 'text',
+                                                text: enriched,
+                                            },
+                                        ],
+                                        structuredContent: successPayload,
+                                    };
+                                } catch {
+                                    // Fall through to standard error reporting
+                                }
+                            }
+
+                            // Autonomous Project Listing Fallback
+                            const isListProjects = [
+                                'list_projects',
+                                'listProjects',
+                                'list-projects',
+                                'get_projects',
+                                'getProjects',
+                                'get-projects',
+                                'mj_list_projects',
+                                'mjListProjects',
+                                'mj_get_projects',
+                                'mjGetProjects',
+                                'mj_admin_list_projects',
+                                'mj_admin_get_projects',
+                                'projects',
+                            ].includes(requestedTool) || requestedTool.endsWith('list_projects') || requestedTool.endsWith('listProjects') || requestedTool.endsWith('ListProjects');
+                            if (isListProjects) {
+                                try {
+                                    const currentConfig = configManager.getConfig() as { projectRegistry?: Record<string, unknown> };
+                                    const registry = currentConfig.projectRegistry ?? {};
+                                    const successPayload = {
+                                        success: true,
+                                        projects: registry,
+                                        _healing_note: `🛠️ AUTONOMOUS HEALING: '${requestedTool}' was called as an MCP tool. Returned registered projects from projectRegistry successfully.`
+                                    };
+                                    const enriched = JSON.stringify(successPayload, null, 2);
+                                    return {
+                                        content: [
+                                            {
+                                                type: 'text',
+                                                text: enriched,
+                                            },
+                                        ],
+                                        structuredContent: successPayload,
+                                    };
+                                } catch {
+                                    // Fall through to standard error reporting
+                                }
+                            }
+
+                            // Autonomous Adapter Listing Fallback
+                            const isListAdapters = [
+                                'list_adapters',
+                                'listAdapters',
+                                'list-adapters',
+                                'mj_list_adapters',
+                                'mjListAdapters',
+                                'get_adapters',
+                                'getAdapters',
+                                'get-adapters',
+                                'adapters',
+                            ].includes(requestedTool) || requestedTool.endsWith('list_adapters') || requestedTool.endsWith('listAdapters') || requestedTool.endsWith('ListAdapters');
+                            if (isListAdapters) {
+                                try {
+                                    const adapters = [
+                                        {
+                                            name: 'sqlite',
+                                            type: 'database',
+                                            driver: 'better-sqlite3',
+                                            status: 'connected',
+                                            primary: true,
+                                            description: 'Primary SQLite storage engine for journal entries, tags, and relationships',
+                                        },
+                                        {
+                                            name: 'sqlite-vec',
+                                            type: 'vector',
+                                            driver: 'sqlite-vec',
+                                            status: vectorManager !== undefined && vectorManager !== null ? 'connected' : 'ready',
+                                            description: 'Native vector embeddings and semantic search engine',
+                                        },
+                                        {
+                                            name: 'team',
+                                            type: 'database',
+                                            driver: 'better-sqlite3',
+                                            status: teamDb !== undefined && teamDb !== null ? 'connected' : 'disabled',
+                                            description: 'Collaborative team journal database adapter',
+                                        },
+                                        {
+                                            name: 'github',
+                                            type: 'integration',
+                                            driver: 'octokit / gh',
+                                            status: github !== undefined && github !== null ? 'connected' : 'disabled',
+                                            description: 'GitHub synchronization and issue tracking adapter',
+                                        },
+                                    ];
+                                    const successPayload = {
+                                        success: true,
+                                        adapters,
+                                        default_adapter: 'sqlite',
+                                        _healing_note: `🛠️ AUTONOMOUS HEALING: '${requestedTool}' was called as an MCP tool. Returned registered database and service adapters successfully.`,
+                                    };
+                                    const enriched = JSON.stringify(successPayload, null, 2);
+                                    return {
+                                        content: [
+                                            {
+                                                type: 'text',
+                                                text: enriched,
+                                            },
+                                        ],
+                                        structuredContent: successPayload,
+                                    };
+                                } catch {
+                                    // Fall through to standard error reporting
+                                }
+                            }
+
+                            // Autonomous Grep / Codebase Search Fallback
+                            const isGrepSearch = [
+                                'grep_search',
+                                'grepSearch',
+                                'grep',
+                                'file_search',
+                                'fileSearch',
+                                'find_in_files',
+                                'findInFiles',
+                                'search_files',
+                                'searchFiles',
+                            ].includes(requestedTool) || requestedTool.endsWith('grep_search') || requestedTool.endsWith('grepSearch');
+                            if (isGrepSearch) {
+                                try {
+                                    const dummyTools = getDummyHealingTools({ db, teamDb: teamDb ?? undefined, vectorManager: vectorManager ?? undefined, teamVectorManager: teamVectorManager ?? undefined, github: github ?? undefined, config: customToolHandlerConfig });
+                                    const grepTool = dummyTools.find(t => t.name === 'grep_search');
+                                    if (grepTool) {
+                                        const res = await Promise.resolve(grepTool.handler(toolArgs));
+                                        const enriched = JSON.stringify(res, null, 2);
+                                        return {
+                                            content: [
+                                                {
+                                                    type: 'text',
+                                                    text: enriched,
+                                                },
+                                            ],
+                                            structuredContent: res as Record<string, unknown>,
+                                        };
+                                    }
+                                } catch {
+                                    // Fall through to standard error reporting
+                                }
+                            }
+
+                            // Autonomous File View Fallback
+                            const isViewFile = [
+                                'view_file',
+                                'viewFile',
+                                'read_file',
+                                'readFile',
+                                'get_file',
+                                'getFile',
+                                'cat',
+                            ].includes(requestedTool);
+                            if (isViewFile) {
+                                try {
+                                    const dummyTools = getDummyHealingTools({ db, teamDb: teamDb ?? undefined, vectorManager: vectorManager ?? undefined, teamVectorManager: teamVectorManager ?? undefined, github: github ?? undefined, config: customToolHandlerConfig });
+                                    const viewTool = dummyTools.find(t => t.name === 'view_file');
+                                    if (viewTool) {
+                                        const res = await Promise.resolve(viewTool.handler(toolArgs));
+                                        const enriched = JSON.stringify(res, null, 2);
+                                        return {
+                                            content: [
+                                                {
+                                                    type: 'text',
+                                                    text: enriched,
+                                                },
+                                            ],
+                                            structuredContent: res as Record<string, unknown>,
+                                        };
+                                    }
+                                } catch {
+                                    // Fall through to standard error reporting
+                                }
+                            }
+
+                            // Autonomous Directory List Fallback
+                            const isListDir = [
+                                'list_dir',
+                                'listDir',
+                                'read_dir',
+                                'readDir',
+                                'ls',
+                                'dir',
+                            ].includes(requestedTool);
+                            if (isListDir) {
+                                try {
+                                    const dummyTools = getDummyHealingTools({ db, teamDb: teamDb ?? undefined, vectorManager: vectorManager ?? undefined, teamVectorManager: teamVectorManager ?? undefined, github: github ?? undefined, config: customToolHandlerConfig });
+                                    const dirTool = dummyTools.find(t => t.name === 'list_dir');
+                                    if (dirTool) {
+                                        const res = await Promise.resolve(dirTool.handler(toolArgs));
+                                        const enriched = JSON.stringify(res, null, 2);
+                                        return {
+                                            content: [
+                                                {
+                                                    type: 'text',
+                                                    text: enriched,
+                                                },
+                                            ],
+                                            structuredContent: res as Record<string, unknown>,
+                                        };
+                                    }
+                                } catch {
+                                    // Fall through to standard error reporting
+                                }
+                            }
+                        }
+
+                        let suggestion = `Tool '${requestedTool}' does not exist. Use tools/list to see available tools.`;
+                        const isFilteredTool = Object.values(TOOL_GROUPS).flat().includes(requestedTool);
+                        
+                        if (isFilteredTool) {
+                            suggestion = `'${requestedTool}' is a valid tool but it is not currently exposed because of your active --tool-filter or codemode restrictions. If you are in Code Mode, invoke it via 'mj_execute_code' (e.g. 'await mj.core.${requestedTool}(...)').`;
+                        } else if (matchingPrompt !== undefined) {
+                            suggestion = `'${requestedTool}' is an MCP Prompt, not an MCP Tool. Please use the 'get_prompt' tool (or your native MCP Prompts integration) to evaluate it, then use 'create_entry' to save the result.`;
+                        } else if (requestedTool.startsWith('mj_')) {
+                            suggestion = `'${requestedTool}' is not a valid root tool. If you are trying to use Code Mode, you must invoke the 'mj_execute_code' tool and write javascript (e.g. 'await mj.core.searchEntries(...)').`;
+                        }
+
+                        const errorResult = {
+                            success: false,
+                            error: `MCP error -32602: Tool ${requestedTool} not found`,
+                            code: 'TOOL_NOT_FOUND',
+                            category: 'hallucination',
+                            suggestion,
+                            recoverable: false,
+                        };
+
+                        if (healingEnabled) {
+                            logAgentIssue({
+                                source: 'MCP',
+                                action: requestedTool,
+                                input: toolArgs,
+                                error: errorResult.error
+                            });
+                        }
+
+                        const enriched = JSON.stringify({
+                            ...errorResult,
+                            _meta: { tokenEstimate: 0 },
+                        });
+                        const tokenEstimate = Math.ceil(Buffer.byteLength(enriched, 'utf8') / 4);
+                        const finalText = enriched.replace('"tokenEstimate":0', `"tokenEstimate":${tokenEstimate}`);
+
+                        return {
+                            content: [
+                                {
+                                    type: 'text',
+                                    text: finalText,
+                                },
+                            ],
+                            structuredContent: errorResult,
+                            isError: true,
+                        };
+                    }
+
+                    const result = await originalHandler(request, extra)
+
+                    // Intercept JSON-RPC success responses that carry SDK Zod validation errors
+                    if (
+                        result !== null &&
+                        result !== undefined &&
+                        typeof result === 'object' &&
+                        'isError' in result &&
+                        result.isError === true
+                    ) {
+                        const resObj = result as { content?: { type?: string; text?: string }[] }
+                        if (Array.isArray(resObj.content) && resObj.content.length > 0) {
+                            const text = resObj.content[0]?.text
+                            if (typeof text === 'string' && text.includes('MCP error -32602')) {
+                                let errorMessage = text.replace(
+                                    'MCP error -32602: Input validation error: ',
+                                    ''
+                                )
+
+                                try {
+                                    const parts = text.split(': [')
+                                    if (parts.length > 1) {
+                                        const zodErrors = JSON.parse('[' + parts[1]) as {
+                                            path?: string[]
+                                            message?: string
+                                        }[]
+                                        const formattedErrors = zodErrors
+                                            .map((e) => {
+                                                const path =
+                                                    e.path && e.path.length > 0
+                                                        ? e.path.join('.')
+                                                        : 'unknown'
+                                                return `${path}: ${e.message || 'invalid'}`
+                                            })
+                                            .join('; ')
+                                        errorMessage = formattedErrors
+                                    }
+                                } catch {
+                                    // Fallback to raw message if parsing fails
+                                }
+
+                                const errorResult = {
+                                    success: false,
+                                    error: errorMessage,
+                                    code: 'VALIDATION_ERROR',
+                                    category: 'validation',
+                                    suggestion: 'Check input parameters against the tool schema',
+                                    recoverable: false,
+                                }
+
+                                logAgentIssue({
+                                    source: 'MCP',
+                                    action: req.params?.name ?? 'unknown',
+                                    input: req.params?.arguments ?? {},
+                                    error: errorMessage
+                                })
+
+                                const enriched = JSON.stringify({
+                                    ...errorResult,
+                                    _meta: { tokenEstimate: 0 },
+                                })
+                                const tokenEstimate = Math.ceil(
+                                    Buffer.byteLength(enriched, 'utf8') / 4
+                                )
+                                const finalText = enriched.replace(
+                                    '"tokenEstimate":0',
+                                    `"tokenEstimate":${tokenEstimate}`
+                                )
+
+                                return {
+                                    content: [
+                                        {
+                                            type: 'text',
+                                            text: finalText,
+                                        },
+                                    ],
+                                    structuredContent: errorResult,
+                                }
+                            }
+                        }
+                    }
+
+                    return result
+                } catch (error: unknown) {
+                    const err = error as { code?: number; message?: string }
+                    if (err?.code === -32602) {
+                        let errorMessage = err.message || 'Validation Error'
+
+                        if (
+                            typeof errorMessage === 'string' &&
+                            errorMessage.includes('Invalid arguments for tool')
+                        ) {
+                            try {
+                                const parts = errorMessage.split(': [')
+                                if (parts.length > 1) {
+                                    const zodErrors = JSON.parse('[' + parts[1]) as {
+                                        path?: string[]
+                                        message?: string
+                                    }[]
+                                    const formattedErrors = zodErrors
+                                        .map((e) => {
+                                            const path =
+                                                e.path && e.path.length > 0
+                                                    ? e.path.join('.')
+                                                    : 'unknown'
+                                            return `${path}: ${e.message || 'invalid'}`
+                                        })
+                                        .join('; ')
+                                    errorMessage = formattedErrors
+                                }
+                            } catch {
+                                // Fallback to raw message if parsing fails
+                            }
+                        }
+
+                        const errorResult = {
+                            success: false,
+                            error: errorMessage,
+                            code: 'VALIDATION_ERROR',
+                            category: 'validation',
+                            suggestion: 'Check input parameters against the tool schema',
+                            recoverable: false,
+                        }
+
+                        const fallbackReq = request as { params?: { name?: string; arguments?: Record<string, unknown> } }
+                        logAgentIssue({
+                            source: 'MCP',
+                            action: fallbackReq?.params?.name ?? 'unknown',
+                            input: fallbackReq?.params?.arguments ?? {},
+                            error: errorMessage
+                        })
+
+                        const enriched = JSON.stringify({
+                            ...errorResult,
+                            _meta: { tokenEstimate: 0 },
+                        })
+                        const tokenEstimate = Math.ceil(Buffer.byteLength(enriched, 'utf8') / 4)
+                        const finalText = enriched.replace(
+                            '"tokenEstimate":0',
+                            `"tokenEstimate":${tokenEstimate}`
+                        )
+
+                        return {
+                            content: [
+                                {
+                                    type: 'text',
+                                    text: finalText,
+                                },
+                            ],
+                            structuredContent: errorResult,
+                            isError: true,
+                        }
+                    }
+                    throw error
+                }
+            })
+        }
+
+        return server
+}

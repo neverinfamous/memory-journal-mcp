@@ -6,17 +6,17 @@
  * create → get → search → update → link → visualize → export → backup → delete.
  */
 
-import { test, expect } from '@playwright/test'
-import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { Client as McpClient } from '@modelcontextprotocol/sdk/client/index.js'
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+import { test, expect } from './test-fixture.js'
+import type { Client } from '@modelcontextprotocol/client'
+import { Client as McpClient } from '@modelcontextprotocol/client'
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 import { callToolAndParse, expectSuccess } from './helpers.js'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { setTimeout as delay } from 'node:timers/promises'
 
-const TEAM_PORT = 3109
+const TEAM_PORT = 5109 + (Number(process.env.TEST_PARALLEL_INDEX || 0) * 100)
 const TEAM_BASE = `http://localhost:${TEAM_PORT}`
 
 test.describe.configure({ mode: 'serial' })
@@ -53,24 +53,37 @@ test.describe('Payload Contracts: Team Tools (Happy Path)', () => {
                 stdio: 'pipe',
                 env: {
                     ...process.env,
+                    PORT: String(TEAM_PORT),
                     ALLOWED_IO_ROOTS: process.cwd(),
                     MCP_RATE_LIMIT_MAX: '10000',
                     TEAM_DB_PATH: './.test-output/e2e/test-e2e-team-happy-team.db',
+                    ADDITIONAL_TEAM_DBS: JSON.stringify({ 
+                        "team-b": join(process.cwd(), '.test-output', 'e2e', 'test-e2e-team-happy-b.db') 
+                    }),
                     MCP_AUTH_SCOPES: 'read,write,team',
+                    MEMORY_JOURNAL_CONFIG: join(process.cwd(), 'tests', 'e2e', 'empty-config.json'),
                 },
+                windowsHide: true,
             }
         )
 
-        // Wait for server readiness
-        for (let i = 0; i < 30; i++) {
+        serverProcess.stdout?.pipe(process.stdout)
+        serverProcess.stderr?.pipe(process.stderr)
+
+        let ready = false
+        for (let i = 0; i < 120; i++) {
             try {
                 const res = await fetch(`${TEAM_BASE}/health`)
-                if (res.ok) break
+                if (res.ok) {
+                    ready = true
+                    break
+                }
             } catch {
                 // Not ready
             }
             await delay(500)
         }
+        if (!ready) throw new Error('Team MCP server failed to start within 60 seconds')
 
         const transport = new StreamableHTTPClientTransport(new URL(`${TEAM_BASE}/mcp`), {
             requestInit: { headers: { Authorization: 'Bearer test-token' } },
@@ -86,7 +99,7 @@ test.describe('Payload Contracts: Team Tools (Happy Path)', () => {
 
     // --- Core ---
     test('team_create_entry returns { success, entry }', async () => {
-        const payload = await callToolAndParse(client, 'team_create_entry', {
+        const payload = await callToolAndParse(client, 'team_create_entry', { workspace_id: 'default', 
             project_number: 1,
             content: 'Team happy path test entry 1',
             entry_type: 'test_entry',
@@ -99,7 +112,7 @@ test.describe('Payload Contracts: Team Tools (Happy Path)', () => {
     })
 
     test('team_create_entry (second entry)', async () => {
-        const payload = await callToolAndParse(client, 'team_create_entry', {
+        const payload = await callToolAndParse(client, 'team_create_entry', { workspace_id: 'default', 
             project_number: 1,
             content: 'Team happy path test entry 2',
             entry_type: 'project_decision',
@@ -156,6 +169,22 @@ test.describe('Payload Contracts: Team Tools (Happy Path)', () => {
         })
         expectSuccess(payload)
         expect(Array.isArray(payload.entries)).toBe(true)
+    })
+
+    test('cross_team_search returns payload', async () => {
+        const payload = await callToolAndParse(client, 'cross_team_search', {
+            query: 'happy path',
+        })
+        expectSuccess(payload)
+        expect(Array.isArray(payload.entries)).toBe(true)
+        expect(Array.isArray(payload.searched_dbs)).toBe(true)
+        expect((payload.searched_dbs as string[])).toContain('primary')
+        expect((payload.searched_dbs as string[])).toContain('team-b')
+        // Ensure standard entry properties + team_db exist
+        const entries = payload.entries as Record<string, unknown>[]
+        if (entries.length > 0) {
+            expect(entries[0]!.team_db).toBeDefined()
+        }
     })
 
     // --- Admin ---
@@ -247,6 +276,24 @@ test.describe('Payload Contracts: Team Tools (Happy Path)', () => {
     // --- Delete (last to avoid breaking other tests) ---
     test('team_delete_entry soft-deletes', async () => {
         const payload = await callToolAndParse(client, 'team_delete_entry', {
+            project_number: 1,
+            entry_id: entryId2,
+            expected_version: 1 })
+        expectSuccess(payload)
+        expect(payload.success).toBe(true)
+    })
+
+    test('team_list_deleted_entries returns deleted entries', async () => {
+        const payload = await callToolAndParse(client, 'team_list_deleted_entries', {
+            project_number: 1,
+        })
+        expectSuccess(payload)
+        expect(Array.isArray(payload.entries)).toBe(true)
+        expect(typeof payload.count).toBe('number')
+    })
+
+    test('team_restore_entry restores deleted entry', async () => {
+        const payload = await callToolAndParse(client, 'team_restore_entry', {
             project_number: 1,
             entry_id: entryId2,
         })

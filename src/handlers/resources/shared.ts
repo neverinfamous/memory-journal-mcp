@@ -5,7 +5,7 @@
  */
 
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
-import type { VectorSearchManager } from '../../vector/vector-search-manager.js'
+import type { VectorSearchManager } from '../../vector/vector-search-manager/index.js'
 import type { ToolFilterConfig } from '../../filtering/tool-filter.js'
 import type { McpIcon, ProjectRegistryEntry } from '../../types/index.js'
 import type { GitHubIntegration } from '../../github/github-integration/index.js'
@@ -108,7 +108,16 @@ export async function resolveGitHubRepo(
 
         // Fallback to the first VALID registered project if no targetRepo was specified
         if (!targetRepo && hasRegistry) {
-            for (const key of Object.keys(registry)) {
+            let fallbackKeys = Object.keys(registry)
+            
+            if (config?.defaultProjectNumber !== undefined) {
+                const defaultKey = fallbackKeys.find(key => registry[key]?.project_number === config?.defaultProjectNumber)
+                if (defaultKey) {
+                    fallbackKeys = [defaultKey, ...fallbackKeys.filter(k => k !== defaultKey)]
+                }
+            }
+
+            for (const key of fallbackKeys) {
                 const project = registry[key]
                 if (project) {
                     const fallbackGithub = getGitHubIntegration(project.path, runtime)
@@ -155,6 +164,8 @@ export function isResourceError(
  * All values have sensible defaults — users opt-in via env vars or CLI flags.
  */
 export interface BriefingConfig {
+    /** Number of recent commits to include in git history (default: 3) */
+    commitCount: number
     /** Number of recent journal entries to include (default: 3) */
     entryCount: number
     /** Number of recent session summaries to display (default: 1) */
@@ -183,16 +194,20 @@ export interface BriefingConfig {
     workflowSummary?: string
     /** Default GitHub Project number for Kanban resources and issue tools (env: DEFAULT_PROJECT_NUMBER) */
     defaultProjectNumber?: number
+    /** Default workspace ID for isolating journal entries */
+    defaultWorkspaceId?: string
     /** Project registry mapping dynamic repo IDs to local paths and kanban boards */
     projectRegistry?: Record<string, ProjectRegistryEntry>
-    /** Hush Protocol flag vocabulary passed from CLI/env */
-    flagVocabulary?: string[]
+
     /** Allowlisted directory roots for strict filesystem jailing of agent read access */
     allowedIoRoots?: string[]
+    /** Minimum significance score for entries to be included in the briefing (default: 0.3) */
+    briefingImportanceThreshold?: number
 }
 
 /** Default briefing configuration — preserves pre-existing behavior */
 export const DEFAULT_BRIEFING_CONFIG: BriefingConfig = {
+    commitCount: 3,
     entryCount: 3,
     summaryCount: 1,
     includeTeam: false,
@@ -203,6 +218,7 @@ export const DEFAULT_BRIEFING_CONFIG: BriefingConfig = {
     workflowCount: 0,
     workflowStatusBreakdown: false,
     copilotReviews: false,
+    briefingImportanceThreshold: 0.3,
 }
 
 /**
@@ -217,6 +233,7 @@ export interface ResourceContext {
     scheduler?: Scheduler | null
     briefingConfig?: BriefingConfig
     runtime?: ServerRuntime
+    resourceCount?: number
 }
 
 /**

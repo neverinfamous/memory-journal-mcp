@@ -4,13 +4,11 @@
  * Resources: github/status, github/insights, github/milestones, milestones/{number}
  */
 
-import { ICON_GITHUB, ICON_ANALYTICS, ICON_MILESTONE } from '../../constants/icons.js'
+import { ICON_GITHUB, ICON_MILESTONE } from '../../constants/icons.js'
 import {
     withPriority,
     ASSISTANT_FOCUSED,
-    LOW_PRIORITY,
-    MEDIUM_PRIORITY,
-} from '../../utils/resource-annotations.js'
+    } from '../../utils/resource-annotations.js'
 import type {
     GitHubIssue,
     GitHubPullRequest,
@@ -237,83 +235,39 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
                     }
                 }
 
+                const responseData = {
+                    status: fetchStatus,
+                    failures: failures.length > 0 ? failures : undefined,
+                    repository: `${owner}/${repo}`,
+                    branch,
+                    commit: commit?.slice(0, 7) ?? null,
+                    ci: {
+                        status: ciStatus,
+                        latestRun,
+                    },
+                    issues: {
+                        openCount: issues.length,
+                        items: openIssues,
+                    },
+                    pullRequests: {
+                        openCount: prs.length,
+                        items: openPrs,
+                    },
+                    kanbanSummary,
+                    milestones: milestoneSummary,
+                }
+                const tokenEstimate = Math.ceil(JSON.stringify(responseData).length / 4)
+
                 return {
                     data: {
-                        status: fetchStatus,
-                        failures: failures.length > 0 ? failures : undefined,
-                        repository: `${owner}/${repo}`,
-                        branch,
-                        commit: commit?.slice(0, 7) ?? null,
-                        ci: {
-                            status: ciStatus,
-                            latestRun,
-                        },
-                        issues: {
-                            openCount: issues.length,
-                            items: openIssues,
-                        },
-                        pullRequests: {
-                            openCount: prs.length,
-                            items: openPrs,
-                        },
-                        kanbanSummary,
-                        milestones: milestoneSummary,
+                        ...responseData,
+                        _meta: { tokenEstimate }
                     },
                     annotations: { lastModified },
                 }
             },
         },
-        // Repository insights resource
-        {
-            uri: 'memory://github/insights',
-            name: 'Repository Insights',
-            title: 'Repository Stars & Traffic Summary',
-            description: 'Compact repo insights: stars, forks, 14-day traffic totals (~150 tokens)',
-            mimeType: 'application/json',
-            icons: [ICON_ANALYTICS],
-            annotations: { ...LOW_PRIORITY, audience: ['assistant'] },
-            handler: async (uri: string, context: ResourceContext): Promise<ResourceResult> => {
-                const match = /memory:\/\/github\/insights\/?(.*)?/.exec(uri)
-                const targetRepo = match?.[1] ? decodeURIComponent(match[1]) : undefined
-                const resolved = await resolveGitHubRepo(
-                    context.github,
-                    context.briefingConfig,
-                    targetRepo,
-                    context.runtime
-                )
-                if (isResourceError(resolved)) return resolved
-                const { owner, repo, lastModified, github } = resolved
 
-                const stats = await github.getRepoStats(owner, repo)
-
-                let traffic: { clones14d: number; views14d: number } | null = null
-                try {
-                    const trafficData = await github.getTrafficData(owner, repo)
-                    if (trafficData) {
-                        traffic = {
-                            clones14d: trafficData.clones.total,
-                            views14d: trafficData.views.total,
-                        }
-                    }
-                } catch {
-                    // Traffic data requires push access
-                }
-
-                return {
-                    data: {
-                        repository: `${owner}/${repo}`,
-                        stars: stats?.stars ?? null,
-                        forks: stats?.forks ?? null,
-                        watchers: stats?.watchers ?? null,
-                        ...(traffic ?? {}),
-                        hint: !traffic
-                            ? 'Traffic data requires push access to the repository.'
-                            : undefined,
-                    },
-                    annotations: { lastModified },
-                }
-            },
-        },
         // Milestone resources
         {
             uri: 'memory://github/milestones',
@@ -323,7 +277,7 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
                 'Open GitHub milestones with completion percentages, due dates, and issue counts',
             mimeType: 'application/json',
             icons: [ICON_MILESTONE],
-            annotations: { ...MEDIUM_PRIORITY, audience: ['assistant'] },
+            annotations: withPriority(0.6, ASSISTANT_FOCUSED),
             handler: async (uri: string, context: ResourceContext): Promise<ResourceResult> => {
                 const match = /memory:\/\/github\/milestones\/?(.*)?/.exec(uri)
                 const targetRepo = match?.[1] ? decodeURIComponent(match[1]) : undefined
@@ -354,12 +308,18 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
                     }
                 })
 
+                const responseData = {
+                    repository: `${owner}/${repo}`,
+                    milestones: milestonesWithProgress,
+                    count: milestonesWithProgress.length,
+                    hint: 'Use get_github_milestones tool for state filtering. Use memory://milestones/{number} for detail.',
+                }
+                const tokenEstimate = Math.ceil(JSON.stringify(responseData).length / 4)
+
                 return {
                     data: {
-                        repository: `${owner}/${repo}`,
-                        milestones: milestonesWithProgress,
-                        count: milestonesWithProgress.length,
-                        hint: 'Use get_github_milestones tool for state filtering. Use memory://milestones/{number} for detail.',
+                        ...responseData,
+                        _meta: { tokenEstimate }
                     },
                     annotations: { lastModified },
                 }
@@ -373,16 +333,16 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
                 'Detailed view of a single GitHub milestone with completion progress and issue counts. Use get_github_issues with the milestone filter for individual issue details.',
             mimeType: 'application/json',
             icons: [ICON_MILESTONE],
-            annotations: ASSISTANT_FOCUSED,
+            annotations: withPriority(0.6, ASSISTANT_FOCUSED),
             handler: async (uri: string, context: ResourceContext): Promise<ResourceResult> => {
                 const lastModified = new Date().toISOString()
                 const match = /memory:\/\/milestones\/(?:(.*)\/)?(\d+)$/.exec(uri)
                 const targetRepo = match?.[1] ? decodeURIComponent(match[1]) : undefined
                 const milestoneNumber = match?.[2] ? parseInt(match[2], 10) : null
 
-                if (milestoneNumber === null) {
+                if (milestoneNumber === null || isNaN(milestoneNumber)) {
                     return {
-                        data: { error: 'Invalid milestone number' },
+                        data: { error: 'Invalid milestone number', code: -32002 },
                         annotations: { lastModified },
                     }
                 }
@@ -399,7 +359,7 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
                 const milestone = await github.getMilestone(owner, repo, milestoneNumber)
                 if (!milestone) {
                     return {
-                        data: { error: `Milestone #${String(milestoneNumber)} not found` },
+                        data: { error: `Milestone #${String(milestoneNumber)} not found`, code: -32002 },
                         annotations: { lastModified },
                     }
                 }
@@ -409,20 +369,27 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
                     milestone.closedIssues
                 )
 
+                const responseData = {
+                    repository: `${owner}/${repo}`,
+                    milestone: {
+                        ...milestone,
+                        title: markUntrustedContentInline(milestone.title),
+                        completionPercentage,
+                    },
+                    hint: 'Use get_github_issues tool to list issues associated with this milestone.',
+                }
+                const tokenEstimate = Math.ceil(JSON.stringify(responseData).length / 4)
+
                 return {
                     data: {
-                        repository: `${owner}/${repo}`,
-                        milestone: {
-                            ...milestone,
-                            title: markUntrustedContentInline(milestone.title),
-                            completionPercentage,
-                        },
-                        hint: 'Use get_github_issues tool to list issues associated with this milestone.',
+                        ...responseData,
+                        _meta: { tokenEstimate }
                     },
                     annotations: { lastModified },
                 }
             },
         },
+
     ]
 
     // Generate dynamic `{repo}` variants for multi-project registry support

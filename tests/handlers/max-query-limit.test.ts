@@ -67,7 +67,7 @@ function createMockGitHub(): GitHubIntegration {
 
 describe('MAX_QUERY_LIMIT Enforcement', () => {
     let db: DatabaseAdapter
-    const testDbPath = './test-max-query-limit.db'
+    const testDbPath = './.test-output/vitest/test-max-query-limit.db'
 
     beforeAll(async () => {
         db = new DatabaseAdapter(testDbPath)

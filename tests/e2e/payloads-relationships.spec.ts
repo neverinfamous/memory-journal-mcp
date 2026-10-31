@@ -5,8 +5,8 @@
  * link_entries, visualize_relationships.
  */
 
-import { test, expect } from '@playwright/test'
-import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import { test, expect } from './test-fixture.js'
+import type { Client } from '@modelcontextprotocol/client'
 import { createClient, callToolAndParse, expectSuccess } from './helpers.js'
 
 test.describe.configure({ mode: 'serial' })
@@ -19,12 +19,12 @@ test.describe('Payload Contracts: Relationships', () => {
     test.beforeAll(async () => {
         client = await createClient()
         // Create two entries for relationship tests
-        const e1 = await callToolAndParse(client, 'create_entry', {
+        const e1 = await callToolAndParse(client, 'create_entry', { workspace_id: 'default', 
             project_number: 1,
             content: 'Relationship source entry',
             entry_type: 'test_entry',
         })
-        const e2 = await callToolAndParse(client, 'create_entry', {
+        const e2 = await callToolAndParse(client, 'create_entry', { workspace_id: 'default', 
             project_number: 1,
             content: 'Relationship target entry',
             entry_type: 'project_decision',

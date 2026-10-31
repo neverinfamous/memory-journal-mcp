@@ -6,7 +6,7 @@
  * Follows RFC 5424 severity levels as per MCP spec.
  */
 
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { McpServer } from '@modelcontextprotocol/server'
 
 /**
  * MCP log levels per RFC 5424
@@ -110,6 +110,7 @@ export class McpLogger {
         // Send via MCP protocol if server connected
         if (this.server) {
             try {
+                // eslint-disable-next-line @typescript-eslint/no-deprecated -- Keep for backward compat
                 void this.server.sendLoggingMessage({
                     level,
                     logger: loggerName,

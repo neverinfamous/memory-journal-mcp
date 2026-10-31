@@ -6,7 +6,7 @@
  * and rejection of stale/invalid sessions.
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test-fixture.js'
 
 test.describe.configure({ mode: 'serial' })
 
@@ -17,6 +17,7 @@ test.describe('Session Lifecycle', () => {
         const response = await request.post('/mcp', {
             headers: {
                 Accept: 'application/json, text/event-stream',
+                    'mcp-protocol-version': '2024-11-05',
             },
             data: {
                 jsonrpc: '2.0',
@@ -44,6 +45,7 @@ test.describe('Session Lifecycle', () => {
         const response = await request.post('/mcp', {
             headers: {
                 Accept: 'application/json, text/event-stream',
+                    'mcp-protocol-version': '2024-11-05',
                 'mcp-session-id': sessionId,
             },
             data: {
@@ -60,6 +62,7 @@ test.describe('Session Lifecycle', () => {
         const response = await request.post('/mcp', {
             headers: {
                 Accept: 'application/json, text/event-stream',
+                    'mcp-protocol-version': '2024-11-05',
                 'mcp-session-id': sessionId,
             },
             data: {
@@ -74,7 +77,7 @@ test.describe('Session Lifecycle', () => {
 
     test('GET /mcp (SSE) should reject without session ID', async ({ request }) => {
         const response = await request.get('/mcp')
-        expect(response.status()).toBe(400)
+        expect(response.status()).toBe(405)
     })
 
     test('DELETE /mcp should reject without session ID', async ({ request }) => {

@@ -9,9 +9,14 @@ describe('Backup Manager Edge Cases', () => {
     let db: DatabaseAdapter
 
     beforeAll(async () => {
-        if (!fs.existsSync(testDir)) {
-            fs.mkdirSync(testDir, { recursive: true })
+        try {
+            if (fs.existsSync(testDir)) {
+                fs.rmSync(testDir, { recursive: true, force: true })
+            }
+        } catch {
+            // ignore
         }
+        fs.mkdirSync(testDir, { recursive: true })
         db = new DatabaseAdapter(testDbPath)
         await db.initialize()
     })
@@ -60,6 +65,9 @@ describe('Backup Manager Edge Cases', () => {
             lockFile,
             JSON.stringify({ pid: 999999, timestamp: Date.now() - 40000, nonce: '123' })
         )
+        
+        // Wait for Windows to fully release the file handle
+        await new Promise((r) => setTimeout(r, 100))
 
         // Should succeed because lock is stale and gets overridden
         const result = await db.restoreFromFile(backup.filename)
@@ -67,6 +75,20 @@ describe('Backup Manager Edge Cases', () => {
     })
 
     it('should rollback on restore failure', async () => {
+        const lockDir = `${testDbPath}.lock.d`
+        if (fs.existsSync(lockDir)) {
+            try {
+                const lockFile = path.join(lockDir, 'lock.json')
+                if (fs.existsSync(lockFile)) {
+                    // Overwrite lock with stale timestamp in case Windows EBUSY prevents rmSync
+                    fs.writeFileSync(lockFile, JSON.stringify({ pid: 999999, timestamp: 0, nonce: '123' }))
+                }
+                fs.rmSync(lockDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
+            } catch {
+                // ignore cleanup errors in test
+            }
+        }
+
         const backup = await db.exportToFile('rollback-test')
 
         // Let's force an error during restore by mocking fs.promises.rename

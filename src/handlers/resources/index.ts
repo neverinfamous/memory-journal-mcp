@@ -5,7 +5,7 @@
  * Exports all MCP resources with annotations following MCP 2025-11-25 spec.
  */
 
-import type { VectorSearchManager } from '../../vector/vector-search-manager.js'
+import type { VectorSearchManager } from '../../vector/vector-search-manager/index.js'
 import type { ToolFilterConfig } from '../../filtering/tool-filter.js'
 import type { GitHubIntegration } from '../../github/github-integration/index.js'
 import type { Scheduler } from '../../server/scheduler.js'
@@ -17,14 +17,16 @@ import { enforceAccessBoundary } from '../../auth/validation.js'
 // Re-export shared types
 export type { ResourceContext, ResourceResult, InternalResourceDef } from './shared.js'
 
-// Import sub-module definitions
 import { getCoreResourceDefinitions } from './core/index.js'
 import { getDynamicGraphResourceDefinitions } from './graph.js'
 import { getGitHubResourceDefinitions } from './github.js'
 import { getTemplateResourceDefinitions } from './templates.js'
+import { getAgentContextResource, getAgentIdResource } from './core/agent-context.js'
 import { getTeamResourceDefinitions } from './team.js'
 import { getHelpResourceDefinitions } from './help.js'
 import { getInsightResourceDefinitions } from './insights.js'
+import { getStalenessResourceDefinitions } from './staleness.js'
+import { getToolsCatalogResourceDefinitions } from './tools-catalog.js'
 import type { InternalResourceDef, ResourceResult } from './shared.js'
 import { ResourceNotFoundError } from '../../types/errors.js'
 import { getAuditResourceDef } from '../../audit/index.js'
@@ -59,7 +61,7 @@ function isResourceResult(result: unknown): result is ResourceResult {
 /**
  * Extract base URI without query parameters for matching
  */
-function getBaseUri(uri: string): string {
+export function getBaseUri(uri: string): string {
     // Handle memory:// URIs specially since URL parser treats the path as host
     if (uri.startsWith('memory://')) {
         const withoutScheme = uri.slice('memory://'.length)
@@ -108,6 +110,7 @@ export async function readResource(
         scheduler,
         briefingConfig,
         runtime,
+        resourceCount: resources.length,
     }
 
     // Strip query parameters for matching, but pass full URI to handler
@@ -173,6 +176,8 @@ const RESOURCE_URI_ALIASES: Record<string, string> = {
     'memory://status': 'memory://health',
     'memory://server': 'memory://health',
     'memory://tools': 'memory://help',
+    'memory://agent-id': 'memory://agent-context/default',
+    'memory://agent-context': 'memory://agent-context/default',
 }
 
 /**
@@ -183,8 +188,22 @@ const RESOURCE_URI_ALIASES: Record<string, string> = {
 function generateResourceAliases(resources: InternalResourceDef[]): InternalResourceDef[] {
     const aliases: InternalResourceDef[] = []
     for (const [aliasUri, canonicalUri] of Object.entries(RESOURCE_URI_ALIASES)) {
-        const canonical = resources.find((r) => r.uri === canonicalUri)
-        if (canonical) {
+        const canonical = resources.find((r) => {
+            if (r.uri === canonicalUri) return true
+            if (r.uri.includes('{')) {
+                const escapedUri = r.uri.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+                const pattern = escapedUri.replace(
+                    /\\{([^}]+)\\}/g,
+                    (_match: string, paramName: string) => {
+                        const cleanParam = paramName.replace(/^\\?\+/, '')
+                        return cleanParam === 'repo' ? '(.+)' : '([^/]+)'
+                    }
+                )
+                return new RegExp(`^${pattern}$`).test(canonicalUri)
+            }
+            return false
+        })
+        if (canonical !== undefined) {
             aliases.push({
                 ...canonical,
                 uri: aliasUri,
@@ -206,11 +225,56 @@ function getAllResourceDefinitions(runtime?: ServerRuntime): InternalResourceDef
         ...getDynamicGraphResourceDefinitions(),
         ...getGitHubResourceDefinitions(),
         ...getTemplateResourceDefinitions(),
+        getAgentContextResource(),
+        getAgentIdResource(),
         ...getTeamResourceDefinitions(),
         ...getHelpResourceDefinitions(),
         ...getInsightResourceDefinitions(),
+        ...getStalenessResourceDefinitions(),
+        ...getToolsCatalogResourceDefinitions(),
         // Audit resource — bound to the runtime's instance audit logger
         getAuditResourceDef(() => runtime?.auditLogger ?? null),
     ]
     return [...coreResources, ...generateResourceAliases(coreResources)]
+}
+
+/**
+ * Validates whether the current request is authorized to subscribe to a resource.
+ * Throws an error if the URI is not found or the user lacks the required scope.
+ */
+export function validateResourceSubscription(uri: string, runtime?: ServerRuntime): void {
+    const resources = getAllResourceDefinitions(runtime)
+    const baseUri = getBaseUri(uri)
+
+    const exactMatch = resources.find((r) => r.uri === baseUri)
+    if (exactMatch) {
+        enforceAccessBoundary(baseUri, 'resource', exactMatch.capabilities, runtime?.auditLogger)
+        return
+    }
+
+    // Check for template matches
+    for (const resource of resources) {
+        if (resource.uri.includes('{')) {
+            const escapedUri = resource.uri.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+            const pattern = escapedUri.replace(
+                /\\{([^}]+)\\}/g,
+                (_match: string, paramName: string) => {
+                    const cleanParam = paramName.replace(/^\\?\+/, '')
+                    return cleanParam === 'repo' ? '(.+)' : '([^/]+)'
+                }
+            )
+            const regex = new RegExp(`^${pattern}$`)
+            if (regex.test(baseUri)) {
+                enforceAccessBoundary(
+                    baseUri,
+                    'resource',
+                    resource.capabilities,
+                    runtime?.auditLogger
+                )
+                return
+            }
+        }
+    }
+
+    throw new ResourceNotFoundError('Resource', uri)
 }

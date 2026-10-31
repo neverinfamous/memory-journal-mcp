@@ -13,34 +13,17 @@
  * Categorization of error types for structured error responses.
  * Enables agents to make programmatic decisions based on error category.
  */
-export enum ErrorCategory {
-    /** Input validation failures (bad params, schema violations) */
-    VALIDATION = 'validation',
-
-    /** Database/service connection failures */
-    CONNECTION = 'connection',
-
-    /** Query/operation execution failures */
-    QUERY = 'query',
-
-    /** Permission denied (insufficient privileges) */
-    PERMISSION = 'permission',
-
-    /** Server/service configuration errors */
-    CONFIGURATION = 'configuration',
-
-    /** Resource not found or unavailable */
-    RESOURCE = 'resource',
-
-    /** Authentication failures (invalid/expired credentials) */
-    AUTHENTICATION = 'authentication',
-
-    /** Authorization failures (valid credentials, insufficient access) */
-    AUTHORIZATION = 'authorization',
-
-    /** Internal/unexpected server errors */
-    INTERNAL = 'internal',
-}
+export type ErrorCategory =
+    | 'validation'
+    | 'connection'
+    | 'query'
+    | 'permission'
+    | 'configuration'
+    | 'resource'
+    | 'authentication'
+    | 'authorization'
+    | 'internal'
+    | 'conflict'
 
 // =============================================================================
 // Error Response
@@ -64,13 +47,16 @@ export interface ErrorResponse {
     category: ErrorCategory
 
     /** Actionable suggestion for resolving the error */
-    suggestion?: string
+    suggestion?: string | undefined
 
     /** Whether the operation can be retried */
     recoverable: boolean
 
+    /** Details of individual errors in a multi-step operation */
+    aggregated_errors?: { message: string; [key: string]: unknown }[] | undefined
+
     /** Additional structured context */
-    details?: Record<string, unknown>
+    details?: Record<string, unknown> | undefined
 }
 
 // =============================================================================

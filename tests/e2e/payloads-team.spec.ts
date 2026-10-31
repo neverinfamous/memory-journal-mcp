@@ -6,14 +6,14 @@
  * { success: false, code: 'CONFIGURATION_ERROR' } — never raw MCP exceptions.
  */
 
-import { test, expect } from '@playwright/test'
-import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import { test, expect } from './test-fixture.js'
+import type { Client } from '@modelcontextprotocol/client'
 import { createClient, callToolAndParse, startServer, stopServer } from './helpers.js'
 
 test.describe.configure({ mode: 'serial' })
 
 /** Port for the isolated server WITHOUT TEAM_DB_PATH */
-const NO_TEAM_PORT = 3116
+const NO_TEAM_PORT = 5116 + (Number(process.env.TEST_PARALLEL_INDEX || 0) * 100)
 
 test.describe('Payload Contracts: Team Tools (no TEAM_DB_PATH)', () => {
     let client: Client
@@ -46,7 +46,7 @@ test.describe('Payload Contracts: Team Tools (no TEAM_DB_PATH)', () => {
 
     // --- Core ---
     test('team_create_entry → CONFIGURATION_ERROR', async () => {
-        const payload = await callToolAndParse(client, 'team_create_entry', {
+        const payload = await callToolAndParse(client, 'team_create_entry', { workspace_id: 'default', 
             project_number: 1,
             content: 'test',
             author: 'e2e',
@@ -94,6 +94,13 @@ test.describe('Payload Contracts: Team Tools (no TEAM_DB_PATH)', () => {
         expectConfigError(payload)
     })
 
+    test('team_list_deleted_entries → CONFIGURATION_ERROR', async () => {
+        const payload = await callToolAndParse(client, 'team_list_deleted_entries', {
+            project_number: 1,
+        })
+        expectConfigError(payload)
+    })
+
     // --- Admin ---
     test('team_update_entry → CONFIGURATION_ERROR', async () => {
         const payload = await callToolAndParse(client, 'team_update_entry', {
@@ -106,6 +113,14 @@ test.describe('Payload Contracts: Team Tools (no TEAM_DB_PATH)', () => {
 
     test('team_delete_entry → CONFIGURATION_ERROR', async () => {
         const payload = await callToolAndParse(client, 'team_delete_entry', {
+            project_number: 1,
+            entry_id: 1,
+            expected_version: 1 })
+        expectConfigError(payload)
+    })
+
+    test('team_restore_entry → CONFIGURATION_ERROR', async () => {
+        const payload = await callToolAndParse(client, 'team_restore_entry', {
             project_number: 1,
             entry_id: 1,
         })

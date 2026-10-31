@@ -6,19 +6,19 @@
  * and without OAuth enabled.
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test-fixture.js'
 import { startServer, stopServer } from './helpers.js'
 
 import express from 'express'
 import { Server } from 'node:http'
 
-const OAUTH_PORT = 3199
-const MOCK_ISSUER_PORT = 3198
+const OAUTH_PORT = 5199 + (Number(process.env.TEST_PARALLEL_INDEX || 0) * 100)
+const MOCK_ISSUER_PORT = 5198 + (Number(process.env.TEST_PARALLEL_INDEX || 0) * 100)
 
 test.describe('OAuth 2.1 Discovery', () => {
     test.describe('Without OAuth enabled (default)', () => {
         test('/.well-known/oauth-protected-resource should return 404', async ({ request }) => {
-            // Default webServer on port 3100 does not have OAuth enabled
+            // Default webServer on port 3105 does not have OAuth enabled
             const response = await request.get('/.well-known/oauth-protected-resource')
 
             // Without OAuth, the endpoint should not be registered
@@ -99,6 +99,7 @@ test.describe('OAuth 2.1 Discovery', () => {
                 headers: {
                     'Content-Type': 'application/json',
                     Accept: 'application/json, text/event-stream',
+                    'mcp-protocol-version': '2024-11-05',
                 },
                 body: JSON.stringify({
                     jsonrpc: '2.0',

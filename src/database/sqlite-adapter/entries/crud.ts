@@ -1,6 +1,15 @@
-import type { JournalEntry, EntryType } from '../../../types/index.js'
+import type { JournalEntry, EntryType, EntryRevision } from '../../../types/index.js'
 import type { CreateEntryInput } from '../../core/schema.js'
-import { ENTRY_COLUMNS, type EntriesSharedContext, rowToEntry, rowToObject } from './shared.js'
+import { ENTRY_COLUMNS, type EntriesSharedContext, rowToEntry, rowToObject, rowsToEntries } from './shared.js'
+import { ConflictError } from '../../../types/errors.js'
+import { insertAnchors } from './anchors.js'
+
+class BatchTransactionError extends Error {
+    constructor(public readonly batchError: { index?: number; id?: number; error: Error }) {
+        super("Batch transaction failed");
+        this.name = "BatchTransactionError";
+    }
+}
 
 export function createEntry(context: EntriesSharedContext, input: CreateEntryInput): JournalEntry {
     const { db, tagsMgr } = context
@@ -40,6 +49,12 @@ export function createEntry(context: EntriesSharedContext, input: CreateEntryInp
             'workflow_run_id',
             'workflow_name',
             'workflow_status',
+            'is_archived',
+            'workspace_id',
+            'trust_score',
+            'validation_status',
+            'impact_score',
+            'session_id'
         ]
         const values = [
             input.entryType ?? 'personal_reflection',
@@ -58,6 +73,12 @@ export function createEntry(context: EntriesSharedContext, input: CreateEntryInp
             input.workflowRunId ?? null,
             input.workflowName || null,
             input.workflowStatus || null,
+            input.isArchived ? 1 : 0,
+            input.workspaceId ?? 'default',
+            input.trustScore ?? 0.5,
+            input.validationStatus ?? 'none',
+            input.impactScore ?? 0.0,
+            input.sessionId ?? null
         ]
 
         if (input.author !== undefined) {
@@ -82,11 +103,16 @@ export function createEntry(context: EntriesSharedContext, input: CreateEntryInp
             )
             tagsMgr.linkTagsToEntry(insertId, formattedTags)
         }
+
+        // Link anchors
+        if (input.anchors && input.anchors.length > 0) {
+            insertAnchors(context, insertId, input.anchors)
+        }
     })
 
     txn()
 
-    const entry = getEntryById(context, insertId)
+    const entry = getEntryById(context, insertId, input.workspaceId ?? 'default')
     if (!entry) {
         throw new Error(
             `Storage Inconsistency Anomaly: Entry with ID ${insertId} successfully written but could not be read back.`
@@ -95,7 +121,7 @@ export function createEntry(context: EntriesSharedContext, input: CreateEntryInp
     return entry
 }
 
-export function getEntryById(context: EntriesSharedContext, id: number): JournalEntry | null {
+export function getEntryById(context: EntriesSharedContext, id: number, workspaceId = 'default'): JournalEntry | null {
     const { db, tagsMgr } = context
     const stmt = db.prepare(
         `SELECT ${ENTRY_COLUMNS} FROM memory_journal WHERE id = ? AND deleted_at IS NULL`
@@ -106,7 +132,11 @@ export function getEntryById(context: EntriesSharedContext, id: number): Journal
         return null
     }
 
-    return rowToEntry(tagsMgr, row)
+    const entry = rowToEntry(tagsMgr, row)
+    if (workspaceId !== '*' && entry.workspaceId !== workspaceId) {
+        return null
+    }
+    return entry
 }
 
 export function getEntriesByIds(
@@ -130,6 +160,7 @@ export function getEntriesByIds(
         return {
             ...p,
             isPersonal: Boolean(p.isPersonal),
+            isArchived: Boolean(p.isArchived),
             tags: [],
         } as JournalEntry
     })
@@ -147,7 +178,8 @@ export function getEntriesByIds(
 
 export function getEntryByIdIncludeDeleted(
     context: EntriesSharedContext,
-    id: number
+    id: number,
+    workspaceId = 'default'
 ): JournalEntry | null {
     const { db, tagsMgr } = context
     const stmt = db.prepare(`SELECT ${ENTRY_COLUMNS} FROM memory_journal WHERE id = ?`)
@@ -157,13 +189,23 @@ export function getEntryByIdIncludeDeleted(
         return null
     }
 
-    return rowToEntry(tagsMgr, row)
+    const entry = rowToEntry(tagsMgr, row)
+    if (workspaceId !== '*' && entry.workspaceId !== workspaceId) {
+        return null
+    }
+    return entry
 }
 
-export function getActiveEntryCount(context: EntriesSharedContext): number {
+export function getActiveEntryCount(context: EntriesSharedContext, workspaceId?: string): number {
     const { db } = context
-    const stmt = db.prepare('SELECT COUNT(*) as count FROM memory_journal WHERE deleted_at IS NULL')
-    const row = rowToObject(stmt.get())
+    let query = 'SELECT COUNT(*) as count FROM memory_journal WHERE deleted_at IS NULL'
+    const params: unknown[] = []
+    if (workspaceId && workspaceId !== '*') {
+        query += ' AND workspace_id = ?'
+        params.push(workspaceId)
+    }
+    const stmt = db.prepare(query)
+    const row = rowToObject(stmt.get(...params))
     return (row?.['count'] as number) || 0
 }
 
@@ -187,15 +229,38 @@ export function updateEntry(
         workflowRunId?: number | null
         workflowName?: string | null
         workflowStatus?: string | null
+        isArchived?: boolean
+        expectedVersion?: number
+        workspaceId?: string
+        trustScore?: number
+        validationStatus?: 'passed' | 'failed' | 'none'
+        impactScore?: number
+        sessionId?: string | null
+        targetWorkspaceId?: string
     }
 ): JournalEntry | null {
     const { db, tagsMgr } = context
 
     // Check existence first
-    const existing = getEntryById(context, id)
+    const existing = getEntryById(context, id, '*')
     if (!existing) return null
 
-    const updates: string[] = []
+    const callerWorkspace = input.workspaceId ?? 'default'
+    if (callerWorkspace !== '*' && existing.workspaceId !== callerWorkspace) {
+        throw new ConflictError(
+            `Entry ${id} belongs to workspace '${existing.workspaceId}', cannot be updated from '${callerWorkspace}'. Moving to another workspace requires explicit overrides (e.g. workspaceId = '*').`,
+            existing as unknown as Record<string, unknown>
+        )
+    }
+
+    if (input.expectedVersion !== undefined && existing.version !== input.expectedVersion) {
+        throw new ConflictError(
+            `Version conflict: expected ${String(input.expectedVersion)} but found ${String(existing.version)}`,
+            existing as unknown as Record<string, unknown>
+        )
+    }
+
+    const updates: string[] = ['version = version + 1']
     const values: unknown[] = []
 
     if (input.entryType !== undefined) {
@@ -218,6 +283,10 @@ export function updateEntry(
         updates.push('auto_context = ?')
         values.push(input.autoContext ?? null)
     }
+    if (input.isArchived !== undefined) {
+        updates.push('is_archived = ?')
+        values.push(input.isArchived ? 1 : 0)
+    }
     // GitHub extensions
     for (const key of [
         'projectNumber',
@@ -238,10 +307,59 @@ export function updateEntry(
         }
     }
 
+    if (input.trustScore !== undefined) {
+        updates.push('trust_score = ?')
+        values.push(input.trustScore)
+    }
+    if (input.validationStatus !== undefined) {
+        updates.push('validation_status = ?')
+        values.push(input.validationStatus)
+    }
+    if (input.impactScore !== undefined) {
+        updates.push('impact_score = ?')
+        values.push(input.impactScore)
+    }
+    if (input.targetWorkspaceId !== undefined) {
+        updates.push('workspace_id = ?')
+        values.push(input.targetWorkspaceId)
+    }
+    if (input.sessionId !== undefined) {
+        updates.push('session_id = ?')
+        values.push(input.sessionId)
+    }
+
     if (updates.length > 0) {
         const query = `UPDATE memory_journal SET ${updates.join(', ')} WHERE id = ? AND deleted_at IS NULL`
-        const stmt = db.prepare(query)
-        const result = stmt.run(...values, id)
+        
+        const txn = db.transaction(() => {
+            // Snapshot creation
+            const maxRevStmt = db.prepare('SELECT MAX(revision_number) as maxRev FROM entry_revisions WHERE entry_id = ?')
+            const maxRevRow = maxRevStmt.get(id) as { maxRev: number | null }
+            const nextRev = (maxRevRow.maxRev ?? 0) + 1
+
+            const snapshotStmt = db.prepare(
+                'INSERT INTO entry_revisions (entry_id, revision_number, content_snapshot, changed_at, changed_by) VALUES (?, ?, ?, ?, ?)'
+            )
+            snapshotStmt.run(id, nextRev, existing.content, new Date().toISOString(), null)
+
+            // Evict oldest (keep last 10)
+            const evictStmt = db.prepare(`
+                DELETE FROM entry_revisions 
+                WHERE entry_id = ? 
+                  AND revision_number IN (
+                      SELECT revision_number FROM entry_revisions 
+                      WHERE entry_id = ? 
+                      ORDER BY revision_number DESC 
+                      LIMIT -1 OFFSET 10
+                  )
+            `)
+            evictStmt.run(id, id)
+
+            const stmt = db.prepare(query)
+            return stmt.run(...values, id)
+        })
+
+        const result = txn()
         if (result.changes === 0) return null
     }
 
@@ -256,7 +374,7 @@ export function updateEntry(
         tagsMgr.linkTagsToEntry(id, formattedTags)
     }
 
-    return getEntryById(context, id)
+    return getEntryById(context, id, input.workspaceId ?? 'default')
 }
 
 export function deleteEntry(context: EntriesSharedContext, id: number, permanent = false): boolean {
@@ -274,3 +392,207 @@ export function deleteEntry(context: EntriesSharedContext, id: number, permanent
     const result = stmt.run(new Date().toISOString(), id)
     return result.changes > 0
 }
+
+export function createEntries(
+    context: EntriesSharedContext,
+    inputs: CreateEntryInput[]
+): { created: JournalEntry[]; errors: { index: number; error: Error }[] } {
+    if (inputs.length === 0) return { created: [], errors: [] }
+
+    const { db } = context
+    const createdIds: number[] = []
+    const errors: { index: number; error: Error }[] = []
+
+    const txn = db.transaction(() => {
+        for (let i = 0; i < inputs.length; i++) {
+            const input = inputs[i]
+            if (!input) continue
+            try {
+                // Nested transactions are implemented as savepoints by better-sqlite3.
+                // This ensures all creations share a single top-level transaction and fsync.
+                const newEntry = createEntry(context, input)
+                createdIds.push(newEntry.id)
+            } catch (err) {
+                const error = err instanceof Error ? err : new Error(String(err));
+                throw new BatchTransactionError({ index: i, error });
+            }
+        }
+    })
+
+    try {
+        txn()
+    } catch (err: unknown) {
+        if (err instanceof BatchTransactionError && err.batchError.index !== undefined) {
+            errors.push({ index: err.batchError.index, error: err.batchError.error });
+        } else {
+            errors.push({ index: -1, error: err instanceof Error ? err : new Error(String(err)) });
+        }
+        return { created: [], errors };
+    }
+
+    const resultsMap = getEntriesByIds(context, createdIds)
+    const created = createdIds.map(id => resultsMap.get(id)).filter((entry): entry is JournalEntry => entry !== undefined)
+    
+    return { created, errors }
+}
+
+export function updateEntries(
+    context: EntriesSharedContext,
+    updates: {
+        id: number
+        content?: string
+        entryType?: EntryType
+        tags?: string[]
+        isPersonal?: boolean
+        significanceType?: string | null
+        autoContext?: string | null
+        projectNumber?: number | null
+        projectOwner?: string | null
+        issueNumber?: number | null
+        issueUrl?: string | null
+        prNumber?: number | null
+        prUrl?: string | null
+        prStatus?: string | null
+        workflowRunId?: number | null
+        workflowName?: string | null
+        workflowStatus?: string | null
+        isArchived?: boolean
+        expectedVersion?: number
+        workspaceId?: string
+        trustScore?: number
+        validationStatus?: 'passed' | 'failed' | 'none'
+        impactScore?: number
+        sessionId?: string | null
+    }[]
+): { updated: JournalEntry[]; notFound: number[]; errors: { id: number; error: Error }[] } {
+    if (updates.length === 0) return { updated: [], notFound: [], errors: [] }
+
+    const { db } = context
+    const notFound: number[] = []
+    const updatedIds: number[] = []
+    const errors: { id: number; error: Error }[] = []
+
+    const txn = db.transaction(() => {
+        for (const input of updates) {
+            try {
+                const entry = updateEntry(context, input.id, input)
+                if (entry) {
+                    updatedIds.push(input.id)
+                } else {
+                    notFound.push(input.id)
+                }
+            } catch (err) {
+                const error = err instanceof Error ? err : new Error(String(err));
+                throw new BatchTransactionError({ id: input.id, error });
+            }
+        }
+    })
+
+    try {
+        txn()
+    } catch (err: unknown) {
+        if (err instanceof BatchTransactionError && err.batchError.id !== undefined) {
+            errors.push({ id: err.batchError.id, error: err.batchError.error });
+        } else {
+            errors.push({ id: -1, error: err instanceof Error ? err : new Error(String(err)) });
+        }
+        return { updated: [], notFound: [], errors };
+    }
+
+    const resultsMap = getEntriesByIds(context, updatedIds)
+    const updated = updatedIds.map(id => resultsMap.get(id)).filter((entry): entry is JournalEntry => entry !== undefined)
+
+    return { updated, notFound, errors }
+}
+
+export function deleteEntries(
+    context: EntriesSharedContext,
+    ids: number[],
+    permanent = false
+): { deleted: number[]; notFound: number[]; errors: { id: number; error: Error }[] } {
+    const { db } = context
+    if (ids.length === 0) return { deleted: [], notFound: [], errors: [] }
+
+    const placeholders = ids.map(() => '?').join(', ')
+
+    // Determine which IDs actually exist
+    const existingRows = db.prepare(`SELECT id FROM memory_journal WHERE id IN (${placeholders}) ${permanent ? '' : 'AND deleted_at IS NULL'}`).all(...ids) as { id: number }[]
+    const existingIds = new Set(existingRows.map(r => r.id))
+    const notFound = ids.filter(id => !existingIds.has(id))
+    const toDelete = ids.filter(id => existingIds.has(id))
+    const deleted: number[] = []
+    const errors: { id: number; error: Error }[] = []
+
+    const txn = db.transaction(() => {
+        for (const id of toDelete) {
+            try {
+                const success = deleteEntry(context, id, permanent)
+                if (success) {
+                    deleted.push(id)
+                }
+            } catch (err) {
+                const error = err instanceof Error ? err : new Error(String(err));
+                throw new BatchTransactionError({ id, error });
+            }
+        }
+    })
+
+    try {
+        txn()
+    } catch (err: unknown) {
+        if (err instanceof BatchTransactionError && err.batchError.id !== undefined) {
+            errors.push({ id: err.batchError.id, error: err.batchError.error });
+        } else {
+            errors.push({ id: -1, error: err instanceof Error ? err : new Error(String(err)) });
+        }
+        return { deleted: [], notFound, errors };
+    }
+
+    return { deleted, notFound, errors }
+}
+
+export function getEntryHistory(
+    context: EntriesSharedContext,
+    id: number
+): EntryRevision[] {
+    const { db } = context
+    
+    const stmt = db.prepare(`
+        SELECT id, entry_id as entryId, revision_number as revisionNumber,
+               content_snapshot as contentSnapshot, changed_at as changedAt,
+               changed_by as changedBy
+        FROM entry_revisions
+        WHERE entry_id = ?
+        ORDER BY revision_number DESC
+    `)
+    
+    const rows = stmt.all(id) as EntryRevision[]
+    return rows
+}
+
+export function restoreEntry(context: EntriesSharedContext, id: number): boolean {
+    const { db } = context
+    const stmt = db.prepare('UPDATE memory_journal SET deleted_at = NULL WHERE id = ? AND deleted_at IS NOT NULL')
+    const result = stmt.run(id)
+    return result.changes > 0
+}
+
+export function getDeletedEntries(
+    context: EntriesSharedContext,
+    options?: { limit?: number; offset?: number }
+): { entries: JournalEntry[]; count: number } {
+    const { db, tagsMgr } = context
+    const limit = options?.limit ?? 50
+    const offset = options?.offset ?? 0
+
+    const countStmt = db.prepare('SELECT COUNT(*) as count FROM memory_journal WHERE deleted_at IS NOT NULL')
+    const countRow = rowToObject(countStmt.get())
+    const count = (countRow?.['count'] as number) || 0
+
+    const stmt = db.prepare(`SELECT ${ENTRY_COLUMNS} FROM memory_journal WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC LIMIT ? OFFSET ?`)
+    const rows = stmt.all([limit, offset])
+    const entries = rowsToEntries(tagsMgr, rows)
+
+    return { entries, count }
+}
+

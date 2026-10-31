@@ -98,7 +98,7 @@ function formatDigest(snapshot: DigestSnapshot): BriefingInsights {
         const sign = snapshot.activityGrowthPercent >= 0 ? '+' : ''
         activityTrend = `${sign}${String(snapshot.activityGrowthPercent)}% vs. last period (${String(snapshot.currentPeriodEntries)} entries)`
     } else {
-        activityTrend = `${String(snapshot.currentPeriodEntries)} entries this period (no previous data)`
+        activityTrend = `${String(snapshot.currentPeriodEntries)} entries this period`
     }
 
     // Significance spike

@@ -1,6 +1,5 @@
 import { getAuthContext } from '../auth/auth-context.js'
 import { MemoryJournalMcpError } from '../types/errors.js'
-import { ErrorCategory } from '../types/error-types.js'
 
 // ============================================================================
 // Typed Security Errors
@@ -12,7 +11,7 @@ import { ErrorCategory } from '../types/error-types.js'
  */
 export class SecurityError extends MemoryJournalMcpError {
     constructor(message: string, code: string) {
-        super(message, code, ErrorCategory.VALIDATION, {
+        super(message, code, 'validation', {
             suggestion: 'Check input for security violations',
             recoverable: false,
         })
@@ -129,14 +128,15 @@ import path from 'node:path'
  * @throws PathTraversalError if the path escapes the sandboxed boundaries
  */
 export function assertSafeDirectoryPath(dirPath: string, providedRoots: string[]): void {
-    // 1. Initial basic check for traversal strings
-    const normalized = dirPath.replace(/\\/g, '/')
+    // 1. Decode URI and perform basic check for traversal strings
+    const decodedDir = decodeURIComponent(dirPath)
+    const normalized = decodedDir.replace(/\\/g, '/')
     const segments = normalized.split('/')
     if (segments.some((s) => s === '..')) {
-        throw new PathTraversalError(dirPath)
+        throw new PathTraversalError(decodedDir)
     }
 
-    const resolved = path.resolve(dirPath)
+    const resolved = path.resolve(decodedDir)
 
     // 2. Resolve realpath iteratively by stepping up the tree until an existing directory is found.
     // This prevents symlink traversal bypasses where the final node does not exist but a parent is a symlink pointing outside.
@@ -144,18 +144,17 @@ export function assertSafeDirectoryPath(dirPath: string, providedRoots: string[]
     let existingRealPath = ''
 
     while (currentDir !== path.parse(currentDir).root) {
-        try {
+        if (fs.existsSync(currentDir)) {
             existingRealPath = fs.realpathSync(currentDir)
             break
-        } catch {
-            currentDir = path.dirname(currentDir)
         }
+        currentDir = path.dirname(currentDir)
     }
 
     if (!existingRealPath) {
-        try {
+        if (fs.existsSync(currentDir)) {
             existingRealPath = fs.realpathSync(currentDir) // root resolution
-        } catch {
+        } else {
             existingRealPath = currentDir
         }
     }
@@ -190,7 +189,7 @@ export function assertSafeDirectoryPath(dirPath: string, providedRoots: string[]
 
     if (!isAllowed) {
         throw new PathTraversalError(
-            `Directory path escapes allowed sandbox boundaries: ${dirPath}`
+            `Directory path escapes allowed sandbox boundaries: ${decodedDir}`
         )
     }
 }
@@ -312,8 +311,7 @@ export function markUntrustedContentInline(content: string | undefined | null): 
  * @returns Sanitized string with control characters removed and length capped at 100
  */
 export function sanitizeAuthor(raw: string): string {
-    // eslint-disable-next-line no-control-regex
-    return raw.replace(/[\x00-\x1f\x7f]/g, '').slice(0, 100)
+    return raw.replace(/\p{Cc}/gu, '').slice(0, 100)
 }
 
 // ============================================================================
@@ -359,6 +357,11 @@ export function resolveAuthor(): string {
     const authCtx = getAuthContext()
     if (authCtx?.claims?.sub) {
         return sanitizeAuthor(authCtx.claims.sub)
+    }
+
+    const localUser = process.env['USERNAME'] || process.env['USER']
+    if (localUser) {
+        return sanitizeAuthor(localUser.toLowerCase())
     }
 
     return 'unknown'

@@ -54,8 +54,8 @@ vi.mock('../../src/auth/auth-context.js', async (importOriginal: any) => {
 describe('Team Analytics Tool Handlers', () => {
     let personalDb: DatabaseAdapter
     let teamDb: DatabaseAdapter
-    const personalDbPath = './test-team-analytics-personal.db'
-    const teamDbPath = './test-team-analytics-team.db'
+    const personalDbPath = './.test-output/vitest/test-team-analytics-personal.db'
+    const teamDbPath = './.test-output/vitest/test-team-analytics-team.db'
 
     beforeAll(async () => {
         try {
@@ -74,7 +74,7 @@ describe('Team Analytics Tool Handlers', () => {
         // Seed data for analytics
         const seed1 = await callTool(
             'team_create_entry',
-            {
+            { workspace_id: 'default', 
                 content: 'Project Alpha init',
                 entry_type: 'technical_note',
                 project_number: 101,
@@ -90,7 +90,7 @@ describe('Team Analytics Tool Handlers', () => {
         )
         const seed2 = await callTool(
             'team_create_entry',
-            {
+            { workspace_id: 'default', 
                 content: 'Project Alpha task 1',
                 entry_type: 'feature_implementation',
                 project_number: 101,
@@ -106,7 +106,7 @@ describe('Team Analytics Tool Handlers', () => {
         )
         const seed3 = await callTool(
             'team_create_entry',
-            {
+            { workspace_id: 'default', 
                 content: 'Project Alpha task 2',
                 entry_type: 'feature_implementation',
                 project_number: 101,
@@ -122,7 +122,7 @@ describe('Team Analytics Tool Handlers', () => {
         )
         const seed4 = await callTool(
             'team_create_entry',
-            {
+            { workspace_id: 'default', 
                 content: 'Project Beta init',
                 entry_type: 'technical_note',
                 project_number: 202,

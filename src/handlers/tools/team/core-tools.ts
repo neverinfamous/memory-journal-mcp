@@ -7,9 +7,11 @@
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
+import { sendProgress } from '../../../utils/progress-utils.js'
 import { resolveAuthor } from '../../../utils/security-utils.js'
 import { getAuthContext } from '../../../auth/auth-context.js'
 import { resolveIssueUrl } from '../../../utils/github-helpers.js'
+import { resolveWorkspaceId, resolveProjectContext } from '../../../utils/workspace-resolver.js'
 import { TEAM_DB_ERROR_RESPONSE, batchFetchAuthors, fetchAuthor } from './helpers.js'
 import {
     TeamCreateEntrySchema,
@@ -24,21 +26,29 @@ import {
     TeamTagsListOutputSchema,
 } from './schemas.js'
 import { coerceSignificanceAlias } from '../schemas.js'
-import { parseFlagContext } from '../../../types/auto-context.js'
+import type { RelationshipType } from '../../../types/index.js'
 
 // ============================================================================
 // Tool Definitions
 // ============================================================================
 
 export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
-    const { teamDb } = context
+    const { teamDb, progress } = context
 
     return [
         {
             name: 'team_create_entry',
             title: 'Create Team Entry',
             description:
-                'Create an entry in the team database for sharing with collaborators. ONLY use when explicitly requested by the user. Default to personal create_entry instead. Requires TEAM_DB_PATH.',
+                'Create an entry in the team database for sharing with collaborators. ' +
+                'ONLY use when explicitly requested by the user. Default to personal create_entry instead. ' +
+                'Content must be well-structured markdown using ## section headers. Select the most accurate entry_type (e.g., retrospective, technical_note). ' +
+                'For session summaries, use entry_type "retrospective" with tag "session-summary" and ' +
+                'structure content as: ## Accomplished, ## Unfinished / Blocked, ## Context for Next Session. ' +
+                'REQUIRED: You MUST include project_number. ' +
+                'REQUIRED: You MUST include impact_score, trust_score, and validation_status. ' +
+                'REQUIRED: You MUST use related_to to anchor the entry to a session summary or nearby context. ' +
+                'Requires TEAM_DB_PATH.',
             group: 'team',
             inputSchema: TeamCreateEntrySchemaMcp,
             outputSchema: TeamCreateOutputSchema,
@@ -57,6 +67,28 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                     coerceSignificanceAlias(params)
 
                     const input = TeamCreateEntrySchema.parse(params)
+                    const resolved = resolveProjectContext(
+                        {
+                            workspace_id: input.workspace_id,
+                            project_number: input.project_number,
+                            content: input.content,
+                            tags: input.tags
+                        },
+                        context.config
+                    )
+                    const wsId = resolved.workspaceId
+                    const projectNumber = resolved.projectNumber
+
+                    if (projectNumber === undefined || projectNumber === null) {
+                        return {
+                            success: false,
+                            error: 'Missing or unresolvable project_number. Team entry creation blocked because no valid project could be determined for this entry.',
+                            code: 'VALIDATION_ERROR',
+                            category: 'validation',
+                            suggestion: 'To find your project_number, call list_projects (or mj.core.listProjects()), read the memory://agent-id resource via read_resource (e.g. read_resource("memory-journal-mcp", "memory://agent-id")), or inspect memory://briefing/<project-name>. Then pass project_number explicitly in your request.',
+                            recoverable: true,
+                        }
+                    }
 
                     // SEC-2.3: Bind authorship to the authenticated principal when OAuth is active.
                     // Hard-reject if caller supplies a mismatched author — prevents impersonation.
@@ -107,9 +139,12 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
+                    // Optional progress for long operations
+                    await sendProgress(progress, 0, 2, 'Creating team entry...')
+
                     const resolvedIssueUrl = await resolveIssueUrl(
                         context,
-                        input.project_number,
+                        projectNumber,
                         input.issue_number,
                         input.issue_url
                     )
@@ -120,7 +155,7 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                         tags: input.tags,
                         isPersonal: false,
                         significanceType: input.significance_type ?? null,
-                        projectNumber: input.project_number,
+                        projectNumber: projectNumber,
                         projectOwner: input.project_owner,
                         issueNumber: input.issue_number,
                         issueUrl: resolvedIssueUrl,
@@ -128,16 +163,35 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                         prUrl: input.pr_url,
                         prStatus: input.pr_status,
                         author,
+                        autoContext: input.auto_context,
+                        workspaceId: wsId,
+                        impactScore: input.impact_score,
+                        trustScore: input.trust_score,
+                        validationStatus: input.validation_status,
+                        sessionId: input.session_id,
                     })
+
+                    if (input.relationships && input.relationships.length > 0) {
+                        for (const rel of input.relationships) {
+                            try {
+                                teamDb.linkEntries(entry.id, rel.targetId, rel.relationType as RelationshipType)
+                            } catch {
+                                // Ignore link failures if target doesn't exist
+                            }
+                        }
+                    }
 
                     teamDb.flushSave()
 
-                    const parsedFlagMetadata =
-                        entry.entryType === 'flag' ? parseFlagContext(entry.autoContext) : undefined
+                    if (context.config?.subscriptionManager) {
+                        void context.config.subscriptionManager.notifyResourceUpdated('memory://team/recent')
+                        // Broad stroke briefing update trigger
+                        void context.config.subscriptionManager.notifyResourceUpdated('memory://briefing')
+                    }
 
                     return {
                         success: true,
-                        entry: { ...entry, author, flagMetadata: parsedFlagMetadata },
+                        entry: { ...entry, author },
                         author,
                     }
                 } catch (err) {
@@ -165,33 +219,38 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                         return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
-                    const { entry_id, include_relationships, project_number } =
+                    const { entry_id, include_relationships, project_number, workspace_id } =
                         TeamGetEntryByIdSchema.parse(params)
-                    const entry = teamDb.getEntryById(entry_id)
+                    const wsId = workspace_id ? resolveWorkspaceId(workspace_id, project_number, context.config) : '*'
+                    const projectNumber = project_number
+                    const entry = teamDb.getEntryById(entry_id, wsId)
 
-                    if (
-                        !entry ||
-                        (project_number !== undefined && entry.projectNumber !== project_number)
-                    ) {
+                    if (!entry) {
                         return {
                             success: false,
-                            error: `Team entry ${String(entry_id)} not found or does not belong to project ${project_number}`,
+                            error: `Team entry ${String(entry_id)} not found`,
                             code: 'RESOURCE_NOT_FOUND',
                             category: 'resource',
-                            suggestion:
-                                'Verify the team entry ID and project number, and try again',
+                            suggestion: 'Verify the team entry ID and try again',
+                            recoverable: true,
+                        }
+                    }
+
+                    if (projectNumber !== undefined && entry.projectNumber !== undefined && entry.projectNumber !== projectNumber) {
+                        return {
+                            success: false,
+                            error: `Team entry ${String(entry_id)} does not belong to project ${projectNumber}`,
+                            code: 'RESOURCE_NOT_FOUND',
+                            category: 'resource',
+                            suggestion: 'Verify the team entry ID and project number, and try again',
                             recoverable: true,
                         }
                     }
 
                     const author = fetchAuthor(teamDb, entry_id)
-                    const parsedFlagMetadata =
-                        entry.entryType === 'flag' ? parseFlagContext(entry.autoContext) : undefined
-                    const enrichedEntry = { ...entry, author, flagMetadata: parsedFlagMetadata }
-
                     const result: Record<string, unknown> = {
                         success: true,
-                        entry: enrichedEntry,
+                        entry: { ...entry, author },
                     }
 
                     if (include_relationships) {
@@ -227,13 +286,18 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                         return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
-                    const { limit, sort_by, project_number } = TeamGetRecentSchema.parse(params)
-                    const entries = teamDb.searchEntries('', {
+                    const { limit, cursor, sort_by, project_number, workspace_id } = TeamGetRecentSchema.parse(params)
+                    const wsId = workspace_id ? resolveWorkspaceId(workspace_id, project_number, context.config) : undefined
+                    const projectNumber = project_number
+                    const result = teamDb.searchEntries('', {
                         limit,
+                        cursor,
                         sortBy: sort_by,
-                        projectNumber: project_number,
+                        projectNumber: projectNumber,
+                        workspaceId: wsId,
                     })
 
+                    const entries = result.entries
                     const authorMap = batchFetchAuthors(
                         teamDb,
                         entries.map((e) => e.id)
@@ -241,11 +305,9 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                     const enriched = entries.map((e) => ({
                         ...e,
                         author: authorMap.get(e.id) ?? null,
-                        flagMetadata:
-                            e.entryType === 'flag' ? parseFlagContext(e.autoContext) : undefined,
                     }))
 
-                    return { entries: enriched, count: enriched.length }
+                    return { entries: enriched, count: enriched.length, next_cursor: result.nextCursor }
                 } catch (err) {
                     return formatHandlerError(err)
                 }
@@ -281,3 +343,4 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
         },
     ]
 }
+

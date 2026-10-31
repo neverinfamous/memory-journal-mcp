@@ -32,6 +32,8 @@ const callTool = (
                 },
                 io: { allowedRoots: [process.cwd()] },
                 dispatch: vi.fn().mockResolvedValue({ success: true, result: 2 }),
+                codemodeEnabled: true,
+                codemodeInternalFullAccess: true,
             } as any),
         progress,
         teamDb,
@@ -71,7 +73,7 @@ vi.mock('../../src/codemode/sandbox-factory.js', async (importOriginal) => {
 describe('Code Mode Tool Handlers', () => {
     let personalDb: DatabaseAdapter
 
-    const personalDbPath = './test-codemode-handlers.db'
+    const personalDbPath = './.test-output/vitest/test-codemode-handlers.db'
 
     beforeAll(async () => {
         try {
@@ -145,6 +147,7 @@ describe('Code Mode Tool Handlers', () => {
             },
             io: { allowedRoots: [process.cwd()] },
             dispatch: vi.fn().mockResolvedValue({ success: true, result: 2 }),
+            codemodeEnabled: true,
         }
 
         const result = (await callTool(
@@ -190,6 +193,7 @@ describe('Code Mode Tool Handlers', () => {
             },
             io: { allowedRoots: [process.cwd()] },
             dispatch: vi.fn().mockResolvedValue({ success: true, result: 2 }),
+            codemodeEnabled: true,
         }
 
         const result = (await callTool(
