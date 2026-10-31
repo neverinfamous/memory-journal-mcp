@@ -1651,8 +1651,10 @@ return { success: true, projectId };
     });
 
     describe('Native Tool & Codebase Search Fallbacks (agent-issues.jsonl regression)', () => {
-        it('should handle grep_search invoked directly as MCP tool (agent-issues.jsonl regression)', async () => {
-            const dummyTools = getDummyHealingTools()
+        it('should handle grep_search invoked directly as MCP tool when within allowedIoRoots (agent-issues.jsonl regression)', async () => {
+            const dummyTools = getDummyHealingTools({
+                config: { allowedIoRoots: [process.cwd()] },
+            } as any)
             const grepTool = dummyTools.find((t) => t.name === 'grep_search')
             expect(grepTool).toBeDefined()
 
@@ -1672,8 +1674,10 @@ return { success: true, projectId };
             expect(res['_healing_note']).toContain('🛠️ AUTONOMOUS HEALING')
         })
 
-        it('should handle non-existent directory in grep_search without crashing', async () => {
-            const dummyTools = getDummyHealingTools()
+        it('should handle non-existent directory inside allowedIoRoots in grep_search without crashing', async () => {
+            const dummyTools = getDummyHealingTools({
+                config: { allowedIoRoots: [process.cwd()] },
+            } as any)
             const grepTool = dummyTools.find((t) => t.name === 'grep_search')
             expect(grepTool).toBeDefined()
 
@@ -1683,12 +1687,65 @@ return { success: true, projectId };
                 _is_regex: false,
                 _match_per_line: true,
                 _query: 'advancedSearch',
-                _search_path: 'C:\\NonExistentPath\\schemas',
+                _search_path: 'src/non-existent-subdir/schemas',
             })) as Record<string, unknown>
 
             expect(res['success']).toBe(true)
             expect(res['totalMatches']).toBe(0)
             expect(res['_healing_note']).toBeDefined()
+        })
+
+        it('should reject grep_search, view_file, and list_dir when allowedIoRoots is not configured or path escapes allowedIoRoots', async () => {
+            const unconfiguredTools = getDummyHealingTools()
+            const grepUnconf = unconfiguredTools.find((t) => t.name === 'grep_search')
+            const viewUnconf = unconfiguredTools.find((t) => t.name === 'view_file')
+            const listUnconf = unconfiguredTools.find((t) => t.name === 'list_dir')
+
+            const grepRes1 = (await grepUnconf?.handler({
+                _query: 'GOTCHAS_HELP',
+                _search_path: 'src/constants/instructions',
+            })) as Record<string, unknown>
+            expect(grepRes1['success']).toBe(false)
+            expect(grepRes1['code']).toBe('PATH_TRAVERSAL')
+
+            const viewRes1 = (await viewUnconf?.handler({
+                path: 'package.json',
+            })) as Record<string, unknown>
+            expect(viewRes1['success']).toBe(false)
+            expect(viewRes1['code']).toBe('PATH_TRAVERSAL')
+
+            const listRes1 = (await listUnconf?.handler({
+                path: 'src',
+            })) as Record<string, unknown>
+            expect(listRes1['success']).toBe(false)
+            expect(listRes1['code']).toBe('PATH_TRAVERSAL')
+
+            // Also reject paths outside configured allowedIoRoots
+            const scopedTools = getDummyHealingTools({
+                config: { allowedIoRoots: [process.cwd()] },
+            } as any)
+            const grepScoped = scopedTools.find((t) => t.name === 'grep_search')
+            const viewScoped = scopedTools.find((t) => t.name === 'view_file')
+            const listScoped = scopedTools.find((t) => t.name === 'list_dir')
+
+            const grepRes2 = (await grepScoped?.handler({
+                _query: 'test',
+                _search_path: '../outside-root',
+            })) as Record<string, unknown>
+            expect(grepRes2['success']).toBe(false)
+            expect(grepRes2['code']).toBe('PATH_TRAVERSAL')
+
+            const viewRes2 = (await viewScoped?.handler({
+                path: '../package.json',
+            })) as Record<string, unknown>
+            expect(viewRes2['success']).toBe(false)
+            expect(viewRes2['code']).toBe('PATH_TRAVERSAL')
+
+            const listRes2 = (await listScoped?.handler({
+                path: '../outside-root',
+            })) as Record<string, unknown>
+            expect(listRes2['success']).toBe(false)
+            expect(listRes2['code']).toBe('PATH_TRAVERSAL')
         })
 
         it('should route grep_search to search_entries when no path is provided', async () => {
@@ -1722,8 +1779,10 @@ return { success: true, projectId };
             expect(res['_healing_note']).toContain('🛠️ AUTONOMOUS HEALING')
         })
 
-        it('should handle view_file and list_dir dummy tools', async () => {
-            const dummyTools = getDummyHealingTools()
+        it('should handle view_file and list_dir dummy tools when within allowedIoRoots', async () => {
+            const dummyTools = getDummyHealingTools({
+                config: { allowedIoRoots: [process.cwd()] },
+            } as any)
             const viewTool = dummyTools.find((t) => t.name === 'view_file')
             const listTool = dummyTools.find((t) => t.name === 'list_dir')
             expect(viewTool).toBeDefined()
@@ -2144,6 +2203,66 @@ return { success: true, projectId };
             } finally {
                 sandbox.dispose()
             }
+        })
+    })
+
+    describe('Agent Healing Toggle (--no-agent-healing / MCP_AGENT_HEALING)', () => {
+        it('should resolve agentHealing to true by default and false via --no-agent-healing or MCP_AGENT_HEALING=false', async () => {
+            const { Command } = await import('commander')
+            const { addCoreOptions } = await import('../src/cli/option-groups.js')
+            const { ConfigResolver } = await import('../src/utils/config-resolver.js')
+            const { buildServerOptions } = await import('../src/cli/server-options-builder.js')
+
+            // 1. Default: true
+            const cmd1 = addCoreOptions(new Command())
+            cmd1.parse(['node', 'test'])
+            const resolver1 = new ConfigResolver(cmd1, cmd1.opts())
+            const built1 = buildServerOptions(resolver1, cmd1.opts(), cmd1, [])
+            expect(built1.serverOptions.agentHealing).toBe(true)
+
+            // 2. CLI flag: --no-agent-healing -> false
+            const cmd2 = addCoreOptions(new Command())
+            cmd2.parse(['node', 'test', '--no-agent-healing'])
+            const resolver2 = new ConfigResolver(cmd2, cmd2.opts())
+            const built2 = buildServerOptions(resolver2, cmd2.opts(), cmd2, [])
+            expect(built2.serverOptions.agentHealing).toBe(false)
+
+            // 3. Env var: MCP_AGENT_HEALING=false -> false
+            const prevEnv = process.env['MCP_AGENT_HEALING']
+            process.env['MCP_AGENT_HEALING'] = 'false'
+            try {
+                const cmd3 = addCoreOptions(new Command())
+                cmd3.parse(['node', 'test'])
+                const resolver3 = new ConfigResolver(cmd3, cmd3.opts())
+                const built3 = buildServerOptions(resolver3, cmd3.opts(), cmd3, [])
+                expect(built3.serverOptions.agentHealing).toBe(false)
+            } finally {
+                if (prevEnv === undefined) {
+                    delete process.env['MCP_AGENT_HEALING']
+                } else {
+                    process.env['MCP_AGENT_HEALING'] = prevEnv
+                }
+            }
+        })
+
+        it('should exclude dummy healing tools from getTools when agentHealing is false', async () => {
+            const { getTools } = await import('../src/handlers/tools/index.js')
+            const mockDb = { getHealthStatus: () => ({ status: 'ok' }) } as any
+
+            const toolsWithHealing = getTools(mockDb, null, undefined, undefined, {
+                agentHealing: true,
+                runtime: { maintenanceManager: {} } as any,
+            })
+            expect(toolsWithHealing.some((t) => t.name === 'server_info')).toBe(true)
+            expect(toolsWithHealing.some((t) => t.name === 'view_file')).toBe(true)
+
+            const toolsWithoutHealing = getTools(mockDb, null, undefined, undefined, {
+                agentHealing: false,
+                runtime: { maintenanceManager: {} } as any,
+            })
+            expect(toolsWithoutHealing.some((t) => t.name === 'server_info')).toBe(false)
+            expect(toolsWithoutHealing.some((t) => t.name === 'view_file')).toBe(false)
+            expect(toolsWithoutHealing.some((t) => t.name === 'create_entry')).toBe(true)
         })
     })
 })
