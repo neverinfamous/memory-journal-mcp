@@ -27,6 +27,7 @@ The server uses the native **better-sqlite3** driver with **sqlite-vec** for vec
 - **Entry types**: 50 characters maximum
 - **Significance types**: 50 characters maximum
 - **HTTP request body**: 1MB maximum (prevents memory exhaustion)
+- **Tool input elements**: 25,000 array/object elements maximum per tool call (configurable via `MAX_TOOL_INPUT_ELEMENTS` / `--max-tool-input-elements`)
 
 ### **Character Handling**
 
@@ -55,7 +56,7 @@ When running in HTTP mode (`--transport http`), the following security measures 
 
 ### **CORS Configuration**
 
-- ✅ **Configurable multiple origins** via comma-separated `--cors-origin` flag or `MCP_CORS_ORIGIN` environment variable
+- ✅ **Configurable multiple origins** via comma-separated `--cors-origin` flag or `CORS_ORIGIN` environment variable (`MCP_CORS_ORIGIN` supported as an alias)
 - ✅ **Exact-match verification** (no wildcard matching for custom domains)
 - 🔒 **Default: None** (no external origins allowed by default). You MUST explicitly configure CORS for browsers.
 - 🔒 **Required**: Set specific origins for production deployments, or wildcard (`*`) will only be accepted if HTTP Authentication is enabled.
@@ -65,7 +66,7 @@ When running in HTTP mode (`--transport http`), the following security measures 
 memory-journal-mcp --transport http --cors-origin "http://localhost:3000,https://my-app.com"
 
 # Or via environment variable
-export MCP_CORS_ORIGIN="http://localhost:3000,https://my-app.com"
+export CORS_ORIGIN="http://localhost:3000,https://my-app.com"
 ```
 
 ### **Security Headers & Protections**
@@ -106,16 +107,19 @@ For production HTTP deployments, Memory Journal supports **OAuth 2.1 authenticat
 | Protected Resource Metadata | ✅     | RFC 9728 `/.well-known/oauth-protected-resource` |
 | Auth Server Discovery       | ✅     | RFC 8414 metadata discovery with caching         |
 | Token Validation            | ✅     | JWT validation with JWKS support (via `jose`)    |
-| Scope Enforcement           | ✅     | Granular `read`, `write`, `admin` scopes         |
+| Scope Enforcement           | ✅     | Granular `read`, `write`, `team`, `audit`, `admin`, `full` scopes |
 | HTTP Middleware             | ✅     | Bearer token extraction and validation           |
 
 ### **Supported Scopes**
 
-| Scope   | Tool Groups                                       | Description                |
-| ------- | ------------------------------------------------- | -------------------------- |
-| `read`  | core, search, analytics, relationships, io, git   | Read-only operations       |
-| `write` | github, team (+ all read groups)                  | Read + write operations    |
-| `admin` | admin, backup, codemode (+ all write/read groups) | Full administrative access |
+| Scope   | Tool Groups                                                                | Description                            |
+| ------- | -------------------------------------------------------------------------- | -------------------------------------- |
+| `read`  | `core, search, analytics, relationships, io, git`                          | Read-only operations                   |
+| `write` | `github (+ all read groups and create_entry / link_entries / markdown IO)` | Read + write operations                |
+| `team`  | `team (dedicated team collaboration scope)`                                | Team database operations               |
+| `audit` | `audit log access`                                                         | Audit log queries and inspection       |
+| `admin` | `admin, backup, codemode (+ all read/write/team/audit groups)`             | Full administrative access             |
+| `full`  | `Unrestricted access to all operations`                                    | Unrestricted access to all tool groups |
 
 ### **Enabling OAuth**
 
@@ -174,7 +178,7 @@ GITHUB_TOKEN=ghp_...            # GitHub personal access token
 GITHUB_ORG_TOKEN=ghp_...        # For organization projects
 PROJECT_REGISTRY='{"my-repo":{"path":"/path/to/repo","project_number":1}}'  # Multi-project routing (Tip: Use `npx memory-journal-mcp project create`)
 DEFAULT_PROJECT_NUMBER=1         # Default project for issue assignment
-MCP_CORS_ORIGIN=                 # CORS origin (default: none)
+CORS_ORIGIN=                     # CORS origin (default: none)
 MCP_HOST=localhost               # Server bind host
 AUTO_REBUILD_INDEX=true          # Rebuild vector index on startup
 ```
@@ -257,7 +261,7 @@ Code Mode (`mj_execute_code`) executes user-provided JavaScript in a hardened `w
 - ✅ **RPC allowlist** — host-side validation prevents workers from invoking unauthorized API methods
 - ✅ **Rate limiting** — 60 executions per minute per client
 - ✅ **Hard timeouts** — configurable execution limit (default 30s) with forced worker termination
-- ✅ **Egress boundary enforcement** — result serialization capped at configurable limit (default 100KB) to prevent OOM via oversized payloads
+- ✅ **Egress boundary enforcement** — result serialization capped at configurable limit (default 100KB) with automatic collection compaction (`compactOversizedResult`) for large object/array payloads to prevent OOM via oversized payloads
 - ✅ **Readonly Proxy traps** — when `readonly: true`, stripped mutation methods throw clear error messages listing available methods
 - ✅ **Schema Introspection Scope** — `.schema()` properties are strictly bound to the permitted methods in the RPC allowlist, preventing unintended internal structure leakage
 - ✅ **Audit logging** — all executions logged with code preview, metrics, and readonly mode
@@ -406,6 +410,7 @@ chmod 700 /shared/team-data
 - [x] FTS5 / LIKE pattern sanitization (`sanitizeSearchQuery`)
 - [x] Date format whitelisting (`validateDateFormatPattern`)
 - [x] HTTP body size limit (1MB)
+- [x] Tool input element count limit (`MAX_TOOL_INPUT_ELEMENTS`, default 25,000)
 - [x] Configurable CORS multi-origin with exact-match enforcement
 - [x] HTTP timeouts and built-in rate limiter (100 req/min)
 - [x] DNS rebinding protection and strict HSTS
@@ -479,7 +484,7 @@ chmod 700 /shared/team-data
 | Component    | Supported Versions | Notes                                                                 |
 | ------------ | ------------------ | --------------------------------------------------------------------- |
 | Node.js      | 24.x+ (26.x LTS)   | Minimum Node 24+. Node 26.x LTS recommended for isolation features. |
-| MCP Protocol | 2024-11-05         | Full compatibility with the official Model Context Protocol.          |
+| MCP Protocol | 2025-11-25 / 2025-03-26 (backward-compatible with 2024-11-05) | Full compatibility with the official Model Context Protocol.          |
 | Docker Base  | `node:26-alpine`   | Alpine-based images receive regular vulnerability patches.            |
 
 ## 🚨 **Reporting Security Issues**

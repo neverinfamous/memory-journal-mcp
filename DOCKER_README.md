@@ -138,11 +138,16 @@ Comprehensive access to internal state via resources (`memory://briefing`, `memo
 
 Code Mode (`mj_execute_code`) is a revolutionary approach that **dramatically reduces token usage by up to 90%** and is included by default in all presets. Instead of spending thousands of tokens on sequential tool calls, AI agents use a single sandboxed execution to reason faster.
 
-Code executes in a **worker_threads sandbox** with multiple layers of security. All `mj.*` API calls execute against the journal within the sandbox, providing:
+Code executes in a **pre-warmed `worker_threads` V8 isolate pool + secondary `vm.createContext` boundary** with multiple layers of security. All `mj.*` API calls execute against the journal within the sandbox, providing:
 
-- **Static code validation** — blocked patterns include `require()`, `process`, `eval()`, and filesystem access
+- **V8 code generation restrictions** — `eval()` and `Function()` construction from strings disabled at the V8 engine level via `codeGeneration: { strings: false, wasm: false }`
+- **Frozen prototypes & API surfaces** — all built-in prototypes (Object, Function, Array, Error, etc.) and `mj.*` API bindings frozen inside the vm context to prevent dynamic constructor chain escapes and prototype pollution
+- **Static code validation** — comprehensive regex rules blocking `require()`, `import()`, `process`, `eval()`, `Reflect.*`, `Symbol.*`, `new Proxy()`, `__proto__`, `constructor.constructor`, and filesystem/network access (50KB max code length)
+- **Proxy constructor nullified** — `Proxy: undefined` in the sandbox prevents meta-object protocol abuse
+- **RPC allowlist** — host-side validation prevents workers from invoking unauthorized API methods
 - **Rate limiting** — 60 executions per minute per client
 - **Hard timeouts** — configurable execution limit (default 30s)
+- **Egress boundary enforcement** — result serialization capped (default 100KB via `CODE_MODE_MAX_RESULT_SIZE`) with automatic payload compaction to prevent OOM
 - **Full API access** — all tool groups are available via `mj.*` (e.g., `mj.core.createEntry()`, `mj.search.searchEntries()`, `mj.github.getGithubIssues()`)
 - **Strict Readonly Contract** — Calling any mutation method under `--tool-filter readonly` safely halts the sandbox to prevent execution, returning a structured error response to the agent instead of a raw MCP protocol exception.
 
@@ -292,6 +297,7 @@ Restart Cursor or your MCP client and start journaling!
 - **`DEFAULT_WORKSPACE_ID` / `--default-workspace-id`**: Sets the default workspace for multi-tenant isolation on a shared SQLite database (default: `default`).
 - **`PROJECT_REGISTRY`**: Maps repo names to paths and project numbers for automatic `workspace_id` resolution and multi-project GitHub context routing.
 - **`MCP_AGENT_HEALING` / `--no-agent-healing`**: Set `MCP_AGENT_HEALING=false` (or pass `--no-agent-healing`) to disable autonomous MCP tool and parameter healing/interception.
+- **`MAX_TOOL_INPUT_ELEMENTS` / `--max-tool-input-elements`**: Maximum array/object elements allowed in tool input arguments (default: `25000`, `0` = disabled).
 - **`ARCHIVE_OLDER_THAN_DAYS` / `HARD_DELETE_OLDER_THAN_DAYS` / `PRUNE_DRY_RUN`**: Control the auto-prune data lifecycle. Test rules safely with `--prune-dry-run`.
 
 For a complete list of all extensive environment variables and detailed routing docs, see the **[Configuration Wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki/Configuration)**.
@@ -309,6 +315,7 @@ For remote access, web-based clients, or HTTP-compatible MCP hosts. The server s
 ```bash
 docker run --rm -p 3000:3000 \
   -v ./data:/app/data \
+  -e MCP_AUTH_TOKEN="your_secure_random_token" \
   writenotenow/memory-journal-mcp:latest \
   --transport http --port 3000 --server-host 0.0.0.0
 ```

@@ -22,7 +22,7 @@ The Memory Journal MCP is a multi-tenant SQLite-backed MCP server. It provides t
 When orchestrating workflows or performing multi-step operations on behalf of a user, **always prioritize Code Mode**. 
 
 - **Token Optimization**: Enables multi-step logic composition across all tool groups within a single sandboxed execution.
-- **Sandbox Security**: Executes in a secure worker thread with frozen prototypes, static validation rules blocking `require()` and `eval()`, and strict execution bounds.
+- **Sandbox Security**: Executes in a pre-warmed `node:worker_threads` V8 isolate pool + secondary `vm.createContext` boundary with V8 `codeGeneration: { strings: false, wasm: false }`, frozen prototypes and `mj.*` API surfaces, `Proxy: undefined`, host-side RPC allowlist, static validation rules (50KB code cap), 30s timeout, and 100KB result egress cap with auto-compaction.
 - **API Surface**: Exposed via the `mj.*` API (e.g., `mj.core.createEntry()`, `mj.search.searchEntries()`, `mj.github.getGithubIssues()`).
 - **Readonly Contract**: Mutations are safely blocked if the server is running with the `--tool-filter readonly` flag.
 
@@ -68,7 +68,7 @@ All errors must extend `MemoryJournalMcpError` (e.g., `ValidationError`, `Resour
 
 The server supports strict data isolation using `workspace_id`.
 - All CRUD, Search, and Analytics tools accept a `workspace_id`. 
-- If omitted, entries default to the `default` workspace.
+- If omitted, the server auto-resolves `workspace_id` from `project_number` (via `PROJECT_REGISTRY`), content/tag keyword aliases, or `process.cwd()` before falling back to `DEFAULT_WORKSPACE_ID` (default: `default`).
 - The `workspace_id` is permanently assigned upon creation and is immutable.
 
 ---

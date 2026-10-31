@@ -63,7 +63,7 @@ All resources must dynamically compute and return `_meta.tokenEstimate` within t
 
 ### Database
 
-- Schema migrations in `src/database/core/schema.ts` (using Drizzle ORM)
+- Schema migrations in `src/database/core/schema.ts` and versioned migrations in `src/database/migrations/` (001-013, using native better-sqlite3)
 - Backward compatible with self-healing legacy database retrofitting — never break existing data
 - Consider index implications for new queries
 
@@ -92,7 +92,7 @@ src/
 ├── database/
 │   ├── adapter-factory.ts      # Database adapter factory
 │   ├── core/                   # Core database types and interfaces
-│   ├── migrations/             # Versioned schema migrations (001-007)
+│   ├── migrations/             # Versioned schema migrations (001-013)
 │   └── sqlite-adapter/         # SQLite operations via better-sqlite3
 ├── filtering/
 │   └── tool-filter.ts          # Tool filtering (groups, meta-groups)
@@ -105,7 +105,7 @@ src/
 ├── markdown/                   # Markdown import/export (round-trip frontmatter parsing)
 ├── observability/              # Metrics interceptor, token estimator, latency tracker
 ├── server/
-│   ├── mcp-server.ts           # MCP server setup
+│   ├── mcp-server/             # MCP server setup
 │   ├── registration.ts         # Tool/resource/prompt registration
 │   └── scheduler.ts            # Recurring task scheduler
 ├── transports/

@@ -15,7 +15,7 @@ Thank you for your interest in contributing to the Memory Journal MCP Server! Th
 ### Prerequisites
 
 - **Node.js 24+** (Node.js 26.x LTS recommended)
-- **npm** (comes with Node.js)
+- **pnpm** (used for dependency management and scripts)
 - **Git** (for version control and GitHub integration testing)
 - **Docker** (optional, for container testing)
 
@@ -138,8 +138,8 @@ docker run --rm -i -v ./data:/app/data memory-journal-dev
 
 ### Database Changes
 
-- **Schema migrations** — Update `src/database/core/schema.ts` for database changes
-- **Backward compatibility** — Ensure existing data isn't broken; use `migrateSchema()` for column additions
+- **Schema migrations** — Update `src/database/core/schema.ts` and add versioned migrations in `src/database/migrations/` (`001` through `013` via `MigrationManager`) for database changes
+- **Backward compatibility** — Ensure existing data isn't broken; use versioned migrations and `migrateSchema()` for column additions
 - **Performance** — Consider index implications for new queries
 - **Testing** — Verify with both empty and populated databases
 
@@ -222,6 +222,7 @@ src/
 ├── database/
 │   ├── adapter-factory.ts      # Adapter instantiation
 │   ├── core/                   # Interfaces, schema, entry columns
+│   ├── migrations/             # Versioned schema migrations (001-013)
 │   └── sqlite-adapter/         # Native SQLite operations (better-sqlite3)
 ├── filtering/                  # Tool filtering system
 ├── github/
@@ -233,7 +234,7 @@ src/
 ├── markdown/                   # Markdown import/export (round-trip frontmatter parsing)
 ├── observability/              # Metrics interceptor, token estimator, latency tracker
 ├── server/
-│   ├── mcp-server.ts           # MCP server setup
+│   ├── mcp-server/             # MCP server setup
 │   ├── registration.ts         # Tool/resource/prompt registration
 │   └── scheduler.ts            # Recurring task scheduler
 ├── transports/                 # HTTP/SSE transport
@@ -241,27 +242,9 @@ src/
 ├── utils/                      # Logger, error helpers, progress
 └── vector/                     # Semantic search (sqlite-vec + transformers)
 
-skills/                             # Bundled agent skills (shipped with npm)
-├── autonomous-dev/                 # Autonomous software development agent harness
-├── bun/                            # Bun all-in-one toolkit guidelines
-├── docker/                         # Production-grade Docker and container best practices
-├── github-actions/                 # GitHub Actions CI/CD workflows
-├── github-commander/               # GitHub workflow skills (triage, review, audits)
-├── github-copilot-cli/             # GitHub Copilot CLI integration
-├── gitlab/                         # GitLab repository and CI/CD assistant
-├── golang/                         # Go development best practices
-├── mysql/                          # Production-grade MySQL rules
-├── playwright-standard/            # End-to-end testing with Playwright
-├── postgres/                       # Enterprise PostgreSQL development
-├── python/                         # Modern Python development guidelines
-├── react-best-practices/           # React and Next.js performance guidelines
-├── rust/                           # Rust systems programming guidelines
-├── shadcn-ui/                      # UI component development with shadcn
-├── skill-builder/                  # Creation and evaluation of agent skills
-├── sqlite/                         # SQLite meta-cognitive rules
-├── tailwind-css/                   # Tailwind CSS v4 guidelines
-├── typescript/                     # Enterprise-grade TypeScript patterns
-└── vitest-standard/                # Unit testing with Vitest and TDD
+skills/
+└── memory-journal-mcp/         # Bundled agent skill shipped with npm and served via SEP-2640
+```
 
 ## 🤝 Community
 
@@ -285,4 +268,3 @@ Contributors are recognized in:
 - **Git history** — Your commits are permanent record
 
 Thank you for helping make Memory Journal MCP Server better for the developer community! 🚀
-```

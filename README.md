@@ -205,16 +205,16 @@ _Note: The `memory://briefing`, `memory://graph/actions`, `memory://actions/rece
 
 Code Mode (`mj_execute_code`) is a revolutionary approach that **dramatically reduces token usage by up to 90%** and is included by default in all presets. Instead of spending thousands of tokens on sequential tool calls, AI agents use a single sandboxed execution to reason faster.
 
-Code executes in a **worker_threads sandbox** designed as a secure multi-tenant process isolation environment. All `mj.*` API calls execute against the journal within the sandbox, providing:
+Code executes in a **pre-warmed `worker_threads` V8 isolate pool + secondary `vm.createContext` boundary** designed as a secure multi-tenant process isolation environment. All `mj.*` API calls execute against the journal within the sandbox, providing:
 
 - **V8 code generation restrictions** — `eval()` and `Function()` construction from strings disabled at the V8 engine level via `codeGeneration: { strings: false, wasm: false }`
-- **Frozen prototypes** — all built-in prototypes (Object, Function, Array, Error, etc.) frozen inside the vm context to prevent dynamic constructor chain escapes
+- **Frozen prototypes & API surfaces** — all built-in prototypes (Object, Function, Array, Error, etc.) and `mj.*` API bindings frozen inside the vm context to prevent dynamic constructor chain escapes and prototype pollution
 - **Static code validation** — Multiple static regex rules blocking `require()`, `process`, `eval()`, `Reflect.*`, `Symbol.*`, `new Proxy()`, and filesystem/network access
 - **Proxy constructor nullified** — `Proxy: undefined` in the sandbox prevents meta-object protocol abuse
 - **RPC allowlist** — host-side validation prevents workers from invoking unauthorized API methods
 - **Rate limiting** — 60 executions per minute per client
 - **Hard timeouts** — configurable execution limit (default 30s)
-- **Egress boundary enforcement** — result serialization capped to prevent OOM via oversized payloads
+- **Egress boundary enforcement** — result serialization capped (default 100KB via `CODE_MODE_MAX_RESULT_SIZE`) with automatic payload compaction to prevent OOM via oversized payloads
 - **Full API access** — all tool groups are available via `mj.*` (e.g., `mj.core.createEntry()`, `mj.search.searchEntries()`, `mj.github.getGithubIssues()`)
 - **Strict Readonly Contract** — Calling any mutation method under `--tool-filter readonly` safely halts the sandbox to prevent execution, returning a structured `{ success: false, error: "..." }` response to the agent instead of a raw MCP protocol exception.
 
@@ -481,6 +481,7 @@ memory-journal-mcp --transport http --port 3000 \
 | `--rebuild-index-interval <min>` | 0 (off) | Full vector index rebuild to maintain semantic search quality        |
 | `--report-interval <min>`        | 0 (off) | Scheduled report generation interval in minutes                      |
 | `--digest-interval <min>`        | 0 (off) | Scheduled periodic digest analysis report                            |
+| `--auto-prune-interval <min>`    | 0 (off) | Run autonomous garbage collection (archive, soft-delete, hard-delete) |
 
 Each job is error-isolated — a failure in one job won't affect the others. Scheduler status (last run, result, next run) is visible via `memory://health`.
 
@@ -516,16 +517,19 @@ For production deployments, enable OAuth 2.1 authentication on the HTTP transpor
 | Protected Resource Metadata | ✅     | RFC 9728 `/.well-known/oauth-protected-resource` |
 | Auth Server Discovery       | ✅     | RFC 8414 metadata discovery with caching         |
 | Token Validation            | ✅     | JWT validation with JWKS support                 |
-| Scope Enforcement           | ✅     | Granular `read`, `write`, `admin` scopes         |
+| Scope Enforcement           | ✅     | Granular `read`, `write`, `team`, `audit`, `admin`, `full` scopes |
 | HTTP Transport              | ✅     | Streamable HTTP with OAuth middleware            |
 
 **Supported Scopes:**
 
-| Scope   | Tool Groups                                       |
-| ------- | ------------------------------------------------- |
-| `read`  | core, search, analytics, relationships, io        |
-| `write` | github, team (+ all read groups)                  |
-| `admin` | admin, backup, codemode (+ all write/read groups) |
+| Scope   | Tool Groups                                                        |
+| ------- | ------------------------------------------------------------------ |
+| `read`  | `core, search, analytics, relationships, io, git`                  |
+| `write` | `github (+ all read groups and create_entry / link_entries / markdown IO)` |
+| `team`  | `team (dedicated team collaboration scope)`                        |
+| `audit` | `audit log access`                                                 |
+| `admin` | `admin, backup, codemode (+ all read/write/team/audit groups)`     |
+| `full`  | `Unrestricted access to all operations`                            |
 
 **Quick Start:**
 
@@ -569,7 +573,7 @@ memory-journal-mcp --transport http --port 3000
 | `PROJECT_REGISTRY`                             | JSON map of repo names to local paths and project numbers  |
 | **Security & Tooling** | |
 | `ALLOWED_IO_ROOTS`                             | Comma-separated paths for Code Mode filesystem boundaries  |
-| `TOOL_FILTER`                                  | Control tool exposure (`full`, `starter`, `readonly`, `-github`) |
+| `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or `TOOL_FILTER`) | Control tool exposure (`full`, `starter`, `readonly`, `-github`) |
 | `CODE_MODE_MAX_RESULT_SIZE`                    | Max execution payload buffer size in Code Mode (bytes)     |
 | `CODEMODE_INTERNAL_FULL_ACCESS`                | Allow Code Mode to bypass tool filters internally          |
 | `MCP_AGENT_HEALING`                            | Enable/disable autonomous tool & parameter healing (`true`/`false`, CLI: `--no-agent-healing`) |
@@ -587,7 +591,7 @@ memory-journal-mcp --transport http --port 3000
 | `OAUTH_ISSUER` / `OAUTH_AUDIENCE`              | OAuth token verification parameters                        |
 | **Telemetry & Administration** | |
 | `AUDIT_LOG_PATH` / `AUDIT_REDACT`              | File path for JSONL telemetry and argument redaction       |
-| `MCP_METRICS_ENABLED` / `PERSIST_METRICS`      | In-memory and disk-persisted operational metrics           |
+| `METRICS_EXPORT` / `PERSIST_METRICS` / `MJ_METRICS_PORT` | Prometheus export, disk-persisted metrics, and dedicated scrape port |
 | `PRUNE_OLDER_THAN_DAYS` / `PRUNE_EXCLUDE_TAGS` | Auto-prune settings and exclusion tags                     |
 | `REPORT_INTERVAL` / `REPORT_WEBHOOK_URL`       | Scheduled HTTP reports                                     |
 
@@ -618,7 +622,7 @@ See the **[Complete tools reference](https://github.com/neverinfamous/memory-jou
 
 ### Automate with GitHub Commander Workflows
 
-The server natively bundles the `github-commander` agent skill (accessible via `memory://skills/github-commander`). This extends your AI assistant with autonomous DevOps workflows for repository stewardship: **Issue Triage**, **Milestone Sprints**, **PR Reviews**, **Copilot Audits**, **Security Audits**, **Code Quality Audits**, **Performance Audits**, **Roadmap Kickoffs**, and **Dependency Updates**. Configure validation layers using the `PROJECT_*` environment overrides to enforce CI-matching execution locally during agent tasks!
+The server natively bundles the `memory-journal-mcp` agent skill (served via SEP-2640 and `memory://skills`) and provides built-in `issue-commander` and `pr-commander` MCP workflow prompts for autonomous DevOps stewardship: **Issue Triage**, **Milestone Sprints**, **PR Reviews**, **Copilot Audits**, **Security Audits**, **Code Quality Audits**, **Performance Audits**, **Roadmap Kickoffs**, and **Dependency Updates**. Configure validation layers using the `PROJECT_*` environment overrides to enforce CI-matching execution locally during agent tasks!
 
 ## 🏗️ Architecture
 
