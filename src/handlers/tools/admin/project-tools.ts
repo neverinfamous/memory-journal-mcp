@@ -108,8 +108,7 @@ export function getProjectTools(_context: ToolContext): ToolDefinition[] {
                     
                     const targetName = parsed.new_name ?? parsed.name
                     if (parsed.new_name && parsed.new_name !== parsed.name) {
-                        const { [parsed.name]: removed, ...rest } = registry
-                        void removed
+                        const rest = Object.fromEntries(Object.entries(registry).filter(([key]) => key !== parsed.name))
                         config['projectRegistry'] = rest
                     }
                     
@@ -147,8 +146,7 @@ export function getProjectTools(_context: ToolContext): ToolDefinition[] {
                         return Promise.resolve({ success: false, error: `🛠️ AUTONOMOUS HEALING: Project not found: '${parsed.name}'` })
                     }
                     
-                    const { [parsed.name]: removed, ...rest } = registry
-                    void removed
+                    const rest = Object.fromEntries(Object.entries(registry).filter(([key]) => key !== parsed.name))
                     config['projectRegistry'] = rest
                     saveConfig(config)
                     

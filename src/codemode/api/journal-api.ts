@@ -309,8 +309,7 @@ export class JournalApi {
             if (typeof projectNumber === 'number' && !Number.isNaN(projectNumber)) project.project_number = projectNumber
             
             const targetName = newName ?? name
-            const { [name]: removed, ...rest } = registry
-            void removed
+            const rest = Object.fromEntries(Object.entries(registry).filter(([key]) => key !== name))
             const newRegistry = { ...rest, [targetName]: project }
             config['projectRegistry'] = newRegistry
             fs.mkdirSync(path.dirname(configPath), { recursive: true })
@@ -333,8 +332,7 @@ export class JournalApi {
             
             if (!registry[name]) return Promise.resolve({ success: false, error: `🛠️ AUTONOMOUS HEALING: Project not found: '${name}'` })
             
-            const { [name]: removed, ...rest } = registry
-            void removed
+            const rest = Object.fromEntries(Object.entries(registry).filter(([key]) => key !== name))
             config['projectRegistry'] = rest
             fs.mkdirSync(path.dirname(configPath), { recursive: true })
             fs.writeFileSync(configPath, JSON.stringify(config, null, 4), 'utf-8')

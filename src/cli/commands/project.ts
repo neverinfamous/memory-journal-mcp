@@ -162,8 +162,7 @@ export function projectUpdateAction(name: string, options: Record<string, unknow
         return
     }
 
-    const { [name]: removed, ...rest } = registry
-    void removed
+    const rest = Object.fromEntries(Object.entries(registry).filter(([key]) => key !== name))
     const newRegistry = { ...rest, [targetName]: project }
     config['projectRegistry'] = newRegistry
     saveConfig(config)
@@ -185,8 +184,7 @@ export function projectDeleteAction(name: string, _options: Record<string, unkno
         process.exit(1)
     }
 
-    const { [name]: removed, ...rest } = registry
-    void removed
+    const rest = Object.fromEntries(Object.entries(registry).filter(([key]) => key !== name))
     config['projectRegistry'] = rest
     saveConfig(config)
 

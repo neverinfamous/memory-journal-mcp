@@ -196,8 +196,7 @@ export async function handleCrossTeamSearch(
 
     // Ensure we enforce schema matching
     const finalEntries = merged.map((entry) => {
-        const { source, ...rest } = entry
-        void source
+        const rest = Object.fromEntries(Object.entries(entry).filter(([key]) => key !== 'source'))
         // Strip any specific things we don't want leaked in the schema
         return {
             ...rest,
