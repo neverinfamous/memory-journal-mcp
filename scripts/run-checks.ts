@@ -29,11 +29,20 @@ function checkFileLengths(): boolean {
                 /\.(ts|tsx|js|mjs|cjs)$/.test(entry) &&
                 !/\.(test|spec)\./.test(entry)
             ) {
-                const lines = readFileSync(fullPath, 'utf-8').split(/\r?\n/).length
+                const content = readFileSync(fullPath, 'utf-8')
+                const lines = content.split(/\r?\n/).length
                 if (lines > 500) {
                     violations.push({ path: fullPath, lines })
                 } else if (lines >= 450) {
                     warnings.push({ path: fullPath, lines })
+                }
+                if (
+                    dir.startsWith('src') &&
+                    /(?:realpathSync|path\.resolve)\([^)]*\)[\s\S]{0,120}\.startsWith\(/.test(content)
+                ) {
+                    console.warn(
+                        `⚠️  Path boundary warning: prefer path.relative() over .startsWith() after path.resolve/realpathSync in ${fullPath}`
+                    )
                 }
             }
         }

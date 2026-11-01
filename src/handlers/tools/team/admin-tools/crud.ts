@@ -9,6 +9,7 @@ import { formatHandlerError } from '../../../../utils/error-helpers.js'
 import { resolveAuthenticatedAuthor } from '../../../../utils/security-utils.js'
 import { resolveWorkspaceId } from '../../../../utils/workspace-resolver.js'
 import { TEAM_DB_ERROR_RESPONSE, fetchAuthor, triggerTeamNotifications } from '../helpers.js'
+import { enforceOwnership } from '../rbac.js'
 import {
     TeamUpdateEntrySchema,
     TeamUpdateEntrySchemaMcp,
@@ -93,15 +94,23 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
 
                     const currentUser = resolveAuthenticatedAuthor()
                     const codemodeBypass = context.config?.codemodeInternalFullAccess === true
+                    const callerRole =
+                        teamDb.isTeamRbacActive?.()
+                            ? teamDb.resolveTeamRole(currentUser, context.config?.teamDefaultRole ?? 'denied')
+                            : null
 
-                    if (author && author !== currentUser && !codemodeBypass) {
-                        return {
-                            success: false,
-                            error: `Permission Denied: Only the original author ("${author}") can modify this team entry.`,
-                            code: 'PERMISSION_DENIED',
-                            category: 'auth',
-                            suggestion: 'You can only update entries that you authored.',
-                            recoverable: false,
+                    if (author && !codemodeBypass) {
+                        try {
+                            enforceOwnership(currentUser, author, callerRole)
+                        } catch {
+                            return {
+                                success: false,
+                                error: `Permission Denied: Only the original author ("${author}") or a team admin can modify this team entry.`,
+                                code: 'PERMISSION_DENIED',
+                                category: 'auth',
+                                suggestion: 'You can only update entries that you authored.',
+                                recoverable: false,
+                            }
                         }
                     }
 
@@ -175,8 +184,10 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
+                    const wsId = resolveWorkspaceId(workspace_id, projectNumber, context.config)
+
                     // Verify entry exists and belongs to project (if projectNumber is specified)
-                    const existing = teamDb.getEntryByIdIncludeDeleted(entry_id, workspace_id)
+                    const existing = teamDb.getEntryByIdIncludeDeleted(entry_id, wsId)
                     if (existing?.projectNumber !== projectNumber) {
                         return {
                             success: false,
@@ -204,19 +215,27 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
 
                     const currentUser = resolveAuthenticatedAuthor()
                     const codemodeBypass = context.config?.codemodeInternalFullAccess === true
+                    const callerRole =
+                        teamDb.isTeamRbacActive?.()
+                            ? teamDb.resolveTeamRole(currentUser, context.config?.teamDefaultRole ?? 'denied')
+                            : null
 
-                    if (author && author !== currentUser && !codemodeBypass) {
-                        return {
-                            success: false,
-                            error: `Permission Denied: Only the original author ("${author}") can delete this team entry.`,
-                            code: 'PERMISSION_DENIED',
-                            category: 'auth',
-                            suggestion: 'You can only delete entries that you authored.',
-                            recoverable: false,
+                    if (author && !codemodeBypass) {
+                        try {
+                            enforceOwnership(currentUser, author, callerRole)
+                        } catch {
+                            return {
+                                success: false,
+                                error: `Permission Denied: Only the original author ("${author}") or a team admin can delete this team entry.`,
+                                code: 'PERMISSION_DENIED',
+                                category: 'auth',
+                                suggestion: 'You can only delete entries that you authored.',
+                                recoverable: false,
+                            }
                         }
                     }
 
-                    teamDb.deleteEntry(entry_id)
+                    teamDb.deleteEntry(entry_id, false, wsId)
                     teamDb.deleteVector(entry_id)
 
                     triggerTeamNotifications(context)
@@ -261,8 +280,10 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
+                    const wsId = resolveWorkspaceId(workspace_id, projectNumber, context.config)
+
                     // Verify entry exists and belongs to project (if projectNumber is specified)
-                    const existing = teamDb.getEntryByIdIncludeDeleted(entry_id, workspace_id)
+                    const existing = teamDb.getEntryByIdIncludeDeleted(entry_id, wsId)
                     if (existing?.projectNumber !== projectNumber) {
                         return {
                             success: false,
@@ -271,7 +292,7 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
                     
-                    const success = teamDb.restoreEntry(entry_id)
+                    const success = teamDb.restoreEntry(entry_id, wsId)
                     if (!success) {
                         return {
                             success: false,
@@ -301,6 +322,9 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                 destructiveHint: false,
                 idempotentHint: false,
                 openWorldHint: false,
+            },
+            capabilities: {
+                requiresAdminScope: true,
             },
             handler: (params: unknown) => {
                 try {

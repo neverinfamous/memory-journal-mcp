@@ -91,7 +91,7 @@ export function createAuthMiddleware(
     logger.info('Bearer token authentication enabled', { module: 'HTTP' })
 
     return (req: Request, res: Response, next: () => void): void => {
-        if (req.path === '/health' || req.path === '/metrics') {
+        if (req.path === '/health' || req.path === '/') {
             next()
             return
         }

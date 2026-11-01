@@ -286,6 +286,19 @@ export function getTeamMemberTools(context: ToolContext): ToolDefinition[] {
                     if (teamDb.updateTeamMemberRole === undefined) return { success: false, error: 'Unsupported' }
 
                     const { author, role } = TeamUpdateMemberRoleSchema.parse(params)
+                    if (role !== 'admin' && teamDb.listTeamMembers !== undefined) {
+                        const existing = teamDb.getTeamMember !== undefined ? teamDb.getTeamMember(author) : null
+                        if (existing?.role === 'admin') {
+                            const admins = teamDb.listTeamMembers().filter((m) => m.role === 'admin')
+                            if (admins.length <= 1) {
+                                return {
+                                    success: false,
+                                    error: 'Cannot demote the last admin in the team. Promote another member to admin first.',
+                                    code: 'VALIDATION_ERROR',
+                                }
+                            }
+                        }
+                    }
                     const updated = teamDb.updateTeamMemberRole(author, role)
                     if (!updated) {
                         return { success: false, error: `Member ${author} not found`, code: 'RESOURCE_NOT_FOUND' }

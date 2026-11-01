@@ -1,147 +1,25 @@
 /**
  * Memory Journal MCP Server - Adversarial Planning Prompt Definitions
  *
- * Prompts: adversarial-plan-review
- *
- * Bootstraps the adversarial planning workflow by pre-fetching prior plan
- * drafts and review findings from the journal, then composing the structured
- * review dimensions and scoring rubric into a single prompt message.
+ * Prompts: adversarial-plan-review, adversarial-audit-code-quality,
+ * adversarial-audit-security, adversarial-audit-performance,
+ * adversarial-audit-seo, adversarial-audit-skill, adversarial-audit-workflow
  */
 
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import { ICON_PROMPT } from '../../constants/icons.js'
 import type { InternalPromptDef } from './index.js'
 import { markUntrustedContent } from '../../utils/security-utils.js'
-import { z } from 'zod'
-
-const planReviewArgsSchema = z.object({
-    topic: z.string().optional(),
-    depth: z.enum(['light', 'standard', 'deep']).optional(),
-    copilot: z.enum(['true', 'false']).optional(),
-})
-
-const auditArgsSchema = z.object({
-    target: z.string().optional(),
-    copilot: z.enum(['true', 'false']).optional(),
-})
-
-const PLAN_REVIEW_ARGUMENTS = [
-    { name: 'topic', description: 'Topic or feature to review', required: false },
-    {
-        name: 'depth',
-        description: "Review depth profile ('light' | 'standard' | 'deep', default: 'standard')",
-        required: false,
-    },
-    {
-        name: 'copilot',
-        description:
-            "Opt-in to external GitHub Copilot CLI validation ('true' | 'false', default: 'false')",
-        required: false,
-    },
-]
-
-const AUDIT_ARGUMENTS = [
-    {
-        name: 'target',
-        description: 'Target file, directory, skill, or workflow to audit',
-        required: false,
-    },
-    {
-        name: 'copilot',
-        description:
-            "Opt-in to external GitHub Copilot CLI validation ('true' | 'false', default: 'false')",
-        required: false,
-    },
-]
-
-/** Review depth profiles controlling which dimensions receive full scrutiny. */
-type ReviewDepth = 'light' | 'standard' | 'deep'
-
-/**
- * Review dimension definitions with weights.
- * Weights reflect relative importance in the scoring rubric.
- */
-const REVIEW_DIMENSIONS = [
-    {
-        dimension: 'Correctness',
-        weight: 3,
-        focus: 'Logic errors, edge cases, race conditions, error handling gaps, incorrect assumptions about existing APIs',
-    },
-    {
-        dimension: 'Security',
-        weight: 3,
-        focus: 'Injection vectors, auth/authz gaps, data boundary validation, secret handling, input sanitization',
-    },
-    {
-        dimension: 'Performance',
-        weight: 2,
-        focus: 'Algorithmic complexity, unnecessary allocations, N+1 queries, missing caching opportunities, hot-path impact',
-    },
-    {
-        dimension: 'Maintainability',
-        weight: 2,
-        focus: 'Coupling, cohesion, single-responsibility violations, naming clarity, testability, documentation debt',
-    },
-    {
-        dimension: 'Completeness',
-        weight: 1,
-        focus: 'Missing tests, missing docs, migration gaps, rollback strategy, monitoring/observability',
-    },
-] as const
-
-/**
- * Build the dimensions table for the given depth profile.
- */
-function buildDimensionsTable(depth: ReviewDepth): string {
-    const dimensionsToInclude =
-        depth === 'light'
-            ? REVIEW_DIMENSIONS.filter(
-                  (d) => d.dimension === 'Correctness' || d.dimension === 'Security'
-              )
-            : REVIEW_DIMENSIONS
-
-    const header = '| Dimension | Weight | Focus Areas |\n| --- | --- | --- |'
-    const rows = dimensionsToInclude
-        .map((d) => `| **${d.dimension}** | ${String(d.weight)} | ${d.focus} |`)
-        .join('\n')
-
-    const maxScore = dimensionsToInclude.reduce((sum, d) => sum + d.weight * 5, 0)
-    const totalWeight = dimensionsToInclude.reduce((sum, d) => sum + d.weight, 0)
-
-    let table = `${header}\n${rows}\n\nMax weighted score: ${String(maxScore)} (${String(totalWeight)} total weight × 5 max)`
-
-    if (depth === 'deep') {
-        table +=
-            '\n\n**Deep review extensions:** Also evaluate API surface backward compatibility, long-term migration path (will this need to be redone in 6 months?), and cross-project impact.'
-    }
-
-    return table
-}
-
-/**
- * Format prior planning entries for context injection.
- */
-function formatPriorEntries(
-    entries: { id: number; entryType: string; content: string; timestamp: string }[],
-    maxCount: number
-): string {
-    if (entries.length === 0) return '_No prior entries found._'
-
-    return entries
-        .slice(0, maxCount)
-        .map(
-            (e) =>
-                `- **#${String(e.id)}** (${e.entryType}, ${e.timestamp}): ${e.content.slice(0, 150)}${e.content.length > 150 ? '...' : ''}`
-        )
-        .join('\n')
-}
-
-function buildCopilotStep(enabled: boolean, promptCmd: string): string {
-    if (enabled) {
-        return `Run \`${promptCmd}\` in NON-INTERACTIVE mode. You MUST wait for it to finish (it may take 10-20 seconds). If Copilot fails, alert the user immediately and note findings.`
-    }
-    return `**Optional (Skip by default)**: External Copilot CLI validation is opt-in (\`copilot: 'true'\`) and skipped by default unless explicitly requested by the user. Only if the user explicitly requests the GitHub Copilot audit, run \`${promptCmd}\` in NON-INTERACTIVE mode and wait for it to finish (it may take 10-20 seconds); if Copilot fails, alert the user immediately and note findings.`
-}
+import {
+    planReviewArgsSchema,
+    auditArgsSchema,
+    PLAN_REVIEW_ARGUMENTS,
+    AUDIT_ARGUMENTS,
+    type ReviewDepth,
+    buildDimensionsTable,
+    formatPriorEntries,
+    buildCopilotStep,
+} from './adversarial-helpers.js'
 
 /**
  * Get adversarial planning prompt definitions
@@ -268,6 +146,12 @@ Target: ${target}
 If the target is '{target}', determine it from the user's request. If the user hasn't specified a target file or module, ask them for it now.
 
 1. Scan the target for dead code, duplication, type safety (any/as, implicit any), magic values, complexity, boundary validation, monkey-patching, unused variables/exports, unhandled promises, and global scope pollution (hacks). For large targets or full-repository audits, spawn parallel \`research\` subagents by subsystem using \`invoke_subagent\` so each subsystem is audited thoroughly without context truncation.
+   - **Mandatory Deep-Quality Detectors (Always Run)**:
+     1. **Silent Catch Block Detector**: Scan for \`catch {\` or \`catch (err) {\` blocks in \`src/\` that neither log nor rethrow nor return a structured error object (distinguishing intentional best-effort fallbacks from swallowed security/IO failures).
+     2. **Cross-Platform Path Separator Assumption Detector**: Scan for \`.startsWith(\` on \`path.resolve\` / \`realpath\` outputs or hardcoded \`'\\\\'\` / \`'/'\` instead of \`path.relative()\` or \`path.sep\`.
+     3. **Cognitive Complexity & Nesting Hotspot Scan**: Flag functions exceeding 80 lines or nesting depth > 4, and modules with excessive circular/cross-layer imports.
+     4. **Schema-to-Handler Parameter Drift Check**: Verify that every property defined in a tool's \`inputSchema\` is either consumed by the handler or normalized in \`param-normalizer.ts\`, and no handler reads undocumented parameters.
+     5. **Uncleaned Timer / EventListener Detector**: Scan for \`setInterval\`, \`setTimeout\`, \`fs.watch\`, and \`.on(\` registrations lacking corresponding \`.unref()\` or cleanup in \`close()\` / \`finally\`.
 2. **Scan for files exceeding 500 lines using two redundant methods** (to ensure no files are missed, scoped to \`src\` and \`scripts\` while excluding \`vendor\` and test files):
    - **Method 1 (Native PowerShell)**:
      \`\`\`powershell
@@ -314,10 +198,16 @@ Target: ${target}
 
 If the target is '{target}', determine it from the user's request. If the user hasn't specified a target file or module, ask them for it now.
 
-1. Perform a multi-pass security audit. Treat all external inputs as untrusted until verified. Depending on the target, evaluate:
+1. Perform a multi-pass security audit. For large targets or full-repository audits, spawn parallel \`research\` subagents by architectural domain using \`invoke_subagent\`. Treat all external inputs as untrusted until verified. Depending on the target, evaluate:
    - **General Code**: Injection vectors, auth/authz gaps, data boundary validation.
    - **Agent Skills / MCP Tools**: Privilege escalation (excessive agency), indirect prompt injection via tool outputs, tool poisoning / supply chain risks, and cross-plugin attacks.
    - **External Integrations**: Data exfiltration paths and excessive API permission scopes.
+   - **Mandatory Deep-Security Gates (Always Run)**:
+     1. **Pre-Validation Transform Audit**: Verify no input healer, AST/regex normalizer, or auto-recovery logic runs *before* rate-limiting, byte-length caps, authentication, or sandbox security validation.
+     2. **Lexical Scanner vs. Regex Stripper Coherence Check**: Verify comment/string strippers cannot be desynchronized by regex literals, template literal interpolations (\`\${...}\`), or multi-step replacement reassembly.
+     3. **Multi-Tenant Parameter Threading Audit**: Trace \`workspace_id\` from tool input -> \`resolveProjectContext\` -> SQLite \`WHERE\` clauses AND Vector Index metadata filters across all read, write, delete, restore, and search paths.
+     4. **Execution-Layer Filter Parity Check**: Verify \`--tool-filter\` and OAuth scopes are enforced identically across \`tools/list\`, direct \`tools/call\`, Code Mode \`mj.*\` dispatch, and dummy/hallucination-healing fallbacks.
+     5. **Transitive Prompt-Injection Taint Trace**: Trace external strings (Git commits, GitHub issues/PRs/workflows/milestones, DB content) into MCP Resources and Prompts to ensure \`markUntrustedContent\` tags are applied and never stripped by downstream table formatters.
 2. **External Validation (Copilot — Opt-In)**: ${copilotInstruction}
 3. Present findings table (incorporating Copilot findings if applicable).
 4. Await HITL approval before applying fixes. **CRITICAL**: You are strictly forbidden from modifying any project files or running any scripts until the user explicitly approves the implementation plan. Only create the markdown artifact and stop.

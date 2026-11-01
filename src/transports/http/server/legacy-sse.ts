@@ -50,6 +50,10 @@ export class LegacySSEServerTransport implements Transport {
      * Handles the initial GET request to establish the SSE stream.
      */
     handleSseRequest(req: Request, res: Response): void {
+        if (this.res !== null) {
+            res.status(409).json({ error: { message: 'SSE stream already connected for this session' } })
+            return
+        }
         this.res = res
         res.writeHead(200, {
             'Content-Type': 'text/event-stream',

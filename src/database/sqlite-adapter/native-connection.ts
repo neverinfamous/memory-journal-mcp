@@ -16,6 +16,11 @@ import type { IDatabaseConnection, QueryResult } from '../core/interfaces.js'
 const IS_MUTATION_RE =
     /^\s*(INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|PRAGMA (?!table_info|foreign_key_list|index_info|index_list|journal_mode|synchronous|temp_store|integrity_check))./i
 
+const ALLOWED_PRAGMAS_RE =
+    /^\s*(?:wal_checkpoint(?:\s*\(\s*(?:PASSIVE|FULL|RESTART|TRUNCATE)\s*\))?|integrity_check|quick_check|foreign_keys(?:\s*=\s*(?:ON|OFF|1|0))?|journal_mode(?:\s*=\s*(?:WAL|DELETE|TRUNCATE|PERSIST|MEMORY|OFF))?|synchronous(?:\s*=\s*(?:OFF|NORMAL|FULL|EXTRA|0|1|2|3))?|temp_store(?:\s*=\s*(?:DEFAULT|FILE|MEMORY|0|1|2))?|busy_timeout(?:\s*=\s*\d+)?|optimize|table_info\s*\([^)]+\)|index_list\s*\([^)]+\)|index_info\s*\([^)]+\)|foreign_key_list\s*\([^)]+\))\s*$/i
+
+const HEX_CIPHER_KEY_RE = /^x'[0-9a-fA-F]+'$/
+
 
 export class NativeConnectionManager implements IDatabaseConnection {
     private db: Database | null = null
@@ -43,6 +48,9 @@ export class NativeConnectionManager implements IDatabaseConnection {
             if (rawKey) {
                 const key = rawKey
                 if (key.startsWith("x'") && key.endsWith("'")) {
+                    if (!HEX_CIPHER_KEY_RE.test(key)) {
+                        throw new Error('Invalid hex encryption key format')
+                    }
                     // Raw hex keys must not be wrapped in additional single quotes
                     db.pragma(`key = "${key}"`)
                 } else {
@@ -286,6 +294,9 @@ export class NativeConnectionManager implements IDatabaseConnection {
     }
 
     pragma(command: string): void {
+        if (!ALLOWED_PRAGMAS_RE.test(command)) {
+            throw new Error(`Disallowed PRAGMA command: ${command}`)
+        }
         const db = this.ensureDb()
         db.pragma(command)
     }
@@ -333,6 +344,9 @@ export class NativeConnectionManager implements IDatabaseConnection {
     }
 
     createVecTable(dimensions: number): void {
+        if (!Number.isInteger(dimensions) || dimensions <= 0 || dimensions > 8192) {
+            throw new Error(`Invalid vector dimensions: ${String(dimensions)}`)
+        }
         const db = this.ensureDb()
         // Wait, vec0 doesn't support parameterized dimensions via '?', we have to interpolate
         db.exec(`

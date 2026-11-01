@@ -20,6 +20,7 @@ import { TOOL_GROUPS } from '../../../../filtering/tool-constants.js'
 import type { ToolFilterConfig } from '../../../../filtering/tool-filter.js'
 import { getPrompts } from '../../../prompts/index.js'
 import { logger } from '../../../../utils/logger.js'
+import { markUntrustedContentInline } from '../../../../utils/security-utils.js'
 import type { BriefingConfig } from '../../shared.js'
 
 
@@ -222,7 +223,7 @@ function loadCachedGitHistory(
                 hash,
                 ...(commitType !== undefined ? { type: commitType } : {}),
                 isBreaking,
-                message: subject,
+                message: markUntrustedContentInline(subject),
                 isPushed: !unpushedHashes.has(hash),
             }
         })

@@ -204,7 +204,12 @@ export class VectorSearchManager {
     /**
      * Search for similar entries by text query
      */
-    public async search(query: string, limit = 10, threshold = 0.0): Promise<SemanticSearchResult[]> {
+    public async search(
+        query: string,
+        limit = 10,
+        threshold = 0.0,
+        workspaceId?: string
+    ): Promise<SemanticSearchResult[]> {
         await this.initialize()
 
         try {
@@ -216,7 +221,7 @@ export class VectorSearchManager {
             const searchResults: SemanticSearchResult[] = []
             
             for (const result of results) {
-                const entry = this.dbAdapter.getEntryById(result.entry_id)
+                const entry = this.dbAdapter.getEntryById(result.entry_id, workspaceId)
                 if (entry) {
                     // sqlite-vec MATCH computes L2 distance by default.
                     // For normalized unit vectors: L2_distance^2 = 2 - 2 * cosine_similarity
@@ -249,21 +254,25 @@ export class VectorSearchManager {
     /**
      * Search for similar entries using an existing entry as the query
      */
-    public async searchByEntryId(entryId: number, limit = 10, threshold = 0.0): Promise<SemanticSearchResult[]> {
+    public async searchByEntryId(
+        entryId: number,
+        limit = 10,
+        threshold = 0.0,
+        workspaceId?: string
+    ): Promise<SemanticSearchResult[]> {
         await this.initialize()
 
         try {
+            const sourceEntry = this.dbAdapter.getEntryById(entryId, workspaceId)
+            if (!sourceEntry) {
+                throw new Error(`Entry ${entryId} not found`)
+            }
+
             let queryEmbedding = this.dbAdapter.getVector(entryId)
             
             if (!queryEmbedding) {
-                // If not in index, fetch the entry and generate embedding
-                const entry = this.dbAdapter.getEntryById(entryId)
-                if (!entry) {
-                    throw new Error(`Entry ${entryId} not found`)
-                }
-                
-                const tagsText = entry.tags !== undefined && entry.tags !== null && entry.tags.length > 0 ? ` [Tags: ${entry.tags.join(', ')}]` : ''
-                const text = `[${entry.entryType}]${tagsText} ${entry.content}`
+                const tagsText = sourceEntry.tags !== undefined && sourceEntry.tags !== null && sourceEntry.tags.length > 0 ? ` [Tags: ${sourceEntry.tags.join(', ')}]` : ''
+                const text = `[${sourceEntry.entryType}]${tagsText} ${sourceEntry.content}`
                 queryEmbedding = await this.generateEmbedding(text)
                 
                 // Add it to the index while we're at it
@@ -279,7 +288,7 @@ export class VectorSearchManager {
                 // Skip the original entry
                 if (result.entry_id === entryId) continue
                 
-                const entry = this.dbAdapter.getEntryById(result.entry_id)
+                const entry = this.dbAdapter.getEntryById(result.entry_id, workspaceId)
                 if (entry) {
                     // Same mathematical conversion as above
                     const similarityScore = Math.max(-1, 1 - (result.distance * result.distance) / 2)

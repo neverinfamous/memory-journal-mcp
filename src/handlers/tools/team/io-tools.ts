@@ -17,7 +17,7 @@ import { sendProgress } from '../../../utils/progress-utils.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { AggregateMcpError } from '../../../types/errors.js'
 import {
-    resolveAuthor,
+    resolveAuthenticatedAuthor,
     assertSafeDirectoryPath,
     assertSafeFilePath,
 } from '../../../utils/security-utils.js'
@@ -334,7 +334,7 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
 
                     await sendProgress(progress, 1, 2, 'Importing team entries...')
 
-                    const author = context.auth?.subject ?? context.auth?.sub ?? resolveAuthor()
+                    const author = resolveAuthenticatedAuthor()
                     const result = await importMarkdownEntries(
                         input.source_dir,
                         teamDb,
@@ -439,7 +439,7 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
 
                     await sendProgress(progress, 2, 3, 'Importing entries...')
 
-                    const author = context.auth?.subject ?? context.auth?.sub ?? resolveAuthor()
+                    const author = resolveAuthenticatedAuthor()
                     const result = await processImportBatch(parsedFiles, teamDb, {
                         dry_run: input.dry_run,
                         limit: input.limit,

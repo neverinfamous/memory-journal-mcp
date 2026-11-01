@@ -2,7 +2,6 @@
  * SQL and prepared statement recovery helpers for Code Mode execution payloads.
  */
 
-import * as vm from 'node:vm'
 import { isRecord } from '../../../codemode/normalizers/shared-utils.js'
 import { extractAndRecoverEntryCode } from './json-entry-recovery.js'
 
@@ -124,47 +123,113 @@ export function extractAndRecoverSqlCode(code: string): string | null {
     return `return await mj.core.getRecentEntries({ limit: ${limitVal ?? 10} });`
 }
 
+function splitTopLevelCommaArgs(rawArgs: string): string[] {
+    const tokens: string[] = []
+    let current = ''
+    let quote: string | null = null
+    let escaped = false
+    let depth = 0
+
+    for (const ch of rawArgs) {
+        if (quote !== null) {
+            current += ch
+            if (escaped) {
+                escaped = false
+            } else if (ch === '\\') {
+                escaped = true
+            } else if (ch === quote) {
+                quote = null
+            }
+            continue
+        }
+
+        if (ch === '"' || ch === "'" || ch === '`') {
+            quote = ch
+            current += ch
+        } else if (ch === '[' || ch === '{' || ch === '(') {
+            depth++
+            current += ch
+        } else if (ch === ']' || ch === '}' || ch === ')') {
+            if (depth > 0) depth--
+            current += ch
+        } else if (ch === ',' && depth === 0) {
+            tokens.push(current)
+            current = ''
+        } else {
+            current += ch
+        }
+    }
+    if (current.trim().length > 0) {
+        tokens.push(current)
+    }
+    return tokens
+}
+
+function unescapeStringLiteral(inner: string): string {
+    let result = ''
+    for (let i = 0; i < inner.length; i++) {
+        const ch = inner[i] ?? ''
+        if (ch === '\\' && i + 1 < inner.length) {
+            const next = inner[++i] ?? ''
+            if (next === 'n') result += '\n'
+            else if (next === 'r') result += '\r'
+            else if (next === 't') result += '\t'
+            else result += next
+        } else {
+            result += ch
+        }
+    }
+    return result
+}
+
+function parseSingleArgToken(rawToken: string): unknown {
+    const trimmed = rawToken.trim()
+    if (trimmed === 'null' || trimmed === 'undefined') return null
+    if (trimmed === 'true') return true
+    if (trimmed === 'false') return false
+    if (/^-?\d+(?:\.\d+)?$/.test(trimmed)) return Number(trimmed)
+    if (
+        (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+        (trimmed.startsWith("'") && trimmed.endsWith("'")) ||
+        (trimmed.startsWith('`') && trimmed.endsWith('`'))
+    ) {
+        return unescapeStringLiteral(trimmed.slice(1, -1))
+    }
+    if (trimmed.startsWith('JSON.stringify(') && trimmed.endsWith(')')) {
+        try {
+            const inner = trimmed.slice(15, -1).trim()
+            const parsed: unknown = JSON.parse(inner)
+            return parsed
+        } catch {
+            return trimmed
+        }
+    }
+    if (
+        (trimmed.startsWith('[') && trimmed.endsWith(']')) ||
+        (trimmed.startsWith('{') && trimmed.endsWith('}'))
+    ) {
+        try {
+            return JSON.parse(trimmed) as unknown
+        } catch {
+            return trimmed
+        }
+    }
+    return trimmed
+}
+
 function parsePreparedStatementArgs(rawArgs: string): unknown[] {
+    if (rawArgs.length > 50_000) return []
     // 1. Try safe JSON.parse first
     try {
         const parsed: unknown = JSON.parse(`[${rawArgs}]`)
         if (Array.isArray(parsed)) return parsed
     } catch {
-        // Fallback to guarded VM or token splitter
+        // Fallback to linear state-machine splitter (no vm.runInNewContext or catastrophic regexes)
     }
 
-    // 2. Guarded VM evaluation for single-quoted strings or literals (Critical C-2 fix)
-    if (!/[(){};=]/.test(rawArgs)) {
-        try {
-            const evaluated: unknown = vm.runInNewContext(
-                `[${rawArgs}]`,
-                {},
-                { timeout: 50, microtaskMode: 'afterEvaluate' }
-            )
-            if (Array.isArray(evaluated)) return evaluated
-        } catch {
-            // Fall through to token splitting
-        }
-    }
-
-    // 3. Token splitting fallback (supports JSON.stringify(...) tokens safely via JSON.parse)
-    const tokens = rawArgs.split(/,\s*(?=(?:[^"']*["'][^"']*["'])*[^"']*$)/)
-    return tokens.map((t) => {
-        const trimmedToken = t.trim()
-        if (/^\d+$/.test(trimmedToken)) return parseInt(trimmedToken, 10)
-        if (trimmedToken.startsWith('"') && trimmedToken.endsWith('"')) return trimmedToken.slice(1, -1)
-        if (trimmedToken.startsWith("'") && trimmedToken.endsWith("'")) return trimmedToken.slice(1, -1)
-        if (trimmedToken.startsWith('JSON.stringify(') && trimmedToken.endsWith(')')) {
-            try {
-                const inner = trimmedToken.slice(15, -1)
-                const parsed: unknown = JSON.parse(inner)
-                return parsed
-            } catch {
-                return trimmedToken
-            }
-        }
-        return trimmedToken
-    })
+    // 2. Linear O(N) top-level comma splitter and literal parser
+    const tokens = splitTopLevelCommaArgs(rawArgs)
+    return tokens.map(parseSingleArgToken)
 }
 
 /**

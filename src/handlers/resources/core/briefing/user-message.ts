@@ -13,8 +13,7 @@ import type { GraphSummary } from './context-section.js'
 import type { BriefingInsights } from './insights-section.js'
 import type { GitHistorySummary, TestHealth } from './system-section.js'
 
-const escapeContent = (text: string): string =>
-    text.replace(/<\/?untrusted_remote_content[^>]*>/gi, '').replace(/\r?\n/g, ' ')
+const escapeContent = (text: string): string => text.replace(/\r?\n/g, ' ')
 
 /** Escape pipe characters for use inside markdown table cells */
 const escapeCell = (text: string): string =>

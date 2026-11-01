@@ -23,7 +23,18 @@ import type { VectorSearchManager } from '../../vector/vector-search-manager/ind
 import type { GitHubIntegration } from '../../github/github-integration/index.js'
 import type { ProgressContext } from '../../utils/progress-utils.js'
 
-import { getCoreTools, getStalenessTools, getDummyHealingTools, DUMMY_HEALING_TOOL_NAMES } from './core/index.js'
+import {
+    getCoreTools,
+    getStalenessTools,
+    getDummyHealingTools,
+} from './core/index.js'
+import {
+    DUMMY_HEALING_TOOL_NAMES,
+    DUMMY_ENTRY_CREATION_TOOL_NAMES,
+    DUMMY_SQL_EXECUTION_TOOL_NAMES,
+    DUMMY_MJ_FUNC_TOOL_NAMES,
+    DUMMY_DOTTED_TOOL_NAMES,
+} from './core/dummy-healing/alias-catalog.js'
 import { getSearchTools } from './search/index.js'
 import { getAnalyticsTools } from './analytics.js'
 import { getRelationshipTools } from './relationships.js'
@@ -64,6 +75,58 @@ export {
 // Public API
 // ============================================================================
 
+const MUTATING_DUMMY_TOOL_NAMES = new Set<string>([
+    'create_entry',
+    ...DUMMY_ENTRY_CREATION_TOOL_NAMES,
+    'update_entry',
+    'delete_entry',
+    ...DUMMY_SQL_EXECUTION_TOOL_NAMES,
+    'mj_core_create_entry',
+    'mj_core_update_entry',
+    'mj_core_delete_entry',
+    'mj.core.createEntry',
+    'mj.core.create_entry',
+    'mj.core.updateEntry',
+    'mj.core.update_entry',
+    'mj.core.deleteEntry',
+    'mj.core.delete_entry',
+])
+
+const EXEC_DUMMY_TOOL_NAMES = new Set<string>(DUMMY_SQL_EXECUTION_TOOL_NAMES)
+
+function isDummyToolAllowedByFilter(
+    name: string,
+    filterConfig: ToolFilterConfig,
+    agentHealingEnabled: boolean
+): boolean {
+    if (!agentHealingEnabled || !DUMMY_HEALING_TOOL_NAMES.has(name)) {
+        return false
+    }
+    const rawFilter = filterConfig.raw.toLowerCase()
+    const isReadonlyFilter = rawFilter.includes('readonly') && !rawFilter.includes('-readonly')
+    if (isReadonlyFilter && MUTATING_DUMMY_TOOL_NAMES.has(name)) {
+        return false
+    }
+    if (EXEC_DUMMY_TOOL_NAMES.has(name) && !filterConfig.enabledTools.has('mj_execute_code')) {
+        return false
+    }
+    const isExplicitDisallow =
+        rawFilter.includes(`-${name.toLowerCase()}`) ||
+        (MUTATING_DUMMY_TOOL_NAMES.has(name) &&
+            !EXEC_DUMMY_TOOL_NAMES.has(name) &&
+            rawFilter.includes('-create_entry') &&
+            (name === 'create_entry' || DUMMY_ENTRY_CREATION_TOOL_NAMES.includes(name)))
+    if (isExplicitDisallow) {
+        return false
+    }
+    const isCodeModeShortcutMode =
+        filterConfig.enabledTools.has('mj_execute_code') && filterConfig.enabledTools.size <= 5
+    if (!isCodeModeShortcutMode && (DUMMY_MJ_FUNC_TOOL_NAMES.includes(name) || DUMMY_DOTTED_TOOL_NAMES.includes(name))) {
+        return true
+    }
+    return true
+}
+
 /**
  * Get all tool definitions, optionally filtered by config
  */
@@ -98,7 +161,7 @@ export function getTools(
             .filter(
                 (t) =>
                     filterConfig.enabledTools.has(t.name) ||
-                    (includeDummyTools && DUMMY_HEALING_TOOL_NAMES.has(t.name))
+                    isDummyToolAllowedByFilter(t.name, filterConfig, includeDummyTools)
             )
             .map(mapTool)
     }
@@ -260,6 +323,30 @@ export async function callTool(
 
     if (!tool) {
         throwToolNotFoundError(name)
+    }
+
+    if (config?.filterConfig) {
+        const isPrimaryEnabled = config.filterConfig.enabledTools.has(name)
+        const isDummyAllowed = isDummyToolAllowedByFilter(
+            name,
+            config.filterConfig,
+            config.agentHealing !== false
+        )
+        const isCodeModeShortcut =
+            config.agentHealing !== false &&
+            config.filterConfig.enabledTools.has('mj_execute_code') &&
+            DUMMY_HEALING_TOOL_NAMES.has(name) &&
+            isDummyAllowed
+        if (!isPrimaryEnabled && !isDummyAllowed && !isCodeModeShortcut) {
+            return {
+                success: false,
+                error: `Tool '${name}' is disabled by the active --tool-filter configuration.`,
+                code: 'TOOL_DISABLED',
+                category: 'authorization',
+                suggestion: 'Update the active tool filter or use an enabled tool.',
+                recoverable: false,
+            }
+        }
     }
 
     if (!config?.runtime?.maintenanceManager) {

@@ -117,22 +117,23 @@ export const DEFAULT_SECURITY_CONFIG: SecurityConfig = {
         /\bimport\s*\(/, // No dynamic import()
         /\bimport\s+[\s\S]*?\bfrom\b/, // No static ES module import from
         /\bimport\s*[{*]/, // No static ES module import statement
-        /\bprocess\./, // No process access
-        /\bglobal\./, // No global access
-        /\bglobalThis\./, // No globalThis access
+        /\bprocess\s*\./, // No process access (including whitespace before dot)
+        /\bglobal\s*\./, // No global access
+        /\bglobalThis\s*\./, // No globalThis access
         /\beval\s*\(/, // No eval()
         /\bFunction\s*\(/, // No Function constructor
         /\b__proto__\b/, // No prototype pollution
-        /\bconstructor\.constructor/, // No constructor chaining
-        /\[['"]constructor['"]\]/i, // No bracket-notation constructor access
+        /\bconstructor\s*\.\s*constructor/, // No constructor chaining
+        /\[\s*['"`]constructor['"`]\s*\]/i, // No bracket-notation constructor access
+        /\bObject\s*\.\s*(?:getPrototypeOf|setPrototypeOf|defineProperty|defineProperties)\b/, // No prototype/descriptor manipulation
         /\bReflect\s*\./i, // No Reflect API access (getPrototypeOf, ownKeys, construct, etc.)
         /\bSymbol\s*\./i, // No Symbol access (hasInstance, toPrimitive, etc.)
         /\bnew\s+Proxy\s*\(/i, // No Proxy construction
         /\bchild_process\b/, // No child processes
-        /\bfs\./, // No filesystem
-        /\bnet\./, // No networking
-        /\bhttp\./, // No HTTP
-        /\bhttps\./, // No HTTPS
+        /\bfs\s*\./, // No filesystem
+        /\bnet\s*\./, // No networking
+        /\bhttp\s*\./, // No HTTP
+        /\bhttps\s*\./, // No HTTPS
     ],
 }
 

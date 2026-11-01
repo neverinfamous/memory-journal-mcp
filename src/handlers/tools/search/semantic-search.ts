@@ -81,13 +81,15 @@ export function getSemanticSearchTool(context: ToolContext): ToolDefinition[] {
                         results = await vectorManager.searchByEntryId(
                             input.entry_id,
                             internalLimit,
-                            input.similarity_threshold ?? 0.25
+                            input.similarity_threshold ?? 0.25,
+                            wsId
                         )
                     } else {
                         results = await vectorManager.search(
                             input.query ?? '',
                             internalLimit,
-                            input.similarity_threshold ?? 0.25
+                            input.similarity_threshold ?? 0.25,
+                            wsId
                         )
                     }
 

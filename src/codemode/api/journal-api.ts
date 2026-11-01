@@ -204,9 +204,49 @@ export class JournalApi {
         this.admin['getConfig'] = getConfigFn
         this.core['getConfig'] = getConfigFn
 
-        this.admin['registerProject'] = createRegisterProjectFn(this.core)
-        this.admin['updateProject'] = createUpdateProjectFn()
-        this.admin['deleteProject'] = createDeleteProjectFn()
+        const existingRegisterProject = this.admin['registerProject']
+        const existingUpdateProject = this.admin['updateProject']
+        const existingDeleteProject = this.admin['deleteProject']
+
+        if (typeof existingRegisterProject === 'function') {
+            const fallbackRegister = createRegisterProjectFn(this.core)
+            this.admin['registerProject'] = async (...args: unknown[]): Promise<unknown> => {
+                if (isRecord(args[0])) return await existingRegisterProject(args[0])
+                if (typeof args[0] === 'string') {
+                    return await existingRegisterProject({
+                        name: args[0],
+                        absolute_path: typeof args[1] === 'string' ? args[1] : '',
+                        ...(typeof args[2] === 'number' ? { project_number: args[2] } : {}),
+                    })
+                }
+                return await fallbackRegister(...args)
+            }
+        }
+        if (typeof existingUpdateProject === 'function') {
+            const fallbackUpdate = createUpdateProjectFn()
+            this.admin['updateProject'] = async (...args: unknown[]): Promise<unknown> => {
+                if (isRecord(args[0])) return await existingUpdateProject(args[0])
+                if (typeof args[0] === 'string') {
+                    return await existingUpdateProject({
+                        name: args[0],
+                        ...(typeof args[1] === 'string' && args[1] !== '' ? { new_name: args[1] } : {}),
+                        ...(typeof args[2] === 'string' && args[2] !== '' ? { absolute_path: args[2] } : {}),
+                        ...(typeof args[3] === 'number' ? { project_number: args[3] } : {}),
+                    })
+                }
+                return await fallbackUpdate(...args)
+            }
+        }
+        if (typeof existingDeleteProject === 'function') {
+            const fallbackDelete = createDeleteProjectFn()
+            this.admin['deleteProject'] = async (...args: unknown[]): Promise<unknown> => {
+                if (isRecord(args[0])) return await existingDeleteProject(args[0])
+                if (typeof args[0] === 'string') {
+                    return await existingDeleteProject({ name: args[0] })
+                }
+                return await fallbackDelete(...args)
+            }
+        }
 
         const listProjectsFn = createListProjectsFn(this.analytics)
         const getProjectFn = createGetProjectFn(listProjectsFn)

@@ -91,11 +91,14 @@ export async function searchDirectoryAsync(
         }
         for (const entry of entries) {
             if (results.length >= maxResults) break
+            if (entry.isSymbolicLink()) continue
             const fullPath = path.join(currentDir, entry.name)
             if (entry.isDirectory()) {
                 if (!IGNORED_DIRS.has(entry.name)) await traverse(fullPath)
             } else if (entry.isFile() && matchesFilePattern(entry.name, options.filePattern)) {
                 try {
+                    const stat = await fs.promises.stat(fullPath)
+                    if (stat.size > 2 * 1024 * 1024) continue
                     const content = await fs.promises.readFile(fullPath, 'utf-8')
                     scanContentLines(fullPath, content, matcher, results, maxResults)
                 } catch {
@@ -128,11 +131,14 @@ export function searchDirectory(
         }
         for (const entry of entries) {
             if (results.length >= maxResults) break
+            if (entry.isSymbolicLink()) continue
             const fullPath = path.join(currentDir, entry.name)
             if (entry.isDirectory()) {
                 if (!IGNORED_DIRS.has(entry.name)) traverse(fullPath)
             } else if (entry.isFile() && matchesFilePattern(entry.name, options.filePattern)) {
                 try {
+                    const stat = fs.statSync(fullPath)
+                    if (stat.size > 2 * 1024 * 1024) continue
                     const content = fs.readFileSync(fullPath, 'utf-8')
                     scanContentLines(fullPath, content, matcher, results, maxResults)
                 } catch {
@@ -310,8 +316,9 @@ export async function handleViewFile(
         }
     }
 
+    let stat: fs.Stats
     try {
-        await fs.promises.stat(resolved)
+        stat = await fs.promises.stat(resolved)
     } catch {
         return {
             success: false,
@@ -319,6 +326,15 @@ export async function handleViewFile(
             code: 'NOT_FOUND',
             category: 'filesystem',
             recoverable: true,
+        }
+    }
+    if (stat.size > 2 * 1024 * 1024) {
+        return {
+            success: false,
+            error: 'File exceeds maximum size limit of 2MB',
+            code: 'VALIDATION_ERROR',
+            category: 'validation',
+            recoverable: false,
         }
     }
 

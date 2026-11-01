@@ -47,16 +47,35 @@ export function createGetConfigFn(): () => Promise<{ PROJECT_REGISTRY: unknown[]
         })
 }
 
+const FORBIDDEN_PROJECT_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
+
+function isForbiddenProjectKey(name: string): boolean {
+    return name.trim().length === 0 || FORBIDDEN_PROJECT_KEYS.has(name.trim())
+}
+
+function isValidProjectPath(dirPath: string): boolean {
+    if (dirPath.trim().length === 0) return false
+    if (dirPath.includes('\0') || dirPath.startsWith('\\\\') || dirPath.startsWith('//')) return false
+    return path.isAbsolute(dirPath)
+}
+
 export function createRegisterProjectFn(
     coreApi: GroupApiRecord
-): (...args: unknown[]) => Promise<{ success: boolean; message: string }> {
-    return async (...args: unknown[]): Promise<{ success: boolean; message: string }> => {
+): (...args: unknown[]) => Promise<{ success: boolean; message?: string; error?: string }> {
+    return async (...args: unknown[]): Promise<{ success: boolean; message?: string; error?: string }> => {
         const name = safeString(args[0] ?? '')
         const absolutePath = safeString(args[1] ?? '')
         const projectNumber = typeof args[2] === 'number' ? args[2] : undefined
 
+        if (isForbiddenProjectKey(name)) {
+            return { success: false, error: `Invalid project name: '${name}'` }
+        }
+        if (!isValidProjectPath(absolutePath)) {
+            return { success: false, error: `Invalid project path: '${absolutePath}'. Must be a local absolute path.` }
+        }
+
         const { configPath, config, registry } = readRegistryConfig()
-        const entry: Record<string, unknown> = { path: absolutePath }
+        const entry: Record<string, unknown> = { path: path.resolve(absolutePath) }
         if (typeof projectNumber === 'number' && !Number.isNaN(projectNumber)) {
             entry['project_number'] = projectNumber
         }
@@ -99,13 +118,20 @@ export function createUpdateProjectFn(): (...args: unknown[]) => Promise<{
         const absolutePath = typeof args[2] === 'string' && args[2] !== '' ? args[2] : undefined
         const projectNumber = typeof args[3] === 'number' ? args[3] : undefined
 
+        if (isForbiddenProjectKey(name) || (newName !== undefined && isForbiddenProjectKey(newName))) {
+            return Promise.resolve({ success: false, error: 'Invalid project name.' })
+        }
+        if (absolutePath !== undefined && !isValidProjectPath(absolutePath)) {
+            return Promise.resolve({ success: false, error: `Invalid project path: '${absolutePath}'.` })
+        }
+
         const { configPath, config, registry } = readRegistryConfig()
-        const project = registry[name]
+        const project = Object.hasOwn(registry, name) ? registry[name] : undefined
         if (!project) {
             return Promise.resolve({ success: false, error: `🛠️ AUTONOMOUS HEALING: Project not found: '${name}'` })
         }
 
-        if (absolutePath !== undefined) project['path'] = absolutePath
+        if (absolutePath !== undefined) project['path'] = path.resolve(absolutePath)
         if (typeof projectNumber === 'number' && !Number.isNaN(projectNumber)) {
             project['project_number'] = projectNumber
         }
@@ -126,9 +152,12 @@ export function createDeleteProjectFn(): (...args: unknown[]) => Promise<{
 }> {
     return (...args: unknown[]): Promise<{ success: boolean; message?: string; error?: string }> => {
         const name = safeString(args[0] ?? '')
+        if (isForbiddenProjectKey(name)) {
+            return Promise.resolve({ success: false, error: `Invalid project name: '${name}'` })
+        }
         const { configPath, config, registry } = readRegistryConfig()
 
-        if (!registry[name]) {
+        if (!Object.hasOwn(registry, name) || !registry[name]) {
             return Promise.resolve({ success: false, error: `🛠️ AUTONOMOUS HEALING: Project not found: '${name}'` })
         }
 

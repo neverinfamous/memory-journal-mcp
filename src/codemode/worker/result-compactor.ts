@@ -19,11 +19,11 @@ export function compactOversizedResult(
     depth = 0,
     seen = new WeakSet()
 ): unknown {
-    if (depth > 6 || val === null || val === undefined) {
+    if (val === null || val === undefined || typeof val !== 'object') {
         return val
     }
-    if (typeof val !== 'object') {
-        return val
+    if (depth > 6) {
+        return '[MaxDepthExceeded]'
     }
     if (seen.has(val)) {
         return '[Circular]'
@@ -55,7 +55,12 @@ export function compactOversizedResult(
     }
 
     const compactedObj: Record<string, unknown> = {}
-    for (const [k, v] of Object.entries(val)) {
+    const entries = Object.entries(val as Record<string, unknown>)
+    const maxKeys = entries.length > 100 ? 100 : entries.length
+    for (let i = 0; i < maxKeys; i++) {
+        const entry = entries[i]
+        if (!entry) continue
+        const [k, v] = entry
         if (typeof v === 'string') {
             if (v.length > 400) {
                 compactedObj[k] =
@@ -68,6 +73,9 @@ export function compactOversizedResult(
         } else {
             compactedObj[k] = v
         }
+    }
+    if (entries.length > maxKeys) {
+        compactedObj['_omitted_keys_count'] = entries.length - maxKeys
     }
 
     if (depth === 0) {

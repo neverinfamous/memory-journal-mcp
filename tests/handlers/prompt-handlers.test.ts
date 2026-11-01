@@ -211,7 +211,7 @@ describe('Prompt Handlers', () => {
             )
             const fullText = fullRes.messages[0]?.content.text ?? ''
             expect(fullText).toContain('UNATTENDED FULL-DEPTH EXECUTION PROTOCOL')
-            expect(fullText).toContain('while (true)')
+            expect(fullText).toContain('for (let _page = 0; _page < 200; _page++)')
             expect(fullText).not.toContain('INTERACTIVE HANDOVER FOR COMPREHENSIVE MULTI-AGENT DOMAIN AUDIT')
         })
 

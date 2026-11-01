@@ -63,13 +63,13 @@ describe('Audit Resource', () => {
         expect(result.data).toContain('error_count: 1')
 
         // First Entry
-        expect(result.data).toContain('tool: create_entry')
+        expect(result.data).toContain('tool: "create_entry"')
         expect(result.data).toContain('token_estimate: 50')
         expect(result.data).toContain('args: {"test":"arg"}')
 
         // Second Entry
-        expect(result.data).toContain('tool: admin_command')
-        expect(result.data).toContain('error: Permission denied')
+        expect(result.data).toContain('tool: "admin_command"')
+        expect(result.data).toContain('error: "Permission denied"')
         expect(result.data).toContain('success: false')
     })
 })

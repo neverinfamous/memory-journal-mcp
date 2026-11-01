@@ -10,8 +10,194 @@ import { DEFAULT_SECURITY_CONFIG, type SecurityConfig, type ValidationResult } f
 import * as v8 from 'node:v8'
 
 // =============================================================================
-// Rate Limiter
+// Single-Pass Lexical Comment & String Stripper
 // =============================================================================
+
+const SENSITIVE_STRING_CONTENT = /^(?:constructor|__proto__|prototype)$/i
+
+/**
+ * Single-pass lexical scanner that strips JS comments and string literal contents
+ * in a single left-to-right pass while preserving:
+ * 1. `${...}` template literal interpolation expressions (so blocked patterns inside
+ *    `${...}` cannot evade static scanning)
+ * 2. String literals whose exact content is `constructor`, `__proto__`, or `prototype`
+ *    (so bracket-notation access checks like `['constructor']` remain detectable)
+ * 3. Comment markers inside string literals (preventing `"/*"` ... `"*" + "/"` or `"//"`
+ *    comment-stripping desynchronization bypasses)
+ */
+export function stripCommentsAndStrings(rawCode: string): string {
+    const code = rawCode.normalize('NFKC')
+    const len = code.length
+    let out = ''
+    let i = 0
+    let lastNonWsToken = ''
+
+    // Stack tracks brace depth inside template literal `${ ... }` interpolations.
+    // When a `}` is reached at braceDepth === 0 for the top of templateStack,
+    // the scanner resumes template literal scanning.
+    const templateBraceDepthStack: number[] = []
+
+    const canStartRegex = (prev: string): boolean => {
+        if (!prev) return true
+        if (/^[([{:;,=!?&|+-~*%^<>]$/.test(prev)) return true
+        return /^(?:return|typeof|instanceof|in|of|void|delete|throw|new|case|yield|await)$/.test(
+            prev
+        )
+    }
+
+    while (i < len) {
+        const ch = code[i] ?? ''
+        const next = i + 1 < len ? (code[i + 1] ?? '') : ''
+
+        // 1. Line comment: // ...
+        if (ch === '/' && next === '/') {
+            out += ' '
+            i += 2
+            while (i < len && code[i] !== '\n') {
+                i++
+            }
+            continue
+        }
+
+        // 2. Block comment: /* ... */
+        if (ch === '/' && next === '*') {
+            out += ' '
+            i += 2
+            while (i < len && !(code[i] === '*' && code[i + 1] === '/')) {
+                if (code[i] === '\n') out += '\n'
+                i++
+            }
+            if (i < len) i += 2
+            continue
+        }
+
+        // 2b. Regex literal: / ... /flags (prevents `/*` or `//` inside regex from desynchronizing comment stripping)
+        if (ch === '/' && next !== '/' && next !== '*' && canStartRegex(lastNonWsToken)) {
+            out += '/ /'
+            i++
+            let inCharClass = false
+            while (i < len) {
+                const c = code[i] ?? ''
+                if (c === '\\') {
+                    i += i + 1 < len ? 2 : 1
+                    continue
+                }
+                if (c === '[') {
+                    inCharClass = true
+                } else if (c === ']') {
+                    inCharClass = false
+                } else if (c === '/' && !inCharClass) {
+                    i++
+                    while (i < len && /[dgimsuvy]/.test(code[i] ?? '')) {
+                        i++
+                    }
+                    break
+                } else if (c === '\n') {
+                    break
+                }
+                i++
+            }
+            lastNonWsToken = '/'
+            continue
+        }
+
+        // 3. Single or double quoted string literal
+        if (ch === '"' || ch === "'") {
+            const quote = ch
+            i++
+            let content = ''
+            while (i < len) {
+                const c = code[i] ?? ''
+                if (c === '\\') {
+                    if (i + 1 < len) {
+                        content += code[i + 1] ?? ''
+                        i += 2
+                    } else {
+                        i++
+                    }
+                    continue
+                }
+                if (c === quote) {
+                    i++
+                    break
+                }
+                content += c
+                i++
+            }
+            if (SENSITIVE_STRING_CONTENT.test(content.trim())) {
+                out += `${quote}${content.trim()}${quote}`
+            } else {
+                out += `${quote}${quote}`
+            }
+            lastNonWsToken = quote
+            continue
+        }
+
+        // 4. Template literal opening or resumption after `${ ... }`
+        if (ch === '`' || (ch === '}' && templateBraceDepthStack.length > 0 && templateBraceDepthStack[templateBraceDepthStack.length - 1] === 0)) {
+            if (ch === '}') {
+                templateBraceDepthStack.pop()
+                out += ')`'
+            } else {
+                out += '`'
+            }
+            i++
+            let content = ''
+            while (i < len) {
+                const c = code[i] ?? ''
+                if (c === '\\') {
+                    if (i + 1 < len) {
+                        content += code[i + 1] ?? ''
+                        i += 2
+                    } else {
+                        i++
+                    }
+                    continue
+                }
+                if (c === '$' && code[i + 1] === '{') {
+                    // Enter interpolation expression: preserve code inside `${ ... }`
+                    out += '`' + '+('
+                    templateBraceDepthStack.push(0)
+                    lastNonWsToken = '('
+                    i += 2
+                    break
+                }
+                if (c === '`') {
+                    if (SENSITIVE_STRING_CONTENT.test(content.trim())) {
+                        out += `${content.trim()}\``
+                    } else {
+                        out += '`'
+                    }
+                    lastNonWsToken = '`'
+                    i++
+                    break
+                }
+                content += c
+                i++
+            }
+            continue
+        }
+
+        // Track nested `{` and `}` when inside a template literal `${ ... }` expression
+        if (templateBraceDepthStack.length > 0) {
+            const topIdx = templateBraceDepthStack.length - 1
+            const currentDepth = templateBraceDepthStack[topIdx] ?? 0
+            if (ch === '{') {
+                templateBraceDepthStack[topIdx] = currentDepth + 1
+            } else if (ch === '}' && currentDepth > 0) {
+                templateBraceDepthStack[topIdx] = currentDepth - 1
+            }
+        }
+
+        if (!/\s/.test(ch)) {
+            lastNonWsToken = ch
+        }
+        out += ch
+        i++
+    }
+
+    return out
+}
 
 interface RateLimitEntry {
     count: number
@@ -65,18 +251,9 @@ export class CodeModeSecurityManager {
             errors.push('Code cannot be empty')
         }
 
-        const SENSITIVE_BRACKETS = /^['"`](?:constructor|__proto__)['"`]$/i
-        const stripString = (match: string): string => (SENSITIVE_BRACKETS.test(match) ? match : '""')
-
-        // Normalize and strip comments/template literals before pattern matching
-        // (e.g., the word "process." in a Markdown string triggering the process.env block).
-        const strippedCode = code
-            .normalize('NFKC')
-            .replace(/\/\*[\s\S]*?\*\//g, ' ') // Block comments
-            .replace(/\/\/[^\n]*/g, ' ') // Line comments
-            .replace(/`(?:[^`\\]|\\.)*`/g, (m) => (SENSITIVE_BRACKETS.test(m) ? m : '``')) // Template literals
-            .replace(/"(?:[^"\\]|\\.)*"/g, stripString) // Double-quoted strings
-            .replace(/'(?:[^'\\]|\\.)*'/g, stripString) // Single-quoted strings
+        // Single-pass lexical scan to strip comments and string contents while preserving
+        // template literal `${...}` expressions and sensitive bracket-access strings
+        const strippedCode = stripCommentsAndStrings(code)
 
         // Blocked pattern scan
         for (const pattern of this.config.blockedPatterns) {

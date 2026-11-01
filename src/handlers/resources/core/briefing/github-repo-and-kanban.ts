@@ -102,7 +102,7 @@ export async function fetchCiStatus(
                 ...(config.workflowCount > 0
                     ? {
                           runs: runs.slice(0, config.workflowCount).map((r) => ({
-                              name: r.name,
+                              name: markUntrustedContentInline(r.name),
                               conclusion:
                                   r.status !== 'completed'
                                       ? 'pending'
@@ -116,7 +116,7 @@ export async function fetchCiStatus(
 
         return {
             status,
-            ciName: latestRun?.name,
+            ciName: latestRun?.name ? markUntrustedContentInline(latestRun.name) : undefined,
             ciUpdatedAt: latestRun?.updatedAt,
             workflowSummary,
         }
@@ -222,7 +222,7 @@ export async function fetchMilestones(
             items: activeMilestones.map((m) => {
                 const pct = milestoneCompletionPct(m.openIssues, m.closedIssues)
                 return {
-                    title: m.title,
+                    title: markUntrustedContentInline(m.title),
                     progress: `${String(pct)}%`,
                     dueOn: m.dueOn,
                 }

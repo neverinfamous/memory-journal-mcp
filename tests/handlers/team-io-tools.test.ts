@@ -23,13 +23,14 @@ vi.mock('../../src/markdown/index.js', () => ({
 }))
 
 import { getTeamIoTools } from '../../src/handlers/tools/team/io-tools.js'
-import { resolveAuthor } from '../../src/utils/security-utils.js'
+import { resolveAuthenticatedAuthor } from '../../src/utils/security-utils.js'
 
 vi.mock('../../src/utils/security-utils.js', async (importOriginal) => {
     const actual = await importOriginal<typeof import('../../src/utils/security-utils.js')>()
     return {
         ...actual,
         resolveAuthor: vi.fn().mockReturnValue('TestAuthor'),
+        resolveAuthenticatedAuthor: vi.fn().mockReturnValue('TestAuthor'),
         assertSafeDirectoryPath: vi.fn(),
         assertAllowedPathBoundaries: vi.fn(),
     }
@@ -164,7 +165,7 @@ describe('getTeamIoTools', () => {
 
             expect(result['success']).toBe(true)
             expect(result['created']).toBe(1)
-            expect(resolveAuthor).toHaveBeenCalled()
+            expect(resolveAuthenticatedAuthor).toHaveBeenCalled()
         })
     })
 })

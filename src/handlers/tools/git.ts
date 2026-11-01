@@ -402,7 +402,12 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
 
                         try {
                             const fullPath = path.resolve(workspaceRoot, anchor.anchorPath)
-                            if (!fullPath.startsWith(workspaceRoot)) {
+                            const relPath = path.relative(workspaceRoot, fullPath)
+                            if (
+                                relPath === '..' ||
+                                relPath.startsWith('..' + path.sep) ||
+                                path.isAbsolute(relPath)
+                            ) {
                                 throw new Error(`Path traversal detected: ${anchor.anchorPath}`)
                             }
 

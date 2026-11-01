@@ -44,38 +44,47 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                 const start = performance.now()
 
                 try {
-                    const input = ExecuteCodeSchema.parse(params)
-                    const healingEnabled = context.config?.agentHealing !== false
-
-                    const payloadRes = resolveExecutionPayload(input, params, healingEnabled, start)
-
-                    // 1. Configuration Validation
+                    // 1. Configuration Validation (must precede any payload synthesis or regex healing)
                     if (context.config?.codemodeEnabled !== true) {
                         throw new ConfigurationError('Code Mode is disabled in the server configuration.')
                     }
 
-                    if ('earlyReturn' in payloadRes) {
-                        return payloadRes.earlyReturn
-                    }
-                    const executionCode = payloadRes.executionCode
-
-                    // 1b. Security Validation
-                    const validation = securityManager.validateCode(executionCode)
-                    if (!validation.valid) {
-                        return {
-                            success: false,
-                            error: `Security validation failed: ${validation.errors.join(', ')}`,
-                            project_id: undefined,
-                            executionTimeMs: 0,
-                        }
-                    }
-
-                    // 1c. Rate Limiting
+                    // 1b. Rate Limiting (must precede expensive payload synthesis)
                     const clientId = context.auth?.sub ?? context.auth?.subject ?? 'default'
                     if (!securityManager.checkRateLimit(clientId)) {
                         return {
                             success: false,
                             error: 'Rate limit exceeded: Maximum code executions per minute reached.',
+                            project_id: undefined,
+                            executionTimeMs: 0,
+                        }
+                    }
+
+                    const input = ExecuteCodeSchema.parse(params)
+                    const healingEnabled = context.config?.agentHealing !== false
+
+                    const rawCodeCandidate = typeof input.code === 'string' ? input.code : typeof input.script === 'string' ? input.script : undefined
+                    if (rawCodeCandidate !== undefined && Buffer.byteLength(rawCodeCandidate, 'utf-8') > securityManager.getConfig().maxCodeLength) {
+                        return {
+                            success: false,
+                            error: `Security validation failed: Code exceeds maximum length of ${String(securityManager.getConfig().maxCodeLength)} bytes`,
+                            project_id: undefined,
+                            executionTimeMs: 0,
+                        }
+                    }
+
+                    const payloadRes = resolveExecutionPayload(input, params, healingEnabled, start)
+                    if ('earlyReturn' in payloadRes) {
+                        return payloadRes.earlyReturn
+                    }
+                    const executionCode = payloadRes.executionCode
+
+                    // 1c. Security Validation
+                    const validation = securityManager.validateCode(executionCode)
+                    if (!validation.valid) {
+                        return {
+                            success: false,
+                            error: `Security validation failed: ${validation.errors.join(', ')}`,
                             project_id: undefined,
                             executionTimeMs: 0,
                         }
@@ -88,8 +97,15 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                     }
                     const { sessionContext, projectId, numericProjectId, workspaceId } = sessionRes
 
-                    // 2b. Fetch all tools and enforce Readonly Mode
+                    // 2b. Fetch all tools and enforce Tool Filter & Readonly Mode
                     let tools = collectNonCodeModeTools(sessionContext)
+                    if (
+                        context.config?.codemodeInternalFullAccess !== true &&
+                        context.config?.filterConfig?.enabledTools !== undefined
+                    ) {
+                        const enabledSet = context.config.filterConfig.enabledTools
+                        tools = tools.filter((t) => enabledSet.has(t.name))
+                    }
                     let isGlobalReadonly = false
                     if (context.config?.filterConfig?.raw !== undefined && context.config.filterConfig.raw !== '') {
                         const rawFilter = context.config.filterConfig.raw
@@ -97,7 +113,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                             isGlobalReadonly = true
                         }
                     }
-                    const isSandboxReadonly = input.readonly ?? isGlobalReadonly
+                    const isSandboxReadonly = Boolean(input.readonly) || isGlobalReadonly
                     if (isSandboxReadonly) {
                         tools = tools.filter((t) => t.annotations?.readOnlyHint === true)
                     }
@@ -140,7 +156,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                                     schemas,
                                     input.timeout ?? input.timeout_ms,
                                     userContext,
-                                    input.dry_run,
+                                    isSandboxReadonly,
                                     requestedMaxResultSize
                                 )
                             })
@@ -151,7 +167,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                                 schemas,
                                 input.timeout ?? input.timeout_ms,
                                 userContext,
-                                input.dry_run,
+                                isSandboxReadonly,
                                 requestedMaxResultSize
                             )
                         }

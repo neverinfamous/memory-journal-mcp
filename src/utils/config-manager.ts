@@ -14,6 +14,7 @@ export interface DynamicConfig {
 
 export class ConfigManager extends EventEmitter {
     private config: DynamicConfig
+    private readonly initialCodemodeFullAccess: boolean
     private configFilePath?: string | undefined
     private watcher?: fs.FSWatcher
     private isWriting = false
@@ -21,6 +22,7 @@ export class ConfigManager extends EventEmitter {
     constructor(initialConfig: DynamicConfig, configFilePath?: string) {
         super()
         this.config = { ...initialConfig }
+        this.initialCodemodeFullAccess = Boolean(initialConfig.codemodeInternalFullAccess)
         this.configFilePath = configFilePath
 
         if (this.configFilePath && fs.existsSync(this.configFilePath)) {
@@ -137,7 +139,10 @@ export class ConfigManager extends EventEmitter {
                 updates.rawToolFilter = typeof parsed['toolFilter'] === 'string' ? parsed['toolFilter'] : undefined
             }
             if ('codemodeInternalFullAccess' in parsed) {
-                updates.codemodeInternalFullAccess = typeof parsed['codemodeInternalFullAccess'] === 'boolean' ? parsed['codemodeInternalFullAccess'] : undefined
+                const requested = typeof parsed['codemodeInternalFullAccess'] === 'boolean' ? parsed['codemodeInternalFullAccess'] : undefined
+                if (requested === false || (requested === true && this.initialCodemodeFullAccess)) {
+                    updates.codemodeInternalFullAccess = requested
+                }
             }
 
             // Update briefing config if present

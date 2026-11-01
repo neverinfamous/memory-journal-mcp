@@ -14,6 +14,7 @@ import type { ServerOptions } from './types.js'
 import { initializeDependencies } from './initialization.js'
 import { createServerInstance } from './tool-registration.js'
 import { startMetricsServer } from '../../observability/metrics-server.js'
+import type { DynamicConfig } from '../../utils/config-manager.js'
 
 export async function createServer(options: ServerOptions): Promise<void> {
     const context = await initializeDependencies(options);
@@ -75,7 +76,11 @@ export async function createServer(options: ServerOptions): Promise<void> {
     const prompts = getPrompts()
 
     // Subscribe to config changes to send notifications
-    configManager.on('changed', () => {
+    configManager.on('changed', (newConfig: DynamicConfig) => {
+        baseConfig.filterConfig = newConfig.toolFilterConfig
+        baseConfig.briefingConfig = newConfig.briefingConfig
+        customToolHandlerConfig.filterConfig = newConfig.toolFilterConfig
+        customToolHandlerConfig.briefingConfig = newConfig.briefingConfig
         // Send tool list changed notification if using SSE/HTTP
         void globalSubscriptionManager.notifyResourceUpdated('memory://briefing')
         try {

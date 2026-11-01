@@ -11,6 +11,7 @@ describe('Team Alias Tools', () => {
         mockContext = {
             resolvedAuthor: 'test_admin',
             teamDb: {
+                getTeamMember: vi.fn().mockReturnValue(null),
                 resolveTeamRole: vi.fn().mockReturnValue(null), // By default, aliases are not existing members
                 addAuthorAlias: vi.fn(),
                 removeAuthorAlias: vi.fn(),
@@ -42,7 +43,7 @@ describe('Team Alias Tools', () => {
         })
 
         it('rejects if alias is an existing member role', async () => {
-            mockContext.teamDb!.resolveTeamRole = vi.fn().mockReturnValue('viewer')
+            mockContext.teamDb!.getTeamMember = vi.fn().mockReturnValue({ author: 'existing_user', role: 'viewer' })
             const tool = getTool('team_add_author_alias')
             
             const result = await tool.handler({ alias: 'existing_user', canonical_author: 'christopher' }) as any

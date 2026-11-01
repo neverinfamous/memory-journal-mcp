@@ -26,7 +26,10 @@ export function enforceAccessBoundary(
         capabilities?.requiresTeamScope ??
         (targetType === 'resource'
             ? targetName.startsWith('memory://team/')
-            : targetName.startsWith('team_'))
+            : targetName.startsWith('team_') ||
+              targetName.startsWith('team-') ||
+              targetName.includes('-team-') ||
+              targetName.includes('_team_'))
 
     const isAdmin =
         capabilities?.requiresAdminScope ??
@@ -36,8 +39,7 @@ export function enforceAccessBoundary(
     if (isTeam) {
         const author = resolveAuthor()
         const hasAuthClaim = auth?.authenticated === true && auth?.claims !== undefined
-        const bypassCodeMode = process.env['CODEMODE_INTERNAL_FULL_ACCESS'] === 'true'
-        if (author === 'unknown' && !hasAuthClaim && !bypassCodeMode) {
+        if (author === 'unknown' && !hasAuthClaim) {
             logger.warning(`Access to team ${targetType} denied: unauthenticated`, {
                 module: 'AUTH',
                 operation: 'fail-closed',

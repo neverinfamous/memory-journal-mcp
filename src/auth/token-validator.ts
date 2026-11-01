@@ -91,6 +91,7 @@ export class TokenValidator {
                 issuer: this.issuer,
                 audience: this.audience,
                 clockTolerance: this.clockTolerance,
+                algorithms: ['RS256', 'RS384', 'RS512', 'ES256', 'ES384', 'ES512', 'EdDSA'],
                 // jose only checks `exp` when it is present. Require it so a validly signed token
                 // without an expiry cannot become a permanent credential.
                 requiredClaims: ['exp'],

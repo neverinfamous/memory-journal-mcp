@@ -160,6 +160,23 @@ export class HttpTransport {
                     })
                     return
                 }
+                let receivedBytes = 0
+                req.on('data', (chunk: Buffer) => {
+                    receivedBytes += chunk.length
+                    if (receivedBytes > maxBody) {
+                        if (!res.headersSent) {
+                            res.status(413).json({
+                                jsonrpc: '2.0',
+                                error: {
+                                    code: -32000,
+                                    message: 'Payload Too Large: Maximum request body size exceeded',
+                                },
+                                id: null,
+                            })
+                        }
+                        req.destroy()
+                    }
+                })
                 next()
             } else {
                 jsonParser(req, res, next)
@@ -304,10 +321,31 @@ export class HttpTransport {
 
         const propagateContextMiddleware: RequestHandler = (req, _res, next) => {
             const reqRecord = req as unknown as Record<string, unknown>
-            const d = reqRecord[['a', 'u', 't', 'h'].join('')] as TokenClaims | undefined
+            const tokenClaims = reqRecord['tokenClaims'] as TokenClaims | undefined
+            const authInfo = reqRecord['auth'] as
+                | (TokenClaims & { clientId?: string })
+                | undefined
 
-            if (d !== undefined && d !== null) {
-                propagateCtx({ authenticated: true, claims: d, scopes: d.scopes }, next)
+            if (tokenClaims !== undefined && tokenClaims !== null) {
+                propagateCtx(
+                    { authenticated: true, claims: tokenClaims, scopes: tokenClaims.scopes },
+                    next
+                )
+            } else if (authInfo !== undefined && authInfo !== null) {
+                const sub =
+                    authInfo.sub ??
+                    (typeof authInfo['subject'] === 'string' ? authInfo['subject'] : undefined) ??
+                    authInfo.clientId ??
+                    'unknown'
+                const normalizedClaims: TokenClaims = {
+                    ...authInfo,
+                    sub,
+                    scopes: Array.isArray(authInfo.scopes) ? authInfo.scopes : [],
+                }
+                propagateCtx(
+                    { authenticated: true, claims: normalizedClaims, scopes: normalizedClaims.scopes },
+                    next
+                )
             } else {
                 next()
             }
@@ -336,8 +374,6 @@ export class HttpTransport {
             logger.debug('404 Not Found', {
                 method: req.method,
                 path: req.path,
-                query: req.query,
-                headers: req.headers,
             })
             res.status(404).json({ error: 'Not found' })
         })

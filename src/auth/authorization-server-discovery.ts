@@ -84,19 +84,21 @@ export class AuthorizationServerDiscovery {
             const { promises: dns } = await import('node:dns')
             const { address } = await dns.lookup(host)
 
+            const normalizedAddr = address.toLowerCase().replace(/^::ffff:/, '')
             const isLoopback =
-                address === 'localhost' ||
-                address === '127.0.0.1' ||
-                address === '::1' ||
-                address.startsWith('127.') ||
-                address === '0.0.0.0' ||
-                address === '::'
+                normalizedAddr === 'localhost' ||
+                normalizedAddr === '127.0.0.1' ||
+                normalizedAddr === '::1' ||
+                normalizedAddr.startsWith('127.') ||
+                normalizedAddr === '0.0.0.0' ||
+                normalizedAddr === '::'
             const isPrivateV4 =
-                address.startsWith('10.') ||
-                address.startsWith('192.168.') ||
-                /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(address)
-            const isLinkLocal = address.startsWith('169.254.')
-            const isPrivateV6 = address.startsWith('fc') || address.startsWith('fd')
+                normalizedAddr.startsWith('10.') ||
+                normalizedAddr.startsWith('192.168.') ||
+                /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(normalizedAddr)
+            const isLinkLocal =
+                normalizedAddr.startsWith('169.254.') || normalizedAddr.startsWith('fe80:')
+            const isPrivateV6 = normalizedAddr.startsWith('fc') || normalizedAddr.startsWith('fd')
 
             if (isLoopback || isPrivateV4 || isLinkLocal || isPrivateV6) {
                 throw new ConfigurationError(
@@ -149,7 +151,17 @@ export class AuthorizationServerDiscovery {
                             return
                         }
                         const chunks: Buffer[] = []
-                        res.on('data', (d: Buffer) => chunks.push(d))
+                        let totalBytes = 0
+                        const maxBytes = 1024 * 1024 // 1 MB cap
+                        res.on('data', (d: Buffer) => {
+                            totalBytes += d.length
+                            if (totalBytes > maxBytes) {
+                                req.destroy()
+                                reject(new ConfigurationError('Authorization server metadata response exceeded 1MB limit'))
+                                return
+                            }
+                            chunks.push(d)
+                        })
                         res.on('end', () => {
                             try {
                                 resolve(

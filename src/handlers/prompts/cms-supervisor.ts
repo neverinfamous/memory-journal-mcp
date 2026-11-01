@@ -128,8 +128,9 @@ ${markUntrustedContent(deletedSnippet)}
 > [!IMPORTANT]
 > **LOAD OPTIMIZATION INVARIANT (DIRTY-TREE CONDITIONAL SINGLE-PASS VALIDATION GATE)**:
 > Full-suite validation (\`lint\`, \`typecheck\`, \`build\`, \`vitest\`, \`playwright\`) is resource-intensive and MUST ONLY run when repository files have actually been modified.
+> **HITL CODE MODIFICATION GUARDRAIL**: Do NOT modify executable source code or global environment files without explicit user approval unless running in an explicitly approved autonomous maintenance session.
 
-1. Apply all code, schema, prompt, or documentation fixes in a single cohesive batch.
+1. Apply all approved code, schema, prompt, or documentation fixes in a single cohesive batch.
 2. Check working tree status via \`bun .\\.agents\\scripts\\get-git-history-json.ts --uncommitted --stats\`.
 3. **If \`0\` files are modified/untracked in \`memory-journal-mcp\`**:
    - **SKIP** \`pnpm run lint\`, \`pnpm run typecheck\`, \`pnpm run build\`, \`npx vitest run\`, and \`npx playwright test\` completely! Proceed directly to Phase D.

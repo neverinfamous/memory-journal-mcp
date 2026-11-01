@@ -226,7 +226,9 @@ describe('buildGitHubSection', () => {
 
         expect(result!.workflowSummary).toBeDefined()
         expect(result!.workflowSummary!.runs).toHaveLength(2)
-        expect(result!.workflowSummary!.runs![0]!.name).toBe('CI')
+        expect(result!.workflowSummary!.runs![0]!.name).toBe(
+            '<untrusted_remote_content>CI</untrusted_remote_content>'
+        )
         expect(result!.workflowSummary!.runs![0]!.conclusion).toBe('success')
     })
 
@@ -282,7 +284,9 @@ describe('buildGitHubSection', () => {
         const result = await buildGitHubSection(github as never, defaultConfig() as never)
 
         expect(result!.milestones).toHaveLength(1)
-        expect(result!.milestones[0]!.title).toBe('v1.0')
+        expect(result!.milestones[0]!.title).toBe(
+            '<untrusted_remote_content>v1.0</untrusted_remote_content>'
+        )
         expect(result!.milestones[0]!.progress).toContain('%')
     })
 

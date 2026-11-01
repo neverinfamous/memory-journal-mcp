@@ -107,8 +107,8 @@ export class EntriesManager {
         return updateEntry(this.sharedContext, id, input)
     }
 
-    deleteEntry(id: number, permanent = false): boolean {
-        return deleteEntry(this.sharedContext, id, permanent)
+    deleteEntry(id: number, permanent = false, workspaceId?: string): boolean {
+        return deleteEntry(this.sharedContext, id, permanent, workspaceId)
     }
 
     createEntries(inputs: CreateEntryInput[]): { created: JournalEntry[]; errors: { index: number; error: Error }[] } {
@@ -144,8 +144,8 @@ export class EntriesManager {
         return updateEntries(this.sharedContext, updates)
     }
 
-    deleteEntries(ids: number[], permanent = false): { deleted: number[]; notFound: number[]; errors: { id: number; error: Error }[] } {
-        return deleteEntries(this.sharedContext, ids, permanent)
+    deleteEntries(ids: number[], permanent = false, workspaceId?: string): { deleted: number[]; notFound: number[]; errors: { id: number; error: Error }[] } {
+        return deleteEntries(this.sharedContext, ids, permanent, workspaceId)
     }
 
     getRecentEntries(limit = 10, isPersonal?: boolean, sortBy?: SortBy, cursor?: string, includeArchived?: boolean, workspaceId?: string, projectNumber?: number, offset?: number): { entries: JournalEntry[]; nextCursor?: string } {
@@ -241,8 +241,8 @@ export class EntriesManager {
         return getEntryHistory(this.sharedContext, id)
     }
 
-    restoreEntry(id: number): boolean {
-        return restoreEntry(this.sharedContext, id)
+    restoreEntry(id: number, workspaceId?: string): boolean {
+        return restoreEntry(this.sharedContext, id, workspaceId)
     }
 
     getDeletedEntries(options?: { limit?: number; offset?: number; workspaceId?: string }): { entries: JournalEntry[]; count: number } {

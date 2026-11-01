@@ -106,13 +106,17 @@ export function resolveProjectContext(
 ): ResolvedContext {
     const registry = config?.projectRegistry ?? loadProjectRegistryFromConfig()
 
+    // Reject internal wildcard sentinel '*' from external input so it falls through to normal resolution
+    const sanitizedWorkspaceId =
+        input.workspace_id === '*' ? undefined : input.workspace_id
+
     // 1. Truly explicit non-default workspace_id provided
     if (
-        input.workspace_id !== undefined &&
-        input.workspace_id !== null &&
-        input.workspace_id !== 'default'
+        sanitizedWorkspaceId !== undefined &&
+        sanitizedWorkspaceId !== null &&
+        sanitizedWorkspaceId !== 'default'
     ) {
-        let wsId = input.workspace_id
+        let wsId = sanitizedWorkspaceId
         const canonicalKey = findCanonicalRegistryKey(wsId, registry)
         if (canonicalKey) {
             wsId = canonicalKey
@@ -210,7 +214,7 @@ export function resolveProjectContext(
 
     // 4. Explicit input.project_number fallback (when no conflicting registry workspace matched)
     if (input.project_number !== undefined && input.project_number !== null) {
-        let wsId = input.workspace_id
+        let wsId = sanitizedWorkspaceId
         if ((!wsId || wsId === 'default') && registry) {
             for (const [key, entry] of Object.entries(registry)) {
                 if (entry.project_number === input.project_number) {
@@ -227,7 +231,7 @@ export function resolveProjectContext(
 
     // 5. CWD / Config Fallback
     const cwdProjNum = resolveProjectNumberFromPath(process.cwd())
-    let resolvedWsId = input.workspace_id
+    let resolvedWsId = sanitizedWorkspaceId
     if ((!resolvedWsId || resolvedWsId === 'default') && cwdProjNum !== undefined && registry) {
         for (const [key, entry] of Object.entries(registry)) {
             if (entry.project_number === cwdProjNum) {

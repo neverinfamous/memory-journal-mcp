@@ -45,6 +45,11 @@ export class MembersManager {
 
     addMember(author: string, role: TeamRole, addedBy?: string, displayName?: string): TeamMember {
         try {
+            if (!this.isRbacActive() && role !== 'admin') {
+                throw new QueryError(
+                    `First team member must be bootstrapped with the 'admin' role (received '${role}')`
+                )
+            }
             const existing = this.getMember(author)
             if (existing) {
                 throw new QueryError(`Failed to add team member: Member already exists (${author})`)

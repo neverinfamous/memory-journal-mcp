@@ -52,22 +52,27 @@ export function checkSchemaAcceptsKey(schema: unknown, key: string): boolean {
     return false
 }
 
-export function deepCamelToSnake(obj: unknown): unknown {
-    if (Array.isArray(obj)) return obj.map(deepCamelToSnake)
+const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
+
+export function deepCamelToSnake(obj: unknown, depth = 0): unknown {
+    if (depth > 12) return obj
+    if (Array.isArray(obj)) return obj.map((item) => deepCamelToSnake(item, depth + 1))
     if (isRecord(obj)) {
         const newObj: Record<string, unknown> = {}
         for (const [k, v] of Object.entries(obj)) {
+            if (FORBIDDEN_KEYS.has(k)) continue
             const snakeKey = k.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
+            if (FORBIDDEN_KEYS.has(snakeKey)) continue
             if (snakeKey === 'id' && !('entry_id' in obj)) {
-                newObj['entry_id'] = deepCamelToSnake(v)
+                newObj['entry_id'] = deepCamelToSnake(v, depth + 1)
                 continue
             }
             if (snakeKey === 'ids' && !('entry_ids' in obj)) {
-                const vSnake = deepCamelToSnake(v)
+                const vSnake = deepCamelToSnake(v, depth + 1)
                 newObj['entry_ids'] = Array.isArray(vSnake) ? vSnake : [vSnake]
                 continue
             }
-            newObj[snakeKey] = deepCamelToSnake(v)
+            newObj[snakeKey] = deepCamelToSnake(v, depth + 1)
         }
         return newObj
     }
@@ -196,7 +201,8 @@ export function createSecureDispatcher(
             const paramsObj = { ...finalParams }
             if (paramsObj['expected_version'] === undefined && typeof paramsObj['entry_id'] === 'number') {
                 const entryId = paramsObj['entry_id']
-                const existingEntry = sessionContext.teamDb?.getEntryById(entryId) ?? sessionContext.db.getEntryById(entryId)
+                const targetDb = toolName.startsWith('team_') ? sessionContext.teamDb : sessionContext.db
+                const existingEntry = targetDb?.getEntryById(entryId)
                 if (existingEntry !== null && existingEntry !== undefined && 'version' in existingEntry) {
                     paramsObj['expected_version'] = existingEntry.version
                 }
@@ -313,11 +319,14 @@ export async function resolveCodeModeSessionContext(
     if (projectId !== undefined && sessionContext.config?.projectRegistry !== undefined) {
         const registryEntry = Object.values(sessionContext.config.projectRegistry).find((r) => r.project_number === projectId)
         if (registryEntry?.path !== undefined && registryEntry.path !== '') {
-            try {
-                const injectedGithub = getGitHubIntegration(registryEntry.path, undefined, process.env['GITHUB_TOKEN'])
-                sessionContext = { ...sessionContext, github: injectedGithub }
-            } catch {
-                // Ignore injection failures; tools will fallback to global context or throw
+            const isSameAsCwd = path.resolve(registryEntry.path).toLowerCase() === path.resolve(process.cwd()).toLowerCase()
+            if (context.config?.codemodeInternalFullAccess === true || isSameAsCwd) {
+                try {
+                    const injectedGithub = getGitHubIntegration(registryEntry.path, undefined, process.env['GITHUB_TOKEN'])
+                    sessionContext = { ...sessionContext, github: injectedGithub }
+                } catch {
+                    // Ignore injection failures; tools will fallback to global context or throw
+                }
             }
         }
     }

@@ -91,14 +91,14 @@ export function getAuditResourceDef(getLogger: () => AuditLogger | null): Intern
                 .map((e) => {
                     const parts: string[] = [
                         `- timestamp: ${e.timestamp}`,
-                        `  tool: ${e.tool}`,
+                        `  tool: ${JSON.stringify(e.tool)}`,
                         `  scope: ${e.scope}`,
                         `  category: ${e.category}`,
                         `  duration_ms: ${String(e.durationMs)}`,
                         `  success: ${String(e.success)}`,
                     ]
                     if (e.error) {
-                        parts.push(`  error: ${e.error}`)
+                        parts.push(`  error: ${JSON.stringify(e.error)}`)
                     }
                     if (e.tokenEstimate !== undefined) {
                         parts.push(`  token_estimate: ${String(e.tokenEstimate)}`)

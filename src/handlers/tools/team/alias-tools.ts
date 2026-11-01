@@ -142,9 +142,9 @@ function handleAddAuthorAlias(context: ToolContext) {
             }
             const { alias, canonical_author } = AddAuthorAliasSchema.parse(params)
 
-            // Check if the alias is actually an existing canonical member role
-            const role = teamDb.resolveTeamRole(alias)
-            if (role) {
+            // Check if the alias is actually an existing canonical member
+            const existingMember = teamDb.getTeamMember(alias)
+            if (existingMember !== null) {
                 throw new ValidationError(
                     `Cannot alias '${alias}' because it is an existing team member with a role`,
                     { alias }

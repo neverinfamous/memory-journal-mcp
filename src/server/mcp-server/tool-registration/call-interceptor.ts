@@ -25,6 +25,7 @@ import { TOOL_GROUPS } from '../../../filtering/tool-constants.js'
 import type { PromptDefinition } from '../../registration.js'
 import { logAgentIssue } from '../../../utils/issue-logger.js'
 import { applyArgInterceptions } from '../../../codemode/param-normalizer.js'
+import { enforceAccessBoundary } from '../../../auth/validation.js'
 import type { ServerContext, ServerOptions } from '../types.js'
 import type { ToolRegistration, ToolHandlerConfig, ToolContext } from '../../../types/index.js'
 import type { RequestHandlerMap } from './list-interceptor.js'
@@ -52,15 +53,20 @@ const ALIASED_LIST_DIR_NAMES = new Set(
     DUMMY_DIR_LIST_TOOL_NAMES.filter((name) => name !== 'ls' && name !== 'dir')
 )
 
-function deepCamelToSnake(obj: unknown): unknown {
-    if (Array.isArray(obj)) return obj.map(deepCamelToSnake)
+const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
+
+function deepCamelToSnake(obj: unknown, depth = 0): unknown {
+    if (depth > 12) return obj
+    if (Array.isArray(obj)) return obj.map((item) => deepCamelToSnake(item, depth + 1))
     if (obj !== null && typeof obj === 'object') {
         const newObj: Record<string, unknown> = {}
         for (const [k, v] of Object.entries(obj)) {
+            if (FORBIDDEN_KEYS.has(k)) continue
             const snakeKey = k
                 .replace(/^[A-Z]/, (letter) => letter.toLowerCase())
                 .replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
-            newObj[snakeKey] = deepCamelToSnake(v)
+            if (FORBIDDEN_KEYS.has(snakeKey)) continue
+            newObj[snakeKey] = deepCamelToSnake(v, depth + 1)
         }
         return newObj
     }
@@ -147,6 +153,7 @@ async function tryAutonomousUnknownToolFallback(
     }
 
     if (matchingPrompt !== undefined) {
+        enforceAccessBoundary(matchingPrompt.name, 'prompt', undefined, runtime.auditLogger)
         const res = await handlePrompt(toolArgs, requestedTool, toolContext)
         if (isSuccessObject(res)) return formatSuccessPayload(res)
     }
@@ -156,19 +163,23 @@ async function tryAutonomousUnknownToolFallback(
         requestedTool === 'mjReadResource' ||
         requestedTool.startsWith('memory://')
     ) {
+        enforceAccessBoundary('read_resource', 'tool', undefined, runtime.auditLogger)
         const res = await handleReadResource(toolArgs, requestedTool, toolContext)
         if (isSuccessObject(res)) return formatSuccessPayload(res)
     }
 
     if (matchesSuffixes(requestedTool, DUMMY_LIST_RESOURCE_TOOL_NAMES, ['_list_resources', 'ListResources'])) {
+        enforceAccessBoundary('list_resources', 'tool', undefined, runtime.auditLogger)
         return formatSuccessPayload(handleListResources(requestedTool))
     }
 
     if (matchesSuffixes(requestedTool, DUMMY_LIST_PROMPT_TOOL_NAMES, ['_list_prompts', 'ListPrompts'])) {
+        enforceAccessBoundary('list_prompts', 'tool', undefined, runtime.auditLogger)
         return formatSuccessPayload(handleListPrompts(requestedTool))
     }
 
     if (matchesSuffixes(requestedTool, DUMMY_LIST_TOOL_NAMES, ['_list_tools', 'ListTools'])) {
+        enforceAccessBoundary('list_tools', 'tool', undefined, runtime.auditLogger)
         const enabledSet = currentConfig.toolFilterConfig?.enabledTools ?? allToolNames
         const toolsList = allTools
             .filter((t) => enabledSet.has(t.name))
@@ -181,11 +192,13 @@ async function tryAutonomousUnknownToolFallback(
     }
 
     if (matchesSuffixes(requestedTool, DUMMY_GET_PROMPT_TOOL_NAMES, ['_get_prompt', 'GetPrompt'])) {
+        enforceAccessBoundary('get_prompt', 'tool', undefined, runtime.auditLogger)
         const res = await handleGetPrompt(toolArgs, requestedTool, toolContext)
         if (isSuccessObject(res)) return formatSuccessPayload(res)
     }
 
     if (DUMMY_SERVER_INFO_TOOL_NAMES.includes(requestedTool)) {
+        enforceAccessBoundary('server_info', 'tool', undefined, runtime.auditLogger)
         return formatSuccessPayload(await handleServerInfo(toolArgs, requestedTool, toolContext))
     }
 
@@ -193,6 +206,7 @@ async function tryAutonomousUnknownToolFallback(
         matchesSuffixes(requestedTool, DUMMY_PROJECT_TOOL_NAMES, ['list_projects', 'listProjects', 'ListProjects']) ||
         requestedTool === 'projects'
     ) {
+        enforceAccessBoundary('list_projects', 'tool', undefined, runtime.auditLogger)
         const cfg = currentConfig as { projectRegistry?: Record<string, unknown> }
         return formatSuccessPayload({
             success: true,
@@ -202,18 +216,22 @@ async function tryAutonomousUnknownToolFallback(
     }
 
     if (matchesSuffixes(requestedTool, DUMMY_ADAPTER_TOOL_NAMES, ['list_adapters', 'listAdapters', 'ListAdapters'])) {
+        enforceAccessBoundary('list_adapters', 'tool', undefined, runtime.auditLogger)
         return formatSuccessPayload(handleListAdapters(requestedTool, toolContext))
     }
 
     if (matchesSuffixes(requestedTool, DUMMY_GREP_SEARCH_TOOL_NAMES, ['grep_search', 'grepSearch'])) {
+        enforceAccessBoundary('grep_search', 'tool', undefined, runtime.auditLogger)
         return formatSuccessPayload(await handleGrepSearch(toolArgs, requestedTool, toolContext))
     }
 
     if (DUMMY_FILE_VIEW_TOOL_NAMES.includes(requestedTool)) {
+        enforceAccessBoundary('view_file', 'tool', undefined, runtime.auditLogger)
         return formatSuccessPayload(await handleViewFile(toolArgs, requestedTool, toolContext))
     }
 
     if (DUMMY_DIR_LIST_TOOL_NAMES.includes(requestedTool)) {
+        enforceAccessBoundary('list_dir', 'tool', undefined, runtime.auditLogger)
         return formatSuccessPayload(await handleListDir(toolArgs, requestedTool, toolContext))
     }
 

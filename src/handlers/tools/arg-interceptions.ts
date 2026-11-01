@@ -95,14 +95,24 @@ export function applyArgInterceptions(
  */
 export function injectProjectNames(
     obj: unknown,
-    registry?: Record<string, ProjectRegistryEntry>
+    registry?: Record<string, ProjectRegistryEntry>,
+    depth = 0,
+    seen = new WeakSet()
 ): void {
-    if (obj === undefined || obj === null || typeof obj !== 'object' || registry === undefined) {
+    if (
+        depth > 10 ||
+        obj === undefined ||
+        obj === null ||
+        typeof obj !== 'object' ||
+        registry === undefined
+    ) {
         return
     }
+    if (seen.has(obj)) return
+    seen.add(obj)
 
     if (Array.isArray(obj)) {
-        obj.forEach((item) => injectProjectNames(item, registry))
+        obj.forEach((item) => injectProjectNames(item, registry, depth + 1, seen))
         return
     }
 
@@ -120,9 +130,9 @@ export function injectProjectNames(
             record['projectName'] = entry[0]
         }
     }
-    for (const key in record) {
+    for (const key of Object.keys(record)) {
         if (typeof record[key] === 'object' && record[key] !== null) {
-            injectProjectNames(record[key], registry)
+            injectProjectNames(record[key], registry, depth + 1, seen)
         }
     }
 }

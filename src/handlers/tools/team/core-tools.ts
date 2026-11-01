@@ -221,7 +221,7 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
 
                     const { entry_id, include_relationships, project_number, workspace_id } =
                         TeamGetEntryByIdSchema.parse(params)
-                    const wsId = workspace_id ? resolveWorkspaceId(workspace_id, project_number, context.config) : '*'
+                    const wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
                     const projectNumber = project_number
                     const entry = teamDb.getEntryById(entry_id, wsId)
 

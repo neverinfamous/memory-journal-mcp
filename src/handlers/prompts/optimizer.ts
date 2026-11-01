@@ -250,7 +250,9 @@ export function getOptimizerPromptDefinitions(): InternalPromptDef[] {
                     : '### Comprehensive Multi-Agent Domain Audit & Noise Pruning (Presented to User for Choice)'
 
                 const scanLoopCondition =
-                    entryLimit === 0 ? 'while (true)' : `while (processed < ${String(entryLimit)})`
+                    entryLimit === 0
+                        ? 'for (let _page = 0; _page < 200; _page++)'
+                        : `while (processed < ${String(entryLimit)})`
 
                 return {
                     messages: [

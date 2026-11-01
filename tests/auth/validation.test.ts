@@ -35,14 +35,16 @@ describe('enforceAccessBoundary', () => {
         )
     })
 
-    it('should allow team target if CODEMODE_INTERNAL_FULL_ACCESS is true', () => {
+    it('should not allow CODEMODE_INTERNAL_FULL_ACCESS env var to bypass unauthenticated team access', () => {
         delete process.env['TEAM_AUTHOR']
         delete process.env['USERNAME']
         delete process.env['USER']
         process.env['CODEMODE_INTERNAL_FULL_ACCESS'] = 'true'
         vi.mocked(authContext.getAuthContext).mockReturnValue(undefined)
 
-        expect(() => enforceAccessBoundary('memory://team/test', 'resource')).not.toThrow()
+        expect(() => enforceAccessBoundary('memory://team/test', 'resource')).toThrow(
+            PermissionError
+        )
     })
 
     it('should require admin scope for memory://audit resource', () => {

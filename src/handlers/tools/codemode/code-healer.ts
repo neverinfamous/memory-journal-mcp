@@ -143,6 +143,9 @@ function unwrapNestedExecuteCode(src: string): string {
  * Auto-heals common syntax, template literal, and LLM formatting errors in Code Mode execution payloads.
  */
 export function healCodeModeScript(code: string): string {
+    if (Buffer.byteLength(code, 'utf-8') > 50 * 1024) {
+        return code
+    }
     let executionCode = code
 
     const healedSql = extractAndRecoverSqlCode(executionCode)

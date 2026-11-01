@@ -219,8 +219,9 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
             handler: async (params: unknown) => {
                 try {
                     const input = BatchDeleteEntriesSchema.parse(params)
+                    const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
                     await sendProgress(progress, 0, 2, 'Deleting entries...')
-                    const { deleted, notFound, errors } = db.deleteEntries(input.entry_ids, input.permanent)
+                    const { deleted, notFound, errors } = db.deleteEntries(input.entry_ids, input.permanent, wsId)
                     
                     await sendProgress(progress, 1, 2, `Deleted ${String(deleted.length)} entries...`)
                     

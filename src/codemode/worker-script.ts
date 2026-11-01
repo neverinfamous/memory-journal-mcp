@@ -21,6 +21,13 @@ import { serializeAndEnforceEgress } from './worker/result-compactor.js'
 
 hardenOuterFunctionPrototypes()
 
+process.on('unhandledRejection', () => {
+    // Prevent asynchronous promise rejections inside user timers from crashing the worker thread
+})
+process.on('uncaughtException', () => {
+    // Prevent synchronous throws inside user timers from crashing the worker thread
+})
+
 let rpcPort: MessagePort | null = null
 let rpcIdCounter = 0
 const pendingRpcRequests = new Map<
@@ -51,6 +58,7 @@ async function executeCode(
 ): Promise<SandboxResult> {
     const startCpu = process.cpuUsage()
     const startTime = performance.now()
+    const activeTimers = new Set<NodeJS.Timeout>()
 
     try {
         const mjApi = buildApiProxy(rpcCall, methodList, schemaList, readonlyMode, contextObj)
@@ -121,7 +129,7 @@ async function executeCode(
                 if (vmContextRef.current !== undefined) {
                     const transformed = transformAutoReturn(codeToExec)
                     const wrapped = `(async () => {\n${transformed}\n})()`
-                    return (await vm.runInContext(wrapped, vmContextRef.current)) as unknown
+                    return (await vm.runInContext(wrapped, vmContextRef.current, { timeout: timeoutMs })) as unknown
                 }
             }
             return { success: true }
@@ -135,6 +143,7 @@ async function executeCode(
             frozenContext,
             executeCodeFn,
             updateMemoryFn,
+            activeTimers,
         })
 
         const context = vm.createContext(sandbox, {
@@ -187,6 +196,11 @@ async function executeCode(
                 memoryUsedMb: 0,
             },
         }
+    } finally {
+        for (const handle of activeTimers) {
+            clearTimeout(handle)
+        }
+        activeTimers.clear()
     }
 }
 

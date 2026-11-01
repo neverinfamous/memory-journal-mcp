@@ -6,12 +6,31 @@ import { globalSubscriptionManager } from '../../../server/subscription-manager.
 import type { McpServerFactory } from '../../../server/mcp-server/index.js'
 import { logger } from '../../../utils/logger.js'
 import type { HttpTransportConfig } from '../types.js'
+import { SESSION_TIMEOUT_MS, SESSION_SWEEP_INTERVAL_MS } from '../types.js'
 import { LegacySSEServerTransport } from './legacy-sse.js'
 
 export type SseTransportMap = Map<
     string,
     NodeStreamableHTTPServerTransport | LegacySSEServerTransport
 >
+
+const MAX_ACTIVE_SESSIONS = 100
+
+function resolveRequestSubject(req: Request): string | undefined {
+    const reqRecord = req as unknown as {
+        tokenClaims?: { sub?: string; email?: string; client_id?: string }
+        auth?: { sub?: string; subject?: string; clientId?: string; client_id?: string }
+    }
+    const sub =
+        reqRecord.tokenClaims?.sub ??
+        reqRecord.tokenClaims?.email ??
+        reqRecord.tokenClaims?.client_id ??
+        reqRecord.auth?.sub ??
+        reqRecord.auth?.subject ??
+        reqRecord.auth?.clientId ??
+        reqRecord.auth?.client_id
+    return typeof sub === 'string' && sub.length > 0 ? sub : undefined
+}
 
 export function registerMcpProtocolRoutes(
     app: Express,
@@ -36,6 +55,37 @@ export function registerMcpProtocolRoutes(
         )
     )
 
+    const sessionOwners = new Map<string, string>()
+    const sessionLastActivity = new Map<string, number>()
+
+    const sweepTimer = setInterval(() => {
+        const now = Date.now()
+        for (const [sid, lastActive] of sessionLastActivity.entries()) {
+            if (now - lastActive > SESSION_TIMEOUT_MS) {
+                const transport = sseTransports.get(sid)
+                if (transport !== undefined) {
+                    void transport.close()
+                    sseTransports.delete(sid)
+                }
+                sessionOwners.delete(sid)
+                sessionLastActivity.delete(sid)
+                globalSubscriptionManager.unregisterServer(sid)
+            }
+        }
+    }, SESSION_SWEEP_INTERVAL_MS)
+    sweepTimer.unref()
+
+    const verifySessionOwner = (req: Request, res: Response, sid: string): boolean => {
+        const expectedOwner = sessionOwners.get(sid)
+        const callerSubject = resolveRequestSubject(req)
+        if (expectedOwner !== undefined && expectedOwner !== callerSubject) {
+            res.status(403).json({ error: { message: 'Forbidden: Session belongs to another principal' } })
+            return false
+        }
+        sessionLastActivity.set(sid, Date.now())
+        return true
+    }
+
     const createSessionAndHandle = (
         req: Request,
         res: Response,
@@ -43,6 +93,13 @@ export function registerMcpProtocolRoutes(
         _sid?: string,
         isLegacySse = false
     ): void => {
+        if (sseTransports.size >= MAX_ACTIVE_SESSIONS) {
+            res.status(503).json({
+                error: { message: 'Service Unavailable: Maximum active stateful sessions reached' },
+            })
+            return
+        }
+
         const sid = _sid ?? randomUUID()
         const transport = isLegacySse
             ? new LegacySSEServerTransport('/messages', sid)
@@ -53,20 +110,17 @@ export function registerMcpProtocolRoutes(
         const sessionId = sid
         const server = serverFactory()
 
-        const authObj = req.auth as Record<string, unknown> | undefined
-        const rawSubject =
-            authObj !== undefined
-                ? (authObj['subject'] ?? authObj['clientId'] ?? authObj['client_id'] ?? 'unknown')
-                : ''
-        const authSubject =
-            typeof rawSubject === 'string' || typeof rawSubject === 'number'
-                ? String(rawSubject)
-                : 'unknown'
-        const authLog = authObj !== undefined ? ` as ${authSubject}` : ''
+        const callerSubject = resolveRequestSubject(req)
+        if (callerSubject !== undefined) {
+            sessionOwners.set(sessionId, callerSubject)
+        }
+        sessionLastActivity.set(sessionId, Date.now())
+
+        const authLog = callerSubject !== undefined ? ` as ${callerSubject}` : ''
         logger.info(`New MCP stateful session initialized${authLog}`, {
             module: 'HTTP',
             sessionId,
-            ...(req.auth !== undefined ? { auth: req.auth } : {}),
+            ...(callerSubject !== undefined ? { subject: callerSubject } : {}),
         })
 
         activeServers.add(server)
@@ -76,6 +130,8 @@ export function registerMcpProtocolRoutes(
         server.close = async () => {
             activeServers.delete(server)
             sseTransports.delete(sessionId)
+            sessionOwners.delete(sessionId)
+            sessionLastActivity.delete(sessionId)
             globalSubscriptionManager.unregisterServer(sessionId)
             return originalClose()
         }
@@ -133,6 +189,7 @@ export function registerMcpProtocolRoutes(
                 res.status(400).json({ error: { message: 'Session not found' } })
                 return
             }
+            if (!verifySessionOwner(req, res, sid)) return
             if (transport instanceof LegacySSEServerTransport) {
                 transport.handleSseRequest(req, res)
             } else {
@@ -166,6 +223,7 @@ export function registerMcpProtocolRoutes(
                 res.status(400).json({ error: { message: 'Session not found' } })
                 return
             }
+            if (!verifySessionOwner(req, res, sid)) return
             if (transport instanceof LegacySSEServerTransport) {
                 transport.handlePostMessage(req, res)
             } else {
@@ -182,11 +240,9 @@ export function registerMcpProtocolRoutes(
             } else if (acceptsSse && !config.stateless) {
                 createSessionAndHandle(req, res, next, randomUUID(), false)
             } else {
-                logger.info('Routing to statelessMcpHandler', {
+                logger.debug('Routing to statelessMcpHandler', {
                     method: req.method,
                     path: req.path,
-                    headers: req.headers,
-                    body: req.body,
                 })
                 statelessMcpHandler(req, res, req.body).catch((err: unknown) => {
                     next(err)
@@ -215,8 +271,11 @@ export function registerMcpProtocolRoutes(
 
         const transport = sseTransports.get(sid)
         if (transport !== undefined) {
+            if (!verifySessionOwner(req, res, sid)) return
             void transport.close()
             sseTransports.delete(sid)
+            sessionOwners.delete(sid)
+            sessionLastActivity.delete(sid)
             globalSubscriptionManager.unregisterServer(sid)
         }
         res.status(204).end()

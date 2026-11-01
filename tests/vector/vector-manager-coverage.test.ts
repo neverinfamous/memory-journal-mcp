@@ -48,6 +48,7 @@ describe('VectorSearchManager - error coverage', () => {
 
     it('covers error path in searchByEntryId', async () => {
         const mockDb = {
+            getEntryById: vi.fn().mockReturnValue({ id: 1, content: 'test' }),
             getVector: vi.fn().mockImplementation(() => {
                 throw new Error('db search id err')
             }),

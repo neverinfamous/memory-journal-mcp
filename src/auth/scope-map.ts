@@ -10,7 +10,22 @@ import { TOOL_GROUPS } from '../filtering/tool-constants.js'
 import { SCOPES, TOOL_GROUP_SCOPES, TOOL_SCOPE_OVERRIDES } from './scopes.js'
 import type { StandardScope } from './scopes.js'
 import type { ToolGroup } from '../types/index.js'
-import { DUMMY_HEALING_TOOL_NAMES } from '../handlers/tools/core/dummy-healing.js'
+import {
+    DUMMY_HEALING_TOOL_NAMES,
+    DUMMY_SQL_EXECUTION_TOOL_NAMES,
+    DUMMY_ENTRY_CREATION_TOOL_NAMES,
+    DUMMY_FILE_VIEW_TOOL_NAMES,
+    DUMMY_DIR_LIST_TOOL_NAMES,
+    DUMMY_GREP_SEARCH_TOOL_NAMES,
+} from '../handlers/tools/core/dummy-healing/alias-catalog.js'
+
+const DUMMY_SQL_EXEC_SET = new Set<string>(DUMMY_SQL_EXECUTION_TOOL_NAMES)
+const DUMMY_ENTRY_CREATE_SET = new Set<string>(DUMMY_ENTRY_CREATION_TOOL_NAMES)
+const DUMMY_FS_TOOL_SET = new Set<string>([
+    ...DUMMY_FILE_VIEW_TOOL_NAMES,
+    ...DUMMY_DIR_LIST_TOOL_NAMES,
+    ...DUMMY_GREP_SEARCH_TOOL_NAMES,
+])
 
 /**
  * Map from tool name to required minimum scope.
@@ -53,6 +68,12 @@ export function getRequiredScope(toolName: string): StandardScope {
             return SCOPES.WRITE
         }
         return SCOPES.READ
+    }
+    if (DUMMY_SQL_EXEC_SET.has(toolName) || DUMMY_FS_TOOL_SET.has(toolName)) {
+        return SCOPES.ADMIN
+    }
+    if (DUMMY_ENTRY_CREATE_SET.has(toolName)) {
+        return SCOPES.WRITE
     }
     if (DUMMY_HEALING_TOOL_NAMES.has(toolName) || toolName.startsWith('memory://')) {
         return SCOPES.READ

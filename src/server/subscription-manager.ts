@@ -7,6 +7,9 @@ import { logger } from '../utils/logger.js'
  * and maintains references to the McpServer instances to broadcast notifications.
  */
 export class SubscriptionManager {
+    private static readonly MAX_TRACKED_SESSIONS = 1000
+    private static readonly MAX_SUBSCRIPTIONS_PER_SESSION = 100
+
     // Map of Session ID (or 'stdio') -> McpServer instance
     private servers = new Map<string, McpServer>()
 
@@ -17,6 +20,12 @@ export class SubscriptionManager {
      * Register a server instance for a session to allow sending notifications.
      */
     public registerServer(sessionId: string, server: McpServer): void {
+        if (!this.servers.has(sessionId) && this.servers.size >= SubscriptionManager.MAX_TRACKED_SESSIONS) {
+            const oldestKey = this.servers.keys().next().value
+            if (oldestKey !== undefined) {
+                this.unregisterServer(oldestKey)
+            }
+        }
         this.servers.set(sessionId, server)
     }
 
@@ -36,8 +45,24 @@ export class SubscriptionManager {
             sessionId = 'stdio' // Fallback for stateless transports or stdio
         }
 
+        let sessionSubCount = 0
+        for (const sessSet of this.subscriptions.values()) {
+            if (sessSet.has(sessionId)) {
+                sessionSubCount++
+            }
+        }
+        if (sessionSubCount >= SubscriptionManager.MAX_SUBSCRIPTIONS_PER_SESSION) {
+            logger.warning(`Session ${sessionId} reached maximum resource subscription limit`, {
+                module: 'SubscriptionManager',
+            })
+            return
+        }
+
         let sessions = this.subscriptions.get(uri)
         if (!sessions) {
+            if (this.subscriptions.size >= SubscriptionManager.MAX_TRACKED_SESSIONS) {
+                return
+            }
             sessions = new Set<string>()
             this.subscriptions.set(uri, sessions)
         }

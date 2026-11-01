@@ -101,8 +101,9 @@ export function getCloseGitHubIssueTool(context: ToolContext): ToolDefinition {
                 }
 
                 // 1. OUTBOX PATTERN: Create journal entry in pending state FIRST
+                const safeIssueTitle = issueDetails.title.replace(/<\/?untrusted_remote_content[^>]*>/gi, '')
                 const entryContent =
-                    `[PENDING] Closing GitHub issue #${String(input.issue_number)}: ${issueDetails.title}\n` +
+                    `[PENDING] Closing GitHub issue #${String(input.issue_number)}: ${safeIssueTitle}\n` +
                     (input.resolution_notes ? `\nResolution: ${input.resolution_notes}` : '')
 
                 const entry = db.createEntry({
@@ -222,7 +223,7 @@ export function getCloseGitHubIssueTool(context: ToolContext): ToolDefinition {
 
                 // 4. Update journal entry with finalized state
                 const finalContent =
-                    `Closed GitHub issue #${String(input.issue_number)}: ${issueDetails.title}\n\n` +
+                    `Closed GitHub issue #${String(input.issue_number)}: ${safeIssueTitle}\n\n` +
                     `URL: ${issueDetails.url}\n` +
                     (input.resolution_notes ? `\nResolution: ${input.resolution_notes}` : '')
 

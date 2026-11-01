@@ -224,7 +224,7 @@ export function updateEntry(
         updates.push('impact_score = ?')
         values.push(input.impactScore)
     }
-    if (input.targetWorkspaceId !== undefined) {
+    if (input.targetWorkspaceId !== undefined && input.targetWorkspaceId !== '*') {
         updates.push('workspace_id = ?')
         values.push(input.targetWorkspaceId)
     }
@@ -287,28 +287,48 @@ export function updateEntry(
     return getEntryById(context, id, readWs)
 }
 
-export function deleteEntry(context: EntriesSharedContext, id: number, permanent = false): boolean {
+export function deleteEntry(
+    context: EntriesSharedContext,
+    id: number,
+    permanent = false,
+    workspaceId?: string
+): boolean {
     const { db } = context
+    const hasWorkspaceFilter = workspaceId !== undefined && workspaceId !== '*'
 
     if (permanent) {
-        const stmt = db.prepare('DELETE FROM memory_journal WHERE id = ?')
-        const result = stmt.run(id)
+        const stmt = db.prepare(
+            hasWorkspaceFilter
+                ? 'DELETE FROM memory_journal WHERE id = ? AND workspace_id = ?'
+                : 'DELETE FROM memory_journal WHERE id = ?'
+        )
+        const result = hasWorkspaceFilter ? stmt.run(id, workspaceId) : stmt.run(id)
         return result.changes > 0
     }
 
     const stmt = db.prepare(
-        `UPDATE memory_journal SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL`
+        hasWorkspaceFilter
+            ? 'UPDATE memory_journal SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL AND workspace_id = ?'
+            : 'UPDATE memory_journal SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL'
     )
-    const result = stmt.run(new Date().toISOString(), id)
+    const now = new Date().toISOString()
+    const result = hasWorkspaceFilter ? stmt.run(now, id, workspaceId) : stmt.run(now, id)
     return result.changes > 0
 }
 
-export function restoreEntry(context: EntriesSharedContext, id: number): boolean {
+export function restoreEntry(
+    context: EntriesSharedContext,
+    id: number,
+    workspaceId?: string
+): boolean {
     const { db } = context
+    const hasWorkspaceFilter = workspaceId !== undefined && workspaceId !== '*'
     const stmt = db.prepare(
-        'UPDATE memory_journal SET deleted_at = NULL WHERE id = ? AND deleted_at IS NOT NULL'
+        hasWorkspaceFilter
+            ? 'UPDATE memory_journal SET deleted_at = NULL WHERE id = ? AND deleted_at IS NOT NULL AND workspace_id = ?'
+            : 'UPDATE memory_journal SET deleted_at = NULL WHERE id = ? AND deleted_at IS NOT NULL'
     )
-    const result = stmt.run(id)
+    const result = hasWorkspaceFilter ? stmt.run(id, workspaceId) : stmt.run(id)
     return result.changes > 0
 }
 
@@ -404,17 +424,19 @@ export function updateEntries(
 export function deleteEntries(
     context: EntriesSharedContext,
     ids: number[],
-    permanent = false
+    permanent = false,
+    workspaceId?: string
 ): { deleted: number[]; notFound: number[]; errors: { id: number; error: Error }[] } {
     const { db } = context
     if (ids.length === 0) return { deleted: [], notFound: [], errors: [] }
 
     const placeholders = ids.map(() => '?').join(', ')
+    const hasWorkspaceFilter = workspaceId !== undefined && workspaceId !== '*'
     const existingRows = db
         .prepare(
-            `SELECT id FROM memory_journal WHERE id IN (${placeholders}) ${permanent ? '' : 'AND deleted_at IS NULL'}`
+            `SELECT id FROM memory_journal WHERE id IN (${placeholders}) ${permanent ? '' : 'AND deleted_at IS NULL'}${hasWorkspaceFilter ? ' AND workspace_id = ?' : ''}`
         )
-        .all(...ids) as { id: number }[]
+        .all(...(hasWorkspaceFilter ? [...ids, workspaceId] : ids)) as { id: number }[]
     const existingIds = new Set(existingRows.map((r) => r.id))
     const notFound = ids.filter((id) => !existingIds.has(id))
     const toDelete = ids.filter((id) => existingIds.has(id))
@@ -424,7 +446,7 @@ export function deleteEntries(
     const txn = db.transaction(() => {
         for (const id of toDelete) {
             try {
-                if (deleteEntry(context, id, permanent)) {
+                if (deleteEntry(context, id, permanent, workspaceId)) {
                     deleted.push(id)
                 }
             } catch (err) {

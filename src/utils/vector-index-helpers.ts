@@ -16,11 +16,12 @@ import { logger } from './logger.js'
 export async function autoIndexEntry(
     vectorManager: VectorSearchManager | undefined,
     db: IDatabaseAdapter,
-    entryId: number
+    entryId: number,
+    workspaceId?: string
 ): Promise<'success' | 'failed' | 'disabled'> {
     if (vectorManager === undefined) return 'disabled'
     try {
-        const entry = db.getEntryById(entryId)
+        const entry = db.getEntryById(entryId, workspaceId ?? '*')
         if (!entry) return 'failed'
         
         await vectorManager.addEntry(entry)

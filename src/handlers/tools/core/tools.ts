@@ -4,6 +4,7 @@ import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { sendProgress } from '../../../utils/progress-utils.js'
 import { resolveAuthor } from '../../../utils/security-utils.js'
 import { getAuthContext } from '../../../auth/auth-context.js'
+import { enforceAccessBoundary } from '../../../auth/validation.js'
 import { resolveIssueUrl } from '../../../utils/github-helpers.js'
 import { resolveWorkspaceId, resolveProjectContext } from '../../../utils/workspace-resolver.js'
 import { MemoryJournalMcpError } from '../../../types/errors.js'
@@ -180,6 +181,12 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                     let author: string | undefined
 
                     if (input.share_with_team && context.teamDb) {
+                        enforceAccessBoundary(
+                            'team_create_entry',
+                            'tool',
+                            { requiresTeamScope: true },
+                            context.config?.runtime?.auditLogger
+                        )
                         const authCtx = getAuthContext()
                         if (authCtx?.authenticated) {
                             const claims = authCtx.claims
@@ -241,7 +248,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     const input = GetEntryByIdSchema.parse(params)
-                    const wsId = input.workspace_id ? resolveWorkspaceId(input.workspace_id, input.project_number, context.config) : '*'
+                    const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
                     const entry = db.getEntryById(input.entry_id, wsId)
                     if (!entry) {
                         return {

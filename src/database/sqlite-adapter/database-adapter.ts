@@ -106,9 +106,9 @@ export class DatabaseAdapter extends AdapterDelegates implements IDatabaseAdapte
         return this.entriesMgr.updateEntry(id, updates)
     }
 
-    deleteEntry(id: number, permanent = false): boolean {
+    deleteEntry(id: number, permanent = false, workspaceId?: string): boolean {
         return this.executeInTransaction(() => {
-            const success = this.entriesMgr.deleteEntry(id, permanent)
+            const success = this.entriesMgr.deleteEntry(id, permanent, workspaceId)
             if (success) {
                 this.deleteVector(id)
             }
@@ -124,8 +124,8 @@ export class DatabaseAdapter extends AdapterDelegates implements IDatabaseAdapte
         return this.entriesMgr.getAnchorsByEntryId(entryId)
     }
 
-    restoreEntry(id: number): boolean {
-        return this.entriesMgr.restoreEntry(id)
+    restoreEntry(id: number, workspaceId?: string): boolean {
+        return this.entriesMgr.restoreEntry(id, workspaceId)
     }
 
     getDeletedEntries(options?: {
@@ -176,10 +176,11 @@ export class DatabaseAdapter extends AdapterDelegates implements IDatabaseAdapte
 
     deleteEntries(
         ids: number[],
-        permanent = false
+        permanent = false,
+        workspaceId?: string
     ): { deleted: number[]; notFound: number[]; errors: { id: number; error: Error }[] } {
         return this.executeInTransaction(() => {
-            const result = this.entriesMgr.deleteEntries(ids, permanent)
+            const result = this.entriesMgr.deleteEntries(ids, permanent, workspaceId)
             for (const id of result.deleted) {
                 try {
                     this.deleteVector(id)

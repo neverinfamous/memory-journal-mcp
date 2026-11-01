@@ -183,9 +183,7 @@ function generateUpdateEntryPrompt(db: IDatabaseAdapter, teamDb: IDatabaseAdapte
 - **Type:** ${String(recent['entryType'])}
 - **Tags:** ${recent['tags'] != null ? JSON.stringify(recent['tags']) : '[]'}
 - **Content:**
-\`\`\`markdown
-${String(recent['content'])}
-\`\`\`
+${markUntrustedContent(String(recent['content']))}
 `
         }
     } catch {
@@ -384,6 +382,9 @@ Agents often run into environment-level interceptors (like global PowerShell pro
 * **Command Verification Trap:** In environments utilizing PowerShell proxy functions (like \`lib-agent-exec\`), native tools (e.g., \`pnpm\`, \`bun\`, \`git\`) exist as Aliases or Functions rather than traditional executables. DO NOT use \`Get-Command <tool> -CommandType Application\` to verify existence, as this explicitly filters out aliases and will falsely report the tool as missing. Use \`Get-Command <tool>\` without the \`-CommandType\` filter.
 
 ## 3. Phase 2: Implementation
+
+> [!IMPORTANT]
+> **HITL APPROVAL GUARDRAIL**: You MUST obtain explicit Human-in-the-Loop (HITL) approval from the user before modifying global environment files (such as PowerShell profiles, \`.bashrc\`, or global Git hooks) or executable source code.
 
 1. Update the necessary files (e.g. schemas, instructions, normalizers, aliases).
 2. Validate the integrity of your code changes by running the project's native validation tooling (analogous to the semantic validation tiers).

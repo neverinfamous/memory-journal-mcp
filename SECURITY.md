@@ -46,9 +46,21 @@ are safely handled by the database layer and do not pose injection risks.
 ### **Path Traversal & Filesystem Boundaries**
 
 - ✅ **Explicit Filesystem Boundaries** — Filesystem access MUST be explicitly granted via `ALLOWED_IO_ROOTS`. The server operates in a **fail-closed** mode (`ALLOWED_IO_ROOTS=[]`) by default if not explicitly configured, preventing all filesystem interaction.
+- ✅ **URL-Encoded & Null-Byte Rejection** — `assertSafeDirectoryPath` rejects URL-encoded traversal sequences (`%2e`, `%2f`, `%5c`, `%00`) and raw null bytes before decoding, resolves ancestor symlinks iteratively via `fs.realpathSync()`, and validates containment using `path.relative()`.
 - ✅ **Implicit Authority Disabled** — The server no longer derives ambient filesystem authority from the location of database files.
-- ✅ **Backup filenames validated** - rejects `/`, `\`, `..` in paths
+- ✅ **Backup & Restore Boundaries** — `backup_journal` and `restore_journal` enforce `path.relative()` containment against the backup directory and reject symlinks or traversal characters (`/`, `\`, `..`).
+- ✅ **Agent-Healing Filesystem Fallbacks** — When `--no-agent-healing` is not set, read-only fallback tools (`view_file`, `list_dir`, `grep_search`) enforce `ALLOWED_IO_ROOTS`, skip symbolic links during recursive directory traversal, cap file reads at 2MB, and require `admin` scope over HTTP.
 - ✅ **Typed security errors** with consistent error codes
+
+### **Multi-Tenant Workspace Isolation (`workspace_id`)**
+
+- ✅ **End-to-End Tenant Scoping** — All personal and team entry reads, updates, soft-deletes, restores, FTS5 searches, and vector semantic searches (`semantic_search`, `team_semantic_search`) enforce `workspace_id` isolation.
+- ✅ **External Wildcard Rejection** — The cross-workspace sentinel (`workspace_id: '*'`) is reserved strictly for internal maintenance/read workflows; external tool callers passing `workspace_id: '*'` on write or mutation paths are rejected or automatically scoped to their resolved workspace.
+- ✅ **Execution-Layer `--tool-filter` Parity** — `--tool-filter` (including `readonly`, `-group`, and `-tool`) is enforced at execution time across `tools/call`, Code Mode (`mj.*`), and agent-healing fallbacks unless `--codemode-internal-full-access` was explicitly granted at server startup (which cannot be escalated via config file hot-reload).
+
+### **Prompt-Injection Defense (`<untrusted_remote_content>`)**
+
+- ✅ **Untrusted Boundary Tagging** — External inputs surfaced in MCP Resources and Workflow Prompts (Git commit subjects, GitHub issue/PR/milestone titles, workflow run names, and journal entry content) are wrapped in `<untrusted_remote_content>` tags with `&`, `<`, and `>` entity-escaped to prevent tag-breakout and indirect prompt injection.
 
 ## 🌐 **HTTP Transport Security**
 
@@ -88,15 +100,19 @@ export CORS_ORIGIN="http://localhost:3000,https://my-app.com"
 ### **Session Management (Stateful Mode)**
 
 - ✅ **UUID-based session IDs** (cryptographically random)
+- ✅ **Principal-bound sessions** — Authenticated sessions bind `mcp-session-id` to the caller's principal (`sub` or Bearer token hash); cross-principal session reuse is rejected with `403 Forbidden`
+- ✅ **Active session cap** — Enforces a hard limit of `100` concurrent active sessions (`503` when full) and rejects duplicate SSE stream attachments on the same session (`409 Conflict`)
 - ✅ **Idle timeout** — Sessions inactive for 30 minutes are automatically expired
 - ✅ **Absolute TTL** — Sessions have a hard 24-hour maximum lifetime regardless of activity, forcing periodic re-authentication
 - ✅ **In-flight protection** — Sessions with active requests are skipped by the sweep timer to prevent mid-request disconnection
 - ✅ **5-minute sweep interval** — periodic cleanup of abandoned sessions
 - ✅ **Explicit session termination** via `DELETE /mcp`
 
-### **Request Size Limits**
+### **Request Size Limits & Metrics Isolation**
 
-- ✅ **1MB body limit** on JSON requests (prevents memory exhaustion DoS)
+- ✅ **1MB body limit** on JSON and chunked stream requests (prevents memory exhaustion DoS)
+- ✅ **Metrics endpoint protection** — `/metrics` requires authentication when HTTP auth is enabled and the standalone Prometheus metrics server binds to `127.0.0.1` by default
+- ✅ **Outbound Webhook SSRF Protection** — Scheduled digest webhooks (`--digest-webhook-url`) require `https:`, resolve DNS prior to dispatch, block loopback/private/link-local/cloud-metadata IP ranges, and disable HTTP redirects (`redirect: 'error'`)
 
 ## 🔐 **OAuth 2.1 Authentication**
 
@@ -253,7 +269,9 @@ Code Mode (`mj_execute_code`) executes user-provided JavaScript in a hardened `w
 
 ### **Static Code Validation**
 
-- ✅ **Comprehensive blocked patterns** — regex rules blocking `require()`, `import()`, `process.*`, `global.*`, `eval()`, `Function()`, `__proto__`, `constructor.constructor`, `['constructor']`, `Reflect.*`, `Symbol.*`, `new Proxy()`, `child_process`, `fs.*`, `net.*`, `http.*`, `https.*`
+- ✅ **Pre-validation ordering** — Code Mode enablement checks, client rate-limiting, and the 50KB byte-size cap execute *before* any code healer or SQL auto-recovery pass, and SQL recovery uses a linear `O(N)` state-machine parser (zero `node:vm` execution on the host thread)
+- ✅ **Single-pass lexical scanner** — `stripCommentsAndStrings` uses a single-pass character state machine that preserves `${...}` template literal interpolation expressions and `'constructor'`/`'__proto__'`/`'prototype'` strings so regex/comment interleaving cannot hide forbidden tokens
+- ✅ **Comprehensive blocked patterns** — regex rules blocking `require()`, `import()`, `process.*`, `global.*`, `eval()`, `Function()`, `__proto__`, `constructor`, `Object.getPrototypeOf`, `Object.setPrototypeOf`, `Object.defineProperty`, `Reflect.*`, `Symbol.*`, `new Proxy()`, `child_process`, `fs.*`, `net.*`, `http.*`, `https.*`
 - ✅ **50KB code size limit** — prevents payload-based resource exhaustion
 
 ### **Runtime Protection**

@@ -8,6 +8,7 @@
 import type { GitHubIntegration } from '../../../../github/github-integration/index.js'
 import type { BriefingConfig } from '../../shared.js'
 import { logger } from '../../../../utils/logger.js'
+import { markUntrustedContentInline } from '../../../../utils/security-utils.js'
 import {
     resolveBriefingRepo,
     fetchCiStatus,
@@ -251,7 +252,7 @@ export async function buildGitHubSection(
 
             activePr = {
                 number: activePrData.number,
-                title: activePrData.title,
+                title: markUntrustedContentInline(activePrData.title),
                 url: activePrData.url,
                 state: activePrData.state,
                 reviewStatus,

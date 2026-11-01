@@ -24,7 +24,7 @@ export function hardenOuterFunctionPrototypes(): void {
         /* noop */
     }) as object | null
 
-    for (const proto of [Function.prototype, AsyncFnProto, GenFnProto, AsyncGenFnProto]) {
+    for (const proto of [Object.prototype, Function.prototype, AsyncFnProto, GenFnProto, AsyncGenFnProto]) {
         if (proto !== null && proto !== undefined) {
             try {
                 Object.defineProperty(proto, 'constructor', {
@@ -34,6 +34,56 @@ export function hardenOuterFunctionPrototypes(): void {
                 })
             } catch {
                 // ignore if already non-configurable
+            }
+        }
+    }
+
+    const outerBuiltins: unknown[] = [
+        Object,
+        Function,
+        Array,
+        String,
+        Number,
+        Boolean,
+        RegExp,
+        Error,
+        TypeError,
+        RangeError,
+        ReferenceError,
+        SyntaxError,
+        URIError,
+        EvalError,
+        Map,
+        Set,
+        WeakMap,
+        WeakSet,
+        Promise,
+        Date,
+        ArrayBuffer,
+        DataView,
+        JSON,
+        Math,
+    ]
+    for (const B of outerBuiltins) {
+        if (typeof B === 'function' && B.prototype !== undefined && B.prototype !== null) {
+            try {
+                Object.freeze(B.prototype)
+            } catch {
+                // ignore
+            }
+        }
+        try {
+            Object.freeze(B)
+        } catch {
+            // ignore
+        }
+    }
+    for (const proto of [Object.prototype, Function.prototype, AsyncFnProto, GenFnProto, AsyncGenFnProto]) {
+        if (proto !== null && proto !== undefined) {
+            try {
+                Object.freeze(proto)
+            } catch {
+                // ignore
             }
         }
     }

@@ -17,6 +17,7 @@ export interface BuildSandboxGlobalsOptions {
     frozenContext: Record<string, unknown>
     executeCodeFn: (arg: unknown) => Promise<unknown>
     updateMemoryFn: (arg: unknown) => unknown
+    activeTimers?: Set<NodeJS.Timeout>
 }
 
 function getGroupMethod(
@@ -169,7 +170,11 @@ const DIRECT_CREATE_ENTRY_SHIMS = [
 export function buildSandboxGlobals(
     options: BuildSandboxGlobalsOptions
 ): Record<string, unknown> {
-    const { mjApi, shimMj, safeFsShim, frozenContext, executeCodeFn, updateMemoryFn } = options
+    const { mjApi, shimMj, safeFsShim, frozenContext, executeCodeFn, updateMemoryFn, activeTimers } = options
+    const registerTimer = (handle: NodeJS.Timeout): NodeJS.Timeout => {
+        activeTimers?.add(handle)
+        return handle
+    }
 
     const servicesProxy = new Proxy({}, { get: (): unknown => shimMj })
     const kernelProxy = new Proxy({}, { get: (): unknown => shimMj })
@@ -330,9 +335,12 @@ export function buildSandboxGlobals(
                 status: 403,
             })
         },
-        sleep: (ms: number) => new Promise((resolve) => setTimeout(resolve, ms)),
+        sleep: (ms: number) =>
+            new Promise((resolve) => {
+                registerTimer(setTimeout(resolve, Math.min(Math.max(0, ms), 30_000)))
+            }),
         setTimeout: (cb: (...args: unknown[]) => void, ms: number, ...args: unknown[]) =>
-            setTimeout(cb, ms, ...args),
+            registerTimer(setTimeout(cb, Math.min(Math.max(0, ms), 30_000), ...args)),
         setInterval: undefined,
         setImmediate: undefined,
         getConfig: () => Promise.resolve({ dbPath: 'memory-journal.db' }),
