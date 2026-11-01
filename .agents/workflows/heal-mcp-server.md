@@ -9,15 +9,11 @@ description: Use when you need to review MCP server agent issues (logs/agent-iss
 
 ---
 
-## 1. Workflow Initialization & Post-NREM Supervisor Audit (`CMS-04`)
+## 1. Workflow Initialization
 
 1. Identify the target MCP server workspace (e.g. `C:\Users\chris\Desktop\memory-journal-mcp` or `C:\Users\chris\Desktop\mysql-mcp`).
-2. **Post-NREM Supervisor Audit (when running on `memory-journal-mcp`)**:
-   - Inspect the latest `CMS-02` (`database-optimizer` / `cms-02-nrem-consolidation`) maintenance entry and recent soft-deleted entries (`mj.admin.listDeletedEntries({ limit: 50 })`).
-   - Verify that no entry with `significanceType !== null`, `impactScore >= 0.5`, or active relationships was erroneously soft-deleted; auto-restore via `mj.admin.restoreEntry` if found.
-3. **Cross-Run Experience & Telemetry Mining**:
-   - Read and review the error log file at `<repo_root>/logs/agent-issues.jsonl` and `logs/mcp-audit.jsonl`.
-   - Categorize each error by source (`MCP`, `CLI`, `CodeMode`, `Protocol`, `Transports`, `Prompts`) and formulate a concrete healing plan.
+2. Read and review the error log file at `<repo_root>/logs/agent-issues.jsonl`.
+3. Categorize each error by source (`MCP`, `CLI`, `CodeMode`, `Protocol`, `Transports`) and formulate a concrete healing plan.
 
 ---
 
@@ -43,31 +39,26 @@ Prevent friction first; mitigate only as fallback. Address issues across the 6 a
 
 ---
 
-## 3. Phase 2: Implementation & Dirty-Tree Conditional Single-Pass Validation Gate
+## 3. Phase 2: Implementation & Mandatory Quality Gates
 
-1. Implement necessary source code fixes, schema updates, aliases, and normalizers in a single cohesive batch.
+1. Implement necessary source code fixes, schema updates, aliases, and normalizers.
 2. Add regression tests to the test suite (e.g., `tests/codemode-healing-guardrails.test.ts`).
-3. **DIRTY-TREE CONDITIONAL SINGLE-PASS VALIDATION GATE (CRITICAL):**
-   - Check uncommitted working tree state first:
-     ```pwsh
-     bun .\.agents\scripts\get-git-history-json.ts --uncommitted --stats
-     ```
-   - **Clean Tree (`0` modified/untracked files)**: **SKIP** `lint`, `typecheck`, `build`, `vitest`, and `playwright` completely! Do NOT execute heavy validation suites when no repository files changed.
-   - **Dirty Tree (`>= 1` modified files)**:
-     > [!WARNING]
-     > **Override & Single-Writer Notice**: When files are modified, the full validation test suite below strictly **OVERRIDES** any default single-file testing rule. Terminate any active subagents first (`manage_subagents` `kill_all`) and run all 5 validation steps **strictly sequentially once** (never concurrently) before committing:
+3. **MANDATORY VALIDATION MATRIX (CRITICAL GATE):**
+   > [!WARNING]
+   > **Override Notice**: The full validation test suite execution below strictly **OVERRIDES** any default single-file testing rule. You must run all validation steps sequentially before committing.
 
-     ```pwsh
-     pnpm run lint
-     pnpm run typecheck
-     pnpm run build
-     npx vitest run
-     npx playwright test
-     ```
-     *(Note: DO NOT run `pnpm run check` as it is an unmanaged meta-script that may hang or time out).*
+   Execute the following commands in order:
+   ```pwsh
+   pnpm run lint
+   pnpm run typecheck
+   pnpm run build
+   npx vitest run
+   npx playwright test
+   ```
+   *(Note: DO NOT run `pnpm run check` as it is an unmanaged meta-script that may hang or time out).*
 
 4. If usability coordinator workflows apply, run them.
-5. Commit your changes locally using `commit.ts` (when dirty tree was validated):
+5. Commit your changes locally using `commit.ts`:
    ```pwsh
    bun .\.agents\scripts\commit.ts --msg "fix(infra): heal MCP server guardrails, aliases, and error handlers" --impact 0.7 --confidence 0.95 --validation passed --journal --add <paths>
    ```

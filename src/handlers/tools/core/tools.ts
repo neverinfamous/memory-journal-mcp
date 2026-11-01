@@ -249,7 +249,8 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                 try {
                     const input = GetEntryByIdSchema.parse(params)
                     const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
-                    const entry = db.getEntryById(input.entry_id, wsId)
+                    const hasExplicitWs = input.workspace_id !== undefined || input.project_number !== undefined
+                    const entry = db.getEntryById(input.entry_id, wsId) ?? (!hasExplicitWs && wsId !== '*' ? db.getEntryById(input.entry_id, '*') : null)
                     if (!entry) {
                         return {
                             success: false,
@@ -261,10 +262,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    const result: Record<string, unknown> = {
-                        success: true,
-                        entry,
-                    }
+                    const result: Record<string, unknown> = { success: true, entry }
 
                     if (input.include_relationships) {
                         const relationships = db.getRelationships(input.entry_id)

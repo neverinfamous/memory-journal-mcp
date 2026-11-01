@@ -143,44 +143,19 @@ export class HttpTransport {
         const maxBody = this.config.maxBodySize ?? DEFAULT_MAX_BODY_BYTES
         const jsonParser = express.json({ limit: maxBody }) as RequestHandler
         this.app.use((req: Request, res: Response, next: NextFunction) => {
-            if (
-                req.method === 'POST' &&
-                req.path === '/mcp' &&
-                req.query['sessionId'] === undefined
-            ) {
-                const contentLength = parseInt(req.headers['content-length'] ?? '0', 10)
-                if (contentLength > maxBody) {
-                    res.status(413).json({
-                        jsonrpc: '2.0',
-                        error: {
-                            code: -32000,
-                            message: 'Payload Too Large: Maximum request body size exceeded',
-                        },
-                        id: null,
-                    })
-                    return
-                }
-                let receivedBytes = 0
-                req.on('data', (chunk: Buffer) => {
-                    receivedBytes += chunk.length
-                    if (receivedBytes > maxBody) {
-                        if (!res.headersSent) {
-                            res.status(413).json({
-                                jsonrpc: '2.0',
-                                error: {
-                                    code: -32000,
-                                    message: 'Payload Too Large: Maximum request body size exceeded',
-                                },
-                                id: null,
-                            })
-                        }
-                        req.destroy()
-                    }
+            const contentLength = parseInt(req.headers['content-length'] ?? '0', 10)
+            if (contentLength > maxBody) {
+                res.status(413).json({
+                    jsonrpc: '2.0',
+                    error: {
+                        code: -32000,
+                        message: 'Payload Too Large: Maximum request body size exceeded',
+                    },
+                    id: null,
                 })
-                next()
-            } else {
-                jsonParser(req, res, next)
+                return
             }
+            jsonParser(req, res, next)
         })
 
         this.app.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {

@@ -52,10 +52,13 @@ describe('SQLite Database Extended Operations', () => {
             expect(db.listTeamMembers()).toEqual([])
             expect(db.getTeamMember('alice')).toBeNull()
 
-            // Add member
-            const alice = db.addTeamMember('alice', 'member', 'system', 'Alice Smith')
+            // Bootstrapping first member must have 'admin' role
+            expect(() => db.addTeamMember('stranger', 'member')).toThrow(/First team member must be bootstrapped with the 'admin' role/)
+
+            // Add first member as admin
+            const alice = db.addTeamMember('alice', 'admin', 'system', 'Alice Smith')
             expect(alice.author).toBe('alice')
-            expect(alice.role).toBe('member')
+            expect(alice.role).toBe('admin')
             expect(alice.displayName).toBe('Alice Smith')
             expect(alice.addedBy).toBe('system')
 
@@ -65,7 +68,7 @@ describe('SQLite Database Extended Operations', () => {
             // RBAC is now active
             expect(db.isTeamRbacActive()).toBe(true)
             expect(db.getTeamMemberCount()).toBe(1)
-            expect(db.resolveTeamRole('alice')).toBe('member')
+            expect(db.resolveTeamRole('alice')).toBe('admin')
             expect(db.resolveTeamRole('stranger', 'denied')).toBeNull()
             expect(db.resolveTeamRole('stranger', 'viewer')).toBe('viewer')
 

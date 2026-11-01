@@ -221,7 +221,7 @@ export class VectorSearchManager {
             const searchResults: SemanticSearchResult[] = []
             
             for (const result of results) {
-                const entry = this.dbAdapter.getEntryById(result.entry_id, workspaceId)
+                const entry = this.dbAdapter.getEntryById(result.entry_id, workspaceId ?? '*')
                 if (entry) {
                     // sqlite-vec MATCH computes L2 distance by default.
                     // For normalized unit vectors: L2_distance^2 = 2 - 2 * cosine_similarity
@@ -263,7 +263,7 @@ export class VectorSearchManager {
         await this.initialize()
 
         try {
-            const sourceEntry = this.dbAdapter.getEntryById(entryId, workspaceId)
+            const sourceEntry = this.dbAdapter.getEntryById(entryId, workspaceId ?? '*')
             if (!sourceEntry) {
                 throw new Error(`Entry ${entryId} not found`)
             }
@@ -288,7 +288,7 @@ export class VectorSearchManager {
                 // Skip the original entry
                 if (result.entry_id === entryId) continue
                 
-                const entry = this.dbAdapter.getEntryById(result.entry_id, workspaceId)
+                const entry = this.dbAdapter.getEntryById(result.entry_id, workspaceId ?? '*')
                 if (entry) {
                     // Same mathematical conversion as above
                     const similarityScore = Math.max(-1, 1 - (result.distance * result.distance) / 2)

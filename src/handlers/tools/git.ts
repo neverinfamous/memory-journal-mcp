@@ -3,6 +3,8 @@ import type { ToolDefinition, ToolContext, AnchorStatus } from '../../types/inde
 import { formatHandlerError } from '../../utils/error-helpers.js'
 import { sendProgress } from '../../utils/progress-utils.js'
 import { ResourceNotFoundError, ValidationError } from '../../types/errors.js'
+import { resolveWorkspaceId } from '../../utils/workspace-resolver.js'
+import { coerceNumber } from '../../utils/query-helpers.js'
 import { ErrorFieldsMixin } from './error-fields-mixin.js'
 import { relaxedNumber } from './schemas.js'
 import {
@@ -347,6 +349,10 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                 entryId: relaxedNumber()
                     .optional()
                     .describe('The ID of the journal entry to check (alias for entry_id)'),
+                workspace_id: z.string().optional().describe('Workspace identifier (defaults to current project)'),
+                workspaceId: z.string().optional().describe('Workspace identifier alias'),
+                project_number: relaxedNumber().optional().describe('Numeric project identifier'),
+                projectNumber: relaxedNumber().optional().describe('Numeric project identifier alias'),
             }),
             outputSchema: z.object({
                 success: z.boolean(),
@@ -372,16 +378,26 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                     const cwd = process.cwd()
                     const parsedParams = z
                         .object({
-                            entry_id: z.number().optional(),
-                            entryId: z.number().optional(),
+                            entry_id: z.preprocess(coerceNumber, z.number().int().optional()),
+                            entryId: z.preprocess(coerceNumber, z.number().int().optional()),
+                            workspace_id: z.string().optional(),
+                            workspaceId: z.string().optional(),
+                            project_number: z.preprocess(coerceNumber, z.number().int().optional()),
+                            projectNumber: z.preprocess(coerceNumber, z.number().int().optional()),
                         })
                         .parse(params)
                     const resolvedEntryId = parsedParams.entry_id ?? parsedParams.entryId
                     if (resolvedEntryId === undefined) {
                         throw new ValidationError('entry_id (or entryId) is required')
                     }
+                    const rawWs = parsedParams.workspace_id ?? parsedParams.workspaceId
+                    const rawProj = parsedParams.project_number ?? parsedParams.projectNumber
+                    const wsId = rawWs === '*' ? '*' : resolveWorkspaceId(rawWs, rawProj, context.config)
 
-                    const entry = db.getEntryByIdIncludeDeleted(resolvedEntryId)
+                    let entry = db.getEntryByIdIncludeDeleted(resolvedEntryId, wsId)
+                    if (!entry && wsId !== '*') {
+                        entry = db.getEntryByIdIncludeDeleted(resolvedEntryId, '*')
+                    }
                     if (!entry) throw new ResourceNotFoundError('entry', String(resolvedEntryId))
 
                     const anchors = db.getAnchorsByEntryId(resolvedEntryId)

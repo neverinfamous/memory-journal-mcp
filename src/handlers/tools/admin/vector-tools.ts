@@ -118,7 +118,7 @@ export function getVectorTools(context: ToolContext): ToolDefinition[] {
                             recoverable: false,
                         }
                     }
-                    const entry = db.getEntryById(entry_id)
+                    const entry = db.getEntryById(entry_id, '*')
                     if (!entry) {
                         return {
                             success: false,

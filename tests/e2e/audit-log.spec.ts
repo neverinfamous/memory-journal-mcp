@@ -151,7 +151,7 @@ test.describe('Audit Log', () => {
             const text = (resource.contents[0] as { text: string }).text
             expect(text).toContain('audit_log:')
             expect(text).toContain('entries_shown:')
-            expect(text).toContain('tool: create_entry')
+            expect(text).toMatch(/tool:\s*"?create_entry"?/)
         } finally {
             if (client) await client.close()
             stopServer(port)
@@ -270,7 +270,7 @@ test.describe('Audit Log', () => {
             expect(text).toContain('  total_tokens: ')
             expect(text).toContain('  total_duration_ms: ')
             expect(text).toContain('  error_count: ')
-            expect(text).toContain('tool: create_entry')
+            expect(text).toMatch(/tool:\s*"?create_entry"?/)
         } finally {
             if (client) await client.close()
             stopServer(port)
@@ -298,8 +298,8 @@ test.describe('Audit Log', () => {
             const resource = await client.readResource({ uri: 'memory://audit' })
             const text = (resource.contents[0] as { text: string }).text
             
-            expect(text).toContain('tool: create_entry')
-            expect(text).toContain('tool: delete_entry')
+            expect(text).toMatch(/tool:\s*"?create_entry"?/)
+            expect(text).toMatch(/tool:\s*"?delete_entry"?/)
 
             const rawFile = await readFile(logPath, 'utf-8')
             expect(rawFile).toContain('category":"wri')

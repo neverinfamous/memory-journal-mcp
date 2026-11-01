@@ -11,7 +11,7 @@ import {
 } from './constants-and-primitives.js'
 
 const KEY_ALIAS_MAP: Record<string, string> = {
-    id: 'entry_id', ids: 'entry_ids',
+    id: 'entry_id', ids: 'entry_ids', entryId: 'entry_id',
     project_id: 'project_number', projectId: 'project_number', projectNumber: 'project_number', project: 'project_number',
     workspaceId: 'workspace_id', workspace: 'workspace_id', repo: 'workspace_id', repository: 'workspace_id', repo_name: 'workspace_id',
     isPersonal: 'is_personal', personal: 'is_personal',

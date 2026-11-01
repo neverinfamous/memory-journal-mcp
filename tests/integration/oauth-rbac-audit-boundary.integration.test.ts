@@ -156,8 +156,8 @@ describe('OAuth Scopes, Team RBAC, Audit Boundary & DatabaseAdapterProxy Integra
             expect(typeof auditResource.data).toBe('string')
             const auditText = String(auditResource.data)
             expect(auditText).toContain('Access Denied: Insufficient scope')
-            expect(auditText).toContain('tool: create_entry')
-            expect(auditText).toContain('tool: memory://audit')
+            expect(auditText).toMatch(/tool:\s*"?create_entry"?/)
+            expect(auditText).toMatch(/tool:\s*"?memory:\/\/audit"?/)
 
             const searchAuditRes = await callTool('search_audit_log', { status: false, limit: 20 }, proxiedDb, undefined, undefined, config, undefined, teamDb)
             expect(isToolResponse(searchAuditRes)).toBe(true)

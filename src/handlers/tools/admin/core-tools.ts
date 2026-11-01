@@ -108,7 +108,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     const { entry_id, permanent, expected_version, workspace_id } = DeleteEntrySchema.parse(params)
-                    const wsId = resolveWorkspaceId(workspace_id, undefined, context.config)
+                    const wsId = workspace_id ? resolveWorkspaceId(workspace_id, undefined, context.config) : undefined
 
                     if (expected_version !== undefined) {
                         const existing = db.getEntryByIdIncludeDeleted(entry_id, wsId);
@@ -207,7 +207,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                             workspace_id: z.string().optional(),
                         })
                     ).parse(params)
-                    const wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
+                    const wsId = workspace_id ? resolveWorkspaceId(workspace_id, project_number, context.config) : undefined
                     const success = db.restoreEntry(entry_id, wsId)
                     if (!success) {
                         return {

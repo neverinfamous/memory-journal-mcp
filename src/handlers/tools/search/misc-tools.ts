@@ -1,6 +1,8 @@
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
+import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
+import { coerceNumber } from '../../../utils/query-helpers.js'
 import { VectorStatsOutputSchema } from './schemas.js'
 import { EntriesListOutputSchema, relaxedNumber } from '../schemas.js'
 
@@ -49,7 +51,11 @@ export function getMiscSearchTools(context: ToolContext): ToolDefinition[] {
             inputSchema: z.object({
                 limit: relaxedNumber().optional().default(50),
                 offset: relaxedNumber().optional().default(0),
-            }).strict(),
+                workspace_id: z.string().optional().describe('Filter by workspace ID, or "*" for all workspaces'),
+                workspaceId: z.string().optional().describe('Workspace identifier alias'),
+                project_number: relaxedNumber().optional().describe('Filter by numeric project ID'),
+                projectNumber: relaxedNumber().optional().describe('Project number alias'),
+            }),
             outputSchema: EntriesListOutputSchema,
             annotations: {
                 readOnlyHint: true,
@@ -59,8 +65,18 @@ export function getMiscSearchTools(context: ToolContext): ToolDefinition[] {
             },
             handler: (params: unknown) => {
                 try {
-                    const { limit, offset } = z.object({ limit: z.number().optional().default(50), offset: z.number().optional().default(0) }).strict().parse(params)
-                    const result = db.getDeletedEntries({ limit, offset })
+                    const parsed = z.object({
+                        limit: z.preprocess(coerceNumber, z.number().int().min(1).optional().default(50)),
+                        offset: z.preprocess(coerceNumber, z.number().int().min(0).optional().default(0)),
+                        workspace_id: z.string().optional(),
+                        workspaceId: z.string().optional(),
+                        project_number: z.preprocess(coerceNumber, z.number().int().optional()),
+                        projectNumber: z.preprocess(coerceNumber, z.number().int().optional()),
+                    }).parse(params)
+                    const rawWs = parsed.workspace_id ?? parsed.workspaceId
+                    const rawProj = parsed.project_number ?? parsed.projectNumber
+                    const wsId = rawWs === '*' ? '*' : (rawWs !== undefined || rawProj !== undefined ? resolveWorkspaceId(rawWs, rawProj, context.config) : undefined)
+                    const result = db.getDeletedEntries({ limit: parsed.limit, offset: parsed.offset, workspaceId: wsId })
                     return {
                         success: true,
                         entries: result.entries.map((e) => ({ ...e, source: 'personal' as const })),
