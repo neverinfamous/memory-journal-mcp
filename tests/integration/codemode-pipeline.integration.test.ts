@@ -1,7 +1,19 @@
 import * as fs from 'node:fs/promises'
 import * as os from 'node:os'
 import * as path from 'node:path'
-import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+const { deterministicEmbedder } = vi.hoisted(() => {
+    const embed = (): Promise<{ data: Float32Array }> =>
+        Promise.resolve({ data: new Float32Array(16).fill(0.25) })
+    return { deterministicEmbedder: embed }
+})
+
+vi.mock('@huggingface/transformers', () => ({
+    pipeline: vi.fn().mockResolvedValue(deterministicEmbedder),
+    env: { allowRemoteModels: false, localModelPath: '' },
+}))
+
 import { AuditLogger } from '../../src/audit/audit-logger.js'
 import { createAuditInterceptor } from '../../src/audit/interceptor.js'
 import { DatabaseAdapterFactory } from '../../src/database/adapter-factory.js'

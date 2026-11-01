@@ -4,6 +4,18 @@ import * as path from 'node:path'
 import type { McpServer } from '@modelcontextprotocol/server'
 import BetterSqlite3 from 'better-sqlite3'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+const { deterministicEmbedder } = vi.hoisted(() => {
+    const embed = (): Promise<{ data: Float32Array }> =>
+        Promise.resolve({ data: new Float32Array(16).fill(0.25) })
+    return { deterministicEmbedder: embed }
+})
+
+vi.mock('@huggingface/transformers', () => ({
+    pipeline: vi.fn().mockResolvedValue(deterministicEmbedder),
+    env: { allowRemoteModels: false, localModelPath: '' },
+}))
+
 import { DatabaseAdapterFactory } from '../../src/database/adapter-factory.js'
 import { getGitHubIntegration } from '../../src/github/github-integration/index.js'
 import { getPrompts } from '../../src/handlers/prompts/index.js'

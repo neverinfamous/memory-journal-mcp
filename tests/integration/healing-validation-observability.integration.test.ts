@@ -2,7 +2,19 @@ import * as fs from 'node:fs/promises'
 import * as os from 'node:os'
 import * as path from 'node:path'
 import type { McpServer } from '@modelcontextprotocol/server'
-import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+const { deterministicEmbedder } = vi.hoisted(() => {
+    const embed = (): Promise<{ data: Float32Array }> =>
+        Promise.resolve({ data: new Float32Array(16).fill(0.25) })
+    return { deterministicEmbedder: embed }
+})
+
+vi.mock('@huggingface/transformers', () => ({
+    pipeline: vi.fn().mockResolvedValue(deterministicEmbedder),
+    env: { allowRemoteModels: false, localModelPath: '' },
+}))
+
 import { AuditLogger } from '../../src/audit/audit-logger.js'
 import { createAuditInterceptor } from '../../src/audit/interceptor.js'
 import { DatabaseAdapterFactory } from '../../src/database/adapter-factory.js'
@@ -241,7 +253,7 @@ describe('Cross-Subsystem Integration: Autonomous Healing, Validation & Observab
             {}
         )
         expect(getProp(parseToolResponsePayload(projAliasRes), 'success')).toBe(true)
-    })
+    }, 30_000)
 
     it('autonomously heals MCP prompts and resources when invoked via tools/call', async () => {
         const callToolHandler = getRequestHandler(server, 'tools/call')
@@ -329,7 +341,7 @@ describe('Cross-Subsystem Integration: Autonomous Healing, Validation & Observab
         expect(getProp(sqlPayload, 'success')).toBe(true)
         const sqlEntries = getProp(getProp(sqlPayload, 'result'), 'entries')
         expect(Array.isArray(sqlEntries) ? sqlEntries.length : 0).toBe(1)
-    })
+    }, 30_000)
 
     it('returns structured VALIDATION_ERROR payloads for unhealable Zod errors and records error telemetry', async () => {
         const callToolHandler = getRequestHandler(server, 'tools/call')
