@@ -534,7 +534,7 @@ For production deployments, enable OAuth 2.1 authentication on the HTTP transpor
 | Scope   | Tool Groups                                                        |
 | ------- | ------------------------------------------------------------------ |
 | `read`  | `core, search, analytics, relationships, io, git`                  |
-| `write` | `github (+ all read groups and create_entry / link_entries / mark_anchors_stale / import_external / markdown IO)` |
+| `write` | `github (+ all read groups and create_entry / create_entry_minimal / link_entries / mark_anchors_stale / import_external / import_markdown / export_markdown)` |
 | `team`  | `team (dedicated team collaboration scope)`                        |
 | `audit` | `audit log access`                                                 |
 | `admin` | `admin, backup, codemode (+ all read/write/team/audit groups)`     |

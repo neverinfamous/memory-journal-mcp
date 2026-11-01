@@ -54,9 +54,8 @@
 | `markdown/`      | Markdown frontmatter parsing, import, and export                |
 | `migrations/`    | Versioned SQLite schema migrations and legacy upgrades          |
 | `observability/` | Metrics interceptor, Prometheus exporter, token estimator       |
-| `scheduler/`     | Automated backup, vacuum, index rebuild, digest, and prune jobs |
 | `security/`      | Input validation, SQL injection, path traversal                 |
-| `server/`        | MCP server initialization, registration, and interceptors       |
+| `server/`        | MCP server initialization, registration, scheduler, and interceptors |
 | `transports/`    | HTTP transport, rate limiting, session behavior                 |
 | `utils/`         | Error formatting, security helpers, logger, progress utilities  |
 | `vector/`        | Vector search manager, semantic embedding logic                 |

@@ -32,6 +32,7 @@ Brief description of the changes in this PR.
 
 - [ ] Manual testing in client
 - [ ] Unit and integration tests (`pnpm test`)
+- [ ] End-to-end transport tests (`pnpm run test:e2e`)
 - [ ] Docker build tested
 - [ ] Database migration tested
 - [ ] Existing functionality verified

@@ -128,7 +128,7 @@ src/
 
 | File                                     | Purpose                                              |
 | ---------------------------------------- | ---------------------------------------------------- |
-| `src/constants/server-instructions.ts` | Server instructions (Agent prompt and composable segments, now uses Adaptive Instruction Architecture pointing to `memory://help`) |
+| `src/constants/server-instructions.ts` | Server instructions (`generateInstructions()` and `HELP_CONTENT` map; compiled from `src/constants/instructions/markdown/*.md` into `src/constants/instructions/*.ts` via `pnpm run generate:instructions`) |
 | `test-server/code-map.md`                | File → tool/handler mapping                          |
 | `test-server/tool-reference.md`          | Categorized tool inventory                       |
 | `CONTRIBUTING.md`                        | Development setup and PR guidelines                  |

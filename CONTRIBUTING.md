@@ -34,9 +34,10 @@ pnpm run build
 
 # Run the test suite
 pnpm test
+pnpm run test:e2e
 
 # Run the full quality check
-pnpm run lint && pnpm run typecheck
+pnpm run check # or: pnpm run lint && pnpm run typecheck
 ```
 
 ### Docker Development (Optional)
@@ -79,8 +80,11 @@ We especially welcome contributions in these areas:
 ### Automated Testing
 
 ```bash
-# Run all tests
+# Run all unit/integration tests
 pnpm test
+
+# Run Playwright E2E HTTP/SSE transport tests
+pnpm run test:e2e
 
 # Run tests in watch mode
 pnpm run test:watch
@@ -95,6 +99,9 @@ pnpm run bench
 ### Quality Checks
 
 ```bash
+# Full check (lint + typecheck + code-map + unassigned entries check)
+pnpm run check
+
 # Lint + type check (required before submitting)
 pnpm run lint && pnpm run typecheck
 
@@ -179,7 +186,7 @@ Use our [Feature Request template](.github/ISSUE_TEMPLATE/feature_request.md).
 ### Before Submitting
 
 - [ ] **Fork** the repository and create a feature branch
-- [ ] **Test** your changes (`pnpm test`, `pnpm run lint && pnpm run typecheck`)
+- [ ] **Test** your changes (`pnpm test`, `pnpm run test:e2e`, `pnpm run check` or `pnpm run lint && pnpm run typecheck`)
 - [ ] **Auto-fix lint issues** if needed (`pnpm run lint:fix`)
 - [ ] **Update documentation** if you changed APIs or behavior
 - [ ] **Add examples** for new features
@@ -232,13 +239,11 @@ src/
 │   ├── tools/                  # tool handlers (multiple groups)
 │   ├── resources/              # resource handlers
 │   └── prompts/                # prompt handlers (load-briefing.ts, optimizer.ts, cms-supervisor.ts, etc.)
-├── importance/                 # Heuristic entry importance scoring engine
 ├── markdown/                   # Markdown import/export (round-trip frontmatter parsing)
 ├── observability/              # Metrics interceptor, token estimator, latency tracker
 ├── server/
 │   ├── mcp-server/             # MCP server setup
 │   ├── digest-reporter.ts      # Scheduled digest report generation and webhook dispatch
-│   ├── elicitation.ts          # MCP elicitation helpers
 │   ├── registration.ts         # Tool/resource/prompt registration
 │   ├── scheduler.ts            # Recurring task scheduler
 │   └── subscription-manager.ts # Resource subscription management

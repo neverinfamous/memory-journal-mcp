@@ -68,7 +68,7 @@ When running in HTTP mode (`--transport http`), the following security measures 
 
 ### **CORS Configuration**
 
-- ✅ **Configurable multiple origins** via comma-separated `--cors-origin` flag or `CORS_ORIGIN` environment variable
+- ✅ **Configurable multiple origins** via comma-separated `--cors-origin` flag or `CORS_ORIGIN` (fallback: `MCP_CORS_ORIGIN`) environment variable
 - ✅ **Exact-match verification** (no wildcard matching for custom domains)
 - 🔒 **Default: None** (no external origins allowed by default). You MUST explicitly configure CORS for browsers.
 - 🔒 **Required**: Set specific origins for production deployments, or wildcard (`*`) will only be accepted if HTTP Authentication is enabled.
@@ -129,7 +129,7 @@ For production HTTP deployments, Memory Journal supports **OAuth 2.1 authenticat
 | Scope   | Tool Groups                                                                | Description                            |
 | ------- | -------------------------------------------------------------------------- | -------------------------------------- |
 | `read`  | `core, search, analytics, relationships, io, git`                          | Read-only operations                   |
-| `write` | `github (+ all read groups and create_entry / link_entries / mark_anchors_stale / import_external / markdown IO)` | Read + write operations                |
+| `write` | `github (+ all read groups and create_entry / create_entry_minimal / link_entries / mark_anchors_stale / import_external / import_markdown / export_markdown)` | Read + write operations                |
 | `team`  | `team (dedicated team collaboration scope)`                                | Team database operations               |
 | `audit` | `audit log access`                                                         | Audit log queries and inspection       |
 | `admin` | `admin, backup, codemode (+ all read/write/team/audit groups)`             | Full administrative access             |
@@ -400,7 +400,7 @@ chmod 700 /shared/team-data
 ### **For Users**
 
 1. **Set a CORS origin** when exposing the HTTP transport on a network
-2. **Keep Node.js updated**: Use Node.js 26+ (LTS)
+2. **Keep Node.js updated**: Use Node.js 24+ (Node.js 26.x LTS recommended)
 3. **Secure host system**: Ensure your host machine is secure
 4. **Regular backups**: Use the `backup_journal` tool or back up your `.db` file
 5. **Limit network access**: Don't expose the HTTP transport to untrusted networks
