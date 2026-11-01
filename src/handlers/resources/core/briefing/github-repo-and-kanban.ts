@@ -147,7 +147,16 @@ export async function fetchIssuesAndPrs(
 }> {
     try {
         const issueLimit = Math.max(1, config.issueCount || 1)
-        const issues = await github.getIssues(owner, repo, 'open', issueLimit)
+        const prState = config.prStatusBreakdown ? ('all' as const) : ('open' as const)
+        const prLimit = config.prStatusBreakdown
+            ? Math.max(20, config.prCount)
+            : Math.max(1, config.prCount || 1)
+
+        const [issues, prs] = await Promise.all([
+            github.getIssues(owner, repo, 'open', issueLimit),
+            github.getPullRequests(owner, repo, prState, prLimit),
+        ])
+
         const openIssues = issues.length > 0 ? issues.length : 0
         const openIssueList =
             config.issueCount > 0 && issues.length > 0
@@ -156,12 +165,6 @@ export async function fetchIssuesAndPrs(
                       title: markUntrustedContentInline(i.title),
                   }))
                 : undefined
-
-        const prState = config.prStatusBreakdown ? ('all' as const) : ('open' as const)
-        const prLimit = config.prStatusBreakdown
-            ? Math.max(20, config.prCount)
-            : Math.max(1, config.prCount || 1)
-        const prs = await github.getPullRequests(owner, repo, prState, prLimit)
 
         const openPRs = config.prStatusBreakdown
             ? prs.filter((p) => p.state === 'OPEN').length
@@ -247,7 +250,13 @@ export async function fetchInsights(
     degraded?: boolean | undefined
 }> {
     try {
-        const repoStats = await github.getRepoStats(owner, repo)
+        const [repoStats, trafficResult] = await Promise.all([
+            github.getRepoStats(owner, repo),
+            github
+                .getTrafficData(owner, repo)
+                .then((data) => ({ ok: true as const, data }))
+                .catch((error: unknown) => ({ ok: false as const, error })),
+        ])
         if (!repoStats) return { degraded: true }
 
         const result: NonNullable<BriefingGitHub['insights']> = {
@@ -255,19 +264,21 @@ export async function fetchInsights(
             forks: repoStats.forks ?? null,
         }
 
-        try {
-            const trafficData = await github.getTrafficData(owner, repo)
-            if (trafficData) {
-                result.clones14d = trafficData.clones.total
-                result.views14d = trafficData.views.total
-            }
-        } catch (error) {
+        if (!trafficResult.ok) {
             logger.debug('Traffic data unavailable (requires push access)', {
                 module: 'BRIEFING',
                 operation: 'traffic',
-                error: error instanceof Error ? error.message : String(error),
+                error:
+                    trafficResult.error instanceof Error
+                        ? trafficResult.error.message
+                        : String(trafficResult.error),
             })
             return { insights: result, degraded: true }
+        }
+
+        if (trafficResult.data) {
+            result.clones14d = trafficResult.data.clones.total
+            result.views14d = trafficResult.data.views.total
         }
 
         return { insights: result }
@@ -295,10 +306,9 @@ export async function fetchCopilotReviews(
         let changesRequested = 0
         let totalComments = 0
 
-        const summaries = []
-        for (const pr of recentPrs.slice(0, 5)) {
-            summaries.push(await github.getCopilotReviewSummary(owner, repo, pr.number))
-        }
+        const summaries = await Promise.all(
+            recentPrs.slice(0, 5).map((pr) => github.getCopilotReviewSummary(owner, repo, pr.number))
+        )
         for (const summary of summaries) {
             if (summary.state !== 'none') {
                 reviewed++

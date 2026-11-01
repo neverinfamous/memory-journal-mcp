@@ -23,12 +23,16 @@ export function getStatistics(
     }
 
     if (startDate) {
-        dateFilter += ' AND DATE(timestamp) >= DATE(?)'
-        dateParams.push(startDate)
+        let start = startDate
+        if (!start.includes('T')) start += 'T00:00:00.000Z'
+        dateFilter += ' AND timestamp >= ?'
+        dateParams.push(start)
     }
     if (endDate) {
-        dateFilter += ' AND DATE(timestamp) <= DATE(?)'
-        dateParams.push(endDate)
+        let end = endDate
+        if (!end.includes('T')) end += 'T23:59:59.999Z'
+        dateFilter += ' AND timestamp <= ?'
+        dateParams.push(end)
     }
 
     let totalEntries: number

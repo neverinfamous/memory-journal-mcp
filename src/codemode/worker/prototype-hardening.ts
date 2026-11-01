@@ -89,54 +89,53 @@ export function hardenOuterFunctionPrototypes(): void {
     }
 }
 
+const FREEZE_INNER_CONTEXT_SCRIPT = new vm.Script(`(function() {
+    "use strict";
+    const noopCtor = Object.freeze(function ForbiddenConstructor() {
+        throw new Error("Dynamic code generation is disabled in sandbox");
+    });
+    const AsyncFnProto = Object.getPrototypeOf(async function() {});
+    const GenFnProto = Object.getPrototypeOf(function*() {});
+    const AsyncGenFnProto = Object.getPrototypeOf(async function*() {});
+    for (const proto of [Function.prototype, AsyncFnProto, GenFnProto, AsyncGenFnProto]) {
+        if (proto) {
+            try {
+                Object.defineProperty(proto, "constructor", {
+                    value: noopCtor,
+                    writable: false,
+                    configurable: false,
+                });
+            } catch(e) {}
+        }
+    }
+    const builtins = [
+        Object, Function, Array, String, Number, Boolean, RegExp,
+        Error, TypeError, RangeError, ReferenceError, SyntaxError,
+        URIError, EvalError, Map, Set, WeakMap, WeakSet,
+        Promise, Date, ArrayBuffer, DataView,
+        Int8Array, Uint8Array, Uint8ClampedArray,
+        Int16Array, Uint16Array, Int32Array, Uint32Array,
+        Float32Array, Float64Array, BigInt64Array, BigUint64Array,
+        JSON, Math,
+    ];
+    for (const B of builtins) {
+        if (B && typeof B === "function" && B.prototype) {
+            try { Object.freeze(B.prototype); } catch(e) {}
+        }
+        try { Object.freeze(B); } catch(e) {}
+    }
+    for (const proto of [Object.prototype, Function.prototype, AsyncFnProto, GenFnProto, AsyncGenFnProto]) {
+        if (proto) {
+            try { Object.freeze(proto); } catch(e) {}
+        }
+    }
+})()`)
+
 /**
  * Freezes built-in prototypes and neuters Function constructors inside the
  * VM context to prevent dynamic constructor chain escapes like:
  *   `const c = 'con'+'structor'; Error()[c][c]('return process')()`
  */
 export function freezeInnerVmContext(context: vm.Context): void {
-    vm.runInContext(
-        `(function() {
-            "use strict";
-            const noopCtor = Object.freeze(function ForbiddenConstructor() {
-                throw new Error("Dynamic code generation is disabled in sandbox");
-            });
-            const AsyncFnProto = Object.getPrototypeOf(async function() {});
-            const GenFnProto = Object.getPrototypeOf(function*() {});
-            const AsyncGenFnProto = Object.getPrototypeOf(async function*() {});
-            for (const proto of [Function.prototype, AsyncFnProto, GenFnProto, AsyncGenFnProto]) {
-                if (proto) {
-                    try {
-                        Object.defineProperty(proto, "constructor", {
-                            value: noopCtor,
-                            writable: false,
-                            configurable: false,
-                        });
-                    } catch(e) {}
-                }
-            }
-            const builtins = [
-                Object, Function, Array, String, Number, Boolean, RegExp,
-                Error, TypeError, RangeError, ReferenceError, SyntaxError,
-                URIError, EvalError, Map, Set, WeakMap, WeakSet,
-                Promise, Date, ArrayBuffer, DataView,
-                Int8Array, Uint8Array, Uint8ClampedArray,
-                Int16Array, Uint16Array, Int32Array, Uint32Array,
-                Float32Array, Float64Array, BigInt64Array, BigUint64Array,
-                JSON, Math,
-            ];
-            for (const B of builtins) {
-                if (B && typeof B === "function" && B.prototype) {
-                    try { Object.freeze(B.prototype); } catch(e) {}
-                }
-                try { Object.freeze(B); } catch(e) {}
-            }
-            for (const proto of [Object.prototype, Function.prototype, AsyncFnProto, GenFnProto, AsyncGenFnProto]) {
-                if (proto) {
-                    try { Object.freeze(proto); } catch(e) {}
-                }
-            }
-        })()`,
-        context
-    )
+    FREEZE_INNER_CONTEXT_SCRIPT.runInContext(context)
 }

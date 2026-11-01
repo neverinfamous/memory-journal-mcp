@@ -29,12 +29,16 @@ export function getCrossProjectInsights(
     sqlParams.push(...wsParams)
 
     if (options.startDate !== undefined && options.startDate.length > 0) {
-        where += ' AND DATE(timestamp) >= DATE(?)'
-        sqlParams.push(options.startDate)
+        let start = options.startDate
+        if (!start.includes('T')) start += 'T00:00:00.000Z'
+        where += ' AND timestamp >= ?'
+        sqlParams.push(start)
     }
     if (options.endDate !== undefined && options.endDate.length > 0) {
-        where += ' AND DATE(timestamp) <= DATE(?)'
-        sqlParams.push(options.endDate)
+        let end = options.endDate
+        if (!end.includes('T')) end += 'T23:59:59.999Z'
+        where += ' AND timestamp <= ?'
+        sqlParams.push(end)
     }
 
     const projectsResult = connection.exec(

@@ -13,8 +13,10 @@ beforeAll(async () => {
 
     vm = new VectorSearchManager(db)
 
-    // Mock the embedding generation to skip transformer inference delay
-    vm.generateEmbedding = () => Promise.resolve(new Float32Array(384).fill(Math.random()))
+    // Mock the embedding generation with a normalized unit vector to skip transformer inference delay
+    const unitVal = 1 / Math.sqrt(384)
+    const unitVec = new Float32Array(384).fill(unitVal)
+    vm.generateEmbedding = () => Promise.resolve(unitVec)
 
     await vm.initialize()
 
@@ -38,9 +40,15 @@ afterAll(() => {
     }
 })
 
+test('search', async ({ bench }) => {
+    await bench('search', async () => {
+        await vm.search('Vector benchmark entry 42', 10, 0.1)
+    }).run()
+})
+
 test('addEntry', async ({ bench }) => {
     await bench('addEntry', async () => {
-        const id = Math.floor(Math.random() * 1000000) + 1000
+        const id = Math.floor(Math.random() * 100) + 1
         await vm.addEntry({
             id,
             content: `New content for adding id ${id}`,
@@ -49,11 +57,5 @@ test('addEntry', async ({ bench }) => {
             isPersonal: true,
             tags: [],
         })
-    }).run()
-})
-
-test('search', async ({ bench }) => {
-    await bench('search', async () => {
-        await vm.search('Vector benchmark entry 42', 10, 0.1)
     }).run()
 })

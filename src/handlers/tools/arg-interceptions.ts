@@ -90,6 +90,28 @@ export function applyArgInterceptions(
     return applyCodeModeArgInterceptions(methodName, args)
 }
 
+const projectNumberToNameCache = new WeakMap<
+    Record<string, ProjectRegistryEntry>,
+    Map<number, string>
+>()
+
+function getProjectNameByNumber(
+    registry: Record<string, ProjectRegistryEntry>,
+    projectNumber: number
+): string | undefined {
+    let reverseMap = projectNumberToNameCache.get(registry)
+    if (reverseMap === undefined) {
+        reverseMap = new Map<number, string>()
+        for (const [name, entry] of Object.entries(registry)) {
+            if (entry.project_number !== undefined) {
+                reverseMap.set(entry.project_number, name)
+            }
+        }
+        projectNumberToNameCache.set(registry, reverseMap)
+    }
+    return reverseMap.get(projectNumber)
+}
+
 /**
  * Inject resolved project names from the project registry into tool responses.
  */
@@ -125,9 +147,9 @@ export function injectProjectNames(
               : undefined
 
     if (pNum !== undefined && typeof record['projectName'] === 'undefined') {
-        const entry = Object.entries(registry).find(([_, r]) => r.project_number === pNum)
-        if (entry) {
-            record['projectName'] = entry[0]
+        const projectName = getProjectNameByNumber(registry, pNum)
+        if (projectName !== undefined) {
+            record['projectName'] = projectName
         }
     }
     for (const key of Object.keys(record)) {

@@ -93,11 +93,17 @@ export function getSemanticSearchTool(context: ToolContext): ToolDefinition[] {
                         )
                     }
 
-                    // Batch-fetch all entries in a single query (instead of N+1 getEntryById calls)
-                    const entryIds = results.map((r) => r.entryId)
-                    const entriesMap = db.getEntriesByIds(entryIds)
+                    // Entries and their tags are already batch-hydrated on r.entry by real VectorSearchManager.
+                    // Fallback to single-batch db.getEntriesByIds only when a test mock omits r.entry.
+                    const unhydratedIds: number[] = []
+                    for (const r of results) {
+                        if ((r as { entry?: unknown }).entry === undefined) {
+                            unhydratedIds.push(r.entryId)
+                        }
+                    }
+                    const fallbackMap =
+                        unhydratedIds.length > 0 ? db.getEntriesByIds(unhydratedIds) : null
 
-                    // Pre-hydrate tags to avoid N+1 queries during metadata filtering
                     const filterOptions = {
                         isPersonal: input.is_personal,
                         projectNumber: input.project_number,
@@ -113,17 +119,12 @@ export function getSemanticSearchTool(context: ToolContext): ToolDefinition[] {
                         workspaceId: wsId,
                     }
 
-                    if (input.tags && input.tags.length > 0) {
-                        const tagsMap = db.getTagsForEntries(entryIds)
-                        for (const entry of entriesMap.values()) {
-                            entry.tags = tagsMap.get(entry.id) ?? []
-                        }
-                    }
-
                     const entries = results
                         .map((r) => {
-                            const entry = entriesMap.get(r.entryId)
-                            if (!entry) return null
+                            const entry =
+                                (r as { entry?: typeof r.entry }).entry ??
+                                fallbackMap?.get(r.entryId)
+                            if (entry === undefined) return null
 
                             if (!passMetadataFilters(entry, filterOptions, db)) return null
 

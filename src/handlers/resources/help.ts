@@ -388,7 +388,7 @@ async function getAllToolDefinitionsAsync(context: ResourceContext): Promise<Min
             null,
             context.vectorManager,
             context.github ?? undefined,
-            undefined,
+            context.runtime !== undefined ? { runtime: context.runtime } : undefined,
             context.teamDb,
             undefined
         )

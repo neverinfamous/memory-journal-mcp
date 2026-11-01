@@ -65,6 +65,9 @@ export class NativeConnectionManager implements IDatabaseConnection {
             db.pragma('synchronous = NORMAL')
             db.pragma('foreign_keys = ON')
             db.pragma('temp_store = MEMORY')
+            db.pragma('busy_timeout = 5000')
+            db.pragma('cache_size = -64000')
+            this.installStatementCache(db)
 
             // Load sqlite-vec extension for vector search
             // Use local `db` ref to avoid race with concurrent close() during await
@@ -293,6 +296,48 @@ export class NativeConnectionManager implements IDatabaseConnection {
         return this.db
     }
 
+    /**
+     * Installs a bounded LRU prepared-statement cache on `db.prepare()` so all
+     * callers benefit from statement reuse without schema-invalidation leaks.
+     */
+    private installStatementCache(db: Database): void {
+        if (typeof db.prepare !== 'function') return
+        const rawPrepare = db.prepare.bind(db)
+        const stmtCache = new Map<string, ReturnType<Database['prepare']>>()
+        const MAX_CACHE_SIZE = 256
+        const DDL_RE = /\b(?:DROP|ALTER|CREATE)\b/i
+
+        db.prepare = ((source: string) => {
+            if (DDL_RE.test(source)) {
+                stmtCache.clear()
+                return rawPrepare(source)
+            }
+            const cached = stmtCache.get(source)
+            if (cached !== undefined) {
+                return cached
+            }
+            const stmt = rawPrepare(source)
+            if (stmtCache.size >= MAX_CACHE_SIZE) {
+                const oldestKey = stmtCache.keys().next().value
+                if (oldestKey !== undefined) {
+                    stmtCache.delete(oldestKey)
+                }
+            }
+            stmtCache.set(source, stmt)
+            return stmt
+        }) as Database['prepare']
+
+        if (typeof db.exec === 'function') {
+            const rawExec = db.exec.bind(db)
+            db.exec = (source: string) => {
+                if (DDL_RE.test(source)) {
+                    stmtCache.clear()
+                }
+                return rawExec(source)
+            }
+        }
+    }
+
     pragma(command: string): void {
         if (!ALLOWED_PRAGMAS_RE.test(command)) {
             throw new Error(`Disallowed PRAGMA command: ${command}`)
@@ -323,8 +368,10 @@ export class NativeConnectionManager implements IDatabaseConnection {
     }
 
     setDbAndInitialized(db: unknown): void {
-        this.db = db as Database
-        this.db.pragma('foreign_keys = ON')
+        const nativeDb = db as Database
+        this.db = nativeDb
+        nativeDb.pragma('foreign_keys = ON')
+        this.installStatementCache(nativeDb)
         this.initialized = true
     }
 
@@ -351,6 +398,7 @@ export class NativeConnectionManager implements IDatabaseConnection {
         // Wait, vec0 doesn't support parameterized dimensions via '?', we have to interpolate
         db.exec(`
             CREATE VIRTUAL TABLE IF NOT EXISTS vec_embeddings USING vec0(
+                chunk_size=256,
                 entry_id INTEGER PRIMARY KEY,
                 embedding float[${dimensions}]
             )

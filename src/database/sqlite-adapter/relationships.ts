@@ -7,11 +7,9 @@ import { buildImportanceCte, buildImportanceSqlExpression } from './entries/impo
 
 export class RelationshipsManager {
     private ctx: NativeConnectionManager
-    private entries: EntriesManager
 
-    constructor(ctx: NativeConnectionManager, entries: EntriesManager) {
+    constructor(ctx: NativeConnectionManager, _entries?: EntriesManager) {
         this.ctx = ctx
-        this.entries = entries
     }
 
     private get db(): Database {
@@ -26,10 +24,13 @@ export class RelationshipsManager {
     ): Relationship {
         const db = this.db
 
-        if (this.entries.getEntryById(fromEntryId, '*') === null) {
+        const existsStmt = db.prepare(
+            'SELECT 1 FROM memory_journal WHERE id = ? AND deleted_at IS NULL'
+        )
+        if (existsStmt.get(fromEntryId) === undefined) {
             throw new ResourceNotFoundError('Entry', String(fromEntryId))
         }
-        if (this.entries.getEntryById(toEntryId, '*') === null) {
+        if (existsStmt.get(toEntryId) === undefined) {
             throw new ResourceNotFoundError('Entry', String(toEntryId))
         }
 

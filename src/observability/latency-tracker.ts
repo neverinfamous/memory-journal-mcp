@@ -33,8 +33,10 @@ export interface LatencyPercentiles {
 interface ToolLatencyData {
     /** Sorted ascending for O(1) percentile lookup */
     sorted: number[]
-    /** Insertion order for FIFO eviction when window is exceeded */
+    /** Ring-buffer insertion order for O(1) FIFO eviction when window is exceeded */
     insertionOrder: number[]
+    /** Current ring-buffer head index */
+    head: number
 }
 
 /**
@@ -105,27 +107,28 @@ export class LatencyTracker {
     record(toolName: string, durationMs: number): void {
         let entry = this.data.get(toolName)
         if (!entry) {
-            entry = { sorted: [], insertionOrder: [] }
+            entry = { sorted: [], insertionOrder: [], head: 0 }
             this.data.set(toolName, entry)
         }
 
-        // Evict oldest sample if window exceeded
+        // Evict oldest sample in O(1) via ring buffer if window exceeded
         if (entry.sorted.length >= this.maxSamplesPerTool) {
-            const oldest = entry.insertionOrder.shift()
+            const oldest = entry.insertionOrder[entry.head]
+            entry.insertionOrder[entry.head] = durationMs
+            entry.head = (entry.head + 1) % this.maxSamplesPerTool
             if (oldest !== undefined) {
                 const removeIdx = binarySearchExact(entry.sorted, oldest)
                 if (removeIdx !== -1) {
                     entry.sorted.splice(removeIdx, 1)
                 }
             }
+        } else {
+            entry.insertionOrder.push(durationMs)
         }
 
         // Binary-search insert into sorted array
         const insertIdx = binarySearchInsertIndex(entry.sorted, durationMs)
         entry.sorted.splice(insertIdx, 0, durationMs)
-
-        // Track insertion order for FIFO eviction
-        entry.insertionOrder.push(durationMs)
     }
 
     /**

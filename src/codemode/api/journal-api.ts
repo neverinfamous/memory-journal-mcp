@@ -24,6 +24,8 @@ import {
 } from './project-registry-ops.js'
 import { buildSandboxBindingsMap } from './sandbox-bindings.js'
 
+const TOOL_SCHEMA_STRING_CACHE = new WeakMap<ToolDefinition, string>()
+
 /**
  * Main API class exposing all Memory Journal tool groups.
  * This is the object injected as `mj` in the sandbox.
@@ -307,7 +309,12 @@ export class JournalApi {
             const groupSchemas: Record<string, string> = {}
             for (const tool of tools) {
                 const methodName = toolNameToMethodName(tool.name, groupName)
-                groupSchemas[methodName] = getZodTypeString(tool.inputSchema)
+                let typeStr = TOOL_SCHEMA_STRING_CACHE.get(tool)
+                if (typeStr === undefined) {
+                    typeStr = getZodTypeString(tool.inputSchema)
+                    TOOL_SCHEMA_STRING_CACHE.set(tool, typeStr)
+                }
+                groupSchemas[methodName] = typeStr
             }
             const aliases = METHOD_ALIASES[groupName]
             if (aliases) {

@@ -257,7 +257,7 @@ export function searchByDateRange(
     }
 
     query += `
-        SELECT DISTINCT ${ALIASED_ENTRY_COLUMNS}${importanceCol} FROM memory_journal e
+        SELECT ${ALIASED_ENTRY_COLUMNS}${importanceCol} FROM memory_journal e
     `
     if (useImportance) {
         query += `LEFT JOIN rel_stats rs ON e.id = rs.entry_id `
@@ -265,12 +265,10 @@ export function searchByDateRange(
     }
 
     if (options?.tags !== undefined && options.tags.length > 0) {
-        query += `
-            JOIN entry_tags et ON e.id = et.entry_id
-            JOIN tags t ON et.tag_id = t.id
-        `
         const placeholders = options.tags.map(() => '?').join(',')
-        conditions.push(`t.name IN (${placeholders})`)
+        conditions.push(
+            `EXISTS (SELECT 1 FROM entry_tags et JOIN tags t ON et.tag_id = t.id WHERE et.entry_id = e.id AND t.name IN (${placeholders}))`
+        )
         params.push(...options.tags)
     }
 

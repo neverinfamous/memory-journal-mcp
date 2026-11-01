@@ -373,7 +373,7 @@ export function buildSandboxGlobals(
 
     // Spread all callable methods from all groups into the sandbox as standalone globals
     for (const key of Object.keys(mjApi)) {
-        const val = shimMj[key]
+        const val = mjApi[key]
         if ((val !== null && typeof val === 'object') || typeof val === 'function') {
             for (const groupMethod of Object.keys(val)) {
                 if (groupMethod in sandbox) continue

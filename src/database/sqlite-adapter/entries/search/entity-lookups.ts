@@ -212,12 +212,13 @@ export function getSearchFacets(
     }
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
-    const joinFts = useFts ? `JOIN fts_content fts ON fts.rowid = e.id` : ''
+    const fromClause = useFts
+        ? `FROM fts_content fts CROSS JOIN memory_journal e ON e.id = fts.rowid`
+        : `FROM memory_journal e`
 
     const tagsSql = `
         SELECT t.name, COUNT(DISTINCT e.id) AS cnt
-        FROM memory_journal e
-        ${joinFts}
+        ${fromClause}
         JOIN entry_tags et ON e.id = et.entry_id
         JOIN tags t ON et.tag_id = t.id
         ${whereClause}
@@ -230,8 +231,7 @@ export function getSearchFacets(
             : ''
     const entryTypesSql = `
         SELECT e.entry_type AS name, COUNT(DISTINCT e.id) AS cnt
-        FROM memory_journal e
-        ${joinFts}
+        ${fromClause}
         ${entryTypesJoinTags}
         ${whereClause}
         GROUP BY e.entry_type ORDER BY cnt DESC

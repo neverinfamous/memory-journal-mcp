@@ -54,6 +54,8 @@ export function checkSchemaAcceptsKey(schema: unknown, key: string): boolean {
 
 const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
 
+const UPPERCASE_RE = /[A-Z]/
+
 export function deepCamelToSnake(obj: unknown, depth = 0): unknown {
     if (depth > 12) return obj
     if (Array.isArray(obj)) return obj.map((item) => deepCamelToSnake(item, depth + 1))
@@ -61,7 +63,9 @@ export function deepCamelToSnake(obj: unknown, depth = 0): unknown {
         const newObj: Record<string, unknown> = {}
         for (const [k, v] of Object.entries(obj)) {
             if (FORBIDDEN_KEYS.has(k)) continue
-            const snakeKey = k.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
+            const snakeKey = UPPERCASE_RE.test(k)
+                ? k.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
+                : k
             if (FORBIDDEN_KEYS.has(snakeKey)) continue
             if (snakeKey === 'id' && !('entry_id' in obj)) {
                 newObj['entry_id'] = deepCamelToSnake(v, depth + 1)

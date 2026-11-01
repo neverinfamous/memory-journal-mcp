@@ -41,23 +41,6 @@ test('getTools', async ({ bench }) => {
     }).run()
 })
 
-test('callTool create_entry', async ({ bench }) => {
-    await bench('callTool create_entry', async () => {
-        await callTool(
-            'create_entry',
-            {
-                workspace_id: 'default',
-                content: 'Bench creation entry text over a tool call',
-                entry_type: 'personal_reflection',
-            },
-            db,
-            undefined,
-            undefined,
-            config
-        )
-    }).run()
-})
-
 test('callTool get_recent_entries', async ({ bench }) => {
     await bench('callTool get_recent_entries', async () => {
         await callTool(
@@ -76,6 +59,24 @@ test('callTool search_entries', async ({ bench }) => {
         await callTool(
             'search_entries',
             { query: 'benchmark', limit: 20 },
+            db,
+            undefined,
+            undefined,
+            config
+        )
+    }).run()
+})
+
+test('callTool create_entry', async ({ bench }) => {
+    await bench('callTool create_entry', async () => {
+        await callTool(
+            'create_entry',
+            {
+                project_number: 1,
+                workspace_id: 'default',
+                content: 'Bench creation entry text over a tool call',
+                entry_type: 'personal_reflection',
+            },
             db,
             undefined,
             undefined,

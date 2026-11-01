@@ -105,14 +105,16 @@ export function serializeAndEnforceEgress(
             if (typeof value === 'object' && value !== null) {
                 if (cache.has(value)) return '[Circular]'
                 cache.add(value)
-            }
-            if (typeof value === 'string') {
-                bytes += Buffer.byteLength(value, 'utf8') + 2 // include quotes
+                bytes += 5
+            } else if (typeof value === 'string') {
+                // Fast UTF-16 code unit lower-bound in replacer; exact UTF-8 byte length is checked once on resultJson
+                bytes += value.length + 2
             } else if (typeof value === 'number' || typeof value === 'boolean') {
-                bytes += Buffer.byteLength(String(value), 'utf8')
+                bytes += 8
             } else if (typeof value === 'bigint') {
-                bytes += Buffer.byteLength(value.toString(), 'utf8') + 2 // Treat as string
-                return value.toString()
+                const str = value.toString()
+                bytes += str.length + 2
+                return str
             } else {
                 bytes += 5 // brackets/keys/null overhead
             }

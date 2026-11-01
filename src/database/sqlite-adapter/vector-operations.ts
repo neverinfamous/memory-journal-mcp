@@ -22,11 +22,14 @@ export class VectorOperations {
     upsertVector(entryId: number, embedding: Float32Array): void {
         const bigId = BigInt(entryId)
         const db = this.connection.getNativeDb()
-        db.prepare('DELETE FROM vec_embeddings WHERE entry_id = ?').run(bigId)
-        db.prepare('INSERT INTO vec_embeddings(entry_id, embedding) VALUES (?, ?)').run(
-            bigId,
-            embedding
+        const deleteStmt = db.prepare('DELETE FROM vec_embeddings WHERE entry_id = ?')
+        const insertStmt = db.prepare(
+            'INSERT INTO vec_embeddings(entry_id, embedding) VALUES (?, ?)'
         )
+        db.transaction(() => {
+            deleteStmt.run(bigId)
+            insertStmt.run(bigId, embedding)
+        })()
     }
 
     upsertVectors(vectors: { entryId: number; embedding: Float32Array }[]): void {
@@ -54,9 +57,9 @@ export class VectorOperations {
             .prepare(
                 `SELECT v.entry_id, v.distance 
                  FROM vec_embeddings v
-                 LEFT JOIN memory_journal mj ON v.entry_id = mj.id
+                 INNER JOIN memory_journal mj ON v.entry_id = mj.id
                  WHERE v.embedding MATCH ? AND v.k = ? AND mj.deleted_at IS NULL 
-                 ORDER BY v.distance LIMIT ?`
+                 LIMIT ?`
             )
             .all(embedding, limit * 4, limit) as { entry_id: number; distance: number }[]
     }

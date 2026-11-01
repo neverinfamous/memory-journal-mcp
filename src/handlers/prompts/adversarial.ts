@@ -240,10 +240,20 @@ Target: ${target}
 
 If the target is '{target}', determine it from the user's request. If the user hasn't specified a target file or module, ask them for it now.
 
-1. Perform a multi-pass performance audit looking for N+1 queries, unnecessary allocations, hot-path bottlenecks.
+1. Perform a multi-pass performance audit looking for N+1 queries, unnecessary allocations, and hot-path bottlenecks. For large targets or full-repository audits, spawn parallel \`research\` subagents by architectural domain (e.g., Database & Query Plans, Vector & Sandbox Execution, Server Dispatch & Observability) using \`invoke_subagent\` so each subsystem is profiled thoroughly without context truncation.
+   - **Mandatory Deep-Performance Gates (Always Run)**:
+     1. **SQLite Query Plan & Virtual Table Join Order Audit**: Inspect SQLite queries (especially FTS5 \`fts_content\` and \`sqlite-vec\` \`vec0\` joins) using \`EXPLAIN QUERY PLAN\`. Verify virtual tables are driven as the outer loop (\`CROSS JOIN\` when necessary to prevent planner inversion), check for \`USE TEMP B-TREE FOR DISTINCT\` or \`ORDER BY\`, verify SARGable \`WHERE\` clauses (no \`DATE(col)\` wrappers on indexed columns), and confirm prepared statement caching or reuse on hot paths.
+     2. **N+1 Query & Post-Limit Hydration Audit**: Scan for database or vector lookups inside loops (e.g., per-row \`getEntryById\`, \`calculateImportance\`, \`getRelationships\`, \`getAuthorsForEntries\`, or tag hydration). Ensure expensive aggregations (like importance CTEs) are deferred to post-\`LIMIT\` batch hydration (\`WHERE id IN (...)\`) unless explicitly sorting by that computed column.
+     3. **Serialization, Token Estimation & Interceptor Redundancy Audit**: Trace tool and resource payloads through handler -> metrics interceptor -> audit interceptor -> token estimator -> MCP transport response. Flag duplicate \`JSON.stringify\`, \`JSON.parse\`, or \`Buffer.byteLength\` calls on the same payload across layers.
+     4. **Sandbox, Schema & RegExp Compilation Audit**: Scan for per-request \`new vm.Script\`, \`new RegExp\`, \`z.object().extend()\` / \`.partial().passthrough()\`, or schema-to-TypeScript string generation on hot paths that can be hoisted to module scope or memoized via \`WeakMap\`.
+     5. **Async Waterfall & I/O Batching Audit**: Scan for sequential \`await\` calls in loops or independent network/git/filesystem operations (e.g., GitHub API fetches, \`realpathSync.native\` in chunked file writes) that can be parallelized with \`Promise.all\` / \`Promise.allSettled\` or cached with TTL.
+     6. **Benchmark Suite Realism & Contamination Audit**: Inspect \`tests/**/*.bench.ts\` to verify benchmarks do not silently benchmark validation errors (e.g., missing required parameters under \`VITEST=true\`), do not contaminate read/search benchmarks with thousands of prior write-benchmark rows or orphan vectors, and do not pay cold-start model loading costs when embeddings are mocked.
 2. **External Validation (Copilot — Opt-In)**: ${copilotInstruction}
-3. Present findings table (incorporating Copilot findings if applicable).
-4. Await HITL approval before applying fixes. **CRITICAL**: You are strictly forbidden from modifying any project files or running any scripts until the user explicitly approves the implementation plan. Only create the markdown artifact and stop.\n5. Commit fixes using \`bun path/to/commit.ts\`.\n**Rule**: If you do not make changes, do not commit. If you make only minor documentation changes, commit.`
+3. Present findings table (incorporating Copilot findings if applicable) grouped by subsystem and severity (Critical, High, Medium, Low) with quantified latency/allocation impact.
+4. Await HITL approval before applying fixes. **CRITICAL**: You are strictly forbidden from modifying any project files or running any scripts until the user explicitly approves the implementation plan. Only create the markdown artifact and stop.
+5. After approval, apply fixes in phased stages, run validation gates (\`bun run lint\`, \`bun run typecheck\`, targeted unit tests, and \`pnpm run bench\`), and compare before/after benchmark telemetry.
+6. Commit fixes using \`bun path/to/commit.ts\`.
+**Rule**: If you do not make changes, do not commit. If you make only minor documentation changes, commit.`
                         }
                     }]
                 }

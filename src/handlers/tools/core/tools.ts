@@ -146,25 +146,24 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     // Vectorize entry
-                    try {
-                        const entry = db.getEntryById(id, wsId)
-                        if (entry) {
+                    if (context.vectorManager) {
+                        try {
                             await sendProgress(progress, 1, 2, 'Generating embeddings...')
-                            await context.vectorManager?.addEntry(entry)
-                        }
-                    } catch (e) {
-                        // Soft fail: return success but warn vector indexing failed
-                        // Usually implies disabled or unavailable embedding model
-                        await sendProgress(
-                            progress,
-                            2,
-                            2,
-                            'Entry created (Vector indexing disabled)'
-                        )
-                        return {
-                            success: true,
-                            id,
-                            error: `Vector indexing failed: ${e instanceof Error ? e.message : String(e)}`,
+                            await context.vectorManager.addEntry(createdEntry)
+                        } catch (e) {
+                            // Soft fail: return success but warn vector indexing failed
+                            // Usually implies disabled or unavailable embedding model
+                            await sendProgress(
+                                progress,
+                                2,
+                                2,
+                                'Entry created (Vector indexing disabled)'
+                            )
+                            return {
+                                success: true,
+                                id,
+                                error: `Vector indexing failed: ${e instanceof Error ? e.message : String(e)}`,
+                            }
                         }
                     }
 
@@ -175,7 +174,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                             'memory://recent'
                         )
                     }
-                    const finalEntry = db.getEntryById(id, wsId) ?? undefined
+                    const finalEntry = createdEntry
 
                     let sharedWithTeam = false
                     let author: string | undefined

@@ -54,6 +54,8 @@ const ALIASED_LIST_DIR_NAMES = new Set(
 )
 
 const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
+const ALL_KNOWN_GROUP_TOOLS = new Set(Object.values(TOOL_GROUPS).flat())
+const UPPERCASE_RE = /[A-Z]/
 
 function deepCamelToSnake(obj: unknown, depth = 0): unknown {
     if (depth > 12) return obj
@@ -62,9 +64,11 @@ function deepCamelToSnake(obj: unknown, depth = 0): unknown {
         const newObj: Record<string, unknown> = {}
         for (const [k, v] of Object.entries(obj)) {
             if (FORBIDDEN_KEYS.has(k)) continue
-            const snakeKey = k
-                .replace(/^[A-Z]/, (letter) => letter.toLowerCase())
-                .replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
+            const snakeKey = UPPERCASE_RE.test(k)
+                ? k
+                      .replace(/^[A-Z]/, (letter) => letter.toLowerCase())
+                      .replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
+                : k
             if (FORBIDDEN_KEYS.has(snakeKey)) continue
             newObj[snakeKey] = deepCamelToSnake(v, depth + 1)
         }
@@ -366,7 +370,7 @@ export function attachCallToolInterceptor(
                 }
 
                 let suggestion = `Tool '${requestedTool}' does not exist. Use tools/list to see available tools.`
-                const isFilteredTool = Object.values(TOOL_GROUPS).flat().includes(requestedTool)
+                const isFilteredTool = ALL_KNOWN_GROUP_TOOLS.has(requestedTool)
 
                 if (isFilteredTool) {
                     suggestion = `'${requestedTool}' is a valid tool but it is not currently exposed because of your active --tool-filter or codemode restrictions. If you are in Code Mode, invoke it via 'mj_execute_code' (e.g. 'await mj.core.${requestedTool}(...)').`

@@ -38,7 +38,7 @@ export class VectorSearchManager {
      * Check if the vector search manager is initialized
      */
     public isInitialized(): boolean {
-        return this.initializationPromise !== null && this.pipeline !== null
+        return this.initializationPromise !== null && (this.pipeline !== null || this.dimensions !== null)
     }
 
     /**
@@ -65,30 +65,50 @@ export class VectorSearchManager {
         try {
             logger.info('Initializing vector search...')
 
-            // Lazy load transformers
-            if (this.transformers === null) {
-                const transformersModule = await import('@huggingface/transformers')
-                this.transformers = transformersModule
-                // Configure transformers to only use local models if we're in a completely offline environment,
-                // otherwise let it download models to cache.
-                transformersModule.env.allowRemoteModels = true
-                transformersModule.env.localModelPath = '.cache/huggingface'
+            const hasCustomEmbeddingFn =
+                this.generateEmbedding !== VectorSearchManager.prototype.generateEmbedding
+
+            if (hasCustomEmbeddingFn) {
+                logger.info('Detecting embedding dimensions via custom embedding generator...')
+                const testEmbedding = await this.generateEmbedding('test')
+                this.dimensions = testEmbedding.length
+                this.pipeline = true
+                logger.info(`Detected ${this.dimensions} dimensions for ${this.modelName}`)
+            } else {
+                // Lazy load transformers
+                if (this.transformers === null) {
+                    const transformersModule = await import('@huggingface/transformers')
+                    this.transformers = transformersModule
+                    // Configure transformers to only use local models if we're in a completely offline environment,
+                    // otherwise let it download models to cache.
+                    transformersModule.env.allowRemoteModels = true
+                    transformersModule.env.localModelPath = '.cache/huggingface'
+                }
+
+                // Load model
+                logger.info(`Loading embedding model: ${this.modelName}`)
+                const transformersModule = this.transformers as {
+                    pipeline: (task: string, model: string, options: unknown) => Promise<unknown>
+                }
+                this.pipeline = await transformersModule.pipeline(
+                    'feature-extraction',
+                    this.modelName,
+                    {
+                        dtype: 'fp32',
+                    }
+                )
+                logger.info('Embedding model loaded')
+
+                // Detect dimensions dynamically by doing a test embedding
+                logger.info('Detecting embedding dimensions...')
+                const pipelineFunc = this.pipeline as (
+                    text: string,
+                    options: unknown
+                ) => Promise<{ data: unknown[] }>
+                const testResult = await pipelineFunc('test', { pooling: 'mean', normalize: true })
+                this.dimensions = testResult.data.length
+                logger.info(`Detected ${this.dimensions} dimensions for ${this.modelName}`)
             }
-
-            // Load model
-            logger.info(`Loading embedding model: ${this.modelName}`)
-            const transformersModule = this.transformers as { pipeline: (task: string, model: string, options: unknown) => Promise<unknown> }
-            this.pipeline = await transformersModule.pipeline('feature-extraction', this.modelName, {
-                dtype: 'fp32',
-            })
-            logger.info('Embedding model loaded')
-
-            // Detect dimensions dynamically by doing a test embedding
-            logger.info('Detecting embedding dimensions...')
-            const pipelineFunc = this.pipeline as (text: string, options: unknown) => Promise<{ data: unknown[] }>
-            const testResult = await pipelineFunc('test', { pooling: 'mean', normalize: true })
-            this.dimensions = testResult.data.length
-            logger.info(`Detected ${this.dimensions} dimensions for ${this.modelName}`)
 
             // Create/verify table structure
             this.verifyAndCreateVecTable()
@@ -217,30 +237,55 @@ export class VectorSearchManager {
             
             // searchVectors returns { entry_id: number; distance: number }[]
             const results = this.dbAdapter.searchVectors(queryEmbedding, limit)
-            
-            const searchResults: SemanticSearchResult[] = []
-            
+
+            const candidates: { entryId: number; distance: number; similarityScore: number }[] = []
             for (const result of results) {
-                const entry = this.dbAdapter.getEntryById(result.entry_id, workspaceId ?? '*')
-                if (entry) {
-                    // sqlite-vec MATCH computes L2 distance by default.
-                    // For normalized unit vectors: L2_distance^2 = 2 - 2 * cosine_similarity
-                    // Therefore: cosine_similarity = 1 - (L2_distance^2 / 2)
-                    const similarityScore = Math.max(-1, 1 - (result.distance * result.distance) / 2)
-                    
-                    if (similarityScore >= threshold) {
-                        searchResults.push({
-                            entryId: result.entry_id,
-                            entry,
-                            distance: result.distance,
-                            score: similarityScore,
-                            similarityScore
-                        })
-                    }
+                // sqlite-vec MATCH computes L2 distance by default.
+                // For normalized unit vectors: L2_distance^2 = 2 - 2 * cosine_similarity
+                // Therefore: cosine_similarity = 1 - (L2_distance^2 / 2)
+                const similarityScore = Math.max(-1, 1 - (result.distance * result.distance) / 2)
+                if (similarityScore >= threshold) {
+                    candidates.push({
+                        entryId: result.entry_id,
+                        distance: result.distance,
+                        similarityScore,
+                    })
+                }
+            }
+
+            if (candidates.length === 0) {
+                return []
+            }
+
+            const targetWs = workspaceId ?? '*'
+            const entriesMap =
+                typeof (this.dbAdapter as { getEntriesByIds?: unknown }).getEntriesByIds ===
+                'function'
+                    ? this.dbAdapter.getEntriesByIds(candidates.map((c) => c.entryId))
+                    : null
+
+            const searchResults: SemanticSearchResult[] = []
+            for (const candidate of candidates) {
+                const entry = entriesMap
+                    ? (entriesMap.get(candidate.entryId) ?? null)
+                    : this.dbAdapter.getEntryById(candidate.entryId, targetWs)
+                if (
+                    entry &&
+                    (targetWs === '*' ||
+                        entry.workspaceId === undefined ||
+                        entry.workspaceId === targetWs)
+                ) {
+                    searchResults.push({
+                        entryId: candidate.entryId,
+                        entry,
+                        distance: candidate.distance,
+                        score: candidate.similarityScore,
+                        similarityScore: candidate.similarityScore,
+                    })
                 }
                 if (searchResults.length >= limit) break
             }
-            
+
             return searchResults
         } catch (error) {
             logger.error('Semantic search failed', {
@@ -281,32 +326,54 @@ export class VectorSearchManager {
             
             // Search (request limit + 1 to account for the entry itself)
             const results = this.dbAdapter.searchVectors(queryEmbedding, limit + 1)
-            
-            const searchResults: SemanticSearchResult[] = []
-            
+
+            const candidates: { entryId: number; distance: number; similarityScore: number }[] = []
             for (const result of results) {
-                // Skip the original entry
-                if (result.entry_id === entryId) continue
-                
-                const entry = this.dbAdapter.getEntryById(result.entry_id, workspaceId ?? '*')
-                if (entry) {
-                    // Same mathematical conversion as above
-                    const similarityScore = Math.max(-1, 1 - (result.distance * result.distance) / 2)
-                    if (similarityScore >= threshold) {
-                        searchResults.push({
-                            entryId: result.entry_id,
-                            entry,
-                            distance: result.distance,
-                            score: similarityScore,
-                            similarityScore
-                        })
-                    }
+                const candidateId = result.entry_id
+                if (candidateId === entryId) continue
+                const similarityScore = Math.max(-1, 1 - (result.distance * result.distance) / 2)
+                if (similarityScore >= threshold) {
+                    candidates.push({
+                        entryId: candidateId,
+                        distance: result.distance,
+                        similarityScore,
+                    })
                 }
-                
-                // Only return up to limit results
+            }
+
+            if (candidates.length === 0) {
+                return []
+            }
+
+            const targetWs = workspaceId ?? '*'
+            const entriesMap =
+                typeof (this.dbAdapter as { getEntriesByIds?: unknown }).getEntriesByIds ===
+                'function'
+                    ? this.dbAdapter.getEntriesByIds(candidates.map((c) => c.entryId))
+                    : null
+
+            const searchResults: SemanticSearchResult[] = []
+            for (const candidate of candidates) {
+                const entry = entriesMap
+                    ? (entriesMap.get(candidate.entryId) ?? null)
+                    : this.dbAdapter.getEntryById(candidate.entryId, targetWs)
+                if (
+                    entry &&
+                    (targetWs === '*' ||
+                        entry.workspaceId === undefined ||
+                        entry.workspaceId === targetWs)
+                ) {
+                    searchResults.push({
+                        entryId: candidate.entryId,
+                        entry,
+                        distance: candidate.distance,
+                        score: candidate.similarityScore,
+                        similarityScore: candidate.similarityScore,
+                    })
+                }
                 if (searchResults.length >= limit) break
             }
-            
+
             return searchResults
         } catch (error) {
             logger.error(`Semantic search by entry ID ${entryId} failed`, {

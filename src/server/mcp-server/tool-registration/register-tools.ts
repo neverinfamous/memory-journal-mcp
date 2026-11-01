@@ -67,7 +67,12 @@ interface ModernToolConfig {
     icons?: Icon[]
 }
 
+const toolRegistrationOptionsCache = new WeakMap<ToolRegistration, ModernToolConfig>()
+
 function buildToolRegistrationOptions(tool: ToolRegistration): ModernToolConfig {
+    const cached = toolRegistrationOptionsCache.get(tool)
+    if (cached !== undefined) return cached
+
     const toolOptions: ModernToolConfig = { description: tool.description }
     if (tool.title !== undefined && tool.title !== '') toolOptions.title = tool.title
 
@@ -119,6 +124,7 @@ function buildToolRegistrationOptions(tool: ToolRegistration): ModernToolConfig 
 
     if (tool.annotations !== undefined) toolOptions.annotations = tool.annotations
     if (tool.icons !== undefined) toolOptions.icons = [{ src: tool.icons.iconUrl }]
+    toolRegistrationOptionsCache.set(tool, toolOptions)
     return toolOptions
 }
 

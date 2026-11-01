@@ -22,6 +22,8 @@ const BYTES_PER_TOKEN_PROSE = 4.0
 const BYTES_PER_TOKEN_JSON = 2.8
 const BYTES_PER_TOKEN_CODE = 3.2
 
+const payloadTokenCache = new WeakMap<object, number>()
+
 // ============================================================================
 // Core Estimator
 // ============================================================================
@@ -32,20 +34,12 @@ const BYTES_PER_TOKEN_CODE = 3.2
 export function detectContentType(text: string): ContentType {
     if (!text || text.length === 0) return 'prose'
     
-    // Quick heuristic: look at the first non-whitespace character
+    // Quick heuristic: look at the first and last non-whitespace characters
     const trimmed = text.trimStart()
     if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
-        // High likelihood of JSON
-        try {
-            JSON.parse(text)
+        const endTrimmed = text.trimEnd()
+        if (endTrimmed.endsWith('}') || endTrimmed.endsWith(']')) {
             return 'json'
-        } catch {
-            // Not valid JSON, but still structurally JSON-like?
-            // If it ends with } or ], we'll call it JSON
-            const endTrimmed = text.trimEnd()
-            if (endTrimmed.endsWith('}') || endTrimmed.endsWith(']')) {
-                return 'json'
-            }
         }
     }
 
@@ -89,8 +83,25 @@ export function estimateTokens(text: string, contentType?: ContentType): number 
  */
 export function estimatePayloadTokens(payload: unknown): number {
     if (payload === null || payload === undefined) return 0
+    if (typeof payload === 'object') {
+        const cached = payloadTokenCache.get(payload)
+        if (cached !== undefined) return cached
+        const obj = payload as Record<string, unknown>
+        const meta = obj['_meta']
+        if (typeof meta === 'object' && meta !== null) {
+            const existing = (meta as Record<string, unknown>)['tokenEstimate']
+            if (typeof existing === 'number') {
+                payloadTokenCache.set(payload, existing)
+                return existing
+            }
+        }
+    }
     try {
-        return estimateTokens(JSON.stringify(payload), 'json')
+        const est = estimateTokens(JSON.stringify(payload), 'json')
+        if (typeof payload === 'object') {
+            payloadTokenCache.set(payload, est)
+        }
+        return est
     } catch {
         return 0
     }
@@ -116,26 +127,23 @@ export function injectTokenEstimate(payload: unknown): unknown {
     }
 
     const obj = payload as Record<string, unknown>
-    const serialized = (() => {
-        try {
-            return JSON.stringify(payload)
-        } catch {
-            return ''
-        }
-    })()
-    // We know it's JSON because we serialized an object
-    const tokenEstimate = estimateTokens(serialized, 'json')
-
     const existingMeta =
         typeof obj['_meta'] === 'object' && obj['_meta'] !== null
             ? (obj['_meta'] as Record<string, unknown>)
             : {}
 
-    return {
+    const tokenEstimate =
+        typeof existingMeta['tokenEstimate'] === 'number'
+            ? existingMeta['tokenEstimate']
+            : estimatePayloadTokens(payload)
+
+    const enriched = {
         ...obj,
         _meta: {
             ...existingMeta,
             tokenEstimate,
         },
     }
+    payloadTokenCache.set(enriched, tokenEstimate)
+    return enriched
 }

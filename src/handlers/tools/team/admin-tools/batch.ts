@@ -9,7 +9,7 @@ import { formatHandlerError } from '../../../../utils/error-helpers.js'
 import { resolveAuthenticatedAuthor } from '../../../../utils/security-utils.js'
 import { getAuthContext } from '../../../../auth/auth-context.js'
 import { resolveWorkspaceId } from '../../../../utils/workspace-resolver.js'
-import { TEAM_DB_ERROR_RESPONSE, fetchAuthor, triggerTeamNotifications } from '../helpers.js'
+import { TEAM_DB_ERROR_RESPONSE, fetchAuthor, batchFetchAuthors, triggerTeamNotifications } from '../helpers.js'
 import { enforceOwnership } from '../rbac.js'
 import {
     TeamBatchCreateEntriesSchema,
@@ -179,6 +179,11 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                     // Verify ownership and project boundary safety
                     const updates = []
                     const notFound: number[] = []
+                    const updateIds = input.updates.map((u) => u.entry_id)
+                    const preFetchedAuthors =
+                        typeof teamDb.getAuthorsForEntries === 'function'
+                            ? batchFetchAuthors(teamDb, updateIds)
+                            : null
                     
                     for (const u of input.updates) {
                         const existing = teamDb.getEntryById(u.entry_id, resolveWorkspaceId(u.workspace_id ?? input.workspace_id, u.project_number ?? input.project_number, context.config))
@@ -195,7 +200,9 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                             }
                         }
                         if (existing) {
-                            const author = fetchAuthor(teamDb, u.entry_id)
+                            const author = preFetchedAuthors
+                                ? (preFetchedAuthors.get(u.entry_id) ?? null)
+                                : fetchAuthor(teamDb, u.entry_id)
                             if (author && !codemodeBypass) {
                                 try {
                                     enforceOwnership(currentUser, author, callerRole)
@@ -240,9 +247,11 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
 
                     const { updated, notFound: updateNotFound, errors } = teamDb.updateEntries(updates)
                     
-                    const entries = updated.map(r => ({
+                    const entries = updated.map((r) => ({
                         ...r,
-                        author: fetchAuthor(teamDb, r.id)
+                        author: preFetchedAuthors
+                            ? (preFetchedAuthors.get(r.id) ?? null)
+                            : fetchAuthor(teamDb, r.id),
                     }))
 
                     await sendProgress(context.progress, 1, 2, `Updated ${String(entries.length)} team entries...`)
@@ -333,14 +342,34 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                             ? teamDb.resolveTeamRole(currentUser, context.config?.teamDefaultRole ?? 'denied')
                             : null
                     
+                    const existingMap =
+                        typeof teamDb.getEntriesByIds === 'function'
+                            ? teamDb.getEntriesByIds(input.entry_ids)
+                            : null
+                    const authorMap =
+                        typeof teamDb.getAuthorsForEntries === 'function'
+                            ? batchFetchAuthors(teamDb, input.entry_ids)
+                            : null
+
                     for (const id of input.entry_ids) {
-                        const existing = teamDb.getEntryById(id, wsId)
+                        const rawExisting = existingMap
+                            ? existingMap.get(id) ?? null
+                            : teamDb.getEntryById(id, wsId)
+                        const existing =
+                            rawExisting &&
+                            (wsId === '*' ||
+                                rawExisting.workspaceId === undefined ||
+                                rawExisting.workspaceId === wsId)
+                                ? rawExisting
+                                : null
                         if (existing?.projectNumber !== projectNumber) {
                             notFound.push(id)
                             continue
                         }
                         
-                        const author = fetchAuthor(teamDb, id)
+                        const author = authorMap
+                            ? (authorMap.get(id) ?? null)
+                            : fetchAuthor(teamDb, id)
                         if (author && !codemodeBypass) {
                             try {
                                 enforceOwnership(currentUser, author, callerRole)

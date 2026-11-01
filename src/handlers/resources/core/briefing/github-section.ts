@@ -105,22 +105,23 @@ export async function buildGitHubSection(
         if (!resolved) return null
         const { owner, repo } = resolved
 
-        const batch1 = await Promise.allSettled([
+        const [
+            ciStatusResult,
+            issuesAndPrsResult,
+            milestonesResult,
+            insightsResult,
+            copilotReviewsResult,
+            localGitStatusResult,
+        ] = await Promise.allSettled([
             fetchCiStatus(github, owner, repo, config),
             fetchIssuesAndPrs(github, owner, repo, config),
             fetchMilestones(github, owner, repo, config.milestoneCount ?? 3),
-        ])
-
-        const batch2 = await Promise.allSettled([
             fetchInsights(github, owner, repo),
             config.copilotReviews
                 ? fetchCopilotReviews(github, owner, repo)
                 : Promise.resolve(undefined),
             github.getLocalGitStatus(),
         ])
-
-        const [ciStatusResult, issuesAndPrsResult, milestonesResult] = batch1
-        const [insightsResult, copilotReviewsResult, localGitStatusResult] = batch2
 
         const degradedReasons: string[] = []
 

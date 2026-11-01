@@ -32,29 +32,9 @@ afterAll(() => {
     }
 })
 
-test('createEntry', async ({ bench }) => {
-    await bench('createEntry', () => {
-        db.createEntry({
-            content: 'Benchmark test entry content that represents a typical journal entry size.',
-            entryType: 'decision',
-            tags: ['benchmark', 'test'],
-        })
-    }).run()
-})
-
 test('getRecentEntries (limit 50)', async ({ bench }) => {
     await bench('getRecentEntries (limit 50)', () => {
         db.getRecentEntries(50)
-    }).run()
-})
-
-test('updateEntry', async ({ bench }) => {
-    await bench('updateEntry', () => {
-        // Pick a random ID between 1 and 1000
-        const randomId = Math.floor(Math.random() * 1000) + 1
-        db.updateEntry(randomId, {
-            content: `Updated benchmark content ${Date.now()}`,
-        })
     }).run()
 })
 
@@ -69,5 +49,25 @@ test('calculateImportance', async ({ bench }) => {
         // Pick a random ID between 1 and 1000
         const randomId = Math.floor(Math.random() * 1000) + 1
         db.calculateImportance(randomId)
+    }).run()
+})
+
+test('createEntry', async ({ bench }) => {
+    await bench('createEntry', () => {
+        db.createEntry({
+            content: 'Benchmark test entry content that represents a typical journal entry size.',
+            entryType: 'decision',
+            tags: ['benchmark', 'test'],
+        })
+    }).run()
+})
+
+test('updateEntry', async ({ bench }) => {
+    await bench('updateEntry', () => {
+        // Pick a random ID between 1 and 1000
+        const randomId = Math.floor(Math.random() * 1000) + 1
+        db.updateEntry(randomId, {
+            content: `Updated benchmark content ${Date.now()}`,
+        })
     }).run()
 })

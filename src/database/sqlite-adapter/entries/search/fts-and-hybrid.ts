@@ -5,7 +5,11 @@ import {
     type EntriesSharedContext,
     rowsToEntries,
 } from '../shared.js'
-import { buildImportanceSqlExpression, buildImportanceCte } from '../importance.js'
+import {
+    buildImportanceSqlExpression,
+    buildImportanceCte,
+    attachImportanceScoresToEntries,
+} from '../importance.js'
 import { sanitizeSearchQuery } from '../../../../utils/security-utils.js'
 import { buildVocabulary, expandFuzzyQuery } from '../fuzzy-matcher.js'
 import { encodeCursor, decodeCursor, type SortBy } from './cursor.js'
@@ -107,6 +111,9 @@ export function searchEntries(
         const stmt = db.prepare(sql)
         const rows = stmt.all(params)
         const entries = rowsToEntries(tagsMgr, rows)
+        if (options?.sortBy !== 'importance' && entries.length > 0) {
+            attachImportanceScoresToEntries(context, entries)
+        }
 
         let nextCursor: string | undefined
         const limit = options?.limit ?? 10
@@ -211,10 +218,14 @@ function buildSearchQuery(
 ): { sql: string; params: unknown[] } {
     let query: string
     const useImportance = options?.sortBy === 'importance'
-    const importanceCol = `, ${buildImportanceSqlExpression()} AS importanceScore`
+    const importanceCol = useImportance
+        ? `, ${buildImportanceSqlExpression()} AS importanceScore`
+        : ''
 
-    const ctePrefix = `WITH ${buildImportanceCte()}`
-    const joinClause = `LEFT JOIN rel_stats rs ON e.id = rs.entry_id LEFT JOIN anchor_stats ans ON e.id = ans.entry_id`
+    const ctePrefix = useImportance ? `WITH ${buildImportanceCte()}` : ''
+    const joinClause = useImportance
+        ? `LEFT JOIN rel_stats rs ON e.id = rs.entry_id LEFT JOIN anchor_stats ans ON e.id = ans.entry_id`
+        : ''
 
     const snippetCol =
         useFts && options?.includeHighlights === true
@@ -224,23 +235,17 @@ function buildSearchQuery(
     if (useFts) {
         query = `
             ${ctePrefix}
-            SELECT DISTINCT ${ALIASED_ENTRY_COLUMNS}${importanceCol}${snippetCol}
-            FROM memory_journal e
-            JOIN fts_content fts ON fts.rowid = e.id
+            SELECT ${ALIASED_ENTRY_COLUMNS}${importanceCol}${snippetCol}
+            FROM fts_content fts
+            CROSS JOIN memory_journal e ON e.id = fts.rowid
             ${joinClause}
         `
     } else {
         query = `
             ${ctePrefix}
-            SELECT DISTINCT ${ALIASED_ENTRY_COLUMNS}${importanceCol}
+            SELECT ${ALIASED_ENTRY_COLUMNS}${importanceCol}
             FROM memory_journal e
             ${joinClause}
-        `
-    }
-    if (options?.tags !== undefined && options.tags.length > 0) {
-        query += `
-            JOIN entry_tags et ON e.id = et.entry_id
-            JOIN tags t ON et.tag_id = t.id
         `
     }
 
@@ -299,7 +304,9 @@ function buildSearchQuery(
 
     if (options?.tags !== undefined && options.tags.length > 0) {
         const placeholders = options.tags.map(() => '?').join(',')
-        conditions.push(`t.name IN (${placeholders})`)
+        conditions.push(
+            `EXISTS (SELECT 1 FROM entry_tags et JOIN tags t ON et.tag_id = t.id WHERE et.entry_id = e.id AND t.name IN (${placeholders}))`
+        )
         params.push(...options.tags)
     }
 

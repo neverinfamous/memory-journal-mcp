@@ -31,7 +31,7 @@ export function validateEntryInput(input: CreateEntryInput): { normalizedTimesta
     return { normalizedTimestamp: timestamp }
 }
 
-export function createEntry(context: EntriesSharedContext, input: CreateEntryInput): JournalEntry {
+function insertEntryRow(context: EntriesSharedContext, input: CreateEntryInput): number {
     const { db, tagsMgr } = context
     const { normalizedTimestamp: timestamp } = validateEntryInput(input)
 
@@ -99,6 +99,11 @@ export function createEntry(context: EntriesSharedContext, input: CreateEntryInp
     })
 
     txn()
+    return insertId
+}
+
+export function createEntry(context: EntriesSharedContext, input: CreateEntryInput): JournalEntry {
+    const insertId = insertEntryRow(context, input)
 
     const entry = getEntryById(context, insertId, input.workspaceId ?? 'default')
     if (entry === null) {
@@ -136,20 +141,26 @@ export interface UpdateEntryInput {
     targetWorkspaceId?: string | undefined
 }
 
-export function updateEntry(
+function performUpdateEntry(
     context: EntriesSharedContext,
     id: number,
     input: UpdateEntryInput
-): JournalEntry | null {
+): boolean {
     const { db, tagsMgr } = context
 
-    const existing = getEntryById(context, id, '*')
-    if (existing === null) return null
+    const existing = db
+        .prepare(
+            'SELECT id, content, version, workspace_id as workspaceId FROM memory_journal WHERE id = ? AND deleted_at IS NULL'
+        )
+        .get(id) as
+        | { id: number; content: string; version: number; workspaceId: string }
+        | undefined
+    if (existing === undefined) return false
 
     const callerWorkspace = input.workspaceId ?? 'default'
     if (callerWorkspace !== '*' && existing.workspaceId !== callerWorkspace) {
         throw new ConflictError(
-            `Entry ${String(id)} belongs to workspace '${String(existing.workspaceId)}', cannot be updated from '${callerWorkspace}'. Moving to another workspace requires explicit overrides (e.g. workspaceId = '*').`,
+            `Entry ${String(id)} belongs to workspace '${existing.workspaceId}', cannot be updated from '${callerWorkspace}'. Moving to another workspace requires explicit overrides (e.g. workspaceId = '*').`,
             { id: existing.id, version: existing.version, workspaceId: existing.workspaceId }
         )
     }
@@ -169,30 +180,26 @@ export function updateEntry(
     const updates: string[] = ['version = version + 1']
     const values: unknown[] = []
 
-    if (input.entryType !== undefined) {
-        updates.push('entry_type = ?')
-        values.push(input.entryType)
+    const scalarFields = [
+        ['entryType', 'entry_type', input.entryType],
+        ['content', 'content', input.content],
+        ['isPersonal', 'is_personal', input.isPersonal !== undefined ? (input.isPersonal ? 1 : 0) : undefined],
+        ['significanceType', 'significance_type', input.significanceType],
+        ['autoContext', 'auto_context', input.autoContext !== undefined ? (input.autoContext ?? null) : undefined],
+        ['isArchived', 'is_archived', input.isArchived !== undefined ? (input.isArchived ? 1 : 0) : undefined],
+        ['trustScore', 'trust_score', input.trustScore],
+        ['validationStatus', 'validation_status', input.validationStatus],
+        ['impactScore', 'impact_score', input.impactScore],
+        ['sessionId', 'session_id', input.sessionId],
+    ] as const
+
+    for (const [, col, val] of scalarFields) {
+        if (val !== undefined) {
+            updates.push(`${col} = ?`)
+            values.push(val)
+        }
     }
-    if (input.content !== undefined) {
-        updates.push('content = ?')
-        values.push(input.content)
-    }
-    if (input.isPersonal !== undefined) {
-        updates.push('is_personal = ?')
-        values.push(input.isPersonal ? 1 : 0)
-    }
-    if (input.significanceType !== undefined) {
-        updates.push('significance_type = ?')
-        values.push(input.significanceType)
-    }
-    if (input.autoContext !== undefined) {
-        updates.push('auto_context = ?')
-        values.push(input.autoContext ?? null)
-    }
-    if (input.isArchived !== undefined) {
-        updates.push('is_archived = ?')
-        values.push(input.isArchived ? 1 : 0)
-    }
+
     for (const key of [
         'projectNumber',
         'projectOwner',
@@ -212,25 +219,9 @@ export function updateEntry(
         }
     }
 
-    if (input.trustScore !== undefined) {
-        updates.push('trust_score = ?')
-        values.push(input.trustScore)
-    }
-    if (input.validationStatus !== undefined) {
-        updates.push('validation_status = ?')
-        values.push(input.validationStatus)
-    }
-    if (input.impactScore !== undefined) {
-        updates.push('impact_score = ?')
-        values.push(input.impactScore)
-    }
     if (input.targetWorkspaceId !== undefined && input.targetWorkspaceId !== '*') {
         updates.push('workspace_id = ?')
         values.push(input.targetWorkspaceId)
-    }
-    if (input.sessionId !== undefined) {
-        updates.push('session_id = ?')
-        values.push(input.sessionId)
     }
 
     const query = `UPDATE memory_journal SET ${updates.join(', ')} WHERE id = ? AND deleted_at IS NULL`
@@ -280,7 +271,15 @@ export function updateEntry(
         return true
     })
 
-    const updated = txn()
+    return txn()
+}
+
+export function updateEntry(
+    context: EntriesSharedContext,
+    id: number,
+    input: UpdateEntryInput
+): JournalEntry | null {
+    const updated = performUpdateEntry(context, id, input)
     if (!updated) return null
 
     const readWs = input.targetWorkspaceId ?? input.workspaceId ?? 'default'
@@ -347,8 +346,8 @@ export function createEntries(
             const input = inputs[i]
             if (input === undefined) continue
             try {
-                const newEntry = createEntry(context, input)
-                createdIds.push(newEntry.id)
+                const insertId = insertEntryRow(context, input)
+                createdIds.push(insertId)
             } catch (err) {
                 const error = err instanceof Error ? err : new Error(String(err))
                 throw new BatchTransactionError({ index: i, error })
@@ -389,8 +388,8 @@ export function updateEntries(
     const txn = db.transaction(() => {
         for (const input of updates) {
             try {
-                const entry = updateEntry(context, input.id, input)
-                if (entry !== null) {
+                const updated = performUpdateEntry(context, input.id, input)
+                if (updated) {
                     updatedIds.push(input.id)
                 } else {
                     notFound.push(input.id)
@@ -443,17 +442,27 @@ export function deleteEntries(
     const deleted: number[] = []
     const errors: { id: number; error: Error }[] = []
 
+    if (toDelete.length === 0) return { deleted: [], notFound, errors: [] }
+
     const txn = db.transaction(() => {
-        for (const id of toDelete) {
-            try {
-                if (deleteEntry(context, id, permanent, workspaceId)) {
-                    deleted.push(id)
-                }
-            } catch (err) {
-                const error = err instanceof Error ? err : new Error(String(err))
-                throw new BatchTransactionError({ id, error })
-            }
+        const delPlaceholders = toDelete.map(() => '?').join(', ')
+        if (permanent) {
+            const stmt = db.prepare(
+                hasWorkspaceFilter
+                    ? `DELETE FROM memory_journal WHERE id IN (${delPlaceholders}) AND workspace_id = ?`
+                    : `DELETE FROM memory_journal WHERE id IN (${delPlaceholders})`
+            )
+            stmt.run(...(hasWorkspaceFilter ? [...toDelete, workspaceId] : toDelete))
+        } else {
+            const now = new Date().toISOString()
+            const stmt = db.prepare(
+                hasWorkspaceFilter
+                    ? `UPDATE memory_journal SET deleted_at = ? WHERE id IN (${delPlaceholders}) AND deleted_at IS NULL AND workspace_id = ?`
+                    : `UPDATE memory_journal SET deleted_at = ? WHERE id IN (${delPlaceholders}) AND deleted_at IS NULL`
+            )
+            stmt.run(...(hasWorkspaceFilter ? [now, ...toDelete, workspaceId] : [now, ...toDelete]))
         }
+        deleted.push(...toDelete)
     })
 
     try {

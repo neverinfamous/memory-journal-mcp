@@ -13,15 +13,23 @@ const EnvConfig = z.object({
     STALENESS_STALE_DAYS: z.coerce.number().default(30),
 })
 
-function getEnvConfig(): { STALENESS_ACTIVE_HOURS: number; STALENESS_RECENT_DAYS: number; STALENESS_STALE_DAYS: number } {
+interface StalenessEnv {
+    STALENESS_ACTIVE_HOURS: number
+    STALENESS_RECENT_DAYS: number
+    STALENESS_STALE_DAYS: number
+}
+
+function getEnvConfig(): StalenessEnv {
     return EnvConfig.parse(process.env)
 }
 
-function calculateStaleness(lastEntryDateStr: string | undefined): 'active' | 'recent' | 'stale' | 'inactive' {
+function calculateStaleness(
+    lastEntryDateStr: string | undefined,
+    env: StalenessEnv = getEnvConfig(),
+    now: number = Date.now()
+): 'active' | 'recent' | 'stale' | 'inactive' {
     if (!lastEntryDateStr) return 'inactive'
     
-    const env = getEnvConfig()
-    const now = Date.now()
     const lastDate = new Date(lastEntryDateStr).getTime()
     const diffHours = (now - lastDate) / (1000 * 60 * 60)
     const diffDays = diffHours / 24
@@ -61,6 +69,9 @@ export function getStalenessResourceDefinitions(): InternalResourceDef[] {
                         inactive: [],
                     }
 
+                    const thresholds = getEnvConfig()
+                    const now = Date.now()
+
                     for (const [name, entry] of Object.entries(registry)) {
                         if (entry.project_number === undefined || entry.project_number === null) {
                             continue
@@ -73,7 +84,7 @@ export function getStalenessResourceDefinitions(): InternalResourceDef[] {
                         })
 
                         const latestEntry = searchResult.entries[0]
-                        const status = calculateStaleness(latestEntry?.timestamp)
+                        const status = calculateStaleness(latestEntry?.timestamp, thresholds, now)
                         
                         const projectData = {
                             name,
@@ -90,7 +101,7 @@ export function getStalenessResourceDefinitions(): InternalResourceDef[] {
                     }
 
                     const responseData = {
-                        thresholds: getEnvConfig(),
+                        thresholds,
                         projects: result,
                     }
                     const tokenEstimate = Math.ceil(JSON.stringify(responseData).length / 4)
