@@ -116,6 +116,13 @@ export class ConfigManager extends EventEmitter {
                     }, 500)
                 }
             })
+            this.watcher.on('error', (err: unknown) => {
+                logger.warning('Config file watcher error', {
+                    module: 'ConfigManager',
+                    path: this.configFilePath,
+                    error: err instanceof Error ? err.message : String(err),
+                })
+            })
             logger.info('Watching configuration file for changes', { module: 'ConfigManager', path: this.configFilePath })
         } catch (error: unknown) {
             logger.warning('Failed to start configuration file watcher', { module: 'ConfigManager', error: error instanceof Error ? error.message : String(error) })

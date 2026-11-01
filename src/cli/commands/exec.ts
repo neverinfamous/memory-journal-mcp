@@ -84,6 +84,7 @@ export async function execAction(scriptPath: string, options: z.infer<typeof exe
         process.stderr.write("Execution failed: " + (error instanceof Error ? error.message : String(error)) + '\n')
         process.exit(1)
     } finally {
+        configManager.close()
         if (runtime.auditLogger) await runtime.auditLogger.close()
         if (context.activeMetricsPath) await runtime.metrics.saveToFile(context.activeMetricsPath)
         db.close()
