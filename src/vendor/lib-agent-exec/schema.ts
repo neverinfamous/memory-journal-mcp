@@ -10,7 +10,20 @@ const safeString = noNullString
   .refine(val => !val.includes('\r'), "Must not contain carriage returns")
   .refine(val => !val.includes('\uFEFF'), "Must not contain BOMs");
 
-const safeStringArray = z.array(safeString).max(1000);
+const safeStringArray = z.preprocess((val) => {
+  if (Array.isArray(val)) {
+    return val
+      .filter((item): item is NonNullable<typeof item> => item !== null && item !== undefined)
+      .map((item) => {
+        if (typeof item === 'number' || typeof item === 'boolean') return String(item);
+        if (typeof item === 'string' && (item.includes('\r') || item.includes('\uFEFF') || item.includes('\0'))) {
+          return item.replace(/[\r\0\uFEFF]/g, '');
+        }
+        return item;
+      });
+  }
+  return val;
+}, z.array(safeString).max(1000));
 
 const lenientBoolean = z.union([z.boolean(), z.literal("true"), z.literal("false")]).transform(val => val === true || val === "true");
 
@@ -95,6 +108,16 @@ export const PayloadSchema = z.preprocess((val) => {
     for (const k of metadataKeys) {
       if (k in obj && !knownKeys.has(k)) {
         delete obj[k];
+      }
+    }
+
+    if ('args' in obj && Array.isArray(obj.args)) {
+      const originalArgs = obj.args;
+      const hasInvalidItem = originalArgs.some(
+        item => item === null || item === undefined || typeof item === 'number' || typeof item === 'boolean' || (typeof item === 'string' && (item.includes('\r') || item.includes('\uFEFF') || item.includes('\0')))
+      );
+      if (hasInvalidItem) {
+        console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Sanitizing args array (filtering null/undefined and coercing primitives to strings)... (Frictionless Recovery)\x1b[0m`);
       }
     }
 

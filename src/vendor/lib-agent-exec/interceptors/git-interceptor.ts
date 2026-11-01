@@ -149,6 +149,18 @@ export function gitInterceptor(ctx: ExecutionContext): void {
         const cwd = ctx.payload.cwd || process.cwd();
         const fallbackScript = path.resolve(__dirname, '../../get-git-history-json.ts');
         const scriptCandidate = findEcosystemScript(targetCwd, 'get-git-history-json.ts') || findEcosystemScript(cwd, 'get-git-history-json.ts') || (fs.existsSync(fallbackScript) ? fallbackScript : null);
+        const isKnownPath = (argStr: string): boolean => {
+          if (argStr.includes('/') || argStr.includes('\\') || argStr.includes('.')) return true;
+          if (/^(?:Dockerfile|Makefile|Containerfile|Procfile|LICENSE|README|AUTHORS|NOTICE|Brewfile|Vagrantfile|Gemfile)$/i.test(argStr)) return true;
+          try {
+            if (fs.existsSync(path.resolve(targetCwd, argStr)) || fs.existsSync(path.resolve(cwd, argStr))) {
+              return true;
+            }
+          } catch {
+            // ignore
+          }
+          return false;
+        };
         if (scriptCandidate !== null) {
           if (cmd === 'show') {
             const isBlobInspection = args.some(a => !a.startsWith('-') && a !== 'show' && a !== '--no-pager' && a.includes(':') && !/^[a-zA-Z]:[\\/]/.test(a));
@@ -362,7 +374,7 @@ export function gitInterceptor(ctx: ExecutionContext): void {
             if (!arg.startsWith('-') && arg !== cmd && arg !== '--no-pager') {
               if (arg.includes('..')) {
                 rangeArg = arg;
-              } else if (arg.includes('/') || arg.includes('\\') || arg.includes('.')) {
+              } else if (isKnownPath(arg)) {
                 pathArg = arg;
               } else {
                 if (rangeArg) {
@@ -390,7 +402,7 @@ export function gitInterceptor(ctx: ExecutionContext): void {
           const nonFlagArgs = ctx.args.filter(a => !a.startsWith('-') && a !== 'diff' && a !== '--no-pager');
           if (nonFlagArgs.length >= 2) {
             const lastArg = nonFlagArgs[nonFlagArgs.length - 1];
-            if (lastArg.includes('/') || lastArg.includes('\\') || /\.[a-zA-Z0-9]+$/.test(lastArg)) {
+            if (isKnownPath(lastArg)) {
               const lastIdx = ctx.args.lastIndexOf(lastArg);
               if (lastIdx !== -1) {
                 console.error(`\n   🛠️ AUTONOMOUS HEALING: Auto-injecting '--' before file path in 'git diff' to prevent ambiguous argument error... (Frictionless Recovery)`);
