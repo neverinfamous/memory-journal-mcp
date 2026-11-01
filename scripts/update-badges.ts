@@ -133,17 +133,20 @@ function updateBadges() {
     }
   }
 
-  if (updatedFiles.length > 0) {
+  if (updatedFiles.length > 0 && !process.env.CI) {
     console.log(`\nAuto-committing badge updates for: ${updatedFiles.join(", ")}`);
     const commitScript = path.join(ROOT_DIR, ".agents", "scripts", "commit.ts");
-    const addArgs = updatedFiles.map(f => `--add "${f}"`).join(" ");
+    const addArgs = updatedFiles.map((f) => `--add "${f}"`).join(" ");
     const cmd = `bun "${commitScript}" --msg "chore(docs): update test badges" --impact 0.1 --confidence 1.0 --validation none --no-history ${addArgs}`;
-    
+
     try {
       execSync(cmd, { stdio: "inherit", cwd: ROOT_DIR });
       console.log("Successfully auto-committed badge updates.");
-    } catch (err: any) {
-      console.error("Failed to auto-commit badge updates:", err.message || err);
+    } catch (err: unknown) {
+      console.error(
+        "Failed to auto-commit badge updates:",
+        err instanceof Error ? err.message : String(err),
+      );
     }
   }
 }

@@ -40,7 +40,7 @@
     "infra:logs": "docker compose -f test-server/infrastructure/docker-compose.yml logs -f",
     "infra:status": "node test-server/infrastructure/scripts/check-status.mjs",
     "pretest:e2e": "node -e \"fs.rmSync('.test-output/e2e', { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })\"",
-    "test:e2e": "playwright test",
+    "test:e2e": "playwright test && tsx scripts/update-badges.ts",
     "test:wsl": "wsl bash -c \"pnpm run test\"",
     "test:e2e:wsl": "wsl bash -c \"pnpm run test:e2e\"",
     "test:scheduler": "node test-server/scripts/test-scheduler.mjs",
