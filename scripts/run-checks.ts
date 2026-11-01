@@ -38,7 +38,9 @@ function checkFileLengths(): boolean {
                 }
                 if (
                     dir.startsWith('src') &&
-                    /(?:realpathSync|path\.resolve)\([^)]*\)[\s\S]{0,120}\.startsWith\(/.test(content)
+                    /(?:realpathSync|path\.resolve)\([^)]*\)(?:(?!path\.relative)[\s\S]){0,120}\.startsWith\((?!['"]\.\.['"])/.test(
+                        content
+                    )
                 ) {
                     console.warn(
                         `⚠️  Path boundary warning: prefer path.relative() over .startsWith() after path.resolve/realpathSync in ${fullPath}`
