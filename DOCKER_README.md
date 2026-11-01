@@ -141,10 +141,10 @@ Code Mode (`mj_execute_code`) is a revolutionary approach that **dramatically re
 Code executes in a **pre-warmed `worker_threads` V8 isolate pool + secondary `vm.createContext` boundary** with multiple layers of security. All `mj.*` API calls execute against the journal within the sandbox, providing:
 
 - **V8 code generation restrictions** — `eval()` and `Function()` construction from strings disabled at the V8 engine level via `codeGeneration: { strings: false, wasm: false }`
-- **Frozen prototypes & API surfaces** — all built-in prototypes (Object, Function, Array, Error, etc.) and `mj.*` API bindings frozen inside the vm context to prevent dynamic constructor chain escapes and prototype pollution
+- **Frozen prototypes & cross-realm constructor lockdown** — all built-in prototypes (`Object`, `Function`, `Array`, `Error`, etc.) and `mj.*` API bindings are frozen, and `.constructor` is neutered across `Function`, `AsyncFunction`, `GeneratorFunction`, and `AsyncGeneratorFunction` prototypes in both the inner `vm` realm and outer worker realm to prevent dynamic constructor chain escapes
 - **Static code validation** — comprehensive regex rules blocking `require()`, `import()`, `process`, `eval()`, `Reflect.*`, `Symbol.*`, `new Proxy()`, `__proto__`, `constructor.constructor`, and filesystem/network access (50KB max code length)
 - **Proxy constructor nullified** — `Proxy: undefined` in the sandbox prevents meta-object protocol abuse
-- **RPC allowlist** — host-side validation prevents workers from invoking unauthorized API methods
+- **Prototype-safe RPC allowlist** — host-side `Object.hasOwn()` validation and request-shape checks prevent workers from invoking unauthorized or prototype-chain API methods
 - **Rate limiting** — 60 executions per minute per client
 - **Hard timeouts** — configurable execution limit (default 30s)
 - **Egress boundary enforcement** — result serialization capped (default 100KB via `CODE_MODE_MAX_RESULT_SIZE`) with automatic payload compaction to prevent OOM

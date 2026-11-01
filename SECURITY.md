@@ -247,9 +247,9 @@ Code Mode (`mj_execute_code`) executes user-provided JavaScript in a hardened `w
 
 - ✅ **V8 code generation disabled** — `codeGeneration: { strings: false, wasm: false }` prevents `eval()` and `Function()` construction from strings at the V8 engine level
 - ✅ **Separate V8 isolate** — each worker thread runs in its own V8 instance with enforced heap limits (`maxOldGenerationSizeMb`, `maxYoungGenerationSizeMb`)
-- ✅ **Frozen prototypes** — all built-in prototypes (Object, Function, Array, Error, Map, Set, Promise, etc.) frozen inside the vm context to prevent dynamic constructor chain escapes
+- ✅ **Frozen prototypes & cross-realm constructor lockdown** — all built-in prototypes (Object, Function, Array, Error, Map, Set, Promise, etc.) are frozen, and `.constructor` on `Function`, `AsyncFunction`, `GeneratorFunction`, and `AsyncGeneratorFunction` prototypes is neutered in both the inner `vm` context and outer worker realm to prevent cross-realm dynamic constructor chain escapes
 - ✅ **Proxy constructor nullified** — `Proxy: undefined` in the sandbox context prevents meta-object protocol abuse
-- ✅ **Frozen API surfaces** — All injected API objects (mj.*, group namespaces, console shim, context) are Object.freeze()'d to prevent prototype pollution on the API bridge
+- ✅ **Frozen API surfaces** — All injected API objects (mj.*, group namespaces, console shim, context, and neutralized `process` stub) are Object.freeze()'d to prevent prototype pollution on the API bridge
 
 ### **Static Code Validation**
 
@@ -258,7 +258,8 @@ Code Mode (`mj_execute_code`) executes user-provided JavaScript in a hardened `w
 
 ### **Runtime Protection**
 
-- ✅ **RPC allowlist** — host-side validation prevents workers from invoking unauthorized API methods
+- ✅ **Prototype-safe RPC allowlist** — host-side `Object.hasOwn()` validation and strict request-shape checks prevent workers from invoking unauthorized or prototype-chain API methods (`__proto__`, `constructor`)
+- ✅ **Host process isolation** — `process.exit()` calls inside the sandbox are safely neutralized in-place (`{ exited: true, exitCode }`) and can never terminate the worker or host MCP server
 - ✅ **Rate limiting** — 60 executions per minute per client
 - ✅ **Hard timeouts** — configurable execution limit (default 30s) with forced worker termination
 - ✅ **Egress boundary enforcement** — result serialization capped at configurable limit (default 100KB) with automatic collection compaction (`compactOversizedResult`) for large object/array payloads to prevent OOM via oversized payloads
