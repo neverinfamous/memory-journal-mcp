@@ -24,7 +24,7 @@ When orchestrating workflows or performing multi-step operations on behalf of a 
 - **Token Optimization**: Enables multi-step logic composition across all tool groups within a single sandboxed execution.
 - **Sandbox Security**: Executes in a pre-warmed `node:worker_threads` V8 isolate pool + secondary `vm.createContext` boundary with V8 `codeGeneration: { strings: false, wasm: false }`, frozen prototypes and `mj.*` API surfaces, `Proxy: undefined`, host-side RPC allowlist, static validation rules (50KB code cap), 30s timeout, and 100KB result egress cap with auto-compaction.
 - **API Surface**: Exposed via the `mj.*` API (e.g., `mj.core.createEntry()`, `mj.search.searchEntries()`, `mj.github.getGithubIssues()`).
-- **Readonly Contract**: Mutations are safely blocked if the server is running with the `--tool-filter readonly` flag.
+- **Readonly Contract**: Mutations are safely blocked if the server is running with `--tool-filter readonly` (env: `MEMORY_JOURNAL_MCP_TOOL_FILTER=readonly`, `memory-journal.config.json` key: `"toolFilter": "readonly"`).
 
 ---
 
@@ -81,6 +81,21 @@ When provided, the briefing contains:
 - `memory://briefing` (or `memory://briefing/{repo_name}` for multi-repo environments)
 - This provides ~350 tokens of high-value ambient context: server health, GitHub CI status, active milestones, and unreleased changes.
 Review it thoroughly before proceeding. For mid-session context recovery (project number, workspace, or agent ID), query `memory://agent-context/{repo}` (or `memory://agent-id`) instead of re-reading `memory://briefing`.
+
+---
+
+## 🔧 Critical Environment Variables
+
+| Variable | Description |
+| --- | --- |
+| `DB_PATH` / `TEAM_DB_PATH` | SQLite database paths for personal and shared team journals |
+| `DEFAULT_WORKSPACE_ID` | Default tenant workspace ID (default: `default`) |
+| `PROJECT_REGISTRY` | JSON map of repo names to local paths and GitHub project numbers |
+| `ALLOWED_IO_ROOTS` | Comma-separated allowed filesystem roots (fail-closed in stdio; mandatory when `--transport http` is used) |
+| `MEMORY_JOURNAL_MCP_TOOL_FILTER` | Control tool exposure (`full`, `starter`, `codemode`, `readonly`, `-github`; CLI: `--tool-filter`, `memory-journal.config.json` key: `"toolFilter"`. Note: `TOOL_FILTER` is a display fallback only) |
+| `CODEMODE_INTERNAL_FULL_ACCESS` | Allow Code Mode (`mj.*`) to bypass tool filters internally (`true`/`false`) |
+| `MCP_AGENT_HEALING` | Enable/disable autonomous tool & parameter healing (`true`/`false`, CLI: `--no-agent-healing`) |
+| `MAX_TOOL_INPUT_ELEMENTS` | Max array/object elements in tool inputs (default: `25000`, `0` = disabled) |
 
 ---
 

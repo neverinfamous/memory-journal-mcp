@@ -4,7 +4,7 @@
 
 Memory Journal MCP is a TypeScript MCP (Model Context Protocol) server providing persistent memory for AI agents. It has **a vast array of tools** across **multiple groups** (Core, Search, Analytics, Relationships, IO, Admin, GitHub, Git, Backup, Team, CodeMode), **dozens of resources**, and **multiple workflow prompts**.
 
-**Stack**: TypeScript, Vitest, Zod schemas, better-sqlite3 (SQLite), sqlite-vec (vector search), @huggingface/transformers (embeddings), @octokit/rest (GitHub API).
+**Stack**: TypeScript, Vitest, Zod (`zod` validation schemas), `better-sqlite3-multiple-ciphers` (aliased as `better-sqlite3` for SQLite + SQLCipher encryption), `sqlite-vec` (vector search), `@huggingface/transformers` (embeddings), `@octokit/rest` + `@octokit/graphql` (GitHub REST & Projects v2 GraphQL API), `simple-git`, `express` (Streamable HTTP), `jose` (OAuth 2.1).
 
 ## Session Context
 
@@ -47,7 +47,7 @@ If you find issues during code review, use `create_entry` with tag `copilot-find
 - **Never use `@ts-ignore` or `@ts-expect-error`** — fix the underlying type issue
 - **Zod schemas** for all tool input validation
 - **Output schemas** — All tools have Zod output schemas; error responses must pass validation
-- **Dual Schema Pattern**: All schemas strictly separate input (stringified, loosely typed for LLMs) and output (strict internal domain types) validations. No `argsSchema` for empty or zero-argument prompts.
+- **Dual Schema Pattern**: All schemas strictly separate input (stringified, loosely typed for LLMs) and output (strict internal domain types) validations. `argsSchema` is omitted for zero-argument prompts AND prompts where all arguments are optional (`!hasRequired` in `src/server/registration.ts`), as `z.object({})` rejects `undefined` when clients omit arguments.
 
 ### Error Handling
 
@@ -59,7 +59,7 @@ Every tool must return \`{success, error, code, category, suggestion, recoverabl
 
 ### Token Estimation
 
-All resources must dynamically compute and return `_meta.tokenEstimate` within their JSON response blocks using the `Math.ceil(length / 4)` heuristic.
+All resources must dynamically compute and return `_meta.tokenEstimate` within their JSON response blocks using the `Math.ceil(length / 4)` heuristic. Tool call observability uses content-type-aware token estimation in `src/observability/token-estimator.ts` (`4.0` bytes/token for prose, `2.8` for JSON, `3.2` for code).
 
 ### Database
 
@@ -77,7 +77,7 @@ All resources must dynamically compute and return `_meta.tokenEstimate` within t
 - **Docker Tags**: Always use `:latest` docker tags. Check limits (25,000 char) for DOCKER_README.md.
 - **Dual-Schema Pattern**: All schemas must separate stringified input from strict internal domain types. Zod schemas are used.
 - **Plugin Sync**: Ensure `lib-agent-exec` and `lib-git-history` plugins are kept in sync.
-- **Guardrails**: Session Briefing Guardrails added to stop agents and run `mcp-heal` when bugs are encountered.
+- **Guardrails**: The `Server Bug Protocol` (`src/constants/instructions/gotchas.ts`) instructs agents to stop and report unexpected server errors, `healAgentHallucinations` (`src/handlers/tools/schemas/hallucination-healer.ts`) autonomously normalizes malformed tool arguments, and the session briefing health alert surfaces maintenance recommendations (via the `optimize-journal` prompt).
 - **Code Mode Error Proxy**: Code Mode result proxy intercepts errors with "AUTONOMOUS HEALING" prefix.
 
 ## Architecture

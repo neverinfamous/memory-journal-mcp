@@ -86,7 +86,10 @@ When the user initializes the session context by executing the `load-briefing` p
 > [!IMPORTANT]
 > All shortcuts and tool groups include **Code Mode** (`mj_execute_code`) by default for token-efficient operations. To exclude it, add `-codemode` to your filter: `--tool-filter starter,-codemode`
 
-Control which tools are exposed via `TOOL_FILTER` (or CLI: `--tool-filter` / config: `toolFilter`):
+Control which tools are exposed using any of the 3 configuration sources (precedence: CLI flag > environment variable > config file):
+- **CLI flag**: `--tool-filter <filter>`
+- **Environment variable**: `MEMORY_JOURNAL_MCP_TOOL_FILTER` *(Note: `TOOL_FILTER` is only a fallback display variable in the session briefing and does **not** activate tool filtering on its own)*
+- **`memory-journal.config.json` key**: `"toolFilter"`
 
 | Filter               | Use Case                 |
 | -------------------- | ------------------------ |
@@ -241,7 +244,7 @@ Showcasing the full power of the server, including Multi-Project Routing, Team C
         "ALLOWED_IO_ROOTS": "/app/projects,/app/data,/app/skills",
         "AUTO_REBUILD_INDEX": "true",
         "EMBEDDING_MODEL": "Xenova/all-MiniLM-L6-v2",
-        "TOOL_FILTER": "codemode",
+        "MEMORY_JOURNAL_MCP_TOOL_FILTER": "codemode",
         "CODEMODE_INTERNAL_FULL_ACCESS": "true",
         "BRIEFING_ENTRY_COUNT": "3",
         "BRIEFING_SUMMARY_COUNT": "1",
@@ -269,7 +272,7 @@ Showcasing the full power of the server, including Multi-Project Routing, Team C
 
 The `memory://briefing` resource is dynamically assembled at each session start, automatically providing ambient context like test health, workspace paths, unreleased changes, and git status. Control what your agent sees by tuning three dimensions via environment variables:
 
-- **Focus** — `TOOL_FILTER`: `full` (default), `starter`, or `essential`
+- **Focus** — `MEMORY_JOURNAL_MCP_TOOL_FILTER` (CLI: `--tool-filter`, config file key: `"toolFilter"`): `full` (default), `starter`, or `essential`
 - **Journal Content** — `BRIEFING_ENTRY_COUNT`, `BRIEFING_SUMMARY_COUNT`, `BRIEFING_INCLUDE_TEAM`
 - **GitHub Enrichment** — `BRIEFING_ISSUE_COUNT`, `BRIEFING_PR_COUNT`, `BRIEFING_PR_STATUS`, `BRIEFING_MILESTONE_COUNT`, `BRIEFING_WORKFLOW_COUNT`, `BRIEFING_WORKFLOW_STATUS`, `BRIEFING_COPILOT_REVIEWS`
 
@@ -292,6 +295,8 @@ Restart Cursor or your MCP client and start journaling!
 ### 🔧 Configuration Highlights
 
 - **`--config <path>`**: Load settings from `.yaml` or `.json`. Use `--dump-config` to debug precedence.
+- **`ALLOWED_IO_ROOTS` / `--allowed-io-roots`**: Comma-separated allowed filesystem paths (default: none — fail-closed in stdio; mandatory when `--transport http` is used).
+- **`MEMORY_JOURNAL_MCP_TOOL_FILTER` / `--tool-filter`**: Control tool exposure (`full`, `starter`, `codemode`, `readonly`, `-github`; config file key: `"toolFilter"`).
 - **`DB_ENCRYPTION_KEY`**: Enables SQLCipher at-rest encryption.
 - **`DEFAULT_WORKSPACE_ID` / `--default-workspace-id`**: Sets the default workspace for multi-tenant isolation on a shared SQLite database (default: `default`).
 - **`PROJECT_REGISTRY`**: Maps repo names to paths and project numbers for automatic `workspace_id` resolution and multi-project GitHub context routing.
@@ -311,9 +316,13 @@ For a complete list of all extensive environment variables and detailed routing 
 
 For remote access, web-based clients, or HTTP-compatible MCP hosts. The server supports both stateful (SSE) and stateless (serverless) modes.
 
+> [!IMPORTANT]
+> In HTTP transport mode (`--transport http`), the server enforces two fail-closed startup guards: (1) explicit `ALLOWED_IO_ROOTS` / `--allowed-io-roots` is always required, and (2) explicit authentication (`MCP_AUTH_TOKEN` / `--auth-token` or `--oauth-enabled`) is required when binding to a non-loopback address (`0.0.0.0`).
+
 ```bash
 docker run --rm -p 3000:3000 \
   -v ./data:/app/data \
+  -e ALLOWED_IO_ROOTS="/app/data" \
   -e MCP_AUTH_TOKEN="your_secure_random_token" \
   writenotenow/memory-journal-mcp:latest \
   --transport http --port 3000 --server-host 0.0.0.0

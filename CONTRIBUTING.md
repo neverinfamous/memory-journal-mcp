@@ -99,7 +99,7 @@ pnpm run bench
 pnpm run lint && pnpm run typecheck
 
 # Format code with Prettier
-npx prettier --write .
+pnpm run format
 ```
 
 ### Manual Testing with MCP Client
@@ -131,7 +131,7 @@ docker run --rm -i -v ./data:/app/data memory-journal-dev
 
 - **Strict mode** — `tsconfig.json` enforces strict TypeScript
 - **ESLint** — Run `pnpm run lint` to check, `pnpm run lint:fix` to auto-fix
-- **Prettier** — Run `npx prettier --write .` for formatting
+- **Prettier** — Run `pnpm run format` for formatting
 - **Type safety** — Avoid `any`; use proper types and Zod schemas
 - **Modularity** — Keep files under ~500 lines; split into sub-modules when approaching the limit
 - **Error handling** — Use `formatHandlerError()` for structured `{success, error, code, category, suggestion, recoverable}` responses in tool handlers
@@ -181,7 +181,7 @@ Use our [Feature Request template](.github/ISSUE_TEMPLATE/feature_request.md).
 
 - [ ] **Fork** the repository and create a feature branch
 - [ ] **Test** your changes (`pnpm test`, `pnpm run lint && pnpm run typecheck`)
-- [ ] **Format** your code (`npx prettier --write .`)
+- [ ] **Format** your code (`pnpm run format`)
 - [ ] **Update documentation** if you changed APIs or behavior
 - [ ] **Add examples** for new features
 - [ ] **Check** that existing functionality still works
@@ -219,6 +219,7 @@ src/
 ├── audit/                      # JSONL audit log, audit resource
 ├── auth/                       # OAuth 2.1 authentication
 ├── codemode/                   # Sandboxed JS execution engine
+├── config/                     # Configuration loader, schema, and precedence resolution
 ├── constants/                  # Server instructions (agent prompt and composable segments)
 ├── database/
 │   ├── adapter-factory.ts      # Adapter instantiation
@@ -234,6 +235,7 @@ src/
 │   └── prompts/                # prompt handlers
 ├── markdown/                   # Markdown import/export (round-trip frontmatter parsing)
 ├── observability/              # Metrics interceptor, token estimator, latency tracker
+├── prompts/                    # Prompt definitions and workflow templates
 ├── server/
 │   ├── mcp-server/             # MCP server setup
 │   ├── registration.ts         # Tool/resource/prompt registration
@@ -244,7 +246,7 @@ src/
 ├── vendor/                     # Vendored internal packages
 └── vector/                     # Semantic search (sqlite-vec + transformers)
 
-skills/
+skills/                         # Bundled agent skills (MCP & CLI)
 └── memory-journal-mcp/         # Bundled agent skill shipped with npm and served via SEP-2640
 ```
 

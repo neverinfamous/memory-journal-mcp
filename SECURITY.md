@@ -496,11 +496,13 @@ chmod 700 /shared/team-data
 
 ## 📦 **Supported Versions**
 
-| Component    | Supported Versions | Notes                                                                 |
-| ------------ | ------------------ | --------------------------------------------------------------------- |
-| Node.js      | 24.x+ (26.x LTS)   | Minimum Node 24+. Node 26.x LTS recommended for isolation features. |
-| MCP Protocol | 2025-11-25 / 2025-03-26 (backward-compatible with 2024-11-05) | Full compatibility with the official Model Context Protocol.          |
-| Docker Base  | `node:26-alpine`   | Alpine-based images receive regular vulnerability patches.            |
+| Version / Component | Supported          | Notes                                                                 |
+| ------------------- | ------------------ | --------------------------------------------------------------------- |
+| `3.x`               | :white_check_mark: | Current major release series receiving active security updates.       |
+| `< 3.0`             | :x:                | Legacy releases; please upgrade to `3.x`.                             |
+| Node.js             | 24.x+ (26.x LTS)   | Minimum Node 24+. Node 26.x LTS recommended for isolation features. |
+| MCP Protocol        | 2025-11-25 / 2025-03-26 (backward-compatible with 2024-11-05) | Full compatibility with the official Model Context Protocol.          |
+| Docker Base         | `node:26-alpine`   | Alpine-based images receive regular vulnerability patches.            |
 
 ## 🚨 **Reporting Security Issues**
 

@@ -148,7 +148,10 @@ When the user initializes the session context by executing the `load-briefing` p
 > [!IMPORTANT]
 > All shortcuts and tool groups include **Code Mode** (`mj_execute_code`) by default for token-efficient operations. To exclude it, add `-codemode` to your filter: `--tool-filter starter,-codemode`
 
-Control which tools are exposed via `TOOL_FILTER` (or CLI: `--tool-filter` / config: `toolFilter`):
+Control which tools are exposed using any of the 3 configuration sources (precedence: CLI flag > environment variable > config file):
+- **CLI flag**: `--tool-filter <filter>`
+- **Environment variable**: `MEMORY_JOURNAL_MCP_TOOL_FILTER` *(Note: `TOOL_FILTER` is only a fallback display variable in the session briefing and does **not** activate tool filtering on its own)*
+- **`memory-journal.config.json` key**: `"toolFilter"`
 
 | Filter               | Use Case                 |
 | -------------------- | ------------------------ |
@@ -287,7 +290,7 @@ Showcasing the full power of the server, including Multi-Project Routing, Team C
         "PROJECT_REGISTRY": "{\"my-repo\":{\"path\":\"/path/to/repo\",\"project_number\":1},\"other-repo\":{\"path\":\"/path/to/other\",\"project_number\":5}}",
         "ALLOWED_IO_ROOTS": "/path/to/repo,/path/to/other,/path/to/your/skills",
         "AUTO_REBUILD_INDEX": "true",
-        "TOOL_FILTER": "codemode",
+        "MEMORY_JOURNAL_MCP_TOOL_FILTER": "codemode",
         "CODEMODE_INTERNAL_FULL_ACCESS": "true",
         "BRIEFING_ENTRY_COUNT": "3",
         "BRIEFING_SUMMARY_COUNT": "1",
@@ -323,7 +326,7 @@ You control exactly what additional content your agent sees across three dimensi
 
 | Dimension             | Variables                                                                                                                                                                        | What It Controls                                                                    |
 | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| **Focus**             | `TOOL_FILTER`                                                                                                                                                                    | Control tool exposure: `full` (default), `starter`, `essential`                     |
+| **Focus**             | `MEMORY_JOURNAL_MCP_TOOL_FILTER` (CLI: `--tool-filter`, config: `"toolFilter"`)                                                                                                  | Control tool exposure: `full` (default), `starter`, `essential`                     |
 | **Journal Content**   | `BRIEFING_ENTRY_COUNT`, `BRIEFING_SUMMARY_COUNT`, `BRIEFING_COMMIT_COUNT`, `BRIEFING_IMPORTANCE_THRESHOLD`, `BRIEFING_INCLUDE_TEAM`                                              | How many recent entries, session summaries, commits, and whether team entries appear |
 | **GitHub Enrichment** | `BRIEFING_ISSUE_COUNT`, `BRIEFING_PR_COUNT`, `BRIEFING_PR_STATUS`, `BRIEFING_MILESTONE_COUNT`, `BRIEFING_WORKFLOW_COUNT`, `BRIEFING_WORKFLOW_STATUS`, `BRIEFING_COPILOT_REVIEWS` | Issues, PRs, milestones, CI runs, and Copilot review state surfaced in the briefing |
 
@@ -339,7 +342,7 @@ You control exactly what additional content your agent sees across three dimensi
 ```json
 "BRIEFING_ENTRY_COUNT": "1",
 "BRIEFING_SUMMARY_COUNT": "0",
-"TOOL_FILTER": "essential"
+"MEMORY_JOURNAL_MCP_TOOL_FILTER": "essential"
 ```
 
 **Full Context (onboarding agents)** — Maximize context for agents unfamiliar with the project:
@@ -352,7 +355,7 @@ You control exactly what additional content your agent sees across three dimensi
 "BRIEFING_PR_COUNT": "3",
 "BRIEFING_PR_STATUS": "true",
 "BRIEFING_COPILOT_REVIEWS": "true",
-"TOOL_FILTER": "full"
+"MEMORY_JOURNAL_MCP_TOOL_FILTER": "full"
 ```
 
 **DevOps-Heavy** — Emphasize CI/CD and GitHub state for infrastructure workflows:
@@ -385,21 +388,25 @@ Restart your MCP client and start journaling!
 
 ### Connect Remotely with HTTP/SSE Transport
 
-> 🔒 **Security Posture: Stdio vs HTTP**
+> [!IMPORTANT]
+> **Security Posture: Stdio vs HTTP (Fail-Closed Startup Guards)**
 >
-> - **Stdio (Default):** Runs implicitly within the secure boundaries of your local IDE or command-line environment. No explicit authentication is required because the execution context is already trusted.
-> - **HTTP/SSE:** Exposes the server over a network socket. By default, HTTP binds ONLY to `localhost` and blocks wildcard CORS to prevent unauthorized access and CSRF attacks. **Public network binding (`--server-host 0.0.0.0`) requires explicit authentication** (`--auth-token` or `--oauth-enabled`). The server will throw a fatal error if you attempt to expose it publicly without securing it.
+> - **Stdio (Default):** Runs implicitly within the secure boundaries of your local IDE or command-line environment. No explicit authentication is required because the execution context is already trusted (`ALLOWED_IO_ROOTS` defaults to fail-closed `[]` unless configured).
+> - **HTTP/SSE (`--transport http`):** Exposes the server over a network socket and enforces **two fail-closed startup guards**:
+>   1. **Mandatory Filesystem Boundary (`ALLOWED_IO_ROOTS` / `--allowed-io-roots`):** Always required in HTTP mode so filesystem boundaries are explicitly declared.
+>   2. **Mandatory Public Authentication:** By default, HTTP binds ONLY to `localhost` and blocks wildcard CORS to prevent unauthorized access and CSRF attacks. Binding to a non-loopback address (`--server-host 0.0.0.0`) requires explicit authentication (`MCP_AUTH_TOKEN` / `--auth-token` or `--oauth-enabled`). The server will throw a fatal error if you attempt to start HTTP mode without `--allowed-io-roots` / `ALLOWED_IO_ROOTS` or expose it publicly without authentication.
 
 For remote access or web-based clients, run the server in HTTP mode:
 
 ```bash
-memory-journal-mcp --transport http --port 3000
+memory-journal-mcp --transport http --port 3000 --allowed-io-roots /path/to/allowed/dir
 ```
 
-To bind to all interfaces (required for containers) and enable the automated proactive analytics scheduler (e.g. daily digest), you MUST provide an authentication token:
+To bind to all interfaces (required for containers) and enable the automated proactive analytics scheduler (e.g. daily digest), you MUST provide both `ALLOWED_IO_ROOTS` and an authentication token:
 
 ```bash
 export MCP_AUTH_TOKEN="your_secure_random_token"
+export ALLOWED_IO_ROOTS="/path/to/allowed/dir"
 memory-journal-mcp --transport http --port 3000 --server-host 0.0.0.0 --digest-interval 1440
 ```
 
@@ -571,8 +578,8 @@ memory-journal-mcp --transport http --port 3000
 | `GITHUB_TOKEN`                                 | Personal access token for GitHub integrations              |
 | `PROJECT_REGISTRY`                             | JSON map of repo names to local paths and project numbers  |
 | **Security & Tooling** | |
-| `ALLOWED_IO_ROOTS`                             | Comma-separated paths for Code Mode filesystem boundaries  |
-| `TOOL_FILTER`                                  | Control tool exposure (`full`, `starter`, `codemode`, `readonly`, `-github`, config: `toolFilter`) |
+| `ALLOWED_IO_ROOTS`                             | Comma-separated paths for Code Mode and IO filesystem boundaries (fail-closed in stdio; mandatory when `--transport http` is used) |
+| `MEMORY_JOURNAL_MCP_TOOL_FILTER`               | Control tool exposure (`full`, `starter`, `codemode`, `readonly`, `-github`; CLI: `--tool-filter`, `memory-journal.config.json` key: `"toolFilter"`. Note: `TOOL_FILTER` is a display fallback only) |
 | `CODE_MODE_MAX_RESULT_SIZE`                    | Max execution payload buffer size in Code Mode (bytes)     |
 | `CODEMODE_INTERNAL_FULL_ACCESS`                | Allow Code Mode to bypass tool filters internally          |
 | `MCP_AGENT_HEALING`                            | Enable/disable autonomous tool & parameter healing (`true`/`false`, CLI: `--no-agent-healing`) |
