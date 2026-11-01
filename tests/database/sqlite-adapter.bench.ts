@@ -1,4 +1,4 @@
-import { bench, beforeAll, afterAll } from 'vitest'
+import { test, beforeAll, afterAll } from 'vitest'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
@@ -32,32 +32,42 @@ afterAll(() => {
     }
 })
 
-bench('createEntry', () => {
-    db.createEntry({
-        content: 'Benchmark test entry content that represents a typical journal entry size.',
-        entryType: 'decision',
-        tags: ['benchmark', 'test'],
-    })
+test('createEntry', async ({ bench }) => {
+    await bench('createEntry', () => {
+        db.createEntry({
+            content: 'Benchmark test entry content that represents a typical journal entry size.',
+            entryType: 'decision',
+            tags: ['benchmark', 'test'],
+        })
+    }).run()
 })
 
-bench('getRecentEntries (limit 50)', () => {
-    db.getRecentEntries(50)
+test('getRecentEntries (limit 50)', async ({ bench }) => {
+    await bench('getRecentEntries (limit 50)', () => {
+        db.getRecentEntries(50)
+    }).run()
 })
 
-bench('updateEntry', () => {
-    // Pick a random ID between 1 and 1000
-    const randomId = Math.floor(Math.random() * 1000) + 1
-    db.updateEntry(randomId, {
-        content: `Updated benchmark content ${Date.now()}`,
-    })
+test('updateEntry', async ({ bench }) => {
+    await bench('updateEntry', () => {
+        // Pick a random ID between 1 and 1000
+        const randomId = Math.floor(Math.random() * 1000) + 1
+        db.updateEntry(randomId, {
+            content: `Updated benchmark content ${Date.now()}`,
+        })
+    }).run()
 })
 
-bench('searchEntries (content match)', () => {
-    db.searchEntries('dummy content', { limit: 20 })
+test('searchEntries (content match)', async ({ bench }) => {
+    await bench('searchEntries (content match)', () => {
+        db.searchEntries('dummy content', { limit: 20 })
+    }).run()
 })
 
-bench('calculateImportance', () => {
-    // Pick a random ID between 1 and 1000
-    const randomId = Math.floor(Math.random() * 1000) + 1
-    db.calculateImportance(randomId)
+test('calculateImportance', async ({ bench }) => {
+    await bench('calculateImportance', () => {
+        // Pick a random ID between 1 and 1000
+        const randomId = Math.floor(Math.random() * 1000) + 1
+        db.calculateImportance(randomId)
+    }).run()
 })

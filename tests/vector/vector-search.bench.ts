@@ -1,4 +1,4 @@
-import { bench, beforeAll, afterAll } from 'vitest'
+import { test, beforeAll, afterAll } from 'vitest'
 import { VectorSearchManager } from '../../src/vector/vector-search-manager/index.js'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
 import * as fs from 'node:fs'
@@ -14,7 +14,7 @@ beforeAll(async () => {
     vm = new VectorSearchManager(db)
 
     // Mock the embedding generation to skip transformer inference delay
-    vm.generateEmbedding = async () => Array.from(new Float32Array(384).fill(Math.random()))
+    vm.generateEmbedding = () => Promise.resolve(new Float32Array(384).fill(Math.random()))
 
     await vm.initialize()
 
@@ -23,7 +23,7 @@ beforeAll(async () => {
         const entry = db.createEntry({
             content: `Vector benchmark entry ${i} content`,
         })
-        await vm.addEntry(entry.id, entry.content)
+        await vm.addEntry(entry)
     }
 })
 
@@ -38,11 +38,22 @@ afterAll(() => {
     }
 })
 
-bench('addEntry', async () => {
-    const id = Math.floor(Math.random() * 1000000)
-    await vm.addEntry(id, `New content for adding id ${id}`)
+test('addEntry', async ({ bench }) => {
+    await bench('addEntry', async () => {
+        const id = Math.floor(Math.random() * 1000000) + 1000
+        await vm.addEntry({
+            id,
+            content: `New content for adding id ${id}`,
+            entryType: 'personal_reflection',
+            timestamp: new Date().toISOString(),
+            isPersonal: true,
+            tags: [],
+        })
+    }).run()
 })
 
-bench('search', async () => {
-    await vm.search('Vector benchmark entry 42', 10, 0.1)
+test('search', async ({ bench }) => {
+    await bench('search', async () => {
+        await vm.search('Vector benchmark entry 42', 10, 0.1)
+    }).run()
 })
