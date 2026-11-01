@@ -15,6 +15,42 @@ import { buildApiProxy } from './worker-api-proxy.js'
 import { wrapResult } from './worker-result-proxy.js'
 
 // =============================================================================
+// Outer-Realm Prototype Hardening (Defense-in-Depth)
+// =============================================================================
+// Helpers and proxies exposed to `vm.createContext` originate in this outer
+// worker realm. Neuter `.constructor` on all outer function prototypes so
+// untrusted scripts inside `vm` cannot traverse `fn['con'+'structor']` to
+// reach the outer realm's Function/AsyncFunction/GeneratorFunction constructors.
+;(function hardenOuterFunctionPrototypes(): void {
+    const noopConstructor = Object.freeze(function ForbiddenConstructor(): never {
+        throw new Error('Dynamic code generation is disabled in sandbox')
+    })
+    const AsyncFnProto = Object.getPrototypeOf(async function () {
+        /* noop */
+    }) as object | null
+    const GenFnProto = Object.getPrototypeOf(function* () {
+        /* noop */
+    }) as object | null
+    const AsyncGenFnProto = Object.getPrototypeOf(async function* () {
+        /* noop */
+    }) as object | null
+
+    for (const proto of [Function.prototype, AsyncFnProto, GenFnProto, AsyncGenFnProto]) {
+        if (proto !== null && proto !== undefined) {
+            try {
+                Object.defineProperty(proto, 'constructor', {
+                    value: noopConstructor,
+                    writable: false,
+                    configurable: false,
+                })
+            } catch {
+                // ignore if already non-configurable
+            }
+        }
+    }
+})()
+
+// =============================================================================
 // Execution State
 // =============================================================================
 
@@ -1781,7 +1817,14 @@ async function executeCode(
             setInterval: undefined,
             setImmediate: undefined,
             getConfig: () => Promise.resolve({ dbPath: 'memory-journal.db' }),
-            process: { exit: (code?: number) => process.exit(200 + (code ?? 0)) },
+            process: Object.freeze({
+                exit: (code?: number) => ({
+                    success: (code ?? 0) === 0,
+                    exited: true,
+                    exitCode: code ?? 0,
+                }),
+                env: Object.freeze({}),
+            }),
             require: undefined,
             __dirname: undefined,
             __filename: undefined,
@@ -1820,15 +1863,29 @@ async function executeCode(
         })
         vmContextRef.current = context
 
-        // Freeze built-in prototypes inside the sandbox to prevent dynamic
-        // constructor chain escapes like:
+        // Freeze built-in prototypes and neuter Function constructors inside the
+        // sandbox to prevent dynamic constructor chain escapes like:
         //   const c = 'con'+'structor'; Error()[c][c]('return process')()
-        // By freezing prototypes, the `constructor` property becomes
-        // non-configurable and returns a frozen function that cannot be
-        // used to reach the real Function constructor.
         vm.runInContext(
             `(function() {
                 "use strict";
+                const noopCtor = Object.freeze(function ForbiddenConstructor() {
+                    throw new Error("Dynamic code generation is disabled in sandbox");
+                });
+                const AsyncFnProto = Object.getPrototypeOf(async function() {});
+                const GenFnProto = Object.getPrototypeOf(function*() {});
+                const AsyncGenFnProto = Object.getPrototypeOf(async function*() {});
+                for (const proto of [Function.prototype, AsyncFnProto, GenFnProto, AsyncGenFnProto]) {
+                    if (proto) {
+                        try {
+                            Object.defineProperty(proto, "constructor", {
+                                value: noopCtor,
+                                writable: false,
+                                configurable: false,
+                            });
+                        } catch(e) {}
+                    }
+                }
                 const builtins = [
                     Object, Function, Array, String, Number, Boolean, RegExp,
                     Error, TypeError, RangeError, ReferenceError, SyntaxError,
@@ -1845,8 +1902,11 @@ async function executeCode(
                     }
                     try { Object.freeze(B); } catch(e) {}
                 }
-                try { Object.freeze(Object.prototype); } catch(e) {}
-                try { Object.freeze(Function.prototype); } catch(e) {}
+                for (const proto of [Object.prototype, Function.prototype, AsyncFnProto, GenFnProto, AsyncGenFnProto]) {
+                    if (proto) {
+                        try { Object.freeze(proto); } catch(e) {}
+                    }
+                }
             })()`,
             context
         )

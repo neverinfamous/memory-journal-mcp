@@ -110,11 +110,7 @@ export class WorkerSandbox {
         })
 
         this.worker.on('exit', (exitCode) => {
-            if (exitCode >= 200 && exitCode < 300) {
-                const actualExitCode = exitCode - 200
-                process.stderr.write(`[CodeMode] Triggering graceful host exit with code ${actualExitCode}\n`)
-                process.exit(actualExitCode)
-            } else if (exitCode !== 0) {
+            if (exitCode !== 0) {
                 this.handleWorkerDeath(
                     `🛠️ AUTONOMOUS HEALING: Worker execution timed out or ran out of memory. Avoid executing hundreds of sequential RPC calls (e.g. inside a loop calling getEntryById) or unbounded loops without keyset/offset pagination. For project counts and aggregates, use 'mj.analytics.getStatistics({ projectBreakdown: true })' or 'mj.admin.listProjects()' instead of iterating entries. Reduce batch/sample size or filter results server-side. (Worker exit code ${String(exitCode)})`
                 )
@@ -265,29 +261,44 @@ async function handleRpcRequest(
     hostPort: MessagePort,
     methodList: Record<string, string[]>
 ): Promise<void> {
+    if (typeof req !== 'object' || req === null || typeof req.id !== 'number') {
+        return
+    }
     const response: RpcResponse = { id: req.id }
 
     try {
-        const allowedMethods = methodList[req.group]
+        if (typeof req.group !== 'string' || typeof req.method !== 'string') {
+            response.error = 'Malformed RPC request: group and method must be strings'
+            hostPort.postMessage(response)
+            return
+        }
+
+        const allowedMethods = Object.hasOwn(methodList, req.group)
+            ? methodList[req.group]
+            : undefined
         if (!allowedMethods?.includes(req.method)) {
             response.error = `Unauthorized method invocation: ${req.group}.${req.method}`
             hostPort.postMessage(response)
             return
         }
 
+        const safeArgs = Array.isArray(req.args) ? req.args : []
         let target: unknown
         if (req.group === '_topLevel') {
-            target = apiBindings[req.method]
-        } else {
+            target = Object.hasOwn(apiBindings, req.method) ? apiBindings[req.method] : undefined
+        } else if (Object.hasOwn(apiBindings, req.group)) {
             const groupApi = apiBindings[req.group]
             if (groupApi !== undefined && groupApi !== null && typeof groupApi === 'object') {
-                target = (groupApi as Record<string, unknown>)[req.method]
+                const groupRecord = groupApi as Record<string, unknown>
+                target = Object.hasOwn(groupRecord, req.method)
+                    ? groupRecord[req.method]
+                    : undefined
             }
         }
 
         if (typeof target === 'function') {
             response.result = await (target as (...args: unknown[]) => Promise<unknown>)(
-                ...req.args
+                ...safeArgs
             )
         } else {
             response.error = `Unknown method: ${req.group}.${req.method}`
