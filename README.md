@@ -5,7 +5,7 @@
 [![GitHub](https://img.shields.io/badge/GitHub-neverinfamous/memory--journal--mcp-blue?logo=github)](https://github.com/neverinfamous/memory-journal-mcp) [![npm](https://img.shields.io/npm/v/memory-journal-mcp)](https://www.npmjs.com/package/memory-journal-mcp) [![Docker Pulls](https://img.shields.io/docker/pulls/writenotenow/memory-journal-mcp)](https://hub.docker.com/r/writenotenow/memory-journal-mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT) ![Status](https://img.shields.io/badge/status-Production%2FStable-brightgreen)
 [![MCP Registry](https://img.shields.io/badge/MCP_Registry-Published-green)](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.neverinfamous/memory-journal-mcp) [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](SECURITY.md) [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
-![Coverage](https://img.shields.io/badge/Coverage-79.63%25-yellowgreen.svg) ![E2E](https://img.shields.io/badge/E2E-450%20passing%20%C2%B7%200%20skipped-blue.svg) ![Tests](https://img.shields.io/badge/Tests-1782_passed-brightgreen.svg) [![CI](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml/badge.svg)](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml)
+![Coverage](https://img.shields.io/badge/Coverage-79.63%25-yellowgreen.svg) ![E2E](https://img.shields.io/badge/E2E-450%20passing%20%C2%B7%200%20skipped-blue.svg) ![Tests](https://img.shields.io/badge/Tests-1782_passed-brightgreen.svg) [![Benchmarks](https://img.shields.io/badge/Benchmarks-11_passed-brightgreen.svg)](https://github.com/neverinfamous/memory-journal-mcp/wiki/Performance) [![CI](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml/badge.svg)](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml)
 
 **[📚 Full Documentation (Wiki)](https://github.com/neverinfamous/memory-journal-mcp/wiki)** • **[Changelog](CHANGELOG.md)** • **[Security](SECURITY.md)** • **[Release Article](https://adamic.tech/articles/memory-journal-mcp-server)**
 
@@ -691,11 +691,11 @@ flowchart TB
 
 ### Performance Benchmarks
 
-Memory Journal is designed for extremely low overhead during AI task execution. We include a `vitest bench` suite to maintain these baseline guarantees:
+Memory Journal is designed for extremely low overhead during AI task execution. We include a `vitest bench` suite (11 benchmarks across 3 suites) to maintain these baseline guarantees:
 
-- **Database Reads**: Operations execute in fractions of a millisecond. `calculateImportance` is ~13-14x faster than retrieving 50 recent entries.
-- **Vector Search Engine**: Both search (~140-220 ops/sec) and indexing (~1600-1900+ ops/sec) are high-throughput via `sqlite-vec` with SQL-native KNN queries.
-- **Core MCP Routines**: `getTools` uses cached O(1) dispatch (~4800-7000x faster than `get_recent_entries`). `create_entry` and `search_entries` execute through the full MCP layer with sub-millisecond overhead.
+- **Database Operations (`sqlite-adapter.bench.ts`)**: `calculateImportance` runs at **~51,600 ops/sec** (~0.03ms mean, ~27x faster than retrieving 50 recent entries) via a 256-entry LRU prepared statement cache. `getRecentEntries (limit 50)` executes at **~1,870 ops/sec** (~0.63ms mean), `updateEntry` at **~2,380 ops/sec** (~0.79ms mean), `createEntry` at **~1,060 ops/sec** (~1.69ms mean), and `searchEntries` (FTS5 BM25 + batch importance hydration) at **~176 ops/sec** (~6.2ms mean).
+- **Vector Search Engine (`vector-search.bench.ts`)**: Both k-NN similarity search (**~1,050 ops/sec**, ~1.8ms mean with batch entry hydration) and vector indexing (**~4,220 ops/sec**, ~0.41ms mean) are high-throughput via `sqlite-vec` (`vec0` with `chunk_size=256`).
+- **Core MCP Routines (`mcp-server.bench.ts`)**: `getTools` uses cached O(1) dispatch (**~7.2M–9.4M ops/sec**, ~0.0001ms). Full end-to-end `callTool` invocations (including interceptor, token estimation, and project registry resolution) run at **~1,775 ops/sec** (~0.65ms) for `get_recent_entries`, **~205 ops/sec** (~5.4ms) for `search_entries`, and **~800 ops/sec** (~2.4ms) for `create_entry`.
 
 To run the benchmarking suite locally:
 
