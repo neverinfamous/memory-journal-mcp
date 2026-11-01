@@ -25,6 +25,35 @@ const auditArgsSchema = z.object({
     copilot: z.enum(['true', 'false']).optional(),
 })
 
+const PLAN_REVIEW_ARGUMENTS = [
+    { name: 'topic', description: 'Topic or feature to review', required: false },
+    {
+        name: 'depth',
+        description: "Review depth profile ('light' | 'standard' | 'deep', default: 'standard')",
+        required: false,
+    },
+    {
+        name: 'copilot',
+        description:
+            "Opt-in to external GitHub Copilot CLI validation ('true' | 'false', default: 'false')",
+        required: false,
+    },
+]
+
+const AUDIT_ARGUMENTS = [
+    {
+        name: 'target',
+        description: 'Target file, directory, skill, or workflow to audit',
+        required: false,
+    },
+    {
+        name: 'copilot',
+        description:
+            "Opt-in to external GitHub Copilot CLI validation ('true' | 'false', default: 'false')",
+        required: false,
+    },
+]
+
 /** Review depth profiles controlling which dimensions receive full scrutiny. */
 type ReviewDepth = 'light' | 'standard' | 'deep'
 
@@ -111,7 +140,7 @@ function buildCopilotStep(enabled: boolean, promptCmd: string): string {
     if (enabled) {
         return `Run \`${promptCmd}\` in NON-INTERACTIVE mode. You MUST wait for it to finish (it may take 10-20 seconds). If Copilot fails, alert the user immediately and note findings.`
     }
-    return `External Copilot CLI validation is opt-in (\`copilot: 'true'\`) and skipped by default unless explicitly requested by the user.`
+    return `**Optional (Skip by default)**: External Copilot CLI validation is opt-in (\`copilot: 'true'\`) and skipped by default unless explicitly requested by the user. Only if the user explicitly requests the GitHub Copilot audit, run \`${promptCmd}\` in NON-INTERACTIVE mode and wait for it to finish (it may take 10-20 seconds); if Copilot fails, alert the user immediately and note findings.`
 }
 
 /**
@@ -124,6 +153,7 @@ export function getAdversarialPromptDefinitions(): InternalPromptDef[] {
             description:
                 'Bootstrap an adversarial planning workflow with structured review dimensions, scoring rubric, and prior plan context from the journal. Optional parameters: topic, depth, copilot.',
             icons: [ICON_PROMPT],
+            arguments: PLAN_REVIEW_ARGUMENTS,
             handler: (args: Record<string, string> | undefined, db: IDatabaseAdapter) => {
                 const parsed = planReviewArgsSchema.parse(args ?? {})
                 const topic = parsed.topic ?? '{topic}'
@@ -219,6 +249,7 @@ Review prior entries for recurring findings and reusable patterns before draftin
             name: 'adversarial-audit-code-quality',
             description: 'Multi-pass adversarial code quality audit (linting, technical debt, consistency) Optional parameters: target, copilot',
             icons: [ICON_PROMPT],
+            arguments: AUDIT_ARGUMENTS,
             handler: (args: Record<string, string> | undefined, _db: IDatabaseAdapter) => {
                 const parsed = auditArgsSchema.parse(args ?? {})
                 const target = parsed.target ?? '{target}'
@@ -265,6 +296,7 @@ If the target is '{target}', determine it from the user's request. If the user h
             name: 'adversarial-audit-security',
             description: 'Multi-pass adversarial security audit (threat modeling, attack surfaces) Optional parameters: target, copilot',
             icons: [ICON_PROMPT],
+            arguments: AUDIT_ARGUMENTS,
             handler: (args: Record<string, string> | undefined, _db: IDatabaseAdapter) => {
                 const parsed = auditArgsSchema.parse(args ?? {})
                 const target = parsed.target ?? '{target}'
@@ -300,6 +332,7 @@ If the target is '{target}', determine it from the user's request. If the user h
             name: 'adversarial-audit-performance',
             description: 'Multi-pass adversarial performance audit (profiling, stress-testing) Optional parameters: target, copilot',
             icons: [ICON_PROMPT],
+            arguments: AUDIT_ARGUMENTS,
             handler: (args: Record<string, string> | undefined, _db: IDatabaseAdapter) => {
                 const parsed = auditArgsSchema.parse(args ?? {})
                 const target = parsed.target ?? '{target}'
@@ -330,6 +363,7 @@ If the target is '{target}', determine it from the user's request. If the user h
             name: 'adversarial-audit-seo',
             description: 'Adversarial SEO audit (technical, semantic HTML, ARIA, structured data, Core Web Vitals) Optional parameters: target, copilot',
             icons: [ICON_PROMPT],
+            arguments: AUDIT_ARGUMENTS,
             handler: (args: Record<string, string> | undefined, _db: IDatabaseAdapter) => {
                 const parsed = auditArgsSchema.parse(args ?? {})
                 const target = parsed.target ?? '{target}'
@@ -364,6 +398,7 @@ If the target is '{target}', determine it from the user's request. If the user h
             name: 'adversarial-audit-skill',
             description: 'Multi-pass adversarial skill audit (research, evaluate triggers, stress-test) Optional parameters: target, copilot',
             icons: [ICON_PROMPT],
+            arguments: AUDIT_ARGUMENTS,
             handler: (args: Record<string, string> | undefined, _db: IDatabaseAdapter) => {
                 const parsed = auditArgsSchema.parse(args ?? {})
                 const target = parsed.target ?? '{target}'
@@ -398,6 +433,7 @@ If the target is '{target}', determine it from the user's request. If the user h
             name: 'adversarial-audit-workflow',
             description: 'Multi-pass adversarial workflow audit (clarity, safety gates, loop prevention) Optional parameters: target, copilot',
             icons: [ICON_PROMPT],
+            arguments: AUDIT_ARGUMENTS,
             handler: (args: Record<string, string> | undefined, _db: IDatabaseAdapter) => {
                 const parsed = auditArgsSchema.parse(args ?? {})
                 const target = parsed.target ?? '{target}'

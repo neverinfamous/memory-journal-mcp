@@ -152,36 +152,44 @@ These prompts execute deep, parallelized audits using subagents.
 **Description**: Comprehensive architectural review.
 - **Arguments**:
   - `topic` (optional) - The topic or feature to review.
+  - `depth` (optional) - Review depth profile (`light` | `standard` | `deep`, default: `standard`).
+  - `copilot` (optional) - Opt-in to external GitHub Copilot CLI validation (`true` | `false`, default: `false`).
 
 ### `adversarial-audit-code-quality`
 **Description**: Deep code quality audit.
 - **Arguments**:
   - `target` (optional) - The directory or file to audit.
+  - `copilot` (optional) - Opt-in to external GitHub Copilot CLI validation (`true` | `false`, default: `false`).
 
 ### `adversarial-audit-security`
 **Description**: Deep security audit.
 - **Arguments**:
   - `target` (optional) - The directory or file to audit.
+  - `copilot` (optional) - Opt-in to external GitHub Copilot CLI validation (`true` | `false`, default: `false`).
 
 ### `adversarial-audit-performance`
 **Description**: Deep performance audit.
 - **Arguments**:
   - `target` (optional) - The directory or file to audit.
+  - `copilot` (optional) - Opt-in to external GitHub Copilot CLI validation (`true` | `false`, default: `false`).
 
 ### `adversarial-audit-seo`
 **Description**: Deep SEO audit.
 - **Arguments**:
   - `target` (optional) - The directory or file to audit.
+  - `copilot` (optional) - Opt-in to external GitHub Copilot CLI validation (`true` | `false`, default: `false`).
 
 ### `adversarial-audit-skill`
 **Description**: Audit an agent skill configuration.
 - **Arguments**:
   - `target` (optional) - The skill to audit.
+  - `copilot` (optional) - Opt-in to external GitHub Copilot CLI validation (`true` | `false`, default: `false`).
 
 ### `adversarial-audit-workflow`
 **Description**: Audit an agent workflow configuration.
 - **Arguments**:
   - `target` (optional) - The workflow to audit.
+  - `copilot` (optional) - Opt-in to external GitHub Copilot CLI validation (`true` | `false`, default: `false`).
 
 ---
 

@@ -87,12 +87,14 @@ describe('Prompt Handlers - Coverage', () => {
             for (const name of adversarialNames) {
                 const defaultRes = await getPrompt(name, {}, db)
                 const defaultText = defaultRes.messages[0]?.content.text ?? ''
+                expect(defaultText).toContain('**Optional (Skip by default)**')
                 expect(defaultText).toContain("opt-in (`copilot: 'true'`)")
-                expect(defaultText).not.toContain('gh copilot -- -p')
+                expect(defaultText).toContain('gh copilot -- -p')
 
                 const enabledRes = await getPrompt(name, { copilot: 'true' }, db)
                 const enabledText = enabledRes.messages[0]?.content.text ?? ''
-                expect(enabledText).toContain('gh copilot -- -p')
+                expect(enabledText).toContain('Run `gh copilot -- -p')
+                expect(enabledText).not.toContain('**Optional (Skip by default)**')
             }
         })
     })
