@@ -32,8 +32,7 @@ The server uses the native **better-sqlite3** driver with **sqlite-vec** for vec
 
 ### **Character Handling**
 
-Tags are stored as-is via parameterized queries. Special characters in tags
-are safely handled by the database layer and do not pose injection risks.
+Tags are lowercased, normalized via slug regex (`[^a-z0-9:@]+` -> `-`, with leading/trailing hyphens stripped), and bound via parameterized queries at the database layer so special characters never pose injection risks.
 
 ### **SQL Injection Prevention**
 
@@ -76,7 +75,7 @@ When running in HTTP mode (`--transport http`), the following security measures 
 
 ```bash
 # Restrict CORS to specific origins
-memory-journal-mcp --transport http --cors-origin "http://localhost:3000,https://my-app.com"
+memory-journal-mcp --transport http --allowed-io-roots /path/to/projects --cors-origin "http://localhost:3000,https://my-app.com"
 
 # Or via environment variable
 export CORS_ORIGIN="http://localhost:3000,https://my-app.com"
@@ -141,6 +140,7 @@ For production HTTP deployments, Memory Journal supports **OAuth 2.1 authenticat
 ```bash
 # CLI flags
 memory-journal-mcp --transport http --port 3000 \
+  --allowed-io-roots /path/to/projects \
   --oauth-enabled \
   --oauth-issuer https://auth.example.com/realms/mcp \
   --oauth-audience memory-journal-mcp \

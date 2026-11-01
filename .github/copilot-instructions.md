@@ -76,7 +76,7 @@ All resources must dynamically compute and return `_meta.tokenEstimate` within t
 - **YAML Frontmatter**: Supported natively in entry commands (`memory-journal-mcp entry create`).
 - **Docker Tags**: Always use `:latest` docker tags. Check limits (25,000 char) for DOCKER_README.md.
 - **Dual-Schema Pattern**: All schemas must separate stringified input from strict internal domain types. Zod schemas are used.
-- **Plugin Sync**: Ensure `lib-agent-exec` and `lib-git-history` plugins are kept in sync.
+- **Vendor Sync**: Ensure vendored libraries in `src/vendor/` (`lib-agent-exec` and `lib-git-history`, tracked in `src/vendor/VENDOR.json`) are kept in sync via `pnpm run sync:vendor` and validated via `pnpm run check:vendor-deps`.
 - **Guardrails**: The `Server Bug Protocol` (`src/constants/instructions/gotchas.ts`) instructs agents to stop and report unexpected server errors, `healAgentHallucinations` (`src/handlers/tools/schemas/hallucination-healer.ts`) autonomously normalizes malformed tool arguments, and the session briefing health alert surfaces maintenance recommendations (via the `optimize-journal` prompt).
 - **Code Mode Error Proxy**: Code Mode API, Promise, and Worker proxies intercept and enrich errors with the `🛠️ AUTONOMOUS HEALING:` guidance prefix, while `worker-result-proxy.ts` prefixes `.error` with `[${code}]`.
 
@@ -89,8 +89,8 @@ src/
 ├── auth/                       # OAuth 2.1 authentication
 ├── codemode/                   # Sandboxed JS execution engine
 ├── constants/
-│   ├── instructions/           # Composable instruction segments
-│   └── server-instructions.ts  # Agent prompts and HELP_CONTENT map (Single Source of Truth)
+│   ├── instructions/           # Modular instruction sections (base, core, gotchas, templates)
+│   └── server-instructions.ts  # Dynamic server instructions and HELP_CONTENT map (Single Source of Truth)
 ├── database/
 │   ├── adapter-factory.ts      # Database adapter factory
 │   ├── core/                   # Core database types and interfaces
@@ -109,9 +109,12 @@ src/
 ├── markdown/                   # Markdown import/export (round-trip frontmatter parsing)
 ├── observability/              # Metrics interceptor, token estimator, latency tracker
 ├── server/
-│   ├── mcp-server/             # MCP server setup
-│   ├── registration.ts         # Tool/resource/prompt registration
-│   └── scheduler.ts            # Recurring task scheduler
+│   ├── mcp-server/             # MCP server setup & tool registration
+│   ├── auto-prune.ts           # Automated pruning & archiving scheduler
+│   ├── digest-reporter.ts      # Scheduled digest & webhook/file reporting
+│   ├── registration.ts         # Resource & prompt capability registration
+│   ├── scheduler.ts            # Cron jobs (backup, vacuum, index rebuild, digest, report)
+│   └── subscription-manager.ts # MCP resource subscription notifications
 ├── transports/
 │   └── http/                   # HTTP/SSE transport (modularized)
 ├── types/                      # Type definitions + barrel

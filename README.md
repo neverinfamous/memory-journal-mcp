@@ -604,7 +604,7 @@ memory-journal-mcp --transport http --port 3000
 | `OAUTH_ENABLED`                                | Enable OAuth 2.1 authentication (default: false)           |
 | `OAUTH_ISSUER` / `OAUTH_AUDIENCE` / `OAUTH_JWKS_URI` / `OAUTH_CLOCK_TOLERANCE` | OAuth token verification parameters (clock tolerance default: 60s) |
 | **Telemetry & Administration** | |
-| `AUDIT_LOG_PATH` / `AUDIT_REDACT` / `AUDIT_READS` / `AUDIT_LOG_MAX_SIZE` | Path to JSONL audit log file, argument/result redaction, read-call logging, and rotation size limit (default: 50MB) |
+| `AUDIT_LOG_PATH` / `AUDIT_REDACT` / `AUDIT_READS` / `AUDIT_LOG_MAX_SIZE` | Path to JSONL audit log file, argument/result redaction, read-call logging, and rotation size limit (default: 10MB) |
 | `METRICS_EXPORT` / `PERSIST_METRICS` / `MJ_METRICS_PORT` / `MJ_METRICS_HOST` | Prometheus export (`METRICS_EXPORT=prometheus` auto-starts the standalone metrics server on `127.0.0.1:9465` in addition to mounting `/metrics` on the HTTP transport), disk-persisted metrics, and dedicated scrape port/host |
 | `AUTO_PRUNE_INTERVAL_MINUTES` / `ARCHIVE_OLDER_THAN_DAYS` / `PRUNE_OLDER_THAN_DAYS` / `HARD_DELETE_OLDER_THAN_DAYS` / `PRUNE_IMPORTANCE_THRESHOLD` / `PRUNE_DRY_RUN` / `PRUNE_EXCLUDE_TAGS` | Autonomous lifecycle pruning, archiving (interval/days default: `0` = disabled), importance threshold (default: `0.15`), dry-run (default: `false`), and exclusion tags |
 | `REPORT_INTERVAL` / `REPORT_WEBHOOK_URL`       | Scheduled HTTP reports                                     |

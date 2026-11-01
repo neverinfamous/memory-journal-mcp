@@ -67,7 +67,7 @@ flowchart LR
 | [gatekeeper.yml](gatekeeper.yml)                                         | push to `main` / tag `v*`                | Orchestrates CI/CD: fans out 5 verification gates (`lint-and-test`, `codeql`, `secrets-scanning`, `security-update`, `e2e`) on `push to main` and `tag v*`; triggers `docker-publish.yml` **only** on `tag v*` pushes (`refs/tags/v*`) |
 | [lint-and-test.yml](lint-and-test.yml)                                   | PR to `main` / `workflow_call`           | Lint, typecheck, build, unit & E2E tests (Node 24.x + 26.x matrix), pnpm audit, Docker smoke test                                                                                                   |
 | [e2e.yml](e2e.yml)                                                       | PR to `main` / manual / `workflow_call`  | Playwright E2E Tests                                                                                                                                                                                |
-| [dockerfile-patch-drift.yml](dockerfile-patch-drift.yml)                 | PR (path-filtered) / daily (12:00 UTC) / manual | Dockerfile Patch Drift Check (`Dockerfile` vs `package.json overrides`)                                                                                                                             |
+| [dockerfile-patch-drift.yml](dockerfile-patch-drift.yml)                 | PR (path-filtered) / daily (12:00 UTC) / manual | Dockerfile & Override Drift Check (bundled npm deps & `package.json overrides` vs npm registry)                                                                                                      |
 
 ### Security
 
@@ -113,9 +113,9 @@ For manual feature releases, the maintainer runs `/bump-deploy` locally which pu
 | Secret            | Used By                                                  | Purpose                        |
 | ----------------- | -------------------------------------------------------- | ------------------------------ |
 | `GITHUB_TOKEN`    | docker-publish, security-update, codeql                  | Git operations, SARIF upload, issue creation |
-| `NPM_TOKEN`       | publish-npm                     | npm registry authentication    |
-| `DOCKER_USERNAME` | docker-publish                  | Docker Hub login               |
-| `DOCKER_PASSWORD` | docker-publish                  | Docker Hub login               |
+| `NPM_TOKEN`       | gatekeeper → docker-publish → publish-npm                | npm registry authentication    |
+| `DOCKER_USERNAME` | gatekeeper → docker-publish                              | Docker Hub login               |
+| `DOCKER_PASSWORD` | gatekeeper → docker-publish                              | Docker Hub login               |
 
 ---
 

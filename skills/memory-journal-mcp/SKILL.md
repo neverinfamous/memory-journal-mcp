@@ -19,10 +19,10 @@ The Memory Journal MCP provides comprehensive, dynamic instructions via its `mem
 - **Context Integrity & Metadata:** Always include mandatory context fields when creating entries:
   - `workspace_id`: Repository name (e.g. `adamic`, `memory-journal-mcp`). Required string (auto-resolves from `project_number` / `PROJECT_REGISTRY` if omitted).
   - `session_id`: Current AI conversation ID.
-  - `project_number`: Numeric project ID.
+  - `project_number`: Numeric project ID (strictly required by CLI `entry create --project <number>` if CWD is not in `PROJECT_REGISTRY`).
   - `impact_score` / `trust_score`: Blast radius and confidence heuristics (0.0 to 1.0).
   - `validation_status`: `'passed'`, `'none'`, or `'failed'`.
-- **Context Recovery:** If you lose workspace context mid-task (e.g., needing a `project_number`), NEVER re-query `memory://briefing`. Query `memory://agent-id` (or `memory://agent-context/{repo}`).
+- **Context Recovery:** If you lose workspace context mid-task (e.g., needing a `project_number`), NEVER re-query `memory://briefing`. Query `memory://agent-context/{repo}` (or `memory://agent-id/{repo}`; bare `memory://agent-id` falls back to server CWD).
 
 ## 3. Commit Integration & Entry Creation
 - **Commit Journaling:** When recording commit history in the journal, create an entry (via `mj_execute_code`, `create_entry`, or `memory-journal-mcp entry create`) tagged `commit-narrative` containing `auto_context` with `commits: ["<sha>"]` and heuristic metadata (`impact_score`, `trust_score`, `validation_status`).
