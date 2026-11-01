@@ -177,6 +177,66 @@ describe('Team Admin Batch Tool Handlers', () => {
 
             expect(teamVector.addEntry).toHaveBeenCalledTimes(2) // 2 from here
         })
+
+        it('should forward impact_score, trust_score, validation_status, auto_context, and relationships in team_batch_create_entries', async () => {
+            const firstRes = (await callTool(
+                'team_batch_create_entries',
+                {
+                    entries: [
+                        {
+                            workspace_id: 'default',
+                            content: 'Target entry for batch link',
+                            project_number: 1,
+                        },
+                    ],
+                    auto_index: false,
+                },
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb,
+                teamVector
+            )) as any
+            const targetId = firstRes.entries[0].id
+
+            const batchRes = (await callTool(
+                'team_batch_create_entries',
+                {
+                    entries: [
+                        {
+                            workspace_id: 'default',
+                            content: 'Batch entry with CMS metadata and relationship',
+                            project_number: 1,
+                            impact_score: 0.85,
+                            trust_score: 0.95,
+                            validation_status: 'passed',
+                            auto_context: JSON.stringify({ commits: ['abc1234'] }),
+                            relationships: [{ targetId, relationType: 'resolved' }],
+                        },
+                    ],
+                    auto_index: false,
+                },
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb,
+                teamVector
+            )) as any
+
+            expect(batchRes.success).toBe(true)
+            const created = teamDb.getEntryById(batchRes.entries[0].id)
+            expect(created?.impactScore).toBe(0.85)
+            expect(created?.trustScore).toBe(0.95)
+            expect(created?.validationStatus).toBe('passed')
+            expect(created?.autoContext).toBe(JSON.stringify({ commits: ['abc1234'] }))
+
+            const rels = teamDb.getRelationships(batchRes.entries[0].id)
+            expect(rels.some((r) => r.toEntryId === targetId && r.relationshipType === 'resolved')).toBe(true)
+        })
     })
 
     describe('team_batch_update_entries', () => {
@@ -276,6 +336,53 @@ describe('Team Admin Batch Tool Handlers', () => {
             expect(result.deleted.length).toBe(1)
             
             expect(teamDb.getEntryById(entry_ids[0])).toBeNull()
+        })
+
+        it('should deny permanent: true on team_batch_delete_entries when caller is not an admin', async () => {
+            teamDb.addTeamMember('admin-bootstrap', 'admin')
+            teamDb.addTeamMember('test-user', 'member')
+            try {
+                const createRes = (await callTool(
+                    'team_batch_create_entries',
+                    { entries: [{ workspace_id: 'default', content: 'Member entry', project_number: 1 }] },
+                    personalDb,
+                    undefined,
+                    undefined,
+                    undefined,
+                    undefined,
+                    teamDb,
+                    teamVector
+                )) as any
+
+                const result = (await callTool(
+                    'team_batch_delete_entries',
+                    { entry_ids: [createRes.entries[0].id], project_number: 1, permanent: true },
+                    personalDb,
+                    undefined,
+                    undefined,
+                    {
+                        teamDefaultRole: 'member',
+                        runtime: {
+                            maintenanceManager: {
+                                withActiveJob: (fn: any) => fn(),
+                                acquireMaintenanceLock: async () => {},
+                                releaseMaintenanceLock: () => {},
+                            },
+                        },
+                        io: { allowedRoots: [process.cwd()] },
+                    },
+                    undefined,
+                    teamDb,
+                    teamVector
+                )) as any
+
+                expect(result.success).toBe(false)
+                expect(result.code).toBe('PERMISSION_DENIED')
+                expect(result.error).toContain("Permanent deletion of team entries requires the 'admin' role")
+            } finally {
+                teamDb.removeTeamMember('test-user')
+                teamDb.removeTeamMember('admin-bootstrap')
+            }
         })
     })
 })

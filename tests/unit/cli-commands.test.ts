@@ -258,7 +258,16 @@ describe('CLI Program & Commands', () => {
             expect(pruneJson.archivedCount).toBe(0)
 
             stderrOutput = []
-            await pruneAction({ db: dbPath, json: false, dryRun: true }, dummyCmd)
+            await pruneAction(
+                {
+                    db: dbPath,
+                    json: false,
+                    pruneDryRun: true,
+                    pruneImportanceThreshold: 0.25,
+                    pruneExcludeTags: 'keep,important',
+                },
+                dummyCmd
+            )
             expect(stderrOutput.join('')).toContain('Prune result:')
         })
 
@@ -425,6 +434,22 @@ describe('CLI Program & Commands', () => {
             )
             const extImport = JSON.parse(stdoutOutput.join('')) as { created: number }
             expect(extImport.created).toBe(1)
+
+            // 5. importExternalAction (logseq format)
+            const logseqDir = path.join(tmpDir, 'ext-logseq')
+            fs.mkdirSync(logseqDir, { recursive: true })
+            fs.writeFileSync(
+                path.join(logseqDir, 'logseq-page.md'),
+                'tags:: logseq-tag\n\n- Top level bullet item\n  - Nested bullet detail\n',
+                'utf-8'
+            )
+            stdoutOutput = []
+            await importExternalAction(
+                { db: dbPath, dir: logseqDir, format: 'logseq' },
+                dummyCmd
+            )
+            const logseqImport = JSON.parse(stdoutOutput.join('')) as { created: number }
+            expect(logseqImport.created).toBe(1)
 
             // Missing --dir error path
             await expect(exportMarkdownAction({ db: dbPath }, dummyCmd)).rejects.toThrow(

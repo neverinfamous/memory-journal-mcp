@@ -233,6 +233,39 @@ describe('Team Vector Tool Handlers', () => {
             expect(result.success).toBe(false)
             expect(result.error).toContain('Team vector search not available')
         })
+
+        it('should require admin role when Team RBAC is active', async () => {
+            teamDb.addTeamMember('admin-bootstrap', 'admin')
+            teamDb.addTeamMember('test-user', 'member')
+            try {
+                const result = (await callTool(
+                    'team_rebuild_vector_index',
+                    {},
+                    personalDb,
+                    undefined,
+                    undefined,
+                    {
+                        teamDefaultRole: 'member',
+                        runtime: {
+                            maintenanceManager: {
+                                withActiveJob: (fn: any) => fn(),
+                                acquireMaintenanceLock: async () => {},
+                                releaseMaintenanceLock: () => {},
+                            },
+                        },
+                        io: { allowedRoots: [process.cwd()] },
+                    },
+                    undefined,
+                    teamDb,
+                    vectorManager
+                )) as any
+                expect(result.success).toBe(false)
+                expect(result.error).toContain("required 'admin' role")
+            } finally {
+                teamDb.removeTeamMember('test-user')
+                teamDb.removeTeamMember('admin-bootstrap')
+            }
+        })
     })
 
     describe('team_add_to_vector_index', () => {
