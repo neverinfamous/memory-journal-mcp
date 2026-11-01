@@ -16,11 +16,13 @@ import { z } from 'zod'
 
 const planReviewArgsSchema = z.object({
     topic: z.string().optional(),
-    depth: z.enum(['light', 'standard', 'deep']).optional()
+    depth: z.enum(['light', 'standard', 'deep']).optional(),
+    copilot: z.enum(['true', 'false']).optional(),
 })
 
 const auditArgsSchema = z.object({
-    target: z.string().optional()
+    target: z.string().optional(),
+    copilot: z.enum(['true', 'false']).optional(),
 })
 
 /** Review depth profiles controlling which dimensions receive full scrutiny. */
@@ -105,6 +107,13 @@ function formatPriorEntries(
         .join('\n')
 }
 
+function buildCopilotStep(enabled: boolean, promptCmd: string): string {
+    if (enabled) {
+        return `Run \`${promptCmd}\` in NON-INTERACTIVE mode. You MUST wait for it to finish (it may take 10-20 seconds). If Copilot fails, alert the user immediately and note findings.`
+    }
+    return `External Copilot CLI validation is opt-in (\`copilot: 'true'\`) and skipped by default unless explicitly requested by the user.`
+}
+
 /**
  * Get adversarial planning prompt definitions
  */
@@ -113,12 +122,13 @@ export function getAdversarialPromptDefinitions(): InternalPromptDef[] {
         {
             name: 'adversarial-plan-review',
             description:
-                'Bootstrap an adversarial planning workflow with structured review dimensions, scoring rubric, and prior plan context from the journal. Optional parameters: topic, depth.',
+                'Bootstrap an adversarial planning workflow with structured review dimensions, scoring rubric, and prior plan context from the journal. Optional parameters: topic, depth, copilot.',
             icons: [ICON_PROMPT],
             handler: (args: Record<string, string> | undefined, db: IDatabaseAdapter) => {
                 const parsed = planReviewArgsSchema.parse(args ?? {})
                 const topic = parsed.topic ?? '{topic}'
                 const depth: ReviewDepth = parsed.depth ?? 'standard'
+                const useCopilot = parsed.copilot === 'true'
 
                 // Pre-fetch prior finalized plans related to this topic
                 const { entries: priorPlans } = db.searchEntries(topic, {
@@ -128,6 +138,10 @@ export function getAdversarialPromptDefinitions(): InternalPromptDef[] {
                 })
 
                 const dimensionsTable = buildDimensionsTable(depth)
+                const copilotInstruction = buildCopilotStep(
+                    useCopilot,
+                    'gh copilot -- -p "Review the plan at <PATH> for correctness and edge cases. Explore the codebase to verify assumptions. When viewing or reading files, always provide the \'path\' parameter correctly. What did we miss?" --allow-all'
+                )
 
                 return {
                     messages: [
@@ -181,13 +195,13 @@ Address every finding with a disposition:
 | **Reject** | Explain why it doesn't apply |
 | **Modify** | Accept the spirit, implement differently |
 
-### Phase 4: External Validation (Copilot)
+### Phase 4: External Validation (Copilot — Opt-In)
 
-Run \`gh copilot -- -p "Review the plan at <PATH> for correctness and edge cases. Explore the codebase to verify assumptions. When viewing or reading files, always provide the 'path' parameter correctly. What did we miss?" --allow-all\` in NON-INTERACTIVE mode. You MUST wait for it to finish (it may take 10-20 seconds). **CRITICAL**: Do NOT skip this step. If Copilot fails, you MUST alert the user immediately. Note findings.
+${copilotInstruction}
 
 ### Phase 5: Present to User
 
-Present the refined plan for approval with the final score, all disposition decisions, and Copilot feedback.
+Present the refined plan for approval with the final score, all disposition decisions, and Copilot feedback (if enabled).
 
 ## Prior Context
 
@@ -203,11 +217,15 @@ Review prior entries for recurring findings and reusable patterns before draftin
         },
         {
             name: 'adversarial-audit-code-quality',
-            description: 'Multi-pass adversarial code quality audit (linting, technical debt, consistency) Optional parameter: target',
+            description: 'Multi-pass adversarial code quality audit (linting, technical debt, consistency) Optional parameters: target, copilot',
             icons: [ICON_PROMPT],
             handler: (args: Record<string, string> | undefined, _db: IDatabaseAdapter) => {
                 const parsed = auditArgsSchema.parse(args ?? {})
                 const target = parsed.target ?? '{target}'
+                const copilotInstruction = buildCopilotStep(
+                    parsed.copilot === 'true',
+                    'gh copilot -- -p "Perform an exhaustive code quality audit on <target>. Focus on dead code, duplication, type safety, magic values, monkey-patching, and anti-patterns." --allow-all'
+                )
                 return {
                     messages: [{
                         role: 'user',
@@ -218,22 +236,22 @@ Target: ${target}
 
 If the target is '{target}', determine it from the user's request. If the user hasn't specified a target file or module, ask them for it now.
 
-1. Scan the target for dead code, duplication, type safety (any/as, implicit any), magic values, complexity, boundary validation, monkey-patching, unused variables/exports, unhandled promises, and global scope pollution (hacks).
-2. **Scan for files exceeding 500 lines using two redundant methods** (to ensure no files are missed). If the user asks to exclude tests, exclude them (e.g., \`tests\`, \`test-server\`, \`__tests__\`):
-   - **Method 1 (Native PowerShell)**: Use this snippet to avoid WSL bridge issues and correctly filter out non-source directories (like logs, builds, test-outputs):
+1. Scan the target for dead code, duplication, type safety (any/as, implicit any), magic values, complexity, boundary validation, monkey-patching, unused variables/exports, unhandled promises, and global scope pollution (hacks). For large targets or full-repository audits, spawn parallel \`research\` subagents by subsystem using \`invoke_subagent\` so each subsystem is audited thoroughly without context truncation.
+2. **Scan for files exceeding 500 lines using two redundant methods** (to ensure no files are missed, scoped to \`src\` and \`scripts\` while excluding \`vendor\` and test files):
+   - **Method 1 (Native PowerShell)**:
      \`\`\`powershell
-     Get-ChildItem -Path . -Recurse -File | Where-Object { $_.FullName -notmatch '\\\\(node_modules|\\\\.git|dist|\\\\.agents|tests|test-server|__tests__|docs|\\\\.test-output|logs|extensions)\\\\' -and $_.Extension -notmatch '\\\\.(test|spec|md)$' } | ForEach-Object { $lines = (Get-Content $_.FullName | Measure-Object -Line).Lines; if ($lines -gt 500) { [PSCustomObject]@{ Lines = $lines; Path = $_.FullName } } }
+     Get-ChildItem -Path src,scripts -Recurse -File -Include *.ts,*.tsx,*.js,*.mjs,*.cjs | Where-Object { $_.FullName -notmatch '[\\\\/]vendor[\\\\/]' -and $_.Name -notmatch '\\.(test|spec)\\.' } | ForEach-Object { $lines = [System.IO.File]::ReadAllLines($_.FullName).Count; if ($lines -gt 500) { [PSCustomObject]@{ Lines = $lines; Path = $_.FullName } } } | Sort-Object Lines -Descending
      \`\`\`
-   - **Method 2 (Bun Native)**: Execute a fast Node script natively:
+   - **Method 2 (Bun Native)**:
      \`\`\`powershell
-     bun -e "import fs from 'fs'; import path from 'path'; function w(d){let r=[];if(!fs.existsSync(d))return r;fs.readdirSync(d).forEach(f=>{f=path.join(d,f);const s=fs.statSync(f);if(s.isDirectory()){if(!f.match(/node_modules|\\\\.git|dist|\\\\.agents|tests|test-server|__tests__|docs|\\\\.test-output|logs|extensions/))r=r.concat(w(f));}else{if(!f.match(/node_modules|\\\\.git|dist|\\\\.agents|tests|test-server|__tests__|docs|\\\\.test-output|logs|extensions/)&&!f.match(/\\\\.(test|spec|md)\\\\./)&&!f.endsWith('.md')){r.push(f);}}});return r;} w('.').forEach(f=>{const c=fs.readFileSync(f,'utf8').split('\\\\n').length;if(c>500)console.log(c, f)});"
+     bun -e "import {readdirSync as r,statSync as s,readFileSync as f} from 'fs';import {join as j} from 'path';function w(d){if(!s(d,{throwIfNoEntry:false}))return;for(const x of r(d)){const p=j(d,x);if(/vendor|node_modules|dist/.test(p))continue;if(s(p).isDirectory())w(p);else if(/\\.(ts|tsx|js|mjs|cjs)$/.test(x)&&!/\\.(test|spec)\\./.test(x)){const l=f(p,'utf8').split(/\\r?\\n/).length;if(l>500)console.log(l,p)}}}w('src');w('scripts');"
      \`\`\`
 
 > [!IMPORTANT]
 > **High Priority — File Size**: Any file exceeding 500 lines is a high-priority finding. Flag all such files in the findings table with severity **High**. Do NOT begin refactoring automatically — present them to the user for approval.
 
 3. Group findings by category and severity (Critical, Moderate, Low).
-4. **(Optional)** If the user has not explicitly skipped Copilot, run \`gh copilot -- -p "Perform an exhaustive code quality audit on <target>. Focus on dead code, duplication, type safety, magic values, monkey-patching, and anti-patterns." --allow-all\` in NON-INTERACTIVE mode. Wait for it to finish. Note findings. If skipped, proceed without it.
+4. **External Validation (Copilot — Opt-In)**: ${copilotInstruction}
 5. Present a summary table to the user (incorporating Copilot findings if applicable) and await approval. **CRITICAL**: You are strictly forbidden from modifying any project files or running any scripts until the user explicitly approves the implementation plan. Only create the markdown artifact and stop.
 6. After approval, fix critical issues first, run validation gates (Lint -> Build -> Tests).
 7. Commit using \`bun path/to/commit.ts\`.
@@ -245,11 +263,15 @@ If the target is '{target}', determine it from the user's request. If the user h
         },
         {
             name: 'adversarial-audit-security',
-            description: 'Multi-pass adversarial security audit (threat modeling, attack surfaces) Optional parameter: target',
+            description: 'Multi-pass adversarial security audit (threat modeling, attack surfaces) Optional parameters: target, copilot',
             icons: [ICON_PROMPT],
             handler: (args: Record<string, string> | undefined, _db: IDatabaseAdapter) => {
                 const parsed = auditArgsSchema.parse(args ?? {})
                 const target = parsed.target ?? '{target}'
+                const copilotInstruction = buildCopilotStep(
+                    parsed.copilot === 'true',
+                    'gh copilot -- -p "Perform a security audit on <target> looking for injection vectors, auth/authz gaps, data boundaries, and agent-specific risks like prompt injection, excessive agency, or tool poisoning." --allow-all'
+                )
                 return {
                     messages: [{
                         role: 'user',
@@ -264,8 +286,8 @@ If the target is '{target}', determine it from the user's request. If the user h
    - **General Code**: Injection vectors, auth/authz gaps, data boundary validation.
    - **Agent Skills / MCP Tools**: Privilege escalation (excessive agency), indirect prompt injection via tool outputs, tool poisoning / supply chain risks, and cross-plugin attacks.
    - **External Integrations**: Data exfiltration paths and excessive API permission scopes.
-2. Run \`gh copilot -- -p "Perform a security audit on <target> looking for injection vectors, auth/authz gaps, data boundaries, and agent-specific risks like prompt injection, excessive agency, or tool poisoning." --allow-all\` in NON-INTERACTIVE mode. You MUST wait for it to finish (it may take 10-20 seconds). **CRITICAL**: Do NOT skip this step. If Copilot fails, you MUST alert the user immediately. Note findings.
-3. Present findings table (incorporating Copilot findings).
+2. **External Validation (Copilot — Opt-In)**: ${copilotInstruction}
+3. Present findings table (incorporating Copilot findings if applicable).
 4. Await HITL approval before applying fixes. **CRITICAL**: You are strictly forbidden from modifying any project files or running any scripts until the user explicitly approves the implementation plan. Only create the markdown artifact and stop.
 5. Commit fixes using \`bun path/to/commit.ts\`
 **Rule**: If you do not make changes, do not commit. If you make only minor documentation changes, commit.`
@@ -276,11 +298,15 @@ If the target is '{target}', determine it from the user's request. If the user h
         },
         {
             name: 'adversarial-audit-performance',
-            description: 'Multi-pass adversarial performance audit (profiling, stress-testing) Optional parameter: target',
+            description: 'Multi-pass adversarial performance audit (profiling, stress-testing) Optional parameters: target, copilot',
             icons: [ICON_PROMPT],
             handler: (args: Record<string, string> | undefined, _db: IDatabaseAdapter) => {
                 const parsed = auditArgsSchema.parse(args ?? {})
                 const target = parsed.target ?? '{target}'
+                const copilotInstruction = buildCopilotStep(
+                    parsed.copilot === 'true',
+                    'gh copilot -- -p "Perform a performance audit on <target> looking for N+1 queries, unnecessary allocations, and hot-path bottlenecks." --allow-all'
+                )
                 return {
                     messages: [{
                         role: 'user',
@@ -292,8 +318,8 @@ Target: ${target}
 If the target is '{target}', determine it from the user's request. If the user hasn't specified a target file or module, ask them for it now.
 
 1. Perform a multi-pass performance audit looking for N+1 queries, unnecessary allocations, hot-path bottlenecks.
-2. Run \`gh copilot -- -p "Perform a performance audit on <target> looking for N+1 queries, unnecessary allocations, and hot-path bottlenecks." --allow-all\` in NON-INTERACTIVE mode. You MUST wait for it to finish (it may take 10-20 seconds). **CRITICAL**: Do NOT skip this step. If Copilot fails, you MUST alert the user immediately. Note findings.
-3. Present findings table (incorporating Copilot findings).
+2. **External Validation (Copilot — Opt-In)**: ${copilotInstruction}
+3. Present findings table (incorporating Copilot findings if applicable).
 4. Await HITL approval before applying fixes. **CRITICAL**: You are strictly forbidden from modifying any project files or running any scripts until the user explicitly approves the implementation plan. Only create the markdown artifact and stop.\n5. Commit fixes using \`bun path/to/commit.ts\`.\n**Rule**: If you do not make changes, do not commit. If you make only minor documentation changes, commit.`
                         }
                     }]
@@ -302,11 +328,15 @@ If the target is '{target}', determine it from the user's request. If the user h
         },
         {
             name: 'adversarial-audit-seo',
-            description: 'Adversarial SEO audit (technical, semantic HTML, ARIA, structured data, Core Web Vitals) Optional parameter: target',
+            description: 'Adversarial SEO audit (technical, semantic HTML, ARIA, structured data, Core Web Vitals) Optional parameters: target, copilot',
             icons: [ICON_PROMPT],
             handler: (args: Record<string, string> | undefined, _db: IDatabaseAdapter) => {
                 const parsed = auditArgsSchema.parse(args ?? {})
                 const target = parsed.target ?? '{target}'
+                const copilotInstruction = buildCopilotStep(
+                    parsed.copilot === 'true',
+                    'gh copilot -- -p "Perform an SEO and Core Web Vitals audit on <target>." --allow-all'
+                )
                 return {
                     messages: [{
                         role: 'user',
@@ -322,8 +352,8 @@ If the target is '{target}', determine it from the user's request. If the user h
    - Semantic HTML and accessibility (ARIA, alt text, structural hierarchy).
    - Core Web Vitals implications (DOM size, layout shifts, LCP elements).
    - Structured data (JSON-LD) and E-E-A-T signals.
-2. Run \`gh copilot -- -p "Perform an SEO and Core Web Vitals audit on <target>." --allow-all\` in NON-INTERACTIVE mode. You MUST wait for it to finish (it may take 10-20 seconds). **CRITICAL**: Do NOT skip this step. If Copilot fails, you MUST alert the user immediately. Note findings.
-3. Present findings table (incorporating Copilot findings).
+2. **External Validation (Copilot — Opt-In)**: ${copilotInstruction}
+3. Present findings table (incorporating Copilot findings if applicable).
 4. Await HITL approval before applying fixes. **CRITICAL**: You are strictly forbidden from modifying any project files or running any scripts until the user explicitly approves the implementation plan. Only create the markdown artifact and stop.\n5. Commit fixes using \`bun path/to/commit.ts\`.\n**Rule**: If you do not make changes, do not commit. If you make only minor documentation changes, commit.`
                         }
                     }]
@@ -332,11 +362,15 @@ If the target is '{target}', determine it from the user's request. If the user h
         },
         {
             name: 'adversarial-audit-skill',
-            description: 'Multi-pass adversarial skill audit (research, evaluate triggers, stress-test) Optional parameter: target',
+            description: 'Multi-pass adversarial skill audit (research, evaluate triggers, stress-test) Optional parameters: target, copilot',
             icons: [ICON_PROMPT],
             handler: (args: Record<string, string> | undefined, _db: IDatabaseAdapter) => {
                 const parsed = auditArgsSchema.parse(args ?? {})
                 const target = parsed.target ?? '{target}'
+                const copilotInstruction = buildCopilotStep(
+                    parsed.copilot === 'true',
+                    'gh copilot -- -p "Evaluate the agent skill at <target> for trigger reliability, safety gates, and frontmatter compliance. When viewing or reading files, always provide the \'path\' parameter correctly." --allow-all'
+                )
                 return {
                     messages: [{
                         role: 'user',
@@ -350,8 +384,8 @@ If the target is '{target}', determine it from the user's request. If the user h
 1. **Subagent Research Phase**: Spawn one or more \`research\` subagents using the \`invoke_subagent\` tool to perform deep web searches on high-value resources (e.g. official docs, release notes, credible blogs) for the latest best practices and version changes related to the target skill. Wait for their findings.
 2. **Gap Analysis**: Compare the subagent research findings against the current skill's contents to identify missing context, outdated information, or new version features.
 3. **Structural Evaluation**: Evaluate the agent skill for trigger reliability, safety gates, and markdown frontmatter compliance.
-4. **Validation via Copilot**: Run \`gh copilot -- -p "Evaluate the agent skill at <target> for trigger reliability, safety gates, and frontmatter compliance. When viewing or reading files, always provide the 'path' parameter correctly." --allow-all\` in NON-INTERACTIVE mode. You MUST wait for it to finish (it may take 10-20 seconds). **CRITICAL**: Do NOT skip this step. If Copilot fails, you MUST alert the user immediately. Note findings.
-5. **Presentation**: Present findings table incorporating Copilot structural findings and the new research gaps.
+4. **External Validation (Copilot — Opt-In)**: ${copilotInstruction}
+5. **Presentation**: Present findings table incorporating Copilot structural findings (if applicable) and the new research gaps.
 6. HITL Approval: Await HITL approval before applying fixes. **CRITICAL**: You are strictly forbidden from modifying any project files or running any scripts until the user explicitly approves the implementation plan. Only create the markdown artifact and stop.
 7. Commit fixes using \`bun path/to/commit.ts\`.
 **Rule**: If you don't make changes, do not commit. If you make only minor documentation changes, commit.`
@@ -362,25 +396,33 @@ If the target is '{target}', determine it from the user's request. If the user h
         },
         {
             name: 'adversarial-audit-workflow',
-            description: 'Multi-pass adversarial workflow audit (clarity, safety gates, loop prevention) Optional parameter: target',
+            description: 'Multi-pass adversarial workflow audit (clarity, safety gates, loop prevention) Optional parameters: target, copilot',
             icons: [ICON_PROMPT],
-            handler: (args: Record<string, string> | undefined, _db: IDatabaseAdapter) => ({
-                messages: [{
-                    role: 'user',
-                    content: {
-                        type: 'text',
-                        text: `# Adversarial Workflow Audit
-Target: ${args?.['target'] ?? '{target}'}
+            handler: (args: Record<string, string> | undefined, _db: IDatabaseAdapter) => {
+                const parsed = auditArgsSchema.parse(args ?? {})
+                const target = parsed.target ?? '{target}'
+                const copilotInstruction = buildCopilotStep(
+                    parsed.copilot === 'true',
+                    'gh copilot -- -p "Evaluate the workflow <target> for sequential clarity, human-in-the-loop safety gates, and infinite loop prevention." --allow-all'
+                )
+                return {
+                    messages: [{
+                        role: 'user',
+                        content: {
+                            type: 'text',
+                            text: `# Adversarial Workflow Audit
+Target: ${target}
 
 If the target is '{target}', determine it from the user's request. If the user hasn't specified a target workflow, ask them for it now.
 
 1. Evaluate the workflow for sequential clarity, human-in-the-loop safety gates, and infinite loop prevention.
-2. Run \`gh copilot -- -p "Evaluate the workflow <target> for sequential clarity, human-in-the-loop safety gates, and infinite loop prevention." --allow-all\` in NON-INTERACTIVE mode. You MUST wait for it to finish (it may take 10-20 seconds). **CRITICAL**: Do NOT skip this step. If Copilot fails, you MUST alert the user immediately. Note findings.
-3. Present findings table (incorporating Copilot findings).
+2. **External Validation (Copilot — Opt-In)**: ${copilotInstruction}
+3. Present findings table (incorporating Copilot findings if applicable).
 4. Await HITL approval before applying fixes. **CRITICAL**: You are strictly forbidden from modifying any project files or running any scripts until the user explicitly approves the implementation plan. Only create the markdown artifact and stop.\n5. Commit fixes using \`bun path/to/commit.ts\`.\n**Rule**: If you do not make changes, do not commit. If you make only minor documentation changes, commit.`
-                    }
-                }]
-            })
+                        }
+                    }]
+                }
+            }
         }
     ]
 }

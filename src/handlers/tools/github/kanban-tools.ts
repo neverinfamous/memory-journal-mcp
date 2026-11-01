@@ -25,8 +25,7 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                 'View a GitHub Project v2 as a Kanban board with items grouped by Status column. Returns all columns with their items.',
             group: 'github',
             inputSchema: z.object({
-                project_number: z
-                    .number()
+                project_number: relaxedNumber()
                     .optional()
                     .describe('GitHub Project number (optional if repo is registered)'),
                 owner: z.string().optional().describe('Project owner - LEAVE EMPTY to auto-detect'),
@@ -171,8 +170,7 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                 'Move a Kanban item to a different status column. Requires the project board to have a Status field.',
             group: 'github',
             inputSchema: z.object({
-                project_number: z
-                    .number()
+                project_number: relaxedNumber()
                     .optional()
                     .describe('GitHub Project number (optional if repo is registered)'),
                 item_id: z.string().describe('Project item ID (from get_kanban_board)'),
@@ -287,11 +285,12 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                 'Add an existing GitHub Issue or Pull Request to a Kanban board (GitHub Project v2). Returns the project item ID on success.',
             group: 'github',
             inputSchema: z.object({
-                project_number: z
-                    .number()
+                project_number: relaxedNumber()
                     .optional()
                     .describe('GitHub Project number (optional if repo is registered)'),
-                issue_number: z.number().describe('The number of the issue or PR to add'),
+                issue_number: relaxedNumber()
+                    .optional()
+                    .describe('The number of the issue or PR to add'),
                 owner: z
                     .string()
                     .optional()
@@ -396,8 +395,7 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                 'Remove an item from a GitHub Kanban board cleanly. This untethers it from the project but does NOT close or delete the underlying Issue/PR.',
             group: 'github',
             inputSchema: z.object({
-                project_number: z
-                    .number()
+                project_number: relaxedNumber()
                     .optional()
                     .describe('GitHub Project number (optional if repo is registered)'),
                 item_id: z

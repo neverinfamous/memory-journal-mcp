@@ -2,8 +2,15 @@ import { z } from 'zod'
 import type { ToolDefinition, ToolContext, AnchorStatus } from '../../types/index.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
 import { sendProgress } from '../../utils/progress-utils.js'
+import { ResourceNotFoundError, ValidationError } from '../../types/errors.js'
 import { ErrorFieldsMixin } from './error-fields-mixin.js'
-import { buildGitBaseArgs, streamGitRecords } from '../../vendor/lib-git-history/git-runner.js'
+import { relaxedNumber } from './schemas.js'
+import {
+    RECORD_SEPARATOR,
+    FIELD_SEPARATOR,
+    buildGitBaseArgs,
+    streamGitRecords,
+} from '../../vendor/lib-git-history/git-runner.js'
 import { parseGitRecord, processBatch } from '../../vendor/lib-git-history/parser.js'
 import type { CliArgs } from '../../vendor/lib-git-history/cli.js'
 import type { CommitEntry } from '../../vendor/lib-git-history/schema.js'
@@ -22,15 +29,23 @@ export const GitHistoryOptionsSchema = z.object({
 export const GitHistoryOptionsSchemaMcp = z.object({
     ref: z.string().optional().describe('Git reference (branch, tag, commit). Default: HEAD'),
     path: z.string().optional().describe('Filter by specific file or directory path'),
-    maxCount: z.number().optional().describe('Maximum number of commits to return. Default: 50'),
-    since: z.string().optional().describe('Show commits more recent than a specific date (e.g. "2023-01-01")'),
-    sortBy: z.enum(['date', 'impact']).optional().describe('Sort commits by date or impact score'),
+    maxCount: relaxedNumber()
+        .optional()
+        .describe('Maximum number of commits to return. Default: 50'),
+    since: z
+        .string()
+        .optional()
+        .describe('Show commits more recent than a specific date (e.g. "2023-01-01")'),
+    sortBy: z.string().optional().describe('Sort commits by date or impact score'),
     scope: z.string().optional().describe('Filter commits by a specific scope'),
-    techDebtAudit: z.boolean().optional().describe('Filter for high impact commits with low trust or missing validation'),
+    techDebtAudit: z
+        .boolean()
+        .optional()
+        .describe('Filter for high impact commits with low trust or missing validation'),
 })
 
 export const GitSearchOptionsSchema = z.object({
-    query: z.string(),
+    query: z.string().min(1),
     maxCount: z.number().optional(),
     sortBy: z.enum(['date', 'impact']).optional(),
     scope: z.string().optional(),
@@ -38,11 +53,16 @@ export const GitSearchOptionsSchema = z.object({
 })
 
 export const GitSearchOptionsSchemaMcp = z.object({
-    query: z.string().describe('Search query to match in commit messages'),
-    maxCount: z.number().optional().describe('Maximum number of commits to return. Default: 50'),
-    sortBy: z.enum(['date', 'impact']).optional().describe('Sort commits by date or impact score'),
+    query: z.string().optional().describe('Search query to match in commit messages'),
+    maxCount: relaxedNumber()
+        .optional()
+        .describe('Maximum number of commits to return. Default: 50'),
+    sortBy: z.string().optional().describe('Sort commits by date or impact score'),
     scope: z.string().optional().describe('Filter commits by a specific scope'),
-    techDebtAudit: z.boolean().optional().describe('Filter for high impact commits with low trust or missing validation'),
+    techDebtAudit: z
+        .boolean()
+        .optional()
+        .describe('Filter for high impact commits with low trust or missing validation'),
 })
 
 export const GitReleaseInfoOptionsSchema = z.object({
@@ -83,18 +103,11 @@ async function fetchCommits(input: FetchCommitsInput, cwd: string): Promise<Comm
     }
     const gitArgs = buildGitBaseArgs(cliArgs, input.ref || 'HEAD')
     
-    // Formatting args required by parseGitRecord
     gitArgs.push(
         '--name-status',
         '-z',
-        '--format=%x1E<GIT_RECORD_BOUNDARY_TODO>%x1E%H%x1E<GIT_FIELD_BOUNDARY_TODO>%x1E%D%x1E<GIT_FIELD_BOUNDARY_TODO>%x1E%aN%x1E<GIT_FIELD_BOUNDARY_TODO>%x1E%aE%x1E<GIT_FIELD_BOUNDARY_TODO>%x1E%aI%x1E<GIT_FIELD_BOUNDARY_TODO>%x1E%cN%x1E<GIT_FIELD_BOUNDARY_TODO>%x1E%cE%x1E<GIT_FIELD_BOUNDARY_TODO>%x1E%cI%x1E<GIT_FIELD_BOUNDARY_TODO>%x1E%s%x1E<GIT_FIELD_BOUNDARY_TODO>%x1E%b%x1E<GIT_FIELD_BOUNDARY_TODO>%x1E%(trailers:unfold,only)%x1E<GIT_FIELD_BOUNDARY_TODO>%x1E%(trailers:unfold)%x1E<GIT_FIELD_BOUNDARY_TODO>%x1E%P'
+        `--format=${RECORD_SEPARATOR}%H${FIELD_SEPARATOR}%D${FIELD_SEPARATOR}%aN${FIELD_SEPARATOR}%aE${FIELD_SEPARATOR}%aI${FIELD_SEPARATOR}%cN${FIELD_SEPARATOR}%cE${FIELD_SEPARATOR}%cI${FIELD_SEPARATOR}%s${FIELD_SEPARATOR}%b${FIELD_SEPARATOR}%(trailers:unfold,only)${FIELD_SEPARATOR}%(trailers:unfold)${FIELD_SEPARATOR}%P`
     )
-    // Actually we should just fetch the basic BOUNDARY constants from git-runner
-    const { RECORD_SEPARATOR, FIELD_SEPARATOR } = await import('../../vendor/lib-git-history/git-runner.js')
-    
-    // pop the fake format and push the real one
-    gitArgs.pop()
-    gitArgs.push(`--format=${RECORD_SEPARATOR}%H${FIELD_SEPARATOR}%D${FIELD_SEPARATOR}%aN${FIELD_SEPARATOR}%aE${FIELD_SEPARATOR}%aI${FIELD_SEPARATOR}%cN${FIELD_SEPARATOR}%cE${FIELD_SEPARATOR}%cI${FIELD_SEPARATOR}%s${FIELD_SEPARATOR}%b${FIELD_SEPARATOR}%(trailers:unfold,only)${FIELD_SEPARATOR}%(trailers:unfold)${FIELD_SEPARATOR}%P`)
 
     const records = streamGitRecords(gitArgs, cwd)
     const batch = []
@@ -257,7 +270,9 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
             description: 'Analyze patterns in a list of commits or recent history',
             group: 'git',
             inputSchema: z.object({
-                maxCount: z.number().optional().describe('Maximum number of commits to analyze. Default: 50')
+                maxCount: relaxedNumber()
+                    .optional()
+                    .describe('Maximum number of commits to analyze. Default: 50'),
             }),
             outputSchema: z.object({
                 success: z.boolean(),
@@ -326,7 +341,12 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
             description: 'Check if a journal entry\'s anchors have been modified or deleted in git since the entry was created.',
             group: 'git',
             inputSchema: z.object({
-                entryId: z.number().describe('The ID of the journal entry to check')
+                entry_id: relaxedNumber()
+                    .optional()
+                    .describe('The ID of the journal entry to check'),
+                entryId: relaxedNumber()
+                    .optional()
+                    .describe('The ID of the journal entry to check (alias for entry_id)'),
             }),
             outputSchema: z.object({
                 success: z.boolean(),
@@ -350,12 +370,21 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                 try {
                     const { db } = context
                     const cwd = process.cwd()
-                    const input = z.object({ entryId: z.number() }).parse(params)
-                    
-                    const entry = db.getEntryByIdIncludeDeleted(input.entryId)
-                    if (!entry) throw new Error(`Entry ${input.entryId} not found`)
-                    
-                    const anchors = db.getAnchorsByEntryId(input.entryId)
+                    const parsedParams = z
+                        .object({
+                            entry_id: z.number().optional(),
+                            entryId: z.number().optional(),
+                        })
+                        .parse(params)
+                    const resolvedEntryId = parsedParams.entry_id ?? parsedParams.entryId
+                    if (resolvedEntryId === undefined) {
+                        throw new ValidationError('entry_id (or entryId) is required')
+                    }
+
+                    const entry = db.getEntryByIdIncludeDeleted(resolvedEntryId)
+                    if (!entry) throw new ResourceNotFoundError('entry', String(resolvedEntryId))
+
+                    const anchors = db.getAnchorsByEntryId(resolvedEntryId)
                     if (anchors.length === 0) {
                         return { success: true, results: [] }
                     }

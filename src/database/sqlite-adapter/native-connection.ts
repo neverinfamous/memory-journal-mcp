@@ -46,7 +46,8 @@ export class NativeConnectionManager implements IDatabaseConnection {
                     // Raw hex keys must not be wrapped in additional single quotes
                     db.pragma(`key = "${key}"`)
                 } else {
-                    db.pragma(`key = '${key}'`)
+                    const escapedKey = key.replace(/'/g, "''")
+                    db.pragma(`key = '${escapedKey}'`)
                 }
                 logger.info('Database encryption key applied', { module: 'NativeConnectionManager' })
             }

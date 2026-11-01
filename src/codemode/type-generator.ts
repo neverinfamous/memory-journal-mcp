@@ -75,7 +75,7 @@ export function generateTypescriptDeclarations(tools: ToolDefinition[]): string 
 
             // Add a brief comment if description exists
             if (tool.description) {
-                const comment = tool.description.split('\\n')[0]
+                const comment = tool.description.split('\n')[0]
                 dts += `    /** ${comment} */\n`
             }
             dts += `    function ${methodName}(args?: ${paramType}): Promise<unknown>;\n`

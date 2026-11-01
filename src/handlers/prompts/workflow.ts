@@ -15,13 +15,9 @@ import { ConfigurationError } from '../../types/errors.js'
 import { markUntrustedContent } from '../../utils/security-utils.js'
 
 
-import { spawn } from 'node:child_process'
 import { readFileSync, existsSync } from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
-import { fileURLToPath } from 'node:url'
-
-let isGeneratingCodeMap = false
 
 function getProjectRegistryHint(): string {
     try {
@@ -65,34 +61,6 @@ function generateSummaryPrompt(
                   .join('\n')
             : '- No entries yet'
 
-
-    try {
-        if (!isGeneratingCodeMap) {
-            const packageJsonUrl = new URL('../../../package.json', import.meta.url)
-            const packageJsonPath = fileURLToPath(packageJsonUrl)
-            
-            if (existsSync(packageJsonPath)) {
-                const pkg: unknown = JSON.parse(readFileSync(packageJsonPath, 'utf-8'))
-                if (pkg !== null && typeof pkg === 'object' && 'name' in pkg && pkg.name === 'memory-journal-mcp') {
-                    isGeneratingCodeMap = true
-                    const scriptUrl = new URL('../../../scripts/update-code-map.ts', import.meta.url)
-                    const absoluteScriptPath = fileURLToPath(scriptUrl)
-                    const cmd = process.platform === 'win32' ? 'npx.cmd' : 'npx'
-                    const child = spawn(cmd, ['tsx', absoluteScriptPath], { 
-                        stdio: 'ignore', 
-                        shell: process.platform === 'win32',
-                        windowsHide: true
-                    })
-                    child.on('exit', () => { isGeneratingCodeMap = false })
-                    child.on('error', () => { isGeneratingCodeMap = false })
-                    child.unref()
-                }
-            }
-        }
-    } catch {
-        // Fail silently so we don't break the prompt fetch
-        isGeneratingCodeMap = false
-    }
 
     const registryHint = getProjectRegistryHint()
 

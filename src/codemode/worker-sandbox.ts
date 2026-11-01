@@ -92,9 +92,7 @@ export class WorkerSandbox {
                 result.metrics = {
                     wallTimeMs: Math.round(endTime - this.currentExecution.startTime),
                     cpuTimeMs: result.metrics.cpuTimeMs,
-                    memoryUsedMb: Math.round(
-                        (endRss - this.currentExecution.startRss) / 1024 / 1024
-                    ),
+                    memoryUsedMb: Math.max(0, Math.round((endRss - this.currentExecution.startRss) / 1024 / 1024)),
                 }
 
                 const resolve = this.currentExecution.resolve
@@ -135,11 +133,11 @@ export class WorkerSandbox {
             resolve({
                 success: false,
                 error: errorMsg,
-                stack: stack,
+                ...(stack !== undefined ? { stack } : {}),
                 metrics: {
                     wallTimeMs: Math.round(endTime - startTime),
                     cpuTimeMs: 0,
-                    memoryUsedMb: Math.round((endRss - startRss) / 1024 / 1024),
+                    memoryUsedMb: Math.max(0, Math.round((endRss - startRss) / 1024 / 1024)),
                 },
             })
         }
@@ -186,14 +184,12 @@ export class WorkerSandbox {
             const methodList: Record<string, string[]> = {}
             const topLevel: string[] = []
 
-            for (const [key, value] of Object.entries(apiBindings)) {
+        for (const [key, value] of Object.entries(apiBindings)) {
                 if (typeof value === 'function') {
                     topLevel.push(key)
                 } else if (typeof value === 'object' && value !== null) {
                     const methods: string[] = []
-                    for (const [methodName, methodValue] of Object.entries(
-                        value as Record<string, unknown>
-                    )) {
+                    for (const [methodName, methodValue] of Object.entries(value)) {
                         if (typeof methodValue === 'function') {
                             methods.push(methodName)
                         }
@@ -289,17 +285,14 @@ async function handleRpcRequest(
         } else if (Object.hasOwn(apiBindings, req.group)) {
             const groupApi = apiBindings[req.group]
             if (groupApi !== undefined && groupApi !== null && typeof groupApi === 'object') {
-                const groupRecord = groupApi as Record<string, unknown>
-                target = Object.hasOwn(groupRecord, req.method)
-                    ? groupRecord[req.method]
+                target = Object.hasOwn(groupApi, req.method)
+                    ? (Reflect.get(groupApi, req.method) as unknown)
                     : undefined
             }
         }
 
         if (typeof target === 'function') {
-            response.result = await (target as (...args: unknown[]) => Promise<unknown>)(
-                ...safeArgs
-            )
+            response.result = await (target as (...args: unknown[]) => Promise<unknown>)(...safeArgs)
         } else {
             response.error = `Unknown method: ${req.group}.${req.method}`
         }
@@ -372,10 +365,7 @@ export class WorkerSandboxPool {
         // 3. Evict idle workers above minInstances (oldest idle first)
         const idleCandidates = this.pool
             .map((w, idx) => ({ worker: w, idx }))
-            .filter(
-                ({ worker }) =>
-                    !worker.isBusy && now - worker.lastUsedAt > this.options.idleTimeoutMs
-            )
+            .filter(({ worker }) => !worker.isBusy && now - worker.lastUsedAt > this.options.idleTimeoutMs)
             .sort((a, b) => a.worker.lastUsedAt - b.worker.lastUsedAt)
 
         for (const { worker } of idleCandidates) {
@@ -414,13 +404,7 @@ export class WorkerSandboxPool {
         }
 
         return await availableSandbox.execute(
-            code,
-            apiBindings,
-            schemas,
-            timeoutMs,
-            contextObj,
-            readonlyMode,
-            maxResultSizeOverride
+            code, apiBindings, schemas, timeoutMs, contextObj, readonlyMode, maxResultSizeOverride
         )
     }
 

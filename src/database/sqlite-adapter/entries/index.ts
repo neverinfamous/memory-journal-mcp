@@ -1,5 +1,5 @@
 import type { JournalEntry, EntryType, ImportanceResult, EntryRevision, AnchorStatus, Anchor, ToolHandlerConfig } from '../../../types/index.js'
-import type { CreateEntryInput } from '../../core/schema.js'
+import type { CreateEntryInput } from '../../core/interfaces.js'
 import type { NativeConnectionManager } from '../native-connection.js'
 import type { TagsManager } from '../tags.js'
 
@@ -25,6 +25,11 @@ import {
     searchEntries,
     getSearchFacets,
     searchByDateRange,
+    getEntriesByProject,
+    getEntriesByIssue,
+    getEntriesByPR,
+    getEntriesByWorkflowRun,
+    getEntriesBySession,
     type SortBy,
 } from './search/index.js'
 export { levenshteinDistance, buildVocabulary, findFuzzyMatches, expandFuzzyQuery } from './fuzzy-matcher.js'
@@ -250,5 +255,25 @@ export class EntriesManager {
 
     getAnchorsByEntryId(entryId: number): Anchor[] {
         return getAnchorsByEntryId(this.sharedContext, entryId)
+    }
+
+    getEntriesByProject(projectNumber: number, limit = 50, workspaceId?: string): JournalEntry[] {
+        return getEntriesByProject(this.sharedContext, projectNumber, limit, workspaceId)
+    }
+
+    getEntriesByIssue(issueNumber: number, limit = 50, workspaceId?: string): JournalEntry[] {
+        return getEntriesByIssue(this.sharedContext, issueNumber, limit, workspaceId)
+    }
+
+    getEntriesByPR(prNumber: number, limit = 50, workspaceId?: string): JournalEntry[] {
+        return getEntriesByPR(this.sharedContext, prNumber, limit, workspaceId)
+    }
+
+    getEntriesByWorkflowRun(workflowRunId: number, limit = 50, workspaceId?: string): JournalEntry[] {
+        return getEntriesByWorkflowRun(this.sharedContext, workflowRunId, limit, workspaceId)
+    }
+
+    getEntriesBySession(sessionId: string, limit = 50, workspaceId?: string): JournalEntry[] {
+        return getEntriesBySession(this.sharedContext, sessionId, limit, workspaceId)
     }
 }

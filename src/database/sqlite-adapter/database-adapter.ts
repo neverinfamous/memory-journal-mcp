@@ -1,81 +1,19 @@
 import type {
     JournalEntry,
-    Tag,
-    Relationship,
     EntryType,
-    RelationshipType,
     ImportanceResult,
     EntryRevision,
     AnchorStatus,
     Anchor,
-    ToolHandlerConfig,
 } from '../../types/index.js'
-import type { CreateEntryInput } from '../core/schema.js'
-import type {
-    IDatabaseAdapter,
-    TeamMember,
-    TeamRole,
-    AuthorAlias,
-} from '../core/interfaces.js'
-
-import { NativeConnectionManager } from './native-connection.js'
-import { AliasManager } from './aliases.js'
-import { TagsManager } from './tags.js'
-import { EntriesManager } from './entries/index.js'
-import { RelationshipsManager } from './relationships.js'
-import { BackupManager } from './backup.js'
-import { MembersManager } from './members.js'
-import { HealthOperations } from './health-operations.js'
-import { LifecycleOperations } from './lifecycle-operations.js'
-import { InsightsOperations } from './insights-operations.js'
-import { VectorOperations } from './vector-operations.js'
+import type { IDatabaseAdapter, CreateEntryInput } from '../core/interfaces.js'
+import type { EntriesManager } from './entries/index.js'
+import { AdapterDelegates } from './adapter-delegates.js'
 
 /**
  * SQLite Database Adapter for Memory Journal using better-sqlite3 native driver
  */
-export class DatabaseAdapter implements IDatabaseAdapter {
-    private connection: NativeConnectionManager
-    private tagsMgr: TagsManager
-    private entriesMgr: EntriesManager
-    private relationshipsMgr: RelationshipsManager
-    private backupMgr: BackupManager
-    private membersMgr: MembersManager
-    private aliasMgr: AliasManager
-    private healthOps: HealthOperations
-    private lifecycleOps: LifecycleOperations
-    private insightsOps: InsightsOperations
-    private vectorOps: VectorOperations
-
-    constructor(dbPath: string, config?: ToolHandlerConfig) {
-        this.connection = new NativeConnectionManager(dbPath)
-        this.tagsMgr = new TagsManager(this.connection)
-        this.entriesMgr = new EntriesManager(this.connection, this.tagsMgr, config)
-        this.relationshipsMgr = new RelationshipsManager(this.connection, this.entriesMgr)
-        this.backupMgr = new BackupManager(this.connection)
-        this.membersMgr = new MembersManager(this.connection)
-        this.aliasMgr = new AliasManager(this.connection)
-        this.healthOps = new HealthOperations(this.connection, this.backupMgr)
-        this.lifecycleOps = new LifecycleOperations(this.connection)
-        this.insightsOps = new InsightsOperations(this.connection)
-        this.vectorOps = new VectorOperations(this.connection)
-    }
-
-    async initialize(): Promise<void> {
-        return this.connection.initialize()
-    }
-
-    applyTeamSchema(): void {
-        this.connection.applyTeamSchema()
-    }
-
-    flushSave(): void {
-        this.connection.flushSave()
-    }
-
-    close(): void {
-        this.connection.close()
-    }
-
+export class DatabaseAdapter extends AdapterDelegates implements IDatabaseAdapter {
     createEntry(input: CreateEntryInput): JournalEntry {
         return this.entriesMgr.createEntry(input)
     }
@@ -162,6 +100,7 @@ export class DatabaseAdapter implements IDatabaseAdapter {
             validationStatus?: 'passed' | 'failed' | 'none'
             workspaceId?: string
             targetWorkspaceId?: string
+            sessionId?: string
         }
     ): JournalEntry | null {
         return this.entriesMgr.updateEntry(id, updates)
@@ -185,73 +124,6 @@ export class DatabaseAdapter implements IDatabaseAdapter {
         return this.entriesMgr.getAnchorsByEntryId(entryId)
     }
 
-    // Team Membership (RBAC)
-
-    addTeamMember(
-        author: string,
-        role: TeamRole,
-        addedBy?: string,
-        displayName?: string
-    ): TeamMember {
-        return this.membersMgr.addMember(author, role, addedBy, displayName)
-    }
-
-    removeTeamMember(author: string): boolean {
-        return this.membersMgr.removeMember(author)
-    }
-
-    updateTeamMemberRole(author: string, newRole: TeamRole): TeamMember | null {
-        return this.membersMgr.updateRole(author, newRole)
-    }
-
-    getTeamMember(author: string): TeamMember | null {
-        return this.membersMgr.getMember(author)
-    }
-
-    listTeamMembers(): TeamMember[] {
-        return this.membersMgr.listMembers()
-    }
-
-    getTeamMemberCount(): number {
-        return this.membersMgr.getMemberCount()
-    }
-
-    isTeamRbacActive(): boolean {
-        return this.membersMgr.isRbacActive()
-    }
-
-    resolveTeamRole(author: string, defaultRole?: TeamRole | 'denied'): TeamRole | null {
-        return this.membersMgr.resolveRole(author, defaultRole)
-    }
-
-    // ========================================================================
-    // Author Aliases (Level 2 Identity)
-    // ========================================================================
-
-    addAuthorAlias(alias: string, canonicalAuthor: string, createdBy?: string): AuthorAlias {
-        return this.aliasMgr.addAlias(alias, canonicalAuthor, createdBy)
-    }
-
-    removeAuthorAlias(alias: string): boolean {
-        return this.aliasMgr.removeAlias(alias)
-    }
-
-    listAuthorAliases(canonicalAuthor?: string): AuthorAlias[] {
-        return this.aliasMgr.listAliases(canonicalAuthor)
-    }
-
-    resolveAuthor(rawAuthor: string): string {
-        return this.aliasMgr.resolveAuthor(rawAuthor)
-    }
-
-    resolveAuthors(rawAuthors: string[]): Map<string, string> {
-        return this.aliasMgr.resolveAuthors(rawAuthors)
-    }
-
-    consolidateAuthors(canonicalAuthor: string): number {
-        return this.aliasMgr.consolidateAuthors(canonicalAuthor)
-    }
-
     restoreEntry(id: number): boolean {
         return this.entriesMgr.restoreEntry(id)
     }
@@ -259,6 +131,7 @@ export class DatabaseAdapter implements IDatabaseAdapter {
     getDeletedEntries(options?: {
         limit?: number
         offset?: number
+        workspaceId?: string
     }): { entries: JournalEntry[]; count: number } {
         return this.entriesMgr.getDeletedEntries(options)
     }
@@ -291,9 +164,11 @@ export class DatabaseAdapter implements IDatabaseAdapter {
             workflowStatus?: string | null
             isArchived?: boolean
             expectedVersion?: number
+            workspaceId?: string
             trustScore?: number
             impactScore?: number
             validationStatus?: 'passed' | 'failed' | 'none'
+            sessionId?: string
         }[]
     ): { updated: JournalEntry[]; notFound: number[]; errors: { id: number; error: Error }[] } {
         return this.entriesMgr.updateEntries(updates)
@@ -406,232 +281,27 @@ export class DatabaseAdapter implements IDatabaseAdapter {
         )
     }
 
-    getTagsForEntry(entryId: number): string[] {
-        return this.tagsMgr.getTagsForEntry(entryId)
+    getEntriesByProject(projectNumber: number, limit?: number, workspaceId?: string): JournalEntry[] {
+        return this.entriesMgr.getEntriesByProject(projectNumber, limit, workspaceId)
     }
 
-    getTagsForEntries(entryIds: number[]): Map<number, string[]> {
-        return this.tagsMgr.batchGetTagsForEntries(entryIds)
+    getEntriesByIssue(issueNumber: number, limit?: number, workspaceId?: string): JournalEntry[] {
+        return this.entriesMgr.getEntriesByIssue(issueNumber, limit, workspaceId)
     }
 
-    listTags(): Tag[] {
-        return this.tagsMgr.listTags()
+    getEntriesByPR(prNumber: number, limit?: number, workspaceId?: string): JournalEntry[] {
+        return this.entriesMgr.getEntriesByPR(prNumber, limit, workspaceId)
     }
 
-    mergeTags(
-        sourceTag: string,
-        targetTag: string
-    ): { entriesUpdated: number; sourceDeleted: boolean } {
-        return this.tagsMgr.mergeTags(sourceTag, targetTag)
+    getEntriesByWorkflowRun(
+        workflowRunId: number,
+        limit?: number,
+        workspaceId?: string
+    ): JournalEntry[] {
+        return this.entriesMgr.getEntriesByWorkflowRun(workflowRunId, limit, workspaceId)
     }
 
-    linkEntries(
-        fromEntryId: number,
-        toEntryId: number,
-        relationshipType: RelationshipType,
-        description?: string
-    ): Relationship {
-        return this.relationshipsMgr.linkEntries(
-            fromEntryId,
-            toEntryId,
-            relationshipType,
-            description
-        )
-    }
-
-    getRelationships(entryId: number): Relationship[] {
-        return this.relationshipsMgr.getRelationships(entryId)
-    }
-
-    getRelationshipsForEntries(entryIds: number[]): Map<number, Relationship[]> {
-        return this.relationshipsMgr.getRelationshipsForEntries(entryIds)
-    }
-
-    getBackupsDir(): string {
-        return this.connection.getBackupsDir()
-    }
-
-    async exportToFile(
-        backupName?: string
-    ): Promise<{ filename: string; path: string; sizeBytes: number }> {
-        return this.backupMgr.exportToFile(backupName)
-    }
-
-    listBackups(): { filename: string; path: string; sizeBytes: number; createdAt: string }[] {
-        return this.backupMgr.listBackups()
-    }
-
-    deleteOldBackups(keepCount: number): { deleted: string[]; kept: number } {
-        return this.backupMgr.deleteOldBackups(keepCount)
-    }
-
-    async restoreFromFile(
-        filename: string,
-        runtime?: unknown
-    ): Promise<{
-        restoredFrom: string
-        previousEntryCount: number
-        newEntryCount: number
-    }> {
-        return this.backupMgr.restoreFromFile(filename, runtime)
-    }
-
-    getHealthStatus(): ReturnType<IDatabaseAdapter['getHealthStatus']> {
-        return this.healthOps.getHealthStatus()
-    }
-
-    pragma(command: string): void {
-        this.connection.pragma(command)
-    }
-
-    getRelationshipHubs(limit: number): { entryId: number; content: string; totalLinks: number }[] {
-        return this.relationshipsMgr.getRelationshipHubs(limit)
-    }
-
-    getOrphanCount(workspaceId?: string): number {
-        return this.relationshipsMgr.getOrphanCount(workspaceId)
-    }
-
-    // ========================================================================
-    // Vector Search Primitives
-    // ========================================================================
-
-    getVectorMetadata(key: string): string | undefined {
-        return this.vectorOps.getVectorMetadata(key)
-    }
-
-    setVectorMetadata(key: string, value: string): void {
-        this.vectorOps.setVectorMetadata(key, value)
-    }
-
-    createVecTable(dimensions: number): void {
-        this.vectorOps.createVecTable(dimensions)
-    }
-
-    dropVecTable(): void {
-        this.vectorOps.dropVecTable()
-    }
-
-    upsertVector(entryId: number, embedding: Float32Array): void {
-        this.vectorOps.upsertVector(entryId, embedding)
-    }
-
-    upsertVectors(vectors: { entryId: number; embedding: Float32Array }[]): void {
-        this.vectorOps.upsertVectors(vectors)
-    }
-
-    searchVectors(
-        embedding: Float32Array,
-        limit: number
-    ): { entry_id: number; distance: number }[] {
-        return this.vectorOps.searchVectors(embedding, limit)
-    }
-
-    getVector(entryId: number): Float32Array | null {
-        return this.vectorOps.getVector(entryId)
-    }
-
-    deleteVector(entryId: number): void {
-        this.vectorOps.deleteVector(entryId)
-    }
-
-    clearVectors(): void {
-        this.vectorOps.clearVectors()
-    }
-
-    getVectorCount(): number {
-        return this.vectorOps.getVectorCount()
-    }
-
-    cleanupStaleVectors(): number {
-        return this.vectorOps.cleanupStaleVectors()
-    }
-
-    executeDataLifecycle(options: {
-        archiveOlderThanDays: number
-        pruneOlderThanDays: number
-        hardDeleteOlderThanDays: number
-        importanceThreshold: number
-        dryRun?: boolean
-        excludeTags?: string[]
-    }): ReturnType<IDatabaseAdapter['executeDataLifecycle']> {
-        return this.lifecycleOps.executeDataLifecycle(options)
-    }
-
-    executeInTransaction<T>(cb: () => T): T {
-        return this.connection.getNativeDb().transaction(cb)()
-    }
-
-    getWorkflowActionEntries(limit: number): JournalEntry[] {
-        return this.insightsOps.getWorkflowActionEntries(limit)
-    }
-
-    getSignificantEntries(limit: number, projectNumber?: number): JournalEntry[] {
-        return this.insightsOps.getSignificantEntries(limit, projectNumber)
-    }
-
-    getRecentGraphRelationships(limit: number): {
-        from_entry_id: number
-        to_entry_id: number
-        relationship_type: string
-        from_content: string
-        to_content: string
-    }[] {
-        return this.insightsOps.getRecentGraphRelationships(limit)
-    }
-
-    getAuthorStatistics(): { author: string; count: number }[] {
-        return this.insightsOps.getAuthorStatistics()
-    }
-
-    getAuthorsForEntries(entryIds: number[]): Map<number, string | null> {
-        return this.insightsOps.getAuthorsForEntries(entryIds)
-    }
-
-    saveAnalyticsSnapshot(type: string, data: Record<string, unknown>): number {
-        return this.insightsOps.saveAnalyticsSnapshot(type, data)
-    }
-
-    getLatestAnalyticsSnapshot(
-        type: string
-    ): { id: number; createdAt: string; data: Record<string, unknown> } | null {
-        return this.insightsOps.getLatestAnalyticsSnapshot(type)
-    }
-
-    getAnalyticsSnapshots(
-        type: string,
-        limit?: number
-    ): { id: number; createdAt: string; data: Record<string, unknown> }[] {
-        return this.insightsOps.getAnalyticsSnapshots(type, limit)
-    }
-
-    computeDigest(): Record<string, unknown> {
-        return this.insightsOps.computeDigest()
-    }
-
-    getCrossProjectInsights(options: {
-        startDate?: string
-        endDate?: string
-        minEntries: number
-        inactiveThresholdDays: number
-    }): ReturnType<IDatabaseAdapter['getCrossProjectInsights']> {
-        return this.insightsOps.getCrossProjectInsights(options)
-    }
-
-    visualizeRelationships(options: {
-        entryId?: number
-        tags?: string[]
-        relationshipType?: string
-        depth: number
-        limit: number
-    }): ReturnType<IDatabaseAdapter['visualizeRelationships']> {
-        return this.insightsOps.visualizeRelationships(options)
-    }
-
-    getTeamCollaborationMatrix(options: {
-        period: string
-        limit: number
-    }): ReturnType<IDatabaseAdapter['getTeamCollaborationMatrix']> {
-        return this.insightsOps.getTeamCollaborationMatrix(options)
+    getEntriesBySession(sessionId: string, limit?: number, workspaceId?: string): JournalEntry[] {
+        return this.entriesMgr.getEntriesBySession(sessionId, limit, workspaceId)
     }
 }

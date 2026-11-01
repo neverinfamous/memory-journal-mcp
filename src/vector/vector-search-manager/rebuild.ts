@@ -73,7 +73,13 @@ export async function rebuildIndex(
                 }
 
                 try {
-                    const text = `[${entry.entryType}] ${entry.content}`
+                    const tagsText =
+                        entry.tags !== undefined &&
+                        entry.tags !== null &&
+                        entry.tags.length > 0
+                            ? ` [Tags: ${entry.tags.join(', ')}]`
+                            : ''
+                    const text = `[${entry.entryType}]${tagsText} ${entry.content}`
                     const embedding = await manager.generateEmbedding(text)
                     vectorsToUpsert.push({ entryId: entry.id, embedding })
                 } catch (err) {

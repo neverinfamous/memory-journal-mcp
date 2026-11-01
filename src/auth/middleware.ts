@@ -14,6 +14,9 @@ import { TokenMissingError, InsufficientScopeError, isOAuthError } from './error
 import { hasScope as checkScope } from './scopes.js'
 import { getRequiredScope } from './scope-map.js'
 import { logger } from '../utils/logger.js'
+import { extractBearerToken } from './transport-agnostic.js'
+
+export { extractBearerToken }
 
 // =============================================================================
 // Express Type Extensions
@@ -57,37 +60,6 @@ export interface AuthMiddlewareConfig {
 
     /** Paths that bypass authentication (e.g., '/.well-known/*', '/health') */
     publicPaths?: string[]
-}
-
-// =============================================================================
-// Token Extraction
-// =============================================================================
-
-/**
- * Extract Bearer token from Authorization header
- *
- * @param authHeader - Authorization header value
- * @returns The token or null if not present/invalid
- */
-export function extractBearerToken(authHeader: string | undefined): string | null {
-    if (!authHeader) {
-        return null
-    }
-
-    // Check for Bearer scheme (case-insensitive)
-    const parts = authHeader.split(' ')
-    const scheme = parts[0]
-    const tokenPart = parts[1]
-    if (parts.length !== 2 || scheme?.toLowerCase() !== 'bearer') {
-        return null
-    }
-
-    if (tokenPart === undefined) {
-        return null
-    }
-
-    const token = tokenPart.trim()
-    return token.length > 0 ? token : null
 }
 
 // =============================================================================

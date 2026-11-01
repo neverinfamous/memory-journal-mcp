@@ -13,7 +13,7 @@
 import type { ConvertedFile } from './index.js'
 import type { FrontmatterData } from '../frontmatter.js'
 import { parseYamlFrontmatter } from './yaml-parser.js'
-import { extractTags } from './utils.js'
+import { extractTags, formatToISODate } from './utils.js'
 
 export function convertLogseq(
     content: string,
@@ -117,16 +117,4 @@ export function convertLogseq(
         metadata: mjMeta,
         body: processedBody.trim(),
     }
-}
-
-function formatToISODate(dateStr: string): string {
-    try {
-        const d = new Date(dateStr)
-        if (!isNaN(d.getTime())) {
-            return d.toISOString()
-        }
-    } catch {
-        // ignore
-    }
-    return dateStr
 }

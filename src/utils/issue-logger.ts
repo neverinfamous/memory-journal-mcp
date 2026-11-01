@@ -11,6 +11,21 @@ export interface AgentIssue {
     error: string
 }
 
+let cachedLogsDir: string | null = null
+
+function resolveLogsDir(): string {
+    if (cachedLogsDir !== null) {
+        return cachedLogsDir
+    }
+    const __filename = fileURLToPath(import.meta.url)
+    let rootDir = path.dirname(__filename)
+    while (!fs.existsSync(path.join(rootDir, 'package.json')) && rootDir !== path.parse(rootDir).root) {
+        rootDir = path.dirname(rootDir)
+    }
+    cachedLogsDir = path.join(rootDir, 'logs')
+    return cachedLogsDir
+}
+
 export function logAgentIssue(issue: Omit<AgentIssue, 'timestamp' | 'level'>): void {
     if (
         process.env['NODE_ENV'] === 'test' ||
@@ -30,14 +45,8 @@ export function logAgentIssue(issue: Omit<AgentIssue, 'timestamp' | 'level'>): v
     }
 
     try {
-        const __filename = fileURLToPath(import.meta.url)
-        let rootDir = path.dirname(__filename)
-        while (!fs.existsSync(path.join(rootDir, 'package.json')) && rootDir !== path.parse(rootDir).root) {
-            rootDir = path.dirname(rootDir)
-        }
-        
-        const logsDir = path.join(rootDir, 'logs')
-        
+        const logsDir = resolveLogsDir()
+
         if (!fs.existsSync(logsDir)) {
             fs.mkdirSync(logsDir, { recursive: true })
         }

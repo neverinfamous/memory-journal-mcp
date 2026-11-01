@@ -198,3 +198,42 @@ export interface ImportanceResult {
     /** Weighted component contributions */
     breakdown: ImportanceBreakdown
 }
+
+/**
+ * Input for creating a new entry
+ */
+export interface CreateEntryInput {
+    content: string
+    entryType?: EntryType | undefined
+    tags?: string[] | undefined
+    isPersonal?: boolean | undefined
+    significanceType?: SignificanceType | undefined
+    autoContext?: string | undefined
+    isArchived?: boolean | undefined
+    timestamp?: string | undefined
+    projectNumber?: number | undefined
+    projectOwner?: string | undefined
+    issueNumber?: number | undefined
+    issueUrl?: string | undefined
+    prNumber?: number | undefined
+    prUrl?: string | undefined
+    prStatus?: 'draft' | 'open' | 'merged' | 'closed' | undefined
+    workflowRunId?: number | undefined
+    workflowName?: string | undefined
+    workflowStatus?: 'queued' | 'in_progress' | 'completed' | undefined
+    author?: string | undefined
+    workspaceId?: string | undefined
+    trustScore?: number | undefined
+    impactScore?: number | undefined
+    validationStatus?: 'passed' | 'failed' | 'none' | undefined
+    anchors?: { anchorPath: string; anchorType: string }[] | undefined
+    sessionId?: string | undefined
+}
+
+/**
+ * Input for creating a team entry (extends standard entry with author)
+ */
+export interface CreateTeamEntryInput extends CreateEntryInput {
+    author?: string | undefined
+    workspaceId?: string | undefined
+}

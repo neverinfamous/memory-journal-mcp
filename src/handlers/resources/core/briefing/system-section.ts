@@ -11,9 +11,8 @@
  */
 
 import * as fs from 'node:fs'
-
+import { execFileSync } from 'node:child_process'
 import * as path from 'node:path'
-import { z } from 'zod'
 
 import { VERSION } from '../../../../version.js'
 import { getAllToolNames } from '../../../../filtering/tool-filter.js'
@@ -139,135 +138,122 @@ export function parseTestHealth(content: string): TestHealth | null {
     }
 }
 
-const cachedGitHistory = new Map<string, GitHistorySummary | null>()
-const cachedTestHealth = new Map<string, TestHealth | null>()
+interface TtlCacheEntry<T> {
+    value: T
+    expiresAt: number
+}
 
-import { execFileSync } from 'node:child_process'
+const CACHE_TTL_MS = 60_000
+const cachedGitHistory = new Map<string, TtlCacheEntry<GitHistorySummary | null>>()
+const cachedTestHealth = new Map<string, TtlCacheEntry<TestHealth | null>>()
 
-function loadCachedGitHistory(commitCount: number, targetPath?: string, importanceThreshold?: number): GitHistorySummary | null {
+function getCached<T>(map: Map<string, TtlCacheEntry<T>>, key: string): { hit: true; value: T } | { hit: false } {
+    const entry = map.get(key)
+    if (!entry) return { hit: false }
+    if (Date.now() > entry.expiresAt) {
+        map.delete(key)
+        return { hit: false }
+    }
+    return { hit: true, value: entry.value }
+}
+
+function setCached<T>(map: Map<string, TtlCacheEntry<T>>, key: string, value: T): T {
+    map.set(key, { value, expiresAt: Date.now() + CACHE_TTL_MS })
+    return value
+}
+
+function loadCachedGitHistory(
+    commitCount: number,
+    targetPath?: string,
+    _importanceThreshold?: number
+): GitHistorySummary | null {
     const root = targetPath || resolveProjectRoot()
-    const existing = cachedGitHistory.get(root)
-    if (existing !== undefined) return existing
+    const cached = getCached(cachedGitHistory, root)
+    if (cached.hit) return cached.value
 
     try {
         if (process.env['VITEST']) {
-            cachedGitHistory.set(root, null)
-            return null
+            return setCached(cachedGitHistory, root, null)
         }
 
-        const fetchLimit = Math.max(50, commitCount * 4)
-        const out = execFileSync('bun', [
-            'C:\\Users\\chris\\Desktop\\adamic\\.agents\\scripts\\get-git-history-json.ts',
-            '--limit', String(fetchLimit),
-            '--summary'
-        ], { cwd: root, encoding: 'utf-8', windowsHide: true })
-        
-        const parsedData = JSON.parse(out) as unknown
-        
-        const gitHistorySchema = z.object({
-            commits: z.array(z.object({
-                commit: z.string().optional(),
-                type: z.string().optional(),
-                size: z.string().optional(),
-                isBreaking: z.boolean().optional(),
-                subject: z.string().optional(),
-                metadata: z.object({
-                    significance: z.union([z.number(), z.string()]).optional(),
-                    impact: z.union([z.number(), z.string()]).optional(),
-                    confidence: z.union([z.number(), z.string()]).optional(),
-                    trust: z.union([z.number(), z.string()]).optional()
-                }).optional(),
-                associatedIssues: z.array(z.object({
-                    issue: z.string()
-                })).optional()
-            }).loose()).optional()
-        }).loose()
-        
-        const parsed = gitHistorySchema.parse(parsedData)
-        
+        const fetchLimit = Math.max(1, commitCount)
+        const out = execFileSync(
+            'git',
+            ['log', '-n', String(fetchLimit), '--format=%h|%s|%cr'],
+            { cwd: root, encoding: 'utf-8', timeout: 3000, windowsHide: true }
+        )
+
         const unpushedHashes = new Set<string>()
         try {
-            const unpushedOut = execFileSync('git', ['log', '@{u}..HEAD', '--format=%H'], { cwd: root, encoding: 'utf-8', windowsHide: true })
-            unpushedOut.split('\n').filter(Boolean).forEach(h => unpushedHashes.add(h.trim()))
+            const unpushedOut = execFileSync(
+                'git',
+                ['log', '@{u}..HEAD', '--format=%h'],
+                { cwd: root, encoding: 'utf-8', timeout: 3000, windowsHide: true }
+            )
+            unpushedOut
+                .split('\n')
+                .filter(Boolean)
+                .forEach((h) => unpushedHashes.add(h.trim()))
         } catch {
             // Ignore if no upstream tracking branch
         }
 
-        const commits: GitHistorySummary['commits'] = (parsed.commits ?? []).map(c => {
-            const fullHash = c.commit ?? ''
-            const issues = c.associatedIssues ? c.associatedIssues.map(i => i.issue) : []
-            return {
-                hash: fullHash.substring(0, 7),
-                type: c.type,
-                size: c.size,
-                significance: c.metadata?.significance ?? c.metadata?.impact,
-                confidence: c.metadata?.confidence ?? c.metadata?.trust,
-                isBreaking: !!c.isBreaking,
-                message: c.subject ?? '',
-                isPushed: !unpushedHashes.has(fullHash),
-                associatedIssues: issues.length > 0 ? issues : undefined
-            }
-        })
-        
+        const lines = out
+            .split('\n')
+            .map((l) => l.trim())
+            .filter(Boolean)
+
         let highImpact = 0
         let lowImpact = 0
-        let totalConf = 0
-        let confCount = 0
-        
-        for (const c of commits) {
-            const sig = typeof c.significance === 'number' ? c.significance : parseFloat(c.significance || '0')
-            if (sig >= 0.5 || c.isBreaking) {
+
+        const commits: GitHistorySummary['commits'] = lines.map((line) => {
+            const parts = line.split('|')
+            const hash = (parts[0] ?? '').trim()
+            const subject = (parts[1] ?? '').trim()
+            const typeMatch = /^([a-zA-Z]+)(?:\([^)]+\))?(!)?:/i.exec(subject)
+            const commitType = typeMatch?.[1]?.toLowerCase()
+            const isBreaking = Boolean(typeMatch?.[2])
+            if (commitType === 'feat' || commitType === 'fix' || isBreaking) {
                 highImpact++
             } else {
                 lowImpact++
             }
-            
-            if (c.confidence !== undefined) {
-                const conf = typeof c.confidence === 'number' ? c.confidence : parseFloat(c.confidence)
-                if (!isNaN(conf)) {
-                    totalConf += conf
-                    confCount++
-                }
+            return {
+                hash,
+                ...(commitType !== undefined ? { type: commitType } : {}),
+                isBreaking,
+                message: subject,
+                isPushed: !unpushedHashes.has(hash),
             }
-        }
-        
-        const threshold = importanceThreshold ?? 0.3;
-        const filteredCommits = commits.filter(c => {
-            const sig = typeof c.significance === 'number' ? c.significance : parseFloat(c.significance || '0');
-            return sig >= threshold || c.isBreaking;
-        });
+        })
 
         const stats = {
             total: commits.length,
             highImpact,
             lowImpact,
-            avgConfidence: confCount > 0 ? totalConf / confCount : 1.0
+            avgConfidence: 1.0,
         }
-        
-        const result = { 
-            stats, 
-            commits: filteredCommits.slice(0, Math.max(1, commitCount)) 
-        }
-        cachedGitHistory.set(root, result)
+
+        return setCached(cachedGitHistory, root, {
+            stats,
+            commits: commits.slice(0, Math.max(1, commitCount)),
+        })
     } catch (err: unknown) {
         logger.debug('Failed to get git history via child_process (non-critical)', {
             module: 'BRIEFING',
             operation: 'git-history',
-            error: err instanceof Error ? err.message : String(err)
+            error: err instanceof Error ? err.message : String(err),
         })
-        cachedGitHistory.set(root, null)
+        return setCached(cachedGitHistory, root, null)
     }
-
-    return cachedGitHistory.get(root) ?? null
 }
 
 function loadCachedTestHealth(targetPath?: string): TestHealth | null {
     const root = targetPath || resolveProjectRoot()
-    const existing = cachedTestHealth.get(root)
-    if (existing !== undefined) return existing
+    const cached = getCached(cachedTestHealth, root)
+    if (cached.hit) return cached.value
 
     try {
-
         // Primary: read structured coverage data from vitest json-summary output
         const coveragePath = path.join(root, '.test-output', 'coverage', 'coverage-summary.json')
         if (fs.existsSync(coveragePath)) {
@@ -297,7 +283,7 @@ function loadCachedTestHealth(targetPath?: string): TestHealth | null {
             } catch {
                 // Ignore error if README.md doesn't exist or is unreadable
             }
-            cachedTestHealth.set(root, { unitTests, e2eTests, coverage })
+            return setCached(cachedTestHealth, root, { unitTests, e2eTests, coverage })
         } else {
             // Fallback: parse everything from README badges (legacy path)
             const readmePath = path.join(root, 'README.md')
@@ -306,25 +292,22 @@ function loadCachedTestHealth(targetPath?: string): TestHealth | null {
             const bytesRead = fs.readSync(fd, buf, 0, 2048, 0)
             fs.closeSync(fd)
             const content = buf.toString('utf-8', 0, bytesRead)
-            cachedTestHealth.set(root, parseTestHealth(content))
+            return setCached(cachedTestHealth, root, parseTestHealth(content))
         }
     } catch {
         logger.debug('Test health data not found or unreadable (non-critical)', {
             module: 'BRIEFING',
             operation: 'test-health-parse',
         })
-        cachedTestHealth.set(root, null)
+        return setCached(cachedTestHealth, root, null)
     }
-
-    const final = cachedTestHealth.get(root)
-    return final !== undefined ? final : null
 }
 
 // ============================================================================
 // Last Release Age (from CHANGELOG.md)
 // ============================================================================
 
-const cachedLastReleaseDaysAgo = new Map<string, number | null>()
+const cachedLastReleaseDaysAgo = new Map<string, TtlCacheEntry<number | null>>()
 
 export function parseLastReleaseAge(content: string): number | null {
     const match = /^## \[[\d.]+\].*?-\s*(\d{4}-\d{2}-\d{2})/m.exec(content)
@@ -336,27 +319,24 @@ export function parseLastReleaseAge(content: string): number | null {
 
 function loadCachedLastReleaseDaysAgo(targetPath?: string): number | null {
     const root = targetPath || resolveProjectRoot()
-    const existing = cachedLastReleaseDaysAgo.get(root)
-    if (existing !== undefined) return existing
+    const cached = getCached(cachedLastReleaseDaysAgo, root)
+    if (cached.hit) return cached.value
 
     try {
         const changelogPath = path.join(root, 'CHANGELOG.md')
         if (fs.existsSync(changelogPath)) {
             const content = fs.readFileSync(changelogPath, 'utf-8')
             const age = parseLastReleaseAge(content)
-            cachedLastReleaseDaysAgo.set(root, age)
-        } else {
-            cachedLastReleaseDaysAgo.set(root, null)
+            return setCached(cachedLastReleaseDaysAgo, root, age)
         }
+        return setCached(cachedLastReleaseDaysAgo, root, null)
     } catch {
         logger.debug('Failed to get release info (non-critical)', {
             module: 'BRIEFING',
             operation: 'release-age',
         })
-        cachedLastReleaseDaysAgo.set(root, null)
+        return setCached(cachedLastReleaseDaysAgo, root, null)
     }
-
-    return cachedLastReleaseDaysAgo.get(root) ?? null
 }
 
 // ============================================================================

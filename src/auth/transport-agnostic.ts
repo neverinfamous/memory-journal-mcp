@@ -13,9 +13,8 @@ import { hasScope as checkScope } from './scopes.js'
 
 /**
  * Extract a Bearer token from an Authorization header.
- * Local copy to avoid circular dependency with middleware.ts.
  */
-function extractBearerToken(authHeader: string | undefined): string | null {
+export function extractBearerToken(authHeader: string | undefined): string | null {
     if (!authHeader) return null
     const parts = authHeader.split(' ')
     const scheme = parts[0]

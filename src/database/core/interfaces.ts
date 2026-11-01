@@ -8,8 +8,11 @@ import type {
     EntryRevision,
     AnchorStatus,
     Anchor,
+    CreateEntryInput,
+    CreateTeamEntryInput,
 } from '../../types/index.js'
-import type { CreateEntryInput } from './schema.js'
+
+export type { CreateEntryInput, CreateTeamEntryInput }
 
 export type TeamRole = 'admin' | 'member' | 'viewer'
 
@@ -343,7 +346,7 @@ export interface IDatabaseAdapter {
         type: string,
         limit?: number
     ): { id: number; createdAt: string; data: Record<string, unknown> }[]
-    computeDigest(): Record<string, unknown>
+    computeDigest(workspaceId?: string): Record<string, unknown>
 
     pragma(command: string): void
 

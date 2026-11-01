@@ -54,7 +54,10 @@ export class VectorSearchManager {
             return this.initializationPromise
         }
 
-        this.initializationPromise = this._initialize()
+        this.initializationPromise = this._initialize().catch((error: unknown) => {
+            this.initializationPromise = null
+            throw error
+        })
         return this.initializationPromise
     }
 

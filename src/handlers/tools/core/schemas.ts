@@ -1,6 +1,15 @@
 import { z } from 'zod'
 import { ErrorFieldsMixin } from '../error-fields-mixin.js'
-import { ENTRY_TYPES, SIGNIFICANCE_TYPES, EntryOutputSchema, relaxedNumber, healAgentHallucinations, StrictProjectNumberSchema } from '../schemas.js'
+import {
+    ENTRY_TYPES,
+    SIGNIFICANCE_TYPES,
+    EntryOutputSchema,
+    RelationshipOutputSchema,
+    ImportanceBreakdownSchema,
+    relaxedNumber,
+    healAgentHallucinations,
+    StrictProjectNumberSchema,
+} from '../schemas.js'
 
 // ============================================================================
 // Shared Constants
@@ -184,9 +193,9 @@ export const EntryByIdOutputSchema = z
     .object({
         success: z.boolean().optional(),
         entry: EntryOutputSchema.optional(),
-        relationships: z.any().optional(),
+        relationships: z.array(RelationshipOutputSchema).optional(),
         importance: z.number().optional(),
-        importanceBreakdown: z.any().optional(),
+        importanceBreakdown: ImportanceBreakdownSchema.optional(),
         error: z.string().optional(),
     })
     .extend(ErrorFieldsMixin.shape)
@@ -207,7 +216,7 @@ export const GetRecentEntriesSchema = z.object({
 })
 
 export const GetRecentEntriesSchemaMcp = z.object({
-    limit: relaxedNumber().optional()
+    limit: relaxedNumber()
         .optional()
         .default(10)
         .describe(`Maximum entries to return (max ${String(MAX_SEARCH_LIMIT)})`),

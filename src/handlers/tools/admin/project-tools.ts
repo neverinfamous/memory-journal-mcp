@@ -59,8 +59,15 @@ export function getProjectTools(_context: ToolContext): ToolDefinition[] {
                     
                     const projectRef = registry[parsed.name] ?? { path: parsed.absolute_path }
                     projectRef.path = parsed.absolute_path
-                    if (typeof parsed.project_number === 'number' && !Number.isNaN(parsed.project_number)) {
-                        projectRef.project_number = parsed.project_number
+                    const coercedNum =
+                        typeof parsed.project_number === 'number'
+                            ? parsed.project_number
+                            : typeof parsed.project_number === 'string' &&
+                                parsed.project_number.trim() !== ''
+                              ? Number(parsed.project_number)
+                              : undefined
+                    if (coercedNum !== undefined && !Number.isNaN(coercedNum)) {
+                        projectRef.project_number = coercedNum
                     }
                     registry[parsed.name] = projectRef
                     
@@ -102,8 +109,15 @@ export function getProjectTools(_context: ToolContext): ToolDefinition[] {
                     if (parsed.absolute_path) {
                         project.path = parsed.absolute_path
                     }
-                    if (typeof parsed.project_number === 'number' && !Number.isNaN(parsed.project_number)) {
-                        project.project_number = parsed.project_number
+                    const coercedUpdateNum =
+                        typeof parsed.project_number === 'number'
+                            ? parsed.project_number
+                            : typeof parsed.project_number === 'string' &&
+                                parsed.project_number.trim() !== ''
+                              ? Number(parsed.project_number)
+                              : undefined
+                    if (coercedUpdateNum !== undefined && !Number.isNaN(coercedUpdateNum)) {
+                        project.project_number = coercedUpdateNum
                     }
                     
                     const targetName = parsed.new_name ?? parsed.name

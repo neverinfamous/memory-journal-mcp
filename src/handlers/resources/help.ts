@@ -392,15 +392,21 @@ async function getAllToolDefinitionsAsync(context: ResourceContext): Promise<Min
             context.teamDb,
             undefined
         )
-        return tools.map((t) => ({
-            name: t.name,
-            title: t.title ?? t.name,
-            description: t.description,
-            group: inferGroupFromName(t.name),
-            inputSchema: t.inputSchema,
-            outputSchema: t.outputSchema,
-            annotations: t.annotations,
-        }))
+        return tools.map((t) => {
+            const regWithGroup = t as typeof t & { group?: string }
+            return {
+                name: t.name,
+                title: t.title ?? t.name,
+                description: t.description,
+                group:
+                    typeof regWithGroup.group === 'string' && regWithGroup.group.length > 0
+                        ? regWithGroup.group
+                        : inferGroupFromName(t.name),
+                inputSchema: t.inputSchema,
+                outputSchema: t.outputSchema,
+                annotations: t.annotations,
+            }
+        })
     } catch (e: unknown) {
         logger.error('HELP_LOAD_TOOLS_FAILED', {
             error: e instanceof Error ? e.message : String(e),
@@ -419,74 +425,27 @@ function inferGroupFromName(name: string): string {
     if (name.startsWith('mj_')) return 'codemode'
 
     const groupMap: Record<string, string> = {
-        // core (7)
-        create_entry: 'core',
-        create_entry_minimal: 'core',
-        get_entry_by_id: 'core',
-        get_recent_entries: 'core',
-        get_entry_history: 'core',
-        test_simple: 'core',
-        list_tags: 'core',
-        // search (6)
-        search_entries: 'search',
-        search_by_date_range: 'search',
-        semantic_search: 'search',
-        get_vector_index_stats: 'search',
-        list_deleted_entries: 'search',
-        cross_team_search: 'search',
-        // analytics (2)
-        get_statistics: 'analytics',
-        get_cross_project_insights: 'analytics',
-        // relationships (2)
-        link_entries: 'relationships',
-        visualize_relationships: 'relationships',
-        // io (4)
-        export_entries: 'io',
-        export_markdown: 'io',
-        import_markdown: 'io',
-        import_external: 'io',
-        // admin (11)
-        update_configuration: 'admin',
-        update_entry: 'admin',
-        delete_entry: 'admin',
-        restore_entry: 'admin',
-        merge_tags: 'admin',
-        rebuild_vector_index: 'admin',
-        add_to_vector_index: 'admin',
-        batch_create_entries: 'admin',
-        batch_update_entries: 'admin',
-        batch_delete_entries: 'admin',
-        search_audit_log: 'admin',
-        // backup (4)
-        backup_journal: 'backup',
-        list_backups: 'backup',
-        restore_backup: 'backup',
-        cleanup_backups: 'backup',
-        // github (18)
-        get_github_issues: 'github',
-        get_github_prs: 'github',
-        get_github_issue: 'github',
-        get_github_pr: 'github',
-        get_github_context: 'github',
-        get_github_milestones: 'github',
-        get_github_milestone: 'github',
-        create_github_milestone: 'github',
-        update_github_milestone: 'github',
-        delete_github_milestone: 'github',
-        get_kanban_board: 'github',
-        move_kanban_item: 'github',
-        add_kanban_item: 'github',
-        delete_kanban_item: 'github',
-        create_github_issue_with_entry: 'github',
-        close_github_issue_with_entry: 'github',
-        get_repo_insights: 'github',
-        get_copilot_reviews: 'github',
-        // git (5)
-        get_commit_history: 'git',
-        search_commits: 'git',
-        get_release_info: 'git',
-        get_unreleased_commits: 'git',
-        analyze_commit_patterns: 'git',
+        create_entry: 'core', create_entry_minimal: 'core', get_entry_by_id: 'core',
+        get_recent_entries: 'core', get_entry_history: 'core', test_simple: 'core', list_tags: 'core',
+        search_entries: 'search', search_by_date_range: 'search', semantic_search: 'search',
+        get_vector_index_stats: 'search', list_deleted_entries: 'search', cross_team_search: 'search',
+        get_statistics: 'analytics', get_cross_project_insights: 'analytics',
+        link_entries: 'relationships', visualize_relationships: 'relationships',
+        export_entries: 'io', export_markdown: 'io', import_markdown: 'io', import_external: 'io',
+        update_configuration: 'admin', update_entry: 'admin', delete_entry: 'admin',
+        restore_entry: 'admin', merge_tags: 'admin', rebuild_vector_index: 'admin',
+        add_to_vector_index: 'admin', batch_create_entries: 'admin', batch_update_entries: 'admin',
+        batch_delete_entries: 'admin', search_audit_log: 'admin',
+        backup_journal: 'backup', list_backups: 'backup', restore_backup: 'backup', cleanup_backups: 'backup',
+        get_github_issues: 'github', get_github_prs: 'github', get_github_issue: 'github',
+        get_github_pr: 'github', get_github_context: 'github', get_github_milestones: 'github',
+        get_github_milestone: 'github', create_github_milestone: 'github',
+        update_github_milestone: 'github', delete_github_milestone: 'github',
+        get_kanban_board: 'github', move_kanban_item: 'github', add_kanban_item: 'github',
+        delete_kanban_item: 'github', create_github_issue_with_entry: 'github',
+        close_github_issue_with_entry: 'github', get_repo_insights: 'github', get_copilot_reviews: 'github',
+        get_commit_history: 'git', search_commits: 'git', get_release_info: 'git',
+        get_unreleased_commits: 'git', analyze_commit_patterns: 'git',
     }
 
     return groupMap[name] ?? 'core'

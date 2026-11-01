@@ -2,12 +2,26 @@ import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { ErrorFieldsMixin } from '../error-fields-mixin.js'
+import { relaxedNumber } from '../schemas.js'
 
 export const MarkAnchorsStaleSchema = z.object({
-    updates: z.array(z.object({
-        id: z.number(),
-        status: z.enum(['pending', 'valid', 'stale', 'invalidated', 'unresolvable'])
-    }))
+    updates: z.array(
+        z.object({
+            id: z.number(),
+            status: z.enum(['pending', 'valid', 'stale', 'invalidated', 'unresolvable']),
+        })
+    ),
+})
+
+export const MarkAnchorsStaleSchemaMcp = z.object({
+    updates: z
+        .array(
+            z.object({
+                id: relaxedNumber(),
+                status: z.string(),
+            })
+        )
+        .optional(),
 })
 
 export function getStalenessTools(context: ToolContext): ToolDefinition[] {
@@ -17,9 +31,10 @@ export function getStalenessTools(context: ToolContext): ToolDefinition[] {
         {
             name: 'mark_anchors_stale',
             title: 'Mark Anchors Stale',
-            description: 'Update the status of multiple anchors (e.g. to stale or invalidated) based on validation rules or git history checks.',
+            description:
+                'Update the status of multiple anchors (e.g. to stale or invalidated) based on validation rules or git history checks.',
             group: 'core',
-            inputSchema: MarkAnchorsStaleSchema,
+            inputSchema: MarkAnchorsStaleSchemaMcp,
             outputSchema: z.object({ success: z.boolean(), updated_count: z.number() }).extend(ErrorFieldsMixin.shape),
             annotations: {
                 readOnlyHint: false,

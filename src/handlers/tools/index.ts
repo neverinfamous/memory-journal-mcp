@@ -22,7 +22,6 @@ import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import type { VectorSearchManager } from '../../vector/vector-search-manager/index.js'
 import type { GitHubIntegration } from '../../github/github-integration/index.js'
 import type { ProgressContext } from '../../utils/progress-utils.js'
-import type { ProjectRegistryEntry } from '../../types/index.js'
 
 import { getCoreTools, getStalenessTools, getDummyHealingTools, DUMMY_HEALING_TOOL_NAMES } from './core/index.js'
 import { getSearchTools } from './search/index.js'
@@ -36,115 +35,29 @@ import { getTeamTools } from './team/index.js'
 import { getCodeModeTools } from './codemode/index.js'
 import { getGitTools } from './git.js'
 
-import { wrapWithMetrics, injectTokenEstimate } from '../../observability/index.js'
-
+import { injectTokenEstimate } from '../../observability/index.js'
 import { enforceAccessBoundary } from '../../auth/validation.js'
-import { ResourceNotFoundError, ConfigurationError } from '../../types/errors.js'
-import { z } from 'zod'
-import { requestContextStorage } from '../../utils/request-context.js'
-import { applyArgInterceptions } from '../../codemode/param-normalizer.js'
+import { ConfigurationError } from '../../types/errors.js'
+import {
+    ARG_ALIASES,
+    BOOLEAN_COERCIONS,
+    NUMBER_COERCIONS,
+    applyArgInterceptions,
+    injectProjectNames,
+    getToolIcon,
+    wrapToolHandlerWithInterceptors,
+    instrumentToolDefinitions,
+    throwToolNotFoundError,
+} from './arg-interceptions.js'
 
-// Re-export for backward compatibility (McpServer imports these)
+// Re-export for backward compatibility
 export type { ToolHandlerConfig }
-
-// ============================================================================
-// Project Name Injection
-// ============================================================================
-
-export function injectProjectNames(obj: unknown, registry?: Record<string, ProjectRegistryEntry>): void {
-    if (obj === undefined || obj === null || typeof obj !== 'object' || registry === undefined) return
-    
-    if (Array.isArray(obj)) {
-        obj.forEach(item => injectProjectNames(item, registry))
-    } else {
-        const record = obj as Record<string, unknown>
-        const pNum = typeof record['projectNumber'] === 'number' ? record['projectNumber'] : 
-                     (typeof record['project_number'] === 'number' ? record['project_number'] : undefined)
-        
-        if (pNum !== undefined && typeof record['projectName'] === 'undefined') {
-            const entry = Object.entries(registry).find(
-                ([_, r]) => r.project_number === pNum
-            )
-            if (entry) {
-                record['projectName'] = entry[0]
-            }
-        }
-        for (const key in record) {
-            if (typeof record[key] === 'object' && record[key] !== null) {
-                injectProjectNames(record[key], registry)
-            }
-        }
-    }
-}
-
-// Global audit singletons removed per CRIT-1
-// Callers must provide ServerRuntime.
-
-// ============================================================================
-// Icon Mapping
-// ============================================================================
-
-function getToolIcon(
-    group: string
-): { iconUrl: string; title: string; description: string } | undefined {
-    const iconMap: Record<string, { iconUrl: string; title: string; description: string }> = {
-        core: {
-            iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/notebook.svg',
-            title: 'Journal Core',
-            description: 'Core journal operations',
-        },
-        search: {
-            iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/magnify.svg',
-            title: 'Search',
-            description: 'Entry search operations',
-        },
-        analytics: {
-            iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/chart-bar.svg',
-            title: 'Analytics',
-            description: 'Journal analytics',
-        },
-        relationships: {
-            iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/graph-outline.svg',
-            title: 'Relationships',
-            description: 'Entry relationship management',
-        },
-        io: {
-            iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/swap-horizontal.svg',
-            title: 'IO',
-            description: 'Import/export operations',
-        },
-        admin: {
-            iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/cog.svg',
-            title: 'Admin',
-            description: 'Administrative operations',
-        },
-        github: {
-            iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/github.svg',
-            title: 'GitHub',
-            description: 'GitHub integration',
-        },
-        backup: {
-            iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/backup-restore.svg',
-            title: 'Backup',
-            description: 'Backup and restore',
-        },
-        team: {
-            iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/account-group.svg',
-            title: 'Team',
-            description: 'Team collaboration',
-        },
-        codemode: {
-            iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/code-braces.svg',
-            title: 'Code Mode',
-            description: 'Sandboxed code execution',
-        },
-        git: {
-            iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/source-branch.svg',
-            title: 'Git History',
-            description: 'Git history operations',
-        },
-    }
-    return iconMap[group]
+export {
+    ARG_ALIASES,
+    BOOLEAN_COERCIONS,
+    NUMBER_COERCIONS,
+    applyArgInterceptions,
+    injectProjectNames,
 }
 
 // ============================================================================
@@ -163,27 +76,30 @@ export function getTools(
     teamDb?: IDatabaseAdapter,
     teamVectorManager?: VectorSearchManager
 ): ToolRegistration[] {
-    // Ensure tool map is built / up-to-date (shared cache with callTool)
     ensureToolCache(db, vectorManager, github, config, teamDb, teamVectorManager)
 
-    const mapTool = (t: ToolDefinition): ToolRegistration => ({
-        name: t.name,
-        title: t.title,
-        description: t.description,
-        inputSchema: t.inputSchema,
-        // Only include outputSchema when defined — undefined values in the
-        // tools/list response break clients that process the JSON Schema field
-        ...(t.outputSchema !== undefined ? { outputSchema: t.outputSchema } : {}),
-        annotations: t.annotations,
-        icons: getToolIcon(t.group),
-    })
+    const mapTool = (t: ToolDefinition): ToolRegistration => {
+        const reg: ToolRegistration = {
+            name: t.name,
+            title: t.title,
+            description: t.description,
+            inputSchema: t.inputSchema,
+            ...(t.outputSchema !== undefined ? { outputSchema: t.outputSchema } : {}),
+            annotations: t.annotations,
+            icons: getToolIcon(t.group),
+        }
+        return Object.assign(reg, { group: t.group })
+    }
 
     if (filterConfig) {
-        // Filtered lists are not cached — filter sets vary per call
         const mapToUse = config?.runtime?.toolMapCache ?? toolMapCache ?? EMPTY_TOOL_MAP
         const includeDummyTools = config?.agentHealing !== false
         return Array.from(mapToUse.values())
-            .filter((t) => filterConfig.enabledTools.has(t.name) || (includeDummyTools && DUMMY_HEALING_TOOL_NAMES.has(t.name)))
+            .filter(
+                (t) =>
+                    filterConfig.enabledTools.has(t.name) ||
+                    (includeDummyTools && DUMMY_HEALING_TOOL_NAMES.has(t.name))
+            )
             .map(mapTool)
     }
 
@@ -194,21 +110,17 @@ export function getTools(
         return config.runtime.mappedToolsCache
     }
 
-    // Return cached mapped output for unfiltered calls
     mappedToolsCache ??= Array.from((toolMapCache ?? EMPTY_TOOL_MAP).values()).map(mapTool)
     return mappedToolsCache
 }
 
 /**
  * Cached tool map for O(1) lookup in callTool and getTools.
- * Built lazily on first invocation. Invalidates when any
- * context parameter changes (happens in tests with different mocks;
- * in production, all instances are stable).
  */
 let toolMapCache: Map<string, ToolDefinition> | null = null
 /** Cached mapped tool output for unfiltered getTools calls */
 let mappedToolsCache: ToolRegistration[] | null = null
-/** Typed empty map for safe fallback (narrowing guard, never actually used) */
+/** Typed empty map for safe fallback */
 const EMPTY_TOOL_MAP = new Map<string, ToolDefinition>()
 let cachedContextRefs: {
     db: IDatabaseAdapter
@@ -233,10 +145,30 @@ function safeIsInitialized(vm: VectorSearchManager | undefined | null): boolean 
     return typeof isInit === 'function' ? Boolean(isInit.call(vm)) : undefined
 }
 
-/**
- * Ensure the tool definition cache is populated and valid for the given context.
- * Shared by getTools() and callTool() to avoid redundant getAllToolDefinitions() calls.
- */
+function isCacheHit(
+    refs: typeof cachedContextRefs,
+    cache: Map<string, ToolDefinition> | null | undefined,
+    db: IDatabaseAdapter,
+    vectorManager?: VectorSearchManager,
+    github?: GitHubIntegration,
+    config?: ToolHandlerConfig,
+    teamDb?: IDatabaseAdapter,
+    teamVectorManager?: VectorSearchManager
+): boolean {
+    return Boolean(
+        cache &&
+            refs?.db === db &&
+            (refs.github === github || safeIsAvailable(refs.github) === safeIsAvailable(github)) &&
+            (refs.vectorManager === vectorManager ||
+                safeIsInitialized(refs.vectorManager) === safeIsInitialized(vectorManager)) &&
+            refs.config === config &&
+            refs.teamDb === teamDb &&
+            (refs.teamVectorManager === teamVectorManager ||
+                safeIsInitialized(refs.teamVectorManager) ===
+                    safeIsInitialized(teamVectorManager))
+    )
+}
+
 function ensureToolCache(
     db: IDatabaseAdapter,
     vectorManager?: VectorSearchManager,
@@ -247,94 +179,38 @@ function ensureToolCache(
 ): void {
     if (config?.runtime) {
         const rt = config.runtime
-        const refs = rt.cachedContextRefs as {
-            db: IDatabaseAdapter
-            github?: GitHubIntegration
-            vectorManager?: VectorSearchManager
-            config?: ToolHandlerConfig
-            teamDb?: IDatabaseAdapter
-            teamVectorManager?: VectorSearchManager
-        } | null
+        const refs = rt.cachedContextRefs as typeof cachedContextRefs
         if (
-            rt.toolMapCache &&
-            refs?.db === db &&
-            (refs?.github === github ||
-                safeIsAvailable(refs?.github) === safeIsAvailable(github)) &&
-            (refs?.vectorManager === vectorManager ||
-                safeIsInitialized(refs?.vectorManager) === safeIsInitialized(vectorManager)) &&
-            refs?.config === config &&
-            refs?.teamDb === teamDb &&
-            (refs?.teamVectorManager === teamVectorManager ||
-                safeIsInitialized(refs?.teamVectorManager) === safeIsInitialized(teamVectorManager))
+            isCacheHit(
+                refs,
+                rt.toolMapCache,
+                db,
+                vectorManager,
+                github,
+                config,
+                teamDb,
+                teamVectorManager
+            )
         ) {
             return
         }
-    } else {
-        if (
-            toolMapCache &&
-            cachedContextRefs?.db === db &&
-            (cachedContextRefs.github === github ||
-                safeIsAvailable(cachedContextRefs.github) === safeIsAvailable(github)) &&
-            (cachedContextRefs.vectorManager === vectorManager ||
-                safeIsInitialized(cachedContextRefs.vectorManager) ===
-                    safeIsInitialized(vectorManager)) &&
-            cachedContextRefs.config === config &&
-            cachedContextRefs.teamDb === teamDb &&
-            (cachedContextRefs.teamVectorManager === teamVectorManager ||
-                safeIsInitialized(cachedContextRefs.teamVectorManager) ===
-                    safeIsInitialized(teamVectorManager))
-        ) {
-            return // Cache is valid
-        }
+    } else if (
+        isCacheHit(
+            cachedContextRefs,
+            toolMapCache,
+            db,
+            vectorManager,
+            github,
+            config,
+            teamDb,
+            teamVectorManager
+        )
+    ) {
+        return
     }
 
     const context: ToolContext = { db, teamDb, vectorManager, teamVectorManager, github, config }
-    const rawDefs = getAllToolDefinitions(context)
-
-    // Wrap every handler with the metrics interceptor at cache-build time.
-    // When audit logging is enabled, also wraps with the audit interceptor.
-    // This is O(n) once per cache miss — production cost is negligible.
-    const instrumentedDefs: ToolDefinition[] = rawDefs.map((t) => {
-        let schema = t.inputSchema
-        if (schema instanceof z.ZodObject) {
-            schema = schema.extend({ use_test_db: z.boolean().optional() })
-        }
-
-        // Layer 1: Metrics collection (always active if runtime is provided)
-        const metricsInstance = config?.runtime?.metrics
-        const metricsWrapped =
-            metricsInstance !== undefined
-                ? wrapWithMetrics(
-                      t.name,
-                      (args: Record<string, unknown>) => Promise.resolve(t.handler(args)),
-                      metricsInstance
-                  )
-                : (args: Record<string, unknown>) => Promise.resolve(t.handler(args))
-
-        // Layer 2: Audit logging (only when initialized)
-        const runtimeAudit = config?.runtime ? config.runtime.auditInterceptor : null
-        const interceptor = runtimeAudit
-        const baseHandler =
-            interceptor !== null && interceptor !== undefined
-                ? (args: Record<string, unknown>): Promise<unknown> =>
-                      interceptor.around(t.name, args, () => metricsWrapped(args))
-                : metricsWrapped
-
-        const finalHandler = (args: Record<string, unknown>): Promise<unknown> => {
-            if (args['use_test_db'] === true) {
-                const cleanArgs = { ...args }
-                delete cleanArgs['use_test_db']
-                return requestContextStorage.run({ useTestDb: true }, () => baseHandler(cleanArgs))
-            }
-            return baseHandler(args)
-        }
-
-        return {
-            ...t,
-            inputSchema: schema,
-            handler: finalHandler as (params: unknown) => unknown,
-        }
-    })
+    const instrumentedDefs = instrumentToolDefinitions(getAllToolDefinitions(context), config)
 
     if (config?.runtime) {
         config.runtime.toolMapCache = new Map(instrumentedDefs.map((t) => [t.name, t]))
@@ -345,11 +221,11 @@ function ensureToolCache(
             vectorManager,
             config,
             teamDb,
-            teamVectorManager
+            teamVectorManager,
         }
     } else {
         toolMapCache = new Map(instrumentedDefs.map((t) => [t.name, t]))
-        mappedToolsCache = null // Invalidate mapped cache when definitions change
+        mappedToolsCache = null
         cachedContextRefs = { db, github, vectorManager, config, teamDb, teamVectorManager }
     }
 }
@@ -383,25 +259,7 @@ export async function callTool(
     const tool = mapToUse.get(name)
 
     if (!tool) {
-        if (name === 'read_resource' || name === 'readResource') {
-            throw new ResourceNotFoundError(
-                'Tool',
-                `${name}. Code Mode cannot directly call read_resource as an MCP tool. Use mj_execute_code or query tools directly.`
-            )
-        }
-        if (['create_entry', 'createEntry', 'insert_entry', 'insertEntry', 'add_entry', 'addEntry', 'search_entries', 'searchEntries', 'get_recent_entries', 'getRecentEntries', 'list_projects', 'listProjects', 'get_project', 'getProject'].includes(name)) {
-            throw new ResourceNotFoundError(
-                'Tool',
-                `${name}. memory-journal-mcp uses Code Mode: use 'mj_execute_code' with JavaScript (e.g. return await mj.core.${name}(...)).`
-            )
-        }
-        if (name.includes('.') || name.startsWith('mj.') || name.startsWith('mj_core_') || name.startsWith('mj_admin_') || name.startsWith('mj_search_')) {
-            throw new ResourceNotFoundError(
-                'Tool',
-                `${name}. '${name}' is a Code Mode JavaScript function/namespace, not a top-level MCP tool. Use 'mj_execute_code' with JavaScript (e.g. return await ${name}({ ... })).`
-            )
-        }
-        throw new ResourceNotFoundError('Tool', name)
+        throwToolNotFoundError(name)
     }
 
     if (!config?.runtime?.maintenanceManager) {
@@ -410,7 +268,6 @@ export async function callTool(
         )
     }
 
-    // Authorization Hook: Enforce scope if auth context exists
     try {
         const auditLogger = config?.runtime?.auditLogger
         enforceAccessBoundary(name, 'tool', tool.capabilities, auditLogger)
@@ -418,10 +275,6 @@ export async function callTool(
         return Promise.reject(error instanceof Error ? error : new Error(String(error)))
     }
 
-    // When progress context is provided, rebuild the handler with it.
-    // This is rare (only MCP server calls with progress tokens, not benchmarked).
-    // IMPORTANT: Fresh handlers must still be wrapped with metrics + audit
-    // interceptors — otherwise the progress path bypasses all instrumentation.
     if (progress) {
         const context: ToolContext = {
             db,
@@ -430,75 +283,28 @@ export async function callTool(
             teamVectorManager,
             github,
             config,
-            progress
+            progress,
         }
-        const freshTools = getAllToolDefinitions(context)
-        const freshTool = freshTools.find((t) => t.name === name)
+        const freshTool = getAllToolDefinitions(context).find((t) => t.name === name)
         if (freshTool) {
-            // Layer 1: Metrics
-            const metricsInstance = config?.runtime?.metrics
-            const metricsWrapped =
-                metricsInstance !== undefined
-                    ? wrapWithMetrics(
-                          freshTool.name,
-                          (a: Record<string, unknown>) => Promise.resolve(freshTool.handler(a)),
-                          metricsInstance
-                      )
-                    : (a: Record<string, unknown>) => Promise.resolve(freshTool.handler(a))
-            // Layer 2: Audit (if initialized)
-            const runtimeAudit =
-                config?.runtime !== undefined && config.runtime !== null
-                    ? config.runtime.auditInterceptor
-                    : null
-            const interceptor = runtimeAudit
-
-            const baseHandler = async (a: Record<string, unknown>): Promise<unknown> => {
-                if (interceptor !== null && interceptor !== undefined) {
-                    return await interceptor.around(freshTool.name, a, () => metricsWrapped(a))
-                }
-                return await metricsWrapped(a)
-            }
-
-            const wrappedHandler = async (a: Record<string, unknown>): Promise<unknown> => {
-                if (a['use_test_db'] === true) {
-                    const cleanArgs = { ...a }
-                    delete cleanArgs['use_test_db']
-                    return requestContextStorage.run({ useTestDb: true }, () => baseHandler(cleanArgs))
-                }
-                return baseHandler(a)
-            }
-
-            if (
-                config?.runtime?.maintenanceManager !== undefined &&
-                config.runtime.maintenanceManager !== null
-            ) {
-                const freshResult = await config.runtime.maintenanceManager.withActiveJob(
-                    () => wrappedHandler(args),
-                    name === 'restore_backup'
-                )
-                injectProjectNames(freshResult, config?.projectRegistry)
-                return injectTokenEstimate(freshResult)
-            }
-
-            const freshResult = await wrappedHandler(args)
+            const wrappedHandler = wrapToolHandlerWithInterceptors(
+                freshTool.name,
+                freshTool.handler,
+                config
+            )
+            const freshResult = await config.runtime.maintenanceManager.withActiveJob(
+                () => wrappedHandler(args),
+                name === 'restore_backup'
+            )
             injectProjectNames(freshResult, config?.projectRegistry)
             return injectTokenEstimate(freshResult)
         }
     }
 
-    if (
-        config?.runtime?.maintenanceManager !== undefined &&
-        config.runtime.maintenanceManager !== null
-    ) {
-        const result = await config.runtime.maintenanceManager.withActiveJob(
-            () => Promise.resolve(tool.handler(args)),
-            name === 'restore_backup' // restore bypasses lock since it acquires exclusive
-        )
-        injectProjectNames(result, config?.projectRegistry)
-        return injectTokenEstimate(result)
-    }
-
-    const result = await Promise.resolve(tool.handler(args))
+    const result = await config.runtime.maintenanceManager.withActiveJob(
+        () => Promise.resolve(tool.handler(args)),
+        name === 'restore_backup'
+    )
     injectProjectNames(result, config?.projectRegistry)
     return injectTokenEstimate(result)
 }

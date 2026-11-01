@@ -97,6 +97,7 @@ export class Scheduler {
     private readonly vectorManager: VectorSearchManager | null
     private readonly timers: JobTimer[] = []
     private started = false
+    private sigtermHandler: (() => void) | null = null
     private readonly runtime?: ServerRuntime
 
     constructor(
@@ -125,7 +126,10 @@ export class Scheduler {
         this.started = true
 
         // Prevent timer leaks on graceful shutdown
-        process.on('SIGTERM', () => this.stop())
+        this.sigtermHandler = (): void => {
+            this.stop()
+        }
+        process.on('SIGTERM', this.sigtermHandler)
 
         const { backupIntervalMinutes, vacuumIntervalMinutes, rebuildIndexIntervalMinutes } =
             this.options
@@ -194,6 +198,10 @@ export class Scheduler {
             logger.info(`Scheduler stopped, cleared ${String(this.timers.length)} job(s)`, {
                 module: 'Scheduler',
             })
+        }
+        if (this.sigtermHandler !== null) {
+            process.off('SIGTERM', this.sigtermHandler)
+            this.sigtermHandler = null
         }
         this.timers.length = 0
         this.started = false

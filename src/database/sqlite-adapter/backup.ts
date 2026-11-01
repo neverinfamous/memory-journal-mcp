@@ -184,7 +184,8 @@ export class BackupManager {
                 if (key.startsWith("x'") && key.endsWith("'")) {
                     tempDb.pragma(`key = "${key}"`)
                 } else {
-                    tempDb.pragma(`key = '${key}'`)
+                    const escapedKey = key.replace(/'/g, "''")
+                    tempDb.pragma(`key = '${escapedKey}'`)
                 }
             }
             

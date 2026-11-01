@@ -16,6 +16,7 @@ export class ConfigManager extends EventEmitter {
     private config: DynamicConfig
     private configFilePath?: string | undefined
     private watcher?: fs.FSWatcher
+    private isWriting = false
 
     constructor(initialConfig: DynamicConfig, configFilePath?: string) {
         super()
@@ -50,6 +51,7 @@ export class ConfigManager extends EventEmitter {
 
     private persistToFile(): void {
         if (!this.configFilePath) return
+        this.isWriting = true
         try {
             const content = fs.readFileSync(this.configFilePath, 'utf-8')
             let parsed: Record<string, unknown> = {}
@@ -89,6 +91,8 @@ export class ConfigManager extends EventEmitter {
             }
         } catch (e: unknown) {
             logger.error('Failed to persist configuration to file', { module: 'ConfigManager', error: e instanceof Error ? e.message : String(e) })
+        } finally {
+            this.isWriting = false
         }
     }
 
@@ -96,11 +100,10 @@ export class ConfigManager extends EventEmitter {
         if (!this.configFilePath) return
         
         let debounceTimer: NodeJS.Timeout
-        const isWriting = false
 
         try {
             this.watcher = fs.watch(this.configFilePath, (eventType) => {
-                if (eventType === 'change' && !isWriting) {
+                if (eventType === 'change' && !this.isWriting) {
                     clearTimeout(debounceTimer)
                     debounceTimer = setTimeout(() => {
                         try {

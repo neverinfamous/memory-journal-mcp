@@ -227,7 +227,9 @@ export function getEntriesByIdsWithImportance(
         const recencyRaw = Math.max(0, 1 - daysSince / RECENCY_WINDOW_DAYS)
 
         const anchorMultiplier = stats.worstStatusRank === 1 ? 0.1 : (stats.worstStatusRank === 2 ? 0.8 : 1.0)
-        const trustMultiplier = 0.5 + (entry.trustScore ?? 0.5)
+        const validationStatus = entry.validationStatus ?? 'none'
+        const validationMultiplier = validationStatus === 'passed' ? 0.5 : (validationStatus === 'failed' ? -0.4 : 0.0)
+        const trustMultiplier = 0.5 + (entry.trustScore ?? 0.5) + validationMultiplier
         const totalModifier = anchorMultiplier * trustMultiplier
 
         const breakdown: ImportanceBreakdown = {

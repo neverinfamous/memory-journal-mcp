@@ -158,6 +158,42 @@ describe('Prompt Handlers', () => {
             )
         })
 
+        it('should omit gh copilot command by default in adversarial prompts and include opt-in note', async () => {
+            const planResult = await getPrompt(
+                'adversarial-plan-review',
+                { topic: 'Test Plan' },
+                db
+            )
+            const planText = planResult.messages[0]?.content.text ?? ''
+            expect(planText).toContain("opt-in (`copilot: 'true'`)")
+            expect(planText).not.toContain('gh copilot -- -p')
 
+            const auditResult = await getPrompt(
+                'adversarial-audit-security',
+                { target: 'src/auth' },
+                db
+            )
+            const auditText = auditResult.messages[0]?.content.text ?? ''
+            expect(auditText).toContain("opt-in (`copilot: 'true'`)")
+            expect(auditText).not.toContain('gh copilot -- -p')
+        })
+
+        it('should include gh copilot command when copilot: "true" is passed to adversarial prompts', async () => {
+            const planResult = await getPrompt(
+                'adversarial-plan-review',
+                { topic: 'Test Plan', copilot: 'true' },
+                db
+            )
+            const planText = planResult.messages[0]?.content.text ?? ''
+            expect(planText).toContain('gh copilot -- -p')
+
+            const auditResult = await getPrompt(
+                'adversarial-audit-security',
+                { target: 'src/auth', copilot: 'true' },
+                db
+            )
+            const auditText = auditResult.messages[0]?.content.text ?? ''
+            expect(auditText).toContain('gh copilot -- -p')
+        })
     })
 })

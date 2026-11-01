@@ -1,58 +1,124 @@
 import { z } from 'zod'
 import type { ToolHandlerConfig } from '../../../types/index.js'
 import type { ConfigManager } from '../../../utils/config-manager.js'
+import { relaxedNumber } from '../schemas.js'
+
+function preprocessUpdateConfig(val: unknown): unknown {
+    if (typeof val === 'object' && val !== null) {
+        let obj = { ...(val as Record<string, unknown>) }
+        if (typeof obj['config'] === 'object' && obj['config'] !== null) {
+            obj = { ...obj, ...(obj['config'] as Record<string, unknown>) }
+            delete obj['config']
+        }
+
+        if ('filter' in obj) {
+            if (!('tool_filter' in obj)) {
+                obj['tool_filter'] = obj['filter']
+            }
+            delete obj['filter']
+        }
+
+        if (
+            'project_number' in obj &&
+            obj['project_number'] !== undefined &&
+            obj['project_number'] !== null
+        ) {
+            if (typeof obj['project_number'] === 'string') {
+                const cleaned = obj['project_number'].replace(/^[^0-9]+/, '')
+                const num = Number(cleaned)
+                if (!Number.isNaN(num) && cleaned.trim() !== '') {
+                    obj['project_number'] = num
+                } else {
+                    Reflect.deleteProperty(obj, 'project_number')
+                }
+            }
+        }
+
+        for (const key of [
+            'mcp_servers',
+            'mcpServers',
+            'servers',
+            'session_id',
+            'update_notes',
+            'notes',
+            'title',
+            'content',
+            'tags',
+            'description',
+            'target',
+            'scope',
+            'action',
+            'mode',
+            'type',
+            'name',
+            'target_user',
+            'params',
+            'input',
+            'args',
+            'entry_type',
+            'entryType',
+            'category',
+            'metadata',
+        ]) {
+            if (key in obj) {
+                Reflect.deleteProperty(obj, key)
+            }
+        }
+        return obj
+    }
+    return val
+}
 
 export const updateConfigurationSchema = z.preprocess(
-    (val: unknown) => {
-        if (typeof val === 'object' && val !== null) {
-            let obj = { ...(val as Record<string, unknown>) };
-            if (typeof obj['config'] === 'object' && obj['config'] !== null) {
-                obj = { ...obj, ...(obj['config'] as Record<string, unknown>) };
-                delete obj['config'];
-            }
+    preprocessUpdateConfig,
+    z
+        .object({
+            tool_filter: z
+                .string()
+                .optional()
+                .describe('A comma-separated list of tool groups to enable, or "all"'),
+            briefing_entries: z.number().int().min(0).optional(),
+            briefing_summaries: z.number().int().min(0).optional(),
+            briefing_include_team: z.boolean().optional(),
+            briefing_issues: z.number().int().min(0).optional(),
+            briefing_prs: z.number().int().min(0).optional(),
+            briefing_pr_status: z.boolean().optional(),
+            briefing_milestones: z.number().int().min(0).optional(),
+            briefing_workflows: z.number().int().min(0).optional(),
+            briefing_workflow_status: z.boolean().optional(),
+            briefing_copilot: z.boolean().optional(),
+            project_number: z.number().int().optional(),
+        })
+        .strict()
+        .describe(
+            'Updates the active MCP server configuration. Provide parameters as flat keys (e.g. tool_filter: "codemode"). Do NOT nest them inside a "config" object.'
+        )
+)
 
-            if ('filter' in obj) {
-                if (!('tool_filter' in obj)) {
-                    obj['tool_filter'] = obj['filter'];
-                }
-                delete obj['filter'];
-            }
-
-            if ('project_number' in obj && obj['project_number'] !== undefined && obj['project_number'] !== null) {
-                if (typeof obj['project_number'] === 'string') {
-                    const cleaned = obj['project_number'].replace(/^[^0-9]+/, '')
-                    const num = Number(cleaned)
-                    if (!Number.isNaN(num) && cleaned.trim() !== '') {
-                        obj['project_number'] = num
-                    } else {
-                        Reflect.deleteProperty(obj, 'project_number')
-                    }
-                }
-            }
-
-            for (const key of ['mcp_servers', 'mcpServers', 'servers', 'session_id', 'update_notes', 'notes', 'title', 'content', 'tags', 'description', 'target', 'scope', 'action', 'mode', 'type', 'name', 'target_user', 'params', 'input', 'args', 'entry_type', 'entryType', 'category', 'metadata']) {
-                if (key in obj) {
-                    Reflect.deleteProperty(obj, key)
-                }
-            }
-            return obj;
-        }
-        return val;
-    },
-    z.object({
-        tool_filter: z.string().optional().describe('A comma-separated list of tool groups to enable, or "all"'),
-        briefing_entries: z.number().int().min(0).optional(),
-        briefing_summaries: z.number().int().min(0).optional(),
-        briefing_include_team: z.boolean().optional(),
-        briefing_issues: z.number().int().min(0).optional(),
-        briefing_prs: z.number().int().min(0).optional(),
-        briefing_pr_status: z.boolean().optional(),
-        briefing_milestones: z.number().int().min(0).optional(),
-        briefing_workflows: z.number().int().min(0).optional(),
-        briefing_workflow_status: z.boolean().optional(),
-        briefing_copilot: z.boolean().optional(),
-        project_number: z.number().int().optional(),
-    }).strict().describe('Updates the active MCP server configuration. Provide parameters as flat keys (e.g. tool_filter: "codemode"). Do NOT nest them inside a "config" object.')
+export const updateConfigurationSchemaMcp = z.preprocess(
+    preprocessUpdateConfig,
+    z
+        .object({
+            tool_filter: z
+                .string()
+                .optional()
+                .describe('A comma-separated list of tool groups to enable, or "all"'),
+            briefing_entries: relaxedNumber().optional(),
+            briefing_summaries: relaxedNumber().optional(),
+            briefing_include_team: z.boolean().optional(),
+            briefing_issues: relaxedNumber().optional(),
+            briefing_prs: relaxedNumber().optional(),
+            briefing_pr_status: z.boolean().optional(),
+            briefing_milestones: relaxedNumber().optional(),
+            briefing_workflows: relaxedNumber().optional(),
+            briefing_workflow_status: z.boolean().optional(),
+            briefing_copilot: z.boolean().optional(),
+            project_number: relaxedNumber().optional(),
+        })
+        .strict()
+        .describe(
+            'Updates the active MCP server configuration. Provide parameters as flat keys (e.g. tool_filter: "codemode"). Do NOT nest them inside a "config" object.'
+        )
 )
 
 export type UpdateConfigurationArgs = z.infer<typeof updateConfigurationSchema>

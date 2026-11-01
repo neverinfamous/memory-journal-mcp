@@ -1,3 +1,4 @@
+import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { sendProgress } from '../../../utils/progress-utils.js'
@@ -5,6 +6,7 @@ import { resolveAuthor } from '../../../utils/security-utils.js'
 import { getAuthContext } from '../../../auth/auth-context.js'
 import { resolveIssueUrl } from '../../../utils/github-helpers.js'
 import { resolveWorkspaceId, resolveProjectContext } from '../../../utils/workspace-resolver.js'
+import { MemoryJournalMcpError } from '../../../types/errors.js'
 
 import {
     CreateEntrySchema,
@@ -398,15 +400,19 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                 openWorldHint: false,
             },
             handler: async () => {
-                await sendProgress(progress, 0, 3, 'Starting operation...')
-                // Wait 500ms
-                await new Promise((resolve) => setTimeout(resolve, 500))
-                await sendProgress(progress, 1, 3, 'Processing step 1...')
-                await new Promise((resolve) => setTimeout(resolve, 500))
-                await sendProgress(progress, 2, 3, 'Processing step 2...')
-                await new Promise((resolve) => setTimeout(resolve, 500))
-                await sendProgress(progress, 3, 3, 'Operation complete')
-                return { success: true, message: 'Progress notifications completed successfully' }
+                try {
+                    await sendProgress(progress, 0, 3, 'Starting operation...')
+                    // Wait 500ms
+                    await new Promise((resolve) => setTimeout(resolve, 500))
+                    await sendProgress(progress, 1, 3, 'Processing step 1...')
+                    await new Promise((resolve) => setTimeout(resolve, 500))
+                    await sendProgress(progress, 2, 3, 'Processing step 2...')
+                    await new Promise((resolve) => setTimeout(resolve, 500))
+                    await sendProgress(progress, 3, 3, 'Operation complete')
+                    return { success: true, message: 'Progress notifications completed successfully' }
+                } catch (err) {
+                    return formatHandlerError(err)
+                }
             },
         },
         {
@@ -425,7 +431,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                 idempotentHint: true,
                 openWorldHint: false,
             },
-            handler: async (params: unknown) => {
+            handler: (params: unknown) => {
                 try {
                     const input = z.object({
                         error_type: z.enum(['zod', 'type', 'database', 'generic', 'memory_journal']),
@@ -444,7 +450,6 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     if (input.error_type === 'memory_journal') {
-                        const { MemoryJournalMcpError } = await import('../../../types/errors.js')
                         throw new MemoryJournalMcpError(
                             input.message,
                             'TEST_ERROR',
@@ -465,6 +470,3 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
         },
     ]
 }
-
-// Ensure z is imported for inline outputSchemas (get_recent_entries, etc)
-import { z } from 'zod'

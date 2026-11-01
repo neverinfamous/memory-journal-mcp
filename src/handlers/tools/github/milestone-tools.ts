@@ -9,6 +9,7 @@ import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { milestoneCompletionPct } from '../../resources/shared.js'
+import { relaxedNumber } from '../schemas.js'
 import {
     GitHubMilestonesListOutputSchema,
     GitHubMilestoneResultOutputSchema,
@@ -36,8 +37,7 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
                     .optional()
                     .default('open')
                     .describe('Filter by state (default: open)'),
-                limit: z
-                    .number()
+                limit: relaxedNumber()
                     .optional()
                     .default(20)
                     .describe('Max milestones to return (default: 20)'),
@@ -103,7 +103,7 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
                 'Get detailed information about a specific GitHub milestone including progress and linked issue counts.',
             group: 'github',
             inputSchema: z.object({
-                milestone_number: z.number().describe('Milestone number'),
+                milestone_number: relaxedNumber().optional().describe('Milestone number'),
                 owner: z.string().optional().describe('LEAVE EMPTY to auto-detect from git'),
                 repo: z.string().optional().describe('LEAVE EMPTY to auto-detect from git'),
             }),
@@ -248,7 +248,9 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
                 'Update a GitHub milestone (title, description, due date, or state). Use state "closed" to close a completed milestone.',
             group: 'github',
             inputSchema: z.object({
-                milestone_number: z.number().describe('Milestone number to update'),
+                milestone_number: relaxedNumber()
+                    .optional()
+                    .describe('Milestone number to update'),
                 title: z.string().optional().describe('New title'),
                 description: z.string().optional().describe('New description'),
                 due_on: z.string().optional().describe('New due date in YYYY-MM-DD format'),
@@ -335,8 +337,10 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
                 'Permanently delete a GitHub milestone. Issues assigned to the milestone will be un-assigned but not deleted.',
             group: 'github',
             inputSchema: z.object({
-                milestone_number: z.number().describe('Milestone number to delete'),
-                confirm: z.literal(true).describe('Must be set to true to confirm deletion'),
+                milestone_number: relaxedNumber()
+                    .optional()
+                    .describe('Milestone number to delete'),
+                confirm: z.boolean().optional().describe('Must be set to true to confirm deletion'),
                 owner: z.string().optional().describe('LEAVE EMPTY to auto-detect'),
                 repo: z.string().optional().describe('LEAVE EMPTY to auto-detect'),
             }),

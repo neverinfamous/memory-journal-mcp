@@ -35,6 +35,8 @@ export type {
     EntryRevision,
     Anchor,
     AnchorStatus,
+    CreateEntryInput,
+    CreateTeamEntryInput,
 } from './entities.js'
 export { ENTRY_TYPES, RELATIONSHIP_TYPES, SIGNIFICANCE_TYPES } from './entities.js'
 export type {
