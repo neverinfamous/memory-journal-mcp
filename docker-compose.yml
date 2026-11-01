@@ -15,6 +15,8 @@ services:
       - GITHUB_TOKEN=
       - DEFAULT_PROJECT_NUMBER=
       - PROJECT_REGISTRY=
+      # Tool filtering naming conventions: MEMORY_JOURNAL_MCP_TOOL_FILTER (primary env var), TOOL_FILTER (fallback env var), "toolFilter" (memory-journal.config.json), --tool-filter (CLI flag), tool_filter (update_configuration MCP tool)
+      - MEMORY_JOURNAL_MCP_TOOL_FILTER=
       - TOOL_FILTER=
       - CODE_MODE_MAX_RESULT_SIZE=
       - CODEMODE_INTERNAL_FULL_ACCESS=
@@ -53,6 +55,9 @@ services:
       - BRIEFING_WORKFLOW_COUNT=
       - BRIEFING_WORKFLOW_STATUS=
       - BRIEFING_COPILOT_REVIEWS=
+      - STALENESS_ACTIVE_HOURS=
+      - STALENESS_RECENT_DAYS=
+      - STALENESS_STALE_DAYS=
       - RULES_FILE_PATH=
       - SKILLS_DIR_PATH=
       - MEMORY_JOURNAL_WORKFLOW_SUMMARY=
@@ -64,6 +69,7 @@ services:
       - METRICS_PATH=
       - METRICS_EXPORT=
       - MJ_METRICS_PORT=
+      - MJ_METRICS_HOST=
       - BACKUP_INTERVAL=
       - KEEP_BACKUPS=
       - VACUUM_INTERVAL=
@@ -112,6 +118,8 @@ services:
       - GITHUB_TOKEN=
       - DEFAULT_PROJECT_NUMBER=
       - PROJECT_REGISTRY=
+      # Tool filtering naming conventions: MEMORY_JOURNAL_MCP_TOOL_FILTER (primary env var), TOOL_FILTER (fallback env var), "toolFilter" (memory-journal.config.json), --tool-filter (CLI flag), tool_filter (update_configuration MCP tool)
+      - MEMORY_JOURNAL_MCP_TOOL_FILTER=
       - TOOL_FILTER=
       - CODE_MODE_MAX_RESULT_SIZE=
       - CODEMODE_INTERNAL_FULL_ACCESS=
@@ -125,6 +133,7 @@ services:
       - PORT=3000
       - STATELESS=
       - MCP_AUTH_TOKEN=${MCP_AUTH_TOKEN:?MCP_AUTH_TOKEN is required for HTTP transport in production}
+      - MCP_AUTH_SCOPES=
       - CORS_ORIGIN=
       - MCP_RATE_LIMIT_MAX=
       - MCP_ENABLE_HSTS=
@@ -150,6 +159,9 @@ services:
       - BRIEFING_WORKFLOW_COUNT=
       - BRIEFING_WORKFLOW_STATUS=
       - BRIEFING_COPILOT_REVIEWS=
+      - STALENESS_ACTIVE_HOURS=
+      - STALENESS_RECENT_DAYS=
+      - STALENESS_STALE_DAYS=
       - RULES_FILE_PATH=
       - SKILLS_DIR_PATH=
       - MEMORY_JOURNAL_WORKFLOW_SUMMARY=
@@ -161,6 +173,7 @@ services:
       - METRICS_PATH=
       - METRICS_EXPORT=
       - MJ_METRICS_PORT=
+      - MJ_METRICS_HOST=
       - BACKUP_INTERVAL=
       - KEEP_BACKUPS=
       - VACUUM_INTERVAL=

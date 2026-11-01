@@ -97,7 +97,7 @@ src/
 │   ├── migrations/             # Versioned schema migrations (MigrationManager)
 │   └── sqlite-adapter/         # SQLite operations via better-sqlite3
 ├── filtering/
-│   └── tool-filter.ts          # Tool filtering (groups, meta-groups)
+│   └── tool-filter.ts          # Tool filtering (groups, meta-groups, tool-constants.ts)
 ├── github/
 │   └── github-integration/     # GitHub API (@octokit/rest + GraphQL)
 ├── handlers/
@@ -115,7 +115,8 @@ src/
 ├── types/                      # Type definitions + barrel
 ├── utils/                      # Logger, error helpers, progress
 ├── vendor/                     # Vendored internal packages
-└── vector/                     # Semantic search (sqlite-vec + transformers)
+├── vector/                     # Semantic search (sqlite-vec + transformers)
+└── version.ts                  # Version SSoT (reads package.json)
 ```
 
 ## Key Reference Files

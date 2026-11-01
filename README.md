@@ -27,19 +27,19 @@ Large projects face a critical challenge. You lose context between sessions.
 - **End Repeated Work** - AI repeats failed solutions. We remember your attempts.
 - **Prevent Context Overload** - You copy history manually. We automate context delivery.
 
-Memory Journal builds your project's long-term memory. It bridges fragmented AI sessions seamlessly.
+Memory Journal builds your project's long-term memory. It acts as a **Project Context Graph** for AI-assisted engineering. It bridges **human workflows** (Issues, PRs, Kanban, Milestones) with **agent execution** (Git, tests, decisions).
 
 ---
 
 **Experience true context-aware development:**
 
 - _"Why did we choose SQLite over Postgres for this service last month?"_ (Semantic search)
-- _"Run the `/issue-triage` workflow on the top priority ticket in the Kanban board."_ (GitHub operations)
+- _"Run the `/issue-commander` (`triage` workflow) on the top priority ticket in the Kanban board."_ (GitHub operations)
 - _"Who has been touching the auth module recently, and what's our team collaboration density?"_ (Team analytics)
 - _"Commit the changes and automatically generate a structured journal entry using the \`--journal\` wrapper flag."_ (Automated lifecycles)
 - _"Draw a visual graph showing how my last 10 architectural decisions relate to each other."_ (Knowledge graph)
 
-**Comprehensive access to internal state via resources (`memory://briefing`, `memory://workflows`, `memory://rules`, `memory://health`, `memory://help`, `memory://staleness`, GitHub status/insights, team stats, metrics/latency, and more) plus dynamic repo variants for cross-repo targeting (like `memory://briefing/{repo}` or `memory://kanban/{repo}/{project_number}`).** **[Resources documentation →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Resources)**
+**Comprehensive access to internal state via resources (`memory://briefing`, `memory://workflows`, `memory://rules`, `memory://health`, `memory://help`, `memory://staleness`, GitHub status/milestones, team stats, metrics/latency, and more) plus dynamic repo variants for cross-repo targeting (like `memory://briefing/{repo}` or `memory://kanban/{repo}/{project_number}`).** **[Resources documentation →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Resources)**
 
 ---
 
@@ -199,13 +199,13 @@ Session briefing, time period analysis, goal tracking, PR & issue command, sessi
 ### 📡 **Resources**
 See the **[Complete resources guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Resources)** for the full list of dynamic context resources, including `memory://briefing`, `memory://instructions`, GitHub integration endpoints, telemetry metrics, and templated views.
 
-_Note: The `memory://briefing`, `memory://graph/actions`, `memory://actions/recent`, `memory://github/status`, `memory://github/insights`, `memory://github/milestones`, `memory://milestones/{number}`, `memory://kanban/{project_number}`, and `memory://kanban/{project_number}/diagram` resources also accept an optional `/{repo}` path suffix for cross-repo targeting._
+- **Dynamic Resource Templates**: Resources `memory://briefing/{repo}`, `memory://actions/recent/{repo}`, `memory://github/status/{repo}`, `memory://github/milestones/{repo}`, `memory://milestones/{repo}/{number}`, and `memory://kanban/{repo}/{project_number}` accept a `{repo}` path parameter for targeted project context.
 
 ---
 
 ## ⚡ Code Mode: Maximum Efficiency (90% Token Savings)
 
-Code Mode (`mj_execute_code`) is a revolutionary approach that **dramatically reduces token usage by up to 90%** and is included by default in all presets. Instead of spending thousands of tokens on sequential tool calls, AI agents use a single sandboxed execution to reason faster.
+Code Mode (`mj_execute_code`) **reduces token usage by up to 90%** and is included by default in all presets. Instead of spending thousands of tokens on sequential tool calls, AI agents use a single sandboxed execution to reason faster.
 
 Code executes in a **pre-warmed `worker_threads` V8 isolate pool + secondary `vm.createContext` boundary** designed as a secure multi-tenant process isolation environment. All `mj.*` API calls execute against the journal within the sandbox, providing:
 
@@ -458,7 +458,7 @@ curl -X POST http://localhost:3000/mcp \
 For serverless deployments (Lambda, Workers, Vercel), use stateless mode:
 
 ```bash
-memory-journal-mcp --transport http --port 3000 --stateless
+memory-journal-mcp --transport http --port 3000 --stateless --allowed-io-roots /path/to/projects
 ```
 
 | Mode                      | Progress Notifications | Legacy SSE | Serverless |
@@ -474,6 +474,7 @@ When running in HTTP/SSE mode, enable periodic maintenance jobs with CLI flags. 
 
 ```bash
 memory-journal-mcp --transport http --port 3000 \
+  --allowed-io-roots /path/to/projects \
   --backup-interval 60 --keep-backups 10 \
   --vacuum-interval 1440 \
   --rebuild-index-interval 720
@@ -541,6 +542,7 @@ For production deployments, enable OAuth 2.1 authentication on the HTTP transpor
 
 ```bash
 memory-journal-mcp --transport http --port 3000 \
+  --allowed-io-roots /path/to/projects \
   --oauth-enabled \
   --oauth-issuer https://auth.example.com/realms/mcp \
   --oauth-audience memory-journal-mcp \
@@ -550,6 +552,7 @@ memory-journal-mcp --transport http --port 3000 \
 Or via environment variables:
 
 ```bash
+export ALLOWED_IO_ROOTS="/path/to/projects"
 export OAUTH_ENABLED=true
 export OAUTH_ISSUER=https://auth.example.com/realms/mcp
 export OAUTH_AUDIENCE=memory-journal-mcp
@@ -573,6 +576,7 @@ memory-journal-mcp --transport http --port 3000
 | ---------------------------------------------- | ---------------------------------------------------------- |
 | **Core Database** | |
 | `DB_PATH`                                      | Path to the personal journal SQLite database               |
+| `DB_ENCRYPTION_KEY`                            | SQLCipher at-rest database encryption key (alias: `MJ_DB_ENCRYPTION_KEY`) |
 | `TEAM_DB_PATH`                                 | Path to the shared team SQLite database                    |
 | `DEFAULT_WORKSPACE_ID`                         | Default workspace ID for multi-tenant isolation (`default`)|
 | `GITHUB_TOKEN`                                 | Personal access token for GitHub integrations              |
@@ -765,4 +769,6 @@ MIT License - See [LICENSE](LICENSE) file for details.
 
 ## 🤝 Contributing
 
-Built by developers, for developers. PRs welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+Built by developers, for developers. PRs welcome! Ensure all unit and E2E tests, linting, and typechecks pass. See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+_Upgrading from an earlier version?_ Your existing SQLite database is automatically migrated on startup.

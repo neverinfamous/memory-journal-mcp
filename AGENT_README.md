@@ -92,8 +92,8 @@ Review it thoroughly before proceeding. For mid-session context recovery (projec
 | `DEFAULT_WORKSPACE_ID` | Default tenant workspace ID (default: `default`) |
 | `PROJECT_REGISTRY` | JSON map of repo names to local paths and GitHub project numbers |
 | `ALLOWED_IO_ROOTS` | Comma-separated allowed filesystem roots (fail-closed in stdio; mandatory when `--transport http` is used) |
-| `MEMORY_JOURNAL_MCP_TOOL_FILTER` | Control tool exposure (`full`, `starter`, `codemode`, `readonly`, `-github`; CLI: `--tool-filter`, `memory-journal.config.json` key: `"toolFilter"`. Note: `TOOL_FILTER` is a display fallback only) |
-| `CODEMODE_INTERNAL_FULL_ACCESS` | Allow Code Mode (`mj.*`) to bypass tool filters internally (`true`/`false`) |
+| `MEMORY_JOURNAL_MCP_TOOL_FILTER` | Control tool exposure (`full`, `codemode` (`mj_execute_code` only), `starter`, `essential`, `core`, `readonly`, `-github`; CLI: `--tool-filter`, `memory-journal.config.json` key: `"toolFilter"`. Note: `TOOL_FILTER` is a display fallback only) |
+| `CODEMODE_INTERNAL_FULL_ACCESS` | Allow Code Mode (`mj.*`) to bypass tool filters internally across all tool namespaces (`true`/`false`) |
 | `MCP_AGENT_HEALING` | Enable/disable autonomous tool & parameter healing (`true`/`false`, CLI: `--no-agent-healing`) |
 | `MAX_TOOL_INPUT_ELEMENTS` | Max array/object elements in tool inputs (default: `25000`, `0` = disabled) |
 

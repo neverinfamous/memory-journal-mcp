@@ -109,7 +109,7 @@ export CORS_ORIGIN="http://localhost:3000,https://my-app.com"
 ### **Request Size Limits & Metrics Isolation**
 
 - ✅ **1MB body limit** on JSON and chunked stream requests (prevents memory exhaustion DoS)
-- ✅ **Metrics endpoint protection** — `/metrics` requires authentication when HTTP auth is enabled and the standalone Prometheus metrics server binds to `127.0.0.1` by default
+- ✅ **Health & Metrics endpoint protection** — `/health` is unauthenticated; `/metrics` is protected under OAuth 2.1, unauthenticated under static Bearer auth, or isolated on `127.0.0.1` via `MJ_METRICS_PORT`
 - ✅ **Outbound Webhook SSRF Protection** — Scheduled digest webhooks (`--report-webhook-url` / `REPORT_WEBHOOK_URL`) require `https:`, resolve DNS prior to dispatch, block loopback/private/link-local/cloud-metadata IP ranges, and disable HTTP redirects (`redirect: 'error'`)
 
 ## 🔐 **OAuth 2.1 Authentication**
@@ -382,19 +382,17 @@ chmod 700 /shared/team-data
 
 ### **Secrets Management**
 
-**No secrets required:**
+**Core local (`stdio`) operation requires no secrets:**
 
-- No API keys
-- No passwords
-- No tokens
-- Optional: GitHub CLI (user manages `gh auth`)
+- No API keys, passwords, or tokens required for local journaling
+- Optional features use `GITHUB_TOKEN` (GitHub API integration; or `gh auth`), `MCP_AUTH_TOKEN` (HTTP Bearer auth), and `DB_ENCRYPTION_KEY` (SQLCipher at-rest encryption)
 
 ## 🔄 **CI/CD Security**
 
 - ✅ **CodeQL analysis** - automated static analysis on push/PR
 - ✅ **Trivy container scanning** - Docker image vulnerability detection
 - ✅ **TruffleHog** - secret scanning on push/PR
-- ✅ **npm audit** - dependency vulnerability checking
+- ✅ **pnpm audit** - dependency vulnerability checking
 
 ## 🚨 **Security Best Practices**
 
@@ -498,8 +496,8 @@ chmod 700 /shared/team-data
 
 | Version / Component | Supported          | Notes                                                                 |
 | ------------------- | ------------------ | --------------------------------------------------------------------- |
-| `3.x`               | :white_check_mark: | Current major release series receiving active security updates.       |
-| `< 3.0`             | :x:                | Legacy releases; please upgrade to `3.x`.                             |
+| `Latest (9.x)`      | :white_check_mark: | Current major release series receiving active security updates.       |
+| `< 9.0`             | :x:                | Legacy releases; please upgrade to `Latest (9.x)`.                    |
 | Node.js             | 24.x+ (26.x LTS)   | Minimum Node 24+. Node 26.x LTS recommended for isolation features. |
 | MCP Protocol        | 2025-11-25 / 2025-03-26 (backward-compatible with 2024-11-05) | Full compatibility with the official Model Context Protocol.          |
 | Docker Base         | `node:26-alpine`   | Alpine-based images receive regular vulnerability patches.            |

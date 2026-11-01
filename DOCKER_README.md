@@ -3,7 +3,7 @@
 [![GitHub](https://img.shields.io/badge/GitHub-neverinfamous/memory--journal--mcp-blue?logo=github)](https://github.com/neverinfamous/memory-journal-mcp) [![Docker Pulls](https://img.shields.io/docker/pulls/writenotenow/memory-journal-mcp)](https://hub.docker.com/r/writenotenow/memory-journal-mcp) [![npm](https://img.shields.io/npm/v/memory-journal-mcp)](https://www.npmjs.com/package/memory-journal-mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT) ![Status](https://img.shields.io/badge/status-Production%2FStable-brightgreen)
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](https://github.com/neverinfamous/memory-journal-mcp/blob/main/SECURITY.md) [![GitHub Stars](https://img.shields.io/github/stars/neverinfamous/memory-journal-mcp?style=social)](https://github.com/neverinfamous/memory-journal-mcp) [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
-![Coverage](https://img.shields.io/badge/Coverage-79.63%25-yellowgreen.svg) ![E2E](https://img.shields.io/badge/E2E-450%20passing%20%C2%B7%200%20skipped-blue.svg) ![Tests](https://img.shields.io/badge/Tests-1782_passed-brightgreen.svg) [![Benchmarks](https://img.shields.io/badge/Benchmarks-11_passed-brightgreen.svg)](https://github.com/neverinfamous/memory-journal-mcp/wiki/Performance) [![CI](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml/badge.svg)](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml)
+![Coverage](https://img.shields.io/badge/Coverage-79.63%25-yellowgreen.svg) ![E2E](https://img.shields.io/badge/E2E-450%20passing%20%C2%B7%200%20skipped-blue.svg) [![CI](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml/badge.svg)](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml)
 
 **[GitHub](https://github.com/neverinfamous/memory-journal-mcp)** • **[Wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki)** • **[Changelog](https://github.com/neverinfamous/memory-journal-mcp/blob/main/CHANGELOG.md)** • **[Release Article](https://adamic.tech/articles/memory-journal-mcp-server)**
 
@@ -24,7 +24,7 @@ Memory Journal builds your project's long-term memory. It bridges fragmented AI 
 **Experience true context-aware development:**
 
 - _"Why did we choose SQLite over Postgres for this service last month?"_ (Semantic search)
-- _"Run the `/issue-triage` workflow on the top priority ticket in the Kanban board."_ (GitHub operations)
+- _"Run the `/issue-commander` (`triage` workflow) on the top priority ticket in the Kanban board."_ (GitHub operations)
 - _"Who has been touching the auth module recently, and what's our team collaboration density?"_ (Team analytics)
 - _"Commit the changes and automatically generate a structured journal entry using the \`--journal\` wrapper flag."_ (Automated lifecycles)
 - _"Draw a visual graph showing how my last 10 architectural decisions relate to each other."_ (Knowledge graph)
@@ -81,12 +81,12 @@ When the user initializes the session context by executing the `load-briefing` p
 
 ---
 
-### Tool Filtering
+### 🎯 Control Access with Tool Filtering
 
 > [!IMPORTANT]
 > All shortcuts and tool groups include **Code Mode** (`mj_execute_code`) by default for token-efficient operations. To exclude it, add `-codemode` to your filter: `--tool-filter starter,-codemode`
 
-Control which tools are exposed using any of the 3 configuration sources (precedence: CLI flag > environment variable > config file):
+Control which tools and tool groups are exposed using `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or any of the 3 configuration sources; precedence: CLI flag > environment variable > config file):
 - **CLI flag**: `--tool-filter <filter>`
 - **Environment variable**: `MEMORY_JOURNAL_MCP_TOOL_FILTER` *(Note: `TOOL_FILTER` is only a fallback display variable in the session briefing and does **not** activate tool filtering on its own)*
 - **`memory-journal.config.json` key**: `"toolFilter"`
@@ -108,7 +108,7 @@ Control which tools are exposed using any of the 3 configuration sources (preced
 
 **[Complete tool filtering guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tool-Filtering)**
 
-## 📋 Core Capabilities
+## 📋 Unlock Core Capabilities
 
 ### 🛠️ **MCP Tools**
 
@@ -134,11 +134,11 @@ Session briefing, time period analysis, goal tracking, PR & issue command, sessi
 
 ### 📡 **Resources**
 
-Comprehensive access to internal state via resources (`memory://briefing`, `memory://workflows`, `memory://rules`, `memory://health`, `memory://help`, `memory://staleness`, GitHub status/insights, team stats, metrics/latency, and more) plus dynamic repo variants for cross-repo targeting (like `memory://briefing/{repo}` or `memory://kanban/{repo}/{project_number}`). **[Resources documentation →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Resources)**
+Comprehensive access to internal state via resources (`memory://briefing`, `memory://workflows`, `memory://rules`, `memory://health`, `memory://help`, `memory://staleness`, GitHub status/milestones, team stats, metrics/latency, and more) plus dynamic repo variants for cross-repo targeting (like `memory://briefing/{repo}` or `memory://kanban/{repo}/{project_number}`). **[Resources documentation →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Resources)**
 
-## ⚡ Code Mode: Maximum Efficiency (90% Token Savings)
+### ⚡ Cut Token Usage with Code Mode
 
-Code Mode (`mj_execute_code`) is a revolutionary approach that **dramatically reduces token usage by up to 90%** and is included by default in all presets. Instead of spending thousands of tokens on sequential tool calls, AI agents use a single sandboxed execution to reason faster.
+Code Mode (`mj_execute_code`) **reduces token usage by up to 90%** and is included by default in all presets. Instead of spending thousands of tokens on sequential tool calls, AI agents use a single sandboxed execution to reason faster.
 
 Code executes in a **pre-warmed `worker_threads` V8 isolate pool + secondary `vm.createContext` boundary** with multiple layers of security. All `mj.*` API calls execute against the journal within the sandbox, providing:
 
@@ -172,7 +172,7 @@ docker pull writenotenow/memory-journal-mcp:latest
 mkdir data
 ```
 
-### 3. Add to MCP Config
+### 3. Add to Your MCP Client (Cursor, Antigravity, Windsurf)
 
 Add this to your `~/.cursor/mcp.json`, Claude Desktop config, or equivalent:
 
@@ -246,15 +246,6 @@ Showcasing the full power of the server, including Multi-Project Routing, Team C
         "EMBEDDING_MODEL": "Xenova/all-MiniLM-L6-v2",
         "MEMORY_JOURNAL_MCP_TOOL_FILTER": "codemode",
         "CODEMODE_INTERNAL_FULL_ACCESS": "true",
-        "BRIEFING_ENTRY_COUNT": "3",
-        "BRIEFING_SUMMARY_COUNT": "1",
-        "BRIEFING_INCLUDE_TEAM": "true",
-        "BRIEFING_ISSUE_COUNT": "1",
-        "BRIEFING_PR_COUNT": "1",
-        "BRIEFING_PR_STATUS": "true",
-        "BRIEFING_WORKFLOW_COUNT": "1",
-        "BRIEFING_WORKFLOW_STATUS": "true",
-        "BRIEFING_COPILOT_REVIEWS": "true",
         "RULES_FILE_PATH": "/app/rules.md",
         "SKILLS_DIR_PATH": "/app/skills",
         "MEMORY_JOURNAL_WORKFLOW_SUMMARY": "/deploy: prod deployment | /audit: security scan",
@@ -265,8 +256,6 @@ Showcasing the full power of the server, including Multi-Project Routing, Team C
   }
 }
 ```
-
-> 💡 **Tip:** Optimize your context window! **Journal entries** (`BRIEFING_ENTRY_COUNT`) capture frequent, granular actions (e.g. bug fixes, implementation steps). **Session summaries** (`BRIEFING_SUMMARY_COUNT`) surface high-level retrospectives meant to pass strategic context continuously across distinct AI sessions. Use both appropriately to keep the agent briefing highly focused!
 
 ### 📋 Customizing the Session Briefing
 
@@ -312,7 +301,7 @@ For a complete list of all extensive environment variables and detailed routing 
 2. **Session summary** → use `/session-summary` to capture progress and next-session context
 3. Next session's briefing includes the previous summary — context flows seamlessly
 
-### HTTP/SSE Transport (Remote Access)
+### 🌐 Scale with HTTP/SSE Transport
 
 For remote access, web-based clients, or HTTP-compatible MCP hosts. The server supports both stateful (SSE) and stateless (serverless) modes.
 
@@ -343,14 +332,8 @@ For production deployments, enable full OAuth 2.1 support on the HTTP transport 
 
 **[See the OAuth 2.1 Setup Guide in the Wiki →](https://github.com/neverinfamous/memory-journal-mcp/wiki/HTTP-Transport#oauth-21-authentication)**
 
-## 🔧 Configuration
-
-All detailed setup and configuration guides are available in our Wiki.
-
-**[Complete Configuration Documentation →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Configuration)**
-
 ## 📄 License
 
 MIT License - See [LICENSE](https://github.com/neverinfamous/memory-journal-mcp/blob/main/LICENSE)
 
-_Migrating from v2.x?_ Your existing database is fully compatible.
+_Upgrading?_ Your existing database is automatically migrated on startup.

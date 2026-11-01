@@ -33,7 +33,7 @@ The Memory Journal MCP provides comprehensive, dynamic instructions via its `mem
   - `## Accomplished`
   - `## Unfinished / Blocked`
   - `## Context for Next Session`
-  - `## Commits` (auto-injected by `healAgentHallucinations` if `auto_context.commits` is supplied)
+  - `## Commits`
 - **Strict Validation:** DO NOT invent extra top-level section headers or duplicate headers. Must include `auto_context` with a non-empty `commits` array.
 
 ## 5. Tool Execution & Lifecycle Rules

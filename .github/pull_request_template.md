@@ -31,6 +31,7 @@ Brief description of the changes in this PR.
 **How did you test these changes?**
 
 - [ ] Manual testing in client
+- [ ] Unit and integration tests (`pnpm test`)
 - [ ] Docker build tested
 - [ ] Database migration tested
 - [ ] Existing functionality verified
@@ -98,6 +99,7 @@ Brief description of the changes in this PR.
 - [ ] Self-review of the code completed
 - [ ] Comments added to hard-to-understand areas
 - [ ] Tests pass locally
+- [ ] Linting and typecheck pass (`pnpm run lint && pnpm run typecheck`)
 - [ ] No new warnings or errors introduced
 - [ ] Relevant documentation updated
 - [ ] Changes work in Docker variant

@@ -35,7 +35,9 @@
         "semantic-search",
         "codemode",
         "analytics",
-        "collaboration"
+        "collaboration",
+        "sqlite",
+        "typescript"
     ],
     "author": {
         "name": "Adamic.tech"
