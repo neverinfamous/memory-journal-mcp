@@ -237,8 +237,11 @@ src/
 ├── observability/              # Metrics interceptor, token estimator, latency tracker
 ├── server/
 │   ├── mcp-server/             # MCP server setup
+│   ├── digest-reporter.ts      # Scheduled digest report generation and webhook dispatch
+│   ├── elicitation.ts          # MCP elicitation helpers
 │   ├── registration.ts         # Tool/resource/prompt registration
-│   └── scheduler.ts            # Recurring task scheduler
+│   ├── scheduler.ts            # Recurring task scheduler
+│   └── subscription-manager.ts # Resource subscription management
 ├── transports/                 # HTTP/SSE transport
 ├── types/                      # TypeScript type definitions
 ├── utils/                      # Logger, error helpers, progress

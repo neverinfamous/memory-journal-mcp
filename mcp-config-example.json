@@ -41,7 +41,7 @@
                 "STATELESS": "false",
                 "MCP_AUTH_TOKEN": "",
                 "CORS_ORIGIN": "",
-                "MCP_RATE_LIMIT_MAX": "",
+                "MCP_RATE_LIMIT_MAX": "100",
                 "MCP_ENABLE_HSTS": "false",
                 "LOG_LEVEL": "",
                 "TRUST_PROXY": "false",

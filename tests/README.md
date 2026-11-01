@@ -34,7 +34,7 @@
 ### 4. Error Assertions (Structured Errors)
 
 - The Memory Journal MCP server uses a strict **Structured Error Pattern**. Tools NEVER throw raw exceptions to the client. They return:
-  `{ success: false, error: '...', code: '...', category: '...', suggestion: '...', recoverable: boolean }`.
+  `{ success: false, error: '...', code: '...', category: '...', suggestion?: '...', recoverable: boolean, details?: {...}, aggregated_errors?: [...] }`.
 - When testing tool handlers, **assert the structured response**, do not expect the tool to `.toThrow()`.
 
 ## 📂 Directory Structure Reference

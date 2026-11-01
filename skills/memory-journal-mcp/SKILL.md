@@ -12,7 +12,7 @@ This skill acts as a static anchor to reinforce core usage patterns, commit work
 ## 1. Accessing Detailed Server Instructions
 The Memory Journal MCP provides comprehensive, dynamic instructions via its `memory://help` resources:
 - Use `read_resource` on `memory://help` for the tool group index and `memory://help/gotchas` for critical gotchas and core usage patterns.
-- Use `read_resource` on `memory://help/{group}` for specific tool groups (e.g., `core`, `search`, `admin`, `codemode`, `github`, `git`, `templates`, `team`).
+- Use `read_resource` on `memory://help/{group}` for specific tool groups (`core`, `search`, `analytics`, `relationships`, `io`, `admin`, `github`, `git`, `backup`, `team`, `codemode`, `templates`, `gotchas`).
 
 ## 2. Core Agent Directives
 - **Session Briefing:** Read the workspace briefing via `memory://briefing/{repo_name}` (or fallback to `memory://briefing`) at session start. DO NOT autonomously execute tasks listed in the briefing.
@@ -34,7 +34,7 @@ The Memory Journal MCP provides comprehensive, dynamic instructions via its `mem
   - `## Unfinished / Blocked`
   - `## Context for Next Session`
   - `## Commits`
-- **Strict Validation:** DO NOT invent extra top-level section headers or duplicate headers. Must include `auto_context` with a non-empty `commits` array.
+- **Strict Validation:** DO NOT invent extra top-level section headers or duplicate headers. If `auto_context` is provided, it must contain a non-empty `commits` array.
 
 ## 5. Tool Execution & Lifecycle Rules
 - **Token Efficiency:** Prioritize MCP Code Mode (`mj_execute_code`) or native MCP tools for token-efficient entry logging, searches, and aggregations.

@@ -23,8 +23,8 @@ The server uses the native **better-sqlite3** driver with **sqlite-vec** for vec
 ### **Content & Boundary Limits**
 
 - **Journal entries**: 50,000 characters maximum
-- **Tags**: 100 characters maximum (normalized via slug regex `[^a-z0-9:@]+` -> `-` at the SQLite adapter boundary)
-- **Entry & significance types**: Enforced against strict `ENTRY_TYPES` and `SIGNIFICANCE_TYPES` allowlists (50 characters maximum)
+- **Tags**: Normalized via slug regex (`[^a-z0-9:@]+` -> `-`) and bound via parameterized queries at the SQLite adapter boundary (100 characters maximum)
+- **Entry & significance types**: Enforced against strict `ENTRY_TYPES` and `SIGNIFICANCE_TYPES` enum allowlists (50 characters maximum)
 - **Timestamps**: Validated and normalized to ISO 8601 (`YYYY-MM-DDTHH:MM:SS.sssZ`) in `validateEntryInput()`
 - **Query & batch bounds**: `MAX_QUERY_LIMIT = 500` per query and `MAX_BATCH_SIZE = 50` per bulk operation
 - **HTTP request body**: 1MB maximum (prevents memory exhaustion)
@@ -69,7 +69,7 @@ When running in HTTP mode (`--transport http`), the following security measures 
 
 ### **CORS Configuration**
 
-- ✅ **Configurable multiple origins** via comma-separated `--cors-origin` flag or `CORS_ORIGIN` environment variable (`MJ_CORS_ORIGIN` supported via `MJ_*` prefix resolution)
+- ✅ **Configurable multiple origins** via comma-separated `--cors-origin` flag or `CORS_ORIGIN` environment variable
 - ✅ **Exact-match verification** (no wildcard matching for custom domains)
 - 🔒 **Default: None** (no external origins allowed by default). You MUST explicitly configure CORS for browsers.
 - 🔒 **Required**: Set specific origins for production deployments, or wildcard (`*`) will only be accepted if HTTP Authentication is enabled.
@@ -207,7 +207,7 @@ AUTO_REBUILD_INDEX=true          # Rebuild vector index on startup
 
 ### **Container Hardening**
 
-- ✅ **Minimal base image**: `node:26.2.0-alpine`
+- ✅ **Minimal base image**: minimal Alpine Node.js production stage
 - ✅ **Multi-stage build**: Build dependencies not in production image
 - ✅ **Process isolation** from host system
 - ✅ **No shell access needed** for production
@@ -415,8 +415,8 @@ chmod 700 /shared/team-data
 
 ## 📋 **Security Checklist**
 
-- [x] Foreign key enforcement (`PRAGMA foreign_keys = ON`)
-- [x] Input validation and length limits (Zod schemas)
+- [x] Foreign key enforcement (`PRAGMA foreign_keys = ON`, initialized in `src/database/sqlite-adapter/native-connection.ts`)
+- [x] Input validation and length limits (Zod schemas, centralized in `src/handlers/tools/schemas/constants-and-primitives.ts`)
 - [x] Parameterized SQL queries
 - [x] SQL injection detection heuristics (defense-in-depth)
 - [x] Path traversal protection (`assertNoPathTraversal`)
@@ -497,11 +497,11 @@ chmod 700 /shared/team-data
 
 | Version / Component | Supported          | Notes                                                                 |
 | ------------------- | ------------------ | --------------------------------------------------------------------- |
-| `Latest (9.x)`      | :white_check_mark: | Current major release series receiving active security updates.       |
-| `< 9.0`             | :x:                | Legacy releases; please upgrade to `Latest (9.x)`.                    |
-| Node.js             | 24.x+ (26.x LTS)   | Minimum Node 24+. Node 26.x LTS recommended for isolation features. |
+| `Latest Release`    | :white_check_mark: | Current major release series receiving active security updates.       |
+| `Older Releases`    | :x:                | Legacy releases; please upgrade to `Latest Release`.                  |
+| Node.js             | 24.x+ (current LTS)| Minimum Node 24+. Current Node.js LTS recommended for isolation features. |
 | MCP Protocol        | 2025-11-25 / 2025-03-26 (backward-compatible with 2024-11-05) | Full compatibility with the official Model Context Protocol.          |
-| Docker Base         | `node:26.2.0-alpine` | Alpine-based images receive regular vulnerability patches.          |
+| Docker Base         | current Node.js Alpine LTS | Alpine-based images receive regular vulnerability patches.    |
 
 ## 🚨 **Reporting Security Issues**
 

@@ -15,7 +15,7 @@ services:
       - GITHUB_TOKEN=
       - DEFAULT_PROJECT_NUMBER=
       - PROJECT_REGISTRY=
-      # Tool filtering naming conventions: MEMORY_JOURNAL_MCP_TOOL_FILTER (primary env var), TOOL_FILTER (fallback env var), "toolFilter" (memory-journal.config.json), --tool-filter (CLI flag), tool_filter (update_configuration MCP tool)
+      # Tool filtering naming conventions: MEMORY_JOURNAL_MCP_TOOL_FILTER (env var), "toolFilter" (memory-journal.config.json), --tool-filter (CLI flag), tool_filter (update_configuration MCP tool). Note: TOOL_FILTER is a display-only fallback and does not activate startup filtering.
       - MEMORY_JOURNAL_MCP_TOOL_FILTER=
       - TOOL_FILTER=
       - CODE_MODE_MAX_RESULT_SIZE=
@@ -121,7 +121,7 @@ services:
       - GITHUB_TOKEN=
       - DEFAULT_PROJECT_NUMBER=
       - PROJECT_REGISTRY=
-      # Tool filtering naming conventions: MEMORY_JOURNAL_MCP_TOOL_FILTER (primary env var), TOOL_FILTER (fallback env var), "toolFilter" (memory-journal.config.json), --tool-filter (CLI flag), tool_filter (update_configuration MCP tool)
+      # Tool filtering naming conventions: MEMORY_JOURNAL_MCP_TOOL_FILTER (env var), "toolFilter" (memory-journal.config.json), --tool-filter (CLI flag), tool_filter (update_configuration MCP tool). Note: TOOL_FILTER is a display-only fallback and does not activate startup filtering.
       - MEMORY_JOURNAL_MCP_TOOL_FILTER=
       - TOOL_FILTER=
       - CODE_MODE_MAX_RESULT_SIZE=

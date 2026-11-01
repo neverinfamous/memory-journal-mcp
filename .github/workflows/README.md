@@ -42,7 +42,7 @@ flowchart LR
 
     PR --> LT
     PR --> E2E
-    PR --> DPD
+    PR -->|"path-filtered"| DPD
     PR --> CQL
     PR --> SS
     PR -->|"path-filtered"| SU

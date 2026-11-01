@@ -178,7 +178,7 @@ Add this to your `~/.cursor/mcp.json`, Claude Desktop config, or equivalent:
 
 ### Basic Configuration
 
-> 💡 **Tip:** Don't want to manually escape JSON strings for `PROJECT_REGISTRY`? Run `npx memory-journal-mcp project create <name> --path <path> [--number <project-number>]` in your terminal to automatically bootstrap and update your MCP configuration!
+> 💡 **Tip:** Run `npx memory-journal-mcp project create <name> --path <path> [--number <project-number>]` to bootstrap and update your `PROJECT_REGISTRY` configuration automatically!
 
 ```json
 {
@@ -212,7 +212,7 @@ Add this to your `~/.cursor/mcp.json`, Claude Desktop config, or equivalent:
 
 Showcasing the full power of the server, including Multi-Project Routing, Team Collaboration, Copilot awareness, and Context Injections.
 
-> 💡 **Tip:** Use `npx memory-journal-mcp project create <name> --path <path> [--number <project-number>]` to easily configure multiple repositories into your `PROJECT_REGISTRY` without manual JSON escaping!
+> 💡 **Tip:** Use `npx memory-journal-mcp project create <name> --path <path> [--number <project-number>]` to configure multiple repositories into `PROJECT_REGISTRY` without manual JSON escaping!
 
 ```json
 {
@@ -287,7 +287,8 @@ Restart Cursor or your MCP client and start journaling!
 - **`ALLOWED_IO_ROOTS` / `--allowed-io-roots`**: Comma-separated allowed filesystem paths (default: none — fail-closed in stdio; mandatory when `--transport http` is used).
 - **`MEMORY_JOURNAL_MCP_TOOL_FILTER` / `--tool-filter`**: Control tool exposure (`full`, `starter`, `codemode`, `readonly`, `-github`; config file key: `"toolFilter"`).
 - **`DB_ENCRYPTION_KEY`**: Enables SQLCipher at-rest encryption.
-- **`DEFAULT_WORKSPACE_ID` / `--default-workspace-id`**: Sets the default workspace for multi-tenant isolation on a shared SQLite database (default: `default`).
+- **`CODEMODE_INTERNAL_FULL_ACCESS`**: Allow Code Mode to bypass tool filters internally (default: `false`).
+- **`DEFAULT_WORKSPACE_ID` / `--default-workspace-id`**: Sets the default workspace for multi-tenant isolation (default: `default`).
 - **`PROJECT_REGISTRY`**: Maps repo names to paths and project numbers for automatic `workspace_id` resolution and multi-project GitHub context routing.
 - **`MCP_AGENT_HEALING` / `--no-agent-healing`**: Set `MCP_AGENT_HEALING=false` (or pass `--no-agent-healing`) to disable autonomous MCP tool and parameter healing/interception.
 - **`MAX_TOOL_INPUT_ELEMENTS` / `--max-tool-input-elements`**: Maximum array/object elements allowed in tool input arguments (default: `25000`, `0` = disabled).

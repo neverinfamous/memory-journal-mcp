@@ -62,7 +62,7 @@ export const handler = async (params: unknown) => {
 }
 ```
 
-All errors must extend `MemoryJournalMcpError` (`ValidationError`, `ResourceNotFoundError`, `QueryError`, `ConnectionError`, `ConfigurationError`, `PermissionError` re-exported from `src/types/index.js`; `AuthorizationError`, `ConflictError`, `AggregateMcpError` exported directly from `src/types/errors.js`; `SecurityError`, `InvalidDateFormatError`, `PathTraversalError` in `src/utils/security-utils.js`; and `OAuthError` in `src/auth/errors.js`).
+All errors must extend `MemoryJournalMcpError` (`ValidationError`, `ResourceNotFoundError`, `QueryError`, `ConnectionError`, `ConfigurationError`, `PermissionError` re-exported from `src/types/index.js`; `AuthorizationError`, `ConflictError`, `AggregateMcpError` exported directly from `src/types/errors.js`; `SecurityError`, `InvalidDateFormatError`, `PathTraversalError` in `src/utils/security-utils.js`; and `OAuthError` (plus concrete `OAuthError` subclasses in `src/auth/errors.js`)).
 
 ### 3. Multi-Tenancy & `workspace_id`
 
@@ -76,7 +76,7 @@ The server supports strict data isolation using `workspace_id`.
 
 ## 📡 Session Initialization & Context
 
-Agents no longer need to proactively pull the briefing. You must wait for the user to optionally inject context using the `load-briefing` prompt.
+Read the workspace briefing via `memory://briefing/{repo_name}` (or use the `load-briefing` prompt / fallback `memory://briefing`) at session start, and must NOT autonomously execute tasks listed in the briefing.
 When provided, the briefing contains:
 - `memory://briefing` (or `memory://briefing/{repo_name}` for multi-repo environments)
 - This provides ~350 tokens of high-value ambient context: server health, GitHub CI status, active milestones, and unreleased changes.
@@ -94,7 +94,7 @@ Review it thoroughly before proceeding. For mid-session context recovery (projec
 | `PROJECT_REGISTRY` | JSON map of repo names to local paths and GitHub project numbers |
 | `ALLOWED_IO_ROOTS` | Comma-separated allowed filesystem roots (fail-closed in stdio; mandatory when `--transport http` is used) |
 | `MEMORY_JOURNAL_MCP_TOOL_FILTER` | Control tool exposure (`full`, `codemode` (`mj_execute_code` only), `starter`, `essential`, `core`, `readonly`, `-github`; CLI: `--tool-filter`, `memory-journal.config.json` key: `"toolFilter"`. Note: `TOOL_FILTER` is a display fallback only) |
-| `CODEMODE_INTERNAL_FULL_ACCESS` | Allow Code Mode (`mj.*`) to bypass tool filters internally across all tool namespaces (`true`/`false`, alias: `MJ_CODEMODE_INTERNAL_FULL_ACCESS`) |
+| `CODEMODE_INTERNAL_FULL_ACCESS` | Allow Code Mode (`mj.*`) to bypass tool filters internally across all tool namespaces (`true`/`false`) |
 | `MCP_AGENT_HEALING` | Enable/disable autonomous tool & parameter healing (`true`/`false`, CLI: `--no-agent-healing`) |
 | `MAX_TOOL_INPUT_ELEMENTS` | Max array/object elements in tool inputs (default: `25000`, `0` = disabled) |
 

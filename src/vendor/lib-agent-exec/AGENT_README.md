@@ -16,7 +16,7 @@ You only need to manually pass a JSON payload (as described below) if you are ex
 ## ⚠️ The `&&` Pipeline Chaining Rule & WSL2 Linux Support
 
 > [!WARNING]
-> Even though we develop and test natively on **PowerShell 7.6.4** (which *does* support `&&` and `||`), the system's global agent rules strictly **FORBID** their use natively to prevent proxy interception conflicts and syntax hallucination traps. If you use `&&` natively, it may cause a `ParserError`.
+> Even though we develop and test natively on **PowerShell 7+** (which *does* support `&&` and `||`), the system's global agent rules strictly **FORBID** their use natively to prevent proxy interception conflicts and syntax hallucination traps. If you use `&&` natively, it may cause a `ParserError`.
 > 
 > **Rule of Thumb:**
 > 1. For native Windows command separation, **MUST** use semicolons (`;`).

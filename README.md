@@ -39,7 +39,7 @@ Memory Journal builds your project's long-term memory. It acts as a **Project Co
 - _"Commit the changes and automatically generate a structured journal entry using the \`--journal\` wrapper flag."_ (Automated lifecycles)
 - _"Draw a visual graph showing how my last 10 architectural decisions relate to each other."_ (Knowledge graph)
 
-**Comprehensive access to internal state via resources (`memory://briefing`, `memory://workflows`, `memory://rules`, `memory://health`, `memory://help`, `memory://staleness`, GitHub status/milestones, team stats, metrics/latency, and more) plus dynamic repo variants for cross-repo targeting (like `memory://briefing/{+repo}` or `memory://kanban/{+repo}/{project_number}`).** **[Resources documentation →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Resources)**
+**Comprehensive access to internal state via resources (`memory://briefing`, `memory://workflows`, `memory://rules`, `memory://health`, `memory://help`, `memory://staleness`, GitHub status/milestones, team stats, and metrics/latency). Dynamic repo variants also support cross-repo targeting (like `memory://briefing/{+repo}` or `memory://kanban/{+repo}/{project_number}`).** **[Resources documentation →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Resources)**
 
 ---
 
@@ -74,10 +74,10 @@ Memory Journal builds your project's long-term memory. It acts as a **Project Co
 
 Memory Journal supports multi-tenancy out of the box via the `workspace_id` construct, acting as a strict isolation barrier for multiple journals sharing the same SQLite database file.
 
-- **Auto-Resolution:** When `workspace_id` is omitted, the server automatically resolves the target workspace by matching `project_number` against `PROJECT_REGISTRY`, matching content/tag keyword aliases, or inspecting `process.cwd()`, before falling back to `DEFAULT_WORKSPACE_ID` (default: `default`).
-- **Data Partitioning & Cross-Workspace Queries:** Core CRUD, Soft-Delete/Restore, FTS5 Search, Vector Semantic Search (`semantic_search`), and Analytics tools enforce `workspace_id` isolation end-to-end. Read and search tools accept `workspace_id: "*"` to query across all workspaces, while external write/mutation paths reject wildcard overrides.
-- **Immutability & Controlled Migration:** A `workspace_id` is assigned upon entry creation and cannot be overwritten directly on standard updates; to migrate an entry across workspaces, call `update_entry` with `workspace_id: "*"` and `target_workspace_id`.
-- **Server Config:** Set `--default-workspace-id` (or the `DEFAULT_WORKSPACE_ID` environment variable) to configure the default fallback workspace for the server instance, allowing you to run multiple isolated journal interfaces on a single physical database.
+- **Auto-Resolution:** When `workspace_id` is omitted, the server automatically resolves the target workspace. It matches `project_number` against `PROJECT_REGISTRY`, checks content/tag keyword aliases, or inspects `process.cwd()` before falling back to `DEFAULT_WORKSPACE_ID` (default: `default`).
+- **Data Partitioning & Cross-Workspace Queries:** Core CRUD, Soft-Delete/Restore, FTS5 Search, Vector Semantic Search (`semantic_search`), and Analytics tools enforce `workspace_id` isolation end-to-end. Read and search tools accept `workspace_id: "*"` to query across all workspaces. External write and mutation paths reject wildcard overrides.
+- **Immutability & Controlled Migration:** Entries receive a `workspace_id` upon creation that standard updates cannot overwrite directly. To migrate an entry across workspaces, call `update_entry` with `workspace_id: "*"` and `target_workspace_id`.
+- **Server Config:** Set `--default-workspace-id` (or the `DEFAULT_WORKSPACE_ID` environment variable) to configure the default fallback workspace for the server instance. This lets you run multiple isolated journal interfaces on a single physical database.
 
 ---
 
@@ -194,7 +194,7 @@ Control which tools are exposed using any of the 3 configuration sources (preced
 
 ### 🎯 **Workflow Prompts**
 
-Specialized workflow prompts covering session briefing, standup & retro prep, goal tracking, PR & issue command, session summaries, journal optimization, CMS REM supervision, adversarial plan reviews, exhaustive code & security audits, secure commit workflows, and anti-hallucination healing. **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
+Specialized workflow prompts cover session briefing, standup & retro prep, goal tracking, PR & issue command, session summaries, and journal optimization. Additional prompts support CMS REM supervision, adversarial plan reviews, code & security audits, secure commit workflows, and anti-hallucination healing. **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
 ### 📡 **Resources**
 See the **[Complete resources guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Resources)** for the full list of dynamic context resources, including `memory://briefing`, `memory://instructions`, GitHub integration endpoints, telemetry metrics, and templated views.
@@ -587,7 +587,7 @@ memory-journal-mcp --transport http --port 3000
 | `ALLOWED_IO_ROOTS`                             | Comma-separated paths for Code Mode and IO filesystem boundaries (fail-closed in stdio; mandatory when `--transport http` is used) |
 | `MEMORY_JOURNAL_MCP_TOOL_FILTER`               | Control tool exposure (`full`, `starter`, `codemode`, `readonly`, `-github`; CLI: `--tool-filter`, `memory-journal.config.json` key: `"toolFilter"`. Note: `TOOL_FILTER` is a display fallback only) |
 | `CODE_MODE_MAX_RESULT_SIZE`                    | Max execution payload buffer size in Code Mode (bytes, default: `102400`) |
-| `CODEMODE_INTERNAL_FULL_ACCESS`                | Allow Code Mode to bypass tool filters internally (default: `false`, alias: `MJ_CODEMODE_INTERNAL_FULL_ACCESS`) |
+| `CODEMODE_INTERNAL_FULL_ACCESS`                | Allow Code Mode to bypass tool filters internally (default: `false`) |
 | `MCP_AGENT_HEALING`                            | Enable/disable autonomous tool & parameter healing (`true`/`false`, CLI: `--no-agent-healing`) |
 | `MAX_TOOL_INPUT_ELEMENTS`                      | Max array/object elements in tool inputs (default: `25000`, `0` = disabled) |
 | **Briefing & Context** | |
@@ -604,8 +604,8 @@ memory-journal-mcp --transport http --port 3000
 | `OAUTH_ENABLED`                                | Enable OAuth 2.1 authentication (default: false)           |
 | `OAUTH_ISSUER` / `OAUTH_AUDIENCE` / `OAUTH_JWKS_URI` / `OAUTH_CLOCK_TOLERANCE` | OAuth token verification parameters (clock tolerance default: 60s) |
 | **Telemetry & Administration** | |
-| `AUDIT_LOG_PATH` / `AUDIT_REDACT`              | File path for JSONL telemetry and argument redaction       |
-| `METRICS_EXPORT` / `PERSIST_METRICS` / `MJ_METRICS_PORT` | Prometheus export, disk-persisted metrics, and dedicated scrape port |
+| `AUDIT_LOG_PATH` / `AUDIT_REDACT` / `AUDIT_READS` / `AUDIT_LOG_MAX_SIZE` | Path to JSONL audit log file, argument/result redaction, read-call logging, and rotation size limit (default: 50MB) |
+| `METRICS_EXPORT` / `PERSIST_METRICS` / `MJ_METRICS_PORT` / `MJ_METRICS_HOST` | Prometheus export (`METRICS_EXPORT=prometheus` auto-starts the standalone metrics server on `127.0.0.1:9465` in addition to mounting `/metrics` on the HTTP transport), disk-persisted metrics, and dedicated scrape port/host |
 | `AUTO_PRUNE_INTERVAL_MINUTES` / `ARCHIVE_OLDER_THAN_DAYS` / `PRUNE_OLDER_THAN_DAYS` / `HARD_DELETE_OLDER_THAN_DAYS` / `PRUNE_IMPORTANCE_THRESHOLD` / `PRUNE_DRY_RUN` / `PRUNE_EXCLUDE_TAGS` | Autonomous lifecycle pruning, archiving (interval/days default: `0` = disabled), importance threshold (default: `0.15`), dry-run (default: `false`), and exclusion tags |
 | `REPORT_INTERVAL` / `REPORT_WEBHOOK_URL`       | Scheduled HTTP reports                                     |
 
@@ -636,7 +636,7 @@ See the **[Complete tools reference](https://github.com/neverinfamous/memory-jou
 
 ### Automate with GitHub Commander Workflows
 
-The server natively bundles the `memory-journal-mcp` agent skill (served via SEP-2640 and `memory://skills`) and provides built-in `issue-commander` and `pr-commander` MCP workflow prompts for autonomous DevOps stewardship: **Issue Triage**, **Milestone Sprints**, **PR Reviews**, **Copilot Audits**, **Security Audits**, **Code Quality Audits**, **Performance Audits**, **Roadmap Kickoffs**, and **Dependency Updates**, enforcing multi-gate validation (`lint`, `typecheck`, `test`, and security checks) locally during agent tasks!
+The server natively bundles the `memory-journal-mcp` agent skill (served via SEP-2640 and `memory://skills`). It also provides built-in `issue-commander` and `pr-commander` MCP workflow prompts for autonomous DevOps stewardship: **Issue Triage**, **Milestone Sprints**, **PR Reviews**, **Copilot Audits**, **Security Audits**, **Code Quality Audits**, **Performance Audits**, **Roadmap Kickoffs**, and **Dependency Updates**. These workflows enforce multi-gate validation (`lint`, `typecheck`, `test`, and security checks) locally during agent tasks.
 
 ## 🏗️ Architecture
 
@@ -724,7 +724,7 @@ Extensively tested across two frameworks:
 
 | Suite                     | Command             | Covers                                                                          |
 | ------------------------- | ------------------- | ------------------------------------------------------------------------------- |
-| Vitest (unit/integration) | `pnpm test`         | Database, tools, resources, handlers, security, GitHub, vector search, codemode |
+| Vitest (unit/integration) | `pnpm test`         | Extensive Vitest unit and integration suite with strict quality gates (database, tools, resources, handlers, security, GitHub, vector search, codemode) |
 | Playwright (e2e)          | `pnpm run test:e2e` | HTTP/SSE transport, auth, sessions, CORS, security headers, scheduler           |
 
 ```bash
@@ -742,7 +742,7 @@ pnpm run test:e2e  # End-to-end HTTP/SSE transport tests
 - **Path traversal & SSRF protection** - `ALLOWED_IO_ROOTS` sandbox containment with URL-decode/symlink verification, backup path validation, and outbound webhook DNS/IP SSRF blocking
 - **Multi-tenant & filter enforcement** - End-to-end `workspace_id` isolation across SQLite and Vector search, plus execution-layer `--tool-filter` enforcement across `tools/call`, Code Mode (`mj.*`), and fallback handlers
 - **MCP 2025-11-25 annotations & icons** - Behavioral hints (`readOnlyHint`, `destructiveHint`, etc.) and capability icons
-- **HTTP transport hardening** - OAuth 2.1 `tokenClaims` propagation, principal-bound stateful sessions (`100` max active sessions), comprehensive security headers, configurable multi-origin CORS, 1MB body/stream limit, built-in rate limiting (100 req/min), server timeouts, HSTS (opt-in), 30-min session timeout, and localhost-bound metrics
+- **HTTP transport hardening** - OAuth 2.1 `tokenClaims` propagation, principal-bound stateful sessions (`100` max active sessions), comprehensive security headers, configurable multi-origin CORS, 1MB body/stream limit, built-in rate limiting (100 req/min), server timeouts, HSTS (opt-in), 30-min session timeout, and localhost-bound metrics (`METRICS_EXPORT=prometheus` automatically starts the standalone metrics server on `127.0.0.1:9465`, customizable via `MJ_METRICS_PORT` and `MJ_METRICS_HOST`, in addition to mounting `/metrics` on the HTTP transport)
 - **Token scrubbing** - GitHub tokens and credentials automatically redacted from error and audit logs
 
 ### Data & Privacy
