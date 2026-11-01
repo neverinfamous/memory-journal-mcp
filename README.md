@@ -148,7 +148,7 @@ When the user initializes the session context by executing the `load-briefing` p
 > [!IMPORTANT]
 > All shortcuts and tool groups include **Code Mode** (`mj_execute_code`) by default for token-efficient operations. To exclude it, add `-codemode` to your filter: `--tool-filter starter,-codemode`
 
-Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `--tool-filter`):
+Control which tools are exposed via `TOOL_FILTER` (or CLI: `--tool-filter` / config: `toolFilter`):
 
 | Filter               | Use Case                 |
 | -------------------- | ------------------------ |
@@ -180,12 +180,12 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 | `search`        | Text search, date range, semantic, vector stats, cross-team                                                                                                                                       |
 | `analytics`     | Statistics, cross-project insights                                                                                                                                                                |
 | `relationships` | Link entries, visualize graphs                                                                                                                                                                    |
-| `io`            | JSON/Markdown export and File-level Markdown Data Integration Interoperability (Import/Export)                                                                                                    |
-| `admin`         | Update configuration, update, delete, restore, rebuild/add to vector index, merge tags, search audit log, bulk operations (batch create/update/delete)                                            |
+| `io`            | JSON/Markdown export, Markdown directory import/export, and external knowledge base import (Notion, Obsidian, Logseq)                                                                              |
+| `admin`         | Update configuration, project registry management, entry update/delete/restore, rebuild/add to vector index, merge tags, search audit log, auto-prune, bulk operations (batch create/update/delete) |
 | `github`        | Issues, PRs, context, Kanban, **Milestones**, **Insights**, **issue lifecycle**, **Copilot Reviews**                                                                                              |
 | `git`           | Commit history, search, release info, patterns, staleness checks                                                                                                                                  |
 | `backup`        | Backup, list, restore, cleanup                                                                                                                                                                    |
-| `team`          | CRUD, search, stats, relationships, IO (Markdown import/export), backup, vector search, cross-project insights, matrix, RBAC member management (requires `TEAM_DB_PATH`) |
+| `team`          | CRUD, search, stats, relationships, IO (Markdown & external import/export), backup, vector search, cross-project insights, matrix, RBAC member management, author aliases (requires `TEAM_DB_PATH`) |
 
 **[Complete tools reference →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tools)**
 
@@ -252,7 +252,7 @@ _Note: Configuration is resolved using strict precedence: `CLI flags > Environme
 
 ### Configure Basics Quickly
 
-> 💡 **Tip:** Don't want to manually escape JSON strings for `PROJECT_REGISTRY`? Run `npx memory-journal-mcp project create` in your terminal to automatically bootstrap and update your MCP configuration!
+> 💡 **Tip:** Don't want to manually escape JSON strings for `PROJECT_REGISTRY`? Run `npx memory-journal-mcp project create <name> --path <repo-path> [--number <project-number>]` in your terminal to automatically bootstrap and update your MCP configuration!
 
 ```json
 {
@@ -273,7 +273,7 @@ _Note: Configuration is resolved using strict precedence: `CLI flags > Environme
 
 Showcasing the full power of the server, including Multi-Project Routing, Team Collaboration, Copilot awareness, and Context Injections.
 
-> 💡 **Tip:** Use `npx memory-journal-mcp project create` to easily configure multiple repositories into your `PROJECT_REGISTRY` without manual JSON escaping!
+> 💡 **Tip:** Use `npx memory-journal-mcp project create <name> --path <repo-path> [--number <project-number>]` to easily configure multiple repositories into your `PROJECT_REGISTRY` without manual JSON escaping!
 
 ```json
 {
@@ -287,7 +287,7 @@ Showcasing the full power of the server, including Multi-Project Routing, Team C
         "PROJECT_REGISTRY": "{\"my-repo\":{\"path\":\"/path/to/repo\",\"project_number\":1},\"other-repo\":{\"path\":\"/path/to/other\",\"project_number\":5}}",
         "ALLOWED_IO_ROOTS": "/path/to/repo,/path/to/other,/path/to/your/skills",
         "AUTO_REBUILD_INDEX": "true",
-        "MEMORY_JOURNAL_MCP_TOOL_FILTER": "codemode",
+        "TOOL_FILTER": "codemode",
         "CODEMODE_INTERNAL_FULL_ACCESS": "true",
         "BRIEFING_ENTRY_COUNT": "3",
         "BRIEFING_SUMMARY_COUNT": "1",
@@ -324,7 +324,7 @@ You control exactly what additional content your agent sees across three dimensi
 | Dimension             | Variables                                                                                                                                                                        | What It Controls                                                                    |
 | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
 | **Focus**             | `TOOL_FILTER`                                                                                                                                                                    | Control tool exposure: `full` (default), `starter`, `essential`                     |
-| **Journal Content**   | `BRIEFING_ENTRY_COUNT`, `BRIEFING_SUMMARY_COUNT`, `BRIEFING_INCLUDE_TEAM`                                                                                                        | How many recent entries, session summaries, and whether team entries appear         |
+| **Journal Content**   | `BRIEFING_ENTRY_COUNT`, `BRIEFING_SUMMARY_COUNT`, `BRIEFING_COMMIT_COUNT`, `BRIEFING_IMPORTANCE_THRESHOLD`, `BRIEFING_INCLUDE_TEAM`                                              | How many recent entries, session summaries, commits, and whether team entries appear |
 | **GitHub Enrichment** | `BRIEFING_ISSUE_COUNT`, `BRIEFING_PR_COUNT`, `BRIEFING_PR_STATUS`, `BRIEFING_MILESTONE_COUNT`, `BRIEFING_WORKFLOW_COUNT`, `BRIEFING_WORKFLOW_STATUS`, `BRIEFING_COPILOT_REVIEWS` | Issues, PRs, milestones, CI runs, and Copilot review state surfaced in the briefing |
 
 **Context Injections:** Set `RULES_FILE_PATH` and `SKILLS_DIR_PATH` to surface user rules and agent skills as companion resources (`memory://rules`, `memory://skills`) alongside the briefing.
@@ -489,7 +489,7 @@ Each job is error-isolated — a failure in one job won't affect the others. Sch
 The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) auto-detect the repository from your git context when `PROJECT_REGISTRY` is configured or the MCP server is run inside a git repository.
 
 
-**Multi-Project Workflows**: For agents to seamlessly support multiple projects, configure your **`PROJECT_REGISTRY`** (tip: use `npx memory-journal-mcp project create`).
+**Multi-Project Workflows**: For agents to seamlessly support multiple projects, configure your **`PROJECT_REGISTRY`** (tip: use `npx memory-journal-mcp project create <name> --path <repo-path> [--number <project-number>]`).
 
 #### Dynamic Context Resolution & Auto-Detection
 
@@ -572,7 +572,7 @@ memory-journal-mcp --transport http --port 3000
 | `PROJECT_REGISTRY`                             | JSON map of repo names to local paths and project numbers  |
 | **Security & Tooling** | |
 | `ALLOWED_IO_ROOTS`                             | Comma-separated paths for Code Mode filesystem boundaries  |
-| `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or `TOOL_FILTER`) | Control tool exposure (`full`, `starter`, `readonly`, `-github`) |
+| `TOOL_FILTER`                                  | Control tool exposure (`full`, `starter`, `codemode`, `readonly`, `-github`, config: `toolFilter`) |
 | `CODE_MODE_MAX_RESULT_SIZE`                    | Max execution payload buffer size in Code Mode (bytes)     |
 | `CODEMODE_INTERNAL_FULL_ACCESS`                | Allow Code Mode to bypass tool filters internally          |
 | `MCP_AGENT_HEALING`                            | Enable/disable autonomous tool & parameter healing (`true`/`false`, CLI: `--no-agent-healing`) |
@@ -580,18 +580,20 @@ memory-journal-mcp --transport http --port 3000
 | **Briefing & Context** | |
 | `BRIEFING_ENTRY_COUNT`                         | Number of granular journal entries in briefing (default: 3)|
 | `BRIEFING_SUMMARY_COUNT`                       | Number of session summaries in briefing (default: 1)       |
+| `BRIEFING_COMMIT_COUNT`                        | Number of git commits in briefing (default: 3)             |
+| `BRIEFING_IMPORTANCE_THRESHOLD`                | Minimum importance score for briefing entries (default: 0.3)|
 | `BRIEFING_INCLUDE_TEAM`                        | Include entries from the team database (default: false)    |
-| `BRIEFING_ISSUE_COUNT` / `BRIEFING_PR_COUNT`   | GitHub Issues and PRs to list with titles                  |
+| `BRIEFING_ISSUE_COUNT` / `BRIEFING_PR_COUNT` / `BRIEFING_PR_STATUS` | GitHub Issues, PRs, and PR status breakdown in briefing |
 | `BRIEFING_MILESTONE_COUNT`                     | GitHub Milestones to list with titles                      |
-| `BRIEFING_WORKFLOW_COUNT`                      | CI workflow runs to list                                   |
-| `RULES_FILE_PATH` / `SKILLS_DIR_PATH`          | Injected behavioral rules and skills boundaries            |
+| `BRIEFING_WORKFLOW_COUNT` / `BRIEFING_WORKFLOW_STATUS` / `BRIEFING_COPILOT_REVIEWS` | CI workflow runs, status breakdown, and Copilot review state |
+| `RULES_FILE_PATH` / `SKILLS_DIR_PATH` / `MEMORY_JOURNAL_WORKFLOW_SUMMARY` | Injected behavioral rules, skills boundaries, and workflow summary |
 | **OAuth (HTTP Mode)** | |
 | `OAUTH_ENABLED`                                | Enable OAuth 2.1 authentication (default: false)           |
-| `OAUTH_ISSUER` / `OAUTH_AUDIENCE`              | OAuth token verification parameters                        |
+| `OAUTH_ISSUER` / `OAUTH_AUDIENCE` / `OAUTH_JWKS_URI` / `OAUTH_CLOCK_TOLERANCE` | OAuth token verification parameters (clock tolerance default: 60s) |
 | **Telemetry & Administration** | |
 | `AUDIT_LOG_PATH` / `AUDIT_REDACT`              | File path for JSONL telemetry and argument redaction       |
 | `METRICS_EXPORT` / `PERSIST_METRICS` / `MJ_METRICS_PORT` | Prometheus export, disk-persisted metrics, and dedicated scrape port |
-| `PRUNE_OLDER_THAN_DAYS` / `PRUNE_EXCLUDE_TAGS` | Auto-prune settings and exclusion tags                     |
+| `AUTO_PRUNE_INTERVAL_MINUTES` / `ARCHIVE_OLDER_THAN_DAYS` / `PRUNE_OLDER_THAN_DAYS` / `HARD_DELETE_OLDER_THAN_DAYS` / `PRUNE_IMPORTANCE_THRESHOLD` / `PRUNE_DRY_RUN` / `PRUNE_EXCLUDE_TAGS` | Autonomous lifecycle pruning, archiving, thresholds, and exclusion tags |
 | `REPORT_INTERVAL` / `REPORT_WEBHOOK_URL`       | Scheduled HTTP reports                                     |
 
 ### GitHub Integration (Optional)
@@ -691,7 +693,7 @@ flowchart TB
 
 ### Performance Benchmarks
 
-Memory Journal is designed for extremely low overhead during AI task execution. We include a `vitest bench` suite (11 benchmarks across 3 suites) to maintain these baseline guarantees:
+Memory Journal is designed for extremely low overhead during AI task execution. We include a `vitest bench` suite across database, vector search, and MCP server routines to maintain these baseline guarantees:
 
 - **Database Operations (`sqlite-adapter.bench.ts`)**: `calculateImportance` runs at **~51,600 ops/sec** (~0.03ms mean, ~27x faster than retrieving 50 recent entries) via a 256-entry LRU prepared statement cache. `getRecentEntries (limit 50)` executes at **~1,870 ops/sec** (~0.63ms mean), `updateEntry` at **~2,380 ops/sec** (~0.79ms mean), `createEntry` at **~1,060 ops/sec** (~1.69ms mean), and `searchEntries` (FTS5 BM25 + batch importance hydration) at **~176 ops/sec** (~6.2ms mean).
 - **Vector Search Engine (`vector-search.bench.ts`)**: Both k-NN similarity search (**~1,050 ops/sec**, ~1.8ms mean with batch entry hydration) and vector indexing (**~4,220 ops/sec**, ~0.41ms mean) are high-throughput via `sqlite-vec` (`vec0` with `chunk_size=256`).

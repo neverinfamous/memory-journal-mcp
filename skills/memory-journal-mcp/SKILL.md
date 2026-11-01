@@ -11,7 +11,7 @@ This skill acts as a static anchor to reinforce core usage patterns, commit work
 
 ## 1. Accessing Detailed Server Instructions
 The Memory Journal MCP provides comprehensive, dynamic instructions via its `memory://help` resources:
-- Use `read_resource` on `memory://help` for critical gotchas and core usage patterns.
+- Use `read_resource` on `memory://help` for the tool group index and `memory://help/gotchas` for critical gotchas and core usage patterns.
 - Use `read_resource` on `memory://help/{group}` for specific tool groups (e.g., `core`, `search`, `admin`, `codemode`, `github`, `git`, `templates`, `team`).
 
 ## 2. Core Agent Directives

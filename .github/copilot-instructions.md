@@ -63,9 +63,10 @@ All resources must dynamically compute and return `_meta.tokenEstimate` within t
 
 ### Database
 
-- Schema migrations in `src/database/core/schema.ts` and versioned migrations in `src/database/migrations/` (001-013, using native better-sqlite3)
+- Versioned schema migrations in `src/database/migrations/` (orchestrated by `src/database/migrations/migration-manager.ts` using native better-sqlite3)
+- Native connection tuning in `src/database/sqlite-adapter/native-connection.ts`: WAL mode, `busy_timeout = 5000`, `cache_size = -64000` (64MB), `sqlite-vec` `vec0` `chunk_size=256`, and a 256-entry bounded LRU prepared-statement cache (`installStatementCache`) with automatic DDL invalidation
 - Backward compatible with self-healing legacy database retrofitting — never break existing data
-- Consider index implications for new queries
+- Consider index implications and virtual table join order (`CROSS JOIN` when driving from `fts_content` / `vec0`) for new queries
 
 ## Architectural Rules & Key Concepts
 
@@ -88,11 +89,12 @@ src/
 ├── auth/                       # OAuth 2.1 authentication
 ├── codemode/                   # Sandboxed JS execution engine
 ├── constants/
+│   ├── instructions/           # Composable instruction segments
 │   └── server-instructions.ts  # Agent prompts and HELP_CONTENT map (Single Source of Truth)
 ├── database/
 │   ├── adapter-factory.ts      # Database adapter factory
 │   ├── core/                   # Core database types and interfaces
-│   ├── migrations/             # Versioned schema migrations (001-013)
+│   ├── migrations/             # Versioned schema migrations (MigrationManager)
 │   └── sqlite-adapter/         # SQLite operations via better-sqlite3
 ├── filtering/
 │   └── tool-filter.ts          # Tool filtering (groups, meta-groups)
@@ -112,6 +114,7 @@ src/
 │   └── http/                   # HTTP/SSE transport (modularized)
 ├── types/                      # Type definitions + barrel
 ├── utils/                      # Logger, error helpers, progress
+├── vendor/                     # Vendored internal packages
 └── vector/                     # Semantic search (sqlite-vec + transformers)
 ```
 
@@ -119,7 +122,7 @@ src/
 
 | File                                     | Purpose                                              |
 | ---------------------------------------- | ---------------------------------------------------- |
-| `src/constants/server-instructions.ts` | Server instructions (Agent prompt and composable segments, now uses Adaptive Instruction Architecture pointing to `{prefix}://help`) |
+| `src/constants/server-instructions.ts` | Server instructions (Agent prompt and composable segments, now uses Adaptive Instruction Architecture pointing to `memory://help`) |
 | `test-server/code-map.md`                | File → tool/handler mapping                          |
 | `test-server/tool-reference.md`          | Categorized tool inventory                       |
 | `CONTRIBUTING.md`                        | Development setup and PR guidelines                  |

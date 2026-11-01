@@ -62,7 +62,7 @@ export const handler = async (params: unknown) => {
 }
 ```
 
-All errors must extend `MemoryJournalMcpError` (e.g., `ValidationError`, `ResourceNotFoundError`, `QueryError`, `ConnectionError`, `PermissionError`).
+All errors must extend `MemoryJournalMcpError` (e.g., `ValidationError`, `ResourceNotFoundError`, `QueryError`, `ConnectionError`, `ConfigurationError`, `PermissionError`, `AuthorizationError`, `ConflictError`).
 
 ### 3. Multi-Tenancy & `workspace_id`
 
@@ -70,6 +70,7 @@ The server supports strict data isolation using `workspace_id`.
 - All CRUD, Search, and Analytics tools accept a `workspace_id`. 
 - If omitted, the server auto-resolves `workspace_id` from `project_number` (via `PROJECT_REGISTRY`), content/tag keyword aliases, or `process.cwd()` before falling back to `DEFAULT_WORKSPACE_ID` (default: `default`).
 - The `workspace_id` is permanently assigned upon creation and is immutable.
+- Read and search tools accept `workspace_id: "*"` to query across all workspaces; external write/mutation paths reject wildcard overrides.
 
 ---
 
@@ -79,7 +80,7 @@ Agents no longer need to proactively pull the briefing. You must wait for the us
 When provided, the briefing contains:
 - `memory://briefing` (or `memory://briefing/{repo_name}` for multi-repo environments)
 - This provides ~350 tokens of high-value ambient context: server health, GitHub CI status, active milestones, and unreleased changes.
-Review it thoroughly before proceeding.
+Review it thoroughly before proceeding. For mid-session context recovery (project number, workspace, or agent ID), query `memory://agent-context/{repo}` (or `memory://agent-id`) instead of re-reading `memory://briefing`.
 
 ---
 

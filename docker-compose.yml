@@ -13,13 +13,14 @@ services:
       - TEAM_DEFAULT_ROLE=
       - TEAM_ADMIN=
       - GITHUB_TOKEN=
-      - GITHUB_HOST=
       - DEFAULT_PROJECT_NUMBER=
       - PROJECT_REGISTRY=
-      - MEMORY_JOURNAL_MCP_TOOL_FILTER=
+      - TOOL_FILTER=
       - CODE_MODE_MAX_RESULT_SIZE=
       - CODEMODE_INTERNAL_FULL_ACCESS=
       - ALLOWED_IO_ROOTS=/app/data
+      - MCP_AGENT_HEALING=true
+      - MAX_TOOL_INPUT_ELEMENTS=25000
       - NODE_ENV=
       - DEBUG=
       - MEMORY_JOURNAL_CONFIG=
@@ -27,7 +28,6 @@ services:
       - PORT=
       - STATELESS=
       - MCP_AUTH_TOKEN=
-      - MCP_AUTH_SCOPES=
       - CORS_ORIGIN=
       - MCP_RATE_LIMIT_MAX=
       - MCP_ENABLE_HSTS=
@@ -63,6 +63,7 @@ services:
       - PERSIST_METRICS=
       - METRICS_PATH=
       - METRICS_EXPORT=
+      - MJ_METRICS_PORT=
       - BACKUP_INTERVAL=
       - KEEP_BACKUPS=
       - VACUUM_INTERVAL=
@@ -109,13 +110,14 @@ services:
       - TEAM_DEFAULT_ROLE=
       - TEAM_ADMIN=
       - GITHUB_TOKEN=
-      - GITHUB_HOST=
       - DEFAULT_PROJECT_NUMBER=
       - PROJECT_REGISTRY=
-      - MEMORY_JOURNAL_MCP_TOOL_FILTER=
+      - TOOL_FILTER=
       - CODE_MODE_MAX_RESULT_SIZE=
       - CODEMODE_INTERNAL_FULL_ACCESS=
       - ALLOWED_IO_ROOTS=/app/data
+      - MCP_AGENT_HEALING=true
+      - MAX_TOOL_INPUT_ELEMENTS=25000
       - NODE_ENV=
       - DEBUG=
       - MEMORY_JOURNAL_CONFIG=
@@ -123,7 +125,6 @@ services:
       - PORT=3000
       - STATELESS=
       - MCP_AUTH_TOKEN=${MCP_AUTH_TOKEN:?MCP_AUTH_TOKEN is required for HTTP transport in production}
-      - MCP_AUTH_SCOPES=
       - CORS_ORIGIN=
       - MCP_RATE_LIMIT_MAX=
       - MCP_ENABLE_HSTS=
@@ -159,6 +160,7 @@ services:
       - PERSIST_METRICS=
       - METRICS_PATH=
       - METRICS_EXPORT=
+      - MJ_METRICS_PORT=
       - BACKUP_INTERVAL=
       - KEEP_BACKUPS=
       - VACUUM_INTERVAL=

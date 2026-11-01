@@ -138,7 +138,7 @@ docker run --rm -i -v ./data:/app/data memory-journal-dev
 
 ### Database Changes
 
-- **Schema migrations** — Update `src/database/core/schema.ts` and add versioned migrations in `src/database/migrations/` (`001` through `013` via `MigrationManager`) for database changes
+- **Schema migrations** — Add versioned migrations in `src/database/migrations/` (registered in `migration-list.ts` and executed via `MigrationManager`) and update column projections in `src/database/sqlite-adapter/entries/shared.ts` when adding columns
 - **Backward compatibility** — Ensure existing data isn't broken; use versioned migrations and `migrateSchema()` for column additions
 - **Performance** — Consider index implications for new queries
 - **Testing** — Verify with both empty and populated databases
@@ -215,14 +215,15 @@ Use our [Feature Request template](.github/ISSUE_TEMPLATE/feature_request.md).
 src/
 ├── cli/                        # CLI entry point (Commander)
 ├── index.ts                    # Library entry point
+├── version.ts                  # Version SSoT (reads package.json)
 ├── audit/                      # JSONL audit log, audit resource
 ├── auth/                       # OAuth 2.1 authentication
 ├── codemode/                   # Sandboxed JS execution engine
 ├── constants/                  # Server instructions (agent prompt and composable segments)
 ├── database/
 │   ├── adapter-factory.ts      # Adapter instantiation
-│   ├── core/                   # Interfaces, schema, entry columns
-│   ├── migrations/             # Versioned schema migrations (001-013)
+│   ├── core/                   # Database adapter and connection interfaces
+│   ├── migrations/             # Versioned schema migrations (MigrationManager)
 │   └── sqlite-adapter/         # Native SQLite operations (better-sqlite3)
 ├── filtering/                  # Tool filtering system
 ├── github/
@@ -240,6 +241,7 @@ src/
 ├── transports/                 # HTTP/SSE transport
 ├── types/                      # TypeScript type definitions
 ├── utils/                      # Logger, error helpers, progress
+├── vendor/                     # Vendored internal packages
 └── vector/                     # Semantic search (sqlite-vec + transformers)
 
 skills/

@@ -48,7 +48,7 @@ are safely handled by the database layer and do not pose injection risks.
 - ✅ **Explicit Filesystem Boundaries** — Filesystem access MUST be explicitly granted via `ALLOWED_IO_ROOTS`. The server operates in a **fail-closed** mode (`ALLOWED_IO_ROOTS=[]`) by default if not explicitly configured, preventing all filesystem interaction.
 - ✅ **URL-Encoded & Null-Byte Rejection** — `assertSafeDirectoryPath` rejects URL-encoded traversal sequences (`%2e`, `%2f`, `%5c`, `%00`) and raw null bytes before decoding, resolves ancestor symlinks iteratively via `fs.realpathSync()`, and validates containment using `path.relative()`.
 - ✅ **Implicit Authority Disabled** — The server no longer derives ambient filesystem authority from the location of database files.
-- ✅ **Backup & Restore Boundaries** — `backup_journal` and `restore_journal` enforce `path.relative()` containment against the backup directory and reject symlinks or traversal characters (`/`, `\`, `..`).
+- ✅ **Backup & Restore Boundaries** — `backup_journal` and `restore_backup` enforce `path.relative()` containment against the backup directory and reject symlinks or traversal characters (`/`, `\`, `..`).
 - ✅ **Agent-Healing Filesystem Fallbacks** — When `--no-agent-healing` is not set, read-only fallback tools (`view_file`, `list_dir`, `grep_search`) enforce `ALLOWED_IO_ROOTS`, skip symbolic links during recursive directory traversal, cap file reads at 2MB, and require `admin` scope over HTTP.
 - ✅ **Typed security errors** with consistent error codes
 
@@ -103,16 +103,14 @@ export CORS_ORIGIN="http://localhost:3000,https://my-app.com"
 - ✅ **Principal-bound sessions** — Authenticated sessions bind `mcp-session-id` to the caller's principal (`sub` or Bearer token hash); cross-principal session reuse is rejected with `403 Forbidden`
 - ✅ **Active session cap** — Enforces a hard limit of `100` concurrent active sessions (`503` when full) and rejects duplicate SSE stream attachments on the same session (`409 Conflict`)
 - ✅ **Idle timeout** — Sessions inactive for 30 minutes are automatically expired
-- ✅ **Absolute TTL** — Sessions have a hard 24-hour maximum lifetime regardless of activity, forcing periodic re-authentication
-- ✅ **In-flight protection** — Sessions with active requests are skipped by the sweep timer to prevent mid-request disconnection
-- ✅ **5-minute sweep interval** — periodic cleanup of abandoned sessions
+- ✅ **1-minute sweep interval** — periodic cleanup of expired sessions and subscription listeners
 - ✅ **Explicit session termination** via `DELETE /mcp`
 
 ### **Request Size Limits & Metrics Isolation**
 
 - ✅ **1MB body limit** on JSON and chunked stream requests (prevents memory exhaustion DoS)
 - ✅ **Metrics endpoint protection** — `/metrics` requires authentication when HTTP auth is enabled and the standalone Prometheus metrics server binds to `127.0.0.1` by default
-- ✅ **Outbound Webhook SSRF Protection** — Scheduled digest webhooks (`--digest-webhook-url`) require `https:`, resolve DNS prior to dispatch, block loopback/private/link-local/cloud-metadata IP ranges, and disable HTTP redirects (`redirect: 'error'`)
+- ✅ **Outbound Webhook SSRF Protection** — Scheduled digest webhooks (`--report-webhook-url` / `REPORT_WEBHOOK_URL`) require `https:`, resolve DNS prior to dispatch, block loopback/private/link-local/cloud-metadata IP ranges, and disable HTTP redirects (`redirect: 'error'`)
 
 ## 🔐 **OAuth 2.1 Authentication**
 
@@ -167,7 +165,7 @@ export OAUTH_JWKS_URI=https://auth.example.com/realms/mcp/protocol/openid-connec
 When OAuth is **not enabled**, authentication falls back to:
 
 1. **Simple token auth** — if `MCP_AUTH_TOKEN` env var is set, requests must include `Authorization: Bearer <token>` matching the configured value
-2. **No auth** — if no auth mechanism is configured, all requests are accepted (suitable for local/development use)
+2. **No auth (loopback only)** — if no auth mechanism is configured and the server is bound to localhost without wildcard CORS, requests are accepted for local development. Binding to non-localhost interfaces (e.g., `0.0.0.0`) or enabling wildcard CORS without authentication throws a fatal startup error.
 
 ## 🐙 **GitHub Token Security**
 
@@ -191,8 +189,7 @@ ALLOWED_IO_ROOTS="/path/to/allow1,/path/to/allow2"
 GITHUB_TOKEN=ghp_...            # GitHub personal access token
 
 # Optional
-GITHUB_ORG_TOKEN=ghp_...        # For organization projects
-PROJECT_REGISTRY='{"my-repo":{"path":"/path/to/repo","project_number":1}}'  # Multi-project routing (Tip: Use `npx memory-journal-mcp project create`)
+PROJECT_REGISTRY='{"my-repo":{"path":"/path/to/repo","project_number":1}}'  # Multi-project routing (Tip: Use `npx memory-journal-mcp project create <name> --path <path>`)
 DEFAULT_PROJECT_NUMBER=1         # Default project for issue assignment
 CORS_ORIGIN=                     # CORS origin (default: none)
 MCP_HOST=localhost               # Server bind host
@@ -344,7 +341,7 @@ Security handled at multiple levels:
 
 ```bash
 # Database created with user permissions
-chmod 600 ~/.memory-journal/memory_journal.db
+chmod 600 ./memory_journal.db  # or your configured DB_PATH
 ```
 
 **Docker installation:**
@@ -434,8 +431,7 @@ chmod 700 /shared/team-data
 - [x] HTTP timeouts and built-in rate limiter (100 req/min)
 - [x] DNS rebinding protection and strict HSTS
 - [x] Security headers (CSP, X-Content-Type-Options, X-Frame-Options, Cache-Control, Referrer-Policy, Permissions-Policy)
-- [x] Session idle timeout (30 minutes) and 5-minute sweep interval
-- [x] Session absolute TTL (24 hours) and in-flight request protection
+- [x] Session idle timeout (30 minutes), active session cap (100), principal binding, and 1-minute sweep interval
 - [x] Non-root Docker user
 - [x] Multi-stage Docker build
 - [x] Local-first data architecture

@@ -86,7 +86,7 @@ When the user initializes the session context by executing the `load-briefing` p
 > [!IMPORTANT]
 > All shortcuts and tool groups include **Code Mode** (`mj_execute_code`) by default for token-efficient operations. To exclude it, add `-codemode` to your filter: `--tool-filter starter,-codemode`
 
-Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `--tool-filter`):
+Control which tools are exposed via `TOOL_FILTER` (or CLI: `--tool-filter` / config: `toolFilter`):
 
 | Filter               | Use Case                 |
 | -------------------- | ------------------------ |
@@ -116,12 +116,12 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 | `search`        | Text search, date range, semantic, vector stats, cross-team                                                                                                                                       |
 | `analytics`     | Statistics, cross-project insights                                                                                                                                                                |
 | `relationships` | Link entries, visualize graphs                                                                                                                                                                    |
-| `io`            | JSON/Markdown export and File-level Markdown Data Integration Interoperability (Import/Export)                                                                                                    |
-| `admin`         | Update configuration, update, delete, restore, rebuild/add to vector index, merge tags, search audit log, bulk operations (batch create/update/delete)                                            |
+| `io`            | JSON/Markdown export, Markdown directory import/export, and external import (Notion, Obsidian, Logseq)                                                                                            |
+| `admin`         | Update configuration, project registry, update, delete, restore, rebuild/add to vector index, merge tags, audit log, auto-prune, bulk operations                                                  |
 | `github`        | Issues, PRs, context, Kanban, **Milestones**, **Insights**, **issue lifecycle**, **Copilot Reviews**                                                                                              |
 | `git`           | Commit history, search, release info, patterns, staleness checks                                                                                                                                  |
 | `backup`        | Backup, list, restore, cleanup                                                                                                                                                                    |
-| `team`          | CRUD, search, stats, relationships, IO (Markdown import/export), backup, vector search, cross-project insights, matrix, RBAC member management (requires `TEAM_DB_PATH`) |
+| `team`          | CRUD, search, stats, relationships, IO, backup, vector search, cross-project insights, matrix, RBAC members, author aliases (requires `TEAM_DB_PATH`) |
 
 **[Complete tools reference →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tools)**
 
@@ -175,7 +175,7 @@ Add this to your `~/.cursor/mcp.json`, Claude Desktop config, or equivalent:
 
 ### Basic Configuration
 
-> 💡 **Tip:** Don't want to manually escape JSON strings for `PROJECT_REGISTRY`? Run `npx memory-journal-mcp project create` in your terminal to automatically bootstrap and update your MCP configuration!
+> 💡 **Tip:** Don't want to manually escape JSON strings for `PROJECT_REGISTRY`? Run `npx memory-journal-mcp project create <name> --path <path>` in your terminal to automatically bootstrap and update your MCP configuration!
 
 ```json
 {
@@ -209,7 +209,7 @@ Add this to your `~/.cursor/mcp.json`, Claude Desktop config, or equivalent:
 
 Showcasing the full power of the server, including Multi-Project Routing, Team Collaboration, Copilot awareness, and Context Injections.
 
-> 💡 **Tip:** Use `npx memory-journal-mcp project create` to easily configure multiple repositories into your `PROJECT_REGISTRY` without manual JSON escaping!
+> 💡 **Tip:** Use `npx memory-journal-mcp project create <name> --path <path>` to easily configure multiple repositories into your `PROJECT_REGISTRY` without manual JSON escaping!
 
 ```json
 {
@@ -241,7 +241,7 @@ Showcasing the full power of the server, including Multi-Project Routing, Team C
         "ALLOWED_IO_ROOTS": "/app/projects,/app/data,/app/skills",
         "AUTO_REBUILD_INDEX": "true",
         "EMBEDDING_MODEL": "Xenova/all-MiniLM-L6-v2",
-        "MEMORY_JOURNAL_MCP_TOOL_FILTER": "codemode",
+        "TOOL_FILTER": "codemode",
         "CODEMODE_INTERNAL_FULL_ACCESS": "true",
         "BRIEFING_ENTRY_COUNT": "3",
         "BRIEFING_SUMMARY_COUNT": "1",
@@ -326,7 +326,7 @@ docker run --rm -p 3000:3000 \
 
 #### Automated Scheduling (HTTP Only)
 
-Enable periodic maintenance jobs (`--backup-interval`, `--vacuum-interval`, `--rebuild-index-interval`, `--digest-interval`) for long-running HTTP containers. **[See the full scheduling documentation in the Wiki →](https://github.com/neverinfamous/memory-journal-mcp/wiki/HTTP-Transport#automated-scheduling)**
+Enable periodic maintenance jobs (`--backup-interval`, `--vacuum-interval`, `--rebuild-index-interval`, `--digest-interval`, `--report-interval`, `--auto-prune-interval`) for long-running HTTP containers. **[See the full scheduling documentation in the Wiki →](https://github.com/neverinfamous/memory-journal-mcp/wiki/HTTP-Transport#automated-scheduling)**
 
 ## 🔐 OAuth 2.1 Authentication
 
