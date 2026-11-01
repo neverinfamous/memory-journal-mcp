@@ -4,7 +4,7 @@
  * Tools: team_batch_create_entries, team_batch_update_entries, team_batch_delete_entries
  */
 
-import type { ToolDefinition, ToolContext } from '../../../../types/index.js'
+import type { ToolDefinition, ToolContext, RelationshipType } from '../../../../types/index.js'
 import { formatHandlerError } from '../../../../utils/error-helpers.js'
 import { resolveAuthenticatedAuthor } from '../../../../utils/security-utils.js'
 import { getAuthContext } from '../../../../auth/auth-context.js'
@@ -90,6 +90,7 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                             entryType: e.entry_type,
                             tags: e.tags,
                             significanceType: e.significance_type,
+                            autoContext: e.auto_context,
                             projectNumber,
                             projectOwner: e.project_owner,
                             issueNumber: e.issue_number,
@@ -97,14 +98,40 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                             prNumber: e.pr_number,
                             prUrl: e.pr_url,
                             prStatus: e.pr_status,
+                            workflowRunId: e.workflow_run_id,
+                            workflowName: e.workflow_name,
+                            workflowStatus: e.workflow_status,
                             isPersonal: false,
                             author: e.author ?? currentUser,
+                            impactScore: e.impact_score,
+                            trustScore: e.trust_score,
+                            validationStatus: e.validation_status,
                             sessionId: e.session_id,
                             workspaceId: resolveWorkspaceId(e.workspace_id ?? input.workspace_id, e.project_number ?? input.project_number, context.config),
                         }
                     })
 
                     const { created: results, errors } = teamDb.createEntries(inputs)
+
+                    for (let i = 0; i < results.length; i++) {
+                        const createdEntry = results[i]
+                        const sourceEntry = input.entries[i]
+                        if (createdEntry && sourceEntry?.relationships && sourceEntry.relationships.length > 0) {
+                            for (const rel of sourceEntry.relationships) {
+                                try {
+                                    const canonicalRelType: RelationshipType =
+                                        rel.relationType === 'relates_to'
+                                            ? 'references'
+                                            : rel.relationType === 'depends_on'
+                                              ? 'blocked_by'
+                                              : rel.relationType
+                                    teamDb.linkEntries(createdEntry.id, rel.targetId, canonicalRelType)
+                                } catch {
+                                    // Ignore link failures if target doesn't exist
+                                }
+                            }
+                        }
+                    }
 
                     const entries = results.map((r, i) => {
                         const author = inputs[i]?.author
@@ -341,6 +368,17 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                         teamDb.isTeamRbacActive?.()
                             ? teamDb.resolveTeamRole(currentUser, context.config?.teamDefaultRole ?? 'denied')
                             : null
+
+                    if (input.permanent && !codemodeBypass && callerRole !== null && callerRole !== 'admin') {
+                        return {
+                            success: false,
+                            error: `Permission Denied: Permanent deletion of team entries requires the 'admin' role (caller "${currentUser}" has role "${callerRole}").`,
+                            code: 'PERMISSION_DENIED',
+                            category: 'auth',
+                            suggestion: 'Omit permanent: true to soft-delete your entries, or ask a team admin to permanently delete them.',
+                            recoverable: false,
+                        }
+                    }
                     
                     const existingMap =
                         typeof teamDb.getEntriesByIds === 'function'

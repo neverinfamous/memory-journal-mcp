@@ -112,13 +112,14 @@ export async function pruneAction(options: z.infer<typeof pruneSchema>, command:
     const { db } = await getDb(options, command)
     
     try {
+        const rawExcludeTags = options.excludeTags ?? options.pruneExcludeTags
         const result = await runAutoPrune(db, {
             archiveOlderThanDays: options.archiveOlderThanDays ?? 0,
             pruneOlderThanDays: options.pruneOlderThanDays ?? 0,
             hardDeleteOlderThanDays: options.hardDeleteOlderThanDays ?? 0,
-            importanceThreshold: options.importanceThreshold ?? 0.15,
-            dryRun: options.dryRun === true,
-            excludeTags: options.excludeTags ? options.excludeTags.split(',') : []
+            importanceThreshold: options.importanceThreshold ?? options.pruneImportanceThreshold ?? 0.15,
+            dryRun: options.dryRun === true || options.pruneDryRun === true,
+            excludeTags: rawExcludeTags ? rawExcludeTags.split(',') : []
         })
         if (options.json === true) {
             process.stdout.write(JSON.stringify(result) + '\n')

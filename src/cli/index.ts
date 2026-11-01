@@ -400,7 +400,7 @@ const importExternalCmd = ioCmd.command('import-external').description('Import e
 withGroup(importExternalCmd, 'Command Options', (cmd: Command) => {
     cmd
         .option('--dir <path>', 'Source directory (required)')
-        .option('--format <format>', 'External format: notion or obsidian (required)')
+        .option('--format <format>', 'External format: notion, obsidian, or logseq (required)')
 })
 addCoreOptions(importExternalCmd)
 addDatabaseOptions(importExternalCmd)

@@ -189,6 +189,7 @@ export const adminPruneOptionsSchema = pruningOptionsSchema
         pruneOlderThanDays: z.coerce.number().optional(),
         hardDeleteOlderThanDays: z.coerce.number().optional(),
         importanceThreshold: z.coerce.number().optional(),
+        pruneImportanceThreshold: z.coerce.number().optional(),
         dryRun: z.boolean().optional(),
         excludeTags: z.string().optional()
     })
@@ -258,7 +259,7 @@ export const ioImportMarkdownOptionsSchema = z.object({
 
 export const ioImportExternalOptionsSchema = z.object({
     dir: z.string().optional(),
-    format: z.enum(['notion', 'obsidian']).optional()
+    format: z.enum(['notion', 'obsidian', 'logseq']).optional()
 }).extend(coreOptionsSchema.shape).extend(databaseOptionsSchema.shape).extend(outputOptionsSchema.shape)
 
 export const visualizeOptionsSchema = z.object({

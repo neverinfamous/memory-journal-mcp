@@ -103,11 +103,14 @@ relationships:
 
 ## Context for Next Session
 - [List key context: relevant entry IDs, branch names, PR numbers, pending decisions]
+
+## Commits
+- \`<sha>\`: [Short commit summary or "None" if no commits were made]
 \`\`\`
 
 **Rules:**
 - Do NOT add extra top-level sections (no "## Summary", "## Overview", "## Notes", etc.)
-- Do NOT omit any of the three required sections
+- Do NOT omit any of the four required sections
 - Use bullet points within each section
 - Reference specific entry IDs, file names, and PR numbers where relevant
 - To populate \`auto_context.commits\`, use \`bun .\\.agents\\scripts\\get-git-history-json.ts --summary -n 20\` to retrieve recent commit SHAs. Do NOT use raw \`git log\`.
@@ -205,7 +208,7 @@ ${entryContext}
 
 **Step 2: Apply Conditional Formatting Rules**
 Look at the tags and structure of the target entry:
-- If it has the \`session-summary\` tag: You MUST preserve the exact 3-header structure (\`## Accomplished\`, \`## Unfinished / Blocked\`, \`## Context for Next Session\`). Do not flatten the text; only append or modify the relevant bullet points.
+- If it has the \`session-summary\` tag: You MUST preserve the exact 4-header structure (\`## Accomplished\`, \`## Unfinished / Blocked\`, \`## Context for Next Session\`, \`## Commits\`). Do not flatten the text; only append or modify the relevant bullet points.
 - If it is a standard entry: Keep your modifications concise and under 150 words.
 
 **Step 3: Execute the Update**

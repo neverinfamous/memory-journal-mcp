@@ -256,6 +256,9 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                 idempotentHint: false,
                 openWorldHint: false,
             },
+            capabilities: {
+                requiresAdminScope: true,
+            },
             handler: async (_params: unknown) => {
                 try {
                     if (!teamDb) {

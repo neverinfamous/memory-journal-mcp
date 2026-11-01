@@ -45,7 +45,6 @@
     "test:e2e:wsl": "wsl bash -c \"pnpm run test:e2e\"",
     "test:scheduler": "node test-server/scripts/test-scheduler.mjs",
     "test:prompts": "node test-server/scripts/test-prompts.mjs",
-    "backfill:metadata": "tsx scripts/backfill-metadata.ts",
     "encrypt-db": "tsx scripts/encrypt-db.ts",
     "prepublishOnly": "pnpm run check && pnpm run build"
   },
