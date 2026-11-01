@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { execSync } from "child_process";
+import { execFileSync } from "child_process";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -31,7 +31,7 @@ function updateBadges() {
     hasCoverage = true;
   } else {
     console.warn(`Coverage summary not found at ${summaryPath}`);
-    if (process.env.CI || process.argv.includes("--strict")) {
+    if (process.env.GITHUB_ACTIONS || process.argv.includes("--strict")) {
       console.error("Strict mode active: Failing because coverage summary is missing.");
       process.exit(1);
     }
@@ -87,7 +87,7 @@ function updateBadges() {
             console.log(`Inserted coverage badge in ${file} to ${linesPct}%`);
           } else {
             console.warn(`Could not find anchor to insert coverage badge in ${file}`);
-            if (process.env.CI || process.argv.includes("--strict")) {
+            if (process.env.GITHUB_ACTIONS || process.argv.includes("--strict")) {
                 process.exit(1);
             }
           }
@@ -133,20 +133,46 @@ function updateBadges() {
     }
   }
 
-  if (updatedFiles.length > 0 && !process.env.CI) {
-    console.log(`\nAuto-committing badge updates for: ${updatedFiles.join(", ")}`);
+  if (!process.env.GITHUB_ACTIONS) {
     const commitScript = path.join(ROOT_DIR, ".agents", "scripts", "commit.ts");
-    const addArgs = updatedFiles.map((f) => `--add "${f}"`).join(" ");
-    const cmd = `bun "${commitScript}" --msg "chore(docs): update test badges" --impact 0.1 --confidence 1.0 --validation none --no-history ${addArgs}`;
+    const dirtyFiles = filesToUpdate.filter((file) => {
+      if (updatedFiles.includes(file)) return true;
+      try {
+        const diff = execFileSync("git", ["ls-files", "-m", "--", file], {
+          cwd: ROOT_DIR,
+          encoding: "utf-8",
+        }).trim();
+        return diff.length > 0;
+      } catch {
+        return false;
+      }
+    });
 
-    try {
-      execSync(cmd, { stdio: "inherit", cwd: ROOT_DIR });
-      console.log("Successfully auto-committed badge updates.");
-    } catch (err: unknown) {
-      console.error(
-        "Failed to auto-commit badge updates:",
-        err instanceof Error ? err.message : String(err),
-      );
+    if (dirtyFiles.length > 0) {
+      console.log(`\nAuto-committing badge updates for: ${dirtyFiles.join(", ")}`);
+      const args = [
+        commitScript,
+        "--msg",
+        "chore(docs): update test badges",
+        "--impact",
+        "0.1",
+        "--confidence",
+        "1.0",
+        "--validation",
+        "none",
+        "--no-history",
+        ...dirtyFiles.flatMap((f) => ["--add", f]),
+      ];
+
+      try {
+        execFileSync("bun", args, { stdio: "inherit", cwd: ROOT_DIR });
+        console.log("Successfully auto-committed badge updates.");
+      } catch (err: unknown) {
+        console.error(
+          "Failed to auto-commit badge updates:",
+          err instanceof Error ? err.message : String(err),
+        );
+      }
     }
   }
 }
