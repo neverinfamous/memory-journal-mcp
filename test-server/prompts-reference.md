@@ -193,15 +193,25 @@ These prompts execute deep, parallelized audits using subagents.
 
 ---
 
-## 6. Optimizer Prompts
+## 6. Optimizer & Cognitive Management System (CMS) Prompts
 
-These prompts focus on maintaining system health and validating state.
+These prompts focus on maintaining system health, consolidating memory (`CMS-02`), and supervising autonomous passes (`CMS-04`).
 
 ### `optimize-journal`
-**Description**: Run health checks and optimizations on the journal database.
-- **Arguments**: 
-  - `lookback` (optional): limit unverified entries to review, default: 10
-  - `autoRun` (optional): boolean, bypass user confirmation and execute optimizations automatically, default: false
+**Description**: Guided database pruning, graph verification, episodic-to-semantic compaction, and multi-agent audit workflow (`CMS-02` NREM Consolidation).
+- **Arguments**:
+  - `lookback` (optional): Number of recent entries to inspect for unverified status (default: `10`)
+  - `limit` (optional): Entry processing cap (`0` = unlimited across all history; default: `500`, or `0` when `mode: 'full'` / `autoRun: 'true'`)
+  - `project` (optional): Target project name or number (omit to optimize all projects globally)
+  - `autoRun` (optional): Boolean (`true` | `false`), bypasses interactive handover and executes all phases including Multi-Agent Domain Audit automatically (default: `false`)
+  - `mode` (optional): `'quick'` | `'targeted'` | `'full'` (default: `'quick'`; `'full'` activates unattended full-depth mode)
+  - `targetDimension` (optional): `'unassigned'` | `'relationships'` | `'scores'` | `'tags'` | `'all'` (default: `'all'`)
+
+### `cms-rem-supervisor`
+**Description**: REM Meta-Cognitive Supervisor & Self-Adaptation workflow (`CMS-04`). Audits recent NREM consolidation (`CMS-02`) mutations and soft-deletions, mines cross-run telemetry and unresolved blockers, and enforces the Dirty-Tree Conditional Single-Pass Validation Gate.
+- **Arguments**:
+  - `lookbackHours` (optional): Hours to look back for `CMS-02` maintenance entries and soft-deleted entries (default: `24`)
+  - `autoRestore` (optional): Boolean (`true` | `false`), automatically restores any high-significance entry erroneously soft-deleted (default: `true`)
 
 ### `verify-work`
 **Description**: Verify recently completed work against requirements.

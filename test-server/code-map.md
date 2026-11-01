@@ -288,6 +288,8 @@ src/
         ├── workflow.ts             # Workflow prompts (standup, retro, digest, analysis, etc., confirm-briefing)
         ├── github.ts               # GitHub prompts (project-status-summary, pr-summary, code-review-prep, pr-retrospective, actions-failure-digest, project-milestone-tracker)
         ├── adversarial.ts          # Adversarial prompts (adversarial-plan-review, adversarial-audit-code-quality, etc)
+        ├── optimizer.ts            # Optimizer prompt (optimize-journal with full/autoRun NREM consolidation mode)
+        └── cms-supervisor.ts       # REM Meta-Cognitive Supervisor prompt (cms-rem-supervisor)
 
 skills/
 ├── bun/                            # Bun ecosystem conventions and testing patterns

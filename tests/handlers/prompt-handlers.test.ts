@@ -197,5 +197,50 @@ describe('Prompt Handlers', () => {
             expect(auditText).toContain('Run `gh copilot -- -p')
             expect(auditText).not.toContain('**Optional (Skip by default)**')
         })
+
+        it('should support unattended full-depth mode in optimize-journal without interactive stop prompts', async () => {
+            const quickRes = await getPrompt('optimize-journal', { mode: 'quick' }, db)
+            const quickText = quickRes.messages[0]?.content.text ?? ''
+            expect(quickText).toContain('INTERACTIVE HANDOVER FOR COMPREHENSIVE MULTI-AGENT DOMAIN AUDIT')
+            expect(quickText).toContain('while (processed < 500)')
+
+            const fullRes = await getPrompt(
+                'optimize-journal',
+                { mode: 'full', autoRun: 'true', limit: '0' },
+                db
+            )
+            const fullText = fullRes.messages[0]?.content.text ?? ''
+            expect(fullText).toContain('UNATTENDED FULL-DEPTH EXECUTION PROTOCOL')
+            expect(fullText).toContain('while (true)')
+            expect(fullText).not.toContain('INTERACTIVE HANDOVER FOR COMPREHENSIVE MULTI-AGENT DOMAIN AUDIT')
+        })
+
+        it('should render cms-rem-supervisor prompt with deleted entry audit and dirty-tree gate instructions', async () => {
+            const maintEntry = db.createEntry({
+                content: '## CMS-02 Maintenance Report\nCompleted consolidation.',
+                entryType: 'maintenance',
+                tags: ['database-optimizer', 'cms-02-nrem-consolidation'],
+                significanceType: 'milestone',
+            })
+            expect(maintEntry.entryType).toBe('maintenance')
+
+            const highValDeleted = db.createEntry({
+                content: 'Important architectural decision accidentally deleted',
+                entryType: 'project_decision',
+                significanceType: 'architecture',
+                impactScore: 0.85,
+            })
+            db.deleteEntry(highValDeleted.id, false)
+
+            const supRes = await getPrompt(
+                'cms-rem-supervisor',
+                { lookbackHours: '24', autoRestore: 'true' },
+                db
+            )
+            const supText = supRes.messages[0]?.content.text ?? ''
+            expect(supText).toContain('CMS-04: REM Meta-Cognitive Supervisor')
+            expect(supText).toContain('HIGH-VALUE CANDIDATE FOR RESTORE')
+            expect(supText).toContain('DIRTY-TREE CONDITIONAL SINGLE-PASS VALIDATION GATE')
+        })
     })
 })

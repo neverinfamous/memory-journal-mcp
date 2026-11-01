@@ -40,6 +40,7 @@ Choose the correct `entry_type` — do NOT default everything to `personal_refle
 - `plan_refinement` — Refinements to plans based on reviews
 - `plan_finalized` — Finalized implementation plans after review
 - `copilot_validation` — Validation of copilot suggestions
+- `maintenance` — Scheduled or manual database optimization, CMS consolidation, and infrastructure healing reports
 - `other` — Anything that doesn't fit the above categories
 - `personal_reflection` — Only for genuinely personal notes that don't fit above
 
@@ -102,6 +103,7 @@ Create relationships to build traversable context chains:
 - `caused` — entry caused or led to another outcome
 
 Only link truly related entries. Do NOT create bulk relationships between unrelated entries that happen to share tags.
+- **Opportunistic Superseding (Awake Contradiction Resolution)**: When creating a `project_decision`, `bug_fix`, or `technical_note` that invalidates or replaces an earlier entry surfaced in your briefing or search results, immediately link the new entry to the superseded entry via `evolves_from` or `resolved` so the knowledge graph reflects the superseding chain in real time.
 
 ### Git Commit Standards
 

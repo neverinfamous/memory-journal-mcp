@@ -31,6 +31,7 @@ export const ENTRY_TYPES = [
     'plan_refinement',
     'plan_finalized',
     'copilot_validation',
+    'maintenance',
     'other',
 ] as const
 

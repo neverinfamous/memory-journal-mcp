@@ -380,4 +380,93 @@ describe('Cross-Subsystem Integration: Autonomous Healing, Validation & Observab
         expect(auditedToolNames).toContain('create_entry')
         expect(auditedToolNames).toContain('test_error_handling')
     })
+
+    it('preserves maintenance entry_type, normalizes resolves relationship alias, persists anchors, and computes relationshipBreakdown & density', async () => {
+        const callToolHandler = getRequestHandler(server, 'tools/call')
+
+        const firstRes = await callToolHandler(
+            {
+                method: 'tools/call',
+                params: {
+                    name: 'create_entry',
+                    arguments: {
+                        content: '## Initial Blocker\nInvestigating anchor persistence.',
+                        entry_type: 'bug_fix',
+                        workspace_id: 'healed-proj',
+                        project_number: 77,
+                        anchors: [{ anchor_path: 'src/handlers/tools/core/tools.ts', anchor_type: 'file' }],
+                    },
+                },
+            },
+            {}
+        )
+        const firstPayload = parseToolResponsePayload(firstRes)
+        expect(getProp(firstPayload, 'success')).toBe(true)
+        const firstId = Number(getProp(firstPayload, 'id'))
+        expect(db.getAnchorsByEntryId(firstId).length).toBe(1)
+        expect(db.getAnchorsByEntryId(firstId)[0]?.anchorPath).toBe('src/handlers/tools/core/tools.ts')
+
+        const secondRes = await callToolHandler(
+            {
+                method: 'tools/call',
+                params: {
+                    name: 'create_entry',
+                    arguments: {
+                        content: '## CMS-02 Maintenance Pass\nResolved anchor persistence and consolidated graph.',
+                        entry_type: 'maintenance',
+                        significance_type: 'milestone',
+                        workspace_id: 'healed-proj',
+                        project_number: 77,
+                        relationships: [{ targetId: firstId, relationType: 'resolves' }],
+                    },
+                },
+            },
+            {}
+        )
+        const secondPayload = parseToolResponsePayload(secondRes)
+        expect(getProp(secondPayload, 'success')).toBe(true)
+        const secondEntry = getProp(secondPayload, 'entry')
+        expect(getProp(secondEntry, 'entryType')).toBe('maintenance')
+
+        const secondId = Number(getProp(secondPayload, 'id'))
+        const rels = db.getRelationships(secondId)
+        expect(rels.some((r) => r.toEntryId === firstId && r.relationshipType === 'resolved')).toBe(true)
+
+        const linkRes = await callToolHandler(
+            {
+                method: 'tools/call',
+                params: {
+                    name: 'link_entries',
+                    arguments: {
+                        from_entry_id: secondId,
+                        to_entry_id: firstId,
+                        relationship_type: 'relates_to',
+                        workspace_id: 'healed-proj',
+                    },
+                },
+            },
+            {}
+        )
+        const linkPayload = parseToolResponsePayload(linkRes)
+        expect(getProp(linkPayload, 'success')).toBe(true)
+        expect(getProp(getProp(linkPayload, 'relationship'), 'relationshipType')).toBe('references')
+
+        const statsRes = await callToolHandler(
+            {
+                method: 'tools/call',
+                params: {
+                    name: 'get_statistics',
+                    arguments: { workspace_id: '*' },
+                },
+            },
+            {}
+        )
+        const statsPayload = parseToolResponsePayload(statsRes)
+        expect(getProp(statsPayload, 'success')).toBe(true)
+        const rc = getProp(statsPayload, 'relationshipComplexity')
+        expect(getProp(rc, 'density')).toBe(1)
+        const breakdown = getProp(statsPayload, 'relationshipBreakdown')
+        expect(getProp(breakdown, 'resolved')).toBe(1)
+        expect(getProp(breakdown, 'references')).toBe(1)
+    })
 })

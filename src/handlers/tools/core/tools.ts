@@ -27,6 +27,7 @@ import {
 import { EntryOutputSchema, coerceSignificanceAlias } from '../schemas.js'
 import type { RelationshipType } from '../../../types/index.js'
 import { ErrorFieldsMixin } from '../error-fields-mixin.js'
+import { resolveEntryAnchors } from './staleness-tools.js'
 
 
 export function getCoreTools(context: ToolContext): ToolDefinition[] {
@@ -92,6 +93,13 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         input.issue_url
                     )
 
+                    const resolvedAnchors = resolveEntryAnchors(
+                        input.anchors,
+                        input.auto_context,
+                        wsId,
+                        context
+                    )
+
                     const createdEntry = db.createEntry({
                         content: input.content,
                         entryType: input.entry_type,
@@ -114,13 +122,22 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         trustScore: input.trust_score,
                         validationStatus: input.validation_status,
                         sessionId: input.session_id,
+                        ...(resolvedAnchors !== undefined ? { anchors: resolvedAnchors } : {}),
                     })
                     const id = createdEntry.id
 
                     if (input.relationships && input.relationships.length > 0) {
                         for (const rel of input.relationships) {
                             try {
-                                db.linkEntries(id, rel.targetId, rel.relationType as RelationshipType)
+                                const canonicalRelType: RelationshipType =
+                                    rel.relationType === 'resolves'
+                                        ? 'resolved'
+                                        : rel.relationType === 'relates_to'
+                                          ? 'references'
+                                          : rel.relationType === 'depends_on'
+                                            ? 'blocked_by'
+                                            : rel.relationType
+                                db.linkEntries(id, rel.targetId, canonicalRelType)
                             } catch {
                                 // Ignore link failures if target doesn't exist
                             }

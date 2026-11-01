@@ -50,21 +50,50 @@ export const CreateEntrySchema = z.preprocess(
         share_with_team: z.boolean().optional().default(false),
         auto_context: z.string().optional(),
         session_id: z.string().optional(),
-        relationships: z.array(z.object({
-            targetId: z.number(),
-            relationType: z.enum([
-                'evolves_from',
-                'references',
-                'implements',
-                'clarifies',
-                'response_to',
-                'blocked_by',
-                'resolved',
-                'caused',
-                'relates_to',
-                'depends_on'
-            ]).optional().default('references')
-        })).optional(),
+        relationships: z.array(
+            z.preprocess(
+                (item: unknown) => {
+                    if (item !== null && typeof item === 'object') {
+                        const relObj = item as Record<string, unknown>
+                        return {
+                            targetId:
+                                relObj['targetId'] ??
+                                relObj['target_id'] ??
+                                relObj['to_entry_id'] ??
+                                relObj['toEntryId'] ??
+                                relObj['id'],
+                            relationType:
+                                relObj['relationType'] ??
+                                relObj['relation_type'] ??
+                                relObj['relationship_type'] ??
+                                relObj['relationshipType'] ??
+                                relObj['type'] ??
+                                'references',
+                        }
+                    }
+                    return item
+                },
+                z.object({
+                    targetId: z.number(),
+                    relationType: z
+                        .enum([
+                            'evolves_from',
+                            'references',
+                            'implements',
+                            'clarifies',
+                            'response_to',
+                            'blocked_by',
+                            'resolved',
+                            'resolves',
+                            'caused',
+                            'relates_to',
+                            'depends_on',
+                        ])
+                        .optional()
+                        .default('references'),
+                })
+            )
+        ).optional(),
     }).strict().superRefine((data, ctx) => {
         if (data.tags?.includes('session-summary')) {
             const c = data.content ?? '';
@@ -157,10 +186,35 @@ export const CreateEntrySchemaMcp = z.preprocess(
         share_with_team: z.boolean().optional().default(false).describe('If true, saves a copy of this entry to the Team database (if configured) using your team alias'),
         auto_context: z.string().optional().describe('JSON string with structured metadata. Used for session-commits context.'),
         session_id: z.string().optional().describe('Agent session ID for thread isolation (usually conversation ID).'),
-        relationships: z.array(z.object({
-            targetId: relaxedNumber(),
-            relationType: z.string().optional().default('references')
-        })).optional().describe('Optional array of links to previous entries/flags to establish relationships immediately upon creation. Types: "resolves", "depends_on", "implements", "relates_to", "references", "evolves_from"'),
+        relationships: z.array(
+            z.preprocess(
+                (item: unknown) => {
+                    if (item !== null && typeof item === 'object') {
+                        const relObj = item as Record<string, unknown>
+                        return {
+                            targetId:
+                                relObj['targetId'] ??
+                                relObj['target_id'] ??
+                                relObj['to_entry_id'] ??
+                                relObj['toEntryId'] ??
+                                relObj['id'],
+                            relationType:
+                                relObj['relationType'] ??
+                                relObj['relation_type'] ??
+                                relObj['relationship_type'] ??
+                                relObj['relationshipType'] ??
+                                relObj['type'] ??
+                                'references',
+                        }
+                    }
+                    return item
+                },
+                z.object({
+                    targetId: relaxedNumber(),
+                    relationType: z.string().optional().default('references'),
+                })
+            )
+        ).optional().describe('Optional array of links to previous entries/flags to establish relationships immediately upon creation. Types: "resolves", "depends_on", "implements", "relates_to", "references", "evolves_from"'),
     }).strict()
 )
 

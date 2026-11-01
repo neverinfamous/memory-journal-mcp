@@ -61,14 +61,25 @@ const LinkEntriesSchemaMcp = z
         message: z.string().optional(),
         text: z.string().optional(),
     })
-    .transform((data) => ({
-        from_entry_id: data.from_entry_id ?? data.from_id ?? data.from ?? data.source_id,
-        to_entry_id: data.to_entry_id ?? data.to_id ?? data.to ?? data.target_id,
-        relationship_type: data.type ?? data.rel ?? data.relationship_type ?? 'references',
-        description: data.description ?? data.message ?? data.text,
-        project_number: data.project_number,
-        workspace_id: data.workspace_id,
-    }))
+    .transform((data) => {
+        const rawRel = data.type ?? data.rel ?? data.relationship_type ?? 'references'
+        const normalizedRel =
+            rawRel === 'resolves'
+                ? 'resolved'
+                : rawRel === 'relates_to'
+                  ? 'references'
+                  : rawRel === 'depends_on'
+                    ? 'blocked_by'
+                    : rawRel
+        return {
+            from_entry_id: data.from_entry_id ?? data.from_id ?? data.from ?? data.source_id,
+            to_entry_id: data.to_entry_id ?? data.to_id ?? data.to ?? data.target_id,
+            relationship_type: normalizedRel,
+            description: data.description ?? data.message ?? data.text,
+            project_number: data.project_number,
+            workspace_id: data.workspace_id,
+        }
+    })
 
 const VisualizeInputSchema = z.object({
     entry_id: z

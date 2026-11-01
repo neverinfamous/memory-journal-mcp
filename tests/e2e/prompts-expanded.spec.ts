@@ -72,5 +72,20 @@ test.describe('E2E Prompts: Expanded Coverage', () => {
         expectValidPrompt(response)
     })
 
+    // --- CMS & Optimizer prompts ---
+    test('optimize-journal prompt in full unattended mode', async () => {
+        const response = await client.getPrompt({
+            name: 'optimize-journal',
+            arguments: { mode: 'full', autoRun: 'true', limit: '0' },
+        })
+        expectValidPrompt(response)
+    })
 
+    test('cms-rem-supervisor prompt', async () => {
+        const response = await client.getPrompt({
+            name: 'cms-rem-supervisor',
+            arguments: { lookbackHours: '24' },
+        })
+        expectValidPrompt(response)
+    })
 })
