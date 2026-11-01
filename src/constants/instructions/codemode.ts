@@ -3,7 +3,7 @@ export const CODEMODE_HELP = `# Code Mode API Reference
 In Code Mode (\`mj_execute_code\`), you do NOT have native MCP tool schemas. You must orchestrate the server using the \`mj.*\` API inside the sandbox.
 
 ## Sandbox Environment
-- **Network:** Disabled. \`fetch()\` throws \`SandboxNetworkError\`. Node network modules are stripped.
+- **Network:** Disabled. \`fetch()\` is blocked and returns a 403 \`VALIDATION_ERROR\` response object. Node network modules are stripped.
 - **Native Modules:** \`fs\`, \`path\`, \`child_process\`, \`require()\`, \`import\` are disabled. To pass file contents or external payloads into Code Mode, use the \`context\` parameter (accessible inside JS code as \`context\`).
 - **Globals:** \`createEntry()\`, \`find()\`, \`recent()\`, \`searchEntries()\`, \`deleteEntry()\`, \`help()\` work without the \`mj.\` prefix.
 - **Positional Arguments:** \`createEntry("note")\`, \`searchEntries("performance")\`, \`mj.backup.backupJournal("snapshot")\`.

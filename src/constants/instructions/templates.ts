@@ -14,10 +14,13 @@ These templates define the REQUIRED structure for journal entry content by type.
 
 ## Context for Next Session
 - [Key context the next agent/session needs: branch names, PR numbers, entry IDs, pending decisions]
+
+## Commits
+- \`<sha>\` — [Brief commit summary or "None"]
 \`\`\`
 
 Do NOT add extra top-level sections (no "## Summary", "## Overview", "## Notes").
-Do NOT omit any of the three required sections.
+Do NOT omit any of the four required sections.
 Always remember to populate the \`auto_context\` payload parameter with the session's commit SHAs.
 
 ## Feature Implementation (entry\\_type: "feature\\_implementation")

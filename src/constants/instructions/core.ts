@@ -58,7 +58,7 @@ Tags are limited to a maximum of 100 characters. Journal entry content is limite
 
 ALL entries MUST define heuristic scores. Use these explicit thresholds:
 
-- \`validation\`: 
+- \`validation_status\`: 
   - \`none\`: Work completed but not yet explicitly tested/verified.
   - \`passed\`: Work explicitly validated via tests, manual confirmation, or peer review.
   - \`failed\`: Work that failed verification or was found to be hallucinatory.

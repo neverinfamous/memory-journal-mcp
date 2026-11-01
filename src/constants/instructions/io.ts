@@ -1,6 +1,6 @@
 export const IO_HELP = `# IO Operations
-- **Exporting**: Supports exporting entries to JSON or Markdown format. Markdown exports include YAML frontmatter for metadata.
-- **Importing**: Supports importing entries from Markdown files with YAML frontmatter, or from external JSON formats.
+- **Exporting**: Supports exporting entries to JSON or Markdown format. Native Markdown exports (\`export_markdown\`) include JSON-formatted frontmatter inside \`---\` delimiters for lossless metadata round-tripping.
+- **Importing**: Supports importing entries from native Markdown files with JSON frontmatter (\`import_markdown\`) or external Markdown vaults with standard YAML frontmatter such as Obsidian, Notion, and Logseq (\`import_external\`).
 
 ## Available Tools
 

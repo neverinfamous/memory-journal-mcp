@@ -18,7 +18,7 @@ When deployed in HTTP mode with `--report-interval <minutes>` and `--report-webh
 
 ### Real-Time Subscriptions
 
-The server supports the standard MCP `resources/subscribe` capability. You can subscribe to team resources (e.g., `memory://team/recent`, `memory://flags`, and `memory://briefing`) to receive real-time `notifications/resources/updated` notifications when other agents or team members mutate shared data. Note that subscriptions are scope-authorized; your session must possess the required scope (e.g., `team` or `admin`) for the target resource, or the subscription will be rejected with a `PermissionError`.
+The server supports the standard MCP `resources/subscribe` capability. You can subscribe to resources (e.g., `memory://recent`, `memory://team/recent`, and `memory://briefing`) to receive real-time `notifications/resources/updated` notifications when other agents or team members mutate shared data. Note that subscriptions are scope-authorized; your session must possess the required scope (e.g., `team` or `admin`) for the target resource, or the subscription will be rejected with a `PermissionError`.
 
 ## Available Tools
 
