@@ -138,7 +138,7 @@ docker run --rm -i -v ./data:/app/data memory-journal-dev
 ### Database Changes
 
 - **Schema migrations** — Add versioned migrations in `src/database/migrations/` (registered in `migration-list.ts` and executed via `MigrationManager`) and update column projections in `src/database/sqlite-adapter/entries/shared.ts` when adding columns
-- **Backward compatibility** — Ensure existing data isn't broken; use versioned migrations and `migrateSchema()` for column additions
+- **Backward compatibility** — Ensure existing data isn't broken; add numbered migrations in `src/database/migrations/` and register them in `src/database/migrations/migration-list.ts` for schema additions
 - **Performance** — Consider index implications for new queries
 - **Testing** — Verify with both empty and populated databases
 
@@ -225,12 +225,14 @@ src/
 │   ├── migrations/             # Versioned schema migrations (MigrationManager)
 │   └── sqlite-adapter/         # Native SQLite operations (better-sqlite3)
 ├── filtering/                  # Tool filtering system
+├── git/                        # Local Git repository inspection and commit analysis
 ├── github/
 │   └── github-integration/     # GitHub API integration
 ├── handlers/
 │   ├── tools/                  # tool handlers (multiple groups)
 │   ├── resources/              # resource handlers
-│   └── prompts/                # prompt handlers
+│   └── prompts/                # prompt handlers (load-briefing.ts, optimizer.ts, cms-supervisor.ts, etc.)
+├── importance/                 # Heuristic entry importance scoring engine
 ├── markdown/                   # Markdown import/export (round-trip frontmatter parsing)
 ├── observability/              # Metrics interceptor, token estimator, latency tracker
 ├── server/

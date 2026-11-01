@@ -20,6 +20,7 @@ This ensures the markdown source of truth remains synchronized with the code.
 
 We use a hybrid documentation approach:
 1. **Dynamic Parameters**: Tool parameter lists, types, and descriptions are dynamically generated at runtime by introspecting the Zod schemas using `peelZodType` and `extractParameters`.
-2. **Static Narrative**: The `markdown/` directory provides the narrative context, standard operating procedures, and "gotchas" that cannot be expressed purely in code. 
-
-At runtime, the `memory://help/{group}` resources merge the static narrative content from these markdown files with the dynamic parameter definitions.
+2. **Static Narrative**: The `markdown/` directory provides the narrative context, standard operating procedures, and "gotchas" that cannot be expressed purely in code.
+   - `overview.md` and `codemode-snippet.md` compile together into `base.ts` (`CORE_INSTRUCTIONS` and `CODE_MODE_INSTRUCTIONS`).
+   - Tool-group files (e.g., `core.md`, `search.md`, `team.md`) compile into `*_HELP` constants that `memory://help/{group}` merges with dynamic Zod parameter definitions at runtime.
+   - `gotchas.md` (`GOTCHAS_HELP`) and `templates.md` (`TEMPLATES_HELP`) serve static narrative guidance directly via `memory://help/gotchas` and `memory://rules/templates` without schema introspection.

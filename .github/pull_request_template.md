@@ -67,7 +67,7 @@ Brief description of the changes in this PR.
 
 - [ ] No database schema changes
 - [ ] Schema changes included (describe below)
-- [ ] Migration script provided
+- [ ] Migration added in `src/database/migrations/` (if applicable)
 - [ ] Backward compatibility maintained
 
 **If schema changes, describe:**

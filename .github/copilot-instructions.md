@@ -47,15 +47,15 @@ If you find issues during code review, use `create_entry` with tag `copilot-find
 - **Never use `@ts-ignore` or `@ts-expect-error`** — fix the underlying type issue
 - **Zod schemas** for all tool input validation
 - **Output schemas** — All tools have Zod output schemas; error responses must pass validation
-- **Dual Schema Pattern**: All schemas strictly separate input (stringified, loosely typed for LLMs) and output (strict internal domain types) validations. `argsSchema` is omitted for zero-argument prompts AND prompts where all arguments are optional (`!hasRequired` in `src/server/registration.ts`), as `z.object({})` rejects `undefined` when clients omit arguments.
+- **Dual Schema Pattern**: All tool schemas separate strict internal validation (`*Schema` preprocessed by `healAgentHallucinations`), MCP wire input schemas (`*SchemaMcp` using `relaxedNumber()` to accept stringified numbers from LLMs), and output schemas (`*OutputSchema`). `argsSchema` is omitted for zero-argument prompts AND prompts where all arguments are optional (`!hasRequired` in `src/server/registration.ts`), as `z.object({})` rejects `undefined` when clients omit arguments.
 
 ### Error Handling
 
-All tool handlers must return structured error JSON with \`isError: true\` instead of throwing raw MCP exceptions.
-Every tool must return \`{success, error, code, category, suggestion, recoverable}\` to ensure agents get classification, remediation hints, and recoverability signals.
+All tool handlers catch errors and return structured error objects via `formatHandlerError(error)` instead of throwing raw MCP exceptions.
+Every tool error return matches `{ success: false, error, code, category, suggestion?, recoverable, details? }` to ensure agents get classification, remediation hints, and recoverability signals.
 
-- **Never** throw raw \`McpError\` exceptions which cause agents to crash.
-- **Always** return a structured JSON response wrapped in \`{ content: [{ type: 'text', text: JSON.stringify(...) }], isError: true }\`.
+- **Never** throw raw `McpError` exceptions from tool handlers which cause agents to crash.
+- **Always** return `formatHandlerError(error)` from tool `catch` blocks; the registration layer (`src/server/mcp-server/tool-registration/`) wraps the structured JSON object into `{ content: [{ type: 'text', text: JSON.stringify(result, null, 2) }], structuredContent: result }` without setting `isError: true` on structured domain errors so clients parse the structured payload cleanly.
 
 ### Token Estimation
 
@@ -78,7 +78,7 @@ All resources must dynamically compute and return `_meta.tokenEstimate` within t
 - **Dual-Schema Pattern**: All schemas must separate stringified input from strict internal domain types. Zod schemas are used.
 - **Plugin Sync**: Ensure `lib-agent-exec` and `lib-git-history` plugins are kept in sync.
 - **Guardrails**: The `Server Bug Protocol` (`src/constants/instructions/gotchas.ts`) instructs agents to stop and report unexpected server errors, `healAgentHallucinations` (`src/handlers/tools/schemas/hallucination-healer.ts`) autonomously normalizes malformed tool arguments, and the session briefing health alert surfaces maintenance recommendations (via the `optimize-journal` prompt).
-- **Code Mode Error Proxy**: Code Mode result proxy intercepts errors with "AUTONOMOUS HEALING" prefix.
+- **Code Mode Error Proxy**: Code Mode API, Promise, and Worker proxies intercept and enrich errors with the `🛠️ AUTONOMOUS HEALING:` guidance prefix, while `worker-result-proxy.ts` prefixes `.error` with `[${code}]`.
 
 ## Architecture
 ```
@@ -97,7 +97,9 @@ src/
 │   ├── migrations/             # Versioned schema migrations (MigrationManager)
 │   └── sqlite-adapter/         # SQLite operations via better-sqlite3
 ├── filtering/
-│   └── tool-filter.ts          # Tool filtering (groups, meta-groups, tool-constants.ts)
+│   ├── tool-constants.ts       # Tool groups and meta-group definitions (TOOL_GROUPS)
+│   └── tool-filter.ts          # Tool filtering engine
+├── git/                        # Local Git repository integration (simple-git)
 ├── github/
 │   └── github-integration/     # GitHub API (@octokit/rest + GraphQL)
 ├── handlers/
@@ -136,9 +138,9 @@ When reviewing PRs, check for:
 - [ ] Missing barrel exports in `src/types/index.ts` when new types are added
 - [ ] `eslint-disable` usage — always forbidden
 - [ ] `@ts-ignore` or `as any` — always forbidden
-- [ ] Raw exceptions from tool handlers — forbidden. Must return structured JSON with \`isError: true\` and exact classification codes
+- [ ] Raw exceptions from tool handlers — forbidden. Must return structured JSON via `formatHandlerError(error)` with exact classification codes
 - [ ] Files approaching 500 lines — flag for splitting
-- [ ] New tools missing from `src/filtering/tool-filter.ts` TOOL_GROUPS
+- [ ] New tools missing from `src/filtering/tool-constants.ts` `TOOL_GROUPS` (re-exported by `src/filtering/tool-filter.ts`)
 - [ ] Missing Zod output schemas on new tools
 - [ ] Kebab-case violations in new filenames
 - [ ] `continue-on-error: true` in workflow files — forbidden per project standards

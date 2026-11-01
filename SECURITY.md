@@ -20,12 +20,13 @@ The server uses the native **better-sqlite3** driver with **sqlite-vec** for vec
 
 ## 🔐 **Input Validation**
 
-### **Content Limits**
+### **Content & Boundary Limits**
 
 - **Journal entries**: 50,000 characters maximum
-- **Tags**: 100 characters maximum
-- **Entry types**: 50 characters maximum
-- **Significance types**: 50 characters maximum
+- **Tags**: 100 characters maximum (normalized via slug regex `[^a-z0-9:@]+` -> `-` at the SQLite adapter boundary)
+- **Entry & significance types**: Enforced against strict `ENTRY_TYPES` and `SIGNIFICANCE_TYPES` allowlists (50 characters maximum)
+- **Timestamps**: Validated and normalized to ISO 8601 (`YYYY-MM-DDTHH:MM:SS.sssZ`) in `validateEntryInput()`
+- **Query & batch bounds**: `MAX_QUERY_LIMIT = 500` per query and `MAX_BATCH_SIZE = 50` per bulk operation
 - **HTTP request body**: 1MB maximum (prevents memory exhaustion)
 - **Tool input elements**: 25,000 array/object elements maximum per tool call (configurable via `MAX_TOOL_INPUT_ELEMENTS` / `--max-tool-input-elements`)
 
@@ -68,7 +69,7 @@ When running in HTTP mode (`--transport http`), the following security measures 
 
 ### **CORS Configuration**
 
-- ✅ **Configurable multiple origins** via comma-separated `--cors-origin` flag or `CORS_ORIGIN` environment variable (`MCP_CORS_ORIGIN` supported as an alias)
+- ✅ **Configurable multiple origins** via comma-separated `--cors-origin` flag or `CORS_ORIGIN` environment variable (`MJ_CORS_ORIGIN` supported via `MJ_*` prefix resolution)
 - ✅ **Exact-match verification** (no wildcard matching for custom domains)
 - 🔒 **Default: None** (no external origins allowed by default). You MUST explicitly configure CORS for browsers.
 - 🔒 **Required**: Set specific origins for production deployments, or wildcard (`*`) will only be accepted if HTTP Authentication is enabled.
@@ -100,8 +101,8 @@ export CORS_ORIGIN="http://localhost:3000,https://my-app.com"
 ### **Session Management (Stateful Mode)**
 
 - ✅ **UUID-based session IDs** (cryptographically random)
-- ✅ **Principal-bound sessions** — Authenticated sessions bind `mcp-session-id` to the caller's principal (`sub` or Bearer token hash); cross-principal session reuse is rejected with `403 Forbidden`
-- ✅ **Active session cap** — Enforces a hard limit of `100` concurrent active sessions (`503` when full) and rejects duplicate SSE stream attachments on the same session (`409 Conflict`)
+- ✅ **Principal-bound sessions** — Authenticated sessions bind `mcp-session-id` to the caller's principal (`sub` or Bearer token hash); cross-principal session reuse is rejected with `403 Forbidden`, and unknown or uninitialized `sessionId` / `mcp-session-id` requests return `400 Bad Request` (`Session not found`)
+- ✅ **Active session cap** — Enforces a hard limit of `100` concurrent active sessions (`503 Service Unavailable` when full) and rejects duplicate SSE stream attachments on the same session (`409 Conflict`)
 - ✅ **Idle timeout** — Sessions inactive for 30 minutes are automatically expired
 - ✅ **1-minute sweep interval** — periodic cleanup of expired sessions and subscription listeners
 - ✅ **Explicit session termination** via `DELETE /mcp`
@@ -129,7 +130,7 @@ For production HTTP deployments, Memory Journal supports **OAuth 2.1 authenticat
 | Scope   | Tool Groups                                                                | Description                            |
 | ------- | -------------------------------------------------------------------------- | -------------------------------------- |
 | `read`  | `core, search, analytics, relationships, io, git`                          | Read-only operations                   |
-| `write` | `github (+ all read groups and create_entry / link_entries / markdown IO)` | Read + write operations                |
+| `write` | `github (+ all read groups and create_entry / link_entries / mark_anchors_stale / import_external / markdown IO)` | Read + write operations                |
 | `team`  | `team (dedicated team collaboration scope)`                                | Team database operations               |
 | `audit` | `audit log access`                                                         | Audit log queries and inspection       |
 | `admin` | `admin, backup, codemode (+ all read/write/team/audit groups)`             | Full administrative access             |
@@ -206,7 +207,7 @@ AUTO_REBUILD_INDEX=true          # Rebuild vector index on startup
 
 ### **Container Hardening**
 
-- ✅ **Minimal base image**: `node:26-alpine`
+- ✅ **Minimal base image**: `node:26.2.0-alpine`
 - ✅ **Multi-stage build**: Build dependencies not in production image
 - ✅ **Process isolation** from host system
 - ✅ **No shell access needed** for production
@@ -500,7 +501,7 @@ chmod 700 /shared/team-data
 | `< 9.0`             | :x:                | Legacy releases; please upgrade to `Latest (9.x)`.                    |
 | Node.js             | 24.x+ (26.x LTS)   | Minimum Node 24+. Node 26.x LTS recommended for isolation features. |
 | MCP Protocol        | 2025-11-25 / 2025-03-26 (backward-compatible with 2024-11-05) | Full compatibility with the official Model Context Protocol.          |
-| Docker Base         | `node:26-alpine`   | Alpine-based images receive regular vulnerability patches.            |
+| Docker Base         | `node:26.2.0-alpine` | Alpine-based images receive regular vulnerability patches.          |
 
 ## 🚨 **Reporting Security Issues**
 

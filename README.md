@@ -23,9 +23,9 @@
 Large projects face a critical challenge. You lose context between sessions.
 
 - **Stop Thread Amnesia** - AI conversations start fresh. They ignore previous work.
-- **Retain Deep Context** - You scatter decisions and code across threads. We save them.
-- **End Repeated Work** - AI repeats failed solutions. We remember your attempts.
-- **Prevent Context Overload** - You copy history manually. We automate context delivery.
+- **Retain Deep Context** - Decisions and code scatter across threads; Memory Journal preserves them automatically.
+- **End Repeated Work** - AI repeats failed solutions; persistent history tracks every prior attempt.
+- **Prevent Context Overload** - Manual history copying wastes tokens; dynamic briefings deliver targeted context automatically.
 
 Memory Journal builds your project's long-term memory. It acts as a **Project Context Graph** for AI-assisted engineering. It bridges **human workflows** (Issues, PRs, Kanban, Milestones) with **agent execution** (Git, tests, decisions).
 
@@ -39,7 +39,7 @@ Memory Journal builds your project's long-term memory. It acts as a **Project Co
 - _"Commit the changes and automatically generate a structured journal entry using the \`--journal\` wrapper flag."_ (Automated lifecycles)
 - _"Draw a visual graph showing how my last 10 architectural decisions relate to each other."_ (Knowledge graph)
 
-**Comprehensive access to internal state via resources (`memory://briefing`, `memory://workflows`, `memory://rules`, `memory://health`, `memory://help`, `memory://staleness`, GitHub status/milestones, team stats, metrics/latency, and more) plus dynamic repo variants for cross-repo targeting (like `memory://briefing/{repo}` or `memory://kanban/{repo}/{project_number}`).** **[Resources documentation →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Resources)**
+**Comprehensive access to internal state via resources (`memory://briefing`, `memory://workflows`, `memory://rules`, `memory://health`, `memory://help`, `memory://staleness`, GitHub status/milestones, team stats, metrics/latency, and more) plus dynamic repo variants for cross-repo targeting (like `memory://briefing/{+repo}` or `memory://kanban/{+repo}/{project_number}`).** **[Resources documentation →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Resources)**
 
 ---
 
@@ -76,7 +76,7 @@ Memory Journal supports multi-tenancy out of the box via the `workspace_id` cons
 
 - **Auto-Resolution:** When `workspace_id` is omitted, the server automatically resolves the target workspace by matching `project_number` against `PROJECT_REGISTRY`, matching content/tag keyword aliases, or inspecting `process.cwd()`, before falling back to `DEFAULT_WORKSPACE_ID` (default: `default`).
 - **Data Partitioning & Cross-Workspace Queries:** Core CRUD, Soft-Delete/Restore, FTS5 Search, Vector Semantic Search (`semantic_search`), and Analytics tools enforce `workspace_id` isolation end-to-end. Read and search tools accept `workspace_id: "*"` to query across all workspaces, while external write/mutation paths reject wildcard overrides.
-- **Immutability:** A `workspace_id` is permanently assigned upon entry creation and **cannot be changed** afterward.
+- **Immutability & Controlled Migration:** A `workspace_id` is assigned upon entry creation and cannot be overwritten directly on standard updates; to migrate an entry across workspaces, call `update_entry` with `workspace_id: "*"` and `target_workspace_id`.
 - **Server Config:** Set `--default-workspace-id` (or the `DEFAULT_WORKSPACE_ID` environment variable) to configure the default fallback workspace for the server instance, allowing you to run multiple isolated journal interfaces on a single physical database.
 
 ---
@@ -194,12 +194,12 @@ Control which tools are exposed using any of the 3 configuration sources (preced
 
 ### 🎯 **Workflow Prompts**
 
-Session briefing, time period analysis, goal tracking, PR & issue command, session summaries, adversarial plan reviews, exhaustive code & security audits, secure commit workflows, anti-hallucination healing. **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
+Specialized workflow prompts covering session briefing, standup & retro prep, goal tracking, PR & issue command, session summaries, journal optimization, CMS REM supervision, adversarial plan reviews, exhaustive code & security audits, secure commit workflows, and anti-hallucination healing. **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
 ### 📡 **Resources**
 See the **[Complete resources guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Resources)** for the full list of dynamic context resources, including `memory://briefing`, `memory://instructions`, GitHub integration endpoints, telemetry metrics, and templated views.
 
-- **Dynamic Resource Templates**: Resources `memory://briefing/{repo}`, `memory://actions/recent/{repo}`, `memory://github/status/{repo}`, `memory://github/milestones/{repo}`, `memory://milestones/{repo}/{number}`, and `memory://kanban/{repo}/{project_number}` accept a `{repo}` path parameter for targeted project context.
+- **Dynamic Resource Templates**: Resources `memory://briefing/{+repo}`, `memory://agent-context/{+repo}`, `memory://actions/recent/{+repo}`, `memory://github/status/{+repo}`, `memory://github/milestones/{+repo}`, `memory://milestones/{+repo}/{number}`, and `memory://kanban/{+repo}/{project_number}` accept an RFC 6570 `{+repo}` path parameter for targeted project context.
 
 ---
 
@@ -248,6 +248,8 @@ If you prefer individual tool calls, exclude codemode:
 ```
 
 ---
+
+## 🚀 Quick Start & Deployment
 
 _Note: Configuration is resolved using strict precedence: `CLI flags > Environment Variables > Config File > Defaults`._
 
@@ -381,7 +383,7 @@ You control exactly what additional content your agent sees across three dimensi
 | **npx (no install)**    | Replace `"command"` with `"npx"` and add `"args": ["-y", "memory-journal-mcp"]`                                              |
 | **From source**         | Replace `"command"` with `"node"` and add `"args": ["dist/cli.js"]`                                                          |
 | **Code Mode only**      | Add `"args": ["--tool-filter", "codemode"]` (single tool, all capabilities)                                                  |
-| **Docker**              | Replace `"command"` with `"docker"` and use `run -i --rm -v ./data:/app/data writenotenow/memory-journal-mcp:latest` as args |
+| **Docker**              | Replace `"command"` with `"docker"` and add `"args": ["run", "-i", "--rm", "-v", "./data:/app/data", "writenotenow/memory-journal-mcp:latest"]` |
 | **Team collaboration**  | Add `"TEAM_DB_PATH": "./team.db"` to `env`                                                                                   |
 
 Restart your MCP client and start journaling!
@@ -532,7 +534,7 @@ For production deployments, enable OAuth 2.1 authentication on the HTTP transpor
 | Scope   | Tool Groups                                                        |
 | ------- | ------------------------------------------------------------------ |
 | `read`  | `core, search, analytics, relationships, io, git`                  |
-| `write` | `github (+ all read groups and create_entry / link_entries / markdown IO)` |
+| `write` | `github (+ all read groups and create_entry / link_entries / mark_anchors_stale / import_external / markdown IO)` |
 | `team`  | `team (dedicated team collaboration scope)`                        |
 | `audit` | `audit log access`                                                 |
 | `admin` | `admin, backup, codemode (+ all read/write/team/audit groups)`     |
@@ -584,8 +586,8 @@ memory-journal-mcp --transport http --port 3000
 | **Security & Tooling** | |
 | `ALLOWED_IO_ROOTS`                             | Comma-separated paths for Code Mode and IO filesystem boundaries (fail-closed in stdio; mandatory when `--transport http` is used) |
 | `MEMORY_JOURNAL_MCP_TOOL_FILTER`               | Control tool exposure (`full`, `starter`, `codemode`, `readonly`, `-github`; CLI: `--tool-filter`, `memory-journal.config.json` key: `"toolFilter"`. Note: `TOOL_FILTER` is a display fallback only) |
-| `CODE_MODE_MAX_RESULT_SIZE`                    | Max execution payload buffer size in Code Mode (bytes)     |
-| `CODEMODE_INTERNAL_FULL_ACCESS`                | Allow Code Mode to bypass tool filters internally          |
+| `CODE_MODE_MAX_RESULT_SIZE`                    | Max execution payload buffer size in Code Mode (bytes, default: `102400`) |
+| `CODEMODE_INTERNAL_FULL_ACCESS`                | Allow Code Mode to bypass tool filters internally (default: `false`, alias: `MJ_CODEMODE_INTERNAL_FULL_ACCESS`) |
 | `MCP_AGENT_HEALING`                            | Enable/disable autonomous tool & parameter healing (`true`/`false`, CLI: `--no-agent-healing`) |
 | `MAX_TOOL_INPUT_ELEMENTS`                      | Max array/object elements in tool inputs (default: `25000`, `0` = disabled) |
 | **Briefing & Context** | |
@@ -594,9 +596,9 @@ memory-journal-mcp --transport http --port 3000
 | `BRIEFING_COMMIT_COUNT`                        | Number of git commits in briefing (default: 3)             |
 | `BRIEFING_IMPORTANCE_THRESHOLD`                | Minimum importance score for briefing entries (default: 0.3)|
 | `BRIEFING_INCLUDE_TEAM`                        | Include entries from the team database (default: false)    |
-| `BRIEFING_ISSUE_COUNT` / `BRIEFING_PR_COUNT` / `BRIEFING_PR_STATUS` | GitHub Issues, PRs, and PR status breakdown in briefing |
-| `BRIEFING_MILESTONE_COUNT`                     | GitHub Milestones to list with titles                      |
-| `BRIEFING_WORKFLOW_COUNT` / `BRIEFING_WORKFLOW_STATUS` / `BRIEFING_COPILOT_REVIEWS` | CI workflow runs, status breakdown, and Copilot review state |
+| `BRIEFING_ISSUE_COUNT` / `BRIEFING_PR_COUNT` / `BRIEFING_PR_STATUS` | GitHub Issues (default: `0`), PRs (default: `0`), and PR status breakdown (default: `false`) in briefing |
+| `BRIEFING_MILESTONE_COUNT`                     | GitHub Milestones to list with titles (default: `3`)       |
+| `BRIEFING_WORKFLOW_COUNT` / `BRIEFING_WORKFLOW_STATUS` / `BRIEFING_COPILOT_REVIEWS` | CI workflow runs (default: `0`), status breakdown (default: `false`), and Copilot review state (default: `false`) |
 | `RULES_FILE_PATH` / `SKILLS_DIR_PATH` / `MEMORY_JOURNAL_WORKFLOW_SUMMARY` | Injected behavioral rules, skills boundaries, and workflow summary |
 | **OAuth (HTTP Mode)** | |
 | `OAUTH_ENABLED`                                | Enable OAuth 2.1 authentication (default: false)           |
@@ -604,7 +606,7 @@ memory-journal-mcp --transport http --port 3000
 | **Telemetry & Administration** | |
 | `AUDIT_LOG_PATH` / `AUDIT_REDACT`              | File path for JSONL telemetry and argument redaction       |
 | `METRICS_EXPORT` / `PERSIST_METRICS` / `MJ_METRICS_PORT` | Prometheus export, disk-persisted metrics, and dedicated scrape port |
-| `AUTO_PRUNE_INTERVAL_MINUTES` / `ARCHIVE_OLDER_THAN_DAYS` / `PRUNE_OLDER_THAN_DAYS` / `HARD_DELETE_OLDER_THAN_DAYS` / `PRUNE_IMPORTANCE_THRESHOLD` / `PRUNE_DRY_RUN` / `PRUNE_EXCLUDE_TAGS` | Autonomous lifecycle pruning, archiving, thresholds, and exclusion tags |
+| `AUTO_PRUNE_INTERVAL_MINUTES` / `ARCHIVE_OLDER_THAN_DAYS` / `PRUNE_OLDER_THAN_DAYS` / `HARD_DELETE_OLDER_THAN_DAYS` / `PRUNE_IMPORTANCE_THRESHOLD` / `PRUNE_DRY_RUN` / `PRUNE_EXCLUDE_TAGS` | Autonomous lifecycle pruning, archiving (interval/days default: `0` = disabled), importance threshold (default: `0.15`), dry-run (default: `false`), and exclusion tags |
 | `REPORT_INTERVAL` / `REPORT_WEBHOOK_URL`       | Scheduled HTTP reports                                     |
 
 ### GitHub Integration (Optional)
@@ -634,7 +636,7 @@ See the **[Complete tools reference](https://github.com/neverinfamous/memory-jou
 
 ### Automate with GitHub Commander Workflows
 
-The server natively bundles the `memory-journal-mcp` agent skill (served via SEP-2640 and `memory://skills`) and provides built-in `issue-commander` and `pr-commander` MCP workflow prompts for autonomous DevOps stewardship: **Issue Triage**, **Milestone Sprints**, **PR Reviews**, **Copilot Audits**, **Security Audits**, **Code Quality Audits**, **Performance Audits**, **Roadmap Kickoffs**, and **Dependency Updates**. Configure validation layers using the `PROJECT_*` environment overrides to enforce CI-matching execution locally during agent tasks!
+The server natively bundles the `memory-journal-mcp` agent skill (served via SEP-2640 and `memory://skills`) and provides built-in `issue-commander` and `pr-commander` MCP workflow prompts for autonomous DevOps stewardship: **Issue Triage**, **Milestone Sprints**, **PR Reviews**, **Copilot Audits**, **Security Audits**, **Code Quality Audits**, **Performance Audits**, **Roadmap Kickoffs**, and **Dependency Updates**, enforcing multi-gate validation (`lint`, `typecheck`, `test`, and security checks) locally during agent tasks!
 
 ## 🏗️ Architecture
 
@@ -739,7 +741,7 @@ pnpm run test:e2e  # End-to-end HTTP/SSE transport tests
 - **Input validation** - Zod schemas, content size limits, SQL injection prevention, and `<untrusted_remote_content>` prompt-injection boundary tagging
 - **Path traversal & SSRF protection** - `ALLOWED_IO_ROOTS` sandbox containment with URL-decode/symlink verification, backup path validation, and outbound webhook DNS/IP SSRF blocking
 - **Multi-tenant & filter enforcement** - End-to-end `workspace_id` isolation across SQLite and Vector search, plus execution-layer `--tool-filter` enforcement across `tools/call`, Code Mode (`mj.*`), and fallback handlers
-- **MCP 2025-03-26 annotations** - Behavioral hints (`readOnlyHint`, `destructiveHint`, etc.)
+- **MCP 2025-11-25 annotations & icons** - Behavioral hints (`readOnlyHint`, `destructiveHint`, etc.) and capability icons
 - **HTTP transport hardening** - OAuth 2.1 `tokenClaims` propagation, principal-bound stateful sessions (`100` max active sessions), comprehensive security headers, configurable multi-origin CORS, 1MB body/stream limit, built-in rate limiting (100 req/min), server timeouts, HSTS (opt-in), 30-min session timeout, and localhost-bound metrics
 - **Token scrubbing** - GitHub tokens and credentials automatically redacted from error and audit logs
 

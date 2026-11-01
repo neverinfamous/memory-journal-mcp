@@ -28,8 +28,10 @@ services:
       - MEMORY_JOURNAL_CONFIG=
       - MCP_HOST=
       - PORT=
+      - TRANSPORT=
       - STATELESS=
       - MCP_AUTH_TOKEN=
+      - MCP_AUTH_SCOPES=
       - CORS_ORIGIN=
       - MCP_RATE_LIMIT_MAX=
       - MCP_ENABLE_HSTS=
@@ -79,6 +81,7 @@ services:
       - REPORT_WEBHOOK_URL=
       - REPORT_WEBHOOK_AUTH=
       - REPORT_CONTENT_TYPE=
+      - ALLOW_INSECURE_WEBHOOK_HTTP=
       - EMBEDDING_MODEL=
       - AUTO_REBUILD_INDEX=
       - AUTO_PRUNE_INTERVAL_MINUTES=
@@ -131,6 +134,7 @@ services:
       - MEMORY_JOURNAL_CONFIG=
       - MCP_HOST=0.0.0.0
       - PORT=3000
+      - TRANSPORT=
       - STATELESS=
       - MCP_AUTH_TOKEN=${MCP_AUTH_TOKEN:?MCP_AUTH_TOKEN is required for HTTP transport in production}
       - MCP_AUTH_SCOPES=
@@ -183,6 +187,7 @@ services:
       - REPORT_WEBHOOK_URL=
       - REPORT_WEBHOOK_AUTH=
       - REPORT_CONTENT_TYPE=
+      - ALLOW_INSECURE_WEBHOOK_HTTP=
       - EMBEDDING_MODEL=
       - AUTO_REBUILD_INDEX=
       - AUTO_PRUNE_INTERVAL_MINUTES=

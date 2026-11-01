@@ -45,7 +45,7 @@ flowchart LR
     PR --> DPD
     PR --> CQL
     PR --> SS
-    PR --> SU
+    PR -->|"path-filtered"| SU
 
     Sched --> CQL
     Sched --> SU
@@ -75,13 +75,13 @@ flowchart LR
 | -------------------------------------------- | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
 | [codeql.yml](codeql.yml)                     | PR / weekly (Mon 02:23 UTC) / `workflow_call`          | CodeQL static analysis for `javascript-typescript` and `actions`                                   |
 | [secrets-scanning.yml](secrets-scanning.yml) | PR / `workflow_call`                                   | TruffleHog (verified secrets) scanning                                                             |
-| [security-update.yml](security-update.yml)   | PR / weekly (Sun 02:00 UTC) / manual / `workflow_call` | Docker image Trivy scan (CRITICAL/HIGH/MEDIUM), SARIF upload, auto-creates GitHub issue on failure |
+| [security-update.yml](security-update.yml)   | PR (path-filtered) / weekly (Sun 02:00 UTC) / manual / `workflow_call` | Docker image Trivy scan (CRITICAL/HIGH/MEDIUM), SARIF upload, auto-creates GitHub issue on failure |
 
 ### Release & Publishing
 
 | File                                     | Trigger                                                                             | Purpose                                                                                                                                                |
 | ---------------------------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| [docker-publish.yml](docker-publish.yml) | `workflow_call` from gatekeeper (on `tag v*` pushes after all 5 gates pass)         | Multi-arch Docker build (amd64 + arm64), smoke test, Docker Scout scan, manifest merge, SBOM/provenance attestation, Docker Hub description update, and npm publish handoff |
+| [docker-publish.yml](docker-publish.yml) | `workflow_call` from gatekeeper (on `tag v*` pushes after all 5 gates pass)         | Docker Scout scan + smoke test → multi-arch Docker build (amd64 + arm64) + SBOM/provenance attestation → manifest merge + Docker Hub README update → npm publish handoff |
 | [publish-npm.yml](publish-npm.yml)       | `workflow_call` (from docker-publish)                                               | Publishes to npm with version verification                                                                                                             |
 
 ---
@@ -99,7 +99,7 @@ push to main / tag v*
       ├── security-update    │
       └── e2e              ──┘
             ↓ all gates pass AND ref is refs/tags/v*
-          docker-publish (multi-arch build + smoke test + Docker Scout + SBOM/provenance + Docker Hub README)
+          docker-publish (Docker Scout + smoke test → multi-arch build + SBOM/provenance → manifest merge + Docker Hub README)
             ↓ workflow_call
           publish-npm (npm publish with provenance)
 ```
@@ -112,7 +112,7 @@ For manual feature releases, the maintainer runs `/bump-deploy` locally which pu
 
 | Secret            | Used By                                                  | Purpose                        |
 | ----------------- | -------------------------------------------------------- | ------------------------------ |
-| `GITHUB_TOKEN`    | docker-publish, security-update, dockerfile-patch-drift  | Git operations, issue creation |
+| `GITHUB_TOKEN`    | docker-publish, security-update, codeql                  | Git operations, SARIF upload, issue creation |
 | `NPM_TOKEN`       | publish-npm                     | npm registry authentication    |
 | `DOCKER_USERNAME` | docker-publish                  | Docker Hub login               |
 | `DOCKER_PASSWORD` | docker-publish                  | Docker Hub login               |

@@ -56,7 +56,7 @@ Memory Journal supports multi-tenancy out of the box via the `workspace_id` cons
 
 - **Auto-Resolution:** When `workspace_id` is omitted, the server automatically resolves the target workspace by matching `project_number` against `PROJECT_REGISTRY`, matching content/tag keyword aliases, or inspecting `process.cwd()`, before falling back to `DEFAULT_WORKSPACE_ID` (default: `default`).
 - **Data Partitioning & Cross-Workspace Queries:** Core CRUD, Soft-Delete/Restore, FTS5 Search, Vector Semantic Search (`semantic_search`), and Analytics tools enforce `workspace_id` isolation end-to-end. Read and search tools accept `workspace_id: "*"` to query across all workspaces, while external write/mutation paths reject wildcard overrides.
-- **Immutability:** A `workspace_id` is permanently assigned upon entry creation and **cannot be changed** afterward.
+- **Controlled Migration:** A `workspace_id` is assigned on creation and migrated only via `update_entry` (`workspace_id: "*"` + `target_workspace_id`).
 - **Server Config:** Set `--default-workspace-id` (or `DEFAULT_WORKSPACE_ID`) to configure the default fallback workspace for the container.
 
 ---
@@ -130,11 +130,11 @@ Control which tools and tool groups are exposed using `MEMORY_JOURNAL_MCP_TOOL_F
 
 ### 🎯 **Workflow Prompts**
 
-Session briefing, time period analysis, goal tracking, PR & issue command, session summaries, adversarial plan reviews, exhaustive code & security audits, secure commit workflows, anti-hallucination healing. **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
+Specialized workflow prompts for session briefing, standup & retro prep, goal tracking, PR & issue command, session summaries, journal optimization, adversarial plan reviews, exhaustive code & security audits, secure commit workflows, and anti-hallucination healing. **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
 ### 📡 **Resources**
 
-Comprehensive access to internal state via resources (`memory://briefing`, `memory://workflows`, `memory://rules`, `memory://health`, `memory://help`, `memory://staleness`, GitHub status/milestones, team stats, metrics/latency, and more) plus dynamic repo variants for cross-repo targeting (like `memory://briefing/{repo}` or `memory://kanban/{repo}/{project_number}`). **[Resources documentation →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Resources)**
+Comprehensive access to internal state via resources (`memory://briefing`, `memory://workflows`, `memory://rules`, `memory://health`, `memory://help`, `memory://staleness`, GitHub status/milestones, team stats, metrics/latency, and more) plus dynamic repo variants for cross-repo targeting (like `memory://briefing/{+repo}`, `memory://agent-context/{+repo}`, or `memory://kanban/{+repo}/{project_number}`). **[Resources documentation →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Resources)**
 
 ### ⚡ Cut Token Usage with Code Mode
 
@@ -178,7 +178,7 @@ Add this to your `~/.cursor/mcp.json`, Claude Desktop config, or equivalent:
 
 ### Basic Configuration
 
-> 💡 **Tip:** Don't want to manually escape JSON strings for `PROJECT_REGISTRY`? Run `npx memory-journal-mcp project create <name> --path <path>` in your terminal to automatically bootstrap and update your MCP configuration!
+> 💡 **Tip:** Don't want to manually escape JSON strings for `PROJECT_REGISTRY`? Run `npx memory-journal-mcp project create <name> --path <path> [--number <project-number>]` in your terminal to automatically bootstrap and update your MCP configuration!
 
 ```json
 {
@@ -212,7 +212,7 @@ Add this to your `~/.cursor/mcp.json`, Claude Desktop config, or equivalent:
 
 Showcasing the full power of the server, including Multi-Project Routing, Team Collaboration, Copilot awareness, and Context Injections.
 
-> 💡 **Tip:** Use `npx memory-journal-mcp project create <name> --path <path>` to easily configure multiple repositories into your `PROJECT_REGISTRY` without manual JSON escaping!
+> 💡 **Tip:** Use `npx memory-journal-mcp project create <name> --path <path> [--number <project-number>]` to easily configure multiple repositories into your `PROJECT_REGISTRY` without manual JSON escaping!
 
 ```json
 {
@@ -262,10 +262,10 @@ Showcasing the full power of the server, including Multi-Project Routing, Team C
 The `memory://briefing` resource is dynamically assembled at each session start, automatically providing ambient context like test health, workspace paths, unreleased changes, and git status. Control what your agent sees by tuning three dimensions via environment variables:
 
 - **Focus** — `MEMORY_JOURNAL_MCP_TOOL_FILTER` (CLI: `--tool-filter`, config file key: `"toolFilter"`): `full` (default), `starter`, or `essential`
-- **Journal Content** — `BRIEFING_ENTRY_COUNT`, `BRIEFING_SUMMARY_COUNT`, `BRIEFING_INCLUDE_TEAM`
+- **Journal Content** — `BRIEFING_ENTRY_COUNT`, `BRIEFING_SUMMARY_COUNT`, `BRIEFING_COMMIT_COUNT`, `BRIEFING_IMPORTANCE_THRESHOLD`, `BRIEFING_INCLUDE_TEAM`
 - **GitHub Enrichment** — `BRIEFING_ISSUE_COUNT`, `BRIEFING_PR_COUNT`, `BRIEFING_PR_STATUS`, `BRIEFING_MILESTONE_COUNT`, `BRIEFING_WORKFLOW_COUNT`, `BRIEFING_WORKFLOW_STATUS`, `BRIEFING_COPILOT_REVIEWS`
 
-Set `RULES_FILE_PATH` and `SKILLS_DIR_PATH` to surface agent rules and skills as companion resources. In multi-repo setups, agents read `memory://briefing/{repo}` for repo-scoped context.
+Set `RULES_FILE_PATH` and `SKILLS_DIR_PATH` to surface agent rules and skills as companion resources. In multi-repo setups, agents read `memory://briefing/{+repo}` for repo-scoped context.
 
 **[Full briefing customization guide with presets →](https://github.com/neverinfamous/memory-journal-mcp#-customizing-the-session-briefing)**
 

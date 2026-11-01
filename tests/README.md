@@ -20,8 +20,8 @@
 ### 2. Execution Protocol
 
 - **Targeted Runs:** NEVER run the entire test suite when working on a specific file. Run targeted tests to save time and token context.
-  - ✅ `npx vitest run path/to/file.test.ts`
-  - ❌ `npx vitest` (Unless explicitly asked for a full suite run)
+  - ✅ `pnpm exec vitest run path/to/file.test.ts`
+  - ❌ `pnpm run test:watch` (Unless explicitly running interactive watch mode)
 - **Output Limits:** When running tests via standard terminal commands, use `OutputCharacterCount: ≥10000` to ensure you see the summary line.
 - **Assertion:** Never assume a test passed if the output is truncated. You MUST verify the final summary line (`✓ 1 passed`).
 
@@ -34,20 +34,32 @@
 ### 4. Error Assertions (Structured Errors)
 
 - The Memory Journal MCP server uses a strict **Structured Error Pattern**. Tools NEVER throw raw exceptions to the client. They return:
-  `{ success: false, error: '...', code: '...', category: '...', suggestion: '...' }`.
+  `{ success: false, error: '...', code: '...', category: '...', suggestion: '...', recoverable: boolean }`.
 - When testing tool handlers, **assert the structured response**, do not expect the tool to `.toThrow()`.
 
 ## 📂 Directory Structure Reference
 
-| Directory     | Tests What                                                      |
-| ------------- | --------------------------------------------------------------- |
-| `auth/`       | OAuth 2.1 middleware, token validation, scopes                  |
-| `codemode/`   | Sandbox security, API bridge, worker lifecycle                  |
-| `database/`   | SQLite adapter, entry CRUD, search, tags, backup                |
-| `handlers/`   | Tool handlers, resource handlers, prompt handlers (Integration) |
-| `security/`   | Input validation, SQL injection, path traversal                 |
-| `transports/` | HTTP transport, rate limiting, session behavior                 |
-| `vector/`     | Vector search manager, semantic embedding logic                 |
+| Directory        | Tests What                                                      |
+| ---------------- | --------------------------------------------------------------- |
+| `audit/`         | JSONL audit logger, redaction, rotation, audit resource         |
+| `auth/`          | OAuth 2.1 middleware, token validation, scopes                  |
+| `cli/`           | CLI argument parsing, subcommands, server option resolution     |
+| `codemode/`      | Sandbox security, API bridge, worker lifecycle                  |
+| `database/`      | SQLite adapter, entry CRUD, search, tags, backup                |
+| `e2e/`           | Playwright HTTP/SSE transport and protocol E2E suite            |
+| `filtering/`     | Tool filter parsing, presets, group/tool exclusion and inclusion |
+| `git/`           | Local Git repository inspection and commit history helpers      |
+| `github/`        | GitHub REST & Projects v2 GraphQL client integration            |
+| `handlers/`      | Tool handlers, resource handlers, prompt handlers (Integration) |
+| `markdown/`      | Markdown frontmatter parsing, import, and export                |
+| `migrations/`    | Versioned SQLite schema migrations and legacy upgrades          |
+| `observability/` | Metrics interceptor, Prometheus exporter, token estimator       |
+| `scheduler/`     | Automated backup, vacuum, index rebuild, digest, and prune jobs |
+| `security/`      | Input validation, SQL injection, path traversal                 |
+| `server/`        | MCP server initialization, registration, and interceptors       |
+| `transports/`    | HTTP transport, rate limiting, session behavior                 |
+| `utils/`         | Error formatting, security helpers, logger, progress utilities  |
+| `vector/`        | Vector search manager, semantic embedding logic                 |
 
 ---
 

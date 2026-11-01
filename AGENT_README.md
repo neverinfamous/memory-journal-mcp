@@ -62,14 +62,14 @@ export const handler = async (params: unknown) => {
 }
 ```
 
-All errors must extend `MemoryJournalMcpError` (e.g., `ValidationError`, `ResourceNotFoundError`, `QueryError`, `ConnectionError`, `ConfigurationError`, `PermissionError`, `AuthorizationError`, `ConflictError`).
+All errors must extend `MemoryJournalMcpError` (`ValidationError`, `ResourceNotFoundError`, `QueryError`, `ConnectionError`, `ConfigurationError`, `PermissionError` re-exported from `src/types/index.js`; `AuthorizationError`, `ConflictError`, `AggregateMcpError` exported directly from `src/types/errors.js`; `SecurityError`, `InvalidDateFormatError`, `PathTraversalError` in `src/utils/security-utils.js`; and `OAuthError` in `src/auth/errors.js`).
 
 ### 3. Multi-Tenancy & `workspace_id`
 
 The server supports strict data isolation using `workspace_id`.
 - All CRUD, Search, and Analytics tools accept a `workspace_id`. 
 - If omitted, the server auto-resolves `workspace_id` from `project_number` (via `PROJECT_REGISTRY`), content/tag keyword aliases, or `process.cwd()` before falling back to `DEFAULT_WORKSPACE_ID` (default: `default`).
-- The `workspace_id` is permanently assigned upon creation and is immutable.
+- The `workspace_id` is assigned upon creation and cannot be overwritten directly on standard updates; cross-workspace entry migration uses `update_entry` with `workspace_id: '*'` and `target_workspace_id`.
 - Read and search tools accept `workspace_id: "*"` to query across all workspaces; external write/mutation paths reject wildcard overrides.
 
 ---
@@ -89,11 +89,12 @@ Review it thoroughly before proceeding. For mid-session context recovery (projec
 | Variable | Description |
 | --- | --- |
 | `DB_PATH` / `TEAM_DB_PATH` | SQLite database paths for personal and shared team journals |
+| `DB_ENCRYPTION_KEY` | SQLCipher at-rest encryption key (alias: `MJ_DB_ENCRYPTION_KEY`) |
 | `DEFAULT_WORKSPACE_ID` | Default tenant workspace ID (default: `default`) |
 | `PROJECT_REGISTRY` | JSON map of repo names to local paths and GitHub project numbers |
 | `ALLOWED_IO_ROOTS` | Comma-separated allowed filesystem roots (fail-closed in stdio; mandatory when `--transport http` is used) |
 | `MEMORY_JOURNAL_MCP_TOOL_FILTER` | Control tool exposure (`full`, `codemode` (`mj_execute_code` only), `starter`, `essential`, `core`, `readonly`, `-github`; CLI: `--tool-filter`, `memory-journal.config.json` key: `"toolFilter"`. Note: `TOOL_FILTER` is a display fallback only) |
-| `CODEMODE_INTERNAL_FULL_ACCESS` | Allow Code Mode (`mj.*`) to bypass tool filters internally across all tool namespaces (`true`/`false`) |
+| `CODEMODE_INTERNAL_FULL_ACCESS` | Allow Code Mode (`mj.*`) to bypass tool filters internally across all tool namespaces (`true`/`false`, alias: `MJ_CODEMODE_INTERNAL_FULL_ACCESS`) |
 | `MCP_AGENT_HEALING` | Enable/disable autonomous tool & parameter healing (`true`/`false`, CLI: `--no-agent-healing`) |
 | `MAX_TOOL_INPUT_ELEMENTS` | Max array/object elements in tool inputs (default: `25000`, `0` = disabled) |
 
