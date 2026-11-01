@@ -19,7 +19,7 @@ const WORKSPACE_DESC =
 const SORT_BY_DESC = 'Sort results by timestamp (default) or importance score'
 const TEAM_RELATION_TYPES = [
     'evolves_from', 'references', 'implements', 'clarifies', 'response_to',
-    'blocked_by', 'resolved', 'caused', 'relates_to', 'depends_on',
+    'blocked_by', 'resolved', 'caused', 'resolves', 'relates_to', 'depends_on',
 ] as const
 
 export const TeamEntryOutputSchema = EntryOutputSchema.extend({

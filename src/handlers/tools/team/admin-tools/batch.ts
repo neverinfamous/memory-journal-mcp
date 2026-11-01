@@ -120,11 +120,13 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                             for (const rel of sourceEntry.relationships) {
                                 try {
                                     const canonicalRelType: RelationshipType =
-                                        rel.relationType === 'relates_to'
-                                            ? 'references'
-                                            : rel.relationType === 'depends_on'
-                                              ? 'blocked_by'
-                                              : rel.relationType
+                                        rel.relationType === 'resolves'
+                                            ? 'resolved'
+                                            : rel.relationType === 'relates_to'
+                                              ? 'references'
+                                              : rel.relationType === 'depends_on'
+                                                ? 'blocked_by'
+                                                : rel.relationType
                                     teamDb.linkEntries(createdEntry.id, rel.targetId, canonicalRelType)
                                 } catch {
                                     // Ignore link failures if target doesn't exist
@@ -267,6 +269,10 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                             workflowStatus: u.workflow_status,
                             isArchived: u.is_archived,
                             expectedVersion: u.expected_version,
+                            autoContext: u.auto_context,
+                            impactScore: u.impact_score,
+                            trustScore: u.trust_score,
+                            validationStatus: u.validation_status,
                             sessionId: u.session_id ?? undefined,
                             workspaceId: resolveWorkspaceId(u.workspace_id ?? input.workspace_id, u.project_number ?? input.project_number, context.config),
                         })

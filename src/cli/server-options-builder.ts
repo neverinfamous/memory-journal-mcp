@@ -216,7 +216,7 @@ export function buildServerOptions(
             summaryCount: catchConfig(() => resolver.resolveInt('briefingSummaries', 'BRIEFING_SUMMARY_COUNT') ?? 1, 1),
             includeTeam: catchConfig(() => resolver.resolveBool('briefingIncludeTeam', 'BRIEFING_INCLUDE_TEAM') ?? false, false),
             issueCount: catchConfig(() => resolver.resolveInt('briefingIssues', 'BRIEFING_ISSUE_COUNT') ?? 0, 0),
-            prCount: catchConfig(() => resolver.resolveInt('briefingPrs', 'BRIEFING_PR_COUNT') ?? 0, 0),
+            prCount: catchConfig(() => resolver.resolveInt('briefingPrCount') ?? resolver.resolveInt('briefingPrs', 'BRIEFING_PR_COUNT') ?? 0, 0),
             prStatusBreakdown: catchConfig(() => resolver.resolveBool('briefingPrStatus', 'BRIEFING_PR_STATUS') ?? false, false),
             milestoneCount: catchConfig(() => resolver.resolveInt('briefingMilestones', 'BRIEFING_MILESTONE_COUNT') ?? 3, 3),
             rulesFilePath: catchConfig(() => {

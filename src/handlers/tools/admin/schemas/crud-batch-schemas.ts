@@ -127,7 +127,7 @@ export const UpdateEntrySchemaMcp = z.preprocess(
                 .describe(
                     'Updated markdown content. Preserve the existing ## section header structure. ' +
                         'For session summaries, keep the ## Accomplished / ## Unfinished / Blocked / ' +
-                        '## Context for Next Session structure intact. ' +
+                        '## Context for Next Session / ## Commits structure intact. ' +
                         'Do NOT restructure or add new top-level sections unless explicitly requested.'
                 ),
             entry_type: z.string().optional(),

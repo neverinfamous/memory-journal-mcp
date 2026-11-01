@@ -189,6 +189,11 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
                         workflowStatus: u.workflow_status,
                         isArchived: u.is_archived,
                         expectedVersion: u.expected_version,
+                        autoContext: u.auto_context,
+                        impactScore: u.impact_score,
+                        trustScore: u.trust_score,
+                        validationStatus: u.validation_status,
+                        targetWorkspaceId: u.target_workspace_id,
                         sessionId: u.session_id ?? undefined,
                         workspaceId: resolveWorkspaceId(u.workspace_id || input.workspace_id, u.project_number ?? input.project_number, context.config),
                     }))

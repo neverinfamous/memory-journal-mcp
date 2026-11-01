@@ -143,9 +143,9 @@ export async function pruneAction(options: z.infer<typeof pruneSchema>, command:
 export async function auditAction(options: z.infer<typeof auditSchema>, command: Command): Promise<void> {
     const { db } = await getDb(options, command)
     try {
-        const auditLogPath = options.auditLog ?? process.env['MEMORY_JOURNAL_AUDIT_LOG']
+        const auditLogPath = options.auditLog ?? process.env['AUDIT_LOG_PATH'] ?? process.env['MEMORY_JOURNAL_AUDIT_LOG']
         if (!auditLogPath) {
-            throw new Error('Audit log path not configured (--audit-log or MEMORY_JOURNAL_AUDIT_LOG)')
+            throw new Error('Audit log path not configured (--audit-log or AUDIT_LOG_PATH)')
         }
         
         const logger = new AuditLogger({

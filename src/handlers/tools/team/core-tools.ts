@@ -174,7 +174,15 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                     if (input.relationships && input.relationships.length > 0) {
                         for (const rel of input.relationships) {
                             try {
-                                teamDb.linkEntries(entry.id, rel.targetId, rel.relationType as RelationshipType)
+                                const canonicalRelType: RelationshipType =
+                                    rel.relationType === 'resolves'
+                                        ? 'resolved'
+                                        : rel.relationType === 'relates_to'
+                                          ? 'references'
+                                          : rel.relationType === 'depends_on'
+                                            ? 'blocked_by'
+                                            : rel.relationType
+                                teamDb.linkEntries(entry.id, rel.targetId, canonicalRelType)
                             } catch {
                                 // Ignore link failures if target doesn't exist
                             }
