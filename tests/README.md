@@ -45,20 +45,24 @@
 | `auth/`          | OAuth 2.1 middleware, token validation, scopes                  |
 | `cli/`           | CLI argument parsing, subcommands, server option resolution     |
 | `codemode/`      | Sandbox security, API bridge, worker lifecycle                  |
+| `constants/`     | Server instructions, icons, and briefing constant verification  |
 | `database/`      | SQLite adapter, entry CRUD, search, tags, backup                |
 | `e2e/`           | Playwright HTTP/SSE transport and protocol E2E suite            |
 | `filtering/`     | Tool filter parsing, presets, group/tool exclusion and inclusion |
 | `git/`           | Local Git repository inspection and commit history helpers      |
 | `github/`        | GitHub REST & Projects v2 GraphQL client integration            |
 | `handlers/`      | Tool handlers, resource handlers, prompt handlers (Integration) |
+| `integration/`   | Cross-module end-to-end pipeline and RBAC boundary tests        |
 | `markdown/`      | Markdown frontmatter parsing, import, and export                |
 | `migrations/`    | Versioned SQLite schema migrations and legacy upgrades          |
 | `observability/` | Metrics interceptor, Prometheus exporter, token estimator       |
 | `security/`      | Input validation, SQL injection, path traversal                 |
 | `server/`        | MCP server initialization, registration, scheduler, and interceptors |
 | `transports/`    | HTTP transport, rate limiting, session behavior                 |
+| `unit/`          | Targeted unit suites for CLI, normalizers, and proxies          |
 | `utils/`         | Error formatting, security helpers, logger, progress utilities  |
 | `vector/`        | Vector search manager, semantic embedding logic                 |
+| `global-teardown.ts` | Global Vitest teardown (cleans up temporary test DBs and backups) |
 
 ---
 

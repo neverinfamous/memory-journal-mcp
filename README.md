@@ -524,8 +524,8 @@ For production deployments, enable OAuth 2.1 authentication on the HTTP transpor
 
 | Scope   | Tool Groups                                                        |
 | ------- | ------------------------------------------------------------------ |
-| `read`  | `core (read-only), search, analytics, relationships, io (export_entries / export_markdown), git (read-only)` |
-| `write` | `github (+ all read groups and create_entry / create_entry_minimal / link_entries / mark_anchors_stale / import_external / import_markdown / export_markdown)` |
+| `read`  | `core (read-only), search, analytics, relationships, io (export_entries), git (read-only)` |
+| `write` | `github (+ all read groups and create_entry / link_entries / mark_anchors_stale / import_external / import_markdown / export_markdown)` |
 | `team`  | `team (dedicated team collaboration scope; combine with read/write for personal journal access)` |
 | `audit` | `memory://audit resource access (dedicated audit scope; included automatically in admin and full)` |
 | `admin` | `admin, backup, codemode (+ all read/write/team/audit groups)`     |
@@ -572,6 +572,10 @@ memory-journal-mcp --transport http --port 3000
 | `DB_PATH`                                      | Path to the personal journal SQLite database               |
 | `DB_ENCRYPTION_KEY`                            | SQLCipher at-rest database encryption key (alias: `MJ_DB_ENCRYPTION_KEY`) |
 | `TEAM_DB_PATH`                                 | Path to the shared team SQLite database                    |
+| `TEAM_AUTHOR`                                  | Display name attached to team entries (resolved after OAuth identity claims when OAuth is active) |
+| `TEAM_DEFAULT_ROLE`                            | Default RBAC role for unlisted team authors: `admin`, `member`, `viewer`, `denied` (CLI: `--team-default-role`, default: `denied`) |
+| `TEAM_ADMIN`                                   | Bootstrap admin author name when the `team_members` table is empty (CLI: `--team-admin`) |
+| `ADDITIONAL_TEAM_DBS`                          | JSON mapping of label to path for additional read-only team SQLite databases (CLI: `--additional-team-dbs`) |
 | `DEFAULT_WORKSPACE_ID`                         | Default workspace ID for multi-tenant isolation (`default`)|
 | `GITHUB_TOKEN`                                 | Personal access token for GitHub integrations              |
 | `PROJECT_REGISTRY`                             | JSON map of repo names to local paths and project numbers  |

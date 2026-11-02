@@ -84,7 +84,7 @@ When the user initializes the session context by executing the `load-briefing` p
 ### 🎯 Control Access with Tool Filtering
 
 > [!IMPORTANT]
-> All shortcuts and tool groups include **Code Mode** (`mj_execute_code`) by default for token-efficient operations. To exclude it, add `-codemode` to your filter: `--tool-filter starter,-codemode`
+> All shortcuts and tool groups always include **Code Mode** (`mj_execute_code`) and **Runtime Configuration** (`update_configuration`) as escape-hatch tools so agents can never lock themselves out of the configuration system or Code Mode.
 
 Control which tools and tool groups are exposed using `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or any of the 3 configuration sources; precedence: CLI flag > environment variable > config file):
 - **CLI flag**: `--tool-filter <filter>`
@@ -308,7 +308,7 @@ For all environment variables and routing docs, see the **[Configuration Wiki](h
 For remote access, web-based clients, or HTTP-compatible MCP hosts. The server supports both stateful (SSE) and stateless (serverless) modes.
 
 > [!IMPORTANT]
-> In HTTP transport mode (`--transport http`), the server enforces two fail-closed startup guards: (1) explicit `ALLOWED_IO_ROOTS` / `--allowed-io-roots` is always required, and (2) explicit authentication (`MCP_AUTH_TOKEN` / `--auth-token` or `--oauth-enabled`) is required when binding to a non-loopback address (`0.0.0.0`).
+> In HTTP transport mode (`--transport http`), the server enforces three fail-closed startup guards: (1) explicit `ALLOWED_IO_ROOTS` / `--allowed-io-roots` is always required, (2) explicit authentication (`MCP_AUTH_TOKEN` / `--auth-token` or `--oauth-enabled`) is required when binding to a non-loopback address (`0.0.0.0`), and (3) explicit `PUBLIC_ORIGIN` / `--public-origin` is required when `--oauth-enabled` is bound to a non-loopback address.
 
 ```bash
 docker run --rm -p 3000:3000 \

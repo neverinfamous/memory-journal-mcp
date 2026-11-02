@@ -128,10 +128,10 @@ For production HTTP deployments, Memory Journal supports **OAuth 2.1 authenticat
 
 | Scope   | Tool Groups                                                                | Description                            |
 | ------- | -------------------------------------------------------------------------- | -------------------------------------- |
-| `read`  | `core, search, analytics, relationships, io, git`                          | Read-only operations                   |
+| `read`  | `core (read-only), search, analytics, relationships, io (export_entries), git (read-only)`                 | Read-only operations                   |
 | `write` | `github (+ all read groups and create_entry / link_entries / mark_anchors_stale / import_external / import_markdown / export_markdown)` | Read + write operations                |
-| `team`  | `team (dedicated team collaboration scope)`                                | Team database operations               |
-| `audit` | `audit log access`                                                         | Audit log queries and inspection       |
+| `team`  | `team (dedicated team collaboration scope)`                                                                | Team database operations               |
+| `audit` | `memory://audit resource access (dedicated audit scope; included automatically in admin and full)`         | Operational telemetry resource access  |
 | `admin` | `admin, backup, codemode (+ all read/write/team/audit groups)`             | Full administrative access             |
 | `full`  | `Unrestricted access to all operations`                                    | Unrestricted access to all tool groups |
 
