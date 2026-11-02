@@ -20,6 +20,13 @@ import { wrapResult } from '../../src/codemode/worker-result-proxy.js'
 import { createJournalApi } from '../../src/codemode/api/journal-api.js'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
 import { collectNonCodeModeTools } from '../../src/handlers/tools/codemode/singleton-state.js'
+import { CreateEntrySchemaMcp } from '../../src/handlers/tools/core/index.js'
+import {
+    UpdateEntrySchemaMcp,
+    BatchCreateEntriesSchemaMcp,
+    BatchUpdateEntriesSchemaMcp,
+    BatchDeleteEntriesSchemaMcp,
+} from '../../src/handlers/tools/admin/schemas.js'
 import type { ToolDefinition } from '../../src/types/index.js'
 
 describe('Code Mode Extended Coverage', () => {
@@ -43,6 +50,48 @@ describe('Code Mode Extended Coverage', () => {
                 )
             ).toBe('{ req: string, opt?: number }')
             expect(getZodTypeString({})).toBe('unknown')
+
+            // Unwrapping z.preprocess (ZodPipe) and .transform()
+            const preprocessedType = getZodTypeString(CreateEntrySchemaMcp)
+            expect(preprocessedType).toContain('content?: string')
+            expect(preprocessedType).toContain('workspace_id: string')
+
+            const transformedSchema = z
+                .object({ from_entry_id: z.number().optional() })
+                .transform((d) => d)
+            expect(getZodTypeString(transformedSchema)).toBe('{ from_entry_id?: number }')
+
+            expect(getZodTypeString(z.string().readonly())).toBe('string')
+            expect(getZodTypeString(z.string().catch('fallback'))).toBe('string')
+
+            // Admin MCP schemas accept target_workspace_id and root project_number
+            expect(
+                UpdateEntrySchemaMcp.safeParse({
+                    entry_id: 1,
+                    target_workspace_id: 'other-ws',
+                }).success
+            ).toBe(true)
+            const batchCreateParsed = BatchCreateEntriesSchemaMcp.parse({
+                project_number: 5,
+                workspace_id: 'ws-a',
+                entries: [{ content: 'Note 1' }],
+            })
+            expect(batchCreateParsed.entries?.[0]?.project_number).toBe(5)
+            expect(batchCreateParsed.entries?.[0]?.workspace_id).toBe('ws-a')
+
+            const batchUpdateParsed = BatchUpdateEntriesSchemaMcp.parse({
+                project_number: 5,
+                updates: [{ entry_id: 1, target_workspace_id: 'ws-b' }],
+            })
+            expect(batchUpdateParsed.updates?.[0]?.project_number).toBe(5)
+            expect(batchUpdateParsed.updates?.[0]?.target_workspace_id).toBe('ws-b')
+
+            expect(
+                BatchDeleteEntriesSchemaMcp.safeParse({
+                    entry_ids: [1, 2],
+                    project_number: 5,
+                }).success
+            ).toBe(true)
 
             const sampleTools: ToolDefinition[] = [
                 {

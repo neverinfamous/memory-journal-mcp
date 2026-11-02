@@ -369,8 +369,11 @@ describe('CLI Program & Commands', () => {
         it('should run visualizeAction to stdout and to --out file', async () => {
             stdoutOutput = []
             await visualizeAction({ db: dbPath }, dummyCmd)
-            expect(stdoutOutput.join('')).toContain('```mermaid')
-            expect(stdoutOutput.join('')).toContain('graph TD')
+            const outText = stdoutOutput.join('')
+            expect(outText).toContain('```mermaid')
+            expect(outText).toContain('graph TD')
+            expect(outText).toContain('First searchable entry about architectur')
+            expect(outText).toContain('-->|relates_to|')
 
             const outFile = path.join(tmpDir, 'graph.md')
             stderrOutput = []
