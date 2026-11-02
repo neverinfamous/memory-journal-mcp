@@ -108,7 +108,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
 
     let shutdownMetrics: (() => Promise<void>) | undefined;
     if (options.metricsExport === 'prometheus') {
-        shutdownMetrics = startMetricsServer(runtime);
+        shutdownMetrics = startMetricsServer(runtime, options.metricsPort);
     }
 
     // Start server based on transport

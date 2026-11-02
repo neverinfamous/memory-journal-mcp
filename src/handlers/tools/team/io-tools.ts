@@ -255,6 +255,7 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                         entries = result.entries
                     } else {
                         const result = teamDb.searchEntries('', {
+                            tags: input.tags,
                             limit,
                             projectNumber: input.project_number,
                             workspaceId: wsId,

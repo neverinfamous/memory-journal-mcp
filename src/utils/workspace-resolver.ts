@@ -122,7 +122,7 @@ export function resolveProjectContext(
             wsId = canonicalKey
         }
         let projNum = input.project_number ?? (canonicalKey ? registry?.[canonicalKey]?.project_number : registry?.[wsId]?.project_number)
-        projNum ??= resolveProjectNumberFromPath(process.cwd())
+        projNum ??= resolveProjectNumberFromPath(process.cwd()) ?? config?.defaultProjectNumber
         return {
             workspaceId: wsId,
             projectNumber: projNum
@@ -230,7 +230,7 @@ export function resolveProjectContext(
     }
 
     // 5. CWD / Config Fallback
-    const cwdProjNum = resolveProjectNumberFromPath(process.cwd())
+    const cwdProjNum = resolveProjectNumberFromPath(process.cwd()) ?? config?.defaultProjectNumber
     let resolvedWsId = sanitizedWorkspaceId
     if ((!resolvedWsId || resolvedWsId === 'default') && cwdProjNum !== undefined && registry) {
         for (const [key, entry] of Object.entries(registry)) {

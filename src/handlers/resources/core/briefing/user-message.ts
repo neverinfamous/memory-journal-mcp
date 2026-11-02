@@ -325,7 +325,7 @@ export function formatUserMessage(opts: {
             return `${shaText}${metaStr} ${escapeCell(c.message)}${issuesStr}`;
         }).join('<br>');
         gitHistoryLines.push(`**Recent Changes:**<br>${shortCommits}`);
-        gitHistoryLines.push(`💡 **Tip:** Use \`get_recent_commits\` or \`search_commits\` for deep Git history analysis instead of raw git commands.`);
+        gitHistoryLines.push(`💡 **Tip:** Use \`get_commit_history\` or \`search_commits\` for deep Git history analysis instead of raw git commands.`);
     }
 
 

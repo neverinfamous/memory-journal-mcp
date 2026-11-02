@@ -337,7 +337,7 @@ entryCmd
     .command('delete [args...]', { hidden: true })
     .allowUnknownOption()
     .action(() => {
-        process.stderr.write(`🛠️ AUTONOMOUS HEALING: The 'entry delete' command does not exist in the CLI. Deleting entries is an admin-level operation. Please use the MCP tool 'mj_execute_code' with 'db.admin.batchDeleteEntries({ entry_ids: [...] })' instead.\n`);
+        process.stderr.write(`🛠️ AUTONOMOUS HEALING: The 'entry delete' command does not exist in the CLI. Deleting entries is an admin-level operation. Please use the MCP tool 'mj_execute_code' with 'mj.admin.batchDeleteEntries({ entry_ids: [...] })' instead.\n`);
         process.exit(1);
     });
 

@@ -3,9 +3,9 @@ import { logger } from '../utils/logger.js';
 import type { ServerRuntime } from '../utils/maintenance-lock.js';
 import { formatPrometheusMetrics } from './prometheus-formatter.js';
 
-export function startMetricsServer(runtime: ServerRuntime): () => Promise<void> {
+export function startMetricsServer(runtime: ServerRuntime, metricsPort?: number): () => Promise<void> {
     const portStr = process.env['MJ_METRICS_PORT'];
-    const port = portStr ? parseInt(portStr, 10) : 9465;
+    const port = metricsPort ?? (portStr !== undefined && portStr !== '' ? parseInt(portStr, 10) : 9465);
 
     const server = http.createServer((req, res) => {
         if (req.url === '/metrics' && req.method === 'GET') {
