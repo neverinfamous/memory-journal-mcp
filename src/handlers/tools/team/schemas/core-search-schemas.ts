@@ -412,6 +412,7 @@ export const TeamEntryDetailOutputSchema = z
                         relationships: z.number(),
                         causal: z.number(),
                         recency: z.number(),
+                        trustModifier: z.number().optional(),
                     })
                     .optional(),
             })

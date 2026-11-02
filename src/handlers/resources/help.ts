@@ -30,6 +30,7 @@ const GROUP_DESCRIPTIONS: Record<string, string> = {
     io: 'Import and export journal data — JSON export, Markdown round-trip (export/import)',
     admin: 'Update entries, rebuild indexes, and manage the vector search index',
     github: 'GitHub integration — issues, PRs, milestones, workflow runs, Kanban boards',
+    git: 'Git history mining — commit search, release tracking, pattern analysis, and entry anchor staleness checks',
     backup: 'Create and restore database backups',
     team: 'Team collaboration — shared entries, cross-project insights, team analytics',
     codemode: 'Sandboxed JavaScript execution with access to the journal API',

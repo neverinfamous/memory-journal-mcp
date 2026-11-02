@@ -152,6 +152,7 @@ export const ImportanceBreakdownSchema = z.object({
     relationships: z.number(),
     causal: z.number(),
     recency: z.number(),
+    trustModifier: z.number().optional(),
 })
 
 /**

@@ -356,7 +356,7 @@ return graph;
 ### Option B: Ground-Truth Verification, Staleness Sweep & Targeted Quality Audit (Executed Automatically)
 1. **Ground-Truth Verification & Staleness Sweep**:
    - Cross-check recent \`session-summary\`, \`bug_fix\`, \`project_decision\`, and \`planning\` entries against Git/GitHub truth (\`mj.git.getGitContext\`, \`mj.github.getGithubIssues\`, \`mj.github.getGithubPrs\`).
-   - Run \`mj.git.checkEntryStaleness({})\` and update stale anchors via \`mj.core.markAnchorsStale\`.
+   - Run \`mj.git.checkEntryStaleness({ entry_id: id, workspace_id: '*' })\` and update stale anchors via \`mj.core.markAnchorsStale\`.
 2. **Quality Dimension Audit (\`${targetDimension}\`)**:
    - \`unassigned\`: Audit only unassigned or default workspace entries.
    - \`relationships\`: Audit only orphan entries lacking graph anchors.
