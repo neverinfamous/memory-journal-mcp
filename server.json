@@ -3,7 +3,7 @@
     "name": "io.github.neverinfamous/memory-journal-mcp",
     "title": "Memory Journal MCP",
     "description": "Persistent knowledge graphs and intelligent context recall across fragmented AI threads.",
-    "version": "9.0.0",
+    "version": "9.1.0",
     "packages": [
         {
             "registryType": "oci",

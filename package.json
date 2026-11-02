@@ -1,6 +1,6 @@
 {
   "name": "memory-journal-mcp",
-  "version": "9.0.0",
+  "version": "9.1.0",
   "description": "Persistent knowledge graphs and intelligent context recall across fragmented AI threads.",
   "type": "module",
   "main": "dist/index.js",
