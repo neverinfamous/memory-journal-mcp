@@ -278,6 +278,7 @@ Showcasing the full power of the server, including Multi-Project Routing, Team C
   "mcpServers": {
     "memory-journal-mcp": {
       "command": "memory-journal-mcp",
+      "args": ["--tool-filter", "codemode"],
       "env": {
         "DB_PATH": "/path/to/your/memory_journal.db",
         "TEAM_DB_PATH": "/path/to/shared/team.db",
@@ -285,7 +286,6 @@ Showcasing the full power of the server, including Multi-Project Routing, Team C
         "PROJECT_REGISTRY": "{\"my-repo\":{\"path\":\"/path/to/repo\",\"project_number\":1},\"other-repo\":{\"path\":\"/path/to/other\",\"project_number\":5}}",
         "ALLOWED_IO_ROOTS": "/path/to/repo,/path/to/other,/path/to/your/skills",
         "AUTO_REBUILD_INDEX": "true",
-        "MEMORY_JOURNAL_MCP_TOOL_FILTER": "codemode",
         "CODEMODE_INTERNAL_FULL_ACCESS": "true",
         "BRIEFING_ENTRY_COUNT": "3",
         "BRIEFING_SUMMARY_COUNT": "1",

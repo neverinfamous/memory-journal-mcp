@@ -217,14 +217,15 @@ Showcasing the full power of the server, including Multi-Project Routing, Team C
         "-v", "./data:/app/data",
         "-e", "GITHUB_TOKEN", "-e", "TEAM_DB_PATH", "-e", "PROJECT_REGISTRY",
         "-e", "ALLOWED_IO_ROOTS", "-e", "AUTO_REBUILD_INDEX", "-e", "EMBEDDING_MODEL",
-        "-e", "MEMORY_JOURNAL_MCP_TOOL_FILTER", "-e", "CODEMODE_INTERNAL_FULL_ACCESS",
+        "-e", "CODEMODE_INTERNAL_FULL_ACCESS",
         "-e", "RULES_FILE_PATH", "-e", "SKILLS_DIR_PATH",
         "-e", "MEMORY_JOURNAL_WORKFLOW_SUMMARY", "-e", "AUDIT_LOG_PATH", "-e", "TEAM_AUTHOR",
         "-v", "/path/to/shared/team.db:/app/data/team.db:rw",
         "-v", "/path/to/your/projects:/app/projects:ro",
         "-v", "/path/to/rules.md:/app/rules.md:ro",
         "-v", "/path/to/skills:/app/skills:ro",
-        "writenotenow/memory-journal-mcp:latest"
+        "writenotenow/memory-journal-mcp:latest",
+        "--tool-filter", "codemode"
       ],
       "env": {
         "GITHUB_TOKEN": "ghp_your_token_here",
@@ -233,7 +234,6 @@ Showcasing the full power of the server, including Multi-Project Routing, Team C
         "ALLOWED_IO_ROOTS": "/app/projects,/app/data,/app/skills",
         "AUTO_REBUILD_INDEX": "true",
         "EMBEDDING_MODEL": "Xenova/all-MiniLM-L6-v2",
-        "MEMORY_JOURNAL_MCP_TOOL_FILTER": "codemode",
         "CODEMODE_INTERNAL_FULL_ACCESS": "true",
         "RULES_FILE_PATH": "/app/rules.md",
         "SKILLS_DIR_PATH": "/app/skills",
