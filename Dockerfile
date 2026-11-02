@@ -2,7 +2,7 @@
 # Multi-stage build for optimized production image
 #
 # Security Notes:
-# - Last Docker Scout scan: 2026-10-31 on node:26.2.0-alpine (Alpine 3.23), 0 critical / 1 high / 2 medium.
+# - Last Docker Scout scan: 2026-11-02 on node:26.2.0-alpine (Alpine 3.23), 0 critical / 1 high / 2 medium.
 #   All three are Alpine OS packages with NO upstream fix available yet (accepted until fixed;
 #   re-check with `docker scout cves` on each base image or Alpine package update):
 #     - git 2.52.0-r0      HIGH   CVE-2025-66413  (runtime image; only matters when git runs against untrusted repos)
@@ -21,9 +21,9 @@ FROM node:26.2.0-alpine AS builder
 WORKDIR /app
 
 # Install build dependencies and upgrade packages for security
-# Use Alpine edge for latest security patches (curl CVE-2025-14524, zlib CVE-2026-27171, libcrypto3 CVE-2026-45447)
+# Use Alpine edge for latest security patches (curl CVE-2025-14524, zlib CVE-2026-27171, libcrypto3 CVE-2026-45447, expat 2.10.0-r0 for CVE-2026-115506/118370/117610/113351)
 RUN apk add --no-cache python3 make g++ gettext git sqlite-dev && \
-    apk add --no-cache --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main curl expat libexpat zlib libcrypto3 libssl3 nghttp2-libs && \
+    apk add --no-cache --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main 'expat>=2.10.0-r0' 'libexpat>=2.10.0-r0' curl zlib libcrypto3 libssl3 nghttp2-libs && \
     apk upgrade --no-cache
 
 # Install pnpm to ensure reproducible builds across the ecosystem
@@ -82,11 +82,11 @@ WORKDIR /app
 
 # Install runtime dependencies with security fixes
 # Use Alpine edge for curl with CVE fixes (and nghttp2-libs for CVE-2026-27135)
-# Explicit libexpat upgrade for CVE-2026-24515 (CRITICAL) and CVE-2026-25210 (MEDIUM)
+# Explicit expat/libexpat >=2.10.0-r0 upgrade for CVE-2026-24515, CVE-2026-25210, CVE-2026-115506, CVE-2026-118370, CVE-2026-117610, CVE-2026-113351
 # Explicit zlib upgrade for CVE-2026-27171 (MEDIUM)
 # Explicit libcrypto3/libssl3 upgrade for CVE-2026-45447 (HIGH)
 RUN apk add --no-cache git ca-certificates && \
-    apk add --no-cache --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main curl expat libexpat zlib libcrypto3 libssl3 nghttp2-libs && \
+    apk add --no-cache --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main 'expat>=2.10.0-r0' 'libexpat>=2.10.0-r0' curl zlib libcrypto3 libssl3 nghttp2-libs && \
     apk upgrade --no-cache && \
     rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
