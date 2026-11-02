@@ -27,7 +27,7 @@
                 "TEAM_DEFAULT_ROLE": "denied",
                 "TEAM_ADMIN": "",
                 "GITHUB_TOKEN": "",
-                "DEFAULT_PROJECT_NUMBER": "1",
+                "DEFAULT_PROJECT_NUMBER": "",
                 "PROJECT_REGISTRY": "",
                 "MCP_WORKSPACE_ID": "",
                 "MEMORY_JOURNAL_MCP_TOOL_FILTER": "full",

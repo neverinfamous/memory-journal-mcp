@@ -151,16 +151,17 @@ When the user initializes the session context by executing the `load-briefing` p
 Control which tools are exposed using any of the 3 configuration sources (precedence: CLI flag > environment variable > config file):
 - **CLI flag**: `--tool-filter <filter>`
 - **Environment variable**: `MEMORY_JOURNAL_MCP_TOOL_FILTER` *(Note: `TOOL_FILTER` is only a fallback display variable in the session briefing and does **not** activate tool filtering on its own)*
-- **`memory-journal.config.json` key**: `"toolFilter"`
+- **`memory-journal.config.{yaml,yml,json}` key**: `"toolFilter"`
 
-| Filter               | Use Case                 |
-| -------------------- | ------------------------ |
-| `full`               | All tools (default)      |
-| `starter`            | Core + search + codemode |
-| `essential`          | Minimal footprint        |
-| `readonly`           | Disable all mutations    |
-| `-github`            | Exclude a group          |
-| `-github,-analytics` | Exclude multiple groups  |
+| Filter               | Use Case                            |
+| -------------------- | ----------------------------------- |
+| `full`               | All tools (default)                 |
+| `starter`            | Core + search + codemode            |
+| `essential`          | Minimal footprint                   |
+| `readonly`           | Disable all mutations               |
+| `codemode`           | `mj_execute_code` + runtime config  |
+| `-github`            | Exclude a group                     |
+| `-github,-analytics` | Exclude multiple groups             |
 
 **Filter Syntax:** `shortcut` or `group` or `tool_name` (whitelist mode) · `-group` (disable group) · `-tool` (disable tool) · `+tool` (re-enable after group disable)
 
@@ -199,7 +200,7 @@ Specialized workflow prompts cover session briefing, standup & retro prep, goal 
 ### 📡 **Resources**
 See the **[Complete resources guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Resources)** for the full list of dynamic context resources, including `memory://briefing`, `memory://instructions`, GitHub integration endpoints, telemetry metrics, and templated views.
 
-- **Dynamic Resource Templates**: Resources `memory://briefing/{+repo}`, `memory://agent-context/{+repo}`, `memory://actions/recent/{+repo}`, `memory://github/status/{+repo}`, `memory://github/milestones/{+repo}`, `memory://milestones/{+repo}/{number}`, and `memory://kanban/{+repo}/{project_number}` accept an RFC 6570 `{+repo}` path parameter for targeted project context.
+- **Dynamic Resource Templates**: Resources `memory://briefing/{+repo}`, `memory://agent-context/{+repo}`, `memory://agent-id/{+repo}`, `memory://actions/recent/{+repo}`, `memory://github/status/{+repo}`, `memory://github/milestones/{+repo}`, `memory://milestones/{+repo}/{number}`, and `memory://kanban/{+repo}/{project_number}` accept an RFC 6570 `{+repo}` path parameter for targeted project context.
 
 ---
 
@@ -318,13 +319,13 @@ You control exactly what additional content your agent sees across three dimensi
 
 | Dimension             | Variables                                                                                                                                                                        | What It Controls                                                                    |
 | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| **Focus**             | `MEMORY_JOURNAL_MCP_TOOL_FILTER` (CLI: `--tool-filter`, config: `"toolFilter"`)                                                                                                  | Control tool exposure: `full` (default), `starter`, `essential`                     |
+| **Focus**             | `MEMORY_JOURNAL_MCP_TOOL_FILTER` (CLI: `--tool-filter`, config: `"toolFilter"`)                                                                                                  | Control tool exposure: `full` (default), `starter`, `essential`, `readonly`, `codemode` |
 | **Journal Content**   | `BRIEFING_ENTRY_COUNT`, `BRIEFING_SUMMARY_COUNT`, `BRIEFING_COMMIT_COUNT`, `BRIEFING_IMPORTANCE_THRESHOLD`, `BRIEFING_INCLUDE_TEAM`                                              | How many recent entries, session summaries, commits, and whether team entries appear |
 | **GitHub Enrichment** | `BRIEFING_ISSUE_COUNT`, `BRIEFING_PR_COUNT`, `BRIEFING_PR_STATUS`, `BRIEFING_MILESTONE_COUNT`, `BRIEFING_WORKFLOW_COUNT`, `BRIEFING_WORKFLOW_STATUS`, `BRIEFING_COPILOT_REVIEWS` | Issues, PRs, milestones, CI runs, and Copilot review state surfaced in the briefing |
 
 **Context Injections:** Set `RULES_FILE_PATH` and `SKILLS_DIR_PATH` to surface user rules and agent skills as companion resources (`memory://rules`, `memory://skills`) alongside the briefing.
 
-**Repo Targeting:** In multi-repo setups, agents read `memory://briefing/{repo}` to get a briefing scoped to a specific repository registered in `PROJECT_REGISTRY`.
+**Repo Targeting:** In multi-repo setups, agents read `memory://briefing/{+repo}` to get a briefing scoped to a specific repository registered in `PROJECT_REGISTRY`.
 
 <details>
 <summary><strong>Briefing Presets (click to expand)</strong></summary>
@@ -579,16 +580,16 @@ memory-journal-mcp --transport http --port 3000
 | Variable                                       | Description                                                |
 | ---------------------------------------------- | ---------------------------------------------------------- |
 | **Core Database & Server** | |
-| `DB_PATH`                                      | Path to the personal journal SQLite database               |
+| `DB_PATH`                                      | Path to the personal journal SQLite database (CLI: `--db`, `--database`, default: `./memory_journal.db`) |
 | `DB_ENCRYPTION_KEY`                            | SQLCipher at-rest database encryption key (alias: `MJ_DB_ENCRYPTION_KEY`) |
-| `TEAM_DB_PATH`                                 | Path to the shared team SQLite database                    |
+| `TEAM_DB_PATH`                                 | Path to the shared team SQLite database (CLI: `--team-db`, `--team-database`) |
 | `TEAM_AUTHOR`                                  | Display name attached to team entries (used for local author identity; OAuth identity claims take precedence when creating team entries and RBAC ownership under active OAuth) |
 | `TEAM_DEFAULT_ROLE`                            | Default RBAC role for unlisted team authors: `admin`, `member`, `viewer`, `denied` (CLI: `--team-default-role`, default: `denied`) |
 | `TEAM_ADMIN`                                   | Bootstrap admin author name when the `team_members` table is empty (CLI: `--team-admin`) |
 | `ADDITIONAL_TEAM_DBS`                          | JSON mapping of label to path for additional read-only team SQLite databases (CLI: `--additional-team-dbs`) |
-| `DEFAULT_WORKSPACE_ID`                         | Default workspace ID for multi-tenant isolation (`default`; legacy fallback: `MCP_WORKSPACE_ID`) |
+| `DEFAULT_WORKSPACE_ID`                         | Default workspace ID for multi-tenant isolation (CLI: `--default-workspace-id`, default: `default`; `MCP_WORKSPACE_ID` provides a session-scoped schema-healing fallback on tool payloads) |
 | `MEMORY_JOURNAL_CONFIG`                        | Path to configuration file (`.yaml`, `.yml`, `.json`; CLI: `--config`) |
-| `LOG_LEVEL`                                    | Server log verbosity: `debug`, `info`, `notice`, `warning`, `error`, `critical` (CLI: `--log-level`, default: `info`) |
+| `LOG_LEVEL`                                    | Server log verbosity: `debug`, `info`, `notice`, `warning`, `error`, `critical` (CLI `--log-level` accepts `debug`, `info`, `warning`, `error`; default: `info`) |
 | `TRANSPORT` / `PORT` / `MCP_HOST` / `STATELESS` | Transport mode (`stdio` or `http`; CLI: `--transport`), HTTP port (`--port`, default: `3000`), bind address (`--server-host`, fallback: `HOST`, default: `localhost`), and stateless HTTP mode (`--stateless`, default: `false`) |
 | `CORS_ORIGIN` / `MCP_CORS_ORIGIN` / `MCP_RATE_LIMIT_MAX` | Allowed CORS origins (`--cors-origin`) and per-IP/minute HTTP rate limit (default: `100`) |
 | `GITHUB_TOKEN`                                 | Personal access token for GitHub integrations              |
@@ -598,7 +599,7 @@ memory-journal-mcp --transport http --port 3000
 | `AUTO_REBUILD_INDEX`                           | Rebuild vector search index on startup (`true`/`false`, CLI: `--auto-rebuild-index`) |
 | **Security & Tooling** | |
 | `ALLOWED_IO_ROOTS`                             | Comma-separated paths for Code Mode and IO filesystem boundaries (fail-closed in stdio; mandatory when `--transport http` is used) |
-| `MEMORY_JOURNAL_MCP_TOOL_FILTER`               | Control tool exposure (`full`, `starter`, `codemode`, `readonly`, `-github`; CLI: `--tool-filter`, `memory-journal.config.json` key: `"toolFilter"`. Note: `TOOL_FILTER` is a display fallback only) |
+| `MEMORY_JOURNAL_MCP_TOOL_FILTER`               | Control tool exposure (`full`, `starter`, `essential`, `codemode`, `readonly`, `-github`; CLI: `--tool-filter`, `memory-journal.config.{yaml,yml,json}` key: `"toolFilter"`. Note: `TOOL_FILTER` is a display fallback only) |
 | `CODE_MODE_MAX_RESULT_SIZE`                    | Max execution payload buffer size in Code Mode (bytes, default: `102400`) |
 | `CODEMODE_INTERNAL_FULL_ACCESS`                | Allow Code Mode to bypass tool filters internally (default: `false`) |
 | `MCP_AGENT_HEALING`                            | Enable/disable autonomous tool & parameter healing (`true`/`false`, CLI: `--no-agent-healing`) |

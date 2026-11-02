@@ -94,7 +94,7 @@ Review it thoroughly before proceeding. For mid-session context recovery (projec
 | `DEFAULT_WORKSPACE_ID` | Default tenant workspace ID (default: `default`) |
 | `PROJECT_REGISTRY` | JSON map of repo names to local paths and GitHub project numbers |
 | `ALLOWED_IO_ROOTS` | Comma-separated allowed filesystem roots (fail-closed in stdio; mandatory when `--transport http` is used) |
-| `MEMORY_JOURNAL_MCP_TOOL_FILTER` | Control tool exposure (`full`, `codemode` [`mj_execute_code` + `update_configuration`], `starter`, `essential`, `core`, `readonly`, `-github`; CLI: `--tool-filter`, `memory-journal.config.json` key: `"toolFilter"`. Note: `TOOL_FILTER` is a display fallback only) |
+| `MEMORY_JOURNAL_MCP_TOOL_FILTER` | Control tool exposure (`full`, `codemode` [`mj_execute_code` + `update_configuration`], `starter`, `essential`, `core`, `readonly`, `-github`; CLI: `--tool-filter`, `memory-journal.config.{yaml,yml,json}` key: `"toolFilter"`. Note: `TOOL_FILTER` is a display fallback only) |
 | `CODEMODE_INTERNAL_FULL_ACCESS` | Allow Code Mode (`mj.*`) to bypass tool filters internally across all tool namespaces (`true`/`false`, default: `false`, CLI: `--codemode-internal-full-access`) |
 | `MCP_AGENT_HEALING` | Enable/disable autonomous tool & parameter healing (`true`/`false`, CLI: `--no-agent-healing`) |
 | `MAX_TOOL_INPUT_ELEMENTS` | Max array/object elements in tool inputs (default: `25000`, `0` or `Infinity` = disabled) |
@@ -110,5 +110,5 @@ Development is optimized for **Windows Native Orchestration** using PowerShell. 
 
 ## 🛡️ Testing & Validation Gates
 
-- Code validation is handled via `pnpm run check` (runs ESLint, 500-line file length ceiling check, `tsc --noEmit`, code-map sync, unassigned workspace entry check, Vitest unit tests, and Playwright E2E).
+- Static code validation is handled via `pnpm run check` (runs ESLint, 500-line file length ceiling check, `tsc --noEmit`, code-map sync, and unassigned workspace entry check); unit tests run via `pnpm test` (Vitest) and E2E tests via `pnpm run test:e2e` (Playwright).
 - Hard fail on security checks; never use `continue-on-error: true` in CI pipelines.

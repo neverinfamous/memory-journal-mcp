@@ -59,7 +59,7 @@ Every tool error return matches `{ success: false, error, code, category, sugges
 
 ### Token Estimation
 
-All JSON resource responses include `_meta.tokenEstimate` using the `Math.ceil(JSON.stringify(responseData).length / 4)` heuristic (alongside `annotations.lastModified` where applicable), while tool call and resource observability in `src/observability/token-estimator.ts` use content-type-aware UTF-8 byte-to-token ratios (`4.0` bytes/token for prose, `2.8` for JSON, `3.2` for code).
+Most JSON resource responses include `_meta.tokenEstimate` using the `Math.ceil(JSON.stringify(responseData).length / 4)` heuristic (alongside `annotations.lastModified` where applicable), while tool call and resource observability in `src/observability/token-estimator.ts` use content-type-aware UTF-8 byte-to-token ratios (`4.0` bytes/token for prose, `2.8` for JSON, `3.2` for code).
 
 ### Database
 

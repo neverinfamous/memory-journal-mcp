@@ -15,14 +15,14 @@ The Memory Journal MCP provides comprehensive, dynamic instructions via its `mem
 - Use `read_resource` on `memory://help/{group}` for specific tool groups (`core`, `search`, `analytics`, `relationships`, `io`, `admin`, `github`, `git`, `backup`, `team`, `codemode`, `templates`, `gotchas`).
 
 ## 2. Core Agent Directives
-- **Session Briefing:** Read the workspace briefing via `memory://briefing/{repo}` (or fallback to `memory://briefing`) at session start. DO NOT autonomously execute tasks listed in the briefing.
+- **Session Briefing:** Read the workspace briefing via `memory://briefing/{+repo}` (or fallback to `memory://briefing`) at session start. DO NOT autonomously execute tasks listed in the briefing.
 - **Context Integrity & Metadata:** Always include mandatory context fields when creating entries:
   - `workspace_id`: Repository name (e.g. `adamic`, `memory-journal-mcp`). Required string (auto-resolves from `project_number` / `PROJECT_REGISTRY` if omitted).
   - `session_id`: Current AI conversation ID.
-  - `project_number`: Numeric project ID (strictly required by MCP `create_entry`/`team_create_entry` and CLI `entry create --project-number <number>` [`-p, --project`] if not auto-resolvable from `workspace_id`, content/tag keyword matching, CWD in `PROJECT_REGISTRY` / `projectRegistry`, or `DEFAULT_PROJECT_NUMBER` / `--default-project`).
+  - `project_number`: Numeric project ID (strictly required by MCP `create_entry`/`team_create_entry` and CLI `entry create -p <number>` [`--project <number>`] if not auto-resolvable from `workspace_id`, content/tag keyword matching, CWD in `PROJECT_REGISTRY` / `projectRegistry`, or `DEFAULT_PROJECT_NUMBER` / `--default-project`).
   - `impact_score` / `trust_score`: Blast radius and confidence heuristics (0.0 to 1.0).
   - `validation_status`: `'passed'`, `'none'`, or `'failed'`.
-- **Context Recovery:** If you lose workspace context mid-task (e.g., needing a `project_number`), NEVER re-query `memory://briefing`. Query `memory://agent-context/{repo}` (or `memory://agent-id/{repo}`; bare `memory://agent-context` and `memory://agent-id` fall back to server CWD).
+- **Context Recovery:** If you lose workspace context mid-task (e.g., needing a `project_number`), NEVER re-query `memory://briefing`. Query `memory://agent-context/{+repo}` (or `memory://agent-id/{+repo}`; bare `memory://agent-context` and `memory://agent-id` fall back to server CWD).
 
 ## 3. Commit Integration & Entry Creation
 - **Commit Journaling:** When recording commit history in the journal, create an entry (via `mj_execute_code`, `create_entry`, or `memory-journal-mcp entry create`) tagged `commit-narrative` containing `auto_context` with `commits: ["<sha>"]` and heuristic metadata (`impact_score`, `trust_score`, `validation_status`).

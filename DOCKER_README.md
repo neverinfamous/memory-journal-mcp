@@ -90,7 +90,7 @@ When the user initializes the session context by executing the `load-briefing` p
 Control which tools and tool groups are exposed using `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or any of the 3 configuration sources; precedence: CLI flag > environment variable > config file):
 - **CLI flag**: `--tool-filter <filter>`
 - **Environment variable**: `MEMORY_JOURNAL_MCP_TOOL_FILTER` *(Note: `TOOL_FILTER` is only a fallback display variable in the session briefing and does **not** activate tool filtering on its own)*
-- **`memory-journal.config.json` key**: `"toolFilter"`
+- **`memory-journal.config.{yaml,yml,json}` key**: `"toolFilter"`
 
 | Filter               | Use Case                 |
 | -------------------- | ------------------------ |
@@ -135,7 +135,7 @@ Specialized workflow prompts for session briefing, standup & retro prep, goal tr
 
 ### 📡 **Resources**
 
-Comprehensive access to internal state via resources (`memory://briefing`, `memory://workflows`, `memory://rules`, `memory://health`, `memory://help`, `memory://staleness`, GitHub status/milestones, team stats, metrics/latency, and more) plus dynamic repo variants for cross-repo targeting (like `memory://briefing/{+repo}`, `memory://agent-context/{+repo}`, or `memory://kanban/{+repo}/{project_number}`). **[Resources documentation →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Resources)**
+Comprehensive access to internal state via resources (`memory://briefing`, `memory://workflows`, `memory://rules`, `memory://health`, `memory://help`, `memory://staleness`, GitHub status/milestones, team stats, metrics/latency, and more) plus dynamic repo variants for cross-repo targeting (like `memory://briefing/{+repo}`, `memory://agent-context/{+repo}`, `memory://agent-id/{+repo}`, or `memory://kanban/{+repo}/{project_number}`). **[Resources documentation →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Resources)**
 
 ### ⚡ Cut Token Usage with Code Mode
 
@@ -260,7 +260,7 @@ Showcasing the full power of the server, including Multi-Project Routing, Team C
 
 The `memory://briefing` resource is dynamically assembled at each session start, automatically providing ambient context like test health, workspace paths, unreleased changes, and git status. Control what your agent sees by tuning three dimensions via environment variables:
 
-- **Focus** — `MEMORY_JOURNAL_MCP_TOOL_FILTER` (CLI: `--tool-filter`, config file key: `"toolFilter"`): `full` (default), `starter`, or `essential`
+- **Focus** — `MEMORY_JOURNAL_MCP_TOOL_FILTER` (CLI: `--tool-filter`, config file key: `"toolFilter"`): `full` (default), `starter`, `essential`, `readonly`, or `codemode`
 - **Journal Content** — `BRIEFING_ENTRY_COUNT`, `BRIEFING_SUMMARY_COUNT`, `BRIEFING_COMMIT_COUNT`, `BRIEFING_IMPORTANCE_THRESHOLD`, `BRIEFING_INCLUDE_TEAM`
 - **GitHub Enrichment** — `BRIEFING_ISSUE_COUNT`, `BRIEFING_PR_COUNT`, `BRIEFING_PR_STATUS`, `BRIEFING_MILESTONE_COUNT`, `BRIEFING_WORKFLOW_COUNT`, `BRIEFING_WORKFLOW_STATUS`, `BRIEFING_COPILOT_REVIEWS`
 
@@ -285,7 +285,7 @@ Restart Cursor or your MCP client and start journaling!
 - **`--config <path>`**: Load settings from `.yaml` or `.json`. Use `--dump-config` to debug precedence.
 - **`ALLOWED_IO_ROOTS` / `--allowed-io-roots`**: Comma-separated allowed filesystem paths (default: none — fail-closed in stdio; mandatory when `--transport http` is used).
 - **`MCP_AUTH_TOKEN` / `MCP_AUTH_SCOPES`** (`--auth-token`, `--auth-scopes`): Static Bearer token and granted scopes (`read` default; use `full` for full access).
-- **`MEMORY_JOURNAL_MCP_TOOL_FILTER` / `--tool-filter`**: Control tool exposure (`full`, `starter`, `codemode`, `readonly`, `-github`; config key: `"toolFilter"`).
+- **`MEMORY_JOURNAL_MCP_TOOL_FILTER` / `--tool-filter`**: Control tool exposure (`full`, `starter`, `essential`, `codemode`, `readonly`, `-github`; config key: `"toolFilter"`).
 - **`MJ_DB_ENCRYPTION_KEY` / `DB_ENCRYPTION_KEY`**: Enables SQLCipher at-rest encryption.
 - **`CODEMODE_INTERNAL_FULL_ACCESS`**: Allow Code Mode to bypass tool filters internally (`false`).
 - **`DEFAULT_WORKSPACE_ID` / `--default-workspace-id`**: Default workspace for multi-tenant isolation (`default`).
@@ -299,7 +299,7 @@ For all environment variables and routing docs, see the **[Configuration Wiki](h
 
 ### 🔄 Session Management
 
-1. **Session start** → agent reads `memory://briefing` (or `memory://briefing/{repo}`) and shows project context
+1. **Session start** → agent reads `memory://briefing` (or `memory://briefing/{+repo}`) and shows project context
 2. **Session summary** → use `/session-summary` to capture progress and next-session context
 3. Next session's briefing includes the previous summary — context flows seamlessly
 

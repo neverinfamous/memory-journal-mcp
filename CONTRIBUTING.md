@@ -231,8 +231,8 @@ src/
 │   ├── tools/                  # Modular tool group handlers (core, search, analytics, etc.)
 │   ├── resources/              # resource handlers
 │   └── prompts/                # prompt handlers (load-briefing.ts, optimizer.ts, cms-supervisor.ts, etc.)
-├── markdown/                   # Markdown import/export (round-trip frontmatter parsing)
-├── observability/              # Metrics interceptor, token estimator, latency tracker
+├── markdown/                   # Markdown import/export (JSON frontmatter & external vault converters)
+├── observability/              # Metrics interceptor, token estimator, latency tracker, Prometheus exporter
 ├── server/
 │   ├── mcp-server/             # MCP server setup
 │   ├── auto-prune.ts           # Automated entry retention and pruning lifecycle

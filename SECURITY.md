@@ -429,7 +429,7 @@ chmod 700 /shared/team-data
 - [x] Tool input element count limit (`MAX_TOOL_INPUT_ELEMENTS`, default 25,000)
 - [x] Configurable CORS multi-origin with exact-match enforcement
 - [x] HTTP timeouts and built-in rate limiter (100 req/min)
-- [x] DNS rebinding protection and strict HSTS
+- [x] DNS rebinding protection and opt-in HSTS (`--enable-hsts` / `MCP_ENABLE_HSTS`)
 - [x] Security headers (CSP, X-Content-Type-Options, X-Frame-Options, Cache-Control, Referrer-Policy, Permissions-Policy)
 - [x] Session idle timeout (30 minutes), active session cap (100), principal binding, and 1-minute sweep interval
 - [x] Non-root Docker user
