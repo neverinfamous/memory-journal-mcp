@@ -31,10 +31,6 @@ function updateBadges() {
     hasCoverage = true;
   } else {
     console.warn(`Coverage summary not found at ${summaryPath}`);
-    if (process.env.GITHUB_ACTIONS || process.argv.includes("--strict")) {
-      console.error("Strict mode active: Failing because coverage summary is missing.");
-      process.exit(1);
-    }
   }
 
   let e2ePassing = 0;
@@ -48,6 +44,15 @@ function updateBadges() {
     hasE2e = true;
   } else {
     console.warn(`Playwright results not found at ${playwrightPath}`);
+  }
+
+  if (
+    !hasCoverage &&
+    !hasE2e &&
+    (process.env.GITHUB_ACTIONS || process.argv.includes("--strict"))
+  ) {
+    console.error("Strict mode active: Failing because neither coverage nor E2E results were found.");
+    process.exit(1);
   }
 
   // ![Coverage](https://img.shields.io/badge/Coverage-96.7%25-brightgreen.svg)

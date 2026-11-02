@@ -2,6 +2,7 @@ import { toNodeHandler, NodeStreamableHTTPServerTransport } from '@modelcontextp
 import { createMcpHandler, type McpServer } from '@modelcontextprotocol/server'
 import { randomUUID } from 'node:crypto'
 import type { Express, Request, Response, NextFunction } from 'express'
+import { getAuthContext } from '../../../auth/auth-context.js'
 import { globalSubscriptionManager } from '../../../server/subscription-manager.js'
 import type { McpServerFactory } from '../../../server/mcp-server/index.js'
 import { logger } from '../../../utils/logger.js'
@@ -16,19 +17,16 @@ export type SseTransportMap = Map<
 
 const MAX_ACTIVE_SESSIONS = 100
 
-function resolveRequestSubject(req: Request): string | undefined {
-    const reqRecord = req as unknown as {
-        tokenClaims?: { sub?: string; email?: string; client_id?: string }
-        auth?: { sub?: string; subject?: string; clientId?: string; client_id?: string }
-    }
+function resolveRequestSubject(): string | undefined {
+    const claims = getAuthContext()?.claims as
+        | { sub?: string; email?: string; client_id?: string; subject?: string; clientId?: string }
+        | undefined
     const sub =
-        reqRecord.tokenClaims?.sub ??
-        reqRecord.tokenClaims?.email ??
-        reqRecord.tokenClaims?.client_id ??
-        reqRecord.auth?.sub ??
-        reqRecord.auth?.subject ??
-        reqRecord.auth?.clientId ??
-        reqRecord.auth?.client_id
+        claims?.sub ??
+        claims?.email ??
+        claims?.client_id ??
+        claims?.subject ??
+        claims?.clientId
     return typeof sub === 'string' && sub.length > 0 ? sub : undefined
 }
 
@@ -75,9 +73,9 @@ export function registerMcpProtocolRoutes(
     }, SESSION_SWEEP_INTERVAL_MS)
     sweepTimer.unref()
 
-    const verifySessionOwner = (req: Request, res: Response, sid: string): boolean => {
+    const verifySessionOwner = (res: Response, sid: string): boolean => {
         const expectedOwner = sessionOwners.get(sid)
-        const callerSubject = resolveRequestSubject(req)
+        const callerSubject = resolveRequestSubject()
         if (expectedOwner !== undefined && expectedOwner !== callerSubject) {
             res.status(403).json({ error: { message: 'Forbidden: Session belongs to another principal' } })
             return false
@@ -110,7 +108,7 @@ export function registerMcpProtocolRoutes(
         const sessionId = sid
         const server = serverFactory()
 
-        const callerSubject = resolveRequestSubject(req)
+        const callerSubject = resolveRequestSubject()
         if (callerSubject !== undefined) {
             sessionOwners.set(sessionId, callerSubject)
         }
@@ -183,14 +181,13 @@ export function registerMcpProtocolRoutes(
             | string
             | undefined
 
-        // codeql[js/user-controlled-bypass] False positive: sessionId selects an existing session vs creating a new session; authentication is enforced upstream
         if (sid !== undefined && sid !== '') {
             const transport = sseTransports.get(sid)
             if (transport === undefined) {
                 res.status(400).json({ error: { message: 'Session not found' } })
                 return
             }
-            if (!verifySessionOwner(req, res, sid)) return
+            if (!verifySessionOwner(res, sid)) return
             if (transport instanceof LegacySSEServerTransport) {
                 transport.handleSseRequest(req, res)
             } else {
@@ -210,22 +207,21 @@ export function registerMcpProtocolRoutes(
         }
     }
 
-    /* codeql[js/missing-rate-limiting] */ app.get('/mcp', handleStatefulGet)
-    /* codeql[js/missing-rate-limiting] */ app.get('/sse', handleStatefulGet)
+    app.get('/mcp', handleStatefulGet)
+    app.get('/sse', handleStatefulGet)
 
     const handlePost = (req: Request, res: Response, next: NextFunction): void => {
         const sid = (req.query?.['sessionId'] ?? req.headers?.['mcp-session-id']) as
             | string
             | undefined
 
-        // codeql[js/user-controlled-bypass] False positive: sessionId selects an existing session vs initializing a new session; authentication is enforced upstream
         if (sid !== undefined && sid !== '') {
             const transport = sseTransports.get(sid)
             if (transport === undefined) {
                 res.status(400).json({ error: { message: 'Session not found' } })
                 return
             }
-            if (!verifySessionOwner(req, res, sid)) return
+            if (!verifySessionOwner(res, sid)) return
             if (transport instanceof LegacySSEServerTransport) {
                 transport.handlePostMessage(req, res)
             } else {
@@ -253,11 +249,11 @@ export function registerMcpProtocolRoutes(
         }
     }
 
-    /* codeql[js/missing-rate-limiting] */ app.post('/mcp', handlePost)
-    /* codeql[js/missing-rate-limiting] */ app.post('/sse', handlePost)
-    /* codeql[js/missing-rate-limiting] */ app.post('/messages', handlePost)
+    app.post('/mcp', handlePost)
+    app.post('/sse', handlePost)
+    app.post('/messages', handlePost)
 
-    /* codeql[js/missing-rate-limiting] */ app.delete('/mcp', (req: Request, res: Response) => {
+    app.delete('/mcp', (req: Request, res: Response) => {
         if (config.stateless) {
             res.status(204).end()
             return
@@ -273,7 +269,7 @@ export function registerMcpProtocolRoutes(
 
         const transport = sseTransports.get(sid)
         if (transport !== undefined) {
-            if (!verifySessionOwner(req, res, sid)) return
+            if (!verifySessionOwner(res, sid)) return
             void transport.close()
             sseTransports.delete(sid)
             sessionOwners.delete(sid)
