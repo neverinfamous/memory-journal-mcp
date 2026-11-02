@@ -12,10 +12,17 @@ import { MetricsAccumulator } from '../../src/observability/metrics.js'
 import { LegacySSEServerTransport } from '../../src/transports/http/server/legacy-sse.js'
 import { logAgentIssue } from '../../src/utils/issue-logger.js'
 import { autoIndexEntry } from '../../src/utils/vector-index-helpers.js'
+import { Command } from 'commander'
 import { getToolsCatalogResourceDefinitions } from '../../src/handlers/resources/tools-catalog.js'
+import { getStalenessResourceDefinitions } from '../../src/handlers/resources/staleness.js'
 import { resolveGitHubRepo, isResourceError, milestoneCompletionPct } from '../../src/handlers/resources/shared.js'
 import { parseToolFilter } from '../../src/filtering/tool-filter.js'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
+import { buildServerOptions } from '../../src/cli/server-options-builder.js'
+import { ConfigResolver } from '../../src/utils/config-resolver.js'
+import { healAgentHallucinations } from '../../src/handlers/tools/schemas/hallucination-healer.js'
+import { TeamLinkEntriesSchema, TeamLinkEntriesSchemaMcp } from '../../src/handlers/tools/team/schemas.js'
+import { getTeamAdminTools } from '../../src/handlers/tools/team/admin-tools/index.js'
 import type { ServerRuntime } from '../../src/utils/maintenance-lock.js'
 import type { Request, Response } from 'express'
 
@@ -79,9 +86,10 @@ describe('Observability, SSE Transport, Utils & Catalog Resource', () => {
     })
 
     describe('startMetricsServer', () => {
-        it('should serve /metrics, /health, and 404 on ephemeral port', async () => {
+        it('should serve /metrics, /health, and 404 on ephemeral port (even when MJ_METRICS_HOST is empty string)', async () => {
             const port = 19465 + Math.floor(Math.random() * 1000)
             process.env['MJ_METRICS_PORT'] = String(port)
+            process.env['MJ_METRICS_HOST'] = '   '
 
             const metrics = new MetricsAccumulator()
             metrics.record({
@@ -112,6 +120,7 @@ describe('Observability, SSE Transport, Utils & Catalog Resource', () => {
                 expect(notFoundRes.status).toBe(404)
             } finally {
                 delete process.env['MJ_METRICS_PORT']
+                delete process.env['MJ_METRICS_HOST']
                 await stopServer()
             }
         })
@@ -299,6 +308,159 @@ describe('Observability, SSE Transport, Utils & Catalog Resource', () => {
                     error: 'test error',
                 })
             ).not.toThrow()
+        })
+    })
+
+    describe('Audit Follow-Up Regressions (CLI Options, Empty Env Vars, Team Schemas)', () => {
+        let db: DatabaseAdapter
+        let savedEncKey: string | undefined
+        let savedDbEncKey: string | undefined
+
+        beforeEach(async () => {
+            savedEncKey = process.env['MJ_DB_ENCRYPTION_KEY']
+            savedDbEncKey = process.env['DB_ENCRYPTION_KEY']
+            process.env['MJ_DB_ENCRYPTION_KEY'] = ''
+            process.env['DB_ENCRYPTION_KEY'] = ''
+            db = new DatabaseAdapter(':memory:')
+            await db.initialize()
+        })
+
+        afterEach(() => {
+            db.close()
+            if (savedEncKey !== undefined) process.env['MJ_DB_ENCRYPTION_KEY'] = savedEncKey
+            else delete process.env['MJ_DB_ENCRYPTION_KEY']
+            if (savedDbEncKey !== undefined) process.env['DB_ENCRYPTION_KEY'] = savedDbEncKey
+            else delete process.env['DB_ENCRYPTION_KEY']
+            delete process.env['MCP_AUTH_SCOPES']
+            delete process.env['CODEMODE_INTERNAL_FULL_ACCESS']
+            delete process.env['ARCHIVE_OLDER_THAN_DAYS']
+            delete process.env['PRUNE_OLDER_THAN_DAYS']
+            delete process.env['MCP_WORKSPACE_ID']
+            delete process.env['STALENESS_ACTIVE_HOURS']
+            delete process.env['STALENESS_RECENT_DAYS']
+            delete process.env['STALENESS_STALE_DAYS']
+        })
+
+        it('should bridge --auth-scopes to process.env.MCP_AUTH_SCOPES and use safe default fallbacks in buildServerOptions', () => {
+            const emptyConfigPath = path.join(os.tmpdir(), `mj-empty-cfg-${String(Date.now())}.json`)
+            fs.writeFileSync(emptyConfigPath, '{}', 'utf-8')
+            try {
+                delete process.env['CODEMODE_INTERNAL_FULL_ACCESS']
+                delete process.env['ARCHIVE_OLDER_THAN_DAYS']
+                delete process.env['PRUNE_OLDER_THAN_DAYS']
+                const cmd = new Command('test')
+                vi.spyOn(cmd, 'getOptionValueSource').mockImplementation((key: string) =>
+                    key === 'authScopes' ? 'cli' : 'default'
+                )
+                const opts = { authScopes: 'read,write' }
+                const resolver = new ConfigResolver(cmd, opts, emptyConfigPath)
+                // Re-clear in case local .env had CODEMODE_INTERNAL_FULL_ACCESS set
+                delete process.env['CODEMODE_INTERNAL_FULL_ACCESS']
+                delete process.env['ARCHIVE_OLDER_THAN_DAYS']
+                delete process.env['PRUNE_OLDER_THAN_DAYS']
+                const configErrors: string[] = []
+                const { serverOptions } = buildServerOptions(resolver, opts, cmd, configErrors)
+                expect(configErrors).toEqual([])
+                expect(process.env['MCP_AUTH_SCOPES']).toBe('read,write')
+                expect(serverOptions.codemodeInternalFullAccess).toBe(false)
+                expect(serverOptions.archiveOlderThanDays).toBe(0)
+                expect(serverOptions.pruneOlderThanDays).toBe(0)
+                expect(serverOptions.hardDeleteOlderThanDays).toBe(0)
+            } finally {
+                fs.rmSync(emptyConfigPath, { force: true })
+            }
+        })
+
+        it('should ignore empty MCP_WORKSPACE_ID in healAgentHallucinations and empty STALENESS_* in staleness resource', async () => {
+            process.env['MCP_WORKSPACE_ID'] = '   '
+            const healed = healAgentHallucinations({
+                content: 'Test entry content',
+                project_number: 5,
+            }) as Record<string, unknown>
+            expect(healed['workspace_id']).toBe('default')
+
+            process.env['STALENESS_ACTIVE_HOURS'] = ''
+            process.env['STALENESS_RECENT_DAYS'] = '  '
+            process.env['STALENESS_STALE_DAYS'] = ''
+            db.createEntry({
+                content: 'Recent entry for staleness check',
+                projectNumber: 5,
+                workspaceId: 'default',
+            })
+
+            const stalenessDefs = getStalenessResourceDefinitions()
+            const stalenessResource = stalenessDefs.find((d) => d.uri === 'memory://staleness')!
+            const result = (await stalenessResource.handler('memory://staleness', {
+                db,
+                briefingConfig: {
+                    commitCount: 3,
+                    entryCount: 3,
+                    includeTeam: false,
+                    issueCount: 0,
+                    prCount: 0,
+                    prStatusBreakdown: false,
+                    workflowCount: 0,
+                    workflowStatusBreakdown: false,
+                    copilotReviews: false,
+                    projectRegistry: {
+                        'memory-journal-mcp': { path: '/workspace/mj', project_number: 5 },
+                    },
+                },
+            })) as {
+                data: {
+                    thresholds: {
+                        STALENESS_ACTIVE_HOURS: number
+                        STALENESS_RECENT_DAYS: number
+                        STALENESS_STALE_DAYS: number
+                    }
+                    projects: { active: { name: string }[] }
+                }
+            }
+            expect(result.data.thresholds).toEqual({
+                STALENESS_ACTIVE_HOURS: 24,
+                STALENESS_RECENT_DAYS: 7,
+                STALENESS_STALE_DAYS: 30,
+            })
+            expect(result.data.projects.active[0]?.name).toBe('memory-journal-mcp')
+        })
+
+        it('should normalize relationship value and key aliases in TeamLinkEntriesSchemaMcp and TeamLinkEntriesSchema', () => {
+            const relaxedResolves = TeamLinkEntriesSchemaMcp.parse({
+                source_id: 10,
+                target_id: 20,
+                rel: 'resolves',
+                message: 'Fixed in PR',
+                project_number: 5,
+            })
+            expect(relaxedResolves).toEqual({
+                from_entry_id: 10,
+                to_entry_id: 20,
+                relationship_type: 'resolved',
+                description: 'Fixed in PR',
+                project_number: 5,
+                workspace_id: undefined,
+            })
+
+            const strictRelatesTo = TeamLinkEntriesSchema.parse({
+                from_entry_id: 1,
+                to_entry_id: 2,
+                relationship_type: 'relates_to',
+                project_number: 5,
+            })
+            expect(strictRelatesTo.relationship_type).toBe('references')
+
+            const strictDependsOn = TeamLinkEntriesSchema.parse({
+                from_entry_id: 1,
+                to_entry_id: 2,
+                relationship_type: 'depends_on',
+                project_number: 5,
+            })
+            expect(strictDependsOn.relationship_type).toBe('blocked_by')
+
+            const adminTools = getTeamAdminTools({ db, teamDb: db })
+            const deleteTool = adminTools.find((t) => t.name === 'team_delete_entry')!
+            expect(deleteTool.description).toContain('team_restore_entry')
+            expect(deleteTool.description).not.toContain('permanent: true')
         })
     })
 })
