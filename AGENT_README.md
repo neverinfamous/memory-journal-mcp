@@ -37,7 +37,7 @@ When modifying the codebase, you must adhere strictly to these architectural pat
 The MCP SDK has a known limitation: it validates inputs against our schemas *before* our handler code runs. If an SDK validation fails, it throws an opaque `-32602 InvalidParams` error that completely bypasses our internal, user-friendly error formatting.
 
 To solve this, we use the **Dual-Schema Pattern**. Every tool must define two Zod schemas:
-- **SDK-Facing (`inputSchema`)**: Extremely relaxed. `register-tools.ts` registers `.partial()` schemas (while `list-interceptor.ts` unwraps `ZodPipe` wrappers up to 5 layers for `tools/list`), allowing `{}` or missing fields to pass through the SDK boundary. Any SDK-level `-32602` validation errors on preprocessed/piped schemas are intercepted by `call-interceptor.ts` and converted into structured `{ success: false, code: "VALIDATION_ERROR" }` responses.
+- **SDK-Facing (`inputSchema`)**: Extremely relaxed. `register-tools.ts` applies `.partial().passthrough()` to `inputSchema` (and `.passthrough()` to `outputSchema`) at SDK registration time while `list-interceptor.ts` filters `tools/list` against the active tool filter, allowing `{}` or missing fields to pass through the SDK boundary. Any SDK-level `-32602` validation errors on preprocessed/piped schemas are intercepted by `call-interceptor.ts` and converted into structured `{ success: false, code: "VALIDATION_ERROR" }` responses.
 - **Handler-Internal**: Extremely strict. Inside the tool handler, the `try/catch` block uses a rigid schema with exact requirements.
 
 If internal validation fails (either via `strictSchema.parse(params)` throwing a `ZodError` or by explicitly throwing a `ValidationError`), `formatHandlerError(error)` catches it and returns a structured `{ success: false, error: "...", code: "VALIDATION_ERROR", category: "validation", recoverable: false }` response.
@@ -77,9 +77,9 @@ The server supports strict data isolation using `workspace_id`.
 
 ## 📡 Session Initialization & Context
 
-Read the workspace briefing via `memory://briefing/{repo_name}` (or use the `load-briefing` prompt / fallback `memory://briefing`) at session start, and must NOT autonomously execute tasks listed in the briefing.
+Read the workspace briefing via `memory://briefing/{+repo}` (or use the `load-briefing` prompt / fallback `memory://briefing`) at session start, and must NOT autonomously execute tasks listed in the briefing.
 When provided, the briefing contains:
-- `memory://briefing` (or `memory://briefing/{repo_name}` for multi-repo environments)
+- `memory://briefing` (or `memory://briefing/{+repo}` for multi-repo environments)
 - This provides ~350 tokens of high-value ambient context: server health, GitHub CI status, active milestones, and unreleased changes.
 Review it thoroughly before proceeding. For mid-session context recovery (project number, workspace, or agent ID), query `memory://agent-context` / `memory://agent-context/{+repo}` (or `memory://agent-id` / `memory://agent-id/{+repo}`) instead of re-reading `memory://briefing`.
 

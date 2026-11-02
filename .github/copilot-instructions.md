@@ -59,7 +59,7 @@ Every tool error return matches `{ success: false, error, code, category, sugges
 
 ### Token Estimation
 
-All resources must dynamically compute and return `_meta.tokenEstimate` within their JSON response blocks using the `Math.ceil(length / 4)` heuristic. Tool call observability uses content-type-aware token estimation in `src/observability/token-estimator.ts` (`4.0` bytes/token for prose, `2.8` for JSON, `3.2` for code).
+All resource responses receive `annotations.tokenEstimate` computed centrally in `src/handlers/resources/index.ts` via `estimateTokens(contentText)` (`Math.ceil(length / 4)`), and JSON resource payloads also include `_meta.tokenEstimate` using the `Math.ceil(length / 4)` heuristic (whereas raw Markdown/YAML resources like `memory://briefing` and `memory://agent-context` rely on `annotations.tokenEstimate`). Tool call observability uses content-type-aware token estimation in `src/observability/token-estimator.ts` (`4.0` bytes/token for prose, `2.8` for JSON, `3.2` for code).
 
 ### Database
 
@@ -77,7 +77,7 @@ All resources must dynamically compute and return `_meta.tokenEstimate` within t
 - **Docker Tags**: Always use `:latest` docker tags. Check limits (25,000 char) for DOCKER_README.md.
 - **Dual-Schema Pattern**: All schemas must separate stringified input from strict internal domain types. Zod schemas are used.
 - **Vendor Sync**: Ensure vendored libraries in `src/vendor/` (`lib-agent-exec` and `lib-git-history`, tracked in `src/vendor/VENDOR.json`) are kept in sync via `pnpm run sync:vendor` and validated via `pnpm run check:vendor-deps` (executed via `bun scripts/sync-vendor.ts`).
-- **Guardrails**: `GOTCHAS_HELP` (`src/constants/instructions/gotchas.ts`) documents critical usage gotchas (covering search/query, backup/restore, GitHub/Kanban, content formatting, and sandbox execution), `memory://briefing` injects the session initialization guardrail, `healAgentHallucinations` (`src/handlers/tools/schemas/hallucination-healer.ts`) autonomously normalizes malformed tool arguments, and the session briefing health alert surfaces maintenance recommendations (via the `optimize-journal` prompt).
+- **Guardrails**: `GOTCHAS_HELP` (`src/constants/instructions/gotchas.ts`) documents critical usage gotchas (covering search/query, backup/restore, GitHub/Kanban, content formatting, and sandbox execution), `memory://briefing` injects the session initialization guardrail, `healAgentHallucinations` (`src/handlers/tools/schemas/hallucination-healer.ts`) autonomously normalizes malformed tool arguments, and the session briefing health alert surfaces maintenance recommendations (`Consider running mj-mcp-optimize.`, backed by the `optimize-journal` prompt).
 - **Code Mode Error Proxy**: Code Mode API, Promise, and Worker proxies intercept and enrich errors with the `🛠️ AUTONOMOUS HEALING:` guidance prefix, while `worker-result-proxy.ts` prefixes `.error` with `[${code}]`.
 
 ## Architecture
@@ -90,7 +90,7 @@ src/
 ├── codemode/                   # Sandboxed JS execution engine
 ├── constants/
 │   ├── icons.ts                # Capability and entity icon constants
-│   ├── instructions/           # Modular instruction sections (base, core, gotchas, templates)
+│   ├── instructions/           # Modular instruction sections (base, core, gotchas, templates, domain groups, markdown/)
 │   └── server-instructions.ts  # Dynamic server instructions and HELP_CONTENT map (Single Source of Truth)
 ├── database/
 │   ├── adapter-factory.ts      # Database adapter factory

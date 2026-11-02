@@ -28,7 +28,7 @@ cd memory-journal-mcp
 
 # Install dependencies
 pnpm install
-pnpm run rebuild:sqlite # Rebuild native SQLite addon after switching Node.js versions
+pnpm rebuild better-sqlite3 # Rebuild native SQLite addon after switching Node.js versions
 
 # Build TypeScript
 pnpm run build

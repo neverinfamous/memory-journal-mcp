@@ -373,7 +373,7 @@ You control exactly what additional content your agent sees across three dimensi
 | **npx (no install)**    | Replace `"command"` with `"npx"` and add `"args": ["-y", "memory-journal-mcp"]`                                              |
 | **From source**         | Replace `"command"` with `"node"` and add `"args": ["dist/cli.js"]`                                                          |
 | **Code Mode minimal**   | Add `"args": ["--tool-filter", "codemode", "--codemode-internal-full-access"]` (`mj_execute_code` + `update_configuration`, all `mj.*` capabilities) |
-| **Docker**              | Replace `"command"` with `"docker"` and add `"args": ["run", "-i", "--rm", "-v", "./data:/app/data", "writenotenow/memory-journal-mcp:latest"]` |
+| **Docker**              | Replace `"command"` with `"docker"` and add `"args": ["run", "-i", "--rm", "-v", "./data:/app/data", "-e", "GITHUB_TOKEN", "-e", "PROJECT_REGISTRY", "-e", "ALLOWED_IO_ROOTS", "writenotenow/memory-journal-mcp:latest"]` (forward any `"env"` keys via `-e <VAR>`) |
 | **Team collaboration**  | Add `"TEAM_DB_PATH": "./team.db"` to `env`                                                                                   |
 
 Restart your MCP client and start journaling!
@@ -586,9 +586,11 @@ memory-journal-mcp --transport http --port 3000
 | `TEAM_DEFAULT_ROLE`                            | Default RBAC role for unlisted team authors: `admin`, `member`, `viewer`, `denied` (CLI: `--team-default-role`, default: `denied`) |
 | `TEAM_ADMIN`                                   | Bootstrap admin author name when the `team_members` table is empty (CLI: `--team-admin`) |
 | `ADDITIONAL_TEAM_DBS`                          | JSON mapping of label to path for additional read-only team SQLite databases (CLI: `--additional-team-dbs`) |
-| `DEFAULT_WORKSPACE_ID`                         | Default workspace ID for multi-tenant isolation (`default`)|
+| `DEFAULT_WORKSPACE_ID`                         | Default workspace ID for multi-tenant isolation (`default`; legacy fallback: `MCP_WORKSPACE_ID`) |
 | `MEMORY_JOURNAL_CONFIG`                        | Path to configuration file (`.yaml`, `.yml`, `.json`; CLI: `--config`) |
 | `LOG_LEVEL`                                    | Server log verbosity: `debug`, `info`, `notice`, `warning`, `error`, `critical` (CLI: `--log-level`, default: `info`) |
+| `TRANSPORT` / `PORT` / `MCP_HOST` / `STATELESS` | Transport mode (`stdio` or `http`; CLI: `--transport`), HTTP port (`--port`, default: `3000`), bind address (`--server-host`, fallback: `HOST`, default: `localhost`), and stateless HTTP mode (`--stateless`, default: `false`) |
+| `CORS_ORIGIN` / `MCP_CORS_ORIGIN` / `MCP_RATE_LIMIT_MAX` | Allowed CORS origins (`--cors-origin`) and per-IP/minute HTTP rate limit (default: `100`) |
 | `GITHUB_TOKEN`                                 | Personal access token for GitHub integrations              |
 | `DEFAULT_PROJECT_NUMBER`                       | Default GitHub Project number for issue auto-assignment (CLI: `--default-project`) |
 | `PROJECT_REGISTRY`                             | JSON map of repo names to local paths and project numbers  |
@@ -621,7 +623,9 @@ memory-journal-mcp --transport http --port 3000
 | `AUDIT_LOG_PATH` / `AUDIT_REDACT` / `AUDIT_READS` / `AUDIT_LOG_MAX_SIZE` | Path to JSONL audit log file, argument/result redaction, read-call logging, and rotation size limit (default: 10MB) |
 | `METRICS_EXPORT` / `PERSIST_METRICS` / `METRICS_PATH` / `MJ_METRICS_PORT` / `MJ_METRICS_HOST` | Prometheus export (`METRICS_EXPORT=prometheus` auto-starts the standalone metrics server on `127.0.0.1:9465` in addition to mounting `/metrics` on the HTTP transport), disk-persisted metrics (`--persist-metrics`, `--metrics-path`), and dedicated scrape port/host |
 | `AUTO_PRUNE_INTERVAL_MINUTES` / `ARCHIVE_OLDER_THAN_DAYS` / `PRUNE_OLDER_THAN_DAYS` / `HARD_DELETE_OLDER_THAN_DAYS` / `PRUNE_IMPORTANCE_THRESHOLD` / `PRUNE_DRY_RUN` / `PRUNE_EXCLUDE_TAGS` | Autonomous lifecycle pruning, archiving (interval/days default: `0` = disabled), importance threshold (default: `0.15`), dry-run (default: `false`), and exclusion tags |
+| `BACKUP_INTERVAL` / `KEEP_BACKUPS` / `VACUUM_INTERVAL` / `REBUILD_INDEX_INTERVAL` / `DIGEST_INTERVAL` | Scheduled HTTP maintenance intervals in minutes (`--backup-interval`, `--vacuum-interval`, `--rebuild-index-interval`, `--digest-interval`) and backup retention count (`--keep-backups`, default: `5`) |
 | `REPORT_INTERVAL` / `REPORT_WEBHOOK_URL` / `REPORT_WEBHOOK_AUTH` / `REPORT_CONTENT_TYPE` / `ALLOW_INSECURE_WEBHOOK_HTTP` | Scheduled HTTP reports, webhook delivery headers/content-type, and local dev HTTP webhook override |
+| `DEBUG` / `DISABLE_ISSUE_LOGGING`              | Verbose debug logging and suppression of automated runtime issue logging |
 
 ### GitHub Integration (Optional)
 
