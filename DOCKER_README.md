@@ -179,7 +179,7 @@ Add this to your `~/.cursor/mcp.json`, Claude Desktop config, or equivalent:
 
 ### Basic Configuration
 
-> 💡 **Tip:** Run `npx memory-journal-mcp project create <name> --path <path> [--number <project-number>]` to bootstrap and update your `PROJECT_REGISTRY` configuration automatically!
+> 💡 **Tip:** Run `npx memory-journal-mcp project create <name> --path <path> [--number <project-number>]` to configure one or more repositories in `PROJECT_REGISTRY` without manual JSON escaping!
 
 ```json
 {
@@ -187,19 +187,11 @@ Add this to your `~/.cursor/mcp.json`, Claude Desktop config, or equivalent:
     "memory-journal-mcp": {
       "command": "docker",
       "args": [
-        "run",
-        "--rm",
-        "-i",
-        "-v",
-        "./data:/app/data",
-        "-e",
-        "GITHUB_TOKEN",
-        "-e",
-        "ALLOWED_IO_ROOTS",
-        "-e",
-        "PROJECT_REGISTRY={\"my-repo\":{\"path\":\"/app/repo\",\"project_number\":1}}",
-        "-v",
-        "/path/to/your/repo:/app/repo:ro",
+        "run", "--rm", "-i",
+        "-v", "./data:/app/data",
+        "-e", "GITHUB_TOKEN", "-e", "ALLOWED_IO_ROOTS",
+        "-e", "PROJECT_REGISTRY={\"my-repo\":{\"path\":\"/app/repo\",\"project_number\":1}}",
+        "-v", "/path/to/your/repo:/app/repo:ro",
         "writenotenow/memory-journal-mcp:latest"
       ],
       "env": {
@@ -214,8 +206,6 @@ Add this to your `~/.cursor/mcp.json`, Claude Desktop config, or equivalent:
 ### Advanced Configuration (Recommended)
 
 Showcasing the full power of the server, including Multi-Project Routing, Team Collaboration, Copilot awareness, and Context Injections.
-
-> 💡 **Tip:** Use `npx memory-journal-mcp project create <name> --path <path> [--number <project-number>]` to configure multiple repositories into `PROJECT_REGISTRY` without manual JSON escaping!
 
 ```json
 {
