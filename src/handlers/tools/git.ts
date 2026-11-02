@@ -2,7 +2,7 @@ import { z } from 'zod'
 import type { ToolDefinition, ToolContext, AnchorStatus } from '../../types/index.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
 import { sendProgress } from '../../utils/progress-utils.js'
-import { ResourceNotFoundError, ValidationError } from '../../types/errors.js'
+import { ResourceNotFoundError } from '../../types/errors.js'
 import { resolveWorkspaceId } from '../../utils/workspace-resolver.js'
 import { coerceNumber } from '../../utils/query-helpers.js'
 import { ErrorFieldsMixin } from './error-fields-mixin.js'
@@ -387,88 +387,99 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                         })
                         .parse(params)
                     const resolvedEntryId = parsedParams.entry_id ?? parsedParams.entryId
-                    if (resolvedEntryId === undefined) {
-                        throw new ValidationError('entry_id (or entryId) is required')
-                    }
                     const rawWs = parsedParams.workspace_id ?? parsedParams.workspaceId
                     const rawProj = parsedParams.project_number ?? parsedParams.projectNumber
                     const wsId = rawWs === '*' ? '*' : resolveWorkspaceId(rawWs, rawProj, context.config)
 
-                    let entry = db.getEntryByIdIncludeDeleted(resolvedEntryId, wsId)
-                    if (!entry && wsId !== '*') {
-                        entry = db.getEntryByIdIncludeDeleted(resolvedEntryId, '*')
-                    }
-                    if (!entry) throw new ResourceNotFoundError('entry', String(resolvedEntryId))
-
-                    const anchors = db.getAnchorsByEntryId(resolvedEntryId)
-                    if (anchors.length === 0) {
-                        return { success: true, results: [] }
+                    const targets: { id: number; timestamp: string }[] = []
+                    if (resolvedEntryId !== undefined) {
+                        let entry = db.getEntryByIdIncludeDeleted(resolvedEntryId, wsId)
+                        if (!entry && wsId !== '*') {
+                            entry = db.getEntryByIdIncludeDeleted(resolvedEntryId, '*')
+                        }
+                        if (!entry) throw new ResourceNotFoundError('entry', String(resolvedEntryId))
+                        targets.push({ id: entry.id, timestamp: entry.timestamp })
+                    } else {
+                        const { entries: recent } = db.getRecentEntries(20, undefined, undefined, undefined, false, wsId)
+                        for (const r of recent) {
+                            targets.push({ id: r.id, timestamp: r.timestamp })
+                        }
                     }
 
                     const fs = await import('node:fs')
                     const path = await import('node:path')
                     const workspaceRoot = process.cwd()
 
-                    const results = []
+                    const results: {
+                        anchorId: number
+                        path: string
+                        oldStatus: string
+                        newStatus: string
+                        commitsSince: number
+                        isDeleted: boolean
+                    }[] = []
                     
-                    for (const anchor of anchors) {
-                        let isDeleted = false
-                        let commitsSince = 0
-                        let newStatus: AnchorStatus = anchor.status
+                    for (const target of targets) {
+                        const anchors = db.getAnchorsByEntryId(target.id)
+                        for (const anchor of anchors) {
+                            let isDeleted = false
+                            let commitsSince = 0
+                            let newStatus: AnchorStatus = anchor.status
 
-                        try {
-                            const fullPath = path.resolve(workspaceRoot, anchor.anchorPath)
-                            const relPath = path.relative(workspaceRoot, fullPath)
-                            if (
-                                relPath === '..' ||
-                                relPath.startsWith('..' + path.sep) ||
-                                path.isAbsolute(relPath)
-                            ) {
-                                throw new Error(`Path traversal detected: ${anchor.anchorPath}`)
-                            }
+                            try {
+                                const fullPath = path.resolve(workspaceRoot, anchor.anchorPath)
+                                const relPath = path.relative(workspaceRoot, fullPath)
+                                if (
+                                    relPath === '..' ||
+                                    relPath.startsWith('..' + path.sep) ||
+                                    path.isAbsolute(relPath)
+                                ) {
+                                    throw new Error(`Path traversal detected: ${anchor.anchorPath}`)
+                                }
 
-                            isDeleted = !fs.existsSync(fullPath)
-                            
-                            if (isDeleted) {
-                                newStatus = 'invalidated'
-                            } else {
-                                const commits = await fetchCommits({
+                                isDeleted = !fs.existsSync(fullPath)
+                                
+                                if (isDeleted) {
+                                    newStatus = 'invalidated'
+                                } else {
+                                    const commits = await fetchCommits({
+                                        path: anchor.anchorPath,
+                                        since: target.timestamp
+                                    }, cwd)
+                                    commitsSince = commits.length
+                                    if (commitsSince > 0) {
+                                        newStatus = 'stale'
+                                    } else if (anchor.status === 'pending') {
+                                        newStatus = 'valid'
+                                    }
+                                }
+                                
+                                if (newStatus !== anchor.status) {
+                                    if (anchor.id !== undefined) {
+                                        db.updateAnchorStatus(anchor.id, newStatus)
+                                    }
+                                }
+
+                                results.push({
+                                    anchorId: anchor.id ?? 0,
                                     path: anchor.anchorPath,
-                                    since: entry.timestamp
-                                }, cwd)
-                                commitsSince = commits.length
-                                if (commitsSince > 0) {
-                                    newStatus = 'stale'
-                                } else if (anchor.status === 'pending') {
-                                    newStatus = 'valid'
+                                    oldStatus: anchor.status,
+                                    newStatus,
+                                    commitsSince,
+                                    isDeleted
+                                })
+                            } catch {
+                                results.push({
+                                    anchorId: anchor.id ?? 0,
+                                    path: anchor.anchorPath,
+                                    oldStatus: anchor.status,
+                                    newStatus: 'unresolvable',
+                                    commitsSince: 0,
+                                    isDeleted: false
+                                })
+                                if (anchor.status !== 'unresolvable' && anchor.id !== undefined) {
+                                    db.updateAnchorStatus(anchor.id, 'unresolvable')
                                 }
-                            }
-                            
-                            if (newStatus !== anchor.status) {
-                                if (anchor.id !== undefined) {
-                                    db.updateAnchorStatus(anchor.id, newStatus)
-                                }
-                            }
-
-                            results.push({
-                                anchorId: anchor.id,
-                                path: anchor.anchorPath,
-                                oldStatus: anchor.status,
-                                newStatus,
-                                commitsSince,
-                                isDeleted
-                            })
-                        } catch {
-                            results.push({
-                                anchorId: anchor.id,
-                                path: anchor.anchorPath,
-                                oldStatus: anchor.status,
-                                newStatus: 'unresolvable',
-                                commitsSince: 0,
-                                isDeleted: false
-                            })
-                            if (anchor.status !== 'unresolvable' && anchor.id !== undefined) {
-                                db.updateAnchorStatus(anchor.id, 'unresolvable')
                             }
                         }
                     }

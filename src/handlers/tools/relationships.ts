@@ -219,7 +219,7 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                     // Guard: both entries must exist and not be soft-deleted.
                     // db.linkEntries only enforces FK against physical rows, so soft-deleted
                     // entries (deletedAt set) would pass the FK check silently.
-                    const fromEntry = db.getEntryById(input.from_entry_id, wsId)
+                    const fromEntry = db.getEntryById(input.from_entry_id, wsId) ?? (wsId !== '*' ? db.getEntryById(input.from_entry_id, '*') : null)
                     if (!fromEntry || fromEntry.deletedAt) {
                         return {
                             ...formatHandlerError(
@@ -228,7 +228,7 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                             success: false,
                         }
                     }
-                    const toEntry = db.getEntryById(input.to_entry_id, wsId)
+                    const toEntry = db.getEntryById(input.to_entry_id, wsId) ?? (wsId !== '*' ? db.getEntryById(input.to_entry_id, '*') : null)
                     if (!toEntry || toEntry.deletedAt) {
                         return {
                             ...formatHandlerError(

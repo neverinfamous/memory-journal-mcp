@@ -26,6 +26,10 @@ const KEY_ALIAS_MAP: Record<string, string> = {
     issueNumber: 'issue_number', issueUrl: 'issue_url', projectOwner: 'project_owner',
     shareWithTeam: 'share_with_team', share_team: 'share_with_team', team: 'share_with_team',
     anchorPath: 'anchor_path', anchorType: 'anchor_type',
+    sourceTag: 'source_tag', targetTag: 'target_tag',
+    fromEntryId: 'from_entry_id', fromId: 'from_entry_id',
+    toEntryId: 'to_entry_id', toId: 'to_entry_id',
+    relationshipType: 'relationship_type',
     session: 'session_id', sessionId: 'session_id', conversation_id: 'session_id',
     conversationId: 'session_id', thread_id: 'session_id', threadId: 'session_id',
 }

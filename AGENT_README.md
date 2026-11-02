@@ -71,7 +71,7 @@ The server supports strict data isolation using `workspace_id`.
 - All CRUD, Search, and Analytics tools accept a `workspace_id`. 
 - If omitted, the server auto-resolves `workspace_id` from `project_number` (via `PROJECT_REGISTRY`), content/tag keyword aliases, or `process.cwd()` before falling back to `DEFAULT_WORKSPACE_ID` (default: `default`).
 - The `workspace_id` is assigned upon creation and cannot be overwritten directly on standard updates; cross-workspace entry migration uses `update_entry` with `workspace_id: '*'` and `target_workspace_id`.
-- Read and search tools accept `workspace_id: "*"` to query across all workspaces; external write/mutation paths reject wildcard overrides.
+- Read, search, and relationship tools accept `workspace_id: "*"` to query across all workspaces (`resolveWorkspaceId('*')` preserves wildcard sentinel `'*'`); external write/mutation paths reject wildcard overrides.
 
 ---
 
