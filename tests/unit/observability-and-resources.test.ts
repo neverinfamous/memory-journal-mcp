@@ -124,6 +124,24 @@ describe('Observability, SSE Transport, Utils & Catalog Resource', () => {
                 await stopServer()
             }
         })
+
+        it('should honor explicit metricsPort parameter over MJ_METRICS_PORT env var', async () => {
+            const explicitPort = 20465 + Math.floor(Math.random() * 1000)
+            process.env['MJ_METRICS_PORT'] = '9999'
+
+            const metrics = new MetricsAccumulator()
+            const stopServer = startMetricsServer({ metrics } as unknown as ServerRuntime, explicitPort)
+
+            await new Promise((r) => setTimeout(r, 50))
+
+            try {
+                const healthRes = await fetch(`http://127.0.0.1:${String(explicitPort)}/health`)
+                expect(healthRes.status).toBe(200)
+            } finally {
+                delete process.env['MJ_METRICS_PORT']
+                await stopServer()
+            }
+        })
     })
 
     describe('LegacySSEServerTransport', () => {

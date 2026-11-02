@@ -372,7 +372,7 @@ describe('formatUserMessage', () => {
         expect(result).toContain('**Git History**')
         expect(result).toContain('`abc1234`')
         expect(result).toContain('`def5678`')
-        expect(result).toContain('`get_recent_commits`')
+        expect(result).toContain('`get_commit_history`')
         expect(result).toContain('`search_commits`')
     })
 
