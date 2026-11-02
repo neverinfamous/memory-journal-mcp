@@ -225,7 +225,7 @@ src/
 ├── audit/                      # JSONL audit log, audit resource
 ├── auth/                       # OAuth 2.1 authentication
 ├── codemode/                   # Sandboxed JS execution engine
-├── constants/                  # Server instructions (agent prompt and composable segments)
+├── constants/                  # Server instructions, help segments, and MCP icons
 ├── database/
 │   ├── adapter-factory.ts      # Adapter instantiation
 │   ├── core/                   # Database adapter and connection interfaces
@@ -243,6 +243,7 @@ src/
 ├── observability/              # Metrics interceptor, token estimator, latency tracker
 ├── server/
 │   ├── mcp-server/             # MCP server setup
+│   ├── auto-prune.ts           # Automated entry retention and pruning lifecycle
 │   ├── digest-reporter.ts      # Scheduled digest report generation and webhook dispatch
 │   ├── registration.ts         # Tool/resource/prompt registration
 │   ├── scheduler.ts            # Recurring task scheduler

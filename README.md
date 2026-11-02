@@ -146,7 +146,7 @@ When the user initializes the session context by executing the `load-briefing` p
 ### Control Access with Tool Filtering
 
 > [!IMPORTANT]
-> All shortcuts and tool groups include **Code Mode** (`mj_execute_code`) by default for token-efficient operations. To exclude it, add `-codemode` to your filter: `--tool-filter starter,-codemode`
+> All shortcuts and tool groups always include **Code Mode** (`mj_execute_code`) and **Runtime Configuration** (`update_configuration`) as escape-hatch tools so agents can never lock themselves out of the configuration system or Code Mode.
 
 Control which tools are exposed using any of the 3 configuration sources (precedence: CLI flag > environment variable > config file):
 - **CLI flag**: `--tool-filter <filter>`
@@ -179,7 +179,7 @@ Control which tools are exposed using any of the 3 configuration sources (preced
 | Group           | Description                                                                                                                                                                                       |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `codemode`      | Code Mode (sandboxed code execution) 🌟 **Recommended**                                                                                                                                           |
-| `core`          | Entry CRUD, tags, test, staleness                                                                                                                                                                 |
+| `core`          | Entry creation/read/history, tags, resource & briefing helpers, anchor staleness, test                                                                                                            |
 | `search`        | Text search, date range, semantic, vector stats, cross-team                                                                                                                                       |
 | `analytics`     | Statistics, cross-project insights                                                                                                                                                                |
 | `relationships` | Link entries, visualize graphs                                                                                                                                                                    |
@@ -220,32 +220,22 @@ Code executes in a **pre-warmed `worker_threads` V8 isolate pool + secondary `vm
 - **Full API access** — all tool groups are available via `mj.*` (e.g., `mj.core.createEntry()`, `mj.search.searchEntries()`, `mj.github.getGithubIssues()`)
 - **Strict Readonly Contract** — Calling any mutation method under `--tool-filter readonly` safely halts the sandbox to prevent execution, returning a structured `{ success: false, error: "..." }` response to the agent instead of a raw MCP protocol exception.
 
-### ⚡ Code Mode Only (Maximum Token Savings)
+### ⚡ Code Mode Minimal Surface (Maximum Token Savings)
 
-Run with **only Code Mode enabled** — a single tool that provides access to its full capability through the `mj.*` API:
+Run with the `codemode` filter and `--codemode-internal-full-access` to expose only the escape-hatch tools (`mj_execute_code` and `update_configuration`) on the MCP tool list while retaining full internal access to the `mj.*` API inside the sandbox:
 
 ```json
 {
   "mcpServers": {
     "memory-journal-mcp": {
       "command": "memory-journal-mcp",
-      "args": ["--tool-filter", "codemode"]
+      "args": ["--tool-filter", "codemode", "--codemode-internal-full-access"]
     }
   }
 }
 ```
 
-This exposes just `mj_execute_code`. The agent writes JavaScript against the typed `mj.*` SDK — composing operations across all tool groups and returning exactly the data it needs — in one execution. This mirrors the [Code Mode pattern](https://blog.cloudflare.com/code-mode-mcp/) pioneered by Cloudflare for their entire API: fixed token cost regardless of how many capabilities exist.
-
-#### Disabling Code Mode
-
-If you prefer individual tool calls, exclude codemode:
-
-```json
-{
-  "args": ["--tool-filter", "starter,-codemode"]
-}
-```
+This exposes only `mj_execute_code` and `update_configuration` to the client's `tools/list`, reducing tool schema overhead to the minimum while preserving full programmatic capability via `mj.*`. The agent writes JavaScript against the typed `mj.*` SDK — composing operations across all tool groups and returning exactly the data it needs — in one execution. This mirrors the [Code Mode pattern](https://blog.cloudflare.com/code-mode-mcp/) pioneered by Cloudflare for their entire API: fixed token cost regardless of how many capabilities exist. Without `--codemode-internal-full-access` (or `CODEMODE_INTERNAL_FULL_ACCESS=true`), internal `mj.*` methods are scoped to the active `--tool-filter`.
 
 ---
 
@@ -382,7 +372,7 @@ You control exactly what additional content your agent sees across three dimensi
 | **Minimal (no GitHub)** | Remove the `env` block entirely                                                                                              |
 | **npx (no install)**    | Replace `"command"` with `"npx"` and add `"args": ["-y", "memory-journal-mcp"]`                                              |
 | **From source**         | Replace `"command"` with `"node"` and add `"args": ["dist/cli.js"]`                                                          |
-| **Code Mode only**      | Add `"args": ["--tool-filter", "codemode"]` (single tool, all capabilities)                                                  |
+| **Code Mode minimal**   | Add `"args": ["--tool-filter", "codemode", "--codemode-internal-full-access"]` (`mj_execute_code` + `update_configuration`, all `mj.*` capabilities) |
 | **Docker**              | Replace `"command"` with `"docker"` and add `"args": ["run", "-i", "--rm", "-v", "./data:/app/data", "writenotenow/memory-journal-mcp:latest"]` |
 | **Team collaboration**  | Add `"TEAM_DB_PATH": "./team.db"` to `env`                                                                                   |
 
@@ -394,9 +384,10 @@ Restart your MCP client and start journaling!
 > **Security Posture: Stdio vs HTTP (Fail-Closed Startup Guards)**
 >
 > - **Stdio (Default):** Runs implicitly within the secure boundaries of your local IDE or command-line environment. No explicit authentication is required because the execution context is already trusted (`ALLOWED_IO_ROOTS` defaults to fail-closed `[]` unless configured).
-> - **HTTP/SSE (`--transport http`):** Exposes the server over a network socket and enforces **two fail-closed startup guards**:
+> - **HTTP/SSE (`--transport http`):** Exposes the server over a network socket and enforces **three fail-closed startup guards**:
 >   1. **Mandatory Filesystem Boundary (`ALLOWED_IO_ROOTS` / `--allowed-io-roots`):** Always required in HTTP mode so filesystem boundaries are explicitly declared.
->   2. **Mandatory Public Authentication:** By default, HTTP binds ONLY to `localhost` and blocks wildcard CORS to prevent unauthorized access and CSRF attacks. Binding to a non-loopback address (`--server-host 0.0.0.0`) requires explicit authentication (`MCP_AUTH_TOKEN` / `--auth-token` or `--oauth-enabled`). The server will throw a fatal error if you attempt to start HTTP mode without `--allowed-io-roots` / `ALLOWED_IO_ROOTS` or expose it publicly without authentication.
+>   2. **Mandatory Public Authentication:** By default, HTTP binds ONLY to `localhost` and blocks wildcard CORS to prevent unauthorized access and CSRF attacks. Binding to a non-loopback address (`--server-host 0.0.0.0`) requires explicit authentication (`MCP_AUTH_TOKEN` / `--auth-token` or `--oauth-enabled`).
+>   3. **Mandatory Public Origin for Non-Loopback OAuth (`PUBLIC_ORIGIN` / `--public-origin`):** When `--oauth-enabled` is bound to a non-loopback address, `--public-origin` (`PUBLIC_ORIGIN`) is strictly required so RFC 9728 Protected Resource Metadata cannot be spoofed via `Host` headers.
 
 For remote access or web-based clients, run the server in HTTP mode:
 
@@ -414,17 +405,17 @@ memory-journal-mcp --transport http --port 3000 --server-host 0.0.0.0 --digest-i
 
 **Endpoints:**
 
-| Endpoint                                    | Description                                      | Mode     |
-| ------------------------------------------- | ------------------------------------------------ | -------- |
-| `GET /`                                     | Server info and available endpoints              | Both     |
-| `POST /mcp`                                 | JSON-RPC requests (initialize, tools/call, etc.) | Both     |
-| `GET /mcp`                                  | SSE stream for server-to-client notifications    | Stateful |
-| `DELETE /mcp`                               | Session termination                              | Stateful |
-| `GET /sse`                                  | Legacy SSE connection (MCP 2024-11-05)           | Stateful |
-| `POST /messages`                            | Legacy SSE message endpoint                      | Stateful |
-| `GET /health`                               | Health check (`{ status, timestamp }`)           | Both     |
-| `GET /metrics`                              | Prometheus metrics export (requires flag)        | Both     |
-| `GET /.well-known/oauth-protected-resource` | RFC 9728 Protected Resource Metadata             | Both     |
+| Endpoint                                    | Description                                                        | Mode     |
+| ------------------------------------------- | ------------------------------------------------------------------ | -------- |
+| `GET /`                                     | Server info and available endpoints                                | Both     |
+| `POST /mcp`                                 | JSON-RPC requests (initialize, tools/call, etc.)                   | Both     |
+| `GET /mcp`                                  | SSE stream for server-to-client notifications                      | Stateful |
+| `DELETE /mcp`                               | Session termination (`204 No Content`)                             | Both     |
+| `GET / POST /sse`                           | Legacy SSE connection & stateless/stateful POST (MCP 2024-11-05)   | Both     |
+| `POST /messages`                            | Legacy SSE message endpoint                                        | Stateful |
+| `GET /health`                               | Health check (`{ status, timestamp }`)                             | Both     |
+| `GET /metrics`                              | Prometheus metrics export (requires flag)                          | Both     |
+| `GET /.well-known/oauth-protected-resource` | RFC 9728 Protected Resource Metadata (requires `--oauth-enabled`)  | Both     |
 
 **Session Management:** The server uses stateful sessions by default. Include the `mcp-session-id` header (returned from initialization) in subsequent requests.
 
@@ -533,10 +524,10 @@ For production deployments, enable OAuth 2.1 authentication on the HTTP transpor
 
 | Scope   | Tool Groups                                                        |
 | ------- | ------------------------------------------------------------------ |
-| `read`  | `core, search, analytics, relationships, io, git`                  |
-| `write` | `github (+ all read groups and create_entry / link_entries / mark_anchors_stale / import_external / import_markdown / export_markdown)` |
-| `team`  | `team (dedicated team collaboration scope)`                        |
-| `audit` | `audit log access`                                                 |
+| `read`  | `core (read-only), search, analytics, relationships, io (export_entries / export_markdown), git (read-only)` |
+| `write` | `github (+ all read groups and create_entry / create_entry_minimal / link_entries / mark_anchors_stale / import_external / import_markdown / export_markdown)` |
+| `team`  | `team (dedicated team collaboration scope; combine with read/write for personal journal access)` |
+| `audit` | `memory://audit resource access (dedicated audit scope; included automatically in admin and full)` |
 | `admin` | `admin, backup, codemode (+ all read/write/team/audit groups)`     |
 | `full`  | `Unrestricted access to all operations`                            |
 
@@ -603,7 +594,7 @@ memory-journal-mcp --transport http --port 3000
 | `RULES_FILE_PATH` / `SKILLS_DIR_PATH` / `MEMORY_JOURNAL_WORKFLOW_SUMMARY` | Injected behavioral rules, skills boundaries, and workflow summary |
 | **OAuth (HTTP Mode)** | |
 | `OAUTH_ENABLED`                                | Enable OAuth 2.1 authentication (default: false)           |
-| `OAUTH_ISSUER` / `OAUTH_AUDIENCE` / `OAUTH_JWKS_URI` / `OAUTH_CLOCK_TOLERANCE` | OAuth token verification parameters (clock tolerance default: 60s) |
+| `OAUTH_ISSUER` / `OAUTH_AUDIENCE` / `OAUTH_JWKS_URI` / `OAUTH_CLOCK_TOLERANCE` / `PUBLIC_ORIGIN` / `OAUTH_ALLOW_PLAINTEXT_LOOPBACK` | OAuth token verification parameters (clock tolerance default: 60s), non-loopback RFC 9728 public origin (`--public-origin`), and local dev plaintext loopback issuer flag (`--oauth-allow-plaintext-loopback`) |
 | **Telemetry & Administration** | |
 | `AUDIT_LOG_PATH` / `AUDIT_REDACT` / `AUDIT_READS` / `AUDIT_LOG_MAX_SIZE` | Path to JSONL audit log file, argument/result redaction, read-call logging, and rotation size limit (default: 10MB) |
 | `METRICS_EXPORT` / `PERSIST_METRICS` / `MJ_METRICS_PORT` / `MJ_METRICS_HOST` | Prometheus export (`METRICS_EXPORT=prometheus` auto-starts the standalone metrics server on `127.0.0.1:9465` in addition to mounting `/metrics` on the HTTP transport), disk-persisted metrics, and dedicated scrape port/host |

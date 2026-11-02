@@ -286,14 +286,14 @@ Restart Cursor or your MCP client and start journaling!
 - **`--config <path>`**: Load settings from `.yaml` or `.json`. Use `--dump-config` to debug precedence.
 - **`ALLOWED_IO_ROOTS` / `--allowed-io-roots`**: Comma-separated allowed filesystem paths (default: none — fail-closed in stdio; mandatory when `--transport http` is used).
 - **`MEMORY_JOURNAL_MCP_TOOL_FILTER` / `--tool-filter`**: Control tool exposure (`full`, `starter`, `codemode`, `readonly`, `-github`; config key: `"toolFilter"`).
-- **`DB_ENCRYPTION_KEY`**: Enables SQLCipher at-rest encryption.
+- **`MJ_DB_ENCRYPTION_KEY` / `DB_ENCRYPTION_KEY`**: Enables SQLCipher at-rest encryption.
 - **`CODEMODE_INTERNAL_FULL_ACCESS`**: Allow Code Mode to bypass tool filters internally (`false`).
 - **`DEFAULT_WORKSPACE_ID` / `--default-workspace-id`**: Default workspace for multi-tenant isolation (`default`).
 - **`PROJECT_REGISTRY`**: Maps repo names to paths and project numbers for `workspace_id` resolution and multi-project routing.
 - **`MCP_AGENT_HEALING` / `--no-agent-healing`**: Set `MCP_AGENT_HEALING=false` (or `--no-agent-healing`) to disable autonomous tool/parameter healing.
 - **`MAX_TOOL_INPUT_ELEMENTS` / `--max-tool-input-elements`**: Max array/object elements in tool inputs (default: `25000`, `0` = disabled).
-- **`AUDIT_LOG_PATH` / `AUDIT_REDACT` / `AUDIT_READS` / `AUDIT_LOG_MAX_SIZE`**: JSONL audit log path (or `stderr`), redaction, read logging, and rotation size.
-- **`ARCHIVE_OLDER_THAN_DAYS` / `HARD_DELETE_OLDER_THAN_DAYS` / `PRUNE_DRY_RUN`**: Control auto-prune lifecycle. Test rules safely with `--prune-dry-run`.
+- **`AUDIT_LOG_PATH` / `AUDIT_REDACT` / `AUDIT_READS` / `AUDIT_LOG_MAX_SIZE`** (`--audit-log`, `--no-audit-redact`, `--audit-reads`, `--audit-log-max-size`): JSONL audit log path (or `stderr`), redaction, read logging, and rotation size.
+- **`ARCHIVE_OLDER_THAN_DAYS` / `PRUNE_OLDER_THAN_DAYS` / `HARD_DELETE_OLDER_THAN_DAYS` / `PRUNE_IMPORTANCE_THRESHOLD` / `PRUNE_EXCLUDE_TAGS` / `AUTO_PRUNE_INTERVAL_MINUTES` / `PRUNE_DRY_RUN`**: Control auto-prune lifecycle. Test rules safely with `--prune-dry-run`.
 
 For all environment variables and routing docs, see the **[Configuration Wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki/Configuration)**.
 

@@ -55,7 +55,7 @@ All tool handlers catch errors and return structured error objects via `formatHa
 Every tool error return matches `{ success: false, error, code, category, suggestion?, recoverable, details? }` to ensure agents get classification, remediation hints, and recoverability signals.
 
 - **Never** throw raw `McpError` exceptions from tool handlers which cause agents to crash.
-- **Always** return `formatHandlerError(error)` from tool `catch` blocks; the registration layer (`src/server/mcp-server/tool-registration/`) wraps the structured JSON object into `{ content: [{ type: 'text', text: JSON.stringify(result, null, 2) }], structuredContent: result }` without setting `isError: true` on structured domain errors so clients parse the structured payload cleanly.
+- **Always** return `formatHandlerError(error)` from tool `catch` blocks; the registration layer (`src/server/mcp-server/tool-registration/`) wraps the structured JSON object into `{ content: [{ type: 'text', text: JSON.stringify(result, null, 2) }], structuredContent: result }` (when `outputSchema` is defined on the tool) without setting `isError: true` on caught structured domain errors so clients parse the structured payload cleanly.
 
 ### Token Estimation
 
@@ -76,7 +76,7 @@ All resources must dynamically compute and return `_meta.tokenEstimate` within t
 - **YAML Frontmatter**: Supported natively in entry commands (`memory-journal-mcp entry create`).
 - **Docker Tags**: Always use `:latest` docker tags. Check limits (25,000 char) for DOCKER_README.md.
 - **Dual-Schema Pattern**: All schemas must separate stringified input from strict internal domain types. Zod schemas are used.
-- **Vendor Sync**: Ensure vendored libraries in `src/vendor/` (`lib-agent-exec` and `lib-git-history`, tracked in `src/vendor/VENDOR.json`) are kept in sync via `pnpm run sync:vendor` and validated via `pnpm run check:vendor-deps`.
+- **Vendor Sync**: Ensure vendored libraries in `src/vendor/` (`lib-agent-exec` and `lib-git-history`, tracked in `src/vendor/VENDOR.json`) are kept in sync via `pnpm run sync:vendor` and validated via `pnpm run check:vendor-deps` (executed via `bun scripts/sync-vendor.ts`).
 - **Guardrails**: `GOTCHAS_HELP` (`src/constants/instructions/gotchas.ts`) documents critical usage gotchas (covering search/query, backup/restore, GitHub/Kanban, content formatting, and sandbox execution), `memory://briefing` injects the session initialization guardrail, `healAgentHallucinations` (`src/handlers/tools/schemas/hallucination-healer.ts`) autonomously normalizes malformed tool arguments, and the session briefing health alert surfaces maintenance recommendations (via the `optimize-journal` prompt).
 - **Code Mode Error Proxy**: Code Mode API, Promise, and Worker proxies intercept and enrich errors with the `🛠️ AUTONOMOUS HEALING:` guidance prefix, while `worker-result-proxy.ts` prefixes `.error` with `[${code}]`.
 

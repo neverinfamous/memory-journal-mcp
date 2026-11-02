@@ -40,15 +40,16 @@ To solve this, we use the **Dual-Schema Pattern**. Every tool must define two Zo
 - **SDK-Facing (`inputSchema`)**: Extremely relaxed. All fields are optional and lack complex constraints (e.g., no `.min()`). This allows `{}` or missing fields to pass through the SDK boundary.
 - **Handler-Internal**: Extremely strict. Inside the tool handler, the `try/catch` block uses a rigid schema with exact requirements.
 
-If the internal validation fails, you must throw a `ValidationError` which will be properly serialized into a `{ success: false, error: "..." }` response via `formatHandlerError`.
+If internal validation fails (either via `strictSchema.parse(params)` throwing a `ZodError` or by explicitly throwing a `ValidationError`), `formatHandlerError(error)` catches it and returns a structured `{ success: false, error: "...", code: "VALIDATION_ERROR", category: "validation", recoverable: false }` response.
 
 ### 2. Structured Error Handling
 
 Never allow raw MCP exceptions to leak to the client. All tool handlers must wrap their execution in a `try/catch` and return the result of `formatHandlerError(error)`.
 
 ```typescript
-import { ValidationError } from '../../types/index.js'
-import { formatHandlerError } from '../../utils/error-helpers.js'
+// Use '../../' from src/handlers/tools/*.ts or '../../../' from src/handlers/tools/<group>/*.ts
+import { ValidationError } from '../../../types/index.js'
+import { formatHandlerError } from '../../../utils/error-helpers.js'
 
 export const handler = async (params: unknown) => {
     try {
@@ -93,8 +94,8 @@ Review it thoroughly before proceeding. For mid-session context recovery (projec
 | `DEFAULT_WORKSPACE_ID` | Default tenant workspace ID (default: `default`) |
 | `PROJECT_REGISTRY` | JSON map of repo names to local paths and GitHub project numbers |
 | `ALLOWED_IO_ROOTS` | Comma-separated allowed filesystem roots (fail-closed in stdio; mandatory when `--transport http` is used) |
-| `MEMORY_JOURNAL_MCP_TOOL_FILTER` | Control tool exposure (`full`, `codemode` (`mj_execute_code` only), `starter`, `essential`, `core`, `readonly`, `-github`; CLI: `--tool-filter`, `memory-journal.config.json` key: `"toolFilter"`. Note: `TOOL_FILTER` is a display fallback only) |
-| `CODEMODE_INTERNAL_FULL_ACCESS` | Allow Code Mode (`mj.*`) to bypass tool filters internally across all tool namespaces (`true`/`false`) |
+| `MEMORY_JOURNAL_MCP_TOOL_FILTER` | Control tool exposure (`full`, `codemode` [`mj_execute_code` + `update_configuration`], `starter`, `essential`, `core`, `readonly`, `-github`; CLI: `--tool-filter`, `memory-journal.config.json` key: `"toolFilter"`. Note: `TOOL_FILTER` is a display fallback only) |
+| `CODEMODE_INTERNAL_FULL_ACCESS` | Allow Code Mode (`mj.*`) to bypass tool filters internally across all tool namespaces (`true`/`false`, default: `false`, CLI: `--codemode-internal-full-access`) |
 | `MCP_AGENT_HEALING` | Enable/disable autonomous tool & parameter healing (`true`/`false`, CLI: `--no-agent-healing`) |
 | `MAX_TOOL_INPUT_ELEMENTS` | Max array/object elements in tool inputs (default: `25000`, `0` = disabled) |
 

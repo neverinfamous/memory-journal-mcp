@@ -73,9 +73,9 @@ flowchart LR
 
 | File                                         | Trigger                                                | Purpose                                                                                            |
 | -------------------------------------------- | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
-| [codeql.yml](codeql.yml)                     | PR / weekly (Mon 02:23 UTC) / `workflow_call`          | CodeQL static analysis for `javascript-typescript` and `actions`                                   |
-| [secrets-scanning.yml](secrets-scanning.yml) | PR / `workflow_call`                                   | TruffleHog (verified secrets) scanning                                                             |
-| [security-update.yml](security-update.yml)   | PR (path-filtered) / weekly (Sun 02:00 UTC) / manual / `workflow_call` | Docker image Trivy scan (CRITICAL/HIGH/MEDIUM), SARIF upload, auto-creates GitHub issue on failure |
+| [codeql.yml](codeql.yml)                     | PR to `main` / weekly (Mon 02:23 UTC) / `workflow_call` | CodeQL static analysis for `javascript-typescript` and `actions`                                   |
+| [secrets-scanning.yml](secrets-scanning.yml) | PR to `main` / `workflow_call`                         | TruffleHog (verified secrets) scanning                                                             |
+| [security-update.yml](security-update.yml)   | PR to `main` (path-filtered) / weekly (Sun 02:00 UTC) / manual / `workflow_call` | Docker image Trivy scan (CRITICAL/HIGH/MEDIUM), SARIF upload, auto-creates GitHub issue on failure |
 
 ### Release & Publishing
 
@@ -112,7 +112,7 @@ For manual feature releases, the maintainer runs `/bump-deploy` locally which pu
 
 | Secret            | Used By                                                  | Purpose                        |
 | ----------------- | -------------------------------------------------------- | ------------------------------ |
-| `GITHUB_TOKEN`    | docker-publish, security-update, codeql                  | Git operations, SARIF upload, issue creation |
+| `GITHUB_TOKEN` *(automatic)* | secrets-scanning, security-update, codeql    | Gitleaks scan, SARIF upload, issue creation (provided automatically by GitHub Actions) |
 | `NPM_TOKEN`       | gatekeeper → docker-publish → publish-npm                | npm registry authentication    |
 | `DOCKER_USERNAME` | gatekeeper → docker-publish                              | Docker Hub login               |
 | `DOCKER_PASSWORD` | gatekeeper → docker-publish                              | Docker Hub login               |
