@@ -17,7 +17,11 @@ import { resolveAuthor } from '../utils/security-utils.js'
 export function enforceAccessBoundary(
     targetName: string,
     targetType: 'resource' | 'tool' | 'prompt',
-    capabilities?: { requiresTeamScope?: boolean; requiresAdminScope?: boolean },
+    capabilities?: {
+        requiresTeamScope?: boolean
+        requiresAdminScope?: boolean
+        requiresAuditScope?: boolean
+    },
     auditLogger?: AuditLogger | null
 ): void {
     const auth = getAuthContext()
@@ -31,9 +35,11 @@ export function enforceAccessBoundary(
               targetName.includes('-team-') ||
               targetName.includes('_team_'))
 
-    const isAdmin =
-        capabilities?.requiresAdminScope ??
+    const isAudit =
+        capabilities?.requiresAuditScope ??
         (targetType === 'resource' ? targetName === 'memory://audit' : false)
+
+    const isAdmin = capabilities?.requiresAdminScope ?? false
 
     // Strict fail-closed boundary for team domains
     if (isTeam) {
@@ -59,6 +65,8 @@ export function enforceAccessBoundary(
             requiredScope = SCOPES.READ
             if (isTeam) {
                 requiredScope = SCOPES.TEAM
+            } else if (isAudit) {
+                requiredScope = SCOPES.AUDIT
             } else if (isAdmin) {
                 requiredScope = SCOPES.ADMIN
             }
@@ -75,7 +83,9 @@ export function enforceAccessBoundary(
                 const category =
                     requiredScope === SCOPES.TEAM
                         ? 'team'
-                        : requiredScope === SCOPES.ADMIN || requiredScope === SCOPES.FULL
+                        : requiredScope === SCOPES.ADMIN ||
+                            requiredScope === SCOPES.FULL ||
+                            requiredScope === SCOPES.AUDIT
                           ? 'admin'
                           : 'read'
                 auditLogger.logDenial(targetName, 'Insufficient scope', {

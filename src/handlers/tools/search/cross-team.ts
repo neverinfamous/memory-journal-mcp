@@ -186,6 +186,7 @@ export async function handleCrossTeamSearch(
             entryType: args.entry_type,
             startDate: args.start_date,
             endDate: args.end_date,
+            sortBy: args.sort_by,
             fuzzy_match: args.fuzzy_match,
             includeArchived: args.include_archived,
             workspaceId: wsId,

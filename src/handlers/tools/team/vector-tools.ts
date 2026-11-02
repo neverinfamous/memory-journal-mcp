@@ -141,7 +141,10 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                                 return null
 
                             // Enforce tenant isolation
-                            if (entry.projectNumber !== input.project_number) {
+                            if (
+                                input.project_number !== undefined &&
+                                entry.projectNumber !== input.project_number
+                            ) {
                                 return null
                             }
                             if (wsId && entry.workspaceId !== wsId) {

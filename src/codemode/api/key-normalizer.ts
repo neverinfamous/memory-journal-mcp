@@ -46,6 +46,35 @@ export function convertKeysToSnakeCase(obj: Record<string, unknown>, methodName?
 
         if (snakeKey === 'id' && !('entry_id' in obj) && !('entryId' in obj)) {
             snakeKey = 'entry_id'
+        } else if (methodLower?.includes('link')) {
+            if (
+                (snakeKey === 'source' || snakeKey === 'source_id' || snakeKey === 'from_id') &&
+                !('from_entry_id' in obj) &&
+                !('from_entry_id' in result)
+            ) {
+                snakeKey = 'from_entry_id'
+            } else if (
+                (snakeKey === 'target' ||
+                    snakeKey === 'target_id' ||
+                    snakeKey === 'to_id' ||
+                    snakeKey === 'dest') &&
+                !('to_entry_id' in obj) &&
+                !('to_entry_id' in result)
+            ) {
+                snakeKey = 'to_entry_id'
+            } else if (
+                (snakeKey === 'type' || snakeKey === 'rel') &&
+                !('relationship_type' in obj) &&
+                !('relationship_type' in result)
+            ) {
+                snakeKey = 'relationship_type'
+            } else if (
+                (snakeKey === 'notes' || snakeKey === 'message' || snakeKey === 'text') &&
+                !('description' in obj) &&
+                !('description' in result)
+            ) {
+                snakeKey = 'description'
+            }
         } else if (snakeKey === 'type') {
             if (methodLower?.includes('export')) {
                 snakeKey = 'format'

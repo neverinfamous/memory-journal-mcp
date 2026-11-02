@@ -266,6 +266,7 @@ export interface InternalResourceDef {
     capabilities?: {
         requiresTeamScope?: boolean
         requiresAdminScope?: boolean
+        requiresAuditScope?: boolean
     }
     handler: (uri: string, context: ResourceContext) => unknown
 }

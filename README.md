@@ -537,7 +537,7 @@ For production deployments, enable OAuth 2.1 authentication on the HTTP transpor
 | `read`  | `core (read-only), search, analytics, relationships (visualize_relationships), io (export_entries), git` |
 | `write` | `github (+ all read groups and create_entry / create_entry_minimal / link_entries / mark_anchors_stale / import_external / import_markdown / export_markdown)` |
 | `team`  | `team (dedicated team collaboration scope; combine with read/write for personal journal access)` |
-| `audit` | `Dedicated audit hierarchy scope (included in admin/full; memory://audit and search_audit_log enforce admin or full at runtime)` |
+| `audit` | `memory://audit resource access (included in admin/full; search_audit_log requires admin or full)` |
 | `admin` | `admin, backup, codemode (+ all read/write/team/audit groups)`     |
 | `full`  | `Unrestricted access to all operations`                            |
 

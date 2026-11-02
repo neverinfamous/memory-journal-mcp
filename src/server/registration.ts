@@ -33,6 +33,7 @@ export interface ResourceDefinition {
     capabilities?: {
         requiresTeamScope?: boolean
         requiresAdminScope?: boolean
+        requiresAuditScope?: boolean
     }
 }
 
@@ -45,6 +46,7 @@ export interface PromptDefinition {
     capabilities?: {
         requiresTeamScope?: boolean
         requiresAdminScope?: boolean
+        requiresAuditScope?: boolean
     }
 }
 

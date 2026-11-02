@@ -97,6 +97,7 @@ export async function hybridSearch(
                 entryType: options.entryType as EntryType,
                 startDate: options.startDate,
                 endDate: options.endDate,
+                includeArchived: options.includeArchived,
                 workspaceId: options.workspaceId,
             })
         ),

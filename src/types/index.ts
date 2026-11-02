@@ -283,6 +283,7 @@ export interface ResourceDefinition {
     capabilities?: {
         requiresTeamScope?: boolean
         requiresAdminScope?: boolean
+        requiresAuditScope?: boolean
     }
 
     /** Resource handler - NOTE: db is passed at runtime, not in the definition */
