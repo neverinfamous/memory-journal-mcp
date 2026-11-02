@@ -17,7 +17,11 @@ import { resolveAuthor } from '../utils/security-utils.js'
 export function enforceAccessBoundary(
     targetName: string,
     targetType: 'resource' | 'tool' | 'prompt',
-    capabilities?: { requiresTeamScope?: boolean; requiresAdminScope?: boolean },
+    capabilities?: {
+        requiresTeamScope?: boolean
+        requiresAdminScope?: boolean
+        requiresAuditScope?: boolean
+    },
     auditLogger?: AuditLogger | null
 ): void {
     const auth = getAuthContext()
@@ -26,18 +30,22 @@ export function enforceAccessBoundary(
         capabilities?.requiresTeamScope ??
         (targetType === 'resource'
             ? targetName.startsWith('memory://team/')
-            : targetName.startsWith('team_'))
+            : targetName.startsWith('team_') ||
+              targetName.startsWith('team-') ||
+              targetName.includes('-team-') ||
+              targetName.includes('_team_'))
 
-    const isAdmin =
-        capabilities?.requiresAdminScope ??
+    const isAudit =
+        capabilities?.requiresAuditScope ??
         (targetType === 'resource' ? targetName === 'memory://audit' : false)
+
+    const isAdmin = capabilities?.requiresAdminScope ?? false
 
     // Strict fail-closed boundary for team domains
     if (isTeam) {
         const author = resolveAuthor()
         const hasAuthClaim = auth?.authenticated === true && auth?.claims !== undefined
-        const bypassCodeMode = process.env['CODEMODE_INTERNAL_FULL_ACCESS'] === 'true'
-        if (author === 'unknown' && !hasAuthClaim && !bypassCodeMode) {
+        if (author === 'unknown' && !hasAuthClaim) {
             logger.warning(`Access to team ${targetType} denied: unauthenticated`, {
                 module: 'AUTH',
                 operation: 'fail-closed',
@@ -57,6 +65,8 @@ export function enforceAccessBoundary(
             requiredScope = SCOPES.READ
             if (isTeam) {
                 requiredScope = SCOPES.TEAM
+            } else if (isAudit) {
+                requiredScope = SCOPES.AUDIT
             } else if (isAdmin) {
                 requiredScope = SCOPES.ADMIN
             }
@@ -73,7 +83,9 @@ export function enforceAccessBoundary(
                 const category =
                     requiredScope === SCOPES.TEAM
                         ? 'team'
-                        : requiredScope === SCOPES.ADMIN || requiredScope === SCOPES.FULL
+                        : requiredScope === SCOPES.ADMIN ||
+                            requiredScope === SCOPES.FULL ||
+                            requiredScope === SCOPES.AUDIT
                           ? 'admin'
                           : 'read'
                 auditLogger.logDenial(targetName, 'Insufficient scope', {

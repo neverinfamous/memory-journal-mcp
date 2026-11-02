@@ -15,13 +15,9 @@ import { ConfigurationError } from '../../types/errors.js'
 import { markUntrustedContent } from '../../utils/security-utils.js'
 
 
-import { spawn } from 'node:child_process'
 import { readFileSync, existsSync } from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
-import { fileURLToPath } from 'node:url'
-
-let isGeneratingCodeMap = false
 
 function getProjectRegistryHint(): string {
     try {
@@ -66,34 +62,6 @@ function generateSummaryPrompt(
             : '- No entries yet'
 
 
-    try {
-        if (!isGeneratingCodeMap) {
-            const packageJsonUrl = new URL('../../../package.json', import.meta.url)
-            const packageJsonPath = fileURLToPath(packageJsonUrl)
-            
-            if (existsSync(packageJsonPath)) {
-                const pkg: unknown = JSON.parse(readFileSync(packageJsonPath, 'utf-8'))
-                if (pkg !== null && typeof pkg === 'object' && 'name' in pkg && pkg.name === 'memory-journal-mcp') {
-                    isGeneratingCodeMap = true
-                    const scriptUrl = new URL('../../../scripts/update-code-map.ts', import.meta.url)
-                    const absoluteScriptPath = fileURLToPath(scriptUrl)
-                    const cmd = process.platform === 'win32' ? 'npx.cmd' : 'npx'
-                    const child = spawn(cmd, ['tsx', absoluteScriptPath], { 
-                        stdio: 'ignore', 
-                        shell: process.platform === 'win32',
-                        windowsHide: true
-                    })
-                    child.on('exit', () => { isGeneratingCodeMap = false })
-                    child.on('error', () => { isGeneratingCodeMap = false })
-                    child.unref()
-                }
-            }
-        }
-    } catch {
-        // Fail silently so we don't break the prompt fetch
-        isGeneratingCodeMap = false
-    }
-
     const registryHint = getProjectRegistryHint()
 
     return {
@@ -135,11 +103,14 @@ relationships:
 
 ## Context for Next Session
 - [List key context: relevant entry IDs, branch names, PR numbers, pending decisions]
+
+## Commits
+- \`<sha>\`: [Short commit summary or "None" if no commits were made]
 \`\`\`
 
 **Rules:**
 - Do NOT add extra top-level sections (no "## Summary", "## Overview", "## Notes", etc.)
-- Do NOT omit any of the three required sections
+- Do NOT omit any of the four required sections
 - Use bullet points within each section
 - Reference specific entry IDs, file names, and PR numbers where relevant
 - To populate \`auto_context.commits\`, use \`bun .\\.agents\\scripts\\get-git-history-json.ts --summary -n 20\` to retrieve recent commit SHAs. Do NOT use raw \`git log\`.
@@ -215,9 +186,7 @@ function generateUpdateEntryPrompt(db: IDatabaseAdapter, teamDb: IDatabaseAdapte
 - **Type:** ${String(recent['entryType'])}
 - **Tags:** ${recent['tags'] != null ? JSON.stringify(recent['tags']) : '[]'}
 - **Content:**
-\`\`\`markdown
-${String(recent['content'])}
-\`\`\`
+${markUntrustedContent(String(recent['content']))}
 `
         }
     } catch {
@@ -239,7 +208,7 @@ ${entryContext}
 
 **Step 2: Apply Conditional Formatting Rules**
 Look at the tags and structure of the target entry:
-- If it has the \`session-summary\` tag: You MUST preserve the exact 3-header structure (\`## Accomplished\`, \`## Unfinished / Blocked\`, \`## Context for Next Session\`). Do not flatten the text; only append or modify the relevant bullet points.
+- If it has the \`session-summary\` tag: You MUST preserve the exact 4-header structure (\`## Accomplished\`, \`## Unfinished / Blocked\`, \`## Context for Next Session\`, \`## Commits\`). Do not flatten the text; only append or modify the relevant bullet points.
 - If it is a standard entry: Keep your modifications concise and under 150 words.
 
 **Step 3: Execute the Update**
@@ -416,6 +385,9 @@ Agents often run into environment-level interceptors (like global PowerShell pro
 * **Command Verification Trap:** In environments utilizing PowerShell proxy functions (like \`lib-agent-exec\`), native tools (e.g., \`pnpm\`, \`bun\`, \`git\`) exist as Aliases or Functions rather than traditional executables. DO NOT use \`Get-Command <tool> -CommandType Application\` to verify existence, as this explicitly filters out aliases and will falsely report the tool as missing. Use \`Get-Command <tool>\` without the \`-CommandType\` filter.
 
 ## 3. Phase 2: Implementation
+
+> [!IMPORTANT]
+> **HITL APPROVAL GUARDRAIL**: You MUST obtain explicit Human-in-the-Loop (HITL) approval from the user before modifying global environment files (such as PowerShell profiles, \`.bashrc\`, or global Git hooks) or executable source code.
 
 1. Update the necessary files (e.g. schemas, instructions, normalizers, aliases).
 2. Validate the integrity of your code changes by running the project's native validation tooling (analogous to the semantic validation tiers).

@@ -148,9 +148,11 @@ export class BackupManager {
         assertNoPathTraversal(filename)
 
         const backupsDir = this.ctx.getBackupsDir()
+        const resolvedBackupsDir = path.resolve(backupsDir)
         const backupPath = path.resolve(backupsDir, filename)
+        const relToBackups = path.relative(resolvedBackupsDir, backupPath)
 
-        if (!backupPath.startsWith(path.resolve(backupsDir))) {
+        if (relToBackups.startsWith('..') || path.isAbsolute(relToBackups)) {
             throw new ValidationError(`Path traversal detected during restore resolution.`)
         }
 
@@ -169,7 +171,8 @@ export class BackupManager {
 
         const realBackupPath = await fs.promises.realpath(backupPath)
         const realBackupsDir = await fs.promises.realpath(backupsDir)
-        if (!realBackupPath.startsWith(realBackupsDir)) {
+        const realRel = path.relative(realBackupsDir, realBackupPath)
+        if (realRel.startsWith('..') || path.isAbsolute(realRel)) {
             throw new ValidationError('Resolved backup path escapes the backups directory.')
         }
 
@@ -182,9 +185,14 @@ export class BackupManager {
             if (rawKey) {
                 const key = rawKey
                 if (key.startsWith("x'") && key.endsWith("'")) {
+                    if (!/^x'[0-9a-fA-F]+'$/.test(key)) {
+                        tempDb.close()
+                        throw new Error('Invalid hex encryption key format')
+                    }
                     tempDb.pragma(`key = "${key}"`)
                 } else {
-                    tempDb.pragma(`key = '${key}'`)
+                    const escapedKey = key.replace(/'/g, "''")
+                    tempDb.pragma(`key = '${escapedKey}'`)
                 }
             }
             

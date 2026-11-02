@@ -7,7 +7,7 @@
 - **Framework:** Playwright (`playwright.config.ts`)
 - **Purpose:** End-to-End (E2E) protocol, transport, and integration parity testing.
 - **Focus:** HTTP/SSE transport, sessions, CORS, security headers, rate limiting, stateless mode, and automated schedulers.
-- **Database:** Uses a dedicated isolated test DB (`.test-output/e2e/test-e2e.db`).
+- **Database:** Uses dedicated per-worker isolated test databases (`.test-output/e2e/test-e2e-worker-{0..3}.db` and `.test-output/e2e/test-e2e-team-worker-{0..3}.db` across ports `3105–3108`).
 
 ## 🚨 AI Agent Testing Rules
 
@@ -18,8 +18,8 @@
 
 ### 2. Execution Protocol
 
-- Run via npm scripts: `npm run test:e2e`
-- For targeted test files: `npx playwright test tests/e2e/your-file.spec.ts`
+- Run via pnpm scripts: `pnpm run test:e2e`
+- For targeted test files: `pnpm exec playwright test tests/e2e/your-file.spec.ts`
 - Playwright automatically handles spinning up the development server via the `webServer` config in `playwright.config.ts`.
 - Check output carefully to verify that the server started successfully before tests executed.
 

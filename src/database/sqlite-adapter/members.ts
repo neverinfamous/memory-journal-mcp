@@ -45,6 +45,11 @@ export class MembersManager {
 
     addMember(author: string, role: TeamRole, addedBy?: string, displayName?: string): TeamMember {
         try {
+            if (!this.isRbacActive() && role !== 'admin') {
+                throw new QueryError(
+                    `First team member must be bootstrapped with the 'admin' role (received '${role}')`
+                )
+            }
             const existing = this.getMember(author)
             if (existing) {
                 throw new QueryError(`Failed to add team member: Member already exists (${author})`)
@@ -73,11 +78,12 @@ export class MembersManager {
 
     removeMember(author: string): boolean {
         try {
+            const existing = this.getMember(author)
+            if (existing === null) {
+                return false
+            }
+
             this.db.run(`DELETE FROM team_members WHERE author = ? COLLATE NOCASE`, [author])
-            
-            // Check if any rows were affected (SQLite specific hack, usually requires native checking,
-            // but for simplicity, we'll assume it succeeded if no error was thrown.
-            // A more robust way is to check if it exists first.
             this.rbacActiveCache = null
             return true
         } catch (error) {

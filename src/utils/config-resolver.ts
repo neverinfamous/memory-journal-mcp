@@ -126,7 +126,7 @@ export class ConfigResolver {
             source = 'cli'
         }
         // 2. Env Var
-        else if (envKey && process.env[envKey] !== undefined) {
+        else if (envKey && process.env[envKey] !== undefined && process.env[envKey] !== '') {
             value = process.env[envKey]
             source = 'env'
         }
@@ -194,7 +194,7 @@ export class ConfigResolver {
         max?: number
     ): number | undefined {
         const val = this.resolve<unknown>(cliKey, envKey)
-        if (val === undefined || val === null) {
+        if (val === undefined || val === null || (typeof val === 'string' && val.trim() === '')) {
             return undefined
         }
         return this._parseNumeric(val, cliKey, min, max, false)
@@ -210,7 +210,7 @@ export class ConfigResolver {
         max?: number
     ): number | undefined {
         const val = this.resolve<unknown>(cliKey, envKey)
-        if (val === undefined || val === null) {
+        if (val === undefined || val === null || (typeof val === 'string' && val.trim() === '')) {
             return undefined
         }
         return this._parseNumeric(val, cliKey, min, max, true)
@@ -224,7 +224,7 @@ export class ConfigResolver {
         envKey?: string
     ): boolean | undefined {
         const val = this.resolve<unknown>(cliKey, envKey)
-        if (val === undefined) return undefined
+        if (val === undefined || val === null || (typeof val === 'string' && val.trim() === '')) return undefined
         
         if (typeof val === 'boolean') return val
         if (typeof val === 'string') return val.toLowerCase() === 'true'

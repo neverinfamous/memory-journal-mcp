@@ -9,7 +9,6 @@ flowchart LR
     subgraph Triggers["Triggers"]
         Push["push to main / tag v*"]
         PR["pull_request"]
-        Tag["release published"]
         Sched["schedule (cron)"]
         Manual["workflow_dispatch"]
     end
@@ -17,6 +16,8 @@ flowchart LR
     subgraph CI["CI"]
         GK["gatekeeper (orchestrator)"]
         LT["lint-and-test"]
+        E2E["e2e (Playwright)"]
+        DPD["dockerfile-patch-drift"]
     end
 
     subgraph Security["Security"]
@@ -26,13 +27,8 @@ flowchart LR
     end
 
     subgraph Release["Release"]
-        NPM["publish-npm"]
         DP["docker-publish"]
-    end
-
-    subgraph Agentic["Agentic Workflows (Copilot)"]
-        CHM["ci-health-monitor"]
-        DDD["docs-drift-detector"]
+        NPM["publish-npm"]
     end
 
     Push --> GK
@@ -40,22 +36,24 @@ flowchart LR
     GK -->|workflow_call| CQL
     GK -->|workflow_call| SS
     GK -->|workflow_call| SU
-    GK -->|all gates pass| DP
-    DP -->|after Docker push| NPM
+    GK -->|workflow_call| E2E
+    GK -->|"all gates pass (tag v* only)"| DP
+    DP -->|workflow_call after Docker push| NPM
 
     PR --> LT
+    PR --> E2E
+    PR -->|"path-filtered"| DPD
     PR --> CQL
     PR --> SS
-    PR --> DDD
-
-    Tag --> NPM
+    PR -->|"path-filtered"| SU
 
     Sched --> CQL
     Sched --> SU
-    Sched --> CHM
+    Sched --> DPD
 
+    Manual --> E2E
     Manual --> SU
-    Manual --> CHM
+    Manual --> DPD
 ```
 
 ---
@@ -64,68 +62,63 @@ flowchart LR
 
 ### CI / Orchestration
 
-| File                                                   | Trigger                        | Purpose                                                                                 |
-| ------------------------------------------------------ | ------------------------------ | --------------------------------------------------------------------------------------- |
-| [gatekeeper.yml](gatekeeper.yml)                       | push to `main` / tag `v*`      | Orchestrates CI/CD: fans out lint + security scans, gates docker-publish on all passing |
-| [lint-and-test.yml](lint-and-test.yml)                 | PR to `main` / `workflow_call` | Lint, typecheck, build, unit tests (Node 24.x + 25.x matrix), npm audit                 |
+| File                                                                     | Trigger                                  | Purpose                                                                                                                                                                                             |
+| ------------------------------------------------------------------------ | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [gatekeeper.yml](gatekeeper.yml)                                         | push to `main` / tag `v*`                | Orchestrates CI/CD: fans out 5 verification gates (`lint-and-test`, `codeql`, `secrets-scanning`, `security-update`, `e2e`) on `push to main` and `tag v*`; triggers `docker-publish.yml` **only** on `tag v*` pushes (`refs/tags/v*`) |
+| [lint-and-test.yml](lint-and-test.yml)                                   | PR to `main` / `workflow_call`           | Lint, typecheck, build, unit & E2E tests (Node 24.x + 26.x matrix), pnpm audit, Docker smoke test                                                                                                   |
+| [e2e.yml](e2e.yml)                                                       | PR to `main` / manual / `workflow_call`  | Playwright E2E Tests                                                                                                                                                                                |
+| [dockerfile-patch-drift.yml](dockerfile-patch-drift.yml)                 | PR (path-filtered) / daily (12:00 UTC) / manual | Dockerfile & Override Drift Check (verifies stage-2 npm removal invariant & checks `package.json overrides` against npm registry)                                                                  |
 
 ### Security
 
-| File                                         | Trigger                                           | Purpose                                                                                            |
-| -------------------------------------------- | ------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| [codeql.yml](codeql.yml)                     | PR / weekly (Mon 02:23 UTC) / `workflow_call`     | CodeQL static analysis for `javascript-typescript` and `actions`                                   |
-| [secrets-scanning.yml](secrets-scanning.yml) | PR / `workflow_call`                              | TruffleHog (verified secrets) + Gitleaks scanning                                                  |
-| [security-update.yml](security-update.yml)   | weekly (Sun 02:00 UTC) / manual / `workflow_call` | Docker image Trivy scan (CRITICAL/HIGH/MEDIUM), SARIF upload, auto-creates GitHub issue on failure |
+| File                                         | Trigger                                                | Purpose                                                                                            |
+| -------------------------------------------- | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
+| [codeql.yml](codeql.yml)                     | PR to `main` / weekly (Mon 02:23 UTC) / `workflow_call` | CodeQL static analysis for `javascript-typescript` and `actions`                                   |
+| [secrets-scanning.yml](secrets-scanning.yml) | PR to `main` / `workflow_call`                         | TruffleHog (verified secrets) scanning                                                             |
+| [security-update.yml](security-update.yml)   | PR to `main` (path-filtered) / weekly (Sun 02:00 UTC) / manual / `workflow_call` | Docker image Trivy scan (CRITICAL/HIGH/MEDIUM), SARIF upload, auto-creates GitHub issue on failure |
 
 ### Release & Publishing
 
-| File                                     | Trigger                                                          | Purpose                                                                                                   |
-| ---------------------------------------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| [publish-npm.yml](publish-npm.yml)       | release published / manual / `workflow_call` from docker-publish | Publishes to npm with version verification                                                                |
-| [docker-publish.yml](docker-publish.yml) | `workflow_call` from gatekeeper (after all security gates pass)  | Multi-arch Docker build (amd64 + arm64), Docker Scout scan, manifest merge, Docker Hub description update |
-
-### Agentic Workflows (GitHub Copilot)
-
-These are AI-powered workflows using [GitHub Copilot Coding Agent](https://docs.github.com/en/copilot/using-github-copilot/using-copilot-coding-agent-to-work-on-tasks/about-assigning-tasks-to-copilot). Each `.md` file contains the agent prompt; the corresponding `.lock.yml` is the auto-generated compiled workflow (**do not edit `.lock.yml` files**).
-
-| Prompt                                               | Lock File                                                    | Schedule             | Purpose                                                                                  |
-| ---------------------------------------------------- | ------------------------------------------------------------ | -------------------- | ---------------------------------------------------------------------------------------- |
-| [ci-health-monitor.md](ci-health-monitor.md)         | [ci-health-monitor.lock.yml](ci-health-monitor.lock.yml)     | Wed 14:00 UTC        | Audits workflows for deprecated actions, Node.js runtime issues, stale Dependabot config |
+| File                                     | Trigger                                                                             | Purpose                                                                                                                                                |
+| ---------------------------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [docker-publish.yml](docker-publish.yml) | `workflow_call` from gatekeeper (on `tag v*` pushes after all 5 gates pass)         | Docker Scout scan + smoke test → multi-arch Docker build (amd64 + arm64) + SBOM/provenance attestation → manifest merge + Docker Hub README update → npm publish handoff |
+| [publish-npm.yml](publish-npm.yml)       | `workflow_call` (from docker-publish)                                               | Publishes to npm with provenance attestation and version verification                                                                                  |
 
 ---
 
 ## Release Pipeline
 
-The full release flow for pushes to `main` (including dependency updates):
+The full verification and release flow for `main` and version tags (`v*`):
 
 ```
 push to main / tag v*
   → gatekeeper (orchestrator)
-      ├── lint-and-test  ──┐
-      ├── codeql           ├── all must pass
-      ├── secrets-scanning ┤
-      └── security-update ─┘
-            ↓ all gates pass
-          docker-publish (multi-arch build + Docker Scout + npm publish)
+      ├── lint-and-test    ──┐
+      ├── codeql             │
+      ├── secrets-scanning   ├── all 5 gates must pass
+      ├── security-update    │
+      └── e2e              ──┘
+            ↓ all gates pass AND ref is refs/tags/v*
+          docker-publish (Docker Scout + smoke test → multi-arch build + SBOM/provenance → manifest merge + Docker Hub README)
+            ↓ workflow_call
+          publish-npm (npm publish with provenance)
 ```
 
-For manual feature releases, the maintainer runs `/bump-deploy` locally which pushes a tag, triggering the gatekeeper pipeline.
+For manual feature releases, the maintainer runs `/bump-deploy` locally which pushes a `v*` tag, triggering the gatekeeper pipeline and subsequent release jobs.
 
 ---
 
 ## Secrets Required
 
-| Secret            | Used By                                             | Purpose                        |
-| ----------------- | --------------------------------------------------- | ------------------------------ |
-| `GITHUB_TOKEN`    | auto-release, security-update | Git operations, issue creation |
-| `NPM_TOKEN`       | publish-npm                                         | npm registry authentication    |
-| `DOCKER_USERNAME` | docker-publish                                      | Docker Hub login               |
-| `DOCKER_PASSWORD` | docker-publish                                      | Docker Hub login               |
+| Secret            | Used By                                                  | Purpose                        |
+| ----------------- | -------------------------------------------------------- | ------------------------------ |
+| `GITHUB_TOKEN` *(automatic)* | `secrets-scanning`, `security-update`, `codeql`, `docker-publish` | TruffleHog checkout/diff scan, CodeQL/Trivy SARIF upload, build provenance attestation, issue creation (provided automatically by GitHub Actions) |
+| `NPM_TOKEN`       | gatekeeper → docker-publish → publish-npm                | npm registry authentication    |
+| `DOCKER_USERNAME` | gatekeeper → docker-publish                              | Docker Hub login               |
+| `DOCKER_PASSWORD` | gatekeeper → docker-publish                              | Docker Hub login               |
 
 ---
 
 ## Editing Guidelines
 
 - **YAML workflows** — edit directly, commit to `main` or via PR
-- **Agentic `.md` prompts** — edit the `.md` file, then run `gh aw compile` to regenerate the `.lock.yml`
-- **`.lock.yml` files** — **never edit manually**; always regenerate via `gh aw compile`

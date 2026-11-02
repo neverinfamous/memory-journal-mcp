@@ -68,10 +68,10 @@ function buildHelpPointers(groups: Set<ToolGroup>): string {
         return groups.has(k as ToolGroup)
     })
     if (enabledHelpGroups.length === 0) {
-        return '\n\nRead `memory://help` for gotchas and critical usage patterns.'
+        return '\n\nRead `memory://help/gotchas` for gotchas and critical usage patterns.'
     }
     return '\n\n## Available Help\n\n' +
-        'Read `memory://help` for gotchas and critical usage patterns.\n' +
+        'Read `memory://help/gotchas` for gotchas and critical usage patterns.\n' +
         'Read `memory://help/{group}` for: ' + enabledHelpGroups.join(', ') + '.'
 }
 
@@ -178,7 +178,7 @@ export const SERVER_INSTRUCTIONS = CORE_INSTRUCTIONS
 
 /**
  * Help content keyed by group name.
- * 'gotchas' is the always-available help (memory://help).
+ * 'gotchas' is the always-available help (memory://help/gotchas).
  * Other keys are feature-specific help (memory://help/{key}).
  */
 export const HELP_CONTENT: ReadonlyMap<string, string> = new Map([

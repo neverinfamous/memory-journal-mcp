@@ -14,8 +14,8 @@ Thank you for your interest in contributing to the Memory Journal MCP Server! Th
 
 ### Prerequisites
 
-- **Node.js 24+** (Node.js 26.x LTS recommended)
-- **npm** (comes with Node.js)
+- **Node.js 24+** (Node.js 24 LTS or 26.x recommended)
+- **pnpm** (used for dependency management and scripts)
 - **Git** (for version control and GitHub integration testing)
 - **Docker** (optional, for container testing)
 
@@ -28,15 +28,17 @@ cd memory-journal-mcp
 
 # Install dependencies
 pnpm install
+pnpm rebuild better-sqlite3 # Rebuild native SQLite addon after switching Node.js versions
 
 # Build TypeScript
 pnpm run build
 
 # Run the test suite
 pnpm test
+pnpm run test:e2e
 
 # Run the full quality check
-pnpm run lint && pnpm run typecheck
+pnpm run check # or: pnpm run lint && pnpm run typecheck
 ```
 
 ### Docker Development (Optional)
@@ -53,34 +55,29 @@ docker run --rm -i -v ./data:/app/data memory-journal-dev
 
 We especially welcome contributions in these areas:
 
-### 🎯 High Priority
+### High Priority
 
-- **Bug fixes** and stability improvements
-- **Performance improvements** (faster search, reduced memory usage)
-- **Better Git/GitHub integrations** (more context, better performance)
-- **New entry types** that make sense for developer workflows
+- **Test & E2E coverage** expansions across edge cases
+- **Performance & benchmark optimizations** for large journals
+- **MCP client integration guides** and workflow recipes
+- **Documentation improvements** and Code Mode examples
 
-### 🔍 Medium Priority
+### Ongoing Enhancements
 
-- **Enhanced semantic search** features and models
-- **Import/export utilities** for data portability
-- **Additional relationship types** between entries
-- **Documentation improvements** and examples
-
-### 💡 Future Features
-
-- **Graph visualization** enhancements for entry relationships
-- **Weekly/monthly auto-summaries**
-- **Team collaboration** improvements
-- **IDE integrations** beyond MCP
+- **Code Mode (`mj.*`)** workflow patterns and sandbox ergonomics
+- **Cognitive Management System (CMS)** & Hush Protocol refinements
+- **Multi-project & team federation** observability
 
 ## 🧪 Testing Your Changes
 
 ### Automated Testing
 
 ```bash
-# Run all tests
+# Run all unit/integration tests
 pnpm test
+
+# Run Playwright E2E HTTP/SSE transport tests
+pnpm run test:e2e
 
 # Run tests in watch mode
 pnpm run test:watch
@@ -95,11 +92,14 @@ pnpm run bench
 ### Quality Checks
 
 ```bash
+# Full check (lint + 500-line file length check + typecheck + code-map + unassigned entries check + unit tests + E2E tests)
+pnpm run check
+
 # Lint + type check (required before submitting)
 pnpm run lint && pnpm run typecheck
 
-# Format code with Prettier
-npx prettier --write .
+# Auto-fix lint issues
+pnpm run lint:fix
 ```
 
 ### Manual Testing with MCP Client
@@ -130,16 +130,15 @@ docker run --rm -i -v ./data:/app/data memory-journal-dev
 ### TypeScript Code Style
 
 - **Strict mode** — `tsconfig.json` enforces strict TypeScript
-- **ESLint** — Run `pnpm run lint` to check, `pnpm run lint:fix` to auto-fix
-- **Prettier** — Run `npx prettier --write .` for formatting
+- **ESLint & Typecheck** — Run `pnpm run lint` and `pnpm run typecheck` to check, `pnpm run lint:fix` to auto-fix
 - **Type safety** — Avoid `any`; use proper types and Zod schemas
 - **Modularity** — Keep files under ~500 lines; split into sub-modules when approaching the limit
 - **Error handling** — Use `formatHandlerError()` for structured `{success, error, code, category, suggestion, recoverable}` responses in tool handlers
 
 ### Database Changes
 
-- **Schema migrations** — Update `src/database/core/schema.ts` for database changes
-- **Backward compatibility** — Ensure existing data isn't broken; use `migrateSchema()` for column additions
+- **Schema migrations** — Add versioned migrations in `src/database/migrations/` (registered in `migration-list.ts` and executed via `MigrationManager`) and update column projections in `src/database/sqlite-adapter/entries/shared.ts` when adding columns
+- **Backward compatibility** — Ensure existing data isn't broken; add numbered migrations in `src/database/migrations/` and register them in `src/database/migrations/migration-list.ts` for schema additions
 - **Performance** — Consider index implications for new queries
 - **Testing** — Verify with both empty and populated databases
 
@@ -180,8 +179,8 @@ Use our [Feature Request template](.github/ISSUE_TEMPLATE/feature_request.md).
 ### Before Submitting
 
 - [ ] **Fork** the repository and create a feature branch
-- [ ] **Test** your changes (`pnpm test`, `pnpm run lint && pnpm run typecheck`)
-- [ ] **Format** your code (`npx prettier --write .`)
+- [ ] **Test** your changes (`pnpm test`, `pnpm run test:e2e`, `pnpm run check` or `pnpm run lint && pnpm run typecheck`)
+- [ ] **Auto-fix lint issues** if needed (`pnpm run lint:fix`)
 - [ ] **Update documentation** if you changed APIs or behavior
 - [ ] **Add examples** for new features
 - [ ] **Check** that existing functionality still works
@@ -215,53 +214,41 @@ Use our [Feature Request template](.github/ISSUE_TEMPLATE/feature_request.md).
 src/
 ├── cli/                        # CLI entry point (Commander)
 ├── index.ts                    # Library entry point
+├── version.ts                  # Version SSoT (reads package.json)
 ├── audit/                      # JSONL audit log, audit resource
 ├── auth/                       # OAuth 2.1 authentication
 ├── codemode/                   # Sandboxed JS execution engine
-├── constants/                  # Server instructions (agent prompt and composable segments)
+├── constants/                  # Server instructions, help segments, and MCP icons
 ├── database/
 │   ├── adapter-factory.ts      # Adapter instantiation
-│   ├── core/                   # Interfaces, schema, entry columns
+│   ├── core/                   # Database adapter and connection interfaces
+│   ├── migrations/             # Versioned schema migrations (MigrationManager)
 │   └── sqlite-adapter/         # Native SQLite operations (better-sqlite3)
-├── filtering/                  # Tool filtering system
+├── filtering/                  # Tool group & shortcut meta-group filtering
 ├── github/
 │   └── github-integration/     # GitHub API integration
 ├── handlers/
-│   ├── tools/                  # tool handlers (multiple groups)
+│   ├── tools/                  # Modular tool group handlers (core, search, analytics, etc.)
 │   ├── resources/              # resource handlers
-│   └── prompts/                # prompt handlers
-├── markdown/                   # Markdown import/export (round-trip frontmatter parsing)
-├── observability/              # Metrics interceptor, token estimator, latency tracker
+│   └── prompts/                # prompt handlers (load-briefing.ts, optimizer.ts, cms-supervisor.ts, etc.)
+├── markdown/                   # Markdown import/export (JSON frontmatter & external vault converters)
+├── observability/              # Metrics interceptor, token estimator, latency tracker, Prometheus exporter
 ├── server/
-│   ├── mcp-server.ts           # MCP server setup
+│   ├── mcp-server/             # MCP server setup
+│   ├── auto-prune.ts           # Automated entry retention and pruning lifecycle
+│   ├── digest-reporter.ts      # Scheduled digest report generation and webhook dispatch
 │   ├── registration.ts         # Tool/resource/prompt registration
-│   └── scheduler.ts            # Recurring task scheduler
+│   ├── scheduler.ts            # Recurring task scheduler
+│   └── subscription-manager.ts # Resource subscription management
 ├── transports/                 # HTTP/SSE transport
 ├── types/                      # TypeScript type definitions
-├── utils/                      # Logger, error helpers, progress
+├── utils/                      # Path guard, ReDoS-safe regex, config resolver, logger, query helpers
+├── vendor/                     # Vendored internal packages
 └── vector/                     # Semantic search (sqlite-vec + transformers)
 
-skills/                             # Bundled agent skills (shipped with npm)
-├── autonomous-dev/                 # Autonomous software development agent harness
-├── bun/                            # Bun all-in-one toolkit guidelines
-├── docker/                         # Production-grade Docker and container best practices
-├── github-actions/                 # GitHub Actions CI/CD workflows
-├── github-commander/               # GitHub workflow skills (triage, review, audits)
-├── github-copilot-cli/             # GitHub Copilot CLI integration
-├── gitlab/                         # GitLab repository and CI/CD assistant
-├── golang/                         # Go development best practices
-├── mysql/                          # Production-grade MySQL rules
-├── playwright-standard/            # End-to-end testing with Playwright
-├── postgres/                       # Enterprise PostgreSQL development
-├── python/                         # Modern Python development guidelines
-├── react-best-practices/           # React and Next.js performance guidelines
-├── rust/                           # Rust systems programming guidelines
-├── shadcn-ui/                      # UI component development with shadcn
-├── skill-builder/                  # Creation and evaluation of agent skills
-├── sqlite/                         # SQLite meta-cognitive rules
-├── tailwind-css/                   # Tailwind CSS v4 guidelines
-├── typescript/                     # Enterprise-grade TypeScript patterns
-└── vitest-standard/                # Unit testing with Vitest and TDD
+skills/                         # Bundled agent skills (MCP & CLI)
+└── memory-journal-mcp/         # Bundled agent skill shipped with npm and served via SEP-2640
+```
 
 ## 🤝 Community
 
@@ -285,4 +272,3 @@ Contributors are recognized in:
 - **Git history** — Your commits are permanent record
 
 Thank you for helping make Memory Journal MCP Server better for the developer community! 🚀
-```

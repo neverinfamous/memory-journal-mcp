@@ -13,8 +13,7 @@ import type { GraphSummary } from './context-section.js'
 import type { BriefingInsights } from './insights-section.js'
 import type { GitHistorySummary, TestHealth } from './system-section.js'
 
-const escapeContent = (text: string): string =>
-    text.replace(/<\/?untrusted_remote_content[^>]*>/gi, '').replace(/\r?\n/g, ' ')
+const escapeContent = (text: string): string => text.replace(/\r?\n/g, ' ')
 
 /** Escape pipe characters for use inside markdown table cells */
 const escapeCell = (text: string): string =>
@@ -119,6 +118,11 @@ export function formatUserMessage(opts: {
         escapeCell(branchName),
         escapeCell(ciDisplay),
     ]
+    if (github?.localGitStatus && !github.localGitStatus.isClean) {
+        githubParts.push(
+            `Dirty (${String(github.localGitStatus.modified)}M, ${String(github.localGitStatus.untracked)}U)`
+        )
+    }
 
     // ========================================================================
     // TABLE ROW 2: Tracking (Issues · PRs · Milestones)
@@ -208,54 +212,7 @@ export function formatUserMessage(opts: {
     }
 
     // ========================================================================
-    // TABLE ROW 4: System
-    // ========================================================================
-    const sysLines: string[] = []
-
-    const sysLine1 = []
-    if (opts.version) sysLine1.push(`v${opts.version}`)
-    if (opts.resourceCount !== undefined) sysLine1.push(`${String(opts.resourceCount)} resources`)
-    if (opts.promptCount !== undefined) sysLine1.push(`${String(opts.promptCount)} prompts`)
-    if (sysLine1.length) sysLines.push(sysLine1.join(' · '))
-
-    if (opts.toolCount !== undefined) {
-        if (opts.filterSummary) {
-            const isCodeMode = opts.filterSummary.includes('codemode')
-            const codeModeNote = isCodeMode ? ' (multiplexed to all tools) | 100KB Cap | Prefers: mj.* API' : ''
-            sysLines.push(
-                `${String(opts.toolCount)} tools | Filter: ${escapeCell(opts.filterSummary)}${codeModeNote}`
-            )
-        } else {
-            sysLines.push(`${String(opts.toolCount)} tools`)
-        }
-    }
-    sysLines.push('📊 memory://metrics/summary')
-    sysLines.push('📍 memory://agent-context/{repo}')
-
-    const testLines: string[] = []
-    if (opts.testHealth) {
-        const th = opts.testHealth
-        const covStr = th.coverage > 0 ? ` (${String(Math.round(th.coverage))}% cov)` : ''
-        testLines.push(`Tests: ${String(th.unitTests)} pass + ${String(th.e2eTests)} E2E${covStr}`)
-    }
-    if (opts.localCheck !== undefined) {
-        testLines.push(`Lint & Typecheck: ${opts.localCheck ? '✅' : '❌'}`)
-    }
-    if (testLines.length) sysLines.push(testLines.join(' · '))
-
-
-
-    if (opts.hasCodeMap) {
-        sysLines.push(
-            '📋 code-map (test-server/code-map.md) · 🛠️ tools (test-server/tool-reference.md)'
-        )
-    }
-
-    if (opts.localTime) sysLines.push(`🕒 ${opts.localTime}`)
-    if (opts.workspaceId) sysLines.push(`Tenant: **${escapeCell(opts.workspaceId)}**`)
-
-    // ========================================================================
-    // TABLE ROW 5: Config (only when non-default values present)
+    // TABLE ROW 4: Config (only when non-default values present)
     // ========================================================================
     const configLines: string[] = []
 
@@ -327,7 +284,7 @@ export function formatUserMessage(opts: {
                 .join(', ') || 'none'
         
         const orphanAlert = graphSummary.orphanRatio !== undefined && graphSummary.orphanRatio > 0.2 ? '🔴 ' : ''
-        let graphText = `${orphanAlert}${String(graphSummary.totalRelationships)} relationships<br>Causal: ${escapeCell(topTypes)} (view: memory://graph/recent)`
+        let graphText = `${orphanAlert}${String(graphSummary.totalRelationships)} relationships<br>Causal: ${escapeCell(topTypes)} (use \`visualize_relationships\`)`
         
         if (graphSummary.topHubs.length > 0) {
             const hubsStr = graphSummary.topHubs
@@ -368,7 +325,7 @@ export function formatUserMessage(opts: {
             return `${shaText}${metaStr} ${escapeCell(c.message)}${issuesStr}`;
         }).join('<br>');
         gitHistoryLines.push(`**Recent Changes:**<br>${shortCommits}`);
-        gitHistoryLines.push(`💡 **Tip:** Use MCP Prompts (\`git-impact-search\`, \`git-velocity-report\`, \`git-audit-trust\`) for deep analysis instead of raw git commands.`);
+        gitHistoryLines.push(`💡 **Tip:** Use \`get_commit_history\` or \`search_commits\` for deep Git history analysis instead of raw git commands.`);
     }
 
 

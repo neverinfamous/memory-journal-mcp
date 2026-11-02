@@ -1,5 +1,5 @@
 import type { JournalEntry, EntryType, ImportanceResult, EntryRevision, AnchorStatus, Anchor, ToolHandlerConfig } from '../../../types/index.js'
-import type { CreateEntryInput } from '../../core/schema.js'
+import type { CreateEntryInput } from '../../core/interfaces.js'
 import type { NativeConnectionManager } from '../native-connection.js'
 import type { TagsManager } from '../tags.js'
 
@@ -25,6 +25,11 @@ import {
     searchEntries,
     getSearchFacets,
     searchByDateRange,
+    getEntriesByProject,
+    getEntriesByIssue,
+    getEntriesByPR,
+    getEntriesByWorkflowRun,
+    getEntriesBySession,
     type SortBy,
 } from './search/index.js'
 export { levenshteinDistance, buildVocabulary, findFuzzyMatches, expandFuzzyQuery } from './fuzzy-matcher.js'
@@ -102,8 +107,8 @@ export class EntriesManager {
         return updateEntry(this.sharedContext, id, input)
     }
 
-    deleteEntry(id: number, permanent = false): boolean {
-        return deleteEntry(this.sharedContext, id, permanent)
+    deleteEntry(id: number, permanent = false, workspaceId?: string): boolean {
+        return deleteEntry(this.sharedContext, id, permanent, workspaceId)
     }
 
     createEntries(inputs: CreateEntryInput[]): { created: JournalEntry[]; errors: { index: number; error: Error }[] } {
@@ -139,8 +144,8 @@ export class EntriesManager {
         return updateEntries(this.sharedContext, updates)
     }
 
-    deleteEntries(ids: number[], permanent = false): { deleted: number[]; notFound: number[]; errors: { id: number; error: Error }[] } {
-        return deleteEntries(this.sharedContext, ids, permanent)
+    deleteEntries(ids: number[], permanent = false, workspaceId?: string): { deleted: number[]; notFound: number[]; errors: { id: number; error: Error }[] } {
+        return deleteEntries(this.sharedContext, ids, permanent, workspaceId)
     }
 
     getRecentEntries(limit = 10, isPersonal?: boolean, sortBy?: SortBy, cursor?: string, includeArchived?: boolean, workspaceId?: string, projectNumber?: number, offset?: number): { entries: JournalEntry[]; nextCursor?: string } {
@@ -236,8 +241,8 @@ export class EntriesManager {
         return getEntryHistory(this.sharedContext, id)
     }
 
-    restoreEntry(id: number): boolean {
-        return restoreEntry(this.sharedContext, id)
+    restoreEntry(id: number, workspaceId?: string): boolean {
+        return restoreEntry(this.sharedContext, id, workspaceId)
     }
 
     getDeletedEntries(options?: { limit?: number; offset?: number; workspaceId?: string }): { entries: JournalEntry[]; count: number } {
@@ -250,5 +255,25 @@ export class EntriesManager {
 
     getAnchorsByEntryId(entryId: number): Anchor[] {
         return getAnchorsByEntryId(this.sharedContext, entryId)
+    }
+
+    getEntriesByProject(projectNumber: number, limit = 50, workspaceId?: string): JournalEntry[] {
+        return getEntriesByProject(this.sharedContext, projectNumber, limit, workspaceId)
+    }
+
+    getEntriesByIssue(issueNumber: number, limit = 50, workspaceId?: string): JournalEntry[] {
+        return getEntriesByIssue(this.sharedContext, issueNumber, limit, workspaceId)
+    }
+
+    getEntriesByPR(prNumber: number, limit = 50, workspaceId?: string): JournalEntry[] {
+        return getEntriesByPR(this.sharedContext, prNumber, limit, workspaceId)
+    }
+
+    getEntriesByWorkflowRun(workflowRunId: number, limit = 50, workspaceId?: string): JournalEntry[] {
+        return getEntriesByWorkflowRun(this.sharedContext, workflowRunId, limit, workspaceId)
+    }
+
+    getEntriesBySession(sessionId: string, limit = 50, workspaceId?: string): JournalEntry[] {
+        return getEntriesBySession(this.sharedContext, sessionId, limit, workspaceId)
     }
 }

@@ -33,6 +33,9 @@ export function getTeamBackupTools(context: ToolContext): ToolDefinition[] {
                 idempotentHint: false,
                 openWorldHint: false,
             },
+            capabilities: {
+                requiresAdminScope: true,
+            },
             handler: async (params: unknown) => {
                 try {
                     if (!teamDb) {

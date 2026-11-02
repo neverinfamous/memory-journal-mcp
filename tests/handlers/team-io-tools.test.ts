@@ -23,13 +23,14 @@ vi.mock('../../src/markdown/index.js', () => ({
 }))
 
 import { getTeamIoTools } from '../../src/handlers/tools/team/io-tools.js'
-import { resolveAuthor } from '../../src/utils/security-utils.js'
+import { resolveAuthenticatedAuthor } from '../../src/utils/security-utils.js'
 
 vi.mock('../../src/utils/security-utils.js', async (importOriginal) => {
     const actual = await importOriginal<typeof import('../../src/utils/security-utils.js')>()
     return {
         ...actual,
         resolveAuthor: vi.fn().mockReturnValue('TestAuthor'),
+        resolveAuthenticatedAuthor: vi.fn().mockReturnValue('TestAuthor'),
         assertSafeDirectoryPath: vi.fn(),
         assertAllowedPathBoundaries: vi.fn(),
     }
@@ -110,7 +111,7 @@ describe('getTeamIoTools', () => {
             expect(result.error).toContain('Export error')
         })
 
-        it('should call export tool with teamDb', async () => {
+        it('should call export tool with teamDb and forward tags when no dates are provided', async () => {
             const context = createMockContext()
             const handler = getTeamIoTools(context as never).find(
                 (t) => t.name === 'team_export_markdown'
@@ -118,12 +119,19 @@ describe('getTeamIoTools', () => {
 
             const result = (await handler({
                 output_dir: '/tmp/team-out',
+                tags: ['sprint-1'],
                 project_number: 1,
             })) as Record<string, unknown>
-            console.log('team_export_markdown result:', result)
 
             expect(result['success']).toBe(true)
             expect(result['exported_count']).toBe(2)
+            expect(context.teamDb.searchEntries).toHaveBeenCalledWith(
+                '',
+                expect.objectContaining({
+                    tags: ['sprint-1'],
+                    projectNumber: 1,
+                })
+            )
         })
     })
 
@@ -164,7 +172,7 @@ describe('getTeamIoTools', () => {
 
             expect(result['success']).toBe(true)
             expect(result['created']).toBe(1)
-            expect(resolveAuthor).toHaveBeenCalled()
+            expect(resolveAuthenticatedAuthor).toHaveBeenCalled()
         })
     })
 })

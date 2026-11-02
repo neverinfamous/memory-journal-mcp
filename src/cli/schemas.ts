@@ -189,20 +189,25 @@ export const adminPruneOptionsSchema = pruningOptionsSchema
         pruneOlderThanDays: z.coerce.number().optional(),
         hardDeleteOlderThanDays: z.coerce.number().optional(),
         importanceThreshold: z.coerce.number().optional(),
+        pruneImportanceThreshold: z.coerce.number().optional(),
         dryRun: z.boolean().optional(),
         excludeTags: z.string().optional()
     })
 
 export const baseEntryOptionsSchema = z.object({
     file: z.string().optional(),
+    contentFile: z.string().optional(),
     content: z.string().optional(),
+    body: z.string().optional(),
     description: z.string().optional(),
     title: z.string().optional(),
     summary: z.string().optional(),
     type: z.string().optional(),
     category: z.string().optional(),
     tags: z.string().optional(),
+    tag: z.string().optional(),
     project: safeCoerceNumber,
+    projectNumber: safeCoerceNumber,
     project_number: safeCoerceNumber,
     trustScore: safeCoerceNumber,
     trust_score: safeCoerceNumber,
@@ -258,7 +263,7 @@ export const ioImportMarkdownOptionsSchema = z.object({
 
 export const ioImportExternalOptionsSchema = z.object({
     dir: z.string().optional(),
-    format: z.enum(['notion', 'obsidian']).optional()
+    format: z.enum(['notion', 'obsidian', 'logseq']).optional()
 }).extend(coreOptionsSchema.shape).extend(databaseOptionsSchema.shape).extend(outputOptionsSchema.shape)
 
 export const visualizeOptionsSchema = z.object({

@@ -147,7 +147,10 @@ describe('DatabaseAdapter', () => {
             })
             const result = db.calculateImportance(entry.id)
 
-            expect(result.breakdown.significance).toBe(0.3)
+            expect(result.breakdown.significance).toBe(0.15)
+            const batchResult = db.getEntriesByIdsWithImportance([entry.id]).get(entry.id)
+            expect(batchResult?.importance.breakdown.significance).toBe(0.15)
+            expect(batchResult?.importance.score).toBe(result.score)
         })
 
         it('should include relationship component', () => {

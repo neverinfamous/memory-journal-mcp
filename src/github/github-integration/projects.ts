@@ -21,6 +21,12 @@ export class ProjectsManager {
             throw new Error('GitHub API not available')
         }
 
+        const cacheKey = `kanban:${owner}:${String(projectNumber)}:${repo ?? ''}`
+        if (typeof this.client.getCached === 'function') {
+            const cached = this.client.getCached(cacheKey) as KanbanBoard | undefined
+            if (cached !== undefined) return cached
+        }
+
         const projectFragment = `
             fragment ProjectData on ProjectV2 {
                 id
@@ -311,7 +317,7 @@ export class ProjectsManager {
             context: { columns: columns.length, items: totalItems, source, truncated },
         })
 
-        return {
+        const board: KanbanBoard = {
             projectId: project.id,
             projectNumber,
             projectTitle: project.title,
@@ -321,6 +327,12 @@ export class ProjectsManager {
             totalItems,
             truncated,
         }
+
+        if (typeof this.client.setCache === 'function') {
+            this.client.setCache(cacheKey, board)
+        }
+
+        return board
     }
 
     async moveProjectItem(

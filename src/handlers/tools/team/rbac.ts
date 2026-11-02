@@ -18,7 +18,13 @@ export function getCallerIdentity(_params?: Record<string, unknown>): string {
         const email = typeof claims?.['email'] === 'string' ? claims['email'] : undefined
         const prefName = typeof claims?.['preferred_username'] === 'string' ? claims['preferred_username'] : undefined
         const subject = typeof claims?.['subject'] === 'string' ? claims['subject'] : undefined
-        return claims?.sub ?? email ?? prefName ?? subject ?? resolveAuthor()
+        const clientId = typeof claims?.client_id === 'string' ? claims.client_id : undefined
+        const resolved = email ?? prefName ?? claims?.sub ?? subject ?? clientId
+        if (resolved && resolved !== 'unknown') {
+            return resolved
+        }
+        const envTeamAuthor = process.env['TEAM_AUTHOR']?.trim().replace(/"/g, '')
+        return envTeamAuthor && envTeamAuthor.length > 0 ? envTeamAuthor : 'unknown'
     }
     // For non-OAuth environments, fallback to the environment variable (TEAM_AUTHOR)
     return resolveAuthor()

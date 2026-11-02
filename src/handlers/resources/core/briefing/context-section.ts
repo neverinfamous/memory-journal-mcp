@@ -76,10 +76,29 @@ export function buildJournalContext(
     activeWorkspaceId?: string
 ): JournalContext {
     const threshold = config.briefingImportanceThreshold ?? 0.3
-    const isImportant = (e: JournalEntry): boolean => {
-        if (e.tags?.includes('session-summary')) return true
-        const score = e.importanceScore ?? context.db.calculateImportance(e.id).score
-        return score >= threshold
+    const importanceScoreCache = new Map<number, number>()
+    const filterImportant = (entries: JournalEntry[]): JournalEntry[] => {
+        if (entries.length === 0) return []
+        const missingIds: number[] = []
+        for (const e of entries) {
+            if (!e.tags?.includes('session-summary') && e.importanceScore === undefined && !importanceScoreCache.has(e.id)) {
+                missingIds.push(e.id)
+            }
+        }
+        if (missingIds.length > 0 && typeof context.db.getEntriesByIdsWithImportance === 'function') {
+            const hydratedMap = context.db.getEntriesByIdsWithImportance(missingIds)
+            for (const [id, hydrated] of hydratedMap) {
+                importanceScoreCache.set(id, hydrated.importance.score)
+            }
+        }
+        return entries.filter((e) => {
+            if (e.tags?.includes('session-summary')) return true
+            const score =
+                e.importanceScore ??
+                importanceScoreCache.get(e.id) ??
+                context.db.calculateImportance(e.id).score
+            return score >= threshold
+        })
     }
 
     const targetWs = activeWorkspaceId || config.defaultWorkspaceId || 'default'
@@ -100,7 +119,7 @@ export function buildJournalContext(
                   sortBy: 'timestamp'
               }))
     
-    let summaryEntries = rawSummaryEntries.filter(isImportant)
+    let summaryEntries = filterImportant(rawSummaryEntries)
     if (summaryEntries.length === 0 && rawSummaryEntries.length > 0) {
         summaryEntries = rawSummaryEntries
     }
@@ -124,7 +143,7 @@ export function buildJournalContext(
                   }))
             : []
             
-    let retroEntries = rawRetroEntries.filter(isImportant)
+    let retroEntries = filterImportant(rawRetroEntries)
     if (retroEntries.length === 0 && rawRetroEntries.length > 0) {
         retroEntries = rawRetroEntries
     }
@@ -158,7 +177,7 @@ export function buildJournalContext(
         })
     )
             
-    let recentEntries = rawRecentEntries.filter(isImportant)
+    let recentEntries = filterImportant(rawRecentEntries)
     if (recentEntries.length === 0 && rawRecentEntries.length > 0) {
         recentEntries = rawRecentEntries
     }

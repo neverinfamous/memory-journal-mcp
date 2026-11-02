@@ -4,7 +4,7 @@ import { getTemplateResourceDefinitions } from '../../../src/handlers/resources/
 vi.mock('../../../src/github/commit-references/index.js', () => ({
     enrichCommits: vi.fn().mockResolvedValue([
         {
-            hash: '123',
+            hash: 'a1b2c3d',
             subject: 'Add feature',
             authorName: 'Chris',
             date: '2023-01-01',
@@ -29,7 +29,7 @@ describe('Commit Grouping Resources', () => {
                             id: 'entry-1',
                             tags: ['session-summary'],
                             autoContext: JSON.stringify({
-                                commits: ['123'],
+                                commits: ['a1b2c3d'],
                             }),
                         },
                     ],
@@ -47,9 +47,9 @@ describe('Commit Grouping Resources', () => {
         expect(handlerDef).toBeDefined()
         const result: any = await handlerDef!.handler('memory://commits/1', context)
 
-        expect(result.commits).toEqual(['123'])
+        expect(result.commits).toEqual(['a1b2c3d'])
         expect(result.enrichedCommits).toHaveLength(1)
-        expect(result.enrichedCommits[0].hash).toBe('123')
+        expect(result.enrichedCommits[0].hash).toBe('a1b2c3d')
     })
 
     it('memory://commits/{project_number}/by-issue groups by issue', async () => {
@@ -63,7 +63,7 @@ describe('Commit Grouping Resources', () => {
 
         expect(result.issues).toHaveLength(1)
         expect(result.issues[0].number).toBe(10)
-        expect(result.issues[0].commits[0].hash).toBe('123')
+        expect(result.issues[0].commits[0].hash).toBe('a1b2c3d')
     })
 
     it('memory://commits/{project_number}/by-pr groups by PR', async () => {
@@ -77,6 +77,6 @@ describe('Commit Grouping Resources', () => {
 
         expect(result.pullRequests).toHaveLength(1)
         expect(result.pullRequests[0].number).toBe(20)
-        expect(result.pullRequests[0].commits[0].hash).toBe('123')
+        expect(result.pullRequests[0].commits[0].hash).toBe('a1b2c3d')
     })
 })

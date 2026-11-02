@@ -1,10 +1,13 @@
-import { bench, beforeAll, afterAll } from 'vitest'
+import { test, beforeAll, afterAll } from 'vitest'
 import { getTools, callTool } from '../../src/handlers/tools/index.js'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
+import { ServerRuntime } from '../../src/utils/maintenance-lock.js'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 
 let db: DatabaseAdapter
+const runtime = new ServerRuntime()
+const config = { runtime }
 const testDbPath = path.join(process.cwd(), 'benchmark-server-tools.db')
 
 beforeAll(async () => {
@@ -31,25 +34,53 @@ afterAll(() => {
     }
 })
 
-bench('getTools', () => {
-    getTools(db, null)
+test('getTools', async ({ bench }) => {
+    const getToolsFn = getTools
+    await bench('getTools', () => {
+        getToolsFn(db, null, undefined, undefined, config)
+    }).run()
 })
 
-bench('callTool create_entry', async () => {
-    await callTool(
-        'create_entry',
-        { workspace_id: 'default', 
-            content: 'Bench creation entry text over a tool call',
-            entry_type: 'personal_reflection',
-        },
-        db
-    )
+test('callTool get_recent_entries', async ({ bench }) => {
+    await bench('callTool get_recent_entries', async () => {
+        await callTool(
+            'get_recent_entries',
+            { limit: 50 },
+            db,
+            undefined,
+            undefined,
+            config
+        )
+    }).run()
 })
 
-bench('callTool get_recent_entries', async () => {
-    await callTool('get_recent_entries', { limit: 50 }, db)
+test('callTool search_entries', async ({ bench }) => {
+    await bench('callTool search_entries', async () => {
+        await callTool(
+            'search_entries',
+            { query: 'benchmark', limit: 20 },
+            db,
+            undefined,
+            undefined,
+            config
+        )
+    }).run()
 })
 
-bench('callTool search_entries', async () => {
-    await callTool('search_entries', { query: 'benchmark', limit: 20 }, db)
+test('callTool create_entry', async ({ bench }) => {
+    await bench('callTool create_entry', async () => {
+        await callTool(
+            'create_entry',
+            {
+                project_number: 1,
+                workspace_id: 'default',
+                content: 'Bench creation entry text over a tool call',
+                entry_type: 'personal_reflection',
+            },
+            db,
+            undefined,
+            undefined,
+            config
+        )
+    }).run()
 })

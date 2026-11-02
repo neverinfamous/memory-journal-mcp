@@ -19,7 +19,8 @@ import type { AuditCategory } from './types.js'
 import { getRequiredScope } from '../auth/scope-map.js'
 import { getAuthContext } from '../auth/auth-context.js'
 import { getRequestContext } from '../utils/request-context.js'
-import { estimateTokens } from '../observability/token-estimator.js'
+import { sanitizeErrorForLogging } from '../utils/security-utils.js'
+import { estimateTokens, estimatePayloadTokens } from '../observability/token-estimator.js'
 
 // ============================================================================
 // Types
@@ -117,17 +118,9 @@ export function createAuditInterceptor(auditLogger: AuditLogger): AuditIntercept
             try {
                 const result = await fn()
 
-                // Compute token estimate from result
+                // Compute token estimate from result (uses WeakMap cache when metrics interceptor already computed it)
                 if (typeof result === 'object' && result !== null) {
-                    try {
-                        const json = JSON.stringify({
-                            ...result,
-                            _meta: { tokenEstimate: 0 },
-                        })
-                        tokenEstimate = estimateTokens(json, 'json')
-                    } catch {
-                        // Serialization failure must not block tool execution
-                    }
+                    tokenEstimate = estimatePayloadTokens(result)
                 } else if (typeof result === 'string') {
                     tokenEstimate = estimateTokens(result, 'prose')
                 }
@@ -135,7 +128,7 @@ export function createAuditInterceptor(auditLogger: AuditLogger): AuditIntercept
                 return result
             } catch (err) {
                 success = false
-                error = err instanceof Error ? err.message : String(err)
+                error = sanitizeErrorForLogging(err instanceof Error ? err.message : String(err))
 
                 // Compute token estimate for the error response
                 const errorResult = {
@@ -236,7 +229,7 @@ export async function auditOperation<T>(
         return result
     } catch (err) {
         success = false
-        error = err instanceof Error ? err.message : String(err)
+        error = sanitizeErrorForLogging(err instanceof Error ? err.message : String(err))
         throw err
     } finally {
         const durationMs = Math.round(performance.now() - start)

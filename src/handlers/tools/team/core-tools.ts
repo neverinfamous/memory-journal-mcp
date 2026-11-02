@@ -8,9 +8,10 @@ import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { sendProgress } from '../../../utils/progress-utils.js'
-import { resolveAuthor } from '../../../utils/security-utils.js'
+import { resolveAuthor, resolveAuthenticatedAuthor } from '../../../utils/security-utils.js'
 import { getAuthContext } from '../../../auth/auth-context.js'
 import { resolveIssueUrl } from '../../../utils/github-helpers.js'
+import { autoIndexEntry } from '../../../utils/vector-index-helpers.js'
 import { resolveWorkspaceId, resolveProjectContext } from '../../../utils/workspace-resolver.js'
 import { TEAM_DB_ERROR_RESPONSE, batchFetchAuthors, fetchAuthor } from './helpers.js'
 import {
@@ -95,17 +96,7 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                     const authCtx = getAuthContext()
                     let author: string
                     if (authCtx?.authenticated) {
-                        const claims = authCtx.claims
-                        const email =
-                            typeof claims?.['email'] === 'string' ? claims['email'] : undefined
-                        const prefName =
-                            typeof claims?.['preferred_username'] === 'string'
-                                ? claims['preferred_username']
-                                : undefined
-                        const subject =
-                            typeof claims?.['subject'] === 'string' ? claims['subject'] : undefined
-                        const authId =
-                            claims?.sub ?? email ?? prefName ?? subject ?? resolveAuthor()
+                        const authId = resolveAuthenticatedAuthor()
 
                         if (input.author !== undefined && input.author !== authId) {
                             return {
@@ -162,6 +153,9 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                         prNumber: input.pr_number,
                         prUrl: input.pr_url,
                         prStatus: input.pr_status,
+                        workflowRunId: input.workflow_run_id,
+                        workflowName: input.workflow_name,
+                        workflowStatus: input.workflow_status,
                         author,
                         autoContext: input.auto_context,
                         workspaceId: wsId,
@@ -174,7 +168,15 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                     if (input.relationships && input.relationships.length > 0) {
                         for (const rel of input.relationships) {
                             try {
-                                teamDb.linkEntries(entry.id, rel.targetId, rel.relationType as RelationshipType)
+                                const canonicalRelType: RelationshipType =
+                                    rel.relationType === 'resolves'
+                                        ? 'resolved'
+                                        : rel.relationType === 'relates_to'
+                                          ? 'references'
+                                          : rel.relationType === 'depends_on'
+                                            ? 'blocked_by'
+                                            : rel.relationType
+                                teamDb.linkEntries(entry.id, rel.targetId, canonicalRelType)
                             } catch {
                                 // Ignore link failures if target doesn't exist
                             }
@@ -182,6 +184,8 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     teamDb.flushSave()
+
+                    await autoIndexEntry(context.teamVectorManager, teamDb, entry.id, wsId)
 
                     if (context.config?.subscriptionManager) {
                         void context.config.subscriptionManager.notifyResourceUpdated('memory://team/recent')
@@ -221,7 +225,7 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
 
                     const { entry_id, include_relationships, project_number, workspace_id } =
                         TeamGetEntryByIdSchema.parse(params)
-                    const wsId = workspace_id ? resolveWorkspaceId(workspace_id, project_number, context.config) : '*'
+                    const wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
                     const projectNumber = project_number
                     const entry = teamDb.getEntryById(entry_id, wsId)
 
@@ -286,7 +290,8 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                         return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
-                    const { limit, cursor, sort_by, project_number, workspace_id } = TeamGetRecentSchema.parse(params)
+                    const { limit, cursor, sort_by, project_number, workspace_id, include_archived } =
+                        TeamGetRecentSchema.parse(params)
                     const wsId = workspace_id ? resolveWorkspaceId(workspace_id, project_number, context.config) : undefined
                     const projectNumber = project_number
                     const result = teamDb.searchEntries('', {
@@ -295,6 +300,7 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                         sortBy: sort_by,
                         projectNumber: projectNumber,
                         workspaceId: wsId,
+                        includeArchived: include_archived,
                     })
 
                     const entries = result.entries

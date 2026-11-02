@@ -16,7 +16,7 @@ export function getVectorTools(context: ToolContext): ToolDefinition[] {
             title: 'Rebuild Vector Index',
             description: '[REQUIRES ADMIN SCOPE] Rebuild the semantic search vector index from all existing entries',
             group: 'admin',
-            inputSchema: z.object({project_number: z.number().int().optional()}).strict(),
+            inputSchema: z.object({ project_number: relaxedNumber().optional() }).strict(),
             outputSchema: RebuildVectorIndexOutputSchema,
             annotations: {
                 readOnlyHint: false,
@@ -76,7 +76,12 @@ export function getVectorTools(context: ToolContext): ToolDefinition[] {
                     }
                     return val;
                 },
-                z.object({ entry_id: relaxedNumber().optional(), project_number: z.number().int().optional() }).strict()
+                z
+                    .object({
+                        entry_id: relaxedNumber().optional(),
+                        project_number: relaxedNumber().optional(),
+                    })
+                    .strict()
             ),
             outputSchema: AddToVectorIndexOutputSchema,
             annotations: {
@@ -113,7 +118,7 @@ export function getVectorTools(context: ToolContext): ToolDefinition[] {
                             recoverable: false,
                         }
                     }
-                    const entry = db.getEntryById(entry_id)
+                    const entry = db.getEntryById(entry_id, '*')
                     if (!entry) {
                         return {
                             success: false,

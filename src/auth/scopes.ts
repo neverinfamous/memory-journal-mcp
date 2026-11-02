@@ -76,6 +76,8 @@ export const TOOL_GROUP_SCOPES: Record<ToolGroup, StandardScope> = {
  */
 export const TOOL_SCOPE_OVERRIDES: Record<string, StandardScope> = {
     import_markdown: SCOPES.WRITE,
+    import_external: SCOPES.WRITE,
+    mark_anchors_stale: SCOPES.WRITE,
     team_import_markdown: SCOPES.TEAM,
     mj_execute_code: SCOPES.ADMIN,
     create_entry: SCOPES.WRITE,

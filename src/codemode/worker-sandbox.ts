@@ -92,9 +92,7 @@ export class WorkerSandbox {
                 result.metrics = {
                     wallTimeMs: Math.round(endTime - this.currentExecution.startTime),
                     cpuTimeMs: result.metrics.cpuTimeMs,
-                    memoryUsedMb: Math.round(
-                        (endRss - this.currentExecution.startRss) / 1024 / 1024
-                    ),
+                    memoryUsedMb: Math.max(0, Math.round((endRss - this.currentExecution.startRss) / 1024 / 1024)),
                 }
 
                 const resolve = this.currentExecution.resolve
@@ -110,14 +108,12 @@ export class WorkerSandbox {
         })
 
         this.worker.on('exit', (exitCode) => {
-            if (exitCode >= 200 && exitCode < 300) {
-                const actualExitCode = exitCode - 200
-                process.stderr.write(`[CodeMode] Triggering graceful host exit with code ${actualExitCode}\n`)
-                process.exit(actualExitCode)
-            } else if (exitCode !== 0) {
+            if (exitCode !== 0 || this.currentExecution !== null) {
                 this.handleWorkerDeath(
                     `🛠️ AUTONOMOUS HEALING: Worker execution timed out or ran out of memory. Avoid executing hundreds of sequential RPC calls (e.g. inside a loop calling getEntryById) or unbounded loops without keyset/offset pagination. For project counts and aggregates, use 'mj.analytics.getStatistics({ projectBreakdown: true })' or 'mj.admin.listProjects()' instead of iterating entries. Reduce batch/sample size or filter results server-side. (Worker exit code ${String(exitCode)})`
                 )
+            } else {
+                this.worker = null
             }
         })
     }
@@ -139,11 +135,11 @@ export class WorkerSandbox {
             resolve({
                 success: false,
                 error: errorMsg,
-                stack: stack,
+                ...(stack !== undefined ? { stack } : {}),
                 metrics: {
                     wallTimeMs: Math.round(endTime - startTime),
                     cpuTimeMs: 0,
-                    memoryUsedMb: Math.round((endRss - startRss) / 1024 / 1024),
+                    memoryUsedMb: Math.max(0, Math.round((endRss - startRss) / 1024 / 1024)),
                 },
             })
         }
@@ -190,14 +186,12 @@ export class WorkerSandbox {
             const methodList: Record<string, string[]> = {}
             const topLevel: string[] = []
 
-            for (const [key, value] of Object.entries(apiBindings)) {
+        for (const [key, value] of Object.entries(apiBindings)) {
                 if (typeof value === 'function') {
                     topLevel.push(key)
                 } else if (typeof value === 'object' && value !== null) {
                     const methods: string[] = []
-                    for (const [methodName, methodValue] of Object.entries(
-                        value as Record<string, unknown>
-                    )) {
+                    for (const [methodName, methodValue] of Object.entries(value)) {
                         if (typeof methodValue === 'function') {
                             methods.push(methodName)
                         }
@@ -265,30 +259,42 @@ async function handleRpcRequest(
     hostPort: MessagePort,
     methodList: Record<string, string[]>
 ): Promise<void> {
+    if (typeof req !== 'object' || req === null || typeof req.id !== 'number') {
+        return
+    }
     const response: RpcResponse = { id: req.id }
 
     try {
-        const allowedMethods = methodList[req.group]
+        if (typeof req.group !== 'string' || typeof req.method !== 'string') {
+            response.error = 'Malformed RPC request: group and method must be strings'
+            hostPort.postMessage(response)
+            return
+        }
+
+        const allowedMethods = Object.hasOwn(methodList, req.group)
+            ? methodList[req.group]
+            : undefined
         if (!allowedMethods?.includes(req.method)) {
             response.error = `Unauthorized method invocation: ${req.group}.${req.method}`
             hostPort.postMessage(response)
             return
         }
 
+        const safeArgs = Array.isArray(req.args) ? req.args : []
         let target: unknown
         if (req.group === '_topLevel') {
-            target = apiBindings[req.method]
-        } else {
+            target = Object.hasOwn(apiBindings, req.method) ? apiBindings[req.method] : undefined
+        } else if (Object.hasOwn(apiBindings, req.group)) {
             const groupApi = apiBindings[req.group]
             if (groupApi !== undefined && groupApi !== null && typeof groupApi === 'object') {
-                target = (groupApi as Record<string, unknown>)[req.method]
+                target = Object.hasOwn(groupApi, req.method)
+                    ? (Reflect.get(groupApi, req.method) as unknown)
+                    : undefined
             }
         }
 
         if (typeof target === 'function') {
-            response.result = await (target as (...args: unknown[]) => Promise<unknown>)(
-                ...req.args
-            )
+            response.result = await (target as (...args: unknown[]) => Promise<unknown>)(...safeArgs)
         } else {
             response.error = `Unknown method: ${req.group}.${req.method}`
         }
@@ -361,10 +367,7 @@ export class WorkerSandboxPool {
         // 3. Evict idle workers above minInstances (oldest idle first)
         const idleCandidates = this.pool
             .map((w, idx) => ({ worker: w, idx }))
-            .filter(
-                ({ worker }) =>
-                    !worker.isBusy && now - worker.lastUsedAt > this.options.idleTimeoutMs
-            )
+            .filter(({ worker }) => !worker.isBusy && now - worker.lastUsedAt > this.options.idleTimeoutMs)
             .sort((a, b) => a.worker.lastUsedAt - b.worker.lastUsedAt)
 
         for (const { worker } of idleCandidates) {
@@ -403,13 +406,7 @@ export class WorkerSandboxPool {
         }
 
         return await availableSandbox.execute(
-            code,
-            apiBindings,
-            schemas,
-            timeoutMs,
-            contextObj,
-            readonlyMode,
-            maxResultSizeOverride
+            code, apiBindings, schemas, timeoutMs, contextObj, readonlyMode, maxResultSizeOverride
         )
     }
 

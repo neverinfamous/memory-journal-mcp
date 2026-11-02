@@ -1,8 +1,9 @@
-import type { ToolDefinition, ToolContext } from '../../../types/index.js'
+import type { ToolDefinition, ToolContext, RelationshipType } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { autoIndexEntry } from '../../../utils/vector-index-helpers.js'
 import { resolveProjectContext, resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { createBatchProgressReporter, sendProgress } from '../../../utils/progress-utils.js'
+import { resolveEntryAnchors } from '../core/staleness-tools.js'
 import {
     BatchCreateEntriesSchema,
     BatchCreateEntriesSchemaMcp,
@@ -60,13 +61,20 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
                             )
                         }
                         
+                        const resolvedAnchors = resolveEntryAnchors(
+                            e.anchors,
+                            e.auto_context,
+                            wsId,
+                            context
+                        )
+
                         return {
                             content: e.content,
                             entryType: e.entry_type,
                             tags: e.tags,
                             isPersonal: e.is_personal,
                             significanceType: e.significance_type,
-                            autoContext: undefined, // Ignore deprecated auto_context
+                            autoContext: e.auto_context,
                             projectNumber: pNumber,
                             projectOwner: e.project_owner,
                             issueNumber: e.issue_number,
@@ -77,10 +85,36 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
                             workflowRunId: e.workflow_run_id,
                             workflowName: e.workflow_name,
                             workflowStatus: e.workflow_status as 'queued' | 'in_progress' | 'completed' | undefined,
+                            impactScore: e.impact_score,
+                            trustScore: e.trust_score,
+                            validationStatus: e.validation_status,
                             sessionId: e.session_id,
                             workspaceId: wsId,
+                            ...(resolvedAnchors !== undefined ? { anchors: resolvedAnchors } : {}),
                         }
                     }))
+
+                    for (let i = 0; i < results.length; i++) {
+                        const createdEntry = results[i]
+                        const sourceEntry = input.entries[i]
+                        if (createdEntry && sourceEntry?.relationships && sourceEntry.relationships.length > 0) {
+                            for (const rel of sourceEntry.relationships) {
+                                try {
+                                    const canonicalRelType: RelationshipType =
+                                        rel.relationType === 'resolves'
+                                            ? 'resolved'
+                                            : rel.relationType === 'relates_to'
+                                              ? 'references'
+                                              : rel.relationType === 'depends_on'
+                                                ? 'blocked_by'
+                                                : rel.relationType
+                                    db.linkEntries(createdEntry.id, rel.targetId, canonicalRelType)
+                                } catch {
+                                    // Ignore link failures if target doesn't exist
+                                }
+                            }
+                        }
+                    }
                     
                     await sendProgress(progress, 1, 2, `Created ${String(results.length)} entries...`)
 
@@ -155,6 +189,11 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
                         workflowStatus: u.workflow_status,
                         isArchived: u.is_archived,
                         expectedVersion: u.expected_version,
+                        autoContext: u.auto_context,
+                        impactScore: u.impact_score,
+                        trustScore: u.trust_score,
+                        validationStatus: u.validation_status,
+                        targetWorkspaceId: u.target_workspace_id,
                         sessionId: u.session_id ?? undefined,
                         workspaceId: resolveWorkspaceId(u.workspace_id || input.workspace_id, u.project_number ?? input.project_number, context.config),
                     }))
@@ -219,8 +258,9 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
             handler: async (params: unknown) => {
                 try {
                     const input = BatchDeleteEntriesSchema.parse(params)
+                    const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
                     await sendProgress(progress, 0, 2, 'Deleting entries...')
-                    const { deleted, notFound, errors } = db.deleteEntries(input.entry_ids, input.permanent)
+                    const { deleted, notFound, errors } = db.deleteEntries(input.entry_ids, input.permanent, wsId)
                     
                     await sendProgress(progress, 1, 2, `Deleted ${String(deleted.length)} entries...`)
                     

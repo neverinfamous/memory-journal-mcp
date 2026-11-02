@@ -2,8 +2,17 @@ import { z } from 'zod'
 import type { ToolDefinition, ToolContext, AnchorStatus } from '../../types/index.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
 import { sendProgress } from '../../utils/progress-utils.js'
+import { ResourceNotFoundError } from '../../types/errors.js'
+import { resolveWorkspaceId } from '../../utils/workspace-resolver.js'
+import { coerceNumber } from '../../utils/query-helpers.js'
 import { ErrorFieldsMixin } from './error-fields-mixin.js'
-import { buildGitBaseArgs, streamGitRecords } from '../../vendor/lib-git-history/git-runner.js'
+import { relaxedNumber } from './schemas.js'
+import {
+    RECORD_SEPARATOR,
+    FIELD_SEPARATOR,
+    buildGitBaseArgs,
+    streamGitRecords,
+} from '../../vendor/lib-git-history/git-runner.js'
 import { parseGitRecord, processBatch } from '../../vendor/lib-git-history/parser.js'
 import type { CliArgs } from '../../vendor/lib-git-history/cli.js'
 import type { CommitEntry } from '../../vendor/lib-git-history/schema.js'
@@ -22,15 +31,23 @@ export const GitHistoryOptionsSchema = z.object({
 export const GitHistoryOptionsSchemaMcp = z.object({
     ref: z.string().optional().describe('Git reference (branch, tag, commit). Default: HEAD'),
     path: z.string().optional().describe('Filter by specific file or directory path'),
-    maxCount: z.number().optional().describe('Maximum number of commits to return. Default: 50'),
-    since: z.string().optional().describe('Show commits more recent than a specific date (e.g. "2023-01-01")'),
-    sortBy: z.enum(['date', 'impact']).optional().describe('Sort commits by date or impact score'),
+    maxCount: relaxedNumber()
+        .optional()
+        .describe('Maximum number of commits to return. Default: 50'),
+    since: z
+        .string()
+        .optional()
+        .describe('Show commits more recent than a specific date (e.g. "2023-01-01")'),
+    sortBy: z.string().optional().describe('Sort commits by date or impact score'),
     scope: z.string().optional().describe('Filter commits by a specific scope'),
-    techDebtAudit: z.boolean().optional().describe('Filter for high impact commits with low trust or missing validation'),
+    techDebtAudit: z
+        .boolean()
+        .optional()
+        .describe('Filter for high impact commits with low trust or missing validation'),
 })
 
 export const GitSearchOptionsSchema = z.object({
-    query: z.string(),
+    query: z.string().min(1),
     maxCount: z.number().optional(),
     sortBy: z.enum(['date', 'impact']).optional(),
     scope: z.string().optional(),
@@ -38,11 +55,16 @@ export const GitSearchOptionsSchema = z.object({
 })
 
 export const GitSearchOptionsSchemaMcp = z.object({
-    query: z.string().describe('Search query to match in commit messages'),
-    maxCount: z.number().optional().describe('Maximum number of commits to return. Default: 50'),
-    sortBy: z.enum(['date', 'impact']).optional().describe('Sort commits by date or impact score'),
+    query: z.string().optional().describe('Search query to match in commit messages'),
+    maxCount: relaxedNumber()
+        .optional()
+        .describe('Maximum number of commits to return. Default: 50'),
+    sortBy: z.string().optional().describe('Sort commits by date or impact score'),
     scope: z.string().optional().describe('Filter commits by a specific scope'),
-    techDebtAudit: z.boolean().optional().describe('Filter for high impact commits with low trust or missing validation'),
+    techDebtAudit: z
+        .boolean()
+        .optional()
+        .describe('Filter for high impact commits with low trust or missing validation'),
 })
 
 export const GitReleaseInfoOptionsSchema = z.object({
@@ -83,18 +105,11 @@ async function fetchCommits(input: FetchCommitsInput, cwd: string): Promise<Comm
     }
     const gitArgs = buildGitBaseArgs(cliArgs, input.ref || 'HEAD')
     
-    // Formatting args required by parseGitRecord
     gitArgs.push(
         '--name-status',
         '-z',
-        '--format=%x1E<GIT_RECORD_BOUNDARY_TODO>%x1E%H%x1E<GIT_FIELD_BOUNDARY_TODO>%x1E%D%x1E<GIT_FIELD_BOUNDARY_TODO>%x1E%aN%x1E<GIT_FIELD_BOUNDARY_TODO>%x1E%aE%x1E<GIT_FIELD_BOUNDARY_TODO>%x1E%aI%x1E<GIT_FIELD_BOUNDARY_TODO>%x1E%cN%x1E<GIT_FIELD_BOUNDARY_TODO>%x1E%cE%x1E<GIT_FIELD_BOUNDARY_TODO>%x1E%cI%x1E<GIT_FIELD_BOUNDARY_TODO>%x1E%s%x1E<GIT_FIELD_BOUNDARY_TODO>%x1E%b%x1E<GIT_FIELD_BOUNDARY_TODO>%x1E%(trailers:unfold,only)%x1E<GIT_FIELD_BOUNDARY_TODO>%x1E%(trailers:unfold)%x1E<GIT_FIELD_BOUNDARY_TODO>%x1E%P'
+        `--format=${RECORD_SEPARATOR}%H${FIELD_SEPARATOR}%D${FIELD_SEPARATOR}%aN${FIELD_SEPARATOR}%aE${FIELD_SEPARATOR}%aI${FIELD_SEPARATOR}%cN${FIELD_SEPARATOR}%cE${FIELD_SEPARATOR}%cI${FIELD_SEPARATOR}%s${FIELD_SEPARATOR}%b${FIELD_SEPARATOR}%(trailers:unfold,only)${FIELD_SEPARATOR}%(trailers:unfold)${FIELD_SEPARATOR}%P`
     )
-    // Actually we should just fetch the basic BOUNDARY constants from git-runner
-    const { RECORD_SEPARATOR, FIELD_SEPARATOR } = await import('../../vendor/lib-git-history/git-runner.js')
-    
-    // pop the fake format and push the real one
-    gitArgs.pop()
-    gitArgs.push(`--format=${RECORD_SEPARATOR}%H${FIELD_SEPARATOR}%D${FIELD_SEPARATOR}%aN${FIELD_SEPARATOR}%aE${FIELD_SEPARATOR}%aI${FIELD_SEPARATOR}%cN${FIELD_SEPARATOR}%cE${FIELD_SEPARATOR}%cI${FIELD_SEPARATOR}%s${FIELD_SEPARATOR}%b${FIELD_SEPARATOR}%(trailers:unfold,only)${FIELD_SEPARATOR}%(trailers:unfold)${FIELD_SEPARATOR}%P`)
 
     const records = streamGitRecords(gitArgs, cwd)
     const batch = []
@@ -257,7 +272,9 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
             description: 'Analyze patterns in a list of commits or recent history',
             group: 'git',
             inputSchema: z.object({
-                maxCount: z.number().optional().describe('Maximum number of commits to analyze. Default: 50')
+                maxCount: relaxedNumber()
+                    .optional()
+                    .describe('Maximum number of commits to analyze. Default: 50'),
             }),
             outputSchema: z.object({
                 success: z.boolean(),
@@ -326,7 +343,16 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
             description: 'Check if a journal entry\'s anchors have been modified or deleted in git since the entry was created.',
             group: 'git',
             inputSchema: z.object({
-                entryId: z.number().describe('The ID of the journal entry to check')
+                entry_id: relaxedNumber()
+                    .optional()
+                    .describe('The ID of the journal entry to check'),
+                entryId: relaxedNumber()
+                    .optional()
+                    .describe('The ID of the journal entry to check (alias for entry_id)'),
+                workspace_id: z.string().optional().describe('Workspace identifier (defaults to current project)'),
+                workspaceId: z.string().optional().describe('Workspace identifier alias'),
+                project_number: relaxedNumber().optional().describe('Numeric project identifier'),
+                projectNumber: relaxedNumber().optional().describe('Numeric project identifier alias'),
             }),
             outputSchema: z.object({
                 success: z.boolean(),
@@ -350,75 +376,110 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                 try {
                     const { db } = context
                     const cwd = process.cwd()
-                    const input = z.object({ entryId: z.number() }).parse(params)
-                    
-                    const entry = db.getEntryByIdIncludeDeleted(input.entryId)
-                    if (!entry) throw new Error(`Entry ${input.entryId} not found`)
-                    
-                    const anchors = db.getAnchorsByEntryId(input.entryId)
-                    if (anchors.length === 0) {
-                        return { success: true, results: [] }
+                    const parsedParams = z
+                        .object({
+                            entry_id: z.preprocess(coerceNumber, z.number().int().optional()),
+                            entryId: z.preprocess(coerceNumber, z.number().int().optional()),
+                            workspace_id: z.string().optional(),
+                            workspaceId: z.string().optional(),
+                            project_number: z.preprocess(coerceNumber, z.number().int().optional()),
+                            projectNumber: z.preprocess(coerceNumber, z.number().int().optional()),
+                        })
+                        .parse(params)
+                    const resolvedEntryId = parsedParams.entry_id ?? parsedParams.entryId
+                    const rawWs = parsedParams.workspace_id ?? parsedParams.workspaceId
+                    const rawProj = parsedParams.project_number ?? parsedParams.projectNumber
+                    const wsId = rawWs === '*' ? '*' : resolveWorkspaceId(rawWs, rawProj, context.config)
+
+                    const targets: { id: number; timestamp: string }[] = []
+                    if (resolvedEntryId !== undefined) {
+                        let entry = db.getEntryByIdIncludeDeleted(resolvedEntryId, wsId)
+                        if (!entry && wsId !== '*') {
+                            entry = db.getEntryByIdIncludeDeleted(resolvedEntryId, '*')
+                        }
+                        if (!entry) throw new ResourceNotFoundError('entry', String(resolvedEntryId))
+                        targets.push({ id: entry.id, timestamp: entry.timestamp })
+                    } else {
+                        const { entries: recent } = db.getRecentEntries(20, undefined, undefined, undefined, false, wsId)
+                        for (const r of recent) {
+                            targets.push({ id: r.id, timestamp: r.timestamp })
+                        }
                     }
 
                     const fs = await import('node:fs')
                     const path = await import('node:path')
                     const workspaceRoot = process.cwd()
 
-                    const results = []
+                    const results: {
+                        anchorId: number
+                        path: string
+                        oldStatus: string
+                        newStatus: string
+                        commitsSince: number
+                        isDeleted: boolean
+                    }[] = []
                     
-                    for (const anchor of anchors) {
-                        let isDeleted = false
-                        let commitsSince = 0
-                        let newStatus: AnchorStatus = anchor.status
+                    for (const target of targets) {
+                        const anchors = db.getAnchorsByEntryId(target.id)
+                        for (const anchor of anchors) {
+                            let isDeleted = false
+                            let commitsSince = 0
+                            let newStatus: AnchorStatus = anchor.status
 
-                        try {
-                            const fullPath = path.resolve(workspaceRoot, anchor.anchorPath)
-                            if (!fullPath.startsWith(workspaceRoot)) {
-                                throw new Error(`Path traversal detected: ${anchor.anchorPath}`)
-                            }
+                            try {
+                                const fullPath = path.resolve(workspaceRoot, anchor.anchorPath)
+                                const relPath = path.relative(workspaceRoot, fullPath)
+                                if (
+                                    relPath === '..' ||
+                                    relPath.startsWith('..' + path.sep) ||
+                                    path.isAbsolute(relPath)
+                                ) {
+                                    throw new Error(`Path traversal detected: ${anchor.anchorPath}`)
+                                }
 
-                            isDeleted = !fs.existsSync(fullPath)
-                            
-                            if (isDeleted) {
-                                newStatus = 'invalidated'
-                            } else {
-                                const commits = await fetchCommits({
+                                isDeleted = !fs.existsSync(fullPath)
+                                
+                                if (isDeleted) {
+                                    newStatus = 'invalidated'
+                                } else {
+                                    const commits = await fetchCommits({
+                                        path: anchor.anchorPath,
+                                        since: target.timestamp
+                                    }, cwd)
+                                    commitsSince = commits.length
+                                    if (commitsSince > 0) {
+                                        newStatus = 'stale'
+                                    } else if (anchor.status === 'pending') {
+                                        newStatus = 'valid'
+                                    }
+                                }
+                                
+                                if (newStatus !== anchor.status) {
+                                    if (anchor.id !== undefined) {
+                                        db.updateAnchorStatus(anchor.id, newStatus)
+                                    }
+                                }
+
+                                results.push({
+                                    anchorId: anchor.id ?? 0,
                                     path: anchor.anchorPath,
-                                    since: entry.timestamp
-                                }, cwd)
-                                commitsSince = commits.length
-                                if (commitsSince > 0) {
-                                    newStatus = 'stale'
-                                } else if (anchor.status === 'pending') {
-                                    newStatus = 'valid'
+                                    oldStatus: anchor.status,
+                                    newStatus,
+                                    commitsSince,
+                                    isDeleted
+                                })
+                            } catch {
+                                results.push({
+                                    anchorId: anchor.id ?? 0,
+                                    path: anchor.anchorPath,
+                                    oldStatus: anchor.status,
+                                    newStatus: 'unresolvable',
+                                    commitsSince: 0,
+                                    isDeleted: false
+                                })
+                                if (anchor.status !== 'unresolvable' && anchor.id !== undefined) {
+                                    db.updateAnchorStatus(anchor.id, 'unresolvable')
                                 }
-                            }
-                            
-                            if (newStatus !== anchor.status) {
-                                if (anchor.id !== undefined) {
-                                    db.updateAnchorStatus(anchor.id, newStatus)
-                                }
-                            }
-
-                            results.push({
-                                anchorId: anchor.id,
-                                path: anchor.anchorPath,
-                                oldStatus: anchor.status,
-                                newStatus,
-                                commitsSince,
-                                isDeleted
-                            })
-                        } catch {
-                            results.push({
-                                anchorId: anchor.id,
-                                path: anchor.anchorPath,
-                                oldStatus: anchor.status,
-                                newStatus: 'unresolvable',
-                                commitsSince: 0,
-                                isDeleted: false
-                            })
-                            if (anchor.status !== 'unresolvable' && anchor.id !== undefined) {
-                                db.updateAnchorStatus(anchor.id, 'unresolvable')
                             }
                         }
                     }

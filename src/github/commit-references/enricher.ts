@@ -38,8 +38,9 @@ export async function enrichCommits(
     }
 
     for (const hash of commitHashes) {
+        if (!/^[0-9a-fA-F]{7,40}$/.test(hash)) continue
         try {
-            const log = await git.log(['-1', hash])
+            const log = await git.log(['-1', hash, '--'])
             const commit = log.latest
             if (!commit) continue
 

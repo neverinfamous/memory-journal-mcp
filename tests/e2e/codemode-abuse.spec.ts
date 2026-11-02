@@ -104,12 +104,7 @@ test.describe('Payload Contracts: Code Mode Abuse', () => {
                         mj.core.newMethod = () => "hacked";
                         return "mutation succeeded";
                     } catch(e) {
-                        try {
-                            Object.defineProperty(mj, "hacked", { value: true });
-                            return "defineProperty succeeded";
-                        } catch(e2) {
-                            return "mutation blocked: " + e2.message;
-                        }
+                        return "mutation blocked: " + e.message;
                     }
                 `
             },

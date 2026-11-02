@@ -31,6 +31,8 @@ Brief description of the changes in this PR.
 **How did you test these changes?**
 
 - [ ] Manual testing in client
+- [ ] Unit and integration tests (`pnpm test`)
+- [ ] End-to-end transport tests (`pnpm run test:e2e`)
 - [ ] Docker build tested
 - [ ] Database migration tested
 - [ ] Existing functionality verified
@@ -66,7 +68,7 @@ Brief description of the changes in this PR.
 
 - [ ] No database schema changes
 - [ ] Schema changes included (describe below)
-- [ ] Migration script provided
+- [ ] Migration added in `src/database/migrations/` (if applicable)
 - [ ] Backward compatibility maintained
 
 **If schema changes, describe:**
@@ -85,10 +87,10 @@ Brief description of the changes in this PR.
 ## 📚 Documentation
 
 - [ ] No documentation changes needed
-- [ ] README.md updated
+- [ ] README.md / DOCKER_README.md / AGENT_README.md updated
 - [ ] CONTRIBUTING.md updated
 - [ ] New documentation added
-- [ ] Examples updated
+- [ ] Examples / config templates updated
 
 ## ✅ Checklist
 
@@ -98,6 +100,7 @@ Brief description of the changes in this PR.
 - [ ] Self-review of the code completed
 - [ ] Comments added to hard-to-understand areas
 - [ ] Tests pass locally
+- [ ] Linting and typecheck pass (`pnpm run lint && pnpm run typecheck`)
 - [ ] No new warnings or errors introduced
 - [ ] Relevant documentation updated
 - [ ] Changes work in Docker variant

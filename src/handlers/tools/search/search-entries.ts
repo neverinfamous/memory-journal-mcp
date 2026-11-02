@@ -136,7 +136,8 @@ export function getSearchEntriesTool(context: ToolContext): ToolDefinition[] {
                             const semanticResults = await vectorManager.search(
                                 query,
                                 internalLimit,
-                                0.25
+                                0.25,
+                                wsId
                             )
                             const entryIds = semanticResults.map((r) => r.entryId)
                             const entriesMap = db.getEntriesByIds(entryIds)

@@ -69,6 +69,9 @@ export type DateGroupBy = 'day' | 'week' | 'month'
  * ```
  */
 export function validateDateFormatPattern(groupBy: string): string {
+    if (!Object.hasOwn(ALLOWED_DATE_FORMATS, groupBy)) {
+        throw new InvalidDateFormatError(groupBy)
+    }
     const format = ALLOWED_DATE_FORMATS[groupBy]
     if (!format) {
         throw new InvalidDateFormatError(groupBy)
@@ -128,8 +131,19 @@ import path from 'node:path'
  * @throws PathTraversalError if the path escapes the sandboxed boundaries
  */
 export function assertSafeDirectoryPath(dirPath: string, providedRoots: string[]): void {
-    // 1. Decode URI and perform basic check for traversal strings
-    const decodedDir = decodeURIComponent(dirPath)
+    // 1. Reject encoded path separators/dots/nulls and raw null bytes before decoding
+    if (/%2f|%5c|%2e|%00/i.test(dirPath) || dirPath.includes('\0')) {
+        throw new PathTraversalError(dirPath)
+    }
+    let decodedDir: string
+    try {
+        decodedDir = decodeURIComponent(dirPath)
+    } catch {
+        throw new PathTraversalError(dirPath)
+    }
+    if (decodedDir.includes('\0')) {
+        throw new PathTraversalError(decodedDir)
+    }
     const normalized = decodedDir.replace(/\\/g, '/')
     const segments = normalized.split('/')
     if (segments.some((s) => s === '..')) {
@@ -275,10 +289,13 @@ export function markUntrustedContent(content: string | undefined | null): string
     let trimmed = content.trim()
     if (!trimmed) return ''
 
-    // Strip any existing tags to prevent breakout/nesting
-    trimmed = trimmed.replace(/<\/?untrusted_remote_content[^>]*>/gi, '')
-    // Escape HTML entities to prevent prompt injection
-    trimmed = trimmed.replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    // Strip any existing literal or entity-encoded tags to prevent breakout/nesting
+    trimmed = trimmed.replace(
+        /&lt;\/?untrusted_remote_content[^&]*&gt;|<\/?untrusted_remote_content[^>]*>/gi,
+        ''
+    )
+    // Escape HTML entities to prevent prompt injection (& first so &lt; cannot be unescaped)
+    trimmed = trimmed.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
     return `<untrusted_remote_content>\n${trimmed}\n</untrusted_remote_content>`
 }
@@ -290,10 +307,13 @@ export function markUntrustedContentInline(content: string | undefined | null): 
     if (!content) return ''
     let cleaned = content
 
-    // Strip existing wrappers to normalize for inline layout
-    cleaned = cleaned.replace(/<\/?untrusted_remote_content[^>]*>/gi, '')
-    // Escape HTML entities to prevent prompt injection
-    cleaned = cleaned.replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    // Strip existing literal or entity-encoded wrappers to normalize for inline layout
+    cleaned = cleaned.replace(
+        /&lt;\/?untrusted_remote_content[^&]*&gt;|<\/?untrusted_remote_content[^>]*>/gi,
+        ''
+    )
+    // Escape HTML entities to prevent prompt injection (& first so &lt; cannot be unescaped)
+    cleaned = cleaned.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
     return `<untrusted_remote_content>${cleaned}</untrusted_remote_content>`
 }
@@ -357,6 +377,9 @@ export function resolveAuthor(): string {
     const authCtx = getAuthContext()
     if (authCtx?.claims?.sub) {
         return sanitizeAuthor(authCtx.claims.sub)
+    }
+    if (authCtx?.authenticated) {
+        return 'unknown'
     }
 
     const localUser = process.env['USERNAME'] || process.env['USER']

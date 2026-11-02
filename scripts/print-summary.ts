@@ -1,18 +1,16 @@
 import { DatabaseAdapter } from '../src/database/sqlite-adapter/index.js'
 import { getPrompt } from '../src/handlers/prompts/index.js'
-import { GitHistoryClient } from '../src/git/git-client.js'
-import * as fs from 'fs'
+import * as fs from 'node:fs'
 
-async function main() {
+async function main(): Promise<void> {
     const dbPath = './.mcp-journal.db'
     // Open the actual database
     const db = new DatabaseAdapter(dbPath)
     await db.initialize()
-    
+
     try {
-        const gitClient = new GitHistoryClient()
-        const result = await getPrompt('session-summary', {}, db, undefined, undefined, gitClient)
-        console.log(result.messages[0].content.text)
+        const result = await getPrompt('session-summary', {}, db)
+        console.log(result.messages[0]?.content.text ?? '')
     } finally {
         db.close()
         if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath)

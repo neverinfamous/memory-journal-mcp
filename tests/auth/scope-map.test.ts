@@ -70,6 +70,9 @@ describe('scope-map', () => {
                             'create_entry_minimal',
                             'link_entries',
                             'export_markdown',
+                            'import_external',
+                            'mark_anchors_stale',
+                            'verify_entry',
                         ].includes(tool)
                     ) {
                         expected = 'write'

@@ -167,7 +167,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                 'Get detailed information about a specific GitHub issue. IMPORTANT: Do NOT guess owner/repo values - leave them empty to auto-detect from the current git repository.',
             group: 'github',
             inputSchema: z.object({
-                issue_number: z.number(),
+                issue_number: relaxedNumber().optional(),
                 owner: z.string().optional().describe('LEAVE EMPTY to auto-detect from git'),
                 repo: z.string().optional().describe('LEAVE EMPTY to auto-detect from git'),
                 truncate_body: relaxedNumber()
@@ -280,7 +280,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                 'Get detailed information about a specific GitHub pull request, including live prStatus. IMPORTANT: Do NOT guess owner/repo values - leave them empty to auto-detect from the current git repository.',
             group: 'github',
             inputSchema: z.object({
-                pr_number: z.number(),
+                pr_number: relaxedNumber().optional(),
                 owner: z.string().optional().describe('LEAVE EMPTY to auto-detect from git'),
                 repo: z.string().optional().describe('LEAVE EMPTY to auto-detect from git'),
                 truncate_body: relaxedNumber()

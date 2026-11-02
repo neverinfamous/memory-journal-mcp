@@ -7,13 +7,20 @@
  * on the team database and preserve the author field.
  */
 
+import * as fs from 'node:fs/promises'
+import { constants as fsConstants } from 'node:fs'
+import * as path from 'node:path'
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { sendProgress } from '../../../utils/progress-utils.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
-
-import { resolveAuthor } from '../../../utils/security-utils.js'
+import { AggregateMcpError } from '../../../types/errors.js'
+import {
+    resolveAuthenticatedAuthor,
+    assertSafeDirectoryPath,
+    assertSafeFilePath,
+} from '../../../utils/security-utils.js'
 import { exportEntriesToMarkdown } from '../../../markdown/index.js'
 import { importMarkdownEntries, processImportBatch, convertFile } from '../../../markdown/index.js'
 import type { ExportableEntry, ParsedFile } from '../../../markdown/index.js'
@@ -229,7 +236,6 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                     // Intercept parameter hallucination for test runner
                     const firstRoot = allowedRoots[0]
                     if (input.output_dir === 'tmp_team_md' && firstRoot) {
-                        const path = await import('node:path')
                         input.output_dir = path.join(firstRoot, 'tmp_team_md')
                     }
 
@@ -249,6 +255,7 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                         entries = result.entries
                     } else {
                         const result = teamDb.searchEntries('', {
+                            tags: input.tags,
                             limit,
                             projectNumber: input.project_number,
                             workspaceId: wsId,
@@ -321,7 +328,6 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                     // Intercept parameter hallucination for test runner
                     const firstRoot = allowedRoots[0]
                     if (input.source_dir === 'tmp_team_md' && firstRoot) {
-                        const path = await import('node:path')
                         input.source_dir = path.join(firstRoot, 'tmp_team_md')
                     }
 
@@ -329,7 +335,7 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
 
                     await sendProgress(progress, 1, 2, 'Importing team entries...')
 
-                    const author = context.auth?.subject ?? context.auth?.sub ?? resolveAuthor()
+                    const author = resolveAuthenticatedAuthor()
                     const result = await importMarkdownEntries(
                         input.source_dir,
                         teamDb,
@@ -380,11 +386,6 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
 
                     await sendProgress(progress, 0, 3, 'Reading files...')
 
-                    const fs = await import('node:fs/promises')
-                    const path = await import('node:path')
-                    const { constants } = await import('node:fs')
-                    const { assertSafeDirectoryPath, assertSafeFilePath } = await import('../../../utils/security-utils.js')
-
                     assertSafeDirectoryPath(input.source_dir, allowedRoots)
 
                     const mdFiles: string[] = []
@@ -407,7 +408,7 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                             const filepath = path.join(input.source_dir, filename)
                             assertSafeFilePath(filepath, allowedRoots)
 
-                            handle = await fs.open(filepath, constants.O_RDONLY | constants.O_NOFOLLOW)
+                            handle = await fs.open(filepath, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW)
                             const stats = await handle.stat()
                             if (stats.size > 5 * 1024 * 1024) {
                                 throw new Error(`File exceeds maximum size limit of 5MB (${stats.size} bytes)`)
@@ -439,7 +440,7 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
 
                     await sendProgress(progress, 2, 3, 'Importing entries...')
 
-                    const author = context.auth?.subject ?? context.auth?.sub ?? resolveAuthor()
+                    const author = resolveAuthenticatedAuthor()
                     const result = await processImportBatch(parsedFiles, teamDb, {
                         dry_run: input.dry_run,
                         limit: input.limit,
@@ -458,10 +459,9 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                         const total = successCount + result.errors.length
                         const message = `Importing ${total} entries: ${successCount} succeeded, ${result.errors.length} failed.`
                         
-                        const { AggregateMcpError } = await import('../../../types/errors.js')
                         throw new AggregateMcpError(
                             message,
-                            result.errors.map(e => ({ message: e.error, file: e.file })),
+                            result.errors.map((e) => ({ message: e.error, file: e.file })),
                             { result }
                         )
                     }

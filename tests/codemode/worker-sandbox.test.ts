@@ -157,22 +157,22 @@ describe('WorkerSandbox', () => {
         const r1 = await sandbox.execute('return sqlite.schema.help();', bindings)
         expect(r1.success).toBe(true)
         expect((r1.result as any).group).toBe('schema')
-        expect((r1.result as any).tables).toContain('entries')
+        expect((r1.result as any).tables).toContain('memory_journal')
 
         // Test 2: Global schema.help()
         const r2 = await sandbox.execute('return schema.help();', bindings)
         expect(r2.success).toBe(true)
-        expect((r2.result as any).tables).toContain('entries')
+        expect((r2.result as any).tables).toContain('memory_journal')
 
         // Test 3: mj.schema.help()
         const r3 = await sandbox.execute('return mj.schema.help();', bindings)
         expect(r3.success).toBe(true)
-        expect((r3.result as any).tables).toContain('entries')
+        expect((r3.result as any).tables).toContain('memory_journal')
 
         // Test 4: db.schema.help()
         const r4 = await sandbox.execute('return db.schema.help();', bindings)
         expect(r4.success).toBe(true)
-        expect((r4.result as any).tables).toContain('entries')
+        expect((r4.result as any).tables).toContain('memory_journal')
 
         // Test 5: sqlite.schema() calls getStatistics
         const r5 = await sandbox.execute('return await sqlite.schema();', bindings)
@@ -182,12 +182,12 @@ describe('WorkerSandbox', () => {
         // Test 6: sqlite.schema.listTables()
         const r6 = await sandbox.execute('return await sqlite.schema.listTables();', bindings)
         expect(r6.success).toBe(true)
-        expect((r6.result as any).tables).toContain('entries')
+        expect((r6.result as any).tables).toContain('memory_journal')
 
         // Test 7: sqlite.schema.describeTable('entries')
         const r7 = await sandbox.execute("return await sqlite.schema.describeTable('entries');", bindings)
         expect(r7.success).toBe(true)
-        expect((r7.result as any).tables).toContain('entries')
+        expect((r7.result as any).tables).toContain('memory_journal')
 
         // Test 8: sqlite.help()
         const r8 = await sandbox.execute('return sqlite.help();', bindings)
@@ -433,6 +433,186 @@ describe('WorkerSandbox', () => {
         expect(result.success).toBe(false)
         expect(result.error).toContain('Worker exit code')
     }, 15000)
+
+    it('should block outer-realm Function constructor escape via obfuscated property access', async () => {
+        const sandbox = new WorkerSandbox()
+        try {
+            const bindings = {
+                core: {
+                    testFunc: async () => 'ok',
+                },
+            }
+            // Attempt to reach the outer worker realm's Function/AsyncFunction constructor
+            // on both sandbox helpers (sleep) and proxy methods (mj.core.testFunc) using
+            // string concatenation to evade static regex checks.
+            const escapeCode = `
+                const k = ['con', 'structor'].join('');
+                const attempts = [];
+                for (const fn of [sleep, setTimeout, fetch, mj.core.testFunc, () => {}, async () => {}]) {
+                    try {
+                        const Ctor = fn[k];
+                        const res = Ctor('return typeof process !== "undefined" ? process.pid : "isolated"')();
+                        attempts.push({ escaped: true, res });
+                    } catch (err) {
+                        attempts.push({ escaped: false, error: err.message });
+                    }
+                }
+                return attempts;
+            `
+            const result = await sandbox.execute(escapeCode, bindings)
+            expect(result.success).toBe(true)
+            const attempts = result.result as Array<{ escaped: boolean; error?: string }>
+            expect(attempts.length).toBe(6)
+            for (const attempt of attempts) {
+                expect(attempt.escaped).toBe(false)
+                expect(attempt.error).toContain('Dynamic code generation is disabled in sandbox')
+            }
+        } finally {
+            sandbox.dispose()
+        }
+    })
+
+    it('should safely neutralize sandbox process.exit(0) without terminating worker or host process', async () => {
+        const sandbox = new WorkerSandbox()
+        try {
+            const k = "['pr','ocess'].join('')"
+            const code = `
+                const p = ${k} === 'process' ? process : undefined;
+                const exitRes = p.exit(0);
+                return { alive: true, exitRes };
+            `
+            const result = await sandbox.execute(code, {})
+            expect(result.success).toBe(true)
+            expect(result.result).toEqual({
+                alive: true,
+                exitRes: {
+                    success: true,
+                    exited: true,
+                    exitCode: 0,
+                },
+            })
+
+            // Verify worker is still alive and reusable on a subsequent execution
+            const followUp = await sandbox.execute('return 99', {})
+            expect(followUp.success).toBe(true)
+            expect(followUp.result).toBe(99)
+        } finally {
+            sandbox.dispose()
+        }
+    })
+
+    it('should reject prototype-chain RPC abuse (__proto__, constructor, malformed requests)', async () => {
+        const sandbox = new WorkerSandbox()
+        try {
+            const code = 'await new Promise(() => {})'
+            const execPromise = sandbox.execute(
+                code,
+                { core: { allowed: async () => 1 } },
+                undefined,
+                80
+            )
+
+            await new Promise((resolve) => setTimeout(resolve, 15))
+
+            const hostPort = sandbox['currentExecution']!.hostPort as any
+            const responses: any[] = []
+            const originalPostMessage = hostPort.postMessage.bind(hostPort)
+            hostPort.postMessage = (msg: any) => {
+                responses.push(msg)
+                originalPostMessage(msg)
+            }
+
+            // 1. Prototype group lookup (__proto__.toString)
+            hostPort.emit('message', {
+                id: 1001,
+                group: '__proto__',
+                method: 'toString',
+                args: [],
+            })
+
+            // 2. Prototype method lookup (core.toString)
+            hostPort.emit('message', {
+                id: 1002,
+                group: 'core',
+                method: 'toString',
+                args: [],
+            })
+
+            // 3. Constructor group lookup (constructor.name)
+            hostPort.emit('message', {
+                id: 1003,
+                group: 'constructor',
+                method: 'bind',
+                args: [],
+            })
+
+            // 4. Malformed RPC request (non-string group/method)
+            hostPort.emit('message', {
+                id: 1004,
+                group: null,
+                method: 123,
+                args: 'not-an-array',
+            })
+
+            await execPromise
+
+            const r1 = responses.find((r) => r.id === 1001)
+            const r2 = responses.find((r) => r.id === 1002)
+            const r3 = responses.find((r) => r.id === 1003)
+            const r4 = responses.find((r) => r.id === 1004)
+
+            expect(r1?.error).toContain('Unauthorized method invocation: __proto__.toString')
+            expect(r2?.error).toContain('Unauthorized method invocation: core.toString')
+            expect(r3?.error).toContain('Unauthorized method invocation: constructor.bind')
+            expect(r4?.error).toContain('Malformed RPC request')
+        } finally {
+            sandbox.dispose()
+        }
+    }, 15000)
+
+    it('should isolate cross-execution state between sequential runs on the same worker', async () => {
+        const sandbox = new WorkerSandbox()
+        try {
+            const run1 = await sandbox.execute(
+                `
+                try { Object.prototype.polluted = "yes"; } catch (e) {}
+                try { Array.prototype.leaked = "yes"; } catch (e) {}
+                try { mj.secretProp = "leaked"; } catch (e) {}
+                return {
+                    pollutedInRun1: ({}).polluted,
+                    arrayLeakedInRun1: ([]).leaked,
+                    mjMutatedInRun1: mj.secretProp === "leaked"
+                };
+                `,
+                {}
+            )
+            expect(run1.success).toBe(true)
+            expect(run1.result).toEqual({
+                pollutedInRun1: undefined,
+                arrayLeakedInRun1: undefined,
+                mjMutatedInRun1: false,
+            })
+
+            const run2 = await sandbox.execute(
+                `
+                return {
+                    polluted: ({}).polluted,
+                    arrayLeaked: ([]).leaked,
+                    mjMutated: mj.secretProp === "leaked"
+                };
+                `,
+                {}
+            )
+            expect(run2.success).toBe(true)
+            expect(run2.result).toEqual({
+                polluted: undefined,
+                arrayLeaked: undefined,
+                mjMutated: false,
+            })
+        } finally {
+            sandbox.dispose()
+        }
+    })
 })
 describe('WorkerSandboxPool', () => {
     it('should create and execute using pool', async () => {

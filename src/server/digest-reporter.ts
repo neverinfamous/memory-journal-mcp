@@ -1,3 +1,4 @@
+import * as dns from 'node:dns'
 import type { DigestSnapshot } from '../database/sqlite-adapter/entries/digest.js'
 import { logger } from '../utils/logger.js'
 
@@ -5,6 +6,68 @@ export interface ReportDeliveryOptions {
     webhookUrl: string
     webhookAuth?: string
     contentType?: 'slack' | 'discord' | 'json'
+}
+
+function isBlockedWebhookIp(ip: string): boolean {
+    const normalized = ip.toLowerCase()
+    if (
+        normalized === 'localhost' ||
+        normalized === '::1' ||
+        normalized === '0.0.0.0' ||
+        normalized === '::' ||
+        normalized.startsWith('127.') ||
+        normalized.startsWith('10.') ||
+        normalized.startsWith('192.168.') ||
+        normalized.startsWith('169.254.') ||
+        normalized.startsWith('fe80:') ||
+        normalized.startsWith('fc00:') ||
+        normalized.startsWith('fd00:') ||
+        normalized.startsWith('::ffff:')
+    ) {
+        return true
+    }
+    const octets = normalized.split('.')
+    if (octets.length === 4 && octets[0] === '172') {
+        const second = Number(octets[1])
+        if (second >= 16 && second <= 31) {
+            return true
+        }
+    }
+    return false
+}
+
+export async function validateWebhookUrl(webhookUrl: string): Promise<void> {
+    let parsed: URL
+    try {
+        parsed = new URL(webhookUrl)
+    } catch {
+        throw new Error('Invalid webhook URL format')
+    }
+
+    const allowInsecureHttp = process.env['ALLOW_INSECURE_WEBHOOK_HTTP'] === 'true'
+    if (parsed.protocol !== 'https:' && !(allowInsecureHttp && parsed.protocol === 'http:')) {
+        throw new Error(`Disallowed webhook protocol: ${parsed.protocol} (https: required)`)
+    }
+
+    const hostname = parsed.hostname.replace(/^\[|\]$/g, '').toLowerCase()
+    if (
+        hostname === 'localhost' ||
+        hostname.endsWith('.localhost') ||
+        hostname.endsWith('.local') ||
+        hostname.endsWith('.internal') ||
+        isBlockedWebhookIp(hostname)
+    ) {
+        throw new Error(`Webhook hostname resolves to restricted network address: ${hostname}`)
+    }
+
+    if (!process.env['VITEST']) {
+        const records = await dns.promises.lookup(hostname, { all: true })
+        for (const rec of records) {
+            if (isBlockedWebhookIp(rec.address)) {
+                throw new Error(`Webhook DNS resolved to private/loopback IP: ${rec.address}`)
+            }
+        }
+    }
 }
 
 /**
@@ -61,6 +124,16 @@ export function formatDigestReport(snapshot: DigestSnapshot, serverVersion: stri
 export async function deliverReport(report: string, snapshot: DigestSnapshot, options: ReportDeliveryOptions): Promise<boolean> {
     const { webhookUrl, webhookAuth, contentType = 'slack' } = options
 
+    try {
+        await validateWebhookUrl(webhookUrl)
+    } catch (err: unknown) {
+        logger.error('Refusing to deliver digest report to unsafe webhook URL', {
+            module: 'DigestReporter',
+            error: err instanceof Error ? err.message : String(err),
+        })
+        return false
+    }
+
     let bodyPayload: string
     if (contentType === 'discord') {
         bodyPayload = JSON.stringify({ content: report })
@@ -92,7 +165,8 @@ export async function deliverReport(report: string, snapshot: DigestSnapshot, op
                 method: 'POST',
                 headers,
                 body: bodyPayload,
-                signal: controller.signal
+                signal: controller.signal,
+                redirect: 'error',
             })
             
             clearTimeout(timeoutId)

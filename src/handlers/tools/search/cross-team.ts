@@ -6,12 +6,19 @@
  */
 
 import { z } from 'zod'
-import { ENTRY_TYPES, DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE, EntryOutputSchema } from '../schemas.js'
+import {
+    ENTRY_TYPES,
+    DATE_FORMAT_REGEX,
+    DATE_FORMAT_MESSAGE,
+    EntryOutputSchema,
+    relaxedNumber,
+} from '../schemas.js'
 import { ErrorFieldsMixin } from '../error-fields-mixin.js'
 import { DatabaseAdapterFactory } from '../../../database/adapter-factory.js'
 import type { IDatabaseAdapter } from '../../../database/core/interfaces.js'
 import type { ToolContext, ToolDefinition } from '../../../types/index.js'
 import { ConfigurationError, ValidationError } from '../../../types/errors.js'
+import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { mergeMultipleSources, type EntryWithSource } from './helpers.js'
 import { logger } from '../../../utils/logger.js'
@@ -40,6 +47,34 @@ export const CrossTeamSearchSchema = z.object({
     include_archived: z.boolean().optional().default(false),
     fuzzy_match: z.boolean().optional().default(false),
 }).strict()
+
+export const CrossTeamSearchSchemaMcp = z
+    .object({
+        query: z.string().optional(),
+        team_dbs: z
+            .array(z.string())
+            .optional()
+            .describe('Specific team DB labels to search. Omit to search all configured DBs.'),
+        tags: z.array(z.string()).optional(),
+        workspace_id: z
+            .string()
+            .optional()
+            .describe(
+                'Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'
+            ),
+        entry_type: z.string().optional(),
+        start_date: z.string().optional(),
+        end_date: z.string().optional(),
+        limit: relaxedNumber().optional().default(20),
+        sort_by: z
+            .string()
+            .optional()
+            .default('timestamp')
+            .describe('Sort results by timestamp (default) or importance score'),
+        include_archived: z.boolean().optional().default(false),
+        fuzzy_match: z.boolean().optional().default(false),
+    })
+    .strict()
 
 export const CrossTeamSearchOutputSchema = z
     .object({
@@ -151,6 +186,7 @@ export async function handleCrossTeamSearch(
             entryType: args.entry_type,
             startDate: args.start_date,
             endDate: args.end_date,
+            sortBy: args.sort_by,
             fuzzy_match: args.fuzzy_match,
             includeArchived: args.include_archived,
             workspaceId: wsId,
@@ -226,15 +262,14 @@ export function getCrossTeamTools(context: ToolContext): ToolDefinition[] {
             title: 'Cross-Team Search',
             description: 'Search across multiple configured team databases simultaneously. Returns results with team_db labels.',
             group: 'search',
-            inputSchema: CrossTeamSearchSchema,
+            inputSchema: CrossTeamSearchSchemaMcp,
             outputSchema: CrossTeamSearchOutputSchema,
             handler: async (args: unknown) => {
                 try {
                     const parsed = CrossTeamSearchSchema.parse(args)
                     return await handleCrossTeamSearch(parsed, context)
                 } catch (error) {
-                    const { formatHandlerError } = await import('../../../utils/error-helpers.js');
-                    return formatHandlerError(error);
+                    return formatHandlerError(error)
                 }
             },
             annotations: {

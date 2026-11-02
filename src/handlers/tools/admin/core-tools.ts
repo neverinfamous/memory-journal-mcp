@@ -108,7 +108,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     const { entry_id, permanent, expected_version, workspace_id } = DeleteEntrySchema.parse(params)
-                    const wsId = resolveWorkspaceId(workspace_id, undefined, context.config)
+                    const wsId = workspace_id ? resolveWorkspaceId(workspace_id, undefined, context.config) : undefined
 
                     if (expected_version !== undefined) {
                         const existing = db.getEntryByIdIncludeDeleted(entry_id, wsId);
@@ -124,7 +124,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    const success = db.deleteEntry(entry_id, permanent)
+                    const success = db.deleteEntry(entry_id, permanent, wsId)
 
                     if (!success) {
                         return {
@@ -176,7 +176,11 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                     }
                     return val;
                 },
-                z.object({ entry_id: relaxedNumber().optional() })
+                z.object({
+                    entry_id: relaxedNumber().optional(),
+                    project_number: relaxedNumber().optional(),
+                    workspace_id: z.string().optional(),
+                })
             ),
             outputSchema: z.object({ success: z.boolean().optional(), entryId: z.number().optional(), error: z.string().optional() }).extend(ErrorFieldsMixin.shape),
             annotations: {
@@ -187,7 +191,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             },
             handler: (params: unknown) => {
                 try {
-                    const { entry_id } = z.preprocess(
+                    const { entry_id, project_number, workspace_id } = z.preprocess(
                         (val: unknown) => {
                             if (typeof val === 'object' && val !== null) {
                                 const obj = val as Record<string, unknown>;
@@ -197,9 +201,14 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                             }
                             return val;
                         },
-                        z.object({ entry_id: z.number(), project_number: z.number().int().optional() })
+                        z.object({
+                            entry_id: z.number(),
+                            project_number: z.number().int().optional(),
+                            workspace_id: z.string().optional(),
+                        })
                     ).parse(params)
-                    const success = db.restoreEntry(entry_id)
+                    const wsId = workspace_id ? resolveWorkspaceId(workspace_id, project_number, context.config) : undefined
+                    const success = db.restoreEntry(entry_id, wsId)
                     if (!success) {
                         return {
                             success: false,

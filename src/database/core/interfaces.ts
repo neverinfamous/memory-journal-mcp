@@ -8,8 +8,11 @@ import type {
     EntryRevision,
     AnchorStatus,
     Anchor,
+    CreateEntryInput,
+    CreateTeamEntryInput,
 } from '../../types/index.js'
-import type { CreateEntryInput } from './schema.js'
+
+export type { CreateEntryInput, CreateTeamEntryInput }
 
 export type TeamRole = 'admin' | 'member' | 'viewer'
 
@@ -155,7 +158,7 @@ export interface IDatabaseAdapter {
             targetWorkspaceId?: string
         }
     ): JournalEntry | null
-    deleteEntry(id: number, permanent?: boolean): boolean
+    deleteEntry(id: number, permanent?: boolean, workspaceId?: string): boolean
     getAnchorsByEntryId(entryId: number): Anchor[]
     updateAnchorStatus(id: number, status: AnchorStatus): void
 
@@ -178,7 +181,7 @@ export interface IDatabaseAdapter {
     consolidateAuthors(canonicalAuthor: string): number
 
     // Soft-Delete Recovery
-    restoreEntry(id: number): boolean
+    restoreEntry(id: number, workspaceId?: string): boolean
     getDeletedEntries(options?: { limit?: number; offset?: number; workspaceId?: string }): { entries: JournalEntry[]; count: number }
     
     // Batch Operations
@@ -213,7 +216,8 @@ export interface IDatabaseAdapter {
     ): { updated: JournalEntry[]; notFound: number[]; errors: { id: number; error: Error }[] }
     deleteEntries(
         ids: number[],
-        permanent?: boolean
+        permanent?: boolean,
+        workspaceId?: string
     ): { deleted: number[]; notFound: number[]; errors: { id: number; error: Error }[] }
 
     searchEntries(
@@ -343,7 +347,7 @@ export interface IDatabaseAdapter {
         type: string,
         limit?: number
     ): { id: number; createdAt: string; data: Record<string, unknown> }[]
-    computeDigest(): Record<string, unknown>
+    computeDigest(workspaceId?: string): Record<string, unknown>
 
     pragma(command: string): void
 

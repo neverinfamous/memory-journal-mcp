@@ -42,28 +42,131 @@ const preprocessMember = (val: unknown): unknown => {
     return val;
 };
 
-const TeamAddMemberSchema = z.preprocess(preprocessMember, z.object({
-    author: z.string().describe('The author ID/username to add'),
-    role: z.enum(['admin', 'member', 'viewer']).describe('The role to assign'),
-    display_name: z.string().optional().describe('Optional display name'),
-    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
-}).strict())
+const TeamAddMemberSchema = z.preprocess(
+    preprocessMember,
+    z
+        .object({
+            author: z.string().min(1).describe('The author ID/username to add'),
+            role: z.enum(['admin', 'member', 'viewer']).describe('The role to assign'),
+            display_name: z.string().optional().describe('Optional display name'),
+            workspace_id: z
+                .string()
+                .optional()
+                .describe(
+                    'Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'
+                ),
+        })
+        .strict()
+)
 
-const TeamRemoveMemberSchema = z.preprocess(preprocessMember, z.object({
-    author: z.string().describe('The author ID/username to remove'),
-    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
-}).strict())
+const TeamAddMemberSchemaMcp = z.preprocess(
+    preprocessMember,
+    z
+        .object({
+            author: z.string().optional().describe('The author ID/username to add'),
+            role: z.string().optional().describe('The role to assign (admin, member, viewer)'),
+            display_name: z.string().optional().describe('Optional display name'),
+            workspace_id: z
+                .string()
+                .optional()
+                .describe(
+                    'Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'
+                ),
+        })
+        .strict()
+)
 
-const TeamUpdateMemberRoleSchema = z.preprocess(preprocessMember, z.object({
-    author: z.string().describe('The author ID/username to update'),
-    role: z.enum(['admin', 'member', 'viewer']).describe('The new role to assign'),
-    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
-}).strict())
+const TeamRemoveMemberSchema = z.preprocess(
+    preprocessMember,
+    z
+        .object({
+            author: z.string().min(1).describe('The author ID/username to remove'),
+            workspace_id: z
+                .string()
+                .optional()
+                .describe(
+                    'Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'
+                ),
+        })
+        .strict()
+)
 
-const TeamGetMemberSchema = z.preprocess(preprocessMember, z.object({
-    author: z.string().describe('The author ID/username to fetch'),
-    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
-}).strict())
+const TeamRemoveMemberSchemaMcp = z.preprocess(
+    preprocessMember,
+    z
+        .object({
+            author: z.string().optional().describe('The author ID/username to remove'),
+            workspace_id: z
+                .string()
+                .optional()
+                .describe(
+                    'Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'
+                ),
+        })
+        .strict()
+)
+
+const TeamUpdateMemberRoleSchema = z.preprocess(
+    preprocessMember,
+    z
+        .object({
+            author: z.string().min(1).describe('The author ID/username to update'),
+            role: z.enum(['admin', 'member', 'viewer']).describe('The new role to assign'),
+            workspace_id: z
+                .string()
+                .optional()
+                .describe(
+                    'Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'
+                ),
+        })
+        .strict()
+)
+
+const TeamUpdateMemberRoleSchemaMcp = z.preprocess(
+    preprocessMember,
+    z
+        .object({
+            author: z.string().optional().describe('The author ID/username to update'),
+            role: z.string().optional().describe('The new role to assign (admin, member, viewer)'),
+            workspace_id: z
+                .string()
+                .optional()
+                .describe(
+                    'Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'
+                ),
+        })
+        .strict()
+)
+
+const TeamGetMemberSchema = z.preprocess(
+    preprocessMember,
+    z
+        .object({
+            author: z.string().min(1).describe('The author ID/username to fetch'),
+            workspace_id: z
+                .string()
+                .optional()
+                .describe(
+                    'Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'
+                ),
+        })
+        .strict()
+)
+
+const TeamGetMemberSchemaMcp = z.preprocess(
+    preprocessMember,
+    z
+        .object({
+            author: z.string().optional().describe('The author ID/username to fetch'),
+            workspace_id: z
+                .string()
+                .optional()
+                .describe(
+                    'Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'
+                ),
+        })
+        .strict()
+)
 
 // ============================================================================
 // Tool Definitions
@@ -78,7 +181,7 @@ export function getTeamMemberTools(context: ToolContext): ToolDefinition[] {
             title: 'Add Team Member',
             description: 'Add a new member to the team with a specific role. Bootstraps the first user as admin if table is empty. Requires TEAM_DB_PATH.',
             group: 'team',
-            inputSchema: TeamAddMemberSchema,
+            inputSchema: TeamAddMemberSchemaMcp,
             outputSchema: z.object({
                 success: z.boolean(),
                 member: z.unknown().optional(),
@@ -119,7 +222,7 @@ export function getTeamMemberTools(context: ToolContext): ToolDefinition[] {
             title: 'Remove Team Member',
             description: 'Remove a member from the team. Requires TEAM_DB_PATH.',
             group: 'team',
-            inputSchema: TeamRemoveMemberSchema,
+            inputSchema: TeamRemoveMemberSchemaMcp,
             outputSchema: z.object({
                 success: z.boolean(),
                 message: z.string().optional(),
@@ -162,7 +265,7 @@ export function getTeamMemberTools(context: ToolContext): ToolDefinition[] {
             title: 'Update Team Member Role',
             description: 'Update the role of an existing team member. Requires TEAM_DB_PATH.',
             group: 'team',
-            inputSchema: TeamUpdateMemberRoleSchema,
+            inputSchema: TeamUpdateMemberRoleSchemaMcp,
             outputSchema: z.object({
                 success: z.boolean(),
                 member: z.unknown().optional(),
@@ -183,6 +286,19 @@ export function getTeamMemberTools(context: ToolContext): ToolDefinition[] {
                     if (teamDb.updateTeamMemberRole === undefined) return { success: false, error: 'Unsupported' }
 
                     const { author, role } = TeamUpdateMemberRoleSchema.parse(params)
+                    if (role !== 'admin' && teamDb.listTeamMembers !== undefined) {
+                        const existing = teamDb.getTeamMember !== undefined ? teamDb.getTeamMember(author) : null
+                        if (existing?.role === 'admin') {
+                            const admins = teamDb.listTeamMembers().filter((m) => m.role === 'admin')
+                            if (admins.length <= 1) {
+                                return {
+                                    success: false,
+                                    error: 'Cannot demote the last admin in the team. Promote another member to admin first.',
+                                    code: 'VALIDATION_ERROR',
+                                }
+                            }
+                        }
+                    }
                     const updated = teamDb.updateTeamMemberRole(author, role)
                     if (!updated) {
                         return { success: false, error: `Member ${author} not found`, code: 'RESOURCE_NOT_FOUND' }
@@ -231,7 +347,7 @@ export function getTeamMemberTools(context: ToolContext): ToolDefinition[] {
             title: 'Get Team Member',
             description: 'Get details about a specific team member. Requires TEAM_DB_PATH.',
             group: 'team',
-            inputSchema: TeamGetMemberSchema,
+            inputSchema: TeamGetMemberSchemaMcp,
             outputSchema: z.object({
                 success: z.boolean(),
                 member: z.unknown().optional(),

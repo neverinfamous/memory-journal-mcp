@@ -6,26 +6,26 @@
  * Tool group identifiers for Memory Journal
  */
 export type ToolGroup =
-    | 'core' // Entry CRUD: create, get_by_id, get_recent, create_minimal, test_simple
-    | 'search' // Search: search_entries, search_by_date_range, semantic_search
+    | 'core' // Entry CRUD & session lifecycle: create_entry, get_entry_by_id, get_recent_entries, get_entry_history, list_tags, mark_anchors_stale
+    | 'search' // Search: search_entries, search_by_date_range, semantic_search, get_vector_index_stats, list_deleted_entries, cross_team_search
     | 'analytics' // Analytics: get_statistics, get_cross_project_insights
     | 'relationships' // Relationships: link_entries, visualize_relationships
-    | 'io' // IO: export_entries, export_markdown, import_markdown
-    | 'admin' // Admin: update_entry, delete_entry
-    | 'github' // Reserved for future GitHub-specific tools
-    | 'git' // Git History operations
-    | 'backup' // Backup: backup_journal, list_backups, restore_backup
-    | 'team' // Team: team_create_entry, team_get_recent, team_search
+    | 'io' // IO: export_entries, export_markdown, import_markdown, import_external
+    | 'admin' // Admin: update_entry, delete_entry, restore_entry, batch ops, project registry, vector index, audit, auto-prune
+    | 'github' // GitHub: issues, PRs, context, Kanban board, milestones, repo insights, Copilot reviews
+    | 'git' // Git History operations: commits, releases, patterns, staleness
+    | 'backup' // Backup: backup_journal, list_backups, restore_backup, cleanup_backups
+    | 'team' // Team: shared team database CRUD, search, analytics, IO, backup, vector, RBAC members, author aliases
     | 'codemode' // Code Mode: mj_execute_code (sandboxed JS execution)
 
 /**
  * Meta-group identifiers for common multi-group selections
  */
 export type MetaGroup =
-    | 'starter' // core + search (~8 tools)
-    | 'essential' // core only (~5 tools)
-    | 'full' // all groups (~16 tools)
-    | 'readonly' // everything except admin
+    | 'starter' // core + search + codemode
+    | 'essential' // core + codemode
+    | 'full' // all 11 groups (115 tools)
+    | 'readonly' // core + search + analytics + relationships + io + git + codemode
 
 /**
  * Tool filter rule

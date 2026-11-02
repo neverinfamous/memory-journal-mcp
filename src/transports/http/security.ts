@@ -46,8 +46,16 @@ export function checkRateLimit(
         return { allowed: true }
     }
 
-    const authReq = req as unknown as { auth?: { sub?: string; subject?: string } }
-    const subject = authReq.auth?.sub ?? authReq.auth?.subject
+    const authReq = req as unknown as {
+        tokenClaims?: { sub?: string; client_id?: string }
+        auth?: { sub?: string; subject?: string; clientId?: string }
+    }
+    const subject =
+        authReq.tokenClaims?.sub ??
+        authReq.tokenClaims?.client_id ??
+        authReq.auth?.sub ??
+        authReq.auth?.subject ??
+        authReq.auth?.clientId
     const ip = getClientIp(req)
     // Ignore user-agent to prevent DoS via UA randomization
     const rawIdentity = typeof subject === 'string' && subject ? subject : ip

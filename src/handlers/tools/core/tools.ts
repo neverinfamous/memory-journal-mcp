@@ -1,10 +1,12 @@
+import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { sendProgress } from '../../../utils/progress-utils.js'
-import { resolveAuthor } from '../../../utils/security-utils.js'
-import { getAuthContext } from '../../../auth/auth-context.js'
+import { resolveAuthenticatedAuthor } from '../../../utils/security-utils.js'
+import { enforceAccessBoundary } from '../../../auth/validation.js'
 import { resolveIssueUrl } from '../../../utils/github-helpers.js'
 import { resolveWorkspaceId, resolveProjectContext } from '../../../utils/workspace-resolver.js'
+import { MemoryJournalMcpError } from '../../../types/errors.js'
 
 import {
     CreateEntrySchema,
@@ -25,6 +27,7 @@ import {
 import { EntryOutputSchema, coerceSignificanceAlias } from '../schemas.js'
 import type { RelationshipType } from '../../../types/index.js'
 import { ErrorFieldsMixin } from '../error-fields-mixin.js'
+import { resolveEntryAnchors } from './staleness-tools.js'
 
 
 export function getCoreTools(context: ToolContext): ToolDefinition[] {
@@ -90,6 +93,13 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         input.issue_url
                     )
 
+                    const resolvedAnchors = resolveEntryAnchors(
+                        input.anchors,
+                        input.auto_context,
+                        wsId,
+                        context
+                    )
+
                     const createdEntry = db.createEntry({
                         content: input.content,
                         entryType: input.entry_type,
@@ -112,13 +122,22 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         trustScore: input.trust_score,
                         validationStatus: input.validation_status,
                         sessionId: input.session_id,
+                        ...(resolvedAnchors !== undefined ? { anchors: resolvedAnchors } : {}),
                     })
                     const id = createdEntry.id
 
                     if (input.relationships && input.relationships.length > 0) {
                         for (const rel of input.relationships) {
                             try {
-                                db.linkEntries(id, rel.targetId, rel.relationType as RelationshipType)
+                                const canonicalRelType: RelationshipType =
+                                    rel.relationType === 'resolves'
+                                        ? 'resolved'
+                                        : rel.relationType === 'relates_to'
+                                          ? 'references'
+                                          : rel.relationType === 'depends_on'
+                                            ? 'blocked_by'
+                                            : rel.relationType
+                                db.linkEntries(id, rel.targetId, canonicalRelType)
                             } catch {
                                 // Ignore link failures if target doesn't exist
                             }
@@ -126,25 +145,24 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     // Vectorize entry
-                    try {
-                        const entry = db.getEntryById(id, wsId)
-                        if (entry) {
+                    if (context.vectorManager) {
+                        try {
                             await sendProgress(progress, 1, 2, 'Generating embeddings...')
-                            await context.vectorManager?.addEntry(entry)
-                        }
-                    } catch (e) {
-                        // Soft fail: return success but warn vector indexing failed
-                        // Usually implies disabled or unavailable embedding model
-                        await sendProgress(
-                            progress,
-                            2,
-                            2,
-                            'Entry created (Vector indexing disabled)'
-                        )
-                        return {
-                            success: true,
-                            id,
-                            error: `Vector indexing failed: ${e instanceof Error ? e.message : String(e)}`,
+                            await context.vectorManager.addEntry(createdEntry)
+                        } catch (e) {
+                            // Soft fail: return success but warn vector indexing failed
+                            // Usually implies disabled or unavailable embedding model
+                            await sendProgress(
+                                progress,
+                                2,
+                                2,
+                                'Entry created (Vector indexing disabled)'
+                            )
+                            return {
+                                success: true,
+                                id,
+                                error: `Vector indexing failed: ${e instanceof Error ? e.message : String(e)}`,
+                            }
                         }
                     }
 
@@ -155,22 +173,19 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                             'memory://recent'
                         )
                     }
-                    const finalEntry = db.getEntryById(id, wsId) ?? undefined
+                    const finalEntry = createdEntry
 
                     let sharedWithTeam = false
                     let author: string | undefined
 
                     if (input.share_with_team && context.teamDb) {
-                        const authCtx = getAuthContext()
-                        if (authCtx?.authenticated) {
-                            const claims = authCtx.claims
-                            const email = typeof claims?.['email'] === 'string' ? claims['email'] : undefined
-                            const prefName = typeof claims?.['preferred_username'] === 'string' ? claims['preferred_username'] : undefined
-                            const subject = typeof claims?.['subject'] === 'string' ? claims['subject'] : undefined
-                            author = claims?.sub ?? email ?? prefName ?? subject ?? resolveAuthor()
-                        } else {
-                            author = resolveAuthor()
-                        }
+                        enforceAccessBoundary(
+                            'team_create_entry',
+                            'tool',
+                            { requiresTeamScope: true },
+                            context.config?.runtime?.auditLogger
+                        )
+                        author = resolveAuthenticatedAuthor()
 
                         if (author && author !== 'unknown') {
                             context.teamDb.createEntry({
@@ -222,8 +237,9 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     const input = GetEntryByIdSchema.parse(params)
-                    const wsId = input.workspace_id ? resolveWorkspaceId(input.workspace_id, input.project_number, context.config) : '*'
-                    const entry = db.getEntryById(input.entry_id, wsId)
+                    const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
+                    const hasExplicitWs = input.workspace_id !== undefined || input.project_number !== undefined
+                    const entry = db.getEntryById(input.entry_id, wsId) ?? (!hasExplicitWs && wsId !== '*' ? db.getEntryById(input.entry_id, '*') : null)
                     if (!entry) {
                         return {
                             success: false,
@@ -235,10 +251,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    const result: Record<string, unknown> = {
-                        success: true,
-                        entry,
-                    }
+                    const result: Record<string, unknown> = { success: true, entry }
 
                     if (input.include_relationships) {
                         const relationships = db.getRelationships(input.entry_id)
@@ -398,15 +411,19 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                 openWorldHint: false,
             },
             handler: async () => {
-                await sendProgress(progress, 0, 3, 'Starting operation...')
-                // Wait 500ms
-                await new Promise((resolve) => setTimeout(resolve, 500))
-                await sendProgress(progress, 1, 3, 'Processing step 1...')
-                await new Promise((resolve) => setTimeout(resolve, 500))
-                await sendProgress(progress, 2, 3, 'Processing step 2...')
-                await new Promise((resolve) => setTimeout(resolve, 500))
-                await sendProgress(progress, 3, 3, 'Operation complete')
-                return { success: true, message: 'Progress notifications completed successfully' }
+                try {
+                    await sendProgress(progress, 0, 3, 'Starting operation...')
+                    // Wait 500ms
+                    await new Promise((resolve) => setTimeout(resolve, 500))
+                    await sendProgress(progress, 1, 3, 'Processing step 1...')
+                    await new Promise((resolve) => setTimeout(resolve, 500))
+                    await sendProgress(progress, 2, 3, 'Processing step 2...')
+                    await new Promise((resolve) => setTimeout(resolve, 500))
+                    await sendProgress(progress, 3, 3, 'Operation complete')
+                    return { success: true, message: 'Progress notifications completed successfully' }
+                } catch (err) {
+                    return formatHandlerError(err)
+                }
             },
         },
         {
@@ -425,7 +442,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                 idempotentHint: true,
                 openWorldHint: false,
             },
-            handler: async (params: unknown) => {
+            handler: (params: unknown) => {
                 try {
                     const input = z.object({
                         error_type: z.enum(['zod', 'type', 'database', 'generic', 'memory_journal']),
@@ -444,7 +461,6 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     if (input.error_type === 'memory_journal') {
-                        const { MemoryJournalMcpError } = await import('../../../types/errors.js')
                         throw new MemoryJournalMcpError(
                             input.message,
                             'TEST_ERROR',
@@ -465,6 +481,3 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
         },
     ]
 }
-
-// Ensure z is imported for inline outputSchemas (get_recent_entries, etc)
-import { z } from 'zod'

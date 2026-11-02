@@ -4,11 +4,13 @@
  * Tools: team_batch_create_entries, team_batch_update_entries, team_batch_delete_entries
  */
 
-import type { ToolDefinition, ToolContext } from '../../../../types/index.js'
+import type { ToolDefinition, ToolContext, RelationshipType } from '../../../../types/index.js'
 import { formatHandlerError } from '../../../../utils/error-helpers.js'
 import { resolveAuthenticatedAuthor } from '../../../../utils/security-utils.js'
+import { getAuthContext } from '../../../../auth/auth-context.js'
 import { resolveWorkspaceId } from '../../../../utils/workspace-resolver.js'
-import { TEAM_DB_ERROR_RESPONSE, fetchAuthor, triggerTeamNotifications } from '../helpers.js'
+import { TEAM_DB_ERROR_RESPONSE, fetchAuthor, batchFetchAuthors, triggerTeamNotifications } from '../helpers.js'
+import { enforceOwnership } from '../rbac.js'
 import {
     TeamBatchCreateEntriesSchema,
     TeamBatchCreateEntriesSchemaMcp,
@@ -51,6 +53,7 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                     const input = TeamBatchCreateEntriesSchema.parse(params)
                     await sendProgress(context.progress, 0, 2, 'Creating team entries...')
                     const currentUser = resolveAuthenticatedAuthor()
+                    const authCtx = getAuthContext()
                     
                     // Validate all entries first
                     for (const e of input.entries) {
@@ -65,6 +68,16 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                                 recoverable: true,
                             }
                         }
+                        if (authCtx?.authenticated && e.author !== undefined && e.author !== currentUser) {
+                            return {
+                                success: false,
+                                error: `Author mismatch: supplied author "${e.author}" does not match authenticated principal "${currentUser}". Omit the author field to use your identity automatically.`,
+                                code: 'PERMISSION_DENIED',
+                                category: 'auth',
+                                suggestion: 'Omit the author field to use your authenticated identity automatically.',
+                                recoverable: false,
+                            }
+                        }
                     }
 
                     const inputs = input.entries.map((e) => {
@@ -77,6 +90,7 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                             entryType: e.entry_type,
                             tags: e.tags,
                             significanceType: e.significance_type,
+                            autoContext: e.auto_context,
                             projectNumber,
                             projectOwner: e.project_owner,
                             issueNumber: e.issue_number,
@@ -84,14 +98,42 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                             prNumber: e.pr_number,
                             prUrl: e.pr_url,
                             prStatus: e.pr_status,
+                            workflowRunId: e.workflow_run_id,
+                            workflowName: e.workflow_name,
+                            workflowStatus: e.workflow_status,
                             isPersonal: false,
                             author: e.author ?? currentUser,
+                            impactScore: e.impact_score,
+                            trustScore: e.trust_score,
+                            validationStatus: e.validation_status,
                             sessionId: e.session_id,
                             workspaceId: resolveWorkspaceId(e.workspace_id ?? input.workspace_id, e.project_number ?? input.project_number, context.config),
                         }
                     })
 
                     const { created: results, errors } = teamDb.createEntries(inputs)
+
+                    for (let i = 0; i < results.length; i++) {
+                        const createdEntry = results[i]
+                        const sourceEntry = input.entries[i]
+                        if (createdEntry && sourceEntry?.relationships && sourceEntry.relationships.length > 0) {
+                            for (const rel of sourceEntry.relationships) {
+                                try {
+                                    const canonicalRelType: RelationshipType =
+                                        rel.relationType === 'resolves'
+                                            ? 'resolved'
+                                            : rel.relationType === 'relates_to'
+                                              ? 'references'
+                                              : rel.relationType === 'depends_on'
+                                                ? 'blocked_by'
+                                                : rel.relationType
+                                    teamDb.linkEntries(createdEntry.id, rel.targetId, canonicalRelType)
+                                } catch {
+                                    // Ignore link failures if target doesn't exist
+                                }
+                            }
+                        }
+                    }
 
                     const entries = results.map((r, i) => {
                         const author = inputs[i]?.author
@@ -158,10 +200,19 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                     await sendProgress(context.progress, 0, 2, 'Updating team entries...')
                     const currentUser = resolveAuthenticatedAuthor()
                     const codemodeBypass = context.config?.codemodeInternalFullAccess === true
+                    const callerRole =
+                        teamDb.isTeamRbacActive?.()
+                            ? teamDb.resolveTeamRole(currentUser, context.config?.teamDefaultRole ?? 'denied')
+                            : null
                     
                     // Verify ownership and project boundary safety
                     const updates = []
                     const notFound: number[] = []
+                    const updateIds = input.updates.map((u) => u.entry_id)
+                    const preFetchedAuthors =
+                        typeof teamDb.getAuthorsForEntries === 'function'
+                            ? batchFetchAuthors(teamDb, updateIds)
+                            : null
                     
                     for (const u of input.updates) {
                         const existing = teamDb.getEntryById(u.entry_id, resolveWorkspaceId(u.workspace_id ?? input.workspace_id, u.project_number ?? input.project_number, context.config))
@@ -178,15 +229,21 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                             }
                         }
                         if (existing) {
-                            const author = fetchAuthor(teamDb, u.entry_id)
-                            if (author && author !== currentUser && !codemodeBypass) {
-                                return {
-                                    success: false,
-                                    error: `Permission Denied: Only the original author ("${author}") can modify team entry ${String(u.entry_id)}.`,
-                                    code: 'PERMISSION_DENIED',
-                                    category: 'auth',
-                                    suggestion: 'You can only update entries that you authored.',
-                                    recoverable: false,
+                            const author = preFetchedAuthors
+                                ? (preFetchedAuthors.get(u.entry_id) ?? null)
+                                : fetchAuthor(teamDb, u.entry_id)
+                            if (author && !codemodeBypass) {
+                                try {
+                                    enforceOwnership(currentUser, author, callerRole)
+                                } catch {
+                                    return {
+                                        success: false,
+                                        error: `Permission Denied: Only the original author ("${author}") or a team admin can modify team entry ${String(u.entry_id)}.`,
+                                        code: 'PERMISSION_DENIED',
+                                        category: 'auth',
+                                        suggestion: 'You can only update entries that you authored.',
+                                        recoverable: false,
+                                    }
                                 }
                             }
                         } else {
@@ -212,6 +269,10 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                             workflowStatus: u.workflow_status,
                             isArchived: u.is_archived,
                             expectedVersion: u.expected_version,
+                            autoContext: u.auto_context,
+                            impactScore: u.impact_score,
+                            trustScore: u.trust_score,
+                            validationStatus: u.validation_status,
                             sessionId: u.session_id ?? undefined,
                             workspaceId: resolveWorkspaceId(u.workspace_id ?? input.workspace_id, u.project_number ?? input.project_number, context.config),
                         })
@@ -219,9 +280,11 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
 
                     const { updated, notFound: updateNotFound, errors } = teamDb.updateEntries(updates)
                     
-                    const entries = updated.map(r => ({
+                    const entries = updated.map((r) => ({
                         ...r,
-                        author: fetchAuthor(teamDb, r.id)
+                        author: preFetchedAuthors
+                            ? (preFetchedAuthors.get(r.id) ?? null)
+                            : fetchAuthor(teamDb, r.id),
                     }))
 
                     await sendProgress(context.progress, 1, 2, `Updated ${String(entries.length)} team entries...`)
@@ -306,29 +369,69 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                     // Filter ids to those that match the project number and check permissions
                     const validIds: number[] = []
                     const notFound: number[] = []
+                    const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
+                    const callerRole =
+                        teamDb.isTeamRbacActive?.()
+                            ? teamDb.resolveTeamRole(currentUser, context.config?.teamDefaultRole ?? 'denied')
+                            : null
+
+                    if (input.permanent && !codemodeBypass && callerRole !== null && callerRole !== 'admin') {
+                        return {
+                            success: false,
+                            error: `Permission Denied: Permanent deletion of team entries requires the 'admin' role (caller "${currentUser}" has role "${callerRole}").`,
+                            code: 'PERMISSION_DENIED',
+                            category: 'auth',
+                            suggestion: 'Omit permanent: true to soft-delete your entries, or ask a team admin to permanently delete them.',
+                            recoverable: false,
+                        }
+                    }
                     
+                    const existingMap =
+                        typeof teamDb.getEntriesByIds === 'function'
+                            ? teamDb.getEntriesByIds(input.entry_ids)
+                            : null
+                    const authorMap =
+                        typeof teamDb.getAuthorsForEntries === 'function'
+                            ? batchFetchAuthors(teamDb, input.entry_ids)
+                            : null
+
                     for (const id of input.entry_ids) {
-                        const existing = teamDb.getEntryById(id, resolveWorkspaceId(input.workspace_id, input.project_number, context.config))
+                        const rawExisting = existingMap
+                            ? existingMap.get(id) ?? null
+                            : teamDb.getEntryById(id, wsId)
+                        const existing =
+                            rawExisting &&
+                            (wsId === '*' ||
+                                rawExisting.workspaceId === undefined ||
+                                rawExisting.workspaceId === wsId)
+                                ? rawExisting
+                                : null
                         if (existing?.projectNumber !== projectNumber) {
                             notFound.push(id)
                             continue
                         }
                         
-                        const author = fetchAuthor(teamDb, id)
-                        if (author && author !== currentUser && !codemodeBypass) {
-                            return {
-                                success: false,
-                                error: `Permission Denied: Only the original author ("${author}") can delete team entry ${String(id)}.`,
-                                code: 'PERMISSION_DENIED',
-                                category: 'auth',
-                                suggestion: 'You can only delete entries that you authored.',
-                                recoverable: false,
+                        const author = authorMap
+                            ? (authorMap.get(id) ?? null)
+                            : fetchAuthor(teamDb, id)
+                        if (author && !codemodeBypass) {
+                            try {
+                                enforceOwnership(currentUser, author, callerRole)
+                            } catch {
+                                return {
+                                    success: false,
+                                    error: `Permission Denied: Only the original author ("${author}") or a team admin can delete team entry ${String(id)}.`,
+                                    code: 'PERMISSION_DENIED',
+                                    category: 'auth',
+                                    suggestion: 'You can only delete entries that you authored.',
+                                    recoverable: false,
+                                }
                             }
                         }
                         validIds.push(id)
                     }
 
-                    const { deleted, notFound: deleteNotFound, errors } = teamDb.deleteEntries(validIds, input.permanent)
+                    const { deleted, notFound: deleteNotFound, errors } = teamDb.deleteEntries(validIds, input.permanent, wsId)
                     
                     await sendProgress(context.progress, 1, 2, `Deleted ${String(deleted.length)} team entries...`)
 

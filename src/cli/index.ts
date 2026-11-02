@@ -47,7 +47,7 @@ addAgentInstructions(program,
 🤖 AI AGENT INSTRUCTIONS:
 - This is an agent-native CLI. 
 - ALWAYS use valid JSON strings for JSON arguments (e.g. \`--rel '[{"target_id":1,"relation_type":"relates_to"}]'\`).
-- If you forget project details, DO NOT hallucinate. Query \`memory://agent-context/{repo}\`.
+- If you forget project details, DO NOT hallucinate. Query \`memory://agent-context/{+repo}\`.
 - 🛠️ AUTONOMOUS HEALING: DO NOT attempt to run \`node .../build/index.js\`. ALWAYS use the global \`memory-journal-mcp\` wrapper or \`bun src/cli/index.ts\`.`
 )
 
@@ -300,7 +300,8 @@ withGroup(updateEntryCmd, 'Command Options', (cmd: Command) => {
         .option('--category <type>', 'Entry type (alias)')
         .option('--tags <tags>', 'Comma-separated tags (e.g., session-summary)')
         .option('--tag <tags>', 'Alias for --tags (Auto-healing agent hallucination)')
-        .option('--project, --project-number <number>', 'Project number')
+        .option('-p, --project <number>', 'Project number (alias)')
+        .option('--project-number <number>', 'Project number')
         .option('--project_number <number>', 'Project number (alias)')
         .option('--trust, --trust-score <number>', 'Trust score (0.0 to 1.0)')
         .option('--trust_score <number>', 'Trust score (0.0 to 1.0) (alias)')
@@ -337,7 +338,7 @@ entryCmd
     .command('delete [args...]', { hidden: true })
     .allowUnknownOption()
     .action(() => {
-        process.stderr.write(`🛠️ AUTONOMOUS HEALING: The 'entry delete' command does not exist in the CLI. Deleting entries is an admin-level operation. Please use the MCP tool 'mj_execute_code' with 'db.admin.batchDeleteEntries({ entry_ids: [...] })' instead.\n`);
+        process.stderr.write(`🛠️ AUTONOMOUS HEALING: The 'entry delete' command does not exist in the CLI. Deleting entries is an admin-level operation. Please use the MCP tool 'mj_execute_code' with 'mj.admin.batchDeleteEntries({ entry_ids: [...] })' instead.\n`);
         process.exit(1);
     });
 
@@ -347,7 +348,7 @@ const searchCmd = program
     .description('Search journal entries')
 withGroup(searchCmd, 'Command Options', (cmd: Command) => {
     cmd
-        .option('--query, -q <string>', 'Search query (alias for positional argument)')
+        .option('-q, --query <string>', 'Search query (alias for positional argument)')
         .option('--term <string>', 'Search query (alias)')
         .option('--keyword <string>', 'Search query (alias)')
         .option('--mode <mode>', 'Search mode: auto, fts, semantic, hybrid', 'auto')
@@ -400,7 +401,7 @@ const importExternalCmd = ioCmd.command('import-external').description('Import e
 withGroup(importExternalCmd, 'Command Options', (cmd: Command) => {
     cmd
         .option('--dir <path>', 'Source directory (required)')
-        .option('--format <format>', 'External format: notion or obsidian (required)')
+        .option('--format <format>', 'External format: notion, obsidian, or logseq (required)')
 })
 addCoreOptions(importExternalCmd)
 addDatabaseOptions(importExternalCmd)

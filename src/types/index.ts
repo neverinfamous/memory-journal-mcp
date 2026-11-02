@@ -35,6 +35,8 @@ export type {
     EntryRevision,
     Anchor,
     AnchorStatus,
+    CreateEntryInput,
+    CreateTeamEntryInput,
 } from './entities.js'
 export { ENTRY_TYPES, RELATIONSHIP_TYPES, SIGNIFICANCE_TYPES } from './entities.js'
 export type {
@@ -227,10 +229,16 @@ export interface ToolHandlerConfig {
      * Optional subscription manager for triggering real-time MCP notifications.
      */
     subscriptionManager?: SubscriptionManager
-    /**
-     * Optional briefing configuration for Code Mode dynamic resolution.
-     */
+    /** Optional briefing configuration for Code Mode dynamic resolution. */
     briefingConfig?: BriefingConfig
+    /** Server-configured auto-prune archive age threshold (days) */
+    archiveOlderThanDays?: number
+    /** Server-configured auto-prune soft-delete age threshold (days) */
+    pruneOlderThanDays?: number
+    /** Server-configured auto-prune hard-delete age threshold (days) */
+    hardDeleteOlderThanDays?: number
+    /** Server-configured auto-prune importance threshold (0.0-1.0) */
+    pruneImportanceThreshold?: number
 }
 
 /**
@@ -281,6 +289,7 @@ export interface ResourceDefinition {
     capabilities?: {
         requiresTeamScope?: boolean
         requiresAdminScope?: boolean
+        requiresAuditScope?: boolean
     }
 
     /** Resource handler - NOTE: db is passed at runtime, not in the definition */

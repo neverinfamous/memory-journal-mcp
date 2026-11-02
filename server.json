@@ -2,8 +2,8 @@
     "$schema": "https://static.modelcontextprotocol.io/schemas/2024-11-05/server.schema.json",
     "name": "io.github.neverinfamous/memory-journal-mcp",
     "title": "Memory Journal MCP",
-    "description": "Persistent knowledge graphs and intelligent context recall across AI threads with GitHub integration",
-    "version": "9.0.0",
+    "description": "Persistent knowledge graphs and intelligent context recall across fragmented AI threads.",
+    "version": "9.1.0",
     "packages": [
         {
             "registryType": "oci",
@@ -35,7 +35,9 @@
         "semantic-search",
         "codemode",
         "analytics",
-        "collaboration"
+        "collaboration",
+        "sqlite",
+        "typescript"
     ],
     "author": {
         "name": "Adamic.tech"

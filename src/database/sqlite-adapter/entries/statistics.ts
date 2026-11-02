@@ -23,12 +23,16 @@ export function getStatistics(
     }
 
     if (startDate) {
-        dateFilter += ' AND DATE(timestamp) >= DATE(?)'
-        dateParams.push(startDate)
+        let start = startDate
+        if (!start.includes('T')) start += 'T00:00:00.000Z'
+        dateFilter += ' AND timestamp >= ?'
+        dateParams.push(start)
     }
     if (endDate) {
-        dateFilter += ' AND DATE(timestamp) <= DATE(?)'
-        dateParams.push(endDate)
+        let end = endDate
+        if (!end.includes('T')) end += 'T23:59:59.999Z'
+        dateFilter += ' AND timestamp <= ?'
+        dateParams.push(end)
     }
 
     let totalEntries: number
@@ -110,17 +114,33 @@ export function getStatistics(
         SELECT r.relationship_type, COUNT(*) as count
         FROM relationships r
         JOIN memory_journal m ON r.from_entry_id = m.id
-        WHERE m.deleted_at IS NULL AND r.relationship_type IN ('blocked_by', 'resolved', 'caused')${dateFilter}
+        WHERE m.deleted_at IS NULL${dateFilter}
         GROUP BY r.relationship_type
     `
         )
         .all(...dateParams) as {
-        relationship_type: 'blocked_by' | 'resolved' | 'caused'
+        relationship_type: string
         count: number
     }[]
 
+    const linkedEntriesRow = db
+        .prepare(
+            `SELECT COUNT(*) as count FROM memory_journal m
+             WHERE m.deleted_at IS NULL${dateFilter}
+               AND m.id IN (
+                   SELECT from_entry_id FROM relationships
+                   UNION
+                   SELECT to_entry_id FROM relationships
+               )`
+        )
+        .get(...dateParams) as { count: number }
+
     const totalRelationships = relCountRow.count
     const avgPerEntry = totalEntries > 0 ? totalRelationships / totalEntries : 0
+    const density =
+        totalEntries > 0
+            ? Math.round((linkedEntriesRow.count / totalEntries) * 10000) / 10000
+            : 0
 
     const currentPeriod = entriesByPeriod[0]?.period ?? ''
     const previousPeriod = entriesByPeriod[1]?.period ?? ''
@@ -132,8 +152,22 @@ export function getStatistics(
             : null
 
     const causalMetrics = { blocked_by: 0, resolved: 0, caused: 0 }
+    const relationshipBreakdown: Record<string, number> = {
+        evolves_from: 0,
+        references: 0,
+        implements: 0,
+        clarifies: 0,
+        response_to: 0,
+        blocked_by: 0,
+        resolved: 0,
+        caused: 0,
+    }
     for (const row of relTypeRows) {
-        causalMetrics[row.relationship_type] = row.count
+        const canonicalKey = row.relationship_type === 'resolves' ? 'resolved' : row.relationship_type
+        relationshipBreakdown[canonicalKey] = (relationshipBreakdown[canonicalKey] ?? 0) + row.count
+        if (canonicalKey === 'blocked_by' || canonicalKey === 'resolved' || canonicalKey === 'caused') {
+            causalMetrics[canonicalKey] = (causalMetrics[canonicalKey] ?? 0) + row.count
+        }
     }
 
     const result: Record<string, unknown> = {
@@ -144,6 +178,7 @@ export function getStatistics(
         relationshipComplexity: {
             totalRelationships,
             avgPerEntry: Math.round(avgPerEntry * 100) / 100,
+            density,
         },
         activityTrend: {
             currentPeriod,
@@ -151,6 +186,7 @@ export function getStatistics(
             growthPercent,
         },
         causalMetrics,
+        relationshipBreakdown,
     }
 
     if (startDate || endDate) {

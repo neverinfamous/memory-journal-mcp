@@ -40,6 +40,7 @@ describe('server-instructions generation', () => {
         const tools = new Set(['create_entry', 'get_github_issues'])
         const text = generateStandardInstructions(tools, [])
         
+        expect(text).toContain('Read `memory://help/gotchas` for gotchas and critical usage patterns.')
         expect(text).toMatch(/Read `memory:\/\/help\/\{group\}` for:.*github/i)
         expect(text).not.toContain('codemode')
     })

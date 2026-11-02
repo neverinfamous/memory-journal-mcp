@@ -5,7 +5,11 @@ import { getVectorTools } from './vector-tools.js'
 import { getMiscTools } from './misc-tools.js'
 import { getLifecycleTools } from './lifecycle-tools.js'
 import { getProjectTools } from './project-tools.js'
-import { updateConfigurationSchema, handleUpdateConfiguration } from './update_configuration.js'
+import {
+    updateConfigurationSchema,
+    updateConfigurationSchemaMcp,
+    handleUpdateConfiguration,
+} from './update_configuration.js'
 import { ErrorFieldsMixin } from '../error-fields-mixin.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { z } from 'zod'
@@ -23,7 +27,7 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
             title: 'Update Server Configuration',
             description: 'Dynamically update the MCP server configuration (instruction level, tool filters, briefing preferences) without restarting the server.',
             group: 'admin',
-            inputSchema: updateConfigurationSchema,
+            inputSchema: updateConfigurationSchemaMcp,
             outputSchema: z.object({ success: z.boolean(), updated: z.array(z.string()), error: z.string().optional() }).extend(ErrorFieldsMixin.shape),
             annotations: {
                 readOnlyHint: false,

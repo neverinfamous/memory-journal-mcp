@@ -72,5 +72,30 @@ describe('Prompt Handlers - Coverage', () => {
             expect(result.messages).toBeDefined()
             expect(result.messages.length).toBeGreaterThan(0)
         })
+
+        it('should cover all adversarial-* prompts in both default (copilot omitted) and copilot: "true" modes', async () => {
+            const adversarialNames = [
+                'adversarial-plan-review',
+                'adversarial-audit-code-quality',
+                'adversarial-audit-security',
+                'adversarial-audit-performance',
+                'adversarial-audit-seo',
+                'adversarial-audit-skill',
+                'adversarial-audit-workflow',
+            ]
+
+            for (const name of adversarialNames) {
+                const defaultRes = await getPrompt(name, {}, db)
+                const defaultText = defaultRes.messages[0]?.content.text ?? ''
+                expect(defaultText).toContain('**Optional (Skip by default)**')
+                expect(defaultText).toContain("opt-in (`copilot: 'true'`)")
+                expect(defaultText).toContain('gh copilot -- -p')
+
+                const enabledRes = await getPrompt(name, { copilot: 'true' }, db)
+                const enabledText = enabledRes.messages[0]?.content.text ?? ''
+                expect(enabledText).toContain('Run `gh copilot -- -p')
+                expect(enabledText).not.toContain('**Optional (Skip by default)**')
+            }
+        })
     })
 })

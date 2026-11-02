@@ -6,8 +6,8 @@ export const GITHUB_HELP = `# GitHub Integration
 - Kanban: \`get_kanban_board\` → \`add_kanban_item\` / \`move_kanban_item\` / \`delete_kanban_item\` → document completion (project_number auto-resolves if repo is registered). **⚠️ Eventual Consistency:** GitHub Projects V2 read index is heavily eventually consistent. Do NOT rely on \`get_kanban_board\` to immediately reflect items that were just added or moved.
 - Milestones: \`get_github_milestones\` → track project progress, \`memory://github/milestones\`
 - Commits: \`memory://commits/{project_number}/by-issue\` and \`memory://commits/{project_number}/by-pr\` group commits by referenced issues/PRs.
-- Rate Limits: Before expensive API operations, check \`memory://github/rate-limit\` (or \`memory://github/rate-limit/{repo}\`) to proactively throttle.
-- **Project Initialization**: To register a new project workspace, create an entry with \`project_number: N\`. Instruct the user to manually update their \`PROJECT_REGISTRY\` config, as agents cannot directly edit protected IDE config files.
+- Rate Limits & Status: Before expensive API operations, check \`memory://github/status\` (or \`memory://github/status/{+repo}\`) to inspect repository connectivity and status.
+- **Project Initialization**: To register a new project workspace, use the \`register_project\` (or \`update_project\`) MCP tool (\`mj.admin.registerProject\` / \`mj.admin.updateProject\` in Code Mode) or the \`memory-journal-mcp project create <name> --path <path> --number <N>\` CLI command.
 - **Multi-Project Routing**: If \`memory://briefing\` shows "Registered Workspaces":
   - **Tools**: The \`repo\` parameter automatically resolves from \`project_number\`. If you omit both, they default to the primary project.
   - **Resources**: Resource URIs like \`memory://github/status\` will fallback to the default project. To explicitly target another project, use the \`{repo}\` variant (e.g., \`memory://github/status/{repo}\`).

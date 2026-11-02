@@ -532,6 +532,17 @@ describe('src/codemode/api/param-normalizer.ts (convertKeysToSnakeCase & normali
         expect(
             convertKeysToSnakeCase({ message: 'Closing' }, 'closeGithubIssue')['comment']
         ).toBe('Closing')
+        expect(
+            convertKeysToSnakeCase(
+                { source: '1', target: '2', type: 'references', message: 'linked' },
+                'linkEntries'
+            )
+        ).toEqual({
+            from_entry_id: 1,
+            to_entry_id: 2,
+            relationship_type: 'references',
+            description: 'linked',
+        })
     })
 
     it('heals session-summary headers, commit-narrative SHAs, auto_context shas, and normalizeParams positional args', () => {

@@ -35,17 +35,19 @@ describe('enforceAccessBoundary', () => {
         )
     })
 
-    it('should allow team target if CODEMODE_INTERNAL_FULL_ACCESS is true', () => {
+    it('should not allow CODEMODE_INTERNAL_FULL_ACCESS env var to bypass unauthenticated team access', () => {
         delete process.env['TEAM_AUTHOR']
         delete process.env['USERNAME']
         delete process.env['USER']
         process.env['CODEMODE_INTERNAL_FULL_ACCESS'] = 'true'
         vi.mocked(authContext.getAuthContext).mockReturnValue(undefined)
 
-        expect(() => enforceAccessBoundary('memory://team/test', 'resource')).not.toThrow()
+        expect(() => enforceAccessBoundary('memory://team/test', 'resource')).toThrow(
+            PermissionError
+        )
     })
 
-    it('should require admin scope for memory://audit resource', () => {
+    it('should require audit or admin scope for memory://audit resource', () => {
         vi.mocked(authContext.getAuthContext).mockReturnValue({
             authenticated: true,
             claims: { sub: 'test', scopes: ['read'], exp: 0, iat: 0, iss: '', aud: '' },
@@ -62,11 +64,19 @@ describe('enforceAccessBoundary', () => {
         expect(mockAuditLogger.logDenial).toHaveBeenCalledWith(
             'memory://audit',
             'Insufficient scope',
-            expect.objectContaining({ scope: 'admin', category: 'admin' })
+            expect.objectContaining({ scope: 'audit', category: 'admin' })
         )
     })
 
-    it('should allow if admin scope is present for memory://audit', () => {
+    it('should allow if audit or admin scope is present for memory://audit', () => {
+        vi.mocked(authContext.getAuthContext).mockReturnValue({
+            authenticated: true,
+            claims: { sub: 'test', scopes: ['audit'], exp: 0, iat: 0, iss: '', aud: '' },
+            scopes: ['audit'],
+        })
+
+        expect(() => enforceAccessBoundary('memory://audit', 'resource')).not.toThrow()
+
         vi.mocked(authContext.getAuthContext).mockReturnValue({
             authenticated: true,
             claims: { sub: 'test', scopes: ['admin'], exp: 0, iat: 0, iss: '', aud: '' },

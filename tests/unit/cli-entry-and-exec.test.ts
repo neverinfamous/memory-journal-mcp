@@ -3,13 +3,26 @@
  * and Exec Command (src/cli/commands/exec.ts)
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, afterAll, vi } from 'vitest'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
 import { Command } from 'commander'
+
+const { deterministicEmbedder } = vi.hoisted(() => {
+    const embed = (): Promise<{ data: Float32Array }> =>
+        Promise.resolve({ data: new Float32Array(16).fill(0.25) })
+    return { deterministicEmbedder: embed }
+})
+
+vi.mock('@huggingface/transformers', () => ({
+    pipeline: vi.fn().mockResolvedValue(deterministicEmbedder),
+    env: { allowRemoteModels: false, localModelPath: '' },
+}))
+
 import { createEntryAction, updateEntryAction } from '../../src/cli/commands/entry.js'
 import { execAction } from '../../src/cli/commands/exec.js'
+import { getSandboxPool } from '../../src/handlers/tools/codemode/singleton-state.js'
 import {
     projectListAction,
     projectCreateAction,
@@ -81,6 +94,10 @@ describe('CLI Entry & Exec Commands', () => {
         } catch {
             // ignore
         }
+    })
+
+    afterAll(() => {
+        getSandboxPool().dispose()
     })
 
     describe('createEntryAction & updateEntryAction', () => {
@@ -246,11 +263,13 @@ describe('CLI Entry & Exec Commands', () => {
     describe('execAction (src/cli/commands/exec.ts)', () => {
         it('should execute a Code Mode script file and exit(0)', async () => {
             const scriptFile = path.join(tmpDir, 'test-script.js')
+            const cfgFile = path.join(tmpDir, 'exec-config.json')
             fs.writeFileSync(scriptFile, 'return 21 * 2;', 'utf-8')
+            fs.writeFileSync(cfgFile, '{}', 'utf-8')
 
             stdoutOutput = []
             await expect(
-                execAction(scriptFile, { db: dbPath }, dummyCmd)
+                execAction(scriptFile, { db: dbPath, config: cfgFile }, dummyCmd)
             ).rejects.toThrow('PROCESS_EXIT_0')
 
             const output = JSON.parse(stdoutOutput.join('')) as {
@@ -259,7 +278,7 @@ describe('CLI Entry & Exec Commands', () => {
             }
             expect(output.success).toBe(true)
             expect(output.result).toBe(42)
-        })
+        }, 30_000)
     })
 
     describe('src/cli/commands/project.ts (projectListAction, projectCreateAction, projectUpdateAction, projectDeleteAction)', () => {

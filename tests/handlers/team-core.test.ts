@@ -126,6 +126,63 @@ describe('Team Core Tool Handlers', () => {
             expect(result.success).toBe(true)
             expect(result.entry.content).toBe('Core test 1')
             expect(result.entry.author).toBeDefined()
+            expect(result.importance?.breakdown?.trustModifier).toBeDefined()
+        })
+
+        it('should persist workflow metadata on team_create_entry', async () => {
+            const created = (await callTool(
+                'team_create_entry',
+                {
+                    workspace_id: 'default',
+                    project_number: 1,
+                    content: 'Workflow metadata test',
+                    workflow_run_id: 987654,
+                    workflow_name: 'CI Pipeline',
+                    workflow_status: 'completed',
+                },
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
+            )) as any
+            expect(created.success).toBe(true)
+            expect(created.entry.workflowRunId).toBe(987654)
+            expect(created.entry.workflowName).toBe('CI Pipeline')
+            expect(created.entry.workflowStatus).toBe('completed')
+        })
+
+        it('should normalize snake_case relationships in team_create_entry and preserve workspace_id in TeamLinkEntriesSchemaMcp', async () => {
+            const { TeamLinkEntriesSchemaMcp } = await import(
+                '../../src/handlers/tools/team/schemas/analytics-vector-schemas.js'
+            )
+            const parsedLink = TeamLinkEntriesSchemaMcp.parse({
+                from: 1,
+                to: 2,
+                type: 'implements',
+                workspace_id: 'alpha',
+            })
+            expect(parsedLink.workspace_id).toBe('alpha')
+            expect(parsedLink.from_entry_id).toBe(1)
+            expect(parsedLink.to_entry_id).toBe(2)
+
+            const created = (await callTool(
+                'team_create_entry',
+                {
+                    workspace_id: 'default',
+                    project_number: 1,
+                    content: 'Snake-case relationships test',
+                    relationships: [{ target_id: entry1Id, relation_type: 'relates_to' }],
+                },
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
+            )) as any
+            expect(created.success).toBe(true)
         })
 
         it('should return error if not found', async () => {

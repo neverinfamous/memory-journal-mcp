@@ -2,6 +2,8 @@
  * Shared types and utilities for the Code Mode API module.
  */
 
+import { isRecord } from '../normalizers/shared-utils.js'
+
 export type ProjectInfo = Record<string, unknown> & { project_number?: number | null }
 export type ProjectMap = Record<string, ProjectInfo>
 export type ProjectArrayItem = ProjectInfo & { name: string; projectNumber?: number | null }
@@ -17,13 +19,21 @@ export type ToolDispatcher = (name: string, args: Record<string, unknown>) => Pr
 export type GroupApiRecord = Record<string, (...args: unknown[]) => Promise<unknown>>
 
 export function parseProjectRegistry(): unknown[] | undefined {
-    if (!process.env['PROJECT_REGISTRY']) return undefined
-    const parsed = JSON.parse(process.env['PROJECT_REGISTRY']) as ProjectMap
-    const arr: ProjectArrayItem[] = Object.entries(parsed).map(([name, val]) => ({
-        name,
-        projectNumber: val.project_number,
-        ...val,
-    }))
-
-    return arr
+    const raw = process.env['PROJECT_REGISTRY']
+    if (raw === undefined || raw.trim() === '') return undefined
+    try {
+        const parsed: unknown = JSON.parse(raw)
+        if (!isRecord(parsed)) return undefined
+        const arr: ProjectArrayItem[] = Object.entries(parsed).map(([name, val]) => {
+            const info: ProjectInfo = isRecord(val) ? val : {}
+            return {
+                name,
+                ...(info.project_number !== undefined ? { projectNumber: info.project_number } : {}),
+                ...info,
+            }
+        })
+        return arr
+    } catch {
+        return undefined
+    }
 }

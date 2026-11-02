@@ -121,6 +121,7 @@ export async function importMarkdownEntries(
             if (mdFiles.length >= limit) break
         }
     }
+    mdFiles.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
 
     const result: ImportResult = {
         success: true,
@@ -264,6 +265,18 @@ export async function processImportBatch(
             if (metadata.mj_id !== undefined) {
                 const existing = db.getEntryById(metadata.mj_id, workspaceId)
                 if (existing) {
+                    if (author !== undefined) {
+                        const existingAuthor = db.getAuthorsForEntries([metadata.mj_id]).get(metadata.mj_id)
+                        if (
+                            existingAuthor !== undefined &&
+                            existingAuthor !== null &&
+                            existingAuthor.toLowerCase() !== author.toLowerCase()
+                        ) {
+                            throw new Error(
+                                `Permission denied: cannot overwrite entry ${String(metadata.mj_id)} owned by '${existingAuthor}' during import by '${author}'`
+                            )
+                        }
+                    }
                     // UPDATE existing entry
                     db.updateEntry(metadata.mj_id, {
                         content: body,

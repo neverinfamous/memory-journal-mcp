@@ -1,15 +1,15 @@
 import type { Database } from 'better-sqlite3'
 import type { Relationship, RelationshipType } from '../../types/index.js'
+import { ResourceNotFoundError } from '../../types/errors.js'
 import type { NativeConnectionManager } from './native-connection.js'
 import type { EntriesManager } from './entries/index.js'
+import { buildImportanceCte, buildImportanceSqlExpression } from './entries/importance.js'
 
 export class RelationshipsManager {
     private ctx: NativeConnectionManager
-    private entries: EntriesManager
 
-    constructor(ctx: NativeConnectionManager, entries: EntriesManager) {
+    constructor(ctx: NativeConnectionManager, _entries?: EntriesManager) {
         this.ctx = ctx
-        this.entries = entries
     }
 
     private get db(): Database {
@@ -24,8 +24,15 @@ export class RelationshipsManager {
     ): Relationship {
         const db = this.db
 
-        this.entries.getEntryById(fromEntryId)
-        this.entries.getEntryById(toEntryId)
+        const existsStmt = db.prepare(
+            'SELECT 1 FROM memory_journal WHERE id = ? AND deleted_at IS NULL'
+        )
+        if (existsStmt.get(fromEntryId) === undefined) {
+            throw new ResourceNotFoundError('Entry', String(fromEntryId))
+        }
+        if (existsStmt.get(toEntryId) === undefined) {
+            throw new ResourceNotFoundError('Entry', String(toEntryId))
+        }
 
         const result = db
             .prepare(
@@ -160,16 +167,21 @@ export class RelationshipsManager {
     getOrphanCount(workspaceId?: string): number {
         let filter = ''
         const params: unknown[] = []
-        if (workspaceId && workspaceId !== '*') {
-            filter = ' AND m.workspace_id = ?'
+        if (workspaceId !== undefined && workspaceId !== '*') {
+            filter = ' AND e.workspace_id = ?'
             params.push(workspaceId)
         }
 
+        const cte = buildImportanceCte()
+        const importanceExpr = buildImportanceSqlExpression()
         const row = this.db
             .prepare(
-                `SELECT COUNT(*) as orphan_count
-                 FROM memory_journal m
-                 WHERE m.deleted_at IS NULL${filter} AND m.importance < 0.2 AND m.id NOT IN (
+                `WITH ${cte}
+                 SELECT COUNT(*) as orphan_count
+                 FROM memory_journal e
+                 LEFT JOIN rel_stats rs ON e.id = rs.entry_id
+                 LEFT JOIN anchor_stats ans ON e.id = ans.entry_id
+                 WHERE e.deleted_at IS NULL${filter} AND (${importanceExpr}) < 0.2 AND e.id NOT IN (
                      SELECT from_entry_id FROM relationships
                      UNION
                      SELECT to_entry_id FROM relationships

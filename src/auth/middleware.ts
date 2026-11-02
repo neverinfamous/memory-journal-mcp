@@ -14,6 +14,9 @@ import { TokenMissingError, InsufficientScopeError, isOAuthError } from './error
 import { hasScope as checkScope } from './scopes.js'
 import { getRequiredScope } from './scope-map.js'
 import { logger } from '../utils/logger.js'
+import { extractBearerToken } from './transport-agnostic.js'
+
+export { extractBearerToken }
 
 // =============================================================================
 // Express Type Extensions
@@ -21,25 +24,17 @@ import { logger } from '../utils/logger.js'
 
 /**
  * Extended Express Request with auth context
- * Uses module augmentation to extend Express.Request interface
  */
-declare global {
-    // eslint-disable-next-line @typescript-eslint/no-namespace
-    namespace Express {
-        interface Request {
-            /** MCP standard auth info */
-            auth?: AuthInfo
-            /** Original Token claims */
-            tokenClaims?: TokenClaims
-            /** Raw access token */
-            accessToken?: string
-            /** Request ID for tracing */
-            requestId?: string
-        }
-    }
+export interface AuthRequest extends Request {
+    /** MCP standard auth info */
+    auth?: AuthInfo
+    /** Original Token claims */
+    tokenClaims?: TokenClaims
+    /** Raw access token */
+    accessToken?: string
+    /** Request ID for tracing */
+    requestId?: string
 }
-
-export type AuthRequest = Request
 
 // =============================================================================
 // Configuration
@@ -57,37 +52,6 @@ export interface AuthMiddlewareConfig {
 
     /** Paths that bypass authentication (e.g., '/.well-known/*', '/health') */
     publicPaths?: string[]
-}
-
-// =============================================================================
-// Token Extraction
-// =============================================================================
-
-/**
- * Extract Bearer token from Authorization header
- *
- * @param authHeader - Authorization header value
- * @returns The token or null if not present/invalid
- */
-export function extractBearerToken(authHeader: string | undefined): string | null {
-    if (!authHeader) {
-        return null
-    }
-
-    // Check for Bearer scheme (case-insensitive)
-    const parts = authHeader.split(' ')
-    const scheme = parts[0]
-    const tokenPart = parts[1]
-    if (parts.length !== 2 || scheme?.toLowerCase() !== 'bearer') {
-        return null
-    }
-
-    if (tokenPart === undefined) {
-        return null
-    }
-
-    const token = tokenPart.trim()
-    return token.length > 0 ? token : null
 }
 
 // =============================================================================
@@ -144,7 +108,7 @@ export function createAuthMiddleware(config: AuthMiddlewareConfig): RequestHandl
     const { tokenValidator, resourceServer, publicPaths = [] } = config
 
     return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-        const authReq = req
+        const authReq: AuthRequest = req
 
         // Generate request ID for tracing
         const requestId = crypto.randomUUID()
@@ -240,7 +204,7 @@ export function createAuthMiddleware(config: AuthMiddlewareConfig): RequestHandl
  */
 export function requireScope(scope: string): RequestHandler {
     return (req: Request, res: Response, next: NextFunction): void => {
-        const authReq = req
+        const authReq: AuthRequest = req
 
         if (!authReq.auth) {
             // Should not happen if auth middleware is applied first
@@ -286,7 +250,7 @@ export function requireScope(scope: string): RequestHandler {
  */
 export function requireAnyScope(scopes: string[]): RequestHandler {
     return (req: Request, res: Response, next: NextFunction): void => {
-        const authReq = req
+        const authReq: AuthRequest = req
 
         if (!authReq.auth) {
             res.status(401).json({
@@ -334,7 +298,7 @@ export function requireAnyScope(scopes: string[]): RequestHandler {
  */
 export function requireToolScope(toolName: string): RequestHandler {
     return (req: Request, res: Response, next: NextFunction): void => {
-        const authReq = req
+        const authReq: AuthRequest = req
 
         if (!authReq.auth) {
             res.status(401).json({

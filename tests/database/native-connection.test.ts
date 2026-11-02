@@ -382,10 +382,11 @@ describe('NativeConnectionManager', () => {
     // =========================================================================
 
     describe('pragma', () => {
-        it('should execute pragma commands', async () => {
+        it('should execute allowed pragma commands and reject disallowed ones', async () => {
             const mgr = new NativeConnectionManager(':memory:')
             await mgr.initialize()
-            expect(() => mgr.pragma('cache_size = 2000')).not.toThrow()
+            expect(() => mgr.pragma('foreign_keys = ON')).not.toThrow()
+            expect(() => mgr.pragma('cache_size = 2000')).toThrow('Disallowed PRAGMA command')
             mgr.close()
         })
     })

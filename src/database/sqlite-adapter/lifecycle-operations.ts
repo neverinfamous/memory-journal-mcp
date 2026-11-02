@@ -27,7 +27,6 @@ export class LifecycleOperations {
         const deletedAt = new Date().toISOString()
         
         let excludeTagsSql = ''
-        const params: unknown[] = []
         const excludeTags = options.excludeTags ?? []
         
         if (excludeTags.length > 0) {
@@ -37,7 +36,6 @@ export class LifecycleOperations {
                 JOIN tags ON tags.id = entry_tags.tag_id 
                 WHERE tags.name IN (${placeholders})
             )`
-            params.push(...excludeTags)
         }
 
         // --- Candidates Generation ---
@@ -46,7 +44,7 @@ export class LifecycleOperations {
             SELECT id, CAST((julianday('now') - julianday(deleted_at)) AS INTEGER) as age_days
             FROM memory_journal
             WHERE deleted_at IS NOT NULL
-              AND julianday('now') - julianday(deleted_at) > ${String(options.hardDeleteOlderThanDays)}
+              AND julianday('now') - julianday(deleted_at) > ?
         `
 
         const pruneSelect = `
@@ -55,10 +53,15 @@ export class LifecycleOperations {
             LEFT JOIN rel_stats rs ON e.id = rs.entry_id
             LEFT JOIN anchor_stats ans ON e.id = ans.entry_id
             WHERE e.deleted_at IS NULL
-              AND julianday('now') - julianday(e.timestamp) > ${String(options.pruneOlderThanDays)}
-              AND ${importanceExpr} < ${String(options.importanceThreshold)}
+              AND julianday('now') - julianday(e.timestamp) > ?
+              AND ${importanceExpr} < ?
               ${excludeTagsSql}
         `
+        const pruneParams: unknown[] = [
+            options.pruneOlderThanDays,
+            options.importanceThreshold,
+            ...excludeTags,
+        ]
 
         const archiveSelect = `
             SELECT e.id, ${importanceExpr} as importance_score
@@ -66,10 +69,15 @@ export class LifecycleOperations {
             LEFT JOIN rel_stats rs ON e.id = rs.entry_id
             LEFT JOIN anchor_stats ans ON e.id = ans.entry_id
             WHERE e.deleted_at IS NULL AND e.is_archived = 0
-            AND julianday('now') - julianday(e.timestamp) > ${String(options.archiveOlderThanDays)}
-            AND ${importanceExpr} < ${String(options.importanceThreshold)}
+            AND julianday('now') - julianday(e.timestamp) > ?
+            AND ${importanceExpr} < ?
             ${excludeTagsSql}
         `
+        const archiveParams: unknown[] = [
+            options.archiveOlderThanDays,
+            options.importanceThreshold,
+            ...excludeTags,
+        ]
 
         let archivedCount = 0
         let prunedCount = 0
@@ -82,7 +90,7 @@ export class LifecycleOperations {
 
         if (options.dryRun) {
             if (options.hardDeleteOlderThanDays > 0) {
-                const rows = db.prepare(hardDeleteSelect).all() as { id: number | bigint, age_days: number }[]
+                const rows = db.prepare(hardDeleteSelect).all(options.hardDeleteOlderThanDays) as { id: number | bigint, age_days: number }[]
                 candidates.hardDeleted = rows.map(r => ({
                     id: typeof r.id === 'bigint' ? Number(r.id) : r.id,
                     age_days: r.age_days
@@ -90,7 +98,7 @@ export class LifecycleOperations {
             }
             if (options.pruneOlderThanDays > 0) {
                 const sql = `WITH ${cte} ${pruneSelect}`
-                const rows = db.prepare(sql).all(...params) as { id: number | bigint, importance_score: number }[]
+                const rows = db.prepare(sql).all(...pruneParams) as { id: number | bigint, importance_score: number }[]
                 candidates.pruned = rows.map(r => ({
                     id: typeof r.id === 'bigint' ? Number(r.id) : r.id,
                     importance_score: r.importance_score
@@ -98,7 +106,7 @@ export class LifecycleOperations {
             }
             if (options.archiveOlderThanDays > 0) {
                 const sql = `WITH ${cte} ${archiveSelect}`
-                const rows = db.prepare(sql).all(...params) as { id: number | bigint, importance_score: number }[]
+                const rows = db.prepare(sql).all(...archiveParams) as { id: number | bigint, importance_score: number }[]
                 candidates.archived = rows.map(r => ({
                     id: typeof r.id === 'bigint' ? Number(r.id) : r.id,
                     importance_score: r.importance_score
@@ -112,7 +120,7 @@ export class LifecycleOperations {
 
         const runTx = db.transaction(() => {
             if (options.hardDeleteOlderThanDays > 0) {
-                const rows = db.prepare(hardDeleteSelect).all() as { id: number | bigint }[]
+                const rows = db.prepare(hardDeleteSelect).all(options.hardDeleteOlderThanDays) as { id: number | bigint }[]
                 const ids = rows.map(r => typeof r.id === 'bigint' ? Number(r.id) : r.id)
                 if (ids.length > 0) {
                     const placeholders = ids.map(() => '?').join(',')
@@ -137,7 +145,7 @@ export class LifecycleOperations {
                         SELECT id FROM (${pruneSelect})
                     )
                 `
-                const result = db.prepare(sql).run(deletedAt, ...params)
+                const result = db.prepare(sql).run(deletedAt, ...pruneParams)
                 prunedCount = result.changes
             }
 
@@ -150,7 +158,7 @@ export class LifecycleOperations {
                         SELECT id FROM (${archiveSelect})
                     )
                 `
-                const result = db.prepare(sql).run(...params)
+                const result = db.prepare(sql).run(...archiveParams)
                 archivedCount = result.changes
             }
         })

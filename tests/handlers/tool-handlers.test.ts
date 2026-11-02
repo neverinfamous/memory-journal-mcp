@@ -769,4 +769,48 @@ describe('Tool Handlers', () => {
             expect(result.total_entries).toBeGreaterThan(0)
         })
     })
+
+    describe('callTool - batch_create_entries CMS & relationships forwarding', () => {
+        it('should forward impact_score, trust_score, validation_status, auto_context, anchors, and relationships', async () => {
+            const target = (await callTool(
+                'create_entry',
+                { content: 'Target for batch create relationship', project_number: 1, workspace_id: 'default' },
+                db
+            )) as { entry: { id: number } }
+
+            const batchRes = (await callTool(
+                'batch_create_entries',
+                {
+                    entries: [
+                        {
+                            content: 'Batch item with CMS fields and relationship',
+                            project_number: 1,
+                            workspace_id: 'default',
+                            impact_score: 0.75,
+                            trust_score: 0.9,
+                            validation_status: 'passed',
+                            auto_context: JSON.stringify({ commits: ['abc1234'] }),
+                            anchors: [{ anchor_path: 'src/index.ts', anchor_type: 'file' }],
+                            relationships: [{ targetId: target.entry.id, relationType: 'relates_to' }],
+                        },
+                    ],
+                    auto_index: false,
+                },
+                db
+            )) as { success: boolean; entries: { id: number; impactScore: number; trustScore: number; validationStatus: string; autoContext: string | null }[] }
+
+            expect(batchRes.success).toBe(true)
+            const created = batchRes.entries[0]!
+            expect(created.impactScore).toBe(0.75)
+            expect(created.trustScore).toBe(0.9)
+            expect(created.validationStatus).toBe('passed')
+            expect(created.autoContext).toBe(JSON.stringify({ commits: ['abc1234'] }))
+
+            const anchors = db.getAnchorsByEntryId(created.id)
+            expect(anchors.some((a) => a.anchorPath === 'src/index.ts')).toBe(true)
+
+            const rels = db.getRelationships(created.id)
+            expect(rels.some((r) => r.toEntryId === target.entry.id && r.relationshipType === 'references')).toBe(true)
+        })
+    })
 })

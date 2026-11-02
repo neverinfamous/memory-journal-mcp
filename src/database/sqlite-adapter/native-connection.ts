@@ -16,6 +16,11 @@ import type { IDatabaseConnection, QueryResult } from '../core/interfaces.js'
 const IS_MUTATION_RE =
     /^\s*(INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|PRAGMA (?!table_info|foreign_key_list|index_info|index_list|journal_mode|synchronous|temp_store|integrity_check))./i
 
+const ALLOWED_PRAGMAS_RE =
+    /^\s*(?:wal_checkpoint(?:\s*\(\s*(?:PASSIVE|FULL|RESTART|TRUNCATE)\s*\))?|integrity_check|quick_check|foreign_keys(?:\s*=\s*(?:ON|OFF|1|0))?|journal_mode(?:\s*=\s*(?:WAL|DELETE|TRUNCATE|PERSIST|MEMORY|OFF))?|synchronous(?:\s*=\s*(?:OFF|NORMAL|FULL|EXTRA|0|1|2|3))?|temp_store(?:\s*=\s*(?:DEFAULT|FILE|MEMORY|0|1|2))?|busy_timeout(?:\s*=\s*\d+)?|optimize|table_info\s*\([^)]+\)|index_list\s*\([^)]+\)|index_info\s*\([^)]+\)|foreign_key_list\s*\([^)]+\))\s*$/i
+
+const HEX_CIPHER_KEY_RE = /^x'[0-9a-fA-F]+'$/
+
 
 export class NativeConnectionManager implements IDatabaseConnection {
     private db: Database | null = null
@@ -43,10 +48,14 @@ export class NativeConnectionManager implements IDatabaseConnection {
             if (rawKey) {
                 const key = rawKey
                 if (key.startsWith("x'") && key.endsWith("'")) {
+                    if (!HEX_CIPHER_KEY_RE.test(key)) {
+                        throw new Error('Invalid hex encryption key format')
+                    }
                     // Raw hex keys must not be wrapped in additional single quotes
                     db.pragma(`key = "${key}"`)
                 } else {
-                    db.pragma(`key = '${key}'`)
+                    const escapedKey = key.replace(/'/g, "''")
+                    db.pragma(`key = '${escapedKey}'`)
                 }
                 logger.info('Database encryption key applied', { module: 'NativeConnectionManager' })
             }
@@ -56,6 +65,9 @@ export class NativeConnectionManager implements IDatabaseConnection {
             db.pragma('synchronous = NORMAL')
             db.pragma('foreign_keys = ON')
             db.pragma('temp_store = MEMORY')
+            db.pragma('busy_timeout = 5000')
+            db.pragma('cache_size = -64000')
+            this.installStatementCache(db)
 
             // Load sqlite-vec extension for vector search
             // Use local `db` ref to avoid race with concurrent close() during await
@@ -284,7 +296,52 @@ export class NativeConnectionManager implements IDatabaseConnection {
         return this.db
     }
 
+    /**
+     * Installs a bounded LRU prepared-statement cache on `db.prepare()` so all
+     * callers benefit from statement reuse without schema-invalidation leaks.
+     */
+    private installStatementCache(db: Database): void {
+        if (typeof db.prepare !== 'function') return
+        const rawPrepare = db.prepare.bind(db)
+        const stmtCache = new Map<string, ReturnType<Database['prepare']>>()
+        const MAX_CACHE_SIZE = 256
+        const DDL_RE = /\b(?:DROP|ALTER|CREATE)\b/i
+
+        db.prepare = ((source: string) => {
+            if (DDL_RE.test(source)) {
+                stmtCache.clear()
+                return rawPrepare(source)
+            }
+            const cached = stmtCache.get(source)
+            if (cached !== undefined) {
+                return cached
+            }
+            const stmt = rawPrepare(source)
+            if (stmtCache.size >= MAX_CACHE_SIZE) {
+                const oldestKey = stmtCache.keys().next().value
+                if (oldestKey !== undefined) {
+                    stmtCache.delete(oldestKey)
+                }
+            }
+            stmtCache.set(source, stmt)
+            return stmt
+        }) as Database['prepare']
+
+        if (typeof db.exec === 'function') {
+            const rawExec = db.exec.bind(db)
+            db.exec = (source: string) => {
+                if (DDL_RE.test(source)) {
+                    stmtCache.clear()
+                }
+                return rawExec(source)
+            }
+        }
+    }
+
     pragma(command: string): void {
+        if (!ALLOWED_PRAGMAS_RE.test(command)) {
+            throw new Error(`Disallowed PRAGMA command: ${command}`)
+        }
         const db = this.ensureDb()
         db.pragma(command)
     }
@@ -311,8 +368,10 @@ export class NativeConnectionManager implements IDatabaseConnection {
     }
 
     setDbAndInitialized(db: unknown): void {
-        this.db = db as Database
-        this.db.pragma('foreign_keys = ON')
+        const nativeDb = db as Database
+        this.db = nativeDb
+        nativeDb.pragma('foreign_keys = ON')
+        this.installStatementCache(nativeDb)
         this.initialized = true
     }
 
@@ -332,10 +391,14 @@ export class NativeConnectionManager implements IDatabaseConnection {
     }
 
     createVecTable(dimensions: number): void {
+        if (!Number.isInteger(dimensions) || dimensions <= 0 || dimensions > 8192) {
+            throw new Error(`Invalid vector dimensions: ${String(dimensions)}`)
+        }
         const db = this.ensureDb()
         // Wait, vec0 doesn't support parameterized dimensions via '?', we have to interpolate
         db.exec(`
             CREATE VIRTUAL TABLE IF NOT EXISTS vec_embeddings USING vec0(
+                chunk_size=256,
                 entry_id INTEGER PRIMARY KEY,
                 embedding float[${dimensions}]
             )

@@ -89,6 +89,9 @@ describe('Help Resource Handlers', () => {
         const groupNames = result.data.groups.map((g: any) => g.name)
         expect(groupNames).toContain('admin')
         expect(groupNames).toContain('backup')
+        expect(groupNames).toContain('git')
+        const gitGroup = result.data.groups.find((g: any) => g.name === 'git')
+        expect(gitGroup?.description).toContain('Git history mining')
     })
 
     it('should extract parameters from admin group tools', async () => {

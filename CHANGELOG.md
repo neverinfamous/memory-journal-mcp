@@ -7,6 +7,32 @@ This changelog is auto-generated from Git history using [lib-git-history](https:
 
 ### Features
 
+- add autonomous full-depth NREM optimizer, REM supervisor prompt, and staleness auto-anchoring by **Chris LeRoux** ([4c8cddd](https://github.com/neverinfamous/memory-journal-mcp/commit/4c8cddd129f1a87998f30a95724b105537f7b99a))
+- make github copilot audit optional across all adversarial prompts by **Chris LeRoux** ([61a19f7](https://github.com/neverinfamous/memory-journal-mcp/commit/61a19f727e31894d9f635e43f04c1669bdf02b13))
+
+### Bug Fixes
+
+- resolve CLI option parsing, auto-prune config fallback, and team tool gaps by **Chris LeRoux** ([c9ff05e](https://github.com/neverinfamous/memory-journal-mcp/commit/c9ff05ef5362dedb132bb0986a7faf4476a77e9c))
+- resolve audit scope check, search filters, and linkEntries key normalization by **Chris LeRoux** ([b19b1ed](https://github.com/neverinfamous/memory-journal-mcp/commit/b19b1ed0552e5b81e4c2406cad497a337d51af7b))
+- bridge --auth-scopes CLI flag, harden empty-string env vars, and align team link aliases by **Chris LeRoux** ([798431c](https://github.com/neverinfamous/memory-journal-mcp/commit/798431c9d7d68c59d2623b0d1975dc0e22929b11))
+- preserve wildcard workspace resolution, heal link fallbacks, and expand staleness inspection by **Chris LeRoux** ([c48989c](https://github.com/neverinfamous/memory-journal-mcp/commit/c48989c8631524a7a5dd4ab4bb964dab00080a05))
+- align MCP wire schemas, team vector archive filter, ZodPipe schema unwrapping, and CLI visualize output by **Chris LeRoux** ([4bc7f72](https://github.com/neverinfamous/memory-journal-mcp/commit/4bc7f723f8cd2036012b90c2495af6701a5ff722))
+- unify importance baseline, team schemas, OAuth author priority, and Code Mode schema introspection by **Chris LeRoux** ([b6afe02](https://github.com/neverinfamous/memory-journal-mcp/commit/b6afe028c533882ed42361fde0cc1e312e308395))
+- resolve workflow metadata forwarding, schema gaps, and lockfile triggers by **Chris LeRoux** ([781e62f](https://github.com/neverinfamous/memory-journal-mcp/commit/781e62fdd118c4ce59727ceb73dbf6e84cfe6e8d))
+- align batch updates, templates, CLI flags, and empty env handling by **Chris LeRoux** ([d69433b](https://github.com/neverinfamous/memory-journal-mcp/commit/d69433bf5037fe481f5d25f019a306bf4d849ceb))
+- align session-summary prompts, CLI options, team RBAC, and batch handlers by **Chris LeRoux** ([2cc22d0](https://github.com/neverinfamous/memory-journal-mcp/commit/2cc22d0d53622941fee20b3d53022e37996417c7))
+- harden multi-tenancy lookups, streamable http body parsing, and e2e boundaries by **Chris LeRoux** ([57996b4](https://github.com/neverinfamous/memory-journal-mcp/commit/57996b44f14f96ec9d46d1c513d2c63fe1170fa1))
+- comprehensive adversarial security hardening and audit prompt upgrades by **Chris LeRoux** ([54f253c](https://github.com/neverinfamous/memory-journal-mcp/commit/54f253cf733f2d7bad498ded02aa51e34ee00314))
+- harden outer worker function prototypes and rpc allowlist by **Chris LeRoux** ([20c4d3d](https://github.com/neverinfamous/memory-journal-mcp/commit/20c4d3d3416512c4cf11378344115588e924dd0c))
+
+### Code Quality
+
+- optimize fts5 query plan, vector hydration, tool dispatch, and audit prompt by **Chris LeRoux** ([4f8cbb1](https://github.com/neverinfamous/memory-journal-mcp/commit/4f8cbb1a010594e3527eb98e01a50daef7d0705e))
+
+## [v9.0.0]
+
+### Features
+
 - add --no-agent-healing toggle, enforce allowed-io-roots on fallbacks, and sanitize shipped skill by **Chris LeRoux** ([12e1b0a](https://github.com/neverinfamous/memory-journal-mcp/commit/12e1b0aec1d578b9db58b7d7d47b382ee3c6ee03))
 - bundle memory-journal-mcp skill and serve via SEP-2640 by **Chris LeRoux** ([22ef9b5](https://github.com/neverinfamous/memory-journal-mcp/commit/22ef9b552430d536727567c12052b979ca6dd7f0))
 - add maxToolInputElements guard with 25k default by **Chris LeRoux** ([edfb4c3](https://github.com/neverinfamous/memory-journal-mcp/commit/edfb4c31df02c7fc1ee7b9881b50e6e38f179bf2))
@@ -121,6 +147,7 @@ This changelog is auto-generated from Git history using [lib-git-history](https:
 
 ### Bug Fixes
 
+- align pnpm v11 workspace config and resolve CodeQL findings by **Chris LeRoux** ([1429cf1](https://github.com/neverinfamous/memory-journal-mcp/commit/1429cf141d5c2b5138f906f4ac83bfb827b63075))
 - deduplicate DatabaseAdapter and fix CLI IO/project config resolution by **Chris LeRoux** ([5dd2d6a](https://github.com/neverinfamous/memory-journal-mcp/commit/5dd2d6af94d41f46f3679938d348aab7e98e1b75))
 - require exp claim on OAuth tokens and log resource URI by **Chris LeRoux** ([849fb53](https://github.com/neverinfamous/memory-journal-mcp/commit/849fb53346da2938e42052f3ec6f319a86b8c485))
 - declare dotenv/picocolors and verify vendored deps in sync-vendor by **Chris LeRoux** ([e430fad](https://github.com/neverinfamous/memory-journal-mcp/commit/e430fad15d9f322b39666b75e79c55820934b3e0))

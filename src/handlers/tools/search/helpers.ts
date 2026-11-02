@@ -121,6 +121,13 @@ export function passMetadataFilters(
     options: ISearchFilters,
     db: IDatabaseAdapter
 ): boolean {
+    if (
+        options.workspaceId !== undefined &&
+        options.workspaceId !== '*' &&
+        entry.workspaceId !== options.workspaceId
+    ) {
+        return false
+    }
     if (options.isPersonal !== undefined && entry.isPersonal !== options.isPersonal) return false
     if (options.projectNumber !== undefined && entry.projectNumber !== options.projectNumber)
         return false

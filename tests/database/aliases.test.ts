@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { NativeConnectionManager } from '../../src/database/sqlite-adapter/native-connection.js'
 import { AliasManager } from '../../src/database/sqlite-adapter/aliases.js'
-import { AUTHOR_ALIASES_SQL } from '../../src/database/core/schema.js'
 import { QueryError } from '../../src/types/errors.js'
 
 describe('AliasManager', () => {
@@ -11,12 +10,7 @@ describe('AliasManager', () => {
     beforeEach(async () => {
         connection = new NativeConnectionManager(':memory:')
         await connection.initialize()
-        const statements = AUTHOR_ALIASES_SQL.split(';')
-            .map(s => s.trim())
-            .filter(s => s.length > 0)
-        for (const stmt of statements) {
-            connection.run(stmt)
-        }
+        connection.applyTeamSchema()
         aliasMgr = new AliasManager(connection)
     })
 

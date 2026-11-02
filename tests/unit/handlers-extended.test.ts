@@ -267,12 +267,19 @@ describe('Extended Tool Handlers (Team, IO, Admin, Core)', () => {
             })) as { exported_count: number }
             expect(teamExpRes.exported_count).toBe(1)
 
-            const teamImpRes = (await findTool(teamIoTools, 'team_import_markdown').handler({
-                source_dir: 'tmp_team_md',
-                project_number: 5,
-                dry_run: false,
-            })) as { updated: number }
-            expect(teamImpRes.updated).toBe(1)
+            const prevAuthorIO = process.env['TEAM_AUTHOR']
+            process.env['TEAM_AUTHOR'] = 'alice'
+            try {
+                const teamImpRes = (await findTool(teamIoTools, 'team_import_markdown').handler({
+                    source_dir: 'tmp_team_md',
+                    project_number: 5,
+                    dry_run: false,
+                })) as { updated: number }
+                expect(teamImpRes.updated).toBe(1)
+            } finally {
+                if (prevAuthorIO === undefined) delete process.env['TEAM_AUTHOR']
+                else process.env['TEAM_AUTHOR'] = prevAuthorIO
+            }
 
             // 4. Team import_external (obsidian format)
             const extDir = path.join(ioRoot, 'team-ext')

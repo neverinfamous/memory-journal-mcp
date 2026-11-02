@@ -146,6 +146,37 @@ describe('Team Vector Tool Handlers', () => {
             expect(result.entries[0].content).toContain('Vector matched')
         })
 
+        it('should return project-scoped semantic search results when project_number is omitted', async () => {
+            const result = (await callTeamTool('team_semantic_search', {
+                query: 'test',
+            })) as any
+
+            expect(result.query).toBe('test')
+            expect(result.count).toBeGreaterThan(0)
+            expect(result.entries[0].projectNumber).toBe(1)
+        })
+
+        it('should filter out archived entries by default and include them when include_archived is true', async () => {
+            teamDb.updateEntry(1, { isArchived: true })
+            try {
+                const excluded = (await callTeamTool('team_semantic_search', {
+                    project_number: 1,
+                    query: 'test',
+                    include_archived: false,
+                })) as any
+                expect(excluded.count).toBe(0)
+
+                const included = (await callTeamTool('team_semantic_search', {
+                    project_number: 1,
+                    query: 'test',
+                    include_archived: true,
+                })) as any
+                expect(included.count).toBeGreaterThan(0)
+            } finally {
+                teamDb.updateEntry(1, { isArchived: false })
+            }
+        })
+
         it('should handle hints on empty results', async () => {
             const result = (await callTeamTool('team_semantic_search', {
                 project_number: 1,
@@ -232,6 +263,39 @@ describe('Team Vector Tool Handlers', () => {
             )) as any
             expect(result.success).toBe(false)
             expect(result.error).toContain('Team vector search not available')
+        })
+
+        it('should require admin role when Team RBAC is active', async () => {
+            teamDb.addTeamMember('admin-bootstrap', 'admin')
+            teamDb.addTeamMember('test-user', 'member')
+            try {
+                const result = (await callTool(
+                    'team_rebuild_vector_index',
+                    {},
+                    personalDb,
+                    undefined,
+                    undefined,
+                    {
+                        teamDefaultRole: 'member',
+                        runtime: {
+                            maintenanceManager: {
+                                withActiveJob: (fn: any) => fn(),
+                                acquireMaintenanceLock: async () => {},
+                                releaseMaintenanceLock: () => {},
+                            },
+                        },
+                        io: { allowedRoots: [process.cwd()] },
+                    },
+                    undefined,
+                    teamDb,
+                    vectorManager
+                )) as any
+                expect(result.success).toBe(false)
+                expect(result.error).toContain("required 'admin' role")
+            } finally {
+                teamDb.removeTeamMember('test-user')
+                teamDb.removeTeamMember('admin-bootstrap')
+            }
         })
     })
 

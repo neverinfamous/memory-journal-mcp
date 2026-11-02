@@ -48,6 +48,7 @@ const StatisticsOutputSchema = z
             .object({
                 totalRelationships: z.number(),
                 avgPerEntry: z.number(),
+                density: z.number().optional(),
             })
             .optional(),
         activityTrend: z
@@ -64,6 +65,7 @@ const StatisticsOutputSchema = z
                 caused: z.number(),
             })
             .optional(),
+        relationshipBreakdown: z.record(z.string(), z.number()).optional(),
         dateRange: z
             .object({
                 startDate: z.string(),

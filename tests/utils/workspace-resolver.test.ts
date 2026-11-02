@@ -58,7 +58,7 @@ describe('workspace-resolver with keyword and tag inference', () => {
         expect(res.projectNumber).toBe(9)
     })
 
-    it('returns undefined projectNumber when no keywords or explicit IDs match and cwd is unregistered', () => {
+    it('falls back to config.defaultProjectNumber when no keywords or explicit IDs match and cwd is unregistered', () => {
         const spy = vi.spyOn(process, 'cwd').mockReturnValue('C:\\tmp\\unregistered-project')
         try {
             const res = resolveProjectContext(
@@ -67,6 +67,23 @@ describe('workspace-resolver with keyword and tag inference', () => {
                     tags: ['journal']
                 },
                 mockConfig
+            )
+            expect(res.workspaceId).toBe('default')
+            expect(res.projectNumber).toBe(1)
+        } finally {
+            spy.mockRestore()
+        }
+    })
+
+    it('returns undefined projectNumber when no keywords, explicit IDs, or defaultProjectNumber match and cwd is unregistered', () => {
+        const spy = vi.spyOn(process, 'cwd').mockReturnValue('C:\\tmp\\unregistered-project')
+        try {
+            const res = resolveProjectContext(
+                {
+                    content: 'Random general reflection with no project references',
+                    tags: ['journal']
+                },
+                { ...mockConfig, defaultProjectNumber: undefined }
             )
             expect(res.workspaceId).toBe('default')
             expect(res.projectNumber).toBeUndefined()

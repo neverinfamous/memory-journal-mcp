@@ -4,7 +4,7 @@
 
 Memory Journal MCP is a TypeScript MCP (Model Context Protocol) server providing persistent memory for AI agents. It has **a vast array of tools** across **multiple groups** (Core, Search, Analytics, Relationships, IO, Admin, GitHub, Git, Backup, Team, CodeMode), **dozens of resources**, and **multiple workflow prompts**.
 
-**Stack**: TypeScript, Vitest, Zod schemas, better-sqlite3 (SQLite), sqlite-vec (vector search), @huggingface/transformers (embeddings), @octokit/rest (GitHub API).
+**Stack**: TypeScript, Vitest, Zod (`zod` validation schemas), `better-sqlite3-multiple-ciphers` (aliased as `better-sqlite3` for SQLite + SQLCipher encryption), `sqlite-vec` (vector search), `@huggingface/transformers` (embeddings), `@octokit/rest` + `@octokit/graphql` (GitHub REST & Projects v2 GraphQL API), `simple-git`, `express` (Streamable HTTP), `jose` (OAuth 2.1).
 
 ## Session Context
 
@@ -46,38 +46,39 @@ If you find issues during code review, use `create_entry` with tag `copilot-find
 - **Never use `as` type assertions** — use `satisfies` operator or strict type guards
 - **Never use `@ts-ignore` or `@ts-expect-error`** — fix the underlying type issue
 - **Zod schemas** for all tool input validation
-- **Output schemas** — All tools have Zod output schemas; error responses must pass validation
-- **Dual Schema Pattern**: All schemas strictly separate input (stringified, loosely typed for LLMs) and output (strict internal domain types) validations. No `argsSchema` for empty or zero-argument prompts.
+- **Output schemas** — All standard domain tools (except `mj_execute_code`, which returns arbitrary sandbox results, and dummy healing tools) define Zod output schemas; error responses must pass validation
+- **Dual Schema Pattern**: All standard domain tool schemas separate strict internal validation (`*Schema` preprocessed by `healAgentHallucinations`), MCP wire input schemas (`*SchemaMcp` using `relaxedNumber()` to accept stringified numbers from LLMs), and output schemas (`*OutputSchema`, omitted on `mj_execute_code` and dummy healing tools). `argsSchema` is omitted for zero-argument prompts AND prompts where all arguments are optional (`!hasRequired` in `src/server/registration.ts`), as `z.object({})` rejects `undefined` when clients omit arguments.
 
 ### Error Handling
 
-All tool handlers must return structured error JSON with \`isError: true\` instead of throwing raw MCP exceptions.
-Every tool must return \`{success, error, code, category, suggestion, recoverable}\` to ensure agents get classification, remediation hints, and recoverability signals.
+All tool handlers catch errors and return structured error objects via `formatHandlerError(error)` instead of throwing raw MCP exceptions.
+Every tool error return matches `{ success: false, error, code, category, suggestion?, recoverable, details? }` to ensure agents get classification, remediation hints, and recoverability signals.
 
-- **Never** throw raw \`McpError\` exceptions which cause agents to crash.
-- **Always** return a structured JSON response wrapped in \`{ content: [{ type: 'text', text: JSON.stringify(...) }], isError: true }\`.
+- **Never** throw raw `McpError` exceptions from tool handlers which cause agents to crash.
+- **Always** return `formatHandlerError(error)` from tool `catch` blocks; the registration layer (`src/server/mcp-server/tool-registration/`) wraps the structured JSON object into `{ content: [{ type: 'text', text: JSON.stringify(result, null, 2) }], structuredContent: result }` (when `outputSchema` is defined on the tool) without setting `isError: true` on caught structured domain errors so clients parse the structured payload cleanly.
 
 ### Token Estimation
 
-All resources must dynamically compute and return `_meta.tokenEstimate` within their JSON response blocks using the `Math.ceil(length / 4)` heuristic.
+Most JSON resource responses include `_meta.tokenEstimate` using the `Math.ceil(JSON.stringify(responseData).length / 4)` heuristic (alongside `annotations.lastModified` where applicable), while tool call and resource observability in `src/observability/token-estimator.ts` use content-type-aware UTF-8 byte-to-token ratios (`4.0` bytes/token for prose, `2.8` for JSON, `3.2` for code).
 
 ### Database
 
-- Schema migrations in `src/database/core/schema.ts` (using Drizzle ORM)
+- Versioned schema migrations in `src/database/migrations/` (orchestrated by `src/database/migrations/migration-manager.ts` using native better-sqlite3)
+- Native connection tuning in `src/database/sqlite-adapter/native-connection.ts`: WAL mode, `busy_timeout = 5000`, `cache_size = -64000` (64MB), `sqlite-vec` `vec0` `chunk_size=256`, and a 256-entry bounded LRU prepared-statement cache (`installStatementCache`) with automatic DDL invalidation
 - Backward compatible with self-healing legacy database retrofitting — never break existing data
-- Consider index implications for new queries
+- Consider index implications and virtual table join order (`CROSS JOIN` when driving from `fts_content` / `vec0`) for new queries
 
 ## Architectural Rules & Key Concepts
 
 - **Multi-Tenancy**: `workspace_id` is a core concept across multi-tenancy. No split-brain allowed. Workspace orphan ratio is correctly calculated using `workspaceId` instead of hardcoded `default`.
 - **Team Support**: Team database tools explicitly require `TEAM_DB_PATH`.
-- **Metrics**: Tools support `trust_score` and `impact_score` for analytics.
+- **Metrics**: Tools support `trust_score`, `impact_score`, and `validation_status` (`passed` | `none` | `failed`) for analytics.
 - **YAML Frontmatter**: Supported natively in entry commands (`memory-journal-mcp entry create`).
 - **Docker Tags**: Always use `:latest` docker tags. Check limits (25,000 char) for DOCKER_README.md.
 - **Dual-Schema Pattern**: All schemas must separate stringified input from strict internal domain types. Zod schemas are used.
-- **Plugin Sync**: Ensure `lib-agent-exec` and `lib-git-history` plugins are kept in sync.
-- **Guardrails**: Session Briefing Guardrails added to stop agents and run `mcp-heal` when bugs are encountered.
-- **Code Mode Error Proxy**: Code Mode result proxy intercepts errors with "AUTONOMOUS HEALING" prefix.
+- **Vendor Sync**: Ensure vendored libraries in `src/vendor/` (`lib-agent-exec` and `lib-git-history`, tracked in `src/vendor/VENDOR.json`) are kept in sync via `pnpm run sync:vendor` and validated via `pnpm run check:vendor-deps` (executed via `bun scripts/sync-vendor.ts`).
+- **Guardrails**: `GOTCHAS_HELP` (`src/constants/instructions/gotchas.ts`) documents critical usage gotchas (covering search/query, backup/restore, GitHub/Kanban, content formatting, and sandbox execution), `memory://briefing` injects the session initialization guardrail, `healAgentHallucinations` (`src/handlers/tools/schemas/hallucination-healer.ts`) autonomously normalizes malformed tool arguments, and the session briefing health alert surfaces maintenance recommendations (`Consider running mj-mcp-optimize.`, backed by the `optimize-journal` prompt).
+- **Code Mode Error Proxy**: Code Mode API, Promise, and Worker proxies intercept and enrich errors with the `🛠️ AUTONOMOUS HEALING:` guidance prefix, while `worker-result-proxy.ts` prefixes `.error` with `[${code}]`.
 
 ## Architecture
 ```
@@ -88,14 +89,17 @@ src/
 ├── auth/                       # OAuth 2.1 authentication
 ├── codemode/                   # Sandboxed JS execution engine
 ├── constants/
-│   └── server-instructions.ts  # Agent prompts and HELP_CONTENT map (Single Source of Truth)
+│   ├── icons.ts                # Capability and entity icon constants
+│   ├── instructions/           # Modular instruction sections (base, core, gotchas, templates, domain groups, markdown/)
+│   └── server-instructions.ts  # Dynamic server instructions and HELP_CONTENT map (Single Source of Truth)
 ├── database/
 │   ├── adapter-factory.ts      # Database adapter factory
 │   ├── core/                   # Core database types and interfaces
-│   ├── migrations/             # Versioned schema migrations (001-007)
+│   ├── migrations/             # Versioned schema migrations (MigrationManager)
 │   └── sqlite-adapter/         # SQLite operations via better-sqlite3
 ├── filtering/
-│   └── tool-filter.ts          # Tool filtering (groups, meta-groups)
+│   ├── tool-constants.ts       # Tool groups and meta-group definitions (TOOL_GROUPS)
+│   └── tool-filter.ts          # Tool filtering engine
 ├── github/
 │   └── github-integration/     # GitHub API (@octokit/rest + GraphQL)
 ├── handlers/
@@ -103,23 +107,29 @@ src/
 │   ├── resources/              # resource handlers
 │   └── prompts/                # prompt handlers
 ├── markdown/                   # Markdown import/export (round-trip frontmatter parsing)
-├── observability/              # Metrics interceptor, token estimator, latency tracker
+├── observability/              # Metrics interceptor, token estimator, latency tracker, Prometheus server/formatter
 ├── server/
-│   ├── mcp-server.ts           # MCP server setup
-│   ├── registration.ts         # Tool/resource/prompt registration
-│   └── scheduler.ts            # Recurring task scheduler
+│   ├── mcp-server/             # MCP server setup & tool registration
+│   ├── auto-prune.ts           # Automated pruning & archiving scheduler
+│   ├── digest-reporter.ts      # Scheduled digest report formatting & webhook delivery
+│   ├── registration.ts         # Resource & prompt capability registration
+│   ├── scheduler.ts            # Periodic maintenance jobs (backup, vacuum, prune, rebuild-index, digest, report)
+│   └── subscription-manager.ts # MCP resource subscription notifications
 ├── transports/
 │   └── http/                   # HTTP/SSE transport (modularized)
 ├── types/                      # Type definitions + barrel
-├── utils/                      # Logger, error helpers, progress
-└── vector/                     # Semantic search (sqlite-vec + transformers)
+├── utils/                      # Config resolver/manager, workspace resolver, security utils, logger, error helpers, maintenance lock
+├── vendor/                     # Vendored internal packages (lib-agent-exec, lib-git-history)
+├── vector/
+│   └── vector-search-manager/  # Semantic search (sqlite-vec + transformers)
+└── version.ts                  # Version SSoT (reads package.json)
 ```
 
 ## Key Reference Files
 
 | File                                     | Purpose                                              |
 | ---------------------------------------- | ---------------------------------------------------- |
-| `src/constants/server-instructions.ts` | Server instructions (Agent prompt and composable segments, now uses Adaptive Instruction Architecture pointing to `{prefix}://help`) |
+| `src/constants/server-instructions.ts` | Server instructions (`generateStandardInstructions()`, `generateCodeModeInstructions()`, `SERVER_INSTRUCTIONS`, and `HELP_CONTENT` map; compiled from `src/constants/instructions/markdown/*.md` into `src/constants/instructions/*.ts` via `pnpm run generate:instructions`) |
 | `test-server/code-map.md`                | File → tool/handler mapping                          |
 | `test-server/tool-reference.md`          | Categorized tool inventory                       |
 | `CONTRIBUTING.md`                        | Development setup and PR guidelines                  |
@@ -132,9 +142,9 @@ When reviewing PRs, check for:
 - [ ] Missing barrel exports in `src/types/index.ts` when new types are added
 - [ ] `eslint-disable` usage — always forbidden
 - [ ] `@ts-ignore` or `as any` — always forbidden
-- [ ] Raw exceptions from tool handlers — forbidden. Must return structured JSON with \`isError: true\` and exact classification codes
+- [ ] Raw exceptions from tool handlers — forbidden. Must return structured JSON via `formatHandlerError(error)` with exact classification codes
 - [ ] Files approaching 500 lines — flag for splitting
-- [ ] New tools missing from `src/filtering/tool-filter.ts` TOOL_GROUPS
-- [ ] Missing Zod output schemas on new tools
+- [ ] New tools missing from `src/filtering/tool-constants.ts` `TOOL_GROUPS` (re-exported by `src/filtering/tool-filter.ts`)
+- [ ] Missing Zod output schemas on new standard domain tools (except `mj_execute_code` and dummy healing tools)
 - [ ] Kebab-case violations in new filenames
 - [ ] `continue-on-error: true` in workflow files — forbidden per project standards

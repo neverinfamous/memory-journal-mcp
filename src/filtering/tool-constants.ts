@@ -9,7 +9,7 @@ import type { ToolGroup, MetaGroup } from '../types/index.js'
 /**
  * Tool group definitions mapping group names to tool names
  *
- * All 108 tools are categorized here for filtering support.
+ * All 115 tools across 11 groups are categorized here for filtering support.
  */
 export const TOOL_GROUPS = {
     core: [

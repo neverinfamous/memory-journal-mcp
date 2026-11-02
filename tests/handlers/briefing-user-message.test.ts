@@ -372,6 +372,30 @@ describe('formatUserMessage', () => {
         expect(result).toContain('**Git History**')
         expect(result).toContain('`abc1234`')
         expect(result).toContain('`def5678`')
+        expect(result).toContain('`get_commit_history`')
+        expect(result).toContain('`search_commits`')
+    })
+
+    it('should surface dirty localGitStatus in GitHub row when worktree is not clean', () => {
+        const result = formatUserMessage({
+            ...baseOpts(),
+            github: {
+                repo: 'neverinfamous/memory-journal-mcp',
+                branch: 'main',
+                ci: 'passing',
+                openIssues: 0,
+                openPRs: 0,
+                milestones: [],
+                localGitStatus: {
+                    modified: 3,
+                    untracked: 2,
+                    isClean: false,
+                    degraded: false,
+                },
+            },
+        })
+
+        expect(result).toContain('Dirty (3M, 2U)')
     })
 
     it('should omit git history when not provided', () => {
@@ -411,5 +435,6 @@ describe('formatUserMessage', () => {
         expect(result).toContain('**Graph**')
         expect(result).toContain('15 relationships')
         expect(result).toContain('evolves_from: 8')
+        expect(result).toContain('(use `visualize_relationships`)')
     })
 })

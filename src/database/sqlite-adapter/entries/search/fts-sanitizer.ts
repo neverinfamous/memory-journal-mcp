@@ -85,7 +85,7 @@ export function sanitizeFtsQuery(query: string): string {
 
                 let nextToken = rawNext.replace(/[^a-zA-Z0-9_*-]/g, '')
                 nextToken = nextToken.replace(/\*/g, '')
-                if (nextToken && !/^(AND|OR|NOT|NEAR)$/i.test(nextToken)) {
+                if (nextToken && !/^(?:AND|OR|NOT|NEAR(?:\d+)?)$/i.test(nextToken)) {
                     hasValidNext = true
                     break
                 }

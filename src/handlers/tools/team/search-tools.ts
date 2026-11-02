@@ -6,6 +6,7 @@
 
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
+import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { MAX_QUERY_LIMIT } from '../schemas.js'
 import { TEAM_DB_ERROR_RESPONSE, batchFetchAuthors } from './helpers.js'
 import {
@@ -49,8 +50,8 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                     const { query, tags, limit, cursor, sort_by, project_number, include_archived, fuzzy_match, auto_correct, workspace_id } =
                         TeamSearchSchema.parse(params)
 
-
                     const projectNumber = project_number
+                    const wsId = resolveWorkspaceId(workspace_id, projectNumber, context.config)
 
                     if (projectNumber == null) {
                         return {
@@ -76,7 +77,7 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         includeArchived: include_archived,
                         fuzzy_match,
                         auto_correct,
-                        workspaceId: workspace_id,
+                        workspaceId: wsId,
                     })
                     let entries = result.entries
 
@@ -155,6 +156,7 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
 
 
                     const projectNumber = project_number
+                    const wsId = resolveWorkspaceId(workspace_id, projectNumber, context.config)
 
                     if (projectNumber == null) {
                         return {
@@ -187,7 +189,7 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         sortBy: sort_by,
                         projectNumber: projectNumber,
                         includeArchived: include_archived,
-                        workspaceId: workspace_id,
+                        workspaceId: wsId,
                     })
                     const entries = result.entries
 
@@ -231,7 +233,8 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                     if (!teamDb) return { ...TEAM_DB_ERROR_RESPONSE }
                     const { limit, offset, project_number, workspace_id } = TeamListDeletedEntriesSchema.parse(params)
                     const projectNumber = project_number
-                    const result = teamDb.getDeletedEntries({ limit, offset, workspaceId: workspace_id })
+                    const wsId = resolveWorkspaceId(workspace_id, projectNumber, context.config)
+                    const result = teamDb.getDeletedEntries({ limit, offset, workspaceId: wsId })
                     let entries = result.entries
                     if (projectNumber != null) {
                         entries = entries.filter((e) => e.projectNumber === projectNumber)

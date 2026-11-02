@@ -49,5 +49,25 @@ describe('Workflow Prompts', () => {
 
         const result = await summary.handler({}, mockDb as any)
         expect(result.messages[0].content).toBeDefined()
+        const text = result.messages[0].content.text ?? ''
+        expect(text).toContain('## Accomplished')
+        expect(text).toContain('## Unfinished / Blocked')
+        expect(text).toContain('## Context for Next Session')
+        expect(text).toContain('## Commits')
+        expect(text).toContain('Do NOT omit any of the four required sections')
+    })
+
+    it('covers update-entry with 4-header session-summary instruction', async () => {
+        const prompts = getWorkflowPromptDefinitions()
+        const updatePrompt = prompts.find((p) => p.name === 'update-entry')!
+
+        const mockDb = {
+            getRecentEntries: vi.fn().mockReturnValue({ entries: [] }),
+        }
+
+        const result = await updatePrompt.handler({}, mockDb as any)
+        const text = result.messages[0].content.text ?? ''
+        expect(text).toContain('exact 4-header structure')
+        expect(text).toContain('## Commits')
     })
 })

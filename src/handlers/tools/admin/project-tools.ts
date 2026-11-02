@@ -11,6 +11,34 @@ import {
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
+import { assertSafeDirectoryPath } from '../../../utils/security-utils.js'
+
+const FORBIDDEN_PROJECT_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
+
+function isForbiddenProjectKey(key: string): boolean {
+    return FORBIDDEN_PROJECT_KEYS.has(key)
+}
+
+function isValidProjectPath(p: string, allowedRoots?: string[]): boolean {
+    if (!p || p.includes('\0') || p.startsWith('\\\\') || p.startsWith('//')) {
+        return false
+    }
+    const normalized = p.replace(/\\/g, '/')
+    if (normalized.split('/').includes('..')) {
+        return false
+    }
+    if (!path.isAbsolute(p)) {
+        return false
+    }
+    if (allowedRoots && allowedRoots.length > 0) {
+        try {
+            assertSafeDirectoryPath(p, allowedRoots)
+        } catch {
+            return false
+        }
+    }
+    return true
+}
 
 function getRegistryConfigPath(): string {
     return process.env['MEMORY_JOURNAL_CONFIG'] ?? path.resolve(os.homedir(), '.gemini', 'config', 'memory-journal.config.json')
@@ -35,7 +63,8 @@ function saveConfig(config: Record<string, unknown>): void {
     process.env['PROJECT_REGISTRY'] = JSON.stringify(config['projectRegistry'])
 }
 
-export function getProjectTools(_context: ToolContext): ToolDefinition[] {
+export function getProjectTools(context: ToolContext): ToolDefinition[] {
+    const allowedRoots = context.config?.allowedIoRoots
     return [
         {
             name: 'register_project',
@@ -53,14 +82,29 @@ export function getProjectTools(_context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     const parsed = RegisterProjectSchemaMcp.parse(params)
+                    if (isForbiddenProjectKey(parsed.name)) {
+                        return Promise.resolve({ success: false, error: `Invalid project name: '${parsed.name}'` })
+                    }
+                    if (!isValidProjectPath(parsed.absolute_path, allowedRoots)) {
+                        return Promise.resolve({ success: false, error: `Invalid or unsafe project path: '${parsed.absolute_path}'` })
+                    }
                     const config = loadConfig()
                     config['projectRegistry'] ??= {}
                     const registry = config['projectRegistry'] as Record<string, { path: string, project_number?: number }>
                     
-                    const projectRef = registry[parsed.name] ?? { path: parsed.absolute_path }
+                    const projectRef = Object.hasOwn(registry, parsed.name)
+                        ? (registry[parsed.name] ?? { path: parsed.absolute_path })
+                        : { path: parsed.absolute_path }
                     projectRef.path = parsed.absolute_path
-                    if (typeof parsed.project_number === 'number' && !Number.isNaN(parsed.project_number)) {
-                        projectRef.project_number = parsed.project_number
+                    const coercedNum =
+                        typeof parsed.project_number === 'number'
+                            ? parsed.project_number
+                            : typeof parsed.project_number === 'string' &&
+                                parsed.project_number.trim() !== ''
+                              ? Number(parsed.project_number)
+                              : undefined
+                    if (coercedNum !== undefined && !Number.isNaN(coercedNum)) {
+                        projectRef.project_number = coercedNum
                     }
                     registry[parsed.name] = projectRef
                     
@@ -89,11 +133,17 @@ export function getProjectTools(_context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     const parsed = UpdateProjectSchemaMcp.parse(params)
+                    if (isForbiddenProjectKey(parsed.name) || (parsed.new_name && isForbiddenProjectKey(parsed.new_name))) {
+                        return Promise.resolve({ success: false, error: `Invalid project name.` })
+                    }
+                    if (parsed.absolute_path && !isValidProjectPath(parsed.absolute_path, allowedRoots)) {
+                        return Promise.resolve({ success: false, error: `Invalid or unsafe project path: '${parsed.absolute_path}'` })
+                    }
                     const config = loadConfig()
                     config['projectRegistry'] ??= {}
                     const registry = config['projectRegistry'] as Record<string, { path: string, project_number?: number }>
                     
-                    if (!registry[parsed.name]) {
+                    if (!Object.hasOwn(registry, parsed.name) || !registry[parsed.name]) {
                         return { success: false, error: `🛠️ AUTONOMOUS HEALING: Project not found: '${parsed.name}'` }
                     }
                     
@@ -102,8 +152,15 @@ export function getProjectTools(_context: ToolContext): ToolDefinition[] {
                     if (parsed.absolute_path) {
                         project.path = parsed.absolute_path
                     }
-                    if (typeof parsed.project_number === 'number' && !Number.isNaN(parsed.project_number)) {
-                        project.project_number = parsed.project_number
+                    const coercedUpdateNum =
+                        typeof parsed.project_number === 'number'
+                            ? parsed.project_number
+                            : typeof parsed.project_number === 'string' &&
+                                parsed.project_number.trim() !== ''
+                              ? Number(parsed.project_number)
+                              : undefined
+                    if (coercedUpdateNum !== undefined && !Number.isNaN(coercedUpdateNum)) {
+                        project.project_number = coercedUpdateNum
                     }
                     
                     const targetName = parsed.new_name ?? parsed.name
@@ -138,11 +195,14 @@ export function getProjectTools(_context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     const parsed = DeleteProjectSchemaMcp.parse(params)
+                    if (isForbiddenProjectKey(parsed.name)) {
+                        return Promise.resolve({ success: false, error: `Invalid project name: '${parsed.name}'` })
+                    }
                     const config = loadConfig()
                     config['projectRegistry'] ??= {}
                     const registry = config['projectRegistry'] as Record<string, { path: string, project_number?: number }>
                     
-                    if (!registry[parsed.name]) {
+                    if (!Object.hasOwn(registry, parsed.name) || !registry[parsed.name]) {
                         return Promise.resolve({ success: false, error: `🛠️ AUTONOMOUS HEALING: Project not found: '${parsed.name}'` })
                     }
                     
@@ -213,12 +273,15 @@ export function getProjectTools(_context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     const parsed = GetProjectSchemaMcp.parse(params)
+                    if (isForbiddenProjectKey(parsed.name)) {
+                        return Promise.resolve({ success: false, error: `Invalid project name: '${parsed.name}'` })
+                    }
                     const config = loadConfig()
                     config['projectRegistry'] ??= {}
                     const registry = config['projectRegistry'] as Record<string, { path: string, project_number?: number, id?: number }>
                     
                     let foundName = parsed.name
-                    let projectInfo = registry[foundName]
+                    let projectInfo = Object.hasOwn(registry, foundName) ? registry[foundName] : undefined
                     const rawProjNum = (parsed as Record<string, unknown>)['project_number']
                     const parsedProjNum = typeof rawProjNum === 'number' ? rawProjNum : undefined
                     if (!projectInfo && (!isNaN(Number(parsed.name)) || parsedProjNum !== undefined)) {

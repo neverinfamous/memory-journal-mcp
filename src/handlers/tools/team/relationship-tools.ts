@@ -193,15 +193,31 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                         let frontier = [...entryIds]
 
                         for (let d = 0; d < depth; d++) {
+                            if (frontier.length === 0) break
                             const nextFrontier: number[] = []
-                            for (const fid of frontier) {
-                                const rels = teamDb.getRelationships(fid)
-                                for (const r of rels) {
-                                    const otherId =
-                                        r.fromEntryId === fid ? r.toEntryId : r.fromEntryId
-                                    if (!visited.has(otherId)) {
-                                        visited.add(otherId)
-                                        nextFrontier.push(otherId)
+                            if (typeof teamDb.getRelationshipsForEntries === 'function') {
+                                const relMap = teamDb.getRelationshipsForEntries(frontier)
+                                for (const fid of frontier) {
+                                    const rels = relMap.get(fid) ?? []
+                                    for (const r of rels) {
+                                        const otherId =
+                                            r.fromEntryId === fid ? r.toEntryId : r.fromEntryId
+                                        if (!visited.has(otherId)) {
+                                            visited.add(otherId)
+                                            nextFrontier.push(otherId)
+                                        }
+                                    }
+                                }
+                            } else {
+                                for (const fid of frontier) {
+                                    const rels = teamDb.getRelationships(fid)
+                                    for (const r of rels) {
+                                        const otherId =
+                                            r.fromEntryId === fid ? r.toEntryId : r.fromEntryId
+                                        if (!visited.has(otherId)) {
+                                            visited.add(otherId)
+                                            nextFrontier.push(otherId)
+                                        }
                                     }
                                 }
                             }
@@ -231,13 +247,31 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                         }
                     }
 
-                    // Build graph
+                    // Build graph using batch entry & relationship lookups when available
                     const nodes = new Map<number, string>()
                     const edges: { from: number; to: number; type: string }[] = []
                     const seenEdges = new Set<string>()
+                    const entryIdSet = new Set<number>(entryIds)
+                    const batchEntries =
+                        typeof teamDb.getEntriesByIds === 'function'
+                            ? teamDb.getEntriesByIds(entryIds)
+                            : null
+                    const batchRels =
+                        typeof teamDb.getRelationshipsForEntries === 'function'
+                            ? teamDb.getRelationshipsForEntries(entryIds)
+                            : null
 
                     for (const eid of entryIds) {
-                        const entry = teamDb.getEntryById(eid, wsId)
+                        const rawEntry = batchEntries
+                            ? batchEntries.get(eid) ?? null
+                            : teamDb.getEntryById(eid, wsId)
+                        const entry =
+                            rawEntry &&
+                            (wsId === '*' ||
+                                rawEntry.workspaceId === undefined ||
+                                rawEntry.workspaceId === wsId)
+                                ? rawEntry
+                                : null
                         if (entry) {
                             let label = entry.content.substring(0, 40).replace(/\n/g, ' ')
                             if (entry.content.length > 40) label += '...'
@@ -245,13 +279,15 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                             nodes.set(eid, label)
                         }
 
-                        const rels = teamDb.getRelationships(eid)
+                        const rels = batchRels
+                            ? batchRels.get(eid) ?? []
+                            : teamDb.getRelationships(eid)
                         for (const r of rels) {
                             const edgeKey = `${String(r.fromEntryId)}-${String(r.toEntryId)}`
                             if (
                                 !seenEdges.has(edgeKey) &&
-                                entryIds.includes(r.fromEntryId) &&
-                                entryIds.includes(r.toEntryId)
+                                entryIdSet.has(r.fromEntryId) &&
+                                entryIdSet.has(r.toEntryId)
                             ) {
                                 seenEdges.add(edgeKey)
                                 edges.push({

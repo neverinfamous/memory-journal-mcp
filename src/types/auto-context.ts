@@ -9,7 +9,7 @@ import { logger } from '../utils/logger.js'
  * Session Commit Context Schema
  */
 export const SessionCommitContextSchema = z.object({
-    commits: z.array(z.string()),
+    commits: z.array(z.string().regex(/^[0-9a-fA-F]{7,40}$/)),
     branch: z.string().optional(),
     pr: z.number().optional(),
     repo: z.string().optional(),

@@ -6,25 +6,33 @@ services:
       - ./data:/app/data:rw,noexec,nosuid,nodev
     environment:
       - DB_PATH=/app/data/memory_journal.db
+      # - TEST_DB_PATH=
+      - MJ_DB_ENCRYPTION_KEY=
       - DB_ENCRYPTION_KEY=
       - TEAM_DB_PATH=
+      # - TEST_TEAM_DB_PATH=
       - ADDITIONAL_TEAM_DBS=
       - TEAM_AUTHOR=
       - TEAM_DEFAULT_ROLE=
       - TEAM_ADMIN=
       - GITHUB_TOKEN=
-      - GITHUB_HOST=
       - DEFAULT_PROJECT_NUMBER=
       - PROJECT_REGISTRY=
+      - MCP_WORKSPACE_ID=
+      # Tool filtering naming conventions: MEMORY_JOURNAL_MCP_TOOL_FILTER (env var), "toolFilter" (memory-journal.config.yaml — supports .yaml/.yml/.json), --tool-filter (CLI flag), tool_filter (update_configuration MCP tool). Note: TOOL_FILTER is a display-only fallback and does not activate startup filtering.
       - MEMORY_JOURNAL_MCP_TOOL_FILTER=
       - CODE_MODE_MAX_RESULT_SIZE=
       - CODEMODE_INTERNAL_FULL_ACCESS=
       - ALLOWED_IO_ROOTS=/app/data
-      - NODE_ENV=
+      - MCP_AGENT_HEALING=true
+      # - DISABLE_ISSUE_LOGGING=false
+      - MAX_TOOL_INPUT_ELEMENTS=25000
+      - NODE_ENV=production
       - DEBUG=
       - MEMORY_JOURNAL_CONFIG=
-      - MCP_HOST=
+      - MCP_HOST=0.0.0.0
       - PORT=
+      - TRANSPORT=
       - STATELESS=
       - MCP_AUTH_TOKEN=
       - MCP_AUTH_SCOPES=
@@ -34,7 +42,7 @@ services:
       - LOG_LEVEL=
       - TRUST_PROXY=
       - PUBLIC_ORIGIN=
-      - DEFAULT_WORKSPACE_ID=
+      - DEFAULT_WORKSPACE_ID=default
       - OAUTH_ENABLED=
       - OAUTH_ISSUER=
       - OAUTH_AUDIENCE=
@@ -53,6 +61,9 @@ services:
       - BRIEFING_WORKFLOW_COUNT=
       - BRIEFING_WORKFLOW_STATUS=
       - BRIEFING_COPILOT_REVIEWS=
+      - STALENESS_ACTIVE_HOURS=24
+      - STALENESS_RECENT_DAYS=7
+      - STALENESS_STALE_DAYS=30
       - RULES_FILE_PATH=
       - SKILLS_DIR_PATH=
       - MEMORY_JOURNAL_WORKFLOW_SUMMARY=
@@ -63,6 +74,8 @@ services:
       - PERSIST_METRICS=
       - METRICS_PATH=
       - METRICS_EXPORT=
+      - MJ_METRICS_PORT=
+      - MJ_METRICS_HOST=127.0.0.1
       - BACKUP_INTERVAL=
       - KEEP_BACKUPS=
       - VACUUM_INTERVAL=
@@ -72,6 +85,7 @@ services:
       - REPORT_WEBHOOK_URL=
       - REPORT_WEBHOOK_AUTH=
       - REPORT_CONTENT_TYPE=
+      - ALLOW_INSECURE_WEBHOOK_HTTP=
       - EMBEDDING_MODEL=
       - AUTO_REBUILD_INDEX=
       - AUTO_PRUNE_INTERVAL_MINUTES=
@@ -102,25 +116,33 @@ services:
       - ./data:/app/data:rw,noexec,nosuid,nodev
     environment:
       - DB_PATH=/app/data/memory_journal.db
+      # - TEST_DB_PATH=
+      - MJ_DB_ENCRYPTION_KEY=
       - DB_ENCRYPTION_KEY=
       - TEAM_DB_PATH=
+      # - TEST_TEAM_DB_PATH=
       - ADDITIONAL_TEAM_DBS=
       - TEAM_AUTHOR=
       - TEAM_DEFAULT_ROLE=
       - TEAM_ADMIN=
       - GITHUB_TOKEN=
-      - GITHUB_HOST=
       - DEFAULT_PROJECT_NUMBER=
       - PROJECT_REGISTRY=
+      - MCP_WORKSPACE_ID=
+      # Tool filtering naming conventions: MEMORY_JOURNAL_MCP_TOOL_FILTER (env var), "toolFilter" (memory-journal.config.yaml — supports .yaml/.yml/.json), --tool-filter (CLI flag), tool_filter (update_configuration MCP tool). Note: TOOL_FILTER is a display-only fallback and does not activate startup filtering.
       - MEMORY_JOURNAL_MCP_TOOL_FILTER=
       - CODE_MODE_MAX_RESULT_SIZE=
       - CODEMODE_INTERNAL_FULL_ACCESS=
       - ALLOWED_IO_ROOTS=/app/data
-      - NODE_ENV=
+      - MCP_AGENT_HEALING=true
+      # - DISABLE_ISSUE_LOGGING=false
+      - MAX_TOOL_INPUT_ELEMENTS=25000
+      - NODE_ENV=production
       - DEBUG=
       - MEMORY_JOURNAL_CONFIG=
       - MCP_HOST=0.0.0.0
       - PORT=3000
+      - TRANSPORT=http
       - STATELESS=
       - MCP_AUTH_TOKEN=${MCP_AUTH_TOKEN:?MCP_AUTH_TOKEN is required for HTTP transport in production}
       - MCP_AUTH_SCOPES=
@@ -130,7 +152,7 @@ services:
       - LOG_LEVEL=
       - TRUST_PROXY=
       - PUBLIC_ORIGIN=
-      - DEFAULT_WORKSPACE_ID=
+      - DEFAULT_WORKSPACE_ID=default
       - OAUTH_ENABLED=
       - OAUTH_ISSUER=
       - OAUTH_AUDIENCE=
@@ -149,6 +171,9 @@ services:
       - BRIEFING_WORKFLOW_COUNT=
       - BRIEFING_WORKFLOW_STATUS=
       - BRIEFING_COPILOT_REVIEWS=
+      - STALENESS_ACTIVE_HOURS=24
+      - STALENESS_RECENT_DAYS=7
+      - STALENESS_STALE_DAYS=30
       - RULES_FILE_PATH=
       - SKILLS_DIR_PATH=
       - MEMORY_JOURNAL_WORKFLOW_SUMMARY=
@@ -159,6 +184,8 @@ services:
       - PERSIST_METRICS=
       - METRICS_PATH=
       - METRICS_EXPORT=
+      - MJ_METRICS_PORT=
+      - MJ_METRICS_HOST=127.0.0.1
       - BACKUP_INTERVAL=
       - KEEP_BACKUPS=
       - VACUUM_INTERVAL=
@@ -168,6 +195,7 @@ services:
       - REPORT_WEBHOOK_URL=
       - REPORT_WEBHOOK_AUTH=
       - REPORT_CONTENT_TYPE=
+      - ALLOW_INSECURE_WEBHOOK_HTTP=
       - EMBEDDING_MODEL=
       - AUTO_REBUILD_INDEX=
       - AUTO_PRUNE_INTERVAL_MINUTES=

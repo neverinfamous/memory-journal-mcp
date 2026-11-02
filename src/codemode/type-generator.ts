@@ -26,6 +26,17 @@ export function getZodTypeString(schema: unknown): string {
         return getZodTypeString(schema.unwrap())
     }
 
+    if (schema instanceof z.ZodPipe) {
+        if (schema.out instanceof z.ZodTransform) {
+            return getZodTypeString(schema.in)
+        }
+        return getZodTypeString(schema.out)
+    }
+
+    if (schema instanceof z.ZodReadonly || schema instanceof z.ZodCatch) {
+        return getZodTypeString(schema.unwrap())
+    }
+
     if (schema instanceof z.ZodUnion) {
         return schema.options.map((o: unknown) => getZodTypeString(o)).join(' | ')
     }
@@ -75,7 +86,7 @@ export function generateTypescriptDeclarations(tools: ToolDefinition[]): string 
 
             // Add a brief comment if description exists
             if (tool.description) {
-                const comment = tool.description.split('\\n')[0]
+                const comment = tool.description.split('\n')[0]
                 dts += `    /** ${comment} */\n`
             }
             dts += `    function ${methodName}(args?: ${paramType}): Promise<unknown>;\n`

@@ -216,7 +216,7 @@ export const SemanticSearchSchemaMcp = z.preprocess(
     (val: unknown) => healAgentHallucinations(val),
     z.object({
     query: z.string().optional().describe('The search query string (use `query`, not `q`)'),
-    entry_id: relaxedNumber().optional()
+    entry_id: relaxedNumber()
         .optional()
         .describe(
             'Find entries related to this entry ID (uses existing embedding, skips re-embedding)'

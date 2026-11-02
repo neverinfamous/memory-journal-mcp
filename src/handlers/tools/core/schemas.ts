@@ -1,6 +1,16 @@
 import { z } from 'zod'
 import { ErrorFieldsMixin } from '../error-fields-mixin.js'
-import { ENTRY_TYPES, SIGNIFICANCE_TYPES, EntryOutputSchema, relaxedNumber, healAgentHallucinations, StrictProjectNumberSchema } from '../schemas.js'
+import {
+    ENTRY_TYPES,
+    SIGNIFICANCE_TYPES,
+    EntryOutputSchema,
+    RelationshipOutputSchema,
+    ImportanceBreakdownSchema,
+    relaxedNumber,
+    healAgentHallucinations,
+    StrictProjectNumberSchema,
+    preprocessRelationshipItem,
+} from '../schemas.js'
 
 // ============================================================================
 // Shared Constants
@@ -41,21 +51,30 @@ export const CreateEntrySchema = z.preprocess(
         share_with_team: z.boolean().optional().default(false),
         auto_context: z.string().optional(),
         session_id: z.string().optional(),
-        relationships: z.array(z.object({
-            targetId: z.number(),
-            relationType: z.enum([
-                'evolves_from',
-                'references',
-                'implements',
-                'clarifies',
-                'response_to',
-                'blocked_by',
-                'resolved',
-                'caused',
-                'relates_to',
-                'depends_on'
-            ]).optional().default('references')
-        })).optional(),
+        relationships: z.array(
+            z.preprocess(
+                preprocessRelationshipItem,
+                z.object({
+                    targetId: z.number(),
+                    relationType: z
+                        .enum([
+                            'evolves_from',
+                            'references',
+                            'implements',
+                            'clarifies',
+                            'response_to',
+                            'blocked_by',
+                            'resolved',
+                            'resolves',
+                            'caused',
+                            'relates_to',
+                            'depends_on',
+                        ])
+                        .optional()
+                        .default('references'),
+                })
+            )
+        ).optional(),
     }).strict().superRefine((data, ctx) => {
         if (data.tags?.includes('session-summary')) {
             const c = data.content ?? '';
@@ -148,10 +167,15 @@ export const CreateEntrySchemaMcp = z.preprocess(
         share_with_team: z.boolean().optional().default(false).describe('If true, saves a copy of this entry to the Team database (if configured) using your team alias'),
         auto_context: z.string().optional().describe('JSON string with structured metadata. Used for session-commits context.'),
         session_id: z.string().optional().describe('Agent session ID for thread isolation (usually conversation ID).'),
-        relationships: z.array(z.object({
-            targetId: relaxedNumber(),
-            relationType: z.string().optional().default('references')
-        })).optional().describe('Optional array of links to previous entries/flags to establish relationships immediately upon creation. Types: "resolves", "depends_on", "implements", "relates_to", "references", "evolves_from"'),
+        relationships: z.array(
+            z.preprocess(
+                preprocessRelationshipItem,
+                z.object({
+                    targetId: relaxedNumber(),
+                    relationType: z.string().optional().default('references'),
+                })
+            )
+        ).optional().describe('Optional array of links to previous entries/flags to establish relationships immediately upon creation. Types: "resolves", "depends_on", "implements", "relates_to", "references", "evolves_from"'),
     }).strict()
 )
 
@@ -184,9 +208,9 @@ export const EntryByIdOutputSchema = z
     .object({
         success: z.boolean().optional(),
         entry: EntryOutputSchema.optional(),
-        relationships: z.any().optional(),
+        relationships: z.array(RelationshipOutputSchema).optional(),
         importance: z.number().optional(),
-        importanceBreakdown: z.any().optional(),
+        importanceBreakdown: ImportanceBreakdownSchema.optional(),
         error: z.string().optional(),
     })
     .extend(ErrorFieldsMixin.shape)
@@ -207,7 +231,7 @@ export const GetRecentEntriesSchema = z.object({
 })
 
 export const GetRecentEntriesSchemaMcp = z.object({
-    limit: relaxedNumber().optional()
+    limit: relaxedNumber()
         .optional()
         .default(10)
         .describe(`Maximum entries to return (max ${String(MAX_SEARCH_LIMIT)})`),

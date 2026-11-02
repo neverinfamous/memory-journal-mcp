@@ -14,12 +14,15 @@ export interface DynamicConfig {
 
 export class ConfigManager extends EventEmitter {
     private config: DynamicConfig
+    private readonly initialCodemodeFullAccess: boolean
     private configFilePath?: string | undefined
     private watcher?: fs.FSWatcher
+    private isWriting = false
 
     constructor(initialConfig: DynamicConfig, configFilePath?: string) {
         super()
         this.config = { ...initialConfig }
+        this.initialCodemodeFullAccess = Boolean(initialConfig.codemodeInternalFullAccess)
         this.configFilePath = configFilePath
 
         if (this.configFilePath && fs.existsSync(this.configFilePath)) {
@@ -50,6 +53,7 @@ export class ConfigManager extends EventEmitter {
 
     private persistToFile(): void {
         if (!this.configFilePath) return
+        this.isWriting = true
         try {
             const content = fs.readFileSync(this.configFilePath, 'utf-8')
             let parsed: Record<string, unknown> = {}
@@ -89,6 +93,8 @@ export class ConfigManager extends EventEmitter {
             }
         } catch (e: unknown) {
             logger.error('Failed to persist configuration to file', { module: 'ConfigManager', error: e instanceof Error ? e.message : String(e) })
+        } finally {
+            this.isWriting = false
         }
     }
 
@@ -96,11 +102,10 @@ export class ConfigManager extends EventEmitter {
         if (!this.configFilePath) return
         
         let debounceTimer: NodeJS.Timeout
-        const isWriting = false
 
         try {
             this.watcher = fs.watch(this.configFilePath, (eventType) => {
-                if (eventType === 'change' && !isWriting) {
+                if (eventType === 'change' && !this.isWriting) {
                     clearTimeout(debounceTimer)
                     debounceTimer = setTimeout(() => {
                         try {
@@ -110,6 +115,13 @@ export class ConfigManager extends EventEmitter {
                         }
                     }, 500)
                 }
+            })
+            this.watcher.on('error', (err: unknown) => {
+                logger.warning('Config file watcher error', {
+                    module: 'ConfigManager',
+                    path: this.configFilePath,
+                    error: err instanceof Error ? err.message : String(err),
+                })
             })
             logger.info('Watching configuration file for changes', { module: 'ConfigManager', path: this.configFilePath })
         } catch (error: unknown) {
@@ -134,7 +146,10 @@ export class ConfigManager extends EventEmitter {
                 updates.rawToolFilter = typeof parsed['toolFilter'] === 'string' ? parsed['toolFilter'] : undefined
             }
             if ('codemodeInternalFullAccess' in parsed) {
-                updates.codemodeInternalFullAccess = typeof parsed['codemodeInternalFullAccess'] === 'boolean' ? parsed['codemodeInternalFullAccess'] : undefined
+                const requested = typeof parsed['codemodeInternalFullAccess'] === 'boolean' ? parsed['codemodeInternalFullAccess'] : undefined
+                if (requested === false || (requested === true && this.initialCodemodeFullAccess)) {
+                    updates.codemodeInternalFullAccess = requested
+                }
             }
 
             // Update briefing config if present

@@ -97,6 +97,7 @@ describe('Cross-Team Search Handler', () => {
                 entryType: undefined,
                 startDate: undefined,
                 endDate: undefined,
+                sortBy: 'timestamp',
                 fuzzy_match: false,
                 includeArchived: false,
                 workspaceId: 'default',

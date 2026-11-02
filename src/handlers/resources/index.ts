@@ -31,6 +31,28 @@ import type { InternalResourceDef, ResourceResult } from './shared.js'
 import { ResourceNotFoundError } from '../../types/errors.js'
 import { getAuditResourceDef } from '../../audit/index.js'
 
+const templateRegexCache = new Map<string, RegExp>()
+
+function getTemplateRegex(uriTemplate: string): RegExp {
+    let regex = templateRegexCache.get(uriTemplate)
+    if (regex === undefined) {
+        const escapedUri = uriTemplate.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        const pattern = escapedUri.replace(
+            /\\{([^}]+)\\}/g,
+            (_match: string, paramName: string) => {
+                const cleanParam = paramName.replace(/^\\?\+/, '')
+                return cleanParam === 'repo' ? '(.+)' : '([^/]+)'
+            }
+        )
+        regex = new RegExp(`^${pattern}$`)
+        templateRegexCache.set(uriTemplate, regex)
+    }
+    return regex
+}
+
+let cachedStaticResources: InternalResourceDef[] | null = null
+const runtimeResourcesCache = new WeakMap<ServerRuntime, InternalResourceDef[]>()
+
 /**
  * Get all resource definitions for MCP list
  */
@@ -133,17 +155,7 @@ export async function readResource(
     // Check for template matches (also use base URI)
     for (const resource of resources) {
         if (resource.uri.includes('{')) {
-            const escapedUri = resource.uri.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-            // Use (.+) for {+repo} to allow slashes (e.g., owner/repo), otherwise use ([^/]+)
-            const pattern = escapedUri.replace(
-                /\\{([^}]+)\\}/g,
-                (_match: string, paramName: string) => {
-                    const cleanParam = paramName.replace(/^\\?\+/, '')
-                    return cleanParam === 'repo' ? '(.+)' : '([^/]+)'
-                }
-            )
-            const regex = new RegExp(`^${pattern}$`)
-            if (regex.test(baseUri)) {
+            if (getTemplateRegex(resource.uri).test(baseUri)) {
                 // Authorization Hook: Enforce scope if auth context exists
                 enforceAccessBoundary(
                     baseUri,
@@ -191,15 +203,7 @@ function generateResourceAliases(resources: InternalResourceDef[]): InternalReso
         const canonical = resources.find((r) => {
             if (r.uri === canonicalUri) return true
             if (r.uri.includes('{')) {
-                const escapedUri = r.uri.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-                const pattern = escapedUri.replace(
-                    /\\{([^}]+)\\}/g,
-                    (_match: string, paramName: string) => {
-                        const cleanParam = paramName.replace(/^\\?\+/, '')
-                        return cleanParam === 'repo' ? '(.+)' : '([^/]+)'
-                    }
-                )
-                return new RegExp(`^${pattern}$`).test(canonicalUri)
+                return getTemplateRegex(r.uri).test(canonicalUri)
             }
             return false
         })
@@ -220,6 +224,13 @@ function generateResourceAliases(resources: InternalResourceDef[]): InternalReso
  * Get all resource definitions by composing sub-module definitions
  */
 function getAllResourceDefinitions(runtime?: ServerRuntime): InternalResourceDef[] {
+    if (runtime !== undefined) {
+        const cached = runtimeResourcesCache.get(runtime)
+        if (cached !== undefined) return cached
+    } else if (cachedStaticResources !== null) {
+        return cachedStaticResources
+    }
+
     const coreResources = [
         ...getCoreResourceDefinitions(),
         ...getDynamicGraphResourceDefinitions(),
@@ -235,7 +246,13 @@ function getAllResourceDefinitions(runtime?: ServerRuntime): InternalResourceDef
         // Audit resource — bound to the runtime's instance audit logger
         getAuditResourceDef(() => runtime?.auditLogger ?? null),
     ]
-    return [...coreResources, ...generateResourceAliases(coreResources)]
+    const all = [...coreResources, ...generateResourceAliases(coreResources)]
+    if (runtime !== undefined) {
+        runtimeResourcesCache.set(runtime, all)
+    } else {
+        cachedStaticResources = all
+    }
+    return all
 }
 
 /**
@@ -255,16 +272,7 @@ export function validateResourceSubscription(uri: string, runtime?: ServerRuntim
     // Check for template matches
     for (const resource of resources) {
         if (resource.uri.includes('{')) {
-            const escapedUri = resource.uri.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-            const pattern = escapedUri.replace(
-                /\\{([^}]+)\\}/g,
-                (_match: string, paramName: string) => {
-                    const cleanParam = paramName.replace(/^\\?\+/, '')
-                    return cleanParam === 'repo' ? '(.+)' : '([^/]+)'
-                }
-            )
-            const regex = new RegExp(`^${pattern}$`)
-            if (regex.test(baseUri)) {
+            if (getTemplateRegex(resource.uri).test(baseUri)) {
                 enforceAccessBoundary(
                     baseUri,
                     'resource',

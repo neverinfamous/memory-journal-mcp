@@ -20,18 +20,19 @@ The server uses the native **better-sqlite3** driver with **sqlite-vec** for vec
 
 ## 🔐 **Input Validation**
 
-### **Content Limits**
+### **Content & Boundary Limits**
 
 - **Journal entries**: 50,000 characters maximum
-- **Tags**: 100 characters maximum
-- **Entry types**: 50 characters maximum
-- **Significance types**: 50 characters maximum
+- **Tags**: Lowercased and normalized via slug regex (`[^a-z0-9:@]+` → `-`, stripping leading/trailing hyphens and filtering out empty post-normalization tags) and bound via parameterized queries at the SQLite adapter boundary
+- **Entry & significance types**: Enforced against strict `ENTRY_TYPES` and `SIGNIFICANCE_TYPES` enum allowlists
+- **Timestamps**: Validated and normalized to ISO 8601 (`YYYY-MM-DDTHH:MM:SS.sssZ`) in `validateEntryInput()`
+- **Query & batch bounds**: `MAX_QUERY_LIMIT = 500` per query and `MAX_BATCH_SIZE = 50` per bulk operation
 - **HTTP request body**: 1MB maximum (prevents memory exhaustion)
+- **Tool input elements**: 25,000 array/object elements maximum per tool call (configurable via `MAX_TOOL_INPUT_ELEMENTS` / `--max-tool-input-elements`)
 
 ### **Character Handling**
 
-Tags are stored as-is via parameterized queries. Special characters in tags
-are safely handled by the database layer and do not pose injection risks.
+- **Tags**: ASCII alphanumeric, colons, and `@` symbols preserved; all other character sequences collapsed to hyphens and stored via parameterized SQL queries (safe from injection)
 
 ### **SQL Injection Prevention**
 
@@ -45,9 +46,21 @@ are safely handled by the database layer and do not pose injection risks.
 ### **Path Traversal & Filesystem Boundaries**
 
 - ✅ **Explicit Filesystem Boundaries** — Filesystem access MUST be explicitly granted via `ALLOWED_IO_ROOTS`. The server operates in a **fail-closed** mode (`ALLOWED_IO_ROOTS=[]`) by default if not explicitly configured, preventing all filesystem interaction.
+- ✅ **URL-Encoded, Null-Byte & Symlink Rejection** — `assertSafeDirectoryPath` (`src/utils/security-utils.ts`) rejects URL-encoded traversal sequences (`%2e`, `%2f`, `%5c`, `%00`) and raw null bytes before decoding, resolves ancestor symlinks iteratively via `fs.realpathSync()`, and validates containment using `path.relative()`. `assertSafeFilePath` (`src/utils/security-utils.ts`) additionally rejects file-level symbolic links via `fs.lstatSync(filePath).isSymbolicLink()`.
 - ✅ **Implicit Authority Disabled** — The server no longer derives ambient filesystem authority from the location of database files.
-- ✅ **Backup filenames validated** - rejects `/`, `\`, `..` in paths
+- ✅ **Backup & Restore Boundaries** — `backup_journal` and `restore_backup` enforce `path.relative()` containment against the backup directory and reject symlinks or traversal characters (`/`, `\`, `..`).
+- ✅ **Agent-Healing Filesystem Fallbacks** — When `--no-agent-healing` is not set, read-only fallback tools (`view_file`, `list_dir`, `grep_search`) enforce `ALLOWED_IO_ROOTS` (fail-closed `[]` when unconfigured; `list_dir` defaults its target directory argument to `process.cwd()`), reject symlink file targets (`view_file`, single-file `grep_search`), resolve directory realpaths (`list_dir`, directory `grep_search`), skip symbolic links during recursive `grep_search` traversal, cap file reads at 2MB, and require `admin` scope under OAuth 2.1.
 - ✅ **Typed security errors** with consistent error codes
+
+### **Multi-Tenant Workspace Isolation (`workspace_id`)**
+
+- ✅ **End-to-End Tenant Scoping** — All personal and team entry reads, updates, soft-deletes, restores, FTS5 searches, and vector semantic searches (`semantic_search`, `team_semantic_search`) enforce `workspace_id` isolation.
+- ✅ **External Wildcard Rejection** — The cross-workspace sentinel (`workspace_id: '*'`) is reserved strictly for internal maintenance/read workflows; external tool callers passing `workspace_id: '*'` on write or mutation paths are rejected or automatically scoped to their resolved workspace.
+- ✅ **Execution-Layer `--tool-filter` Parity** — `--tool-filter` (including `readonly`, `-group`, and `-tool`) is enforced at execution time across `tools/call`, Code Mode (`mj.*`), and agent-healing fallbacks unless `--codemode-internal-full-access` was explicitly granted at server startup (which cannot be escalated via config file hot-reload).
+
+### **Prompt-Injection Defense (`<untrusted_remote_content>`)**
+
+- ✅ **Untrusted Boundary Tagging** — External inputs surfaced in MCP Resources and Workflow Prompts (Git commit subjects, GitHub issue/PR/milestone titles, workflow run names, and journal entry content) are wrapped in `<untrusted_remote_content>` tags with `&`, `<`, and `>` entity-escaped to prevent tag-breakout and indirect prompt injection.
 
 ## 🌐 **HTTP Transport Security**
 
@@ -55,17 +68,17 @@ When running in HTTP mode (`--transport http`), the following security measures 
 
 ### **CORS Configuration**
 
-- ✅ **Configurable multiple origins** via comma-separated `--cors-origin` flag or `MCP_CORS_ORIGIN` environment variable
+- ✅ **Configurable multiple origins** via comma-separated `--cors-origin` flag or `CORS_ORIGIN` (fallback: `MCP_CORS_ORIGIN`) environment variable
 - ✅ **Exact-match verification** (no wildcard matching for custom domains)
 - 🔒 **Default: None** (no external origins allowed by default). You MUST explicitly configure CORS for browsers.
 - 🔒 **Required**: Set specific origins for production deployments, or wildcard (`*`) will only be accepted if HTTP Authentication is enabled.
 
 ```bash
 # Restrict CORS to specific origins
-memory-journal-mcp --transport http --cors-origin "http://localhost:3000,https://my-app.com"
+memory-journal-mcp --transport http --allowed-io-roots /path/to/projects --cors-origin "http://localhost:3000,https://my-app.com"
 
 # Or via environment variable
-export MCP_CORS_ORIGIN="http://localhost:3000,https://my-app.com"
+export CORS_ORIGIN="http://localhost:3000,https://my-app.com"
 ```
 
 ### **Security Headers & Protections**
@@ -81,21 +94,23 @@ export MCP_CORS_ORIGIN="http://localhost:3000,https://my-app.com"
 
 ### **Rate Limiting & Timeouts**
 
-- ✅ **Built-in Rate Limiting** — 100 requests/minute per IP (sliding window with `Retry-After` header)
+- **Rate limiting**: 100 requests/minute per authenticated subject or fallback client IP (60-second fixed window with `Retry-After` header and 10,000-key LRU eviction)
 - ✅ **HTTP Timeouts** — Request timeout (120s), keep-alive timeout (65s), headers timeout (66s)
 
 ### **Session Management (Stateful Mode)**
 
 - ✅ **UUID-based session IDs** (cryptographically random)
+- ✅ **Principal-bound sessions** — Authenticated sessions bind `mcp-session-id` to the caller's principal (OAuth `sub`/`email`/`client_id` or SHA-256 hash of static Bearer token + client IP); cross-principal session reuse is rejected with `403 Forbidden`, and unknown or uninitialized `sessionId` / `mcp-session-id` requests return `400 Bad Request` (`Session not found`)
+- ✅ **Active session cap** — Enforces a hard limit of `100` concurrent active sessions (`503 Service Unavailable` when full) and rejects duplicate SSE stream attachments on the same session (`409 Conflict`)
 - ✅ **Idle timeout** — Sessions inactive for 30 minutes are automatically expired
-- ✅ **Absolute TTL** — Sessions have a hard 24-hour maximum lifetime regardless of activity, forcing periodic re-authentication
-- ✅ **In-flight protection** — Sessions with active requests are skipped by the sweep timer to prevent mid-request disconnection
-- ✅ **5-minute sweep interval** — periodic cleanup of abandoned sessions
+- ✅ **1-minute sweep interval** — periodic cleanup of expired sessions and subscription listeners
 - ✅ **Explicit session termination** via `DELETE /mcp`
 
-### **Request Size Limits**
+### **Request Size Limits & Metrics Isolation**
 
-- ✅ **1MB body limit** on JSON requests (prevents memory exhaustion DoS)
+- ✅ **1MB body limit** on JSON and chunked stream requests (prevents memory exhaustion DoS)
+- ✅ **Health & Metrics endpoint protection** — `/health` is unauthenticated; on the HTTP transport, `/metrics` is protected under OAuth 2.1 and unauthenticated under static Bearer auth, while the standalone Prometheus server (`METRICS_EXPORT=prometheus`) isolates `/metrics` on `MJ_METRICS_HOST` (default `127.0.0.1`) and `MJ_METRICS_PORT` (default `9465`)
+- ✅ **Outbound Webhook SSRF Protection** — Scheduled digest webhooks (`--report-webhook-url` / `REPORT_WEBHOOK_URL`) require `https:` (unless `ALLOW_INSECURE_WEBHOOK_HTTP=true` is explicitly set for local testing), resolve DNS prior to dispatch, block loopback/private/link-local/cloud-metadata IP ranges, and disable HTTP redirects (`redirect: 'error'`)
 
 ## 🔐 **OAuth 2.1 Authentication**
 
@@ -106,22 +121,26 @@ For production HTTP deployments, Memory Journal supports **OAuth 2.1 authenticat
 | Protected Resource Metadata | ✅     | RFC 9728 `/.well-known/oauth-protected-resource` |
 | Auth Server Discovery       | ✅     | RFC 8414 metadata discovery with caching         |
 | Token Validation            | ✅     | JWT validation with JWKS support (via `jose`)    |
-| Scope Enforcement           | ✅     | Granular `read`, `write`, `admin` scopes         |
+| Scope Enforcement           | ✅     | Granular `read`, `write`, `team`, `audit`, `admin`, `full` scopes |
 | HTTP Middleware             | ✅     | Bearer token extraction and validation           |
 
 ### **Supported Scopes**
 
-| Scope   | Tool Groups                                       | Description                |
-| ------- | ------------------------------------------------- | -------------------------- |
-| `read`  | core, search, analytics, relationships, io, git   | Read-only operations       |
-| `write` | github, team (+ all read groups)                  | Read + write operations    |
-| `admin` | admin, backup, codemode (+ all write/read groups) | Full administrative access |
+| Scope   | Tool Groups                                                                | Description                            |
+| ------- | -------------------------------------------------------------------------- | -------------------------------------- |
+| `read`  | `core (read-only), search, analytics, relationships (visualize_relationships), io (export_entries), git`                 | Read-only operations                   |
+| `write` | `github (+ all read groups and create_entry / create_entry_minimal / link_entries / mark_anchors_stale / import_external / import_markdown / export_markdown)` | Read + write operations                |
+| `team`  | `team (dedicated team collaboration scope)`                                                                | Team database operations               |
+| `audit` | `memory://audit resource access (included in admin/full; search_audit_log requires admin or full)`         | Operational telemetry resource access  |
+| `admin` | `admin, backup, codemode (+ all read/write/team/audit groups)`             | Full administrative access             |
+| `full`  | `Unrestricted access to all operations`                                    | Unrestricted access to all tool groups |
 
 ### **Enabling OAuth**
 
 ```bash
 # CLI flags
 memory-journal-mcp --transport http --port 3000 \
+  --allowed-io-roots /path/to/projects \
   --oauth-enabled \
   --oauth-issuer https://auth.example.com/realms/mcp \
   --oauth-audience memory-journal-mcp \
@@ -146,8 +165,8 @@ export OAUTH_JWKS_URI=https://auth.example.com/realms/mcp/protocol/openid-connec
 
 When OAuth is **not enabled**, authentication falls back to:
 
-1. **Simple token auth** — if `MCP_AUTH_TOKEN` env var is set, requests must include `Authorization: Bearer <token>` matching the configured value
-2. **No auth** — if no auth mechanism is configured, all requests are accepted (suitable for local/development use)
+1. **Simple token auth** — if `MCP_AUTH_TOKEN` env var is set, requests must include `Authorization: Bearer <token>` matching the configured value, with granted scopes controlled by `MCP_AUTH_SCOPES` (default: `read`; set `export MCP_AUTH_SCOPES="full"` for unrestricted access)
+2. **No auth (loopback only)** — if no auth mechanism is configured and the server is bound to localhost without wildcard CORS, requests are accepted for local development. Binding to non-localhost interfaces (e.g., `0.0.0.0`) or enabling wildcard CORS without authentication throws a fatal startup error.
 
 ## 🐙 **GitHub Token Security**
 
@@ -163,6 +182,7 @@ When OAuth is **not enabled**, authentication falls back to:
 ```bash
 # Required for Authentication (Must not be the placeholder token)
 MCP_AUTH_TOKEN="your-secure-token-here"
+MCP_AUTH_SCOPES="full"          # Granted scopes for static Bearer auth (default: read)
 
 # Required for Filesystem Tools (Export, Backup)
 ALLOWED_IO_ROOTS="/path/to/allow1,/path/to/allow2"
@@ -171,10 +191,9 @@ ALLOWED_IO_ROOTS="/path/to/allow1,/path/to/allow2"
 GITHUB_TOKEN=ghp_...            # GitHub personal access token
 
 # Optional
-GITHUB_ORG_TOKEN=ghp_...        # For organization projects
-PROJECT_REGISTRY='{"my-repo":{"path":"/path/to/repo","project_number":1}}'  # Multi-project routing (Tip: Use `npx memory-journal-mcp project create`)
+PROJECT_REGISTRY='{"my-repo":{"path":"/path/to/repo","project_number":1}}'  # Multi-project routing (Tip: Use `npx memory-journal-mcp project create <name> --path <path>`)
 DEFAULT_PROJECT_NUMBER=1         # Default project for issue assignment
-MCP_CORS_ORIGIN=                 # CORS origin (default: none)
+CORS_ORIGIN=                     # CORS origin (default: none)
 MCP_HOST=localhost               # Server bind host
 AUTO_REBUILD_INDEX=true          # Rebuild vector index on startup
 ```
@@ -189,7 +208,7 @@ AUTO_REBUILD_INDEX=true          # Rebuild vector index on startup
 
 ### **Container Hardening**
 
-- ✅ **Minimal base image**: `node:26-alpine`
+- ✅ **Minimal base image**: minimal Alpine Node.js production stage
 - ✅ **Multi-stage build**: Build dependencies not in production image
 - ✅ **Process isolation** from host system
 - ✅ **No shell access needed** for production
@@ -243,22 +262,25 @@ Code Mode (`mj_execute_code`) executes user-provided JavaScript in a hardened `w
 
 - ✅ **V8 code generation disabled** — `codeGeneration: { strings: false, wasm: false }` prevents `eval()` and `Function()` construction from strings at the V8 engine level
 - ✅ **Separate V8 isolate** — each worker thread runs in its own V8 instance with enforced heap limits (`maxOldGenerationSizeMb`, `maxYoungGenerationSizeMb`)
-- ✅ **Frozen prototypes** — all built-in prototypes (Object, Function, Array, Error, Map, Set, Promise, etc.) frozen inside the vm context to prevent dynamic constructor chain escapes
+- ✅ **Frozen prototypes & cross-realm constructor lockdown** — all built-in prototypes (Object, Function, Array, Error, Map, Set, Promise, etc.) are frozen, and `.constructor` on `Object`, `Function`, `AsyncFunction`, `GeneratorFunction`, and `AsyncGeneratorFunction` prototypes is neutered in both the inner `vm` context and outer worker realm to prevent cross-realm dynamic constructor chain escapes
 - ✅ **Proxy constructor nullified** — `Proxy: undefined` in the sandbox context prevents meta-object protocol abuse
-- ✅ **Frozen API surfaces** — All injected API objects (mj.*, group namespaces, console shim, context) are Object.freeze()'d to prevent prototype pollution on the API bridge
+- ✅ **Frozen API surfaces** — All injected API objects (mj.*, group namespaces, console shim, context, and neutralized `process` stub) are Object.freeze()'d to prevent prototype pollution on the API bridge
 
 ### **Static Code Validation**
 
-- ✅ **Comprehensive blocked patterns** — regex rules blocking `require()`, `import()`, `process.*`, `global.*`, `eval()`, `Function()`, `__proto__`, `constructor.constructor`, `['constructor']`, `Reflect.*`, `Symbol.*`, `new Proxy()`, `child_process`, `fs.*`, `net.*`, `http.*`, `https.*`
+- ✅ **Pre-validation ordering** — Code Mode enablement checks, client rate-limiting, and the 50KB byte-size cap execute *before* any code healer or SQL auto-recovery pass, and SQL recovery uses a linear `O(N)` state-machine parser (zero `node:vm` execution on the host thread)
+- ✅ **Single-pass lexical scanner** — `stripCommentsAndStrings` uses a single-pass character state machine that preserves `${...}` template literal interpolation expressions and `'constructor'`/`'__proto__'`/`'prototype'` strings so regex/comment interleaving cannot hide forbidden tokens
+- ✅ **Comprehensive blocked patterns** — regex rules blocking `require()`, `import()`, `process.*`, `global.*`, `eval()`, `Function()`, `__proto__`, `constructor.constructor`, `['constructor']`, `Object.getPrototypeOf`, `Object.setPrototypeOf`, `Object.defineProperty`, `Reflect.*`, `Symbol.*`, `new Proxy()`, `child_process`, `fs.*`, `net.*`, `http.*`, `https.*`
 - ✅ **50KB code size limit** — prevents payload-based resource exhaustion
 
 ### **Runtime Protection**
 
-- ✅ **RPC allowlist** — host-side validation prevents workers from invoking unauthorized API methods
+- ✅ **Prototype-safe RPC allowlist** — host-side `Object.hasOwn()` validation and strict request-shape checks prevent workers from invoking unauthorized or prototype-chain API methods (`__proto__`, `constructor`)
+- ✅ **Host process isolation** — `process.exit()` calls inside the sandbox are safely neutralized in-place (`{ exited: true, exitCode }`) and can never terminate the worker or host MCP server
 - ✅ **Rate limiting** — 60 executions per minute per client
 - ✅ **Hard timeouts** — configurable execution limit (default 30s) with forced worker termination
-- ✅ **Egress boundary enforcement** — result serialization capped at configurable limit (default 100KB) to prevent OOM via oversized payloads
-- ✅ **Readonly Proxy traps** — when `readonly: true`, stripped mutation methods throw clear error messages listing available methods
+- ✅ **Egress boundary enforcement** — result serialization capped at configurable limit (default 100KB) with automatic collection compaction (`compactOversizedResult`) for large object/array payloads to prevent OOM via oversized payloads
+- ✅ **Readonly Proxy traps** — when `readonly: true` is passed to `mj_execute_code`, calling a stripped mutation method resolves to a structured `{ success: false, error: "🛠️ AUTONOMOUS HEALING: Operation '<key>' is blocked in readonly mode. Read operations only.", code: "VALIDATION_ERROR" }` object rather than throwing an exception
 - ✅ **Schema Introspection Scope** — `.schema()` properties are strictly bound to the permitted methods in the RPC allowlist, preventing unintended internal structure leakage
 - ✅ **Audit logging** — all executions logged with code preview, metrics, and readonly mode
 - ✅ **Pre-warmed worker pool** — Worker threads are pre-warmed on startup to eliminate cold-start latency, with idle recycling and age-based recycling for memory hygiene
@@ -321,7 +343,7 @@ Security handled at multiple levels:
 
 ```bash
 # Database created with user permissions
-chmod 600 ~/.memory-journal/memory_journal.db
+chmod 600 ./memory_journal.db  # or your configured DB_PATH
 ```
 
 **Docker installation:**
@@ -362,26 +384,24 @@ chmod 700 /shared/team-data
 
 ### **Secrets Management**
 
-**No secrets required:**
+**Core local (`stdio`) operation requires no secrets:**
 
-- No API keys
-- No passwords
-- No tokens
-- Optional: GitHub CLI (user manages `gh auth`)
+- No API keys, passwords, or tokens required for local journaling
+- Optional features use `GITHUB_TOKEN` (GitHub API integration; or `gh auth`), `MCP_AUTH_TOKEN` (HTTP Bearer auth), and `MJ_DB_ENCRYPTION_KEY` / `DB_ENCRYPTION_KEY` (SQLCipher at-rest encryption)
 
 ## 🔄 **CI/CD Security**
 
 - ✅ **CodeQL analysis** - automated static analysis on push/PR
 - ✅ **Trivy container scanning** - Docker image vulnerability detection
 - ✅ **TruffleHog** - secret scanning on push/PR
-- ✅ **npm audit** - dependency vulnerability checking
+- ✅ **pnpm audit** - dependency vulnerability checking
 
 ## 🚨 **Security Best Practices**
 
 ### **For Users**
 
 1. **Set a CORS origin** when exposing the HTTP transport on a network
-2. **Keep Node.js updated**: Use Node.js 26+ (LTS)
+2. **Keep Node.js updated**: Use Node.js 24+ (current LTS recommended)
 3. **Secure host system**: Ensure your host machine is secure
 4. **Regular backups**: Use the `backup_journal` tool or back up your `.db` file
 5. **Limit network access**: Don't expose the HTTP transport to untrusted networks
@@ -396,8 +416,8 @@ chmod 700 /shared/team-data
 
 ## 📋 **Security Checklist**
 
-- [x] Foreign key enforcement (`PRAGMA foreign_keys = ON`)
-- [x] Input validation and length limits (Zod schemas)
+- [x] Foreign key enforcement (`PRAGMA foreign_keys = ON`, initialized in `src/database/sqlite-adapter/native-connection.ts`)
+- [x] Input validation and length limits (Zod schemas, centralized in `src/handlers/tools/schemas/constants-and-primitives.ts`)
 - [x] Parameterized SQL queries
 - [x] SQL injection detection heuristics (defense-in-depth)
 - [x] Path traversal protection (`assertNoPathTraversal`)
@@ -406,12 +426,12 @@ chmod 700 /shared/team-data
 - [x] FTS5 / LIKE pattern sanitization (`sanitizeSearchQuery`)
 - [x] Date format whitelisting (`validateDateFormatPattern`)
 - [x] HTTP body size limit (1MB)
+- [x] Tool input element count limit (`MAX_TOOL_INPUT_ELEMENTS`, default 25,000)
 - [x] Configurable CORS multi-origin with exact-match enforcement
 - [x] HTTP timeouts and built-in rate limiter (100 req/min)
-- [x] DNS rebinding protection and strict HSTS
+- [x] DNS rebinding protection and opt-in HSTS (`--enable-hsts` / `MCP_ENABLE_HSTS`)
 - [x] Security headers (CSP, X-Content-Type-Options, X-Frame-Options, Cache-Control, Referrer-Policy, Permissions-Policy)
-- [x] Session idle timeout (30 minutes) and 5-minute sweep interval
-- [x] Session absolute TTL (24 hours) and in-flight request protection
+- [x] Session idle timeout (30 minutes), active session cap (100), principal binding, and 1-minute sweep interval
 - [x] Non-root Docker user
 - [x] Multi-stage Docker build
 - [x] Local-first data architecture
@@ -476,11 +496,13 @@ chmod 700 /shared/team-data
 
 ## 📦 **Supported Versions**
 
-| Component    | Supported Versions | Notes                                                                 |
-| ------------ | ------------------ | --------------------------------------------------------------------- |
-| Node.js      | 24.x+ (26.x LTS)   | Minimum Node 24+. Node 26.x LTS recommended for isolation features. |
-| MCP Protocol | 2024-11-05         | Full compatibility with the official Model Context Protocol.          |
-| Docker Base  | `node:26-alpine`   | Alpine-based images receive regular vulnerability patches.            |
+| Version / Component | Supported          | Notes                                                                 |
+| ------------------- | ------------------ | --------------------------------------------------------------------- |
+| `Latest Release`    | :white_check_mark: | Current major release series receiving active security updates.       |
+| `Older Releases`    | :x:                | Legacy releases; please upgrade to `Latest Release`.                  |
+| Node.js             | 24.x+ (current LTS)| Minimum Node 24+. Current Node.js LTS recommended for isolation features. |
+| MCP Protocol        | 2025-11-25 / 2025-03-26 (backward-compatible with 2024-11-05) | Full compatibility with the official Model Context Protocol.          |
+| Docker Base         | current Node.js Alpine LTS | Alpine-based images receive regular vulnerability patches.    |
 
 ## 🚨 **Reporting Security Issues**
 
