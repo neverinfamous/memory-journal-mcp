@@ -45,32 +45,78 @@ export async function visualizeAction(options: z.infer<typeof visualizeSchema>, 
             limit: 200
         })
 
+        const MERMAID_CONTENT_PREVIEW_LENGTH = 40
         const mermaidLines: string[] = ['```mermaid', 'graph TD']
-        
-        // Add nodes
-        for (const node of graph.nodes) {
-            const safeLabel = node.label.replace(/"/g, "'").substring(0, 50)
-            mermaidLines.push(`    E${node.id}["#${node.id}: ${safeLabel}"]`)
-        }
-        
-        mermaidLines.push('')
-        
-        // Add edges
-        for (const edge of graph.edges) {
-            mermaidLines.push(`    E${edge.from} -->|${edge.label}| E${edge.to}`)
-        }
-        
-        mermaidLines.push('')
-        
-        // Add styles
-        for (const node of graph.nodes) {
-            if (node.group === 'target') {
-                mermaidLines.push(`    style E${node.id} fill:#E3F2FD`)
-            } else {
-                mermaidLines.push(`    style E${node.id} fill:#FFF3E0`)
+
+        if (graph.nodes.length === 0) {
+            mermaidLines.push(
+                '    NoData["No entries found with relationships matching your criteria"]'
+            )
+        } else {
+            // Add nodes
+            for (const node of graph.nodes) {
+                const rawContent =
+                    typeof node.metadata?.['content'] === 'string'
+                        ? node.metadata['content']
+                        : ''
+                if (rawContent !== '') {
+                    let contentPreview = rawContent
+                        .slice(0, MERMAID_CONTENT_PREVIEW_LENGTH)
+                        .replace(/\n/g, ' ')
+                    if (rawContent.length > MERMAID_CONTENT_PREVIEW_LENGTH) {
+                        contentPreview += '...'
+                    }
+                    contentPreview = contentPreview
+                        .replace(/"/g, "'")
+                        .replace(/\[/g, '(')
+                        .replace(/\]/g, ')')
+                    const entryTypeShort = node.group.slice(0, 20)
+                    mermaidLines.push(
+                        `    E${String(node.id)}["#${String(node.id)}: ${contentPreview}<br/>${entryTypeShort}"]`
+                    )
+                } else {
+                    const safeLabel = node.label.replace(/"/g, "'").substring(0, 50)
+                    mermaidLines.push(`    E${String(node.id)}["#${String(node.id)}: ${safeLabel}"]`)
+                }
+            }
+
+            mermaidLines.push('')
+
+            const relSymbols: Record<string, string> = {
+                references: '-->',
+                implements: '==>',
+                clarifies: '-.->',
+                evolves_from: '-->',
+                response_to: '<-->',
+                blocked_by: '--x',
+                resolved: '==>',
+                caused: '-.->',
+            }
+
+            // Add edges
+            for (const edge of graph.edges) {
+                const arrow = relSymbols[edge.type] ?? '-->'
+                mermaidLines.push(
+                    `    E${String(edge.from)} ${arrow}|${edge.type}| E${String(edge.to)}`
+                )
+            }
+
+            mermaidLines.push('')
+
+            // Add styles
+            for (const node of graph.nodes) {
+                const isPersonal =
+                    node.metadata !== undefined && 'is_personal' in node.metadata
+                        ? Boolean(node.metadata['is_personal'])
+                        : node.group === 'target'
+                if (isPersonal) {
+                    mermaidLines.push(`    style E${String(node.id)} fill:#E3F2FD`)
+                } else {
+                    mermaidLines.push(`    style E${String(node.id)} fill:#FFF3E0`)
+                }
             }
         }
-        
+
         mermaidLines.push('```')
         const mermaid = mermaidLines.join('\n')
 

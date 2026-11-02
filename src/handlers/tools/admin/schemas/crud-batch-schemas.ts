@@ -148,6 +148,10 @@ export const UpdateEntrySchemaMcp = z.preprocess(
             expected_version: relaxedNumber().optional(),
             auto_context: z.string().nullable().optional(),
             workspace_id: z.string().optional().describe(WORKSPACE_DESC),
+            target_workspace_id: z
+                .string()
+                .optional()
+                .describe('Target workspace to move entry into (e.g. "mysql-mcp")'),
             impact_score: relaxedNumber()
                 .optional()
                 .describe(
@@ -234,31 +238,33 @@ export const DeleteEntrySchemaMcp = z.preprocess(
         .strict()
 )
 
-export const BatchCreateEntriesSchema = z.preprocess(
-    (val: unknown) => {
-        if (typeof val === 'object' && val !== null) {
-            const obj = { ...(val as Record<string, unknown>) }
-            if (Array.isArray(obj['entries'])) {
-                const rootProjectNum = obj['project_number']
-                const rootWorkspaceId = obj['workspace_id']
-                obj['entries'] = obj['entries'].map((e: unknown) => {
-                    if (typeof e === 'object' && e !== null) {
-                        const eObj = { ...(e as Record<string, unknown>) }
-                        if (eObj['project_number'] === undefined && rootProjectNum !== undefined) {
-                            eObj['project_number'] = rootProjectNum
-                        }
-                        if (eObj['workspace_id'] === undefined && rootWorkspaceId !== undefined) {
-                            eObj['workspace_id'] = rootWorkspaceId
-                        }
-                        return eObj
+function preprocessBatchCreateEntries(val: unknown): unknown {
+    if (typeof val === 'object' && val !== null) {
+        const obj = { ...(val as Record<string, unknown>) }
+        if (Array.isArray(obj['entries'])) {
+            const rootProjectNum = obj['project_number']
+            const rootWorkspaceId = obj['workspace_id']
+            obj['entries'] = obj['entries'].map((e: unknown) => {
+                if (typeof e === 'object' && e !== null) {
+                    const eObj = { ...(e as Record<string, unknown>) }
+                    if (eObj['project_number'] === undefined && rootProjectNum !== undefined) {
+                        eObj['project_number'] = rootProjectNum
                     }
-                    return e
-                })
-                return obj
-            }
+                    if (eObj['workspace_id'] === undefined && rootWorkspaceId !== undefined) {
+                        eObj['workspace_id'] = rootWorkspaceId
+                    }
+                    return eObj
+                }
+                return e
+            })
+            return obj
         }
-        return val
-    },
+    }
+    return val
+}
+
+export const BatchCreateEntriesSchema = z.preprocess(
+    preprocessBatchCreateEntries,
     z
         .object({
             entries: z.array(CreateEntrySchema).min(1).max(MAX_BATCH_SIZE),
@@ -269,13 +275,19 @@ export const BatchCreateEntriesSchema = z.preprocess(
         .strict()
 )
 
-export const BatchCreateEntriesSchemaMcp = z
-    .object({
-        entries: z.array(CreateEntrySchemaMcp).optional(),
-        auto_index: z.boolean().optional().default(true),
-        workspace_id: z.string().optional().describe(WORKSPACE_DESC),
-    })
-    .strict()
+export const BatchCreateEntriesSchemaMcp = z.preprocess(
+    preprocessBatchCreateEntries,
+    z
+        .object({
+            entries: z.array(CreateEntrySchemaMcp).optional(),
+            auto_index: z.boolean().optional().default(true),
+            project_number: relaxedNumber()
+                .optional()
+                .describe('Numeric project ID applied to batch entries when omitted per item.'),
+            workspace_id: z.string().optional().describe(WORKSPACE_DESC),
+        })
+        .strict()
+)
 
 function preprocessBatchUpdates(val: unknown, propagateRootProject: boolean): unknown {
     if (typeof val === 'object' && val !== null) {
@@ -330,11 +342,14 @@ export const BatchUpdateEntriesSchema = z.preprocess(
 )
 
 export const BatchUpdateEntriesSchemaMcp = z.preprocess(
-    (val: unknown) => preprocessBatchUpdates(val, false),
+    (val: unknown) => preprocessBatchUpdates(val, true),
     z
         .object({
             updates: z.array(UpdateEntrySchemaMcp).optional(),
             auto_index: z.boolean().optional().default(true),
+            project_number: relaxedNumber()
+                .optional()
+                .describe('Numeric project ID applied to batch updates when omitted per item.'),
             workspace_id: z.string().optional().describe(WORKSPACE_DESC),
         })
         .strict()
@@ -377,6 +392,9 @@ export const BatchDeleteEntriesSchemaMcp = z.preprocess(
         .object({
             entry_ids: z.array(relaxedNumber().optional()).optional(),
             permanent: z.boolean().optional().default(false),
+            project_number: relaxedNumber()
+                .optional()
+                .describe('Optional project number for workspace resolution.'),
             workspace_id: z.string().optional().describe(WORKSPACE_DESC),
         })
         .strict()

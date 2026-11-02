@@ -160,6 +160,7 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                                         issueNumber: input.issue_number,
                                         prNumber: input.pr_number,
                                         workflowRunId: input.workflow_run_id,
+                                        includeArchived: input.include_archived,
                                     },
                                     teamDb
                                 )
