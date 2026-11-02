@@ -36,7 +36,8 @@ export function startMetricsServer(runtime: ServerRuntime): () => Promise<void> 
         }
     });
 
-    const host = process.env['MJ_METRICS_HOST'] ?? '127.0.0.1';
+    const rawHost = process.env['MJ_METRICS_HOST']?.trim();
+    const host = rawHost !== undefined && rawHost !== '' ? rawHost : '127.0.0.1';
     server.listen(port, host, () => {
         logger.info(`Standalone metrics server listening on ${host}:${port}`, { module: 'MetricsServer' });
     });

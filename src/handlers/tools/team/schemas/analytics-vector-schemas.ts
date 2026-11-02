@@ -32,23 +32,35 @@ export const TeamGetStatisticsSchemaMcp = z.object({
         ),
 })
 
+const normalizeTeamLinkRelationshipType = (val: unknown): unknown =>
+    val === 'resolves'
+        ? 'resolved'
+        : val === 'relates_to'
+          ? 'references'
+          : val === 'depends_on'
+            ? 'blocked_by'
+            : val
+
 /** team_link_entries — strict */
 export const TeamLinkEntriesSchema = z.object({
     from_entry_id: z.number(),
     to_entry_id: z.number(),
-    relationship_type: z
-        .enum([
-            'evolves_from',
-            'references',
-            'implements',
-            'clarifies',
-            'response_to',
-            'blocked_by',
-            'resolved',
-            'caused',
-        ])
-        .optional()
-        .default('references'),
+    relationship_type: z.preprocess(
+        normalizeTeamLinkRelationshipType,
+        z
+            .enum([
+                'evolves_from',
+                'references',
+                'implements',
+                'clarifies',
+                'response_to',
+                'blocked_by',
+                'resolved',
+                'caused',
+            ])
+            .optional()
+            .default('references')
+    ),
     description: z.string().optional(),
     project_number: StrictProjectNumberSchema,
     workspace_id: z.string().optional(),
@@ -63,9 +75,14 @@ export const TeamLinkEntriesSchemaMcp = z
         to: relaxedNumber().optional(),
         from_id: relaxedNumber().optional(),
         to_id: relaxedNumber().optional(),
+        source_id: relaxedNumber().optional(),
+        target_id: relaxedNumber().optional(),
         relationship_type: z.string().optional().default('references'),
         type: z.string().optional(),
+        rel: z.string().optional(),
         description: z.string().optional(),
+        message: z.string().optional(),
+        text: z.string().optional(),
         project_number: relaxedNumber().optional(),
         workspace_id: z
             .string()
@@ -74,14 +91,18 @@ export const TeamLinkEntriesSchemaMcp = z
                 'Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'
             ),
     })
-    .transform((data) => ({
-        from_entry_id: data.from_entry_id ?? data.from_id ?? data.from,
-        to_entry_id: data.to_entry_id ?? data.to_id ?? data.to,
-        relationship_type: data.type ?? data.relationship_type,
-        description: data.description,
-        project_number: data.project_number,
-        workspace_id: data.workspace_id,
-    }))
+    .transform((data) => {
+        const rawRel = data.type ?? data.rel ?? data.relationship_type ?? 'references'
+        const normalizedRel = normalizeTeamLinkRelationshipType(rawRel) as string
+        return {
+            from_entry_id: data.from_entry_id ?? data.from_id ?? data.from ?? data.source_id,
+            to_entry_id: data.to_entry_id ?? data.to_id ?? data.to ?? data.target_id,
+            relationship_type: normalizedRel,
+            description: data.description ?? data.message ?? data.text,
+            project_number: data.project_number,
+            workspace_id: data.workspace_id,
+        }
+    })
 
 /** team_visualize_relationships — strict */
 export const TeamVisualizeRelationshipsSchema = z.object({

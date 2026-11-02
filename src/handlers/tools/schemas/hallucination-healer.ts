@@ -276,9 +276,10 @@ function healWorkspaceAndProjectContext(obj: Record<string, unknown>): boolean {
             modified = true
         } else if (
             process.env['MCP_WORKSPACE_ID'] !== undefined &&
+            process.env['MCP_WORKSPACE_ID'].trim() !== '' &&
             (wsId === undefined || wsId === 'default')
         ) {
-            obj['workspace_id'] = process.env['MCP_WORKSPACE_ID']
+            obj['workspace_id'] = process.env['MCP_WORKSPACE_ID'].trim()
             modified = true
         } else if (wsId === undefined) {
             obj['workspace_id'] = 'default'

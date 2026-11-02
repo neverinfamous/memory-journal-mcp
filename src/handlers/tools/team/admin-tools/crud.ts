@@ -154,7 +154,7 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
             name: 'team_delete_entry',
             title: 'Delete Team Entry',
             description:
-                'Soft-delete a team entry (marks as deleted, preservable). Calling with permanent: true on a previously soft-deleted entry works. Returns success: false for nonexistent entries. Requires TEAM_DB_PATH.',
+                'Soft-delete a team entry (marks as deleted, preservable via team_restore_entry). Returns success: false for nonexistent entries. Requires TEAM_DB_PATH.',
             group: 'team',
             inputSchema: TeamDeleteEntrySchemaMcp,
             outputSchema: TeamDeleteOutputSchema,

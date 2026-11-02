@@ -7,10 +7,13 @@ import type {
 } from './shared.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
 
+const emptyStringToUndefined = (val: unknown): unknown =>
+    typeof val === 'string' && val.trim() === '' ? undefined : val
+
 const EnvConfig = z.object({
-    STALENESS_ACTIVE_HOURS: z.coerce.number().default(24),
-    STALENESS_RECENT_DAYS: z.coerce.number().default(7),
-    STALENESS_STALE_DAYS: z.coerce.number().default(30),
+    STALENESS_ACTIVE_HOURS: z.preprocess(emptyStringToUndefined, z.coerce.number().default(24)),
+    STALENESS_RECENT_DAYS: z.preprocess(emptyStringToUndefined, z.coerce.number().default(7)),
+    STALENESS_STALE_DAYS: z.preprocess(emptyStringToUndefined, z.coerce.number().default(30)),
 })
 
 interface StalenessEnv {
