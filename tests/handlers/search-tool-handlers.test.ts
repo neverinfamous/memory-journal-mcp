@@ -651,5 +651,58 @@ describe('Search Tool Handlers - Coverage', () => {
                 expect(typeof entry['importanceScore']).toBe('number')
             }
         })
+
+        it('should sort cross_team_search by importance and forward sortBy to adapters', async () => {
+            const result = (await callTool(
+                'cross_team_search',
+                { query: 'ImpSort', sort_by: 'importance', limit: 10 },
+                impDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                impDb
+            )) as { entries: { id: number; importanceScore?: number }[]; count: number }
+
+            expect(result.count).toBe(3)
+            expect(result.entries[0]!.id).toBe(highId)
+            expect(result.entries[result.entries.length - 1]!.id).toBe(lowId)
+        })
+
+        it('should forward include_archived to the FTS leg in hybrid search mode', async () => {
+            const archivedEntry = impDb.createEntry({
+                content: 'ImpSort archived hybrid target entry',
+                entryType: 'technical_note',
+                tags: ['imp-test'],
+            })
+            impDb.updateEntry(archivedEntry.id, { isArchived: true })
+            try {
+                const excluded = (await callTool(
+                    'search_entries',
+                    {
+                        query: 'archived hybrid target',
+                        mode: 'hybrid',
+                        include_archived: false,
+                        limit: 10,
+                    },
+                    impDb
+                )) as { entries: { id: number }[]; count: number }
+                expect(excluded.entries.some((e) => e.id === archivedEntry.id)).toBe(false)
+
+                const included = (await callTool(
+                    'search_entries',
+                    {
+                        query: 'archived hybrid target',
+                        mode: 'hybrid',
+                        include_archived: true,
+                        limit: 10,
+                    },
+                    impDb
+                )) as { entries: { id: number }[]; count: number }
+                expect(included.entries.some((e) => e.id === archivedEntry.id)).toBe(true)
+            } finally {
+                impDb.deleteEntry(archivedEntry.id, true)
+            }
+        })
     })
 })

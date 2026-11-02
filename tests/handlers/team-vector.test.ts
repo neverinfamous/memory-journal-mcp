@@ -146,6 +146,16 @@ describe('Team Vector Tool Handlers', () => {
             expect(result.entries[0].content).toContain('Vector matched')
         })
 
+        it('should return project-scoped semantic search results when project_number is omitted', async () => {
+            const result = (await callTeamTool('team_semantic_search', {
+                query: 'test',
+            })) as any
+
+            expect(result.query).toBe('test')
+            expect(result.count).toBeGreaterThan(0)
+            expect(result.entries[0].projectNumber).toBe(1)
+        })
+
         it('should filter out archived entries by default and include them when include_archived is true', async () => {
             teamDb.updateEntry(1, { isArchived: true })
             try {

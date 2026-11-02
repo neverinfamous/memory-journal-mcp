@@ -45,7 +45,7 @@ describe('validateResourceSubscription', () => {
     })
 
     describe('with OAuth context', () => {
-        it('throws PermissionError when accessing admin resource with only read scope', () => {
+        it('throws PermissionError when accessing audit resource with only read scope', () => {
             withAuthContext(
                 { authenticated: true, scopes: ['read'], claims: { sub: 'user1', scopes: ['read'], exp: 9999999999, iat: 1234567890 } },
                 () => {
@@ -55,8 +55,19 @@ describe('validateResourceSubscription', () => {
                     expect(mockRuntime.auditLogger?.logDenial).toHaveBeenCalledWith(
                         'memory://audit',
                         'Insufficient scope',
-                        expect.objectContaining({ scope: 'admin' })
+                        expect.objectContaining({ scope: 'audit' })
                     )
+                }
+            )
+        })
+
+        it('passes validation when accessing audit resource with audit scope', () => {
+            withAuthContext(
+                { authenticated: true, scopes: ['audit'], claims: { sub: 'user1', scopes: ['audit'], exp: 9999999999, iat: 1234567890 } },
+                () => {
+                    expect(() => {
+                        validateResourceSubscription('memory://audit', mockRuntime)
+                    }).not.toThrow()
                 }
             )
         })
