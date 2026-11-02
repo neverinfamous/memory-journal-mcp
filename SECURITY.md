@@ -32,7 +32,7 @@ The server uses the native **better-sqlite3** driver with **sqlite-vec** for vec
 
 ### **Character Handling**
 
-Tags are lowercased, normalized via slug regex (`[^a-z0-9:@]+` -> `-`, with leading/trailing hyphens stripped), and bound via parameterized queries at the database layer so special characters never pose injection risks.
+- **Tags**: ASCII alphanumeric, colons, and `@` symbols preserved; all other character sequences collapsed to hyphens and stored via parameterized SQL queries (safe from injection)
 
 ### **SQL Injection Prevention**
 
@@ -110,7 +110,7 @@ export CORS_ORIGIN="http://localhost:3000,https://my-app.com"
 
 - ✅ **1MB body limit** on JSON and chunked stream requests (prevents memory exhaustion DoS)
 - ✅ **Health & Metrics endpoint protection** — `/health` is unauthenticated; on the HTTP transport, `/metrics` is protected under OAuth 2.1 and unauthenticated under static Bearer auth, while the standalone Prometheus server (`METRICS_EXPORT=prometheus`) isolates `/metrics` on `MJ_METRICS_HOST` (default `127.0.0.1`) and `MJ_METRICS_PORT` (default `9465`)
-- ✅ **Outbound Webhook SSRF Protection** — Scheduled digest webhooks (`--report-webhook-url` / `REPORT_WEBHOOK_URL`) require `https:`, resolve DNS prior to dispatch, block loopback/private/link-local/cloud-metadata IP ranges, and disable HTTP redirects (`redirect: 'error'`)
+- ✅ **Outbound Webhook SSRF Protection** — Scheduled digest webhooks (`--report-webhook-url` / `REPORT_WEBHOOK_URL`) require `https:` (unless `ALLOW_INSECURE_WEBHOOK_HTTP=true` is explicitly set for local testing), resolve DNS prior to dispatch, block loopback/private/link-local/cloud-metadata IP ranges, and disable HTTP redirects (`redirect: 'error'`)
 
 ## 🔐 **OAuth 2.1 Authentication**
 
@@ -128,8 +128,8 @@ For production HTTP deployments, Memory Journal supports **OAuth 2.1 authenticat
 
 | Scope   | Tool Groups                                                                | Description                            |
 | ------- | -------------------------------------------------------------------------- | -------------------------------------- |
-| `read`  | `core (read-only), search, analytics, relationships, io (export_entries), git (read-only)`                 | Read-only operations                   |
-| `write` | `github (+ all read groups and create_entry / link_entries / mark_anchors_stale / import_external / import_markdown / export_markdown)` | Read + write operations                |
+| `read`  | `core (read-only), search, analytics, relationships (visualize_relationships), io (export_entries), git (read-only)`                 | Read-only operations                   |
+| `write` | `github (+ all read groups and create_entry / create_entry_minimal / link_entries / mark_anchors_stale / import_external / import_markdown / export_markdown)` | Read + write operations                |
 | `team`  | `team (dedicated team collaboration scope)`                                                                | Team database operations               |
 | `audit` | `memory://audit resource access (dedicated audit scope; included automatically in admin and full)`         | Operational telemetry resource access  |
 | `admin` | `admin, backup, codemode (+ all read/write/team/audit groups)`             | Full administrative access             |
@@ -165,7 +165,7 @@ export OAUTH_JWKS_URI=https://auth.example.com/realms/mcp/protocol/openid-connec
 
 When OAuth is **not enabled**, authentication falls back to:
 
-1. **Simple token auth** — if `MCP_AUTH_TOKEN` env var is set, requests must include `Authorization: Bearer <token>` matching the configured value
+1. **Simple token auth** — if `MCP_AUTH_TOKEN` env var is set, requests must include `Authorization: Bearer <token>` matching the configured value, with granted scopes controlled by `MCP_AUTH_SCOPES` (default: `read`; set `export MCP_AUTH_SCOPES="full"` for unrestricted access)
 2. **No auth (loopback only)** — if no auth mechanism is configured and the server is bound to localhost without wildcard CORS, requests are accepted for local development. Binding to non-localhost interfaces (e.g., `0.0.0.0`) or enabling wildcard CORS without authentication throws a fatal startup error.
 
 ## 🐙 **GitHub Token Security**
@@ -182,6 +182,7 @@ When OAuth is **not enabled**, authentication falls back to:
 ```bash
 # Required for Authentication (Must not be the placeholder token)
 MCP_AUTH_TOKEN="your-secure-token-here"
+MCP_AUTH_SCOPES="full"          # Granted scopes for static Bearer auth (default: read)
 
 # Required for Filesystem Tools (Export, Backup)
 ALLOWED_IO_ROOTS="/path/to/allow1,/path/to/allow2"
@@ -261,7 +262,7 @@ Code Mode (`mj_execute_code`) executes user-provided JavaScript in a hardened `w
 
 - ✅ **V8 code generation disabled** — `codeGeneration: { strings: false, wasm: false }` prevents `eval()` and `Function()` construction from strings at the V8 engine level
 - ✅ **Separate V8 isolate** — each worker thread runs in its own V8 instance with enforced heap limits (`maxOldGenerationSizeMb`, `maxYoungGenerationSizeMb`)
-- ✅ **Frozen prototypes & cross-realm constructor lockdown** — all built-in prototypes (Object, Function, Array, Error, Map, Set, Promise, etc.) are frozen, and `.constructor` on `Function`, `AsyncFunction`, `GeneratorFunction`, and `AsyncGeneratorFunction` prototypes is neutered in both the inner `vm` context and outer worker realm to prevent cross-realm dynamic constructor chain escapes
+- ✅ **Frozen prototypes & cross-realm constructor lockdown** — all built-in prototypes (Object, Function, Array, Error, Map, Set, Promise, etc.) are frozen, and `.constructor` on `Object`, `Function`, `AsyncFunction`, `GeneratorFunction`, and `AsyncGeneratorFunction` prototypes is neutered in both the inner `vm` context and outer worker realm to prevent cross-realm dynamic constructor chain escapes
 - ✅ **Proxy constructor nullified** — `Proxy: undefined` in the sandbox context prevents meta-object protocol abuse
 - ✅ **Frozen API surfaces** — All injected API objects (mj.*, group namespaces, console shim, context, and neutralized `process` stub) are Object.freeze()'d to prevent prototype pollution on the API bridge
 

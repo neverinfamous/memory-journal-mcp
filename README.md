@@ -180,7 +180,7 @@ Control which tools are exposed using any of the 3 configuration sources (preced
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `codemode`      | Code Mode (sandboxed code execution) 🌟 **Recommended**                                                                                                                                           |
 | `core`          | Entry creation/read/history, tags, resource & briefing helpers, anchor staleness, test                                                                                                            |
-| `search`        | Text search, date range, semantic, vector stats, cross-team                                                                                                                                       |
+| `search`        | Text search, date range, semantic, vector stats, deleted entries, cross-team                                                                                                                      |
 | `analytics`     | Statistics, cross-project insights                                                                                                                                                                |
 | `relationships` | Link entries, visualize graphs                                                                                                                                                                    |
 | `io`            | JSON/Markdown export, Markdown directory import/export, and external knowledge base import (Notion, Obsidian, Logseq)                                                                              |
@@ -399,6 +399,7 @@ To bind to all interfaces (required for containers) and enable the automated pro
 
 ```bash
 export MCP_AUTH_TOKEN="your_secure_random_token"
+export MCP_AUTH_SCOPES="full" # Defaults to "read" if omitted
 export ALLOWED_IO_ROOTS="/path/to/allowed/dir"
 memory-journal-mcp --transport http --port 3000 --server-host 0.0.0.0 --digest-interval 1440
 ```
@@ -473,15 +474,24 @@ memory-journal-mcp --transport http --port 3000 \
   --rebuild-index-interval 720
 ```
 
-| Flag                             | Default | Description                                                          |
-| -------------------------------- | ------- | -------------------------------------------------------------------- |
-| `--backup-interval <min>`        | 0 (off) | Create timestamped database backups and prune old ones automatically |
-| `--keep-backups <count>`         | 5       | Max backups retained during automated cleanup                        |
-| `--vacuum-interval <min>`        | 0 (off) | Run `PRAGMA optimize` and flush database to disk                     |
-| `--rebuild-index-interval <min>` | 0 (off) | Full vector index rebuild to maintain semantic search quality        |
-| `--report-interval <min>`        | 0 (off) | Scheduled report generation interval in minutes                      |
-| `--digest-interval <min>`        | 0 (off) | Scheduled periodic digest analysis report                            |
-| `--auto-prune-interval <min>`    | 0 (off) | Run autonomous garbage collection (archive, soft-delete, hard-delete) |
+| Flag                                    | Default                  | Description                                                           |
+| --------------------------------------- | ------------------------ | --------------------------------------------------------------------- |
+| `--backup-interval <min>`               | 0 (off)                  | Create timestamped database backups and prune old ones automatically  |
+| `--keep-backups <count>`                | 5                        | Max backups retained during automated cleanup                         |
+| `--vacuum-interval <min>`               | 0 (off)                  | Run `PRAGMA optimize` and flush database to disk                      |
+| `--rebuild-index-interval <min>`        | 0 (off)                  | Full vector index rebuild to maintain semantic search quality         |
+| `--report-interval <min>`               | 0 (off)                  | Scheduled report generation interval in minutes                       |
+| `--report-webhook-url <url>`            | —                        | HTTPS webhook URL for scheduled report delivery                       |
+| `--report-webhook-auth <header>`        | —                        | Custom `Authorization` header for webhook requests                    |
+| `--report-content-type <type>`          | `application/json`       | Webhook payload content type (`application/json` or `text/markdown`)  |
+| `--digest-interval <min>`               | 0 (off)                  | Scheduled periodic digest analysis report                             |
+| `--auto-prune-interval <min>`           | 0 (off)                  | Run autonomous garbage collection (archive, soft-delete, hard-delete) |
+| `--archive-older-than-days <days>`      | 0 (off)                  | Auto-archive low-importance entries older than N days                 |
+| `--prune-older-than-days <days>`        | 0 (off)                  | Auto soft-delete entries older than N days                            |
+| `--hard-delete-older-than-days <days>`  | 0 (off)                  | Permanently purge soft-deleted entries older than N days              |
+| `--prune-importance-threshold <score>`  | 0.15                     | Max importance score (`0.0`–`1.0`) eligible for archiving/pruning     |
+| `--prune-dry-run`                       | false                    | Log auto-prune candidates without mutating entries                    |
+| `--prune-exclude-tags <tags>`           | —                        | Comma-separated tags exempt from auto-prune (`archived` always kept)  |
 
 Each job is error-isolated — a failure in one job won't affect the others. Scheduler status (last run, result, next run) is visible via `memory://health`.
 
@@ -524,8 +534,8 @@ For production deployments, enable OAuth 2.1 authentication on the HTTP transpor
 
 | Scope   | Tool Groups                                                        |
 | ------- | ------------------------------------------------------------------ |
-| `read`  | `core (read-only), search, analytics, relationships, io (export_entries), git (read-only)` |
-| `write` | `github (+ all read groups and create_entry / link_entries / mark_anchors_stale / import_external / import_markdown / export_markdown)` |
+| `read`  | `core (read-only), search, analytics, relationships (visualize_relationships), io (export_entries), git (read-only)` |
+| `write` | `github (+ all read groups and create_entry / create_entry_minimal / link_entries / mark_anchors_stale / import_external / import_markdown / export_markdown)` |
 | `team`  | `team (dedicated team collaboration scope; combine with read/write for personal journal access)` |
 | `audit` | `memory://audit resource access (dedicated audit scope; included automatically in admin and full)` |
 | `admin` | `admin, backup, codemode (+ all read/write/team/audit groups)`     |
@@ -568,17 +578,22 @@ memory-journal-mcp --transport http --port 3000
 
 | Variable                                       | Description                                                |
 | ---------------------------------------------- | ---------------------------------------------------------- |
-| **Core Database** | |
+| **Core Database & Server** | |
 | `DB_PATH`                                      | Path to the personal journal SQLite database               |
 | `DB_ENCRYPTION_KEY`                            | SQLCipher at-rest database encryption key (alias: `MJ_DB_ENCRYPTION_KEY`) |
 | `TEAM_DB_PATH`                                 | Path to the shared team SQLite database                    |
-| `TEAM_AUTHOR`                                  | Display name attached to team entries (resolved after OAuth identity claims when OAuth is active) |
+| `TEAM_AUTHOR`                                  | Display name attached to team entries (used for local author identity; OAuth identity claims take precedence when creating team entries/flags/comments under active OAuth) |
 | `TEAM_DEFAULT_ROLE`                            | Default RBAC role for unlisted team authors: `admin`, `member`, `viewer`, `denied` (CLI: `--team-default-role`, default: `denied`) |
 | `TEAM_ADMIN`                                   | Bootstrap admin author name when the `team_members` table is empty (CLI: `--team-admin`) |
 | `ADDITIONAL_TEAM_DBS`                          | JSON mapping of label to path for additional read-only team SQLite databases (CLI: `--additional-team-dbs`) |
 | `DEFAULT_WORKSPACE_ID`                         | Default workspace ID for multi-tenant isolation (`default`)|
+| `MEMORY_JOURNAL_CONFIG`                        | Path to configuration file (`.yaml`, `.yml`, `.json`; CLI: `--config`) |
+| `LOG_LEVEL`                                    | Server log verbosity: `debug`, `info`, `notice`, `warning`, `error`, `critical` (CLI: `--log-level`, default: `info`) |
 | `GITHUB_TOKEN`                                 | Personal access token for GitHub integrations              |
+| `DEFAULT_PROJECT_NUMBER`                       | Default GitHub Project number for issue auto-assignment (CLI: `--default-project`) |
 | `PROJECT_REGISTRY`                             | JSON map of repo names to local paths and project numbers  |
+| `EMBEDDING_MODEL`                              | HuggingFace transformers model for semantic search (CLI: `--embedding-model`, default: `Xenova/all-MiniLM-L6-v2`) |
+| `AUTO_REBUILD_INDEX`                           | Rebuild vector search index on startup (`true`/`false`, CLI: `--auto-rebuild-index`) |
 | **Security & Tooling** | |
 | `ALLOWED_IO_ROOTS`                             | Comma-separated paths for Code Mode and IO filesystem boundaries (fail-closed in stdio; mandatory when `--transport http` is used) |
 | `MEMORY_JOURNAL_MCP_TOOL_FILTER`               | Control tool exposure (`full`, `starter`, `codemode`, `readonly`, `-github`; CLI: `--tool-filter`, `memory-journal.config.json` key: `"toolFilter"`. Note: `TOOL_FILTER` is a display fallback only) |
@@ -586,6 +601,8 @@ memory-journal-mcp --transport http --port 3000
 | `CODEMODE_INTERNAL_FULL_ACCESS`                | Allow Code Mode to bypass tool filters internally (default: `false`) |
 | `MCP_AGENT_HEALING`                            | Enable/disable autonomous tool & parameter healing (`true`/`false`, CLI: `--no-agent-healing`) |
 | `MAX_TOOL_INPUT_ELEMENTS`                      | Max array/object elements in tool inputs (default: `25000`, `0` = disabled) |
+| `MCP_AUTH_TOKEN` / `MCP_AUTH_SCOPES`           | Static Bearer authentication token (`--auth-token`) and comma-separated granted scopes for HTTP transport (default: `read`) |
+| `MCP_ENABLE_HSTS` / `TRUST_PROXY`              | Enable `Strict-Transport-Security` header (`--enable-hsts`) and reverse-proxy `X-Forwarded-For` trust (`--trust-proxy`) |
 | **Briefing & Context** | |
 | `BRIEFING_ENTRY_COUNT`                         | Number of granular journal entries in briefing (default: 3)|
 | `BRIEFING_SUMMARY_COUNT`                       | Number of session summaries in briefing (default: 1)       |
@@ -595,15 +612,16 @@ memory-journal-mcp --transport http --port 3000
 | `BRIEFING_ISSUE_COUNT` / `BRIEFING_PR_COUNT` / `BRIEFING_PR_STATUS` | GitHub Issues (default: `0`), PRs (default: `0`), and PR status breakdown (default: `false`) in briefing |
 | `BRIEFING_MILESTONE_COUNT`                     | GitHub Milestones to list with titles (default: `3`)       |
 | `BRIEFING_WORKFLOW_COUNT` / `BRIEFING_WORKFLOW_STATUS` / `BRIEFING_COPILOT_REVIEWS` | CI workflow runs (default: `0`), status breakdown (default: `false`), and Copilot review state (default: `false`) |
+| `STALENESS_ACTIVE_HOURS` / `STALENESS_RECENT_DAYS` / `STALENESS_STALE_DAYS` | Thresholds for `memory://staleness` project classification (defaults: `24`h / `7`d / `30`d) |
 | `RULES_FILE_PATH` / `SKILLS_DIR_PATH` / `MEMORY_JOURNAL_WORKFLOW_SUMMARY` | Injected behavioral rules, skills boundaries, and workflow summary |
 | **OAuth (HTTP Mode)** | |
 | `OAUTH_ENABLED`                                | Enable OAuth 2.1 authentication (default: false)           |
 | `OAUTH_ISSUER` / `OAUTH_AUDIENCE` / `OAUTH_JWKS_URI` / `OAUTH_CLOCK_TOLERANCE` / `PUBLIC_ORIGIN` / `OAUTH_ALLOW_PLAINTEXT_LOOPBACK` | OAuth token verification parameters (clock tolerance default: 60s), non-loopback RFC 9728 public origin (`--public-origin`), and local dev plaintext loopback issuer flag (`--oauth-allow-plaintext-loopback`) |
 | **Telemetry & Administration** | |
 | `AUDIT_LOG_PATH` / `AUDIT_REDACT` / `AUDIT_READS` / `AUDIT_LOG_MAX_SIZE` | Path to JSONL audit log file, argument/result redaction, read-call logging, and rotation size limit (default: 10MB) |
-| `METRICS_EXPORT` / `PERSIST_METRICS` / `MJ_METRICS_PORT` / `MJ_METRICS_HOST` | Prometheus export (`METRICS_EXPORT=prometheus` auto-starts the standalone metrics server on `127.0.0.1:9465` in addition to mounting `/metrics` on the HTTP transport), disk-persisted metrics, and dedicated scrape port/host |
+| `METRICS_EXPORT` / `PERSIST_METRICS` / `METRICS_PATH` / `MJ_METRICS_PORT` / `MJ_METRICS_HOST` | Prometheus export (`METRICS_EXPORT=prometheus` auto-starts the standalone metrics server on `127.0.0.1:9465` in addition to mounting `/metrics` on the HTTP transport), disk-persisted metrics (`--persist-metrics`, `--metrics-path`), and dedicated scrape port/host |
 | `AUTO_PRUNE_INTERVAL_MINUTES` / `ARCHIVE_OLDER_THAN_DAYS` / `PRUNE_OLDER_THAN_DAYS` / `HARD_DELETE_OLDER_THAN_DAYS` / `PRUNE_IMPORTANCE_THRESHOLD` / `PRUNE_DRY_RUN` / `PRUNE_EXCLUDE_TAGS` | Autonomous lifecycle pruning, archiving (interval/days default: `0` = disabled), importance threshold (default: `0.15`), dry-run (default: `false`), and exclusion tags |
-| `REPORT_INTERVAL` / `REPORT_WEBHOOK_URL`       | Scheduled HTTP reports                                     |
+| `REPORT_INTERVAL` / `REPORT_WEBHOOK_URL` / `REPORT_WEBHOOK_AUTH` / `REPORT_CONTENT_TYPE` / `ALLOW_INSECURE_WEBHOOK_HTTP` | Scheduled HTTP reports, webhook delivery headers/content-type, and local dev HTTP webhook override |
 
 ### GitHub Integration (Optional)
 

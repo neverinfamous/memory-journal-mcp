@@ -82,7 +82,7 @@ flowchart LR
 | File                                     | Trigger                                                                             | Purpose                                                                                                                                                |
 | ---------------------------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | [docker-publish.yml](docker-publish.yml) | `workflow_call` from gatekeeper (on `tag v*` pushes after all 5 gates pass)         | Docker Scout scan + smoke test → multi-arch Docker build (amd64 + arm64) + SBOM/provenance attestation → manifest merge + Docker Hub README update → npm publish handoff |
-| [publish-npm.yml](publish-npm.yml)       | `workflow_call` (from docker-publish)                                               | Publishes to npm with version verification                                                                                                             |
+| [publish-npm.yml](publish-npm.yml)       | `workflow_call` (from docker-publish)                                               | Publishes to npm with provenance attestation and version verification                                                                                  |
 
 ---
 
@@ -112,7 +112,7 @@ For manual feature releases, the maintainer runs `/bump-deploy` locally which pu
 
 | Secret            | Used By                                                  | Purpose                        |
 | ----------------- | -------------------------------------------------------- | ------------------------------ |
-| `GITHUB_TOKEN` *(automatic)* | secrets-scanning, security-update, codeql    | Gitleaks scan, SARIF upload, issue creation (provided automatically by GitHub Actions) |
+| `GITHUB_TOKEN` *(automatic)* | `secrets-scanning`, `security-update`, `codeql`, `docker-publish` | TruffleHog checkout/diff scan, CodeQL/Trivy SARIF upload, build provenance attestation, issue creation (provided automatically by GitHub Actions) |
 | `NPM_TOKEN`       | gatekeeper → docker-publish → publish-npm                | npm registry authentication    |
 | `DOCKER_USERNAME` | gatekeeper → docker-publish                              | Docker Hub login               |
 | `DOCKER_PASSWORD` | gatekeeper → docker-publish                              | Docker Hub login               |

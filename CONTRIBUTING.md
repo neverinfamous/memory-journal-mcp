@@ -14,7 +14,7 @@ Thank you for your interest in contributing to the Memory Journal MCP Server! Th
 
 ### Prerequisites
 
-- **Node.js 24+** (Node.js 26.x LTS recommended)
+- **Node.js 24+** (Node.js 24 LTS or 26.x recommended)
 - **pnpm** (used for dependency management and scripts)
 - **Git** (for version control and GitHub integration testing)
 - **Docker** (optional, for container testing)
@@ -54,26 +54,18 @@ docker run --rm -i -v ./data:/app/data memory-journal-dev
 
 We especially welcome contributions in these areas:
 
-### 🎯 High Priority
+### High Priority
 
-- **Bug fixes** and stability improvements
-- **Performance improvements** (faster search, reduced memory usage)
-- **Better Git/GitHub integrations** (more context, better performance)
-- **New entry types** that make sense for developer workflows
+- **Test & E2E coverage** expansions across edge cases
+- **Performance & benchmark optimizations** for large journals
+- **MCP client integration guides** and workflow recipes
+- **Documentation improvements** and Code Mode examples
 
-### 🔍 Medium Priority
+### Ongoing Enhancements
 
-- **Enhanced semantic search** features and models
-- **Import/export utilities** for data portability
-- **Additional relationship types** between entries
-- **Documentation improvements** and examples
-
-### 💡 Future Features
-
-- **Graph visualization** enhancements for entry relationships
-- **Weekly/monthly auto-summaries**
-- **Team collaboration** improvements
-- **IDE integrations** beyond MCP
+- **Code Mode (`mj.*`)** workflow patterns and sandbox ergonomics
+- **Cognitive Management System (CMS)** & Hush Protocol refinements
+- **Multi-project & team federation** observability
 
 ## 🧪 Testing Your Changes
 

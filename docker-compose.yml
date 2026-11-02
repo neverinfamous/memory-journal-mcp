@@ -17,7 +17,7 @@ services:
       - GITHUB_TOKEN=
       - DEFAULT_PROJECT_NUMBER=
       - PROJECT_REGISTRY=
-      # - MCP_WORKSPACE_ID=
+      - MCP_WORKSPACE_ID=default
       # Tool filtering naming conventions: MEMORY_JOURNAL_MCP_TOOL_FILTER (env var), "toolFilter" (memory-journal.config.yaml — supports .yaml/.yml/.json), --tool-filter (CLI flag), tool_filter (update_configuration MCP tool). Note: TOOL_FILTER is a display-only fallback and does not activate startup filtering.
       - MEMORY_JOURNAL_MCP_TOOL_FILTER=
       - CODE_MODE_MAX_RESULT_SIZE=
@@ -26,10 +26,10 @@ services:
       - MCP_AGENT_HEALING=true
       # - DISABLE_ISSUE_LOGGING=false
       - MAX_TOOL_INPUT_ELEMENTS=25000
-      - NODE_ENV=
+      - NODE_ENV=production
       - DEBUG=
       - MEMORY_JOURNAL_CONFIG=
-      - MCP_HOST=
+      - MCP_HOST=0.0.0.0
       - PORT=
       - TRANSPORT=
       - STATELESS=
@@ -41,7 +41,7 @@ services:
       - LOG_LEVEL=
       - TRUST_PROXY=
       - PUBLIC_ORIGIN=
-      - DEFAULT_WORKSPACE_ID=
+      - DEFAULT_WORKSPACE_ID=default
       - OAUTH_ENABLED=
       - OAUTH_ISSUER=
       - OAUTH_AUDIENCE=
@@ -74,7 +74,7 @@ services:
       - METRICS_PATH=
       - METRICS_EXPORT=
       - MJ_METRICS_PORT=
-      - MJ_METRICS_HOST=
+      - MJ_METRICS_HOST=127.0.0.1
       - BACKUP_INTERVAL=
       - KEEP_BACKUPS=
       - VACUUM_INTERVAL=
@@ -126,7 +126,7 @@ services:
       - GITHUB_TOKEN=
       - DEFAULT_PROJECT_NUMBER=
       - PROJECT_REGISTRY=
-      # - MCP_WORKSPACE_ID=
+      - MCP_WORKSPACE_ID=default
       # Tool filtering naming conventions: MEMORY_JOURNAL_MCP_TOOL_FILTER (env var), "toolFilter" (memory-journal.config.yaml — supports .yaml/.yml/.json), --tool-filter (CLI flag), tool_filter (update_configuration MCP tool). Note: TOOL_FILTER is a display-only fallback and does not activate startup filtering.
       - MEMORY_JOURNAL_MCP_TOOL_FILTER=
       - CODE_MODE_MAX_RESULT_SIZE=
@@ -135,7 +135,7 @@ services:
       - MCP_AGENT_HEALING=true
       # - DISABLE_ISSUE_LOGGING=false
       - MAX_TOOL_INPUT_ELEMENTS=25000
-      - NODE_ENV=
+      - NODE_ENV=production
       - DEBUG=
       - MEMORY_JOURNAL_CONFIG=
       - MCP_HOST=0.0.0.0
@@ -150,7 +150,7 @@ services:
       - LOG_LEVEL=
       - TRUST_PROXY=
       - PUBLIC_ORIGIN=
-      - DEFAULT_WORKSPACE_ID=
+      - DEFAULT_WORKSPACE_ID=default
       - OAUTH_ENABLED=
       - OAUTH_ISSUER=
       - OAUTH_AUDIENCE=
@@ -183,7 +183,7 @@ services:
       - METRICS_PATH=
       - METRICS_EXPORT=
       - MJ_METRICS_PORT=
-      - MJ_METRICS_HOST=
+      - MJ_METRICS_HOST=127.0.0.1
       - BACKUP_INTERVAL=
       - KEEP_BACKUPS=
       - VACUUM_INTERVAL=

@@ -47,7 +47,7 @@ If internal validation fails (either via `strictSchema.parse(params)` throwing a
 Never allow raw MCP exceptions to leak to the client. All tool handlers must wrap their execution in a `try/catch` and return the result of `formatHandlerError(error)`.
 
 ```typescript
-// Use '../../' from src/handlers/tools/*.ts or '../../../' from src/handlers/tools/<group>/*.ts
+// Adjust relative depth: '../../' from src/handlers/tools/*.ts, '../../../' from src/handlers/tools/<group>/*.ts, etc.
 import { ValidationError } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 
@@ -81,7 +81,7 @@ Read the workspace briefing via `memory://briefing/{repo_name}` (or use the `loa
 When provided, the briefing contains:
 - `memory://briefing` (or `memory://briefing/{repo_name}` for multi-repo environments)
 - This provides ~350 tokens of high-value ambient context: server health, GitHub CI status, active milestones, and unreleased changes.
-Review it thoroughly before proceeding. For mid-session context recovery (project number, workspace, or agent ID), query `memory://agent-context/{+repo}` (or `memory://agent-id` / `memory://agent-id/{+repo}`) instead of re-reading `memory://briefing`.
+Review it thoroughly before proceeding. For mid-session context recovery (project number, workspace, or agent ID), query `memory://agent-context` / `memory://agent-context/{+repo}` (or `memory://agent-id` / `memory://agent-id/{+repo}`) instead of re-reading `memory://briefing`.
 
 ---
 
@@ -103,7 +103,7 @@ Review it thoroughly before proceeding. For mid-session context recovery (projec
 
 ## 💻 Execution & OS Boundaries
 
-Development is optimized for **Windows Native Orchestration** using PowerShell. However, you MUST cross the boundary into **WSL (`wsl bash -c`)** for:
+Development is optimized for **Windows Native Orchestration** using PowerShell. However, you MUST cross the boundary into **WSL (e.g., via `pnpm run test:wsl` / `pnpm run test:e2e:wsl`)** for:
 - **Native compilation**: Building SQLite C-bindings if `node-gyp` fails on Windows.
 - **CRLF Isolation**: Resolving string matching or `simple-git` errors caused by Windows line endings (`\r\n`).
 - **Forensic parsing**: Chaining complex tools (`grep`, `awk`) against massive Playwright E2E trace logs.

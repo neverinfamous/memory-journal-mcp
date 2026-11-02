@@ -89,6 +89,7 @@ src/
 ├── auth/                       # OAuth 2.1 authentication
 ├── codemode/                   # Sandboxed JS execution engine
 ├── constants/
+│   ├── icons.ts                # Capability and entity icon constants
 │   ├── instructions/           # Modular instruction sections (base, core, gotchas, templates)
 │   └── server-instructions.ts  # Dynamic server instructions and HELP_CONTENT map (Single Source of Truth)
 ├── database/
@@ -106,7 +107,7 @@ src/
 │   ├── resources/              # resource handlers
 │   └── prompts/                # prompt handlers
 ├── markdown/                   # Markdown import/export (round-trip frontmatter parsing)
-├── observability/              # Metrics interceptor, token estimator, latency tracker
+├── observability/              # Metrics interceptor, token estimator, latency tracker, Prometheus server/formatter
 ├── server/
 │   ├── mcp-server/             # MCP server setup & tool registration
 │   ├── auto-prune.ts           # Automated pruning & archiving scheduler
@@ -117,9 +118,10 @@ src/
 ├── transports/
 │   └── http/                   # HTTP/SSE transport (modularized)
 ├── types/                      # Type definitions + barrel
-├── utils/                      # Logger, error helpers, progress
+├── utils/                      # Config resolver/manager, workspace resolver, security utils, logger, error helpers, maintenance lock
 ├── vendor/                     # Vendored internal packages (lib-agent-exec, lib-git-history)
-├── vector/                     # Semantic search (sqlite-vec + transformers)
+├── vector/
+│   └── vector-search-manager/  # Semantic search (sqlite-vec + transformers)
 └── version.ts                  # Version SSoT (reads package.json)
 ```
 

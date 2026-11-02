@@ -15,9 +15,10 @@
 
 Large projects face a critical challenge. You lose context between sessions.
 
-- **Stop Thread Amnesia** - AI conversations start fresh. They ignore previous work.
-- **Retain Deep Context** - You scatter decisions and code across threads. We save them.
-- **End Repeated Work** - AI repeats failed solutions. We remember your attempts.
+- **Eliminate Session Amnesia** - AI forgets context when sessions end; Memory Journal remembers.
+- **Retain Deep Context** - Decisions and code scatter across threads; Memory Journal preserves them automatically.
+- **End Repeated Work** - AI repeats failed solutions; persistent history tracks every prior attempt.
+- **Prevent Context Overload** - Loading 55+ tool schemas bloats prompts; Code Mode compresses the API into one tool.
 
 Memory Journal builds your project's long-term memory. It bridges fragmented AI sessions seamlessly.
 
@@ -115,8 +116,8 @@ Control which tools and tool groups are exposed using `MEMORY_JOURNAL_MCP_TOOL_F
 | Group           | Description                                                                                                                                                                                       |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `codemode`      | Code Mode (sandboxed code execution) 🌟 **Recommended**                                                                                                                                           |
-| `core`          | Entry CRUD, tags, test, staleness                                                                                                                                                                 |
-| `search`        | Text search, date range, semantic, vector stats, cross-team                                                                                                                                       |
+| `core`          | Entry creation/read/history, tags, resource & briefing helpers, anchor staleness, test                                                                                                            |
+| `search`        | Text search, date range, semantic, vector stats, deleted entries, cross-team                                                                                                                      |
 | `analytics`     | Statistics, cross-project insights                                                                                                                                                                |
 | `relationships` | Link entries, visualize graphs                                                                                                                                                                    |
 | `io`            | JSON/Markdown export, Markdown directory import/export, and external import (Notion, Obsidian, Logseq)                                                                                            |
@@ -285,6 +286,7 @@ Restart Cursor or your MCP client and start journaling!
 
 - **`--config <path>`**: Load settings from `.yaml` or `.json`. Use `--dump-config` to debug precedence.
 - **`ALLOWED_IO_ROOTS` / `--allowed-io-roots`**: Comma-separated allowed filesystem paths (default: none — fail-closed in stdio; mandatory when `--transport http` is used).
+- **`MCP_AUTH_TOKEN` / `MCP_AUTH_SCOPES`**: Static Bearer token and granted scopes (`read` default; use `full` for full access).
 - **`MEMORY_JOURNAL_MCP_TOOL_FILTER` / `--tool-filter`**: Control tool exposure (`full`, `starter`, `codemode`, `readonly`, `-github`; config key: `"toolFilter"`).
 - **`MJ_DB_ENCRYPTION_KEY` / `DB_ENCRYPTION_KEY`**: Enables SQLCipher at-rest encryption.
 - **`CODEMODE_INTERNAL_FULL_ACCESS`**: Allow Code Mode to bypass tool filters internally (`false`).
@@ -315,6 +317,7 @@ docker run --rm -p 3000:3000 \
   -v ./data:/app/data \
   -e ALLOWED_IO_ROOTS="/app/data" \
   -e MCP_AUTH_TOKEN="your_secure_random_token" \
+  -e MCP_AUTH_SCOPES="full" \
   writenotenow/memory-journal-mcp:latest \
   --transport http --port 3000 --server-host 0.0.0.0
 ```

@@ -87,10 +87,10 @@ Brief description of the changes in this PR.
 ## 📚 Documentation
 
 - [ ] No documentation changes needed
-- [ ] README.md updated
+- [ ] README.md / DOCKER_README.md / AGENT_README.md updated
 - [ ] CONTRIBUTING.md updated
 - [ ] New documentation added
-- [ ] Examples updated
+- [ ] Examples / config templates updated
 
 ## ✅ Checklist
 
