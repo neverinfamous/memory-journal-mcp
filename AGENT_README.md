@@ -37,7 +37,7 @@ When modifying the codebase, you must adhere strictly to these architectural pat
 The MCP SDK has a known limitation: it validates inputs against our schemas *before* our handler code runs. If an SDK validation fails, it throws an opaque `-32602 InvalidParams` error that completely bypasses our internal, user-friendly error formatting.
 
 To solve this, we use the **Dual-Schema Pattern**. Every tool must define two Zod schemas:
-- **SDK-Facing (`inputSchema`)**: Extremely relaxed. All fields are optional and lack complex constraints (e.g., no `.min()`). This allows `{}` or missing fields to pass through the SDK boundary.
+- **SDK-Facing (`inputSchema`)**: Extremely relaxed. `register-tools.ts` registers `.partial()` schemas (while `list-interceptor.ts` unwraps `ZodPipe` wrappers up to 5 layers for `tools/list`), allowing `{}` or missing fields to pass through the SDK boundary. Any SDK-level `-32602` validation errors on preprocessed/piped schemas are intercepted by `call-interceptor.ts` and converted into structured `{ success: false, code: "VALIDATION_ERROR" }` responses.
 - **Handler-Internal**: Extremely strict. Inside the tool handler, the `try/catch` block uses a rigid schema with exact requirements.
 
 If internal validation fails (either via `strictSchema.parse(params)` throwing a `ZodError` or by explicitly throwing a `ValidationError`), `formatHandlerError(error)` catches it and returns a structured `{ success: false, error: "...", code: "VALIDATION_ERROR", category: "validation", recoverable: false }` response.
@@ -97,7 +97,7 @@ Review it thoroughly before proceeding. For mid-session context recovery (projec
 | `MEMORY_JOURNAL_MCP_TOOL_FILTER` | Control tool exposure (`full`, `codemode` [`mj_execute_code` + `update_configuration`], `starter`, `essential`, `core`, `readonly`, `-github`; CLI: `--tool-filter`, `memory-journal.config.json` key: `"toolFilter"`. Note: `TOOL_FILTER` is a display fallback only) |
 | `CODEMODE_INTERNAL_FULL_ACCESS` | Allow Code Mode (`mj.*`) to bypass tool filters internally across all tool namespaces (`true`/`false`, default: `false`, CLI: `--codemode-internal-full-access`) |
 | `MCP_AGENT_HEALING` | Enable/disable autonomous tool & parameter healing (`true`/`false`, CLI: `--no-agent-healing`) |
-| `MAX_TOOL_INPUT_ELEMENTS` | Max array/object elements in tool inputs (default: `25000`, `0` = disabled) |
+| `MAX_TOOL_INPUT_ELEMENTS` | Max array/object elements in tool inputs (default: `25000`, `0` or `Infinity` = disabled) |
 
 ---
 

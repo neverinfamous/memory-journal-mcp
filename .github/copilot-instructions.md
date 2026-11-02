@@ -46,8 +46,8 @@ If you find issues during code review, use `create_entry` with tag `copilot-find
 - **Never use `as` type assertions** — use `satisfies` operator or strict type guards
 - **Never use `@ts-ignore` or `@ts-expect-error`** — fix the underlying type issue
 - **Zod schemas** for all tool input validation
-- **Output schemas** — All tools have Zod output schemas; error responses must pass validation
-- **Dual Schema Pattern**: All tool schemas separate strict internal validation (`*Schema` preprocessed by `healAgentHallucinations`), MCP wire input schemas (`*SchemaMcp` using `relaxedNumber()` to accept stringified numbers from LLMs), and output schemas (`*OutputSchema`). `argsSchema` is omitted for zero-argument prompts AND prompts where all arguments are optional (`!hasRequired` in `src/server/registration.ts`), as `z.object({})` rejects `undefined` when clients omit arguments.
+- **Output schemas** — All standard domain tools (except `mj_execute_code`, which returns arbitrary sandbox results, and dummy healing tools) define Zod output schemas; error responses must pass validation
+- **Dual Schema Pattern**: All standard domain tool schemas separate strict internal validation (`*Schema` preprocessed by `healAgentHallucinations`), MCP wire input schemas (`*SchemaMcp` using `relaxedNumber()` to accept stringified numbers from LLMs), and output schemas (`*OutputSchema`, omitted on `mj_execute_code` and dummy healing tools). `argsSchema` is omitted for zero-argument prompts AND prompts where all arguments are optional (`!hasRequired` in `src/server/registration.ts`), as `z.object({})` rejects `undefined` when clients omit arguments.
 
 ### Error Handling
 
@@ -72,7 +72,7 @@ All resources must dynamically compute and return `_meta.tokenEstimate` within t
 
 - **Multi-Tenancy**: `workspace_id` is a core concept across multi-tenancy. No split-brain allowed. Workspace orphan ratio is correctly calculated using `workspaceId` instead of hardcoded `default`.
 - **Team Support**: Team database tools explicitly require `TEAM_DB_PATH`.
-- **Metrics**: Tools support `trust_score` and `impact_score` for analytics.
+- **Metrics**: Tools support `trust_score`, `impact_score`, and `validation_status` (`passed` | `none` | `failed`) for analytics.
 - **YAML Frontmatter**: Supported natively in entry commands (`memory-journal-mcp entry create`).
 - **Docker Tags**: Always use `:latest` docker tags. Check limits (25,000 char) for DOCKER_README.md.
 - **Dual-Schema Pattern**: All schemas must separate stringified input from strict internal domain types. Zod schemas are used.
@@ -111,9 +111,9 @@ src/
 ├── server/
 │   ├── mcp-server/             # MCP server setup & tool registration
 │   ├── auto-prune.ts           # Automated pruning & archiving scheduler
-│   ├── digest-reporter.ts      # Scheduled digest & webhook/file reporting
+│   ├── digest-reporter.ts      # Scheduled digest report formatting & webhook delivery
 │   ├── registration.ts         # Resource & prompt capability registration
-│   ├── scheduler.ts            # Cron jobs (backup, vacuum, index rebuild, digest, report)
+│   ├── scheduler.ts            # Periodic maintenance jobs (backup, vacuum, prune, rebuild-index, digest, report)
 │   └── subscription-manager.ts # MCP resource subscription notifications
 ├── transports/
 │   └── http/                   # HTTP/SSE transport (modularized)
@@ -145,6 +145,6 @@ When reviewing PRs, check for:
 - [ ] Raw exceptions from tool handlers — forbidden. Must return structured JSON via `formatHandlerError(error)` with exact classification codes
 - [ ] Files approaching 500 lines — flag for splitting
 - [ ] New tools missing from `src/filtering/tool-constants.ts` `TOOL_GROUPS` (re-exported by `src/filtering/tool-filter.ts`)
-- [ ] Missing Zod output schemas on new tools
+- [ ] Missing Zod output schemas on new standard domain tools (except `mj_execute_code` and dummy healing tools)
 - [ ] Kebab-case violations in new filenames
 - [ ] `continue-on-error: true` in workflow files — forbidden per project standards

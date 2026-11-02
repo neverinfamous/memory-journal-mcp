@@ -1,7 +1,6 @@
 name: Dockerfile Patch Drift Check
 
-# Verifies Dockerfile security invariants (npm/npx removal in stage 2),
-# package.json / pnpm-workspace.yaml override parity, and upstream npm
+# Verifies Dockerfile security invariants (npm/npx removal in stage 2) and upstream npm
 # registry versions for CVE overrides. Runs daily and on dependency changes.
 
 on:

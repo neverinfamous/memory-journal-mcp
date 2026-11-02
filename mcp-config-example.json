@@ -29,7 +29,7 @@
                 "GITHUB_TOKEN": "",
                 "DEFAULT_PROJECT_NUMBER": "1",
                 "PROJECT_REGISTRY": "",
-                "MCP_WORKSPACE_ID": "default",
+                "MCP_WORKSPACE_ID": "",
                 "MEMORY_JOURNAL_MCP_TOOL_FILTER": "full",
                 "CODE_MODE_MAX_RESULT_SIZE": "",
                 "CODEMODE_INTERNAL_FULL_ACCESS": "",

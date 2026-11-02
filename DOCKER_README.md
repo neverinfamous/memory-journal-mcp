@@ -18,7 +18,7 @@ Large projects face a critical challenge. You lose context between sessions.
 - **Eliminate Session Amnesia** - AI forgets context when sessions end; Memory Journal remembers.
 - **Retain Deep Context** - Decisions and code scatter across threads; Memory Journal preserves them automatically.
 - **End Repeated Work** - AI repeats failed solutions; persistent history tracks every prior attempt.
-- **Prevent Context Overload** - Loading 55+ tool schemas bloats prompts; Code Mode compresses the API into one tool.
+- **Prevent Context Overload** - Loading dozens of tool schemas bloats prompts; Code Mode compresses the API into one tool.
 
 Memory Journal builds your project's long-term memory. It bridges fragmented AI sessions seamlessly.
 
@@ -275,7 +275,7 @@ Set `RULES_FILE_PATH` and `SKILLS_DIR_PATH` to surface agent rules and skills as
 - **Minimal**: Remove `-e GITHUB_TOKEN`, repo mount, and `env` block.
 - **Team**: Add `-e "TEAM_DB_PATH=/app/data/team.db"`.
 - **Cross-Team**: Add `-e "ADDITIONAL_TEAM_DBS={\"other-team\":\"/app/data/other-team.db\"}"`.
-- **Code Mode**: Add `"--tool-filter", "codemode"`.
+- **Code Mode**: Add `"--tool-filter", "codemode", "--codemode-internal-full-access"`.
 - **Briefing**: Add `-e "BRIEFING_ENTRY_COUNT=5"`.
 
 ### 4. Restart & Journal!
@@ -286,14 +286,14 @@ Restart Cursor or your MCP client and start journaling!
 
 - **`--config <path>`**: Load settings from `.yaml` or `.json`. Use `--dump-config` to debug precedence.
 - **`ALLOWED_IO_ROOTS` / `--allowed-io-roots`**: Comma-separated allowed filesystem paths (default: none — fail-closed in stdio; mandatory when `--transport http` is used).
-- **`MCP_AUTH_TOKEN` / `MCP_AUTH_SCOPES`**: Static Bearer token and granted scopes (`read` default; use `full` for full access).
+- **`MCP_AUTH_TOKEN` / `MCP_AUTH_SCOPES`** (`--auth-token`, `--auth-scopes`): Static Bearer token and granted scopes (`read` default; use `full` for full access).
 - **`MEMORY_JOURNAL_MCP_TOOL_FILTER` / `--tool-filter`**: Control tool exposure (`full`, `starter`, `codemode`, `readonly`, `-github`; config key: `"toolFilter"`).
 - **`MJ_DB_ENCRYPTION_KEY` / `DB_ENCRYPTION_KEY`**: Enables SQLCipher at-rest encryption.
 - **`CODEMODE_INTERNAL_FULL_ACCESS`**: Allow Code Mode to bypass tool filters internally (`false`).
 - **`DEFAULT_WORKSPACE_ID` / `--default-workspace-id`**: Default workspace for multi-tenant isolation (`default`).
 - **`PROJECT_REGISTRY`**: Maps repo names to paths and project numbers for `workspace_id` resolution and multi-project routing.
 - **`MCP_AGENT_HEALING` / `--no-agent-healing`**: Set `MCP_AGENT_HEALING=false` (or `--no-agent-healing`) to disable autonomous tool/parameter healing.
-- **`MAX_TOOL_INPUT_ELEMENTS` / `--max-tool-input-elements`**: Max array/object elements in tool inputs (default: `25000`, `0` = disabled).
+- **`MAX_TOOL_INPUT_ELEMENTS` / `--max-tool-input-elements`**: Max array/object elements in tool inputs (default: `25000`, `0` or `Infinity` = disabled).
 - **`AUDIT_LOG_PATH` / `AUDIT_REDACT` / `AUDIT_READS` / `AUDIT_LOG_MAX_SIZE`** (`--audit-log`, `--no-audit-redact`, `--audit-reads`, `--audit-log-max-size`): JSONL audit log path (or `stderr`), redaction, read logging, and rotation size.
 - **`ARCHIVE_OLDER_THAN_DAYS` / `PRUNE_OLDER_THAN_DAYS` / `HARD_DELETE_OLDER_THAN_DAYS` / `PRUNE_IMPORTANCE_THRESHOLD` / `PRUNE_EXCLUDE_TAGS` / `AUTO_PRUNE_INTERVAL_MINUTES` / `PRUNE_DRY_RUN`**: Control auto-prune lifecycle. Test rules safely with `--prune-dry-run`.
 

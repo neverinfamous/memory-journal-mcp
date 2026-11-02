@@ -28,6 +28,7 @@ cd memory-journal-mcp
 
 # Install dependencies
 pnpm install
+pnpm run rebuild:sqlite # Rebuild native SQLite addon after switching Node.js versions
 
 # Build TypeScript
 pnpm run build
@@ -224,7 +225,6 @@ src/
 │   ├── migrations/             # Versioned schema migrations (MigrationManager)
 │   └── sqlite-adapter/         # Native SQLite operations (better-sqlite3)
 ├── filtering/                  # Tool group & shortcut meta-group filtering
-├── git/                        # Local Git repository inspection and commit analysis
 ├── github/
 │   └── github-integration/     # GitHub API integration
 ├── handlers/

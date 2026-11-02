@@ -412,7 +412,7 @@ memory-journal-mcp --transport http --port 3000 --server-host 0.0.0.0 --digest-i
 | `POST /mcp`                                 | JSON-RPC requests (initialize, tools/call, etc.)                   | Both     |
 | `GET /mcp`                                  | SSE stream for server-to-client notifications                      | Stateful |
 | `DELETE /mcp`                               | Session termination (`204 No Content`)                             | Both     |
-| `GET / POST /sse`                           | Legacy SSE connection & stateless/stateful POST (MCP 2024-11-05)   | Both     |
+| `GET / POST /sse`                           | Legacy SSE connection & stateless/stateful POST (MCP 2024-11-05)   | GET: Stateful / POST: Both |
 | `POST /messages`                            | Legacy SSE message endpoint                                        | Stateful |
 | `GET /health`                               | Health check (`{ status, timestamp }`)                             | Both     |
 | `GET /metrics`                              | Prometheus metrics export (requires flag)                          | Both     |
@@ -483,7 +483,7 @@ memory-journal-mcp --transport http --port 3000 \
 | `--report-interval <min>`               | 0 (off)                  | Scheduled report generation interval in minutes                       |
 | `--report-webhook-url <url>`            | —                        | HTTPS webhook URL for scheduled report delivery                       |
 | `--report-webhook-auth <header>`        | —                        | Custom `Authorization` header for webhook requests                    |
-| `--report-content-type <type>`          | `application/json`       | Webhook payload content type (`application/json` or `text/markdown`)  |
+| `--report-content-type <type>`          | `slack`                  | Webhook payload format: `slack`, `discord`, or `json` (env: `REPORT_CONTENT_TYPE`) |
 | `--digest-interval <min>`               | 0 (off)                  | Scheduled periodic digest analysis report                             |
 | `--auto-prune-interval <min>`           | 0 (off)                  | Run autonomous garbage collection (archive, soft-delete, hard-delete) |
 | `--archive-older-than-days <days>`      | 0 (off)                  | Auto-archive low-importance entries older than N days                 |
@@ -534,10 +534,10 @@ For production deployments, enable OAuth 2.1 authentication on the HTTP transpor
 
 | Scope   | Tool Groups                                                        |
 | ------- | ------------------------------------------------------------------ |
-| `read`  | `core (read-only), search, analytics, relationships (visualize_relationships), io (export_entries), git (read-only)` |
+| `read`  | `core (read-only), search, analytics, relationships (visualize_relationships), io (export_entries), git` |
 | `write` | `github (+ all read groups and create_entry / create_entry_minimal / link_entries / mark_anchors_stale / import_external / import_markdown / export_markdown)` |
 | `team`  | `team (dedicated team collaboration scope; combine with read/write for personal journal access)` |
-| `audit` | `memory://audit resource access (dedicated audit scope; included automatically in admin and full)` |
+| `audit` | `Dedicated audit hierarchy scope (included in admin/full; memory://audit and search_audit_log enforce admin or full at runtime)` |
 | `admin` | `admin, backup, codemode (+ all read/write/team/audit groups)`     |
 | `full`  | `Unrestricted access to all operations`                            |
 
@@ -582,7 +582,7 @@ memory-journal-mcp --transport http --port 3000
 | `DB_PATH`                                      | Path to the personal journal SQLite database               |
 | `DB_ENCRYPTION_KEY`                            | SQLCipher at-rest database encryption key (alias: `MJ_DB_ENCRYPTION_KEY`) |
 | `TEAM_DB_PATH`                                 | Path to the shared team SQLite database                    |
-| `TEAM_AUTHOR`                                  | Display name attached to team entries (used for local author identity; OAuth identity claims take precedence when creating team entries/flags/comments under active OAuth) |
+| `TEAM_AUTHOR`                                  | Display name attached to team entries (used for local author identity; OAuth identity claims take precedence when creating team entries and RBAC ownership under active OAuth) |
 | `TEAM_DEFAULT_ROLE`                            | Default RBAC role for unlisted team authors: `admin`, `member`, `viewer`, `denied` (CLI: `--team-default-role`, default: `denied`) |
 | `TEAM_ADMIN`                                   | Bootstrap admin author name when the `team_members` table is empty (CLI: `--team-admin`) |
 | `ADDITIONAL_TEAM_DBS`                          | JSON mapping of label to path for additional read-only team SQLite databases (CLI: `--additional-team-dbs`) |
@@ -600,8 +600,8 @@ memory-journal-mcp --transport http --port 3000
 | `CODE_MODE_MAX_RESULT_SIZE`                    | Max execution payload buffer size in Code Mode (bytes, default: `102400`) |
 | `CODEMODE_INTERNAL_FULL_ACCESS`                | Allow Code Mode to bypass tool filters internally (default: `false`) |
 | `MCP_AGENT_HEALING`                            | Enable/disable autonomous tool & parameter healing (`true`/`false`, CLI: `--no-agent-healing`) |
-| `MAX_TOOL_INPUT_ELEMENTS`                      | Max array/object elements in tool inputs (default: `25000`, `0` = disabled) |
-| `MCP_AUTH_TOKEN` / `MCP_AUTH_SCOPES`           | Static Bearer authentication token (`--auth-token`) and comma-separated granted scopes for HTTP transport (default: `read`) |
+| `MAX_TOOL_INPUT_ELEMENTS`                      | Max array/object elements in tool inputs (default: `25000`, `0` or `Infinity` = disabled) |
+| `MCP_AUTH_TOKEN` / `MCP_AUTH_SCOPES`           | Static Bearer authentication token (`--auth-token`, `--auth-scopes`) and comma-separated granted scopes for HTTP transport (default: `read`) |
 | `MCP_ENABLE_HSTS` / `TRUST_PROXY`              | Enable `Strict-Transport-Security` header (`--enable-hsts`) and reverse-proxy `X-Forwarded-For` trust (`--trust-proxy`) |
 | **Briefing & Context** | |
 | `BRIEFING_ENTRY_COUNT`                         | Number of granular journal entries in briefing (default: 3)|

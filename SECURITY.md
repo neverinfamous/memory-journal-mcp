@@ -46,7 +46,7 @@ The server uses the native **better-sqlite3** driver with **sqlite-vec** for vec
 ### **Path Traversal & Filesystem Boundaries**
 
 - ✅ **Explicit Filesystem Boundaries** — Filesystem access MUST be explicitly granted via `ALLOWED_IO_ROOTS`. The server operates in a **fail-closed** mode (`ALLOWED_IO_ROOTS=[]`) by default if not explicitly configured, preventing all filesystem interaction.
-- ✅ **URL-Encoded & Null-Byte Rejection** — `assertSafeDirectoryPath` rejects URL-encoded traversal sequences (`%2e`, `%2f`, `%5c`, `%00`) and raw null bytes before decoding, resolves ancestor symlinks iteratively via `fs.realpathSync()`, and validates containment using `path.relative()`.
+- ✅ **URL-Encoded, Null-Byte & Symlink Rejection** — `assertSafeDirectoryPath` (`src/utils/security-utils.ts`) rejects URL-encoded traversal sequences (`%2e`, `%2f`, `%5c`, `%00`) and raw null bytes before decoding, resolves ancestor symlinks iteratively via `fs.realpathSync()`, and validates containment using `path.relative()`. `assertSafeFilePath` (`src/utils/security-utils.ts`) additionally rejects file-level symbolic links via `fs.lstatSync(filePath).isSymbolicLink()`.
 - ✅ **Implicit Authority Disabled** — The server no longer derives ambient filesystem authority from the location of database files.
 - ✅ **Backup & Restore Boundaries** — `backup_journal` and `restore_backup` enforce `path.relative()` containment against the backup directory and reject symlinks or traversal characters (`/`, `\`, `..`).
 - ✅ **Agent-Healing Filesystem Fallbacks** — When `--no-agent-healing` is not set, read-only fallback tools (`view_file`, `list_dir`, `grep_search`) enforce `ALLOWED_IO_ROOTS` (fail-closed `[]` when unconfigured; `list_dir` defaults its target directory argument to `process.cwd()`), reject symlink file targets (`view_file`, single-file `grep_search`), resolve directory realpaths (`list_dir`, directory `grep_search`), skip symbolic links during recursive `grep_search` traversal, cap file reads at 2MB, and require `admin` scope under OAuth 2.1.
@@ -128,10 +128,10 @@ For production HTTP deployments, Memory Journal supports **OAuth 2.1 authenticat
 
 | Scope   | Tool Groups                                                                | Description                            |
 | ------- | -------------------------------------------------------------------------- | -------------------------------------- |
-| `read`  | `core (read-only), search, analytics, relationships (visualize_relationships), io (export_entries), git (read-only)`                 | Read-only operations                   |
+| `read`  | `core (read-only), search, analytics, relationships (visualize_relationships), io (export_entries), git`                 | Read-only operations                   |
 | `write` | `github (+ all read groups and create_entry / create_entry_minimal / link_entries / mark_anchors_stale / import_external / import_markdown / export_markdown)` | Read + write operations                |
 | `team`  | `team (dedicated team collaboration scope)`                                                                | Team database operations               |
-| `audit` | `memory://audit resource access (dedicated audit scope; included automatically in admin and full)`         | Operational telemetry resource access  |
+| `audit` | `Dedicated audit hierarchy scope (included in admin/full; memory://audit and search_audit_log enforce admin or full at runtime)`         | Operational telemetry resource access  |
 | `admin` | `admin, backup, codemode (+ all read/write/team/audit groups)`             | Full administrative access             |
 | `full`  | `Unrestricted access to all operations`                                    | Unrestricted access to all tool groups |
 
@@ -280,7 +280,7 @@ Code Mode (`mj_execute_code`) executes user-provided JavaScript in a hardened `w
 - ✅ **Rate limiting** — 60 executions per minute per client
 - ✅ **Hard timeouts** — configurable execution limit (default 30s) with forced worker termination
 - ✅ **Egress boundary enforcement** — result serialization capped at configurable limit (default 100KB) with automatic collection compaction (`compactOversizedResult`) for large object/array payloads to prevent OOM via oversized payloads
-- ✅ **Readonly Proxy traps** — when `readonly: true`, stripped mutation methods throw clear error messages listing available methods
+- ✅ **Readonly Proxy traps** — when `readonly: true` is passed to `mj_execute_code`, calling a stripped mutation method resolves to a structured `{ success: false, error: "🛠️ AUTONOMOUS HEALING: Operation '<key>' is blocked in readonly mode. Read operations only.", code: "VALIDATION_ERROR" }` object rather than throwing an exception
 - ✅ **Schema Introspection Scope** — `.schema()` properties are strictly bound to the permitted methods in the RPC allowlist, preventing unintended internal structure leakage
 - ✅ **Audit logging** — all executions logged with code preview, metrics, and readonly mode
 - ✅ **Pre-warmed worker pool** — Worker threads are pre-warmed on startup to eliminate cold-start latency, with idle recycling and age-based recycling for memory hygiene

@@ -69,7 +69,7 @@ jobs:
         run: pnpm audit
 
   # Smoke test: verify the Docker image builds and starts successfully
-  # Catches dependency resolution failures that only surface after npm prune (neverinfamous/db-mcp#149)
+  # Catches dependency resolution failures that only surface after production dependency pruning (pnpm install --frozen-lockfile --prod) (neverinfamous/db-mcp#149)
   docker-smoke-test:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
