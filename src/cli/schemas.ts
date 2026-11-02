@@ -196,14 +196,18 @@ export const adminPruneOptionsSchema = pruningOptionsSchema
 
 export const baseEntryOptionsSchema = z.object({
     file: z.string().optional(),
+    contentFile: z.string().optional(),
     content: z.string().optional(),
+    body: z.string().optional(),
     description: z.string().optional(),
     title: z.string().optional(),
     summary: z.string().optional(),
     type: z.string().optional(),
     category: z.string().optional(),
     tags: z.string().optional(),
+    tag: z.string().optional(),
     project: safeCoerceNumber,
+    projectNumber: safeCoerceNumber,
     project_number: safeCoerceNumber,
     trustScore: safeCoerceNumber,
     trust_score: safeCoerceNumber,

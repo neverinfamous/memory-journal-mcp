@@ -86,14 +86,14 @@ export function deepCamelToSnake(obj: unknown, depth = 0): unknown {
 const MUTATING_TOOL_NAMES = new Set([
     'create_entry', 'update_entry', 'delete_entry', 'restore_entry',
     'batch_create_entries', 'batch_update_entries', 'batch_delete_entries',
-    'add_team_member', 'update_team_member', 'remove_team_member',
+    'team_add_member', 'team_update_member_role', 'team_remove_member',
 ])
 
-function notifySubscriptionsIfMutated(toolName: string, result: unknown, sessionContext: ToolContext): void {
+function notifySubscriptionsIfMutated(tool: ToolDefinition, result: unknown, sessionContext: ToolContext): void {
     if (!isRecord(result) || result['success'] !== true) return
     const isMutation =
-        MUTATING_TOOL_NAMES.has(toolName) ||
-        (toolName.startsWith('team_') && toolName !== 'team_search' && toolName !== 'get_team_entry_by_id')
+        MUTATING_TOOL_NAMES.has(tool.name) ||
+        (tool.name.startsWith('team_') && tool.annotations.readOnlyHint !== true)
     if (!isMutation) return
 
     const subMgr = sessionContext.config?.subscriptionManager ?? globalSubscriptionManager
@@ -101,7 +101,7 @@ function notifySubscriptionsIfMutated(toolName: string, result: unknown, session
     void subMgr.notifyResourceUpdated('memory://recent')
     void subMgr.notifyResourceUpdated('memory://statistics')
 
-    if (toolName.startsWith('team_') || toolName.includes('team_member')) {
+    if (tool.name.startsWith('team_')) {
         void subMgr.notifyResourceUpdated('memory://team/recent')
         void subMgr.notifyResourceUpdated('memory://team/statistics')
     }
@@ -244,7 +244,7 @@ export function createSecureDispatcher(
                 : await metricsWrapped(argsRecord)
 
         injectProjectNames(result, sessionContext.config?.projectRegistry)
-        notifySubscriptionsIfMutated(tool.name, result, sessionContext)
+        notifySubscriptionsIfMutated(tool, result, sessionContext)
         return result
     }
 }

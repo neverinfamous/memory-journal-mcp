@@ -300,7 +300,8 @@ withGroup(updateEntryCmd, 'Command Options', (cmd: Command) => {
         .option('--category <type>', 'Entry type (alias)')
         .option('--tags <tags>', 'Comma-separated tags (e.g., session-summary)')
         .option('--tag <tags>', 'Alias for --tags (Auto-healing agent hallucination)')
-        .option('--project, --project-number <number>', 'Project number')
+        .option('-p, --project <number>', 'Project number (alias)')
+        .option('--project-number <number>', 'Project number')
         .option('--project_number <number>', 'Project number (alias)')
         .option('--trust, --trust-score <number>', 'Trust score (0.0 to 1.0)')
         .option('--trust_score <number>', 'Trust score (0.0 to 1.0) (alias)')
@@ -347,7 +348,7 @@ const searchCmd = program
     .description('Search journal entries')
 withGroup(searchCmd, 'Command Options', (cmd: Command) => {
     cmd
-        .option('--query, -q <string>', 'Search query (alias for positional argument)')
+        .option('-q, --query <string>', 'Search query (alias for positional argument)')
         .option('--term <string>', 'Search query (alias)')
         .option('--keyword <string>', 'Search query (alias)')
         .option('--mode <mode>', 'Search mode: auto, fts, semantic, hybrid', 'auto')

@@ -40,6 +40,10 @@ export async function createServer(options: ServerOptions): Promise<void> {
         teamAdmin: options.teamAdmin,
         runtime,
         subscriptionManager: globalSubscriptionManager,
+        archiveOlderThanDays: options.archiveOlderThanDays,
+        pruneOlderThanDays: options.pruneOlderThanDays,
+        hardDeleteOlderThanDays: options.hardDeleteOlderThanDays,
+        pruneImportanceThreshold: options.pruneImportanceThreshold,
     }
 
     const dispatch = (name: string, args: Record<string, unknown>): Promise<unknown> =>

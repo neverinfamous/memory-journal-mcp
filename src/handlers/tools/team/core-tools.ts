@@ -11,6 +11,7 @@ import { sendProgress } from '../../../utils/progress-utils.js'
 import { resolveAuthor, resolveAuthenticatedAuthor } from '../../../utils/security-utils.js'
 import { getAuthContext } from '../../../auth/auth-context.js'
 import { resolveIssueUrl } from '../../../utils/github-helpers.js'
+import { autoIndexEntry } from '../../../utils/vector-index-helpers.js'
 import { resolveWorkspaceId, resolveProjectContext } from '../../../utils/workspace-resolver.js'
 import { TEAM_DB_ERROR_RESPONSE, batchFetchAuthors, fetchAuthor } from './helpers.js'
 import {
@@ -184,6 +185,8 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
 
                     teamDb.flushSave()
 
+                    await autoIndexEntry(context.teamVectorManager, teamDb, entry.id, wsId)
+
                     if (context.config?.subscriptionManager) {
                         void context.config.subscriptionManager.notifyResourceUpdated('memory://team/recent')
                         // Broad stroke briefing update trigger
@@ -287,7 +290,8 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                         return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
-                    const { limit, cursor, sort_by, project_number, workspace_id } = TeamGetRecentSchema.parse(params)
+                    const { limit, cursor, sort_by, project_number, workspace_id, include_archived } =
+                        TeamGetRecentSchema.parse(params)
                     const wsId = workspace_id ? resolveWorkspaceId(workspace_id, project_number, context.config) : undefined
                     const projectNumber = project_number
                     const result = teamDb.searchEntries('', {
@@ -296,6 +300,7 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                         sortBy: sort_by,
                         projectNumber: projectNumber,
                         workspaceId: wsId,
+                        includeArchived: include_archived,
                     })
 
                     const entries = result.entries

@@ -265,6 +265,7 @@ export function buildEntryPayload(
 
     const projectRaw =
         options.project ??
+        options.projectNumber ??
         options.project_number ??
         metadata['project'] ??
         metadata['projectNumber'] ??

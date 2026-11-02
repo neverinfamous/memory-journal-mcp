@@ -53,9 +53,9 @@ const MUTATING_TOOLS = new Set([
     'batch_create_entries',
     'batch_update_entries',
     'batch_delete_entries',
-    'add_team_member',
-    'update_team_member',
-    'remove_team_member',
+    'team_add_member',
+    'team_update_member_role',
+    'team_remove_member',
 ])
 
 interface ModernToolConfig {
@@ -259,8 +259,7 @@ export function createServerInstance(
                         const isMutation =
                             MUTATING_TOOLS.has(tool.name) ||
                             (tool.name.startsWith('team_') &&
-                                tool.name !== 'team_search' &&
-                                tool.name !== 'get_team_entry_by_id')
+                                tool.annotations.readOnlyHint !== true)
 
                         if (isMutation) {
                             void globalSubscriptionManager.notifyResourceUpdated('memory://briefing')
@@ -269,10 +268,7 @@ export function createServerInstance(
                                 'memory://statistics'
                             )
 
-                            if (
-                                tool.name.startsWith('team_') ||
-                                tool.name.includes('team_member')
-                            ) {
+                            if (tool.name.startsWith('team_')) {
                                 void globalSubscriptionManager.notifyResourceUpdated(
                                     'memory://team/recent'
                                 )
