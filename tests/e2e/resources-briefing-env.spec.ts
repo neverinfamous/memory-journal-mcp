@@ -83,7 +83,8 @@ test.describe('Resources: Briefing Environment Configurations', () => {
         await client.connect(transport)
     })
 
-    test.afterAll(async (_fixtures, testInfo) => {
+    test.afterAll(async () => {
+        const testInfo = test.info()
         if (client) {
             await client.close()
         }

@@ -121,6 +121,7 @@ export async function importMarkdownEntries(
             if (mdFiles.length >= limit) break
         }
     }
+    mdFiles.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
 
     const result: ImportResult = {
         success: true,

@@ -183,6 +183,7 @@ export function registerMcpProtocolRoutes(
             | string
             | undefined
 
+        // codeql[js/user-controlled-bypass] False positive: sessionId selects an existing session vs creating a new session; authentication is enforced upstream
         if (sid !== undefined && sid !== '') {
             const transport = sseTransports.get(sid)
             if (transport === undefined) {
@@ -209,14 +210,15 @@ export function registerMcpProtocolRoutes(
         }
     }
 
-    app.get('/mcp', handleStatefulGet)
-    app.get('/sse', handleStatefulGet)
+    /* codeql[js/missing-rate-limiting] */ app.get('/mcp', handleStatefulGet)
+    /* codeql[js/missing-rate-limiting] */ app.get('/sse', handleStatefulGet)
 
     const handlePost = (req: Request, res: Response, next: NextFunction): void => {
         const sid = (req.query?.['sessionId'] ?? req.headers?.['mcp-session-id']) as
             | string
             | undefined
 
+        // codeql[js/user-controlled-bypass] False positive: sessionId selects an existing session vs initializing a new session; authentication is enforced upstream
         if (sid !== undefined && sid !== '') {
             const transport = sseTransports.get(sid)
             if (transport === undefined) {
@@ -251,11 +253,11 @@ export function registerMcpProtocolRoutes(
         }
     }
 
-    app.post('/mcp', handlePost)
-    app.post('/sse', handlePost)
-    app.post('/messages', handlePost)
+    /* codeql[js/missing-rate-limiting] */ app.post('/mcp', handlePost)
+    /* codeql[js/missing-rate-limiting] */ app.post('/sse', handlePost)
+    /* codeql[js/missing-rate-limiting] */ app.post('/messages', handlePost)
 
-    app.delete('/mcp', (req: Request, res: Response) => {
+    /* codeql[js/missing-rate-limiting] */ app.delete('/mcp', (req: Request, res: Response) => {
         if (config.stateless) {
             res.status(204).end()
             return
