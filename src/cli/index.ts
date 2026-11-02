@@ -47,7 +47,7 @@ addAgentInstructions(program,
 🤖 AI AGENT INSTRUCTIONS:
 - This is an agent-native CLI. 
 - ALWAYS use valid JSON strings for JSON arguments (e.g. \`--rel '[{"target_id":1,"relation_type":"relates_to"}]'\`).
-- If you forget project details, DO NOT hallucinate. Query \`memory://agent-context/{repo}\`.
+- If you forget project details, DO NOT hallucinate. Query \`memory://agent-context/{+repo}\`.
 - 🛠️ AUTONOMOUS HEALING: DO NOT attempt to run \`node .../build/index.js\`. ALWAYS use the global \`memory-journal-mcp\` wrapper or \`bun src/cli/index.ts\`.`
 )
 
