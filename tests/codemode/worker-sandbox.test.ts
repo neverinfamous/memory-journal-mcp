@@ -157,22 +157,22 @@ describe('WorkerSandbox', () => {
         const r1 = await sandbox.execute('return sqlite.schema.help();', bindings)
         expect(r1.success).toBe(true)
         expect((r1.result as any).group).toBe('schema')
-        expect((r1.result as any).tables).toContain('entries')
+        expect((r1.result as any).tables).toContain('memory_journal')
 
         // Test 2: Global schema.help()
         const r2 = await sandbox.execute('return schema.help();', bindings)
         expect(r2.success).toBe(true)
-        expect((r2.result as any).tables).toContain('entries')
+        expect((r2.result as any).tables).toContain('memory_journal')
 
         // Test 3: mj.schema.help()
         const r3 = await sandbox.execute('return mj.schema.help();', bindings)
         expect(r3.success).toBe(true)
-        expect((r3.result as any).tables).toContain('entries')
+        expect((r3.result as any).tables).toContain('memory_journal')
 
         // Test 4: db.schema.help()
         const r4 = await sandbox.execute('return db.schema.help();', bindings)
         expect(r4.success).toBe(true)
-        expect((r4.result as any).tables).toContain('entries')
+        expect((r4.result as any).tables).toContain('memory_journal')
 
         // Test 5: sqlite.schema() calls getStatistics
         const r5 = await sandbox.execute('return await sqlite.schema();', bindings)
@@ -182,12 +182,12 @@ describe('WorkerSandbox', () => {
         // Test 6: sqlite.schema.listTables()
         const r6 = await sandbox.execute('return await sqlite.schema.listTables();', bindings)
         expect(r6.success).toBe(true)
-        expect((r6.result as any).tables).toContain('entries')
+        expect((r6.result as any).tables).toContain('memory_journal')
 
         // Test 7: sqlite.schema.describeTable('entries')
         const r7 = await sandbox.execute("return await sqlite.schema.describeTable('entries');", bindings)
         expect(r7.success).toBe(true)
-        expect((r7.result as any).tables).toContain('entries')
+        expect((r7.result as any).tables).toContain('memory_journal')
 
         // Test 8: sqlite.help()
         const r8 = await sandbox.execute('return sqlite.help();', bindings)

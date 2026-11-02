@@ -1223,10 +1223,10 @@ return {
 
             const helpResult = await schema.help()
             expect(helpResult.group).toBe('schema')
-            expect(helpResult.tables).toContain('entries')
+            expect(helpResult.tables).toContain('memory_journal')
 
             const tablesResult = await schema.listTables()
-            expect(tablesResult.tables).toContain('entries')
+            expect(tablesResult.tables).toContain('memory_journal')
 
             // Method introspection attached on alias methods (METHOD_ALIASES)
             const schemaAlias = (proxy as Record<string, any>)['schema']

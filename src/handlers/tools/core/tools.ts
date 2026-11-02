@@ -2,8 +2,7 @@ import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { sendProgress } from '../../../utils/progress-utils.js'
-import { resolveAuthor } from '../../../utils/security-utils.js'
-import { getAuthContext } from '../../../auth/auth-context.js'
+import { resolveAuthenticatedAuthor } from '../../../utils/security-utils.js'
 import { enforceAccessBoundary } from '../../../auth/validation.js'
 import { resolveIssueUrl } from '../../../utils/github-helpers.js'
 import { resolveWorkspaceId, resolveProjectContext } from '../../../utils/workspace-resolver.js'
@@ -186,16 +185,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                             { requiresTeamScope: true },
                             context.config?.runtime?.auditLogger
                         )
-                        const authCtx = getAuthContext()
-                        if (authCtx?.authenticated) {
-                            const claims = authCtx.claims
-                            const email = typeof claims?.['email'] === 'string' ? claims['email'] : undefined
-                            const prefName = typeof claims?.['preferred_username'] === 'string' ? claims['preferred_username'] : undefined
-                            const subject = typeof claims?.['subject'] === 'string' ? claims['subject'] : undefined
-                            author = claims?.sub ?? email ?? prefName ?? subject ?? resolveAuthor()
-                        } else {
-                            author = resolveAuthor()
-                        }
+                        author = resolveAuthenticatedAuthor()
 
                         if (author && author !== 'unknown') {
                             context.teamDb.createEntry({

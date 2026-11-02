@@ -9,6 +9,7 @@ import {
     relaxedNumber,
     healAgentHallucinations,
     StrictProjectNumberSchema,
+    preprocessRelationshipItem,
 } from '../schemas.js'
 
 // ============================================================================
@@ -52,27 +53,7 @@ export const CreateEntrySchema = z.preprocess(
         session_id: z.string().optional(),
         relationships: z.array(
             z.preprocess(
-                (item: unknown) => {
-                    if (item !== null && typeof item === 'object') {
-                        const relObj = item as Record<string, unknown>
-                        return {
-                            targetId:
-                                relObj['targetId'] ??
-                                relObj['target_id'] ??
-                                relObj['to_entry_id'] ??
-                                relObj['toEntryId'] ??
-                                relObj['id'],
-                            relationType:
-                                relObj['relationType'] ??
-                                relObj['relation_type'] ??
-                                relObj['relationship_type'] ??
-                                relObj['relationshipType'] ??
-                                relObj['type'] ??
-                                'references',
-                        }
-                    }
-                    return item
-                },
+                preprocessRelationshipItem,
                 z.object({
                     targetId: z.number(),
                     relationType: z
@@ -188,27 +169,7 @@ export const CreateEntrySchemaMcp = z.preprocess(
         session_id: z.string().optional().describe('Agent session ID for thread isolation (usually conversation ID).'),
         relationships: z.array(
             z.preprocess(
-                (item: unknown) => {
-                    if (item !== null && typeof item === 'object') {
-                        const relObj = item as Record<string, unknown>
-                        return {
-                            targetId:
-                                relObj['targetId'] ??
-                                relObj['target_id'] ??
-                                relObj['to_entry_id'] ??
-                                relObj['toEntryId'] ??
-                                relObj['id'],
-                            relationType:
-                                relObj['relationType'] ??
-                                relObj['relation_type'] ??
-                                relObj['relationship_type'] ??
-                                relObj['relationshipType'] ??
-                                relObj['type'] ??
-                                'references',
-                        }
-                    }
-                    return item
-                },
+                preprocessRelationshipItem,
                 z.object({
                     targetId: relaxedNumber(),
                     relationType: z.string().optional().default('references'),

@@ -253,7 +253,7 @@ describe('Code Mode Extended Coverage', () => {
             const schemaHelp = await schemaObj.help()
             expect(schemaHelp.group).toBe('schema')
             const tables = await schemaObj.listTables()
-            expect(tables.tables).toContain('entries')
+            expect(tables.tables).toContain('memory_journal')
             const descEntries = await schemaObj.describeTable('entries')
             expect(descEntries.group).toBe('schema')
             const descCustom = await schemaObj.describeTable('custom_table')

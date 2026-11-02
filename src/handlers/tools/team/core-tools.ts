@@ -8,7 +8,7 @@ import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { sendProgress } from '../../../utils/progress-utils.js'
-import { resolveAuthor } from '../../../utils/security-utils.js'
+import { resolveAuthor, resolveAuthenticatedAuthor } from '../../../utils/security-utils.js'
 import { getAuthContext } from '../../../auth/auth-context.js'
 import { resolveIssueUrl } from '../../../utils/github-helpers.js'
 import { resolveWorkspaceId, resolveProjectContext } from '../../../utils/workspace-resolver.js'
@@ -95,17 +95,7 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                     const authCtx = getAuthContext()
                     let author: string
                     if (authCtx?.authenticated) {
-                        const claims = authCtx.claims
-                        const email =
-                            typeof claims?.['email'] === 'string' ? claims['email'] : undefined
-                        const prefName =
-                            typeof claims?.['preferred_username'] === 'string'
-                                ? claims['preferred_username']
-                                : undefined
-                        const subject =
-                            typeof claims?.['subject'] === 'string' ? claims['subject'] : undefined
-                        const authId =
-                            claims?.sub ?? email ?? prefName ?? subject ?? resolveAuthor()
+                        const authId = resolveAuthenticatedAuthor()
 
                         if (input.author !== undefined && input.author !== authId) {
                             return {

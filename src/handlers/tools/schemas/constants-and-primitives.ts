@@ -125,3 +125,29 @@ export const StrictProjectNumberSchema = z
             'Missing project_number. You MUST provide a valid project_number (e.g., 1) to associate this action with a specific project context.',
     })
     .optional()
+
+/**
+ * Normalize relationship item aliases (target_id, to_entry_id, relation_type, type, etc.)
+ * into canonical { targetId, relationType } shape before Zod validation.
+ */
+export function preprocessRelationshipItem(item: unknown): unknown {
+    if (item !== null && typeof item === 'object') {
+        const relObj = item as Record<string, unknown>
+        return {
+            targetId:
+                relObj['targetId'] ??
+                relObj['target_id'] ??
+                relObj['to_entry_id'] ??
+                relObj['toEntryId'] ??
+                relObj['id'],
+            relationType:
+                relObj['relationType'] ??
+                relObj['relation_type'] ??
+                relObj['relationship_type'] ??
+                relObj['relationshipType'] ??
+                relObj['type'] ??
+                'references',
+        }
+    }
+    return item
+}

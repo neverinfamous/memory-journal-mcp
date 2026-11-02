@@ -80,6 +80,7 @@ export const TeamLinkEntriesSchemaMcp = z
         relationship_type: data.type ?? data.relationship_type,
         description: data.description,
         project_number: data.project_number,
+        workspace_id: data.workspace_id,
     }))
 
 /** team_visualize_relationships — strict */

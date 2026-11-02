@@ -153,6 +153,38 @@ describe('Team Core Tool Handlers', () => {
             expect(created.entry.workflowStatus).toBe('completed')
         })
 
+        it('should normalize snake_case relationships in team_create_entry and preserve workspace_id in TeamLinkEntriesSchemaMcp', async () => {
+            const { TeamLinkEntriesSchemaMcp } = await import(
+                '../../src/handlers/tools/team/schemas/analytics-vector-schemas.js'
+            )
+            const parsedLink = TeamLinkEntriesSchemaMcp.parse({
+                from: 1,
+                to: 2,
+                type: 'implements',
+                workspace_id: 'alpha',
+            })
+            expect(parsedLink.workspace_id).toBe('alpha')
+            expect(parsedLink.from_entry_id).toBe(1)
+            expect(parsedLink.to_entry_id).toBe(2)
+
+            const created = (await callTool(
+                'team_create_entry',
+                {
+                    workspace_id: 'default',
+                    project_number: 1,
+                    content: 'Snake-case relationships test',
+                    relationships: [{ target_id: entry1Id, relation_type: 'relates_to' }],
+                },
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
+            )) as any
+            expect(created.success).toBe(true)
+        })
+
         it('should return error if not found', async () => {
             const result = (await callTool(
                 'team_get_entry_by_id',

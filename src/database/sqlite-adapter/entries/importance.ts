@@ -15,6 +15,8 @@ export const MAX_RELATIONSHIP_SCORE_AT = 5
 export const MAX_CAUSAL_SCORE_AT = 3
 /** Number of days after which the recency component decays to zero */
 export const RECENCY_WINDOW_DAYS = 90
+/** Baseline significance value when significance_type is set without a higher impact_score */
+export const SIGNIFICANCE_TYPE_BASELINE = 0.5
 
 /**
  * Build a Common Table Expression (CTE) which aggregates a relationship
@@ -57,7 +59,7 @@ export function buildImportanceSqlExpression(): string {
     const w = IMPORTANCE_WEIGHTS
     return `(
     (
-        MAX(COALESCE(e.impact_score, 0.0), CASE WHEN e.significance_type IS NOT NULL THEN 0.5 ELSE 0.0 END) * ${String(w.significance)}
+        MAX(COALESCE(e.impact_score, 0.0), CASE WHEN e.significance_type IS NOT NULL THEN ${String(SIGNIFICANCE_TYPE_BASELINE)} ELSE 0.0 END) * ${String(w.significance)}
         + MIN(COALESCE(rs.rel_count, 0) * 1.0 / ${String(MAX_RELATIONSHIP_SCORE_AT)}, 1.0) * ${String(w.relationships)}
         + MIN(COALESCE(rs.causal_count, 0) * 1.0 / ${String(MAX_CAUSAL_SCORE_AT)}, 1.0) * ${String(w.causal)}
         + MAX(0, 1.0 - (julianday('now') - julianday(e.timestamp)) / ${String(RECENCY_WINDOW_DAYS)}.0) * ${String(w.recency)}
@@ -113,7 +115,7 @@ export function calculateImportance(
     const causalCount = (row['causal_count'] as number) ?? 0
     const worstStatusRank = (row['worst_status_rank'] as number) ?? 3
 
-    const significanceRaw = Math.max(impactScore, significanceType ? 1.0 : 0.0)
+    const significanceRaw = Math.max(impactScore, significanceType ? SIGNIFICANCE_TYPE_BASELINE : 0.0)
     const relationshipsRaw = Math.min(relCount / MAX_RELATIONSHIP_SCORE_AT, 1.0)
     const causalRaw = Math.min(causalCount / MAX_CAUSAL_SCORE_AT, 1.0)
 
@@ -221,7 +223,7 @@ export function attachImportanceScoresToEntries(
 
         const significanceRaw = Math.max(
             entry.impactScore ?? 0.0,
-            entry.significanceType ? 0.5 : 0.0
+            entry.significanceType ? SIGNIFICANCE_TYPE_BASELINE : 0.0
         )
         const relationshipsRaw = Math.min(stats.relCount / MAX_RELATIONSHIP_SCORE_AT, 1.0)
         const causalRaw = Math.min(stats.causalCount / MAX_CAUSAL_SCORE_AT, 1.0)
@@ -319,7 +321,10 @@ export function getEntriesByIdsWithImportance(
     for (const [id, entry] of entriesMap.entries()) {
         const stats = relData.get(id) ?? { relCount: 0, causalCount: 0, worstStatusRank: 3 }
 
-        const significanceRaw = Math.max(entry.impactScore ?? 0.0, entry.significanceType ? 0.5 : 0.0)
+        const significanceRaw = Math.max(
+            entry.impactScore ?? 0.0,
+            entry.significanceType ? SIGNIFICANCE_TYPE_BASELINE : 0.0
+        )
         const relationshipsRaw = Math.min(stats.relCount / MAX_RELATIONSHIP_SCORE_AT, 1.0)
         const causalRaw = Math.min(stats.causalCount / MAX_CAUSAL_SCORE_AT, 1.0)
 

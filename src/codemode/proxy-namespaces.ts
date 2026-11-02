@@ -6,11 +6,21 @@
 import { wrapResult } from './worker-result-proxy.js'
 import { wrapPromise } from './proxy-helpers.js'
 import { VERSION } from '../version.js'
+import { ENTRY_TYPES, SIGNIFICANCE_TYPES } from '../handlers/tools/schemas/constants-and-primitives.js'
 
 export type InvokeRpcFn = (group: string, method: string, args: unknown[]) => Promise<unknown>
 export type SafeRpcCallFn = (group: string, method: string, args: unknown[]) => Promise<unknown>
 
-const TABLES = ['entries', 'tags', 'entry_tags', 'relationships', 'projects']
+const TABLES = [
+    'memory_journal',
+    'tags',
+    'entry_tags',
+    'relationships',
+    'entry_anchors',
+    'entry_revisions',
+    'vec_embeddings',
+    'team_flags',
+]
 
 /**
  * Builds the `mj.schema` virtual namespace proxy.
@@ -20,17 +30,25 @@ export function createSchemaProxy(safeRpcCall: SafeRpcCallFn): object {
         Promise.resolve({
             group: 'schema',
             description:
-                'Memory Journal Schema: Embedded SQLite database storing entries, tags, entry tags, relationships, and projects.',
+                'Memory Journal Schema: Embedded SQLite database storing journal entries, tags, relationships, code anchors, revisions, vector embeddings, and team flags.',
             tables: TABLES,
             entrySchema: {
                 id: 'number (auto-increment primary key)',
-                title: 'string (required, entry title)',
-                content: 'string (markdown body)',
-                entry_type: "'journal' | 'retrospective' | 'decision' | 'note' | 'runbook'",
-                tags: 'string[] (optional array of tags)',
-                project_number: 'number (optional project number)',
+                content: 'string (required, markdown body)',
+                entry_type: ENTRY_TYPES.map((t) => `'${t}'`).join(' | '),
+                timestamp: 'string (ISO 8601 timestamp)',
+                is_personal: 'boolean (default: true)',
+                significance_type: `optional (${SIGNIFICANCE_TYPES.map((t) => `'${t}'`).join(' | ')})`,
+                tags: 'string[] (optional array of kebab-case tags)',
+                workspace_id: 'string (required repository/workspace identifier)',
+                project_number: 'number (optional GitHub project number)',
+                impact_score: 'number (0.0-1.0 blast radius score)',
+                trust_score: 'number (0.0-1.0 confidence score)',
+                validation_status: "'passed' | 'none' | 'failed'",
+                auto_context: 'string (optional JSON metadata string, e.g. { "commits": ["<sha>"] })',
                 session_id: 'string (optional session tracking id)',
-                metadata: 'Record<string, unknown> (optional JSON metadata)',
+                relationships: 'Array<{ targetId: number, relationType?: string }> (optional entry links)',
+                anchors: 'Array<{ anchor_path: string, anchor_type: string, status?: string }> (optional code anchors)',
             },
             methods: ['help', 'describe', 'listTables', 'describeTable', 'getSchema'],
             usage: 'Use mj.core.createEntry.schema() for entry parameter details, or mj.analytics.getStatistics() for database statistics.',

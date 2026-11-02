@@ -11,6 +11,7 @@ import {
     DATE_FORMAT_MESSAGE,
     StrictProjectNumberSchema,
     healAgentHallucinations,
+    preprocessRelationshipItem,
 } from '../../schemas.js'
 import { ErrorFieldsMixin } from '../../error-fields-mixin.js'
 
@@ -54,10 +55,16 @@ export const TeamCreateEntrySchema = z.preprocess(
             session_id: z.string().optional(),
             relationships: z
                 .array(
-                    z.object({
-                        targetId: z.number(),
-                        relationType: z.enum(TEAM_RELATION_TYPES).optional().default('references'),
-                    })
+                    z.preprocess(
+                        preprocessRelationshipItem,
+                        z.object({
+                            targetId: z.number(),
+                            relationType: z
+                                .enum(TEAM_RELATION_TYPES)
+                                .optional()
+                                .default('references'),
+                        })
+                    )
                 )
                 .optional(),
         })
@@ -200,10 +207,13 @@ export const TeamCreateEntrySchemaMcp = z.preprocess(
                 .describe('Agent session ID for thread isolation (usually conversation ID).'),
             relationships: z
                 .array(
-                    z.object({
-                        targetId: relaxedNumber(),
-                        relationType: z.string().optional().default('references'),
-                    })
+                    z.preprocess(
+                        preprocessRelationshipItem,
+                        z.object({
+                            targetId: relaxedNumber(),
+                            relationType: z.string().optional().default('references'),
+                        })
+                    )
                 )
                 .optional()
                 .describe(

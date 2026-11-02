@@ -67,7 +67,7 @@ flowchart LR
 | [gatekeeper.yml](gatekeeper.yml)                                         | push to `main` / tag `v*`                | Orchestrates CI/CD: fans out 5 verification gates (`lint-and-test`, `codeql`, `secrets-scanning`, `security-update`, `e2e`) on `push to main` and `tag v*`; triggers `docker-publish.yml` **only** on `tag v*` pushes (`refs/tags/v*`) |
 | [lint-and-test.yml](lint-and-test.yml)                                   | PR to `main` / `workflow_call`           | Lint, typecheck, build, unit & E2E tests (Node 24.x + 26.x matrix), pnpm audit, Docker smoke test                                                                                                   |
 | [e2e.yml](e2e.yml)                                                       | PR to `main` / manual / `workflow_call`  | Playwright E2E Tests                                                                                                                                                                                |
-| [dockerfile-patch-drift.yml](dockerfile-patch-drift.yml)                 | PR (path-filtered) / daily (12:00 UTC) / manual | Dockerfile & Override Drift Check (bundled npm deps & `package.json overrides` vs npm registry)                                                                                                      |
+| [dockerfile-patch-drift.yml](dockerfile-patch-drift.yml)                 | PR (path-filtered) / daily (12:00 UTC) / manual | Dockerfile & Override Drift Check (verifies stage-2 npm removal invariant & checks `package.json overrides` against npm registry)                                                                  |
 
 ### Security
 

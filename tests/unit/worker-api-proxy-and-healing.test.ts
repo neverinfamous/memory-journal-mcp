@@ -156,8 +156,8 @@ describe('Worker API Proxy (buildApiProxy)', () => {
         const schema = mj['schema'] as Record<string, unknown> & (() => Promise<Record<string, unknown>>)
         expect((await schema())['method']).toBe('get_statistics')
         expect(((await (schema['help'] as () => Promise<Record<string, unknown>>)())['tables'] as string[]).length).toBeGreaterThan(0)
-        expect(((await (schema['listTables'] as () => Promise<Record<string, unknown>>)())['tables'] as string[])).toContain('entries')
-        expect(schema['tables']).toContain('entries')
+        expect(((await (schema['listTables'] as () => Promise<Record<string, unknown>>)())['tables'] as string[])).toContain('memory_journal')
+        expect(schema['tables']).toContain('memory_journal')
 
         // Top-level help
         const topHelp = await (mj['help'] as () => Promise<Record<string, unknown>>)()
