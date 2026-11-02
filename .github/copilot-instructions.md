@@ -77,7 +77,7 @@ All resources must dynamically compute and return `_meta.tokenEstimate` within t
 - **Docker Tags**: Always use `:latest` docker tags. Check limits (25,000 char) for DOCKER_README.md.
 - **Dual-Schema Pattern**: All schemas must separate stringified input from strict internal domain types. Zod schemas are used.
 - **Vendor Sync**: Ensure vendored libraries in `src/vendor/` (`lib-agent-exec` and `lib-git-history`, tracked in `src/vendor/VENDOR.json`) are kept in sync via `pnpm run sync:vendor` and validated via `pnpm run check:vendor-deps`.
-- **Guardrails**: The `Server Bug Protocol` (`src/constants/instructions/gotchas.ts`) instructs agents to stop and report unexpected server errors, `healAgentHallucinations` (`src/handlers/tools/schemas/hallucination-healer.ts`) autonomously normalizes malformed tool arguments, and the session briefing health alert surfaces maintenance recommendations (via the `optimize-journal` prompt).
+- **Guardrails**: `GOTCHAS_HELP` (`src/constants/instructions/gotchas.ts`) documents critical usage gotchas (covering search/query, backup/restore, GitHub/Kanban, content formatting, and sandbox execution), `memory://briefing` injects the session initialization guardrail, `healAgentHallucinations` (`src/handlers/tools/schemas/hallucination-healer.ts`) autonomously normalizes malformed tool arguments, and the session briefing health alert surfaces maintenance recommendations (via the `optimize-journal` prompt).
 - **Code Mode Error Proxy**: Code Mode API, Promise, and Worker proxies intercept and enrich errors with the `🛠️ AUTONOMOUS HEALING:` guidance prefix, while `worker-result-proxy.ts` prefixes `.error` with `[${code}]`.
 
 ## Architecture
@@ -99,7 +99,6 @@ src/
 ├── filtering/
 │   ├── tool-constants.ts       # Tool groups and meta-group definitions (TOOL_GROUPS)
 │   └── tool-filter.ts          # Tool filtering engine
-├── git/                        # Local Git repository integration (simple-git)
 ├── github/
 │   └── github-integration/     # GitHub API (@octokit/rest + GraphQL)
 ├── handlers/
@@ -119,7 +118,7 @@ src/
 │   └── http/                   # HTTP/SSE transport (modularized)
 ├── types/                      # Type definitions + barrel
 ├── utils/                      # Logger, error helpers, progress
-├── vendor/                     # Vendored internal packages
+├── vendor/                     # Vendored internal packages (lib-agent-exec, lib-git-history)
 ├── vector/                     # Semantic search (sqlite-vec + transformers)
 └── version.ts                  # Version SSoT (reads package.json)
 ```
@@ -128,7 +127,7 @@ src/
 
 | File                                     | Purpose                                              |
 | ---------------------------------------- | ---------------------------------------------------- |
-| `src/constants/server-instructions.ts` | Server instructions (`generateInstructions()` and `HELP_CONTENT` map; compiled from `src/constants/instructions/markdown/*.md` into `src/constants/instructions/*.ts` via `pnpm run generate:instructions`) |
+| `src/constants/server-instructions.ts` | Server instructions (`generateStandardInstructions()`, `generateCodeModeInstructions()`, `SERVER_INSTRUCTIONS`, and `HELP_CONTENT` map; compiled from `src/constants/instructions/markdown/*.md` into `src/constants/instructions/*.ts` via `pnpm run generate:instructions`) |
 | `test-server/code-map.md`                | File → tool/handler mapping                          |
 | `test-server/tool-reference.md`          | Categorized tool inventory                       |
 | `CONTRIBUTING.md`                        | Development setup and PR guidelines                  |

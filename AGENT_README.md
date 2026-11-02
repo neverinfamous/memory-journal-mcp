@@ -80,7 +80,7 @@ Read the workspace briefing via `memory://briefing/{repo_name}` (or use the `loa
 When provided, the briefing contains:
 - `memory://briefing` (or `memory://briefing/{repo_name}` for multi-repo environments)
 - This provides ~350 tokens of high-value ambient context: server health, GitHub CI status, active milestones, and unreleased changes.
-Review it thoroughly before proceeding. For mid-session context recovery (project number, workspace, or agent ID), query `memory://agent-context/{repo}` (or `memory://agent-id`) instead of re-reading `memory://briefing`.
+Review it thoroughly before proceeding. For mid-session context recovery (project number, workspace, or agent ID), query `memory://agent-context/{+repo}` (or `memory://agent-id` / `memory://agent-id/{+repo}`) instead of re-reading `memory://briefing`.
 
 ---
 
@@ -109,5 +109,5 @@ Development is optimized for **Windows Native Orchestration** using PowerShell. 
 
 ## 🛡️ Testing & Validation Gates
 
-- Code validation is handled via `pnpm run check` (handles linting, typechecking, vitest, and playwright E2E).
+- Code validation is handled via `pnpm run check` (runs ESLint, 500-line file length ceiling check, `tsc --noEmit`, code-map sync, unassigned workspace entry check, Vitest unit tests, and Playwright E2E).
 - Hard fail on security checks; never use `continue-on-error: true` in CI pipelines.

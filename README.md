@@ -430,7 +430,7 @@ memory-journal-mcp --transport http --port 3000 --server-host 0.0.0.0 --digest-i
 
 - **OAuth 2.1** — RFC 9728/8414, JWT/JWKS, granular scopes (opt-in via `--oauth-enabled`)
 - **Comprehensive Security Headers** — CSP, HSTS (opt-in), X-Frame-Options, and more
-- **Rate Limiting** — 100 req/min per IP · **CORS** — configurable multi-origin (exact-match) · **1MB body limit**
+- **Rate Limiting** — 100 req/min per subject/IP · **CORS** — configurable multi-origin (exact-match) · **1MB body limit**
 - **Server Timeouts** — Request (120s), keep-alive (65s), headers (66s) · **404 handler** · **Cross-protocol guard**
 - **Build Provenance** · **SBOM** · **Supply Chain Attestations** · **Non-root execution**
 
@@ -534,7 +534,7 @@ For production deployments, enable OAuth 2.1 authentication on the HTTP transpor
 | Scope   | Tool Groups                                                        |
 | ------- | ------------------------------------------------------------------ |
 | `read`  | `core, search, analytics, relationships, io, git`                  |
-| `write` | `github (+ all read groups and create_entry / create_entry_minimal / link_entries / mark_anchors_stale / import_external / import_markdown / export_markdown)` |
+| `write` | `github (+ all read groups and create_entry / link_entries / mark_anchors_stale / import_external / import_markdown / export_markdown)` |
 | `team`  | `team (dedicated team collaboration scope)`                        |
 | `audit` | `audit log access`                                                 |
 | `admin` | `admin, backup, codemode (+ all read/write/team/audit groups)`     |
@@ -558,7 +558,8 @@ export ALLOWED_IO_ROOTS="/path/to/projects"
 export OAUTH_ENABLED=true
 export OAUTH_ISSUER=https://auth.example.com/realms/mcp
 export OAUTH_AUDIENCE=memory-journal-mcp
-export OAUTH_CLOCK_TOLERANCE=5
+export OAUTH_JWKS_URI=https://auth.example.com/realms/mcp/protocol/openid-connect/certs
+export OAUTH_CLOCK_TOLERANCE=60
 memory-journal-mcp --transport http --port 3000
 ```
 
@@ -636,7 +637,7 @@ See the **[Complete tools reference](https://github.com/neverinfamous/memory-jou
 
 ### Automate with GitHub Commander Workflows
 
-The server natively bundles the `memory-journal-mcp` agent skill (served via SEP-2640 and `memory://skills`). It also provides built-in `issue-commander` and `pr-commander` MCP workflow prompts for autonomous DevOps stewardship: **Issue Triage**, **Milestone Sprints**, **PR Reviews**, **Copilot Audits**, **Security Audits**, **Code Quality Audits**, **Performance Audits**, **Roadmap Kickoffs**, and **Dependency Updates**. These workflows enforce multi-gate validation (`lint`, `typecheck`, `test`, and security checks) locally during agent tasks.
+The server natively bundles the `memory-journal-mcp` agent skill (served via SEP-2640 and `memory://skills`). It also provides built-in `issue-commander`, `pr-commander`, and `cms-rem-supervisor` MCP workflow prompts for autonomous DevOps stewardship: **Issue Triage**, **Milestone Sprints**, **PR Reviews**, **Copilot Audits**, **Security Audits**, **Code Quality Audits**, **Performance Audits**, **Roadmap Kickoffs**, and **Dependency Updates**. These workflows enforce multi-gate validation (`lint`, `typecheck`, `test`, and security checks) locally during agent tasks.
 
 ## 🏗️ Architecture
 
@@ -742,7 +743,7 @@ pnpm run test:e2e  # End-to-end HTTP/SSE transport tests
 - **Path traversal & SSRF protection** - `ALLOWED_IO_ROOTS` sandbox containment with URL-decode/symlink verification, backup path validation, and outbound webhook DNS/IP SSRF blocking
 - **Multi-tenant & filter enforcement** - End-to-end `workspace_id` isolation across SQLite and Vector search, plus execution-layer `--tool-filter` enforcement across `tools/call`, Code Mode (`mj.*`), and fallback handlers
 - **MCP 2025-11-25 annotations & icons** - Behavioral hints (`readOnlyHint`, `destructiveHint`, etc.) and capability icons
-- **HTTP transport hardening** - OAuth 2.1 `tokenClaims` propagation, principal-bound stateful sessions (`100` max active sessions), comprehensive security headers, configurable multi-origin CORS, 1MB body/stream limit, built-in rate limiting (100 req/min), server timeouts, HSTS (opt-in), 30-min session timeout, and localhost-bound metrics (`METRICS_EXPORT=prometheus` automatically starts the standalone metrics server on `127.0.0.1:9465`, customizable via `MJ_METRICS_PORT` and `MJ_METRICS_HOST`, in addition to mounting `/metrics` on the HTTP transport)
+- **HTTP transport hardening** - OAuth 2.1 `tokenClaims` propagation, principal-bound stateful sessions (`100` max active sessions), comprehensive security headers, configurable multi-origin CORS, 1MB body/stream limit, built-in per-subject/IP rate limiting (100 req/min), server timeouts, HSTS (opt-in), 30-min session timeout, and localhost-bound metrics (`METRICS_EXPORT=prometheus` automatically starts the standalone metrics server on `127.0.0.1:9465`, customizable via `MJ_METRICS_PORT` and `MJ_METRICS_HOST`, in addition to mounting `/metrics` on the HTTP transport)
 - **Token scrubbing** - GitHub tokens and credentials automatically redacted from error and audit logs
 
 ### Data & Privacy

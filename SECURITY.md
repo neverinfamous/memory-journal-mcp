@@ -23,8 +23,8 @@ The server uses the native **better-sqlite3** driver with **sqlite-vec** for vec
 ### **Content & Boundary Limits**
 
 - **Journal entries**: 50,000 characters maximum
-- **Tags**: Normalized via slug regex (`[^a-z0-9:@]+` -> `-`) and bound via parameterized queries at the SQLite adapter boundary (100 characters maximum)
-- **Entry & significance types**: Enforced against strict `ENTRY_TYPES` and `SIGNIFICANCE_TYPES` enum allowlists (50 characters maximum)
+- **Tags**: Normalized via slug regex (`[^a-z0-9:@]+` → `-`, rejecting empty post-normalization tags) and bound via parameterized queries at the SQLite adapter boundary
+- **Entry & significance types**: Enforced against strict `ENTRY_TYPES` and `SIGNIFICANCE_TYPES` enum allowlists
 - **Timestamps**: Validated and normalized to ISO 8601 (`YYYY-MM-DDTHH:MM:SS.sssZ`) in `validateEntryInput()`
 - **Query & batch bounds**: `MAX_QUERY_LIMIT = 500` per query and `MAX_BATCH_SIZE = 50` per bulk operation
 - **HTTP request body**: 1MB maximum (prevents memory exhaustion)
@@ -49,7 +49,7 @@ Tags are lowercased, normalized via slug regex (`[^a-z0-9:@]+` -> `-`, with lead
 - ✅ **URL-Encoded & Null-Byte Rejection** — `assertSafeDirectoryPath` rejects URL-encoded traversal sequences (`%2e`, `%2f`, `%5c`, `%00`) and raw null bytes before decoding, resolves ancestor symlinks iteratively via `fs.realpathSync()`, and validates containment using `path.relative()`.
 - ✅ **Implicit Authority Disabled** — The server no longer derives ambient filesystem authority from the location of database files.
 - ✅ **Backup & Restore Boundaries** — `backup_journal` and `restore_backup` enforce `path.relative()` containment against the backup directory and reject symlinks or traversal characters (`/`, `\`, `..`).
-- ✅ **Agent-Healing Filesystem Fallbacks** — When `--no-agent-healing` is not set, read-only fallback tools (`view_file`, `list_dir`, `grep_search`) enforce `ALLOWED_IO_ROOTS`, skip symbolic links during recursive directory traversal, cap file reads at 2MB, and require `admin` scope over HTTP.
+- ✅ **Agent-Healing Filesystem Fallbacks** — When `--no-agent-healing` is not set, read-only fallback tools (`view_file`, `list_dir`, `grep_search`) enforce `ALLOWED_IO_ROOTS` (defaulting to `process.cwd()`), reject symlink targets (`view_file`, `list_dir`) and skip symbolic links during recursive `grep_search` traversal, cap file reads at 2MB, and require `admin` scope under OAuth 2.1.
 - ✅ **Typed security errors** with consistent error codes
 
 ### **Multi-Tenant Workspace Isolation (`workspace_id`)**
@@ -94,13 +94,13 @@ export CORS_ORIGIN="http://localhost:3000,https://my-app.com"
 
 ### **Rate Limiting & Timeouts**
 
-- ✅ **Built-in Rate Limiting** — 100 requests/minute per IP (sliding window with `Retry-After` header)
+- **Rate limiting**: 100 requests/minute per authenticated subject or fallback client IP (60-second fixed window with `Retry-After` header and 10,000-key LRU eviction)
 - ✅ **HTTP Timeouts** — Request timeout (120s), keep-alive timeout (65s), headers timeout (66s)
 
 ### **Session Management (Stateful Mode)**
 
 - ✅ **UUID-based session IDs** (cryptographically random)
-- ✅ **Principal-bound sessions** — Authenticated sessions bind `mcp-session-id` to the caller's principal (`sub` or Bearer token hash); cross-principal session reuse is rejected with `403 Forbidden`, and unknown or uninitialized `sessionId` / `mcp-session-id` requests return `400 Bad Request` (`Session not found`)
+- ✅ **Principal-bound sessions** — Authenticated sessions bind `mcp-session-id` to the caller's principal (OAuth `sub`/`email`/`client_id` or SHA-256 hash of static Bearer token + client IP); cross-principal session reuse is rejected with `403 Forbidden`, capacity is capped at 1,000 active sessions (`100` concurrent SSE/session streams, `503 Service Unavailable` when full), and unknown or uninitialized `sessionId` / `mcp-session-id` requests return `400 Bad Request` (`Session not found`)
 - ✅ **Active session cap** — Enforces a hard limit of `100` concurrent active sessions (`503 Service Unavailable` when full) and rejects duplicate SSE stream attachments on the same session (`409 Conflict`)
 - ✅ **Idle timeout** — Sessions inactive for 30 minutes are automatically expired
 - ✅ **1-minute sweep interval** — periodic cleanup of expired sessions and subscription listeners
@@ -129,7 +129,7 @@ For production HTTP deployments, Memory Journal supports **OAuth 2.1 authenticat
 | Scope   | Tool Groups                                                                | Description                            |
 | ------- | -------------------------------------------------------------------------- | -------------------------------------- |
 | `read`  | `core, search, analytics, relationships, io, git`                          | Read-only operations                   |
-| `write` | `github (+ all read groups and create_entry / create_entry_minimal / link_entries / mark_anchors_stale / import_external / import_markdown / export_markdown)` | Read + write operations                |
+| `write` | `github (+ all read groups and create_entry / link_entries / mark_anchors_stale / import_external / import_markdown / export_markdown)` | Read + write operations                |
 | `team`  | `team (dedicated team collaboration scope)`                                | Team database operations               |
 | `audit` | `audit log access`                                                         | Audit log queries and inspection       |
 | `admin` | `admin, backup, codemode (+ all read/write/team/audit groups)`             | Full administrative access             |
@@ -269,7 +269,7 @@ Code Mode (`mj_execute_code`) executes user-provided JavaScript in a hardened `w
 
 - ✅ **Pre-validation ordering** — Code Mode enablement checks, client rate-limiting, and the 50KB byte-size cap execute *before* any code healer or SQL auto-recovery pass, and SQL recovery uses a linear `O(N)` state-machine parser (zero `node:vm` execution on the host thread)
 - ✅ **Single-pass lexical scanner** — `stripCommentsAndStrings` uses a single-pass character state machine that preserves `${...}` template literal interpolation expressions and `'constructor'`/`'__proto__'`/`'prototype'` strings so regex/comment interleaving cannot hide forbidden tokens
-- ✅ **Comprehensive blocked patterns** — regex rules blocking `require()`, `import()`, `process.*`, `global.*`, `eval()`, `Function()`, `__proto__`, `constructor`, `Object.getPrototypeOf`, `Object.setPrototypeOf`, `Object.defineProperty`, `Reflect.*`, `Symbol.*`, `new Proxy()`, `child_process`, `fs.*`, `net.*`, `http.*`, `https.*`
+- ✅ **Comprehensive blocked patterns** — regex rules blocking `require()`, `import()`, `process.*`, `global.*`, `eval()`, `Function()`, `__proto__`, `constructor.constructor`, `['constructor']`, `Object.getPrototypeOf`, `Object.setPrototypeOf`, `Object.defineProperty`, `Reflect.*`, `Symbol.*`, `new Proxy()`, `child_process`, `fs.*`, `net.*`, `http.*`, `https.*`
 - ✅ **50KB code size limit** — prevents payload-based resource exhaustion
 
 ### **Runtime Protection**
@@ -400,7 +400,7 @@ chmod 700 /shared/team-data
 ### **For Users**
 
 1. **Set a CORS origin** when exposing the HTTP transport on a network
-2. **Keep Node.js updated**: Use Node.js 24+ (Node.js 26.x LTS recommended)
+2. **Keep Node.js updated**: Use Node.js 24+ (current LTS recommended)
 3. **Secure host system**: Ensure your host machine is secure
 4. **Regular backups**: Use the `backup_journal` tool or back up your `.db` file
 5. **Limit network access**: Don't expose the HTTP transport to untrusted networks

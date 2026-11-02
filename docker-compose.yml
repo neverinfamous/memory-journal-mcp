@@ -6,8 +6,10 @@ services:
       - ./data:/app/data:rw,noexec,nosuid,nodev
     environment:
       - DB_PATH=/app/data/memory_journal.db
+      # - TEST_DB_PATH=
       - DB_ENCRYPTION_KEY=
       - TEAM_DB_PATH=
+      # - TEST_TEAM_DB_PATH=
       - ADDITIONAL_TEAM_DBS=
       - TEAM_AUTHOR=
       - TEAM_DEFAULT_ROLE=
@@ -15,13 +17,15 @@ services:
       - GITHUB_TOKEN=
       - DEFAULT_PROJECT_NUMBER=
       - PROJECT_REGISTRY=
-      # Tool filtering naming conventions: MEMORY_JOURNAL_MCP_TOOL_FILTER (env var), "toolFilter" (memory-journal.config.json), --tool-filter (CLI flag), tool_filter (update_configuration MCP tool). Note: TOOL_FILTER is a display-only fallback and does not activate startup filtering.
+      # - MCP_WORKSPACE_ID=
+      # Tool filtering naming conventions: MEMORY_JOURNAL_MCP_TOOL_FILTER (env var), "toolFilter" (memory-journal.config.yaml — supports .yaml/.yml/.json), --tool-filter (CLI flag), tool_filter (update_configuration MCP tool). Note: TOOL_FILTER is a display-only fallback and does not activate startup filtering.
       - MEMORY_JOURNAL_MCP_TOOL_FILTER=
       - TOOL_FILTER=
       - CODE_MODE_MAX_RESULT_SIZE=
       - CODEMODE_INTERNAL_FULL_ACCESS=
       - ALLOWED_IO_ROOTS=/app/data
       - MCP_AGENT_HEALING=true
+      # - DISABLE_ISSUE_LOGGING=false
       - MAX_TOOL_INPUT_ELEMENTS=25000
       - NODE_ENV=
       - DEBUG=
@@ -112,8 +116,10 @@ services:
       - ./data:/app/data:rw,noexec,nosuid,nodev
     environment:
       - DB_PATH=/app/data/memory_journal.db
+      # - TEST_DB_PATH=
       - DB_ENCRYPTION_KEY=
       - TEAM_DB_PATH=
+      # - TEST_TEAM_DB_PATH=
       - ADDITIONAL_TEAM_DBS=
       - TEAM_AUTHOR=
       - TEAM_DEFAULT_ROLE=
@@ -121,13 +127,15 @@ services:
       - GITHUB_TOKEN=
       - DEFAULT_PROJECT_NUMBER=
       - PROJECT_REGISTRY=
-      # Tool filtering naming conventions: MEMORY_JOURNAL_MCP_TOOL_FILTER (env var), "toolFilter" (memory-journal.config.json), --tool-filter (CLI flag), tool_filter (update_configuration MCP tool). Note: TOOL_FILTER is a display-only fallback and does not activate startup filtering.
+      # - MCP_WORKSPACE_ID=
+      # Tool filtering naming conventions: MEMORY_JOURNAL_MCP_TOOL_FILTER (env var), "toolFilter" (memory-journal.config.yaml — supports .yaml/.yml/.json), --tool-filter (CLI flag), tool_filter (update_configuration MCP tool). Note: TOOL_FILTER is a display-only fallback and does not activate startup filtering.
       - MEMORY_JOURNAL_MCP_TOOL_FILTER=
       - TOOL_FILTER=
       - CODE_MODE_MAX_RESULT_SIZE=
       - CODEMODE_INTERNAL_FULL_ACCESS=
       - ALLOWED_IO_ROOTS=/app/data
       - MCP_AGENT_HEALING=true
+      # - DISABLE_ISSUE_LOGGING=false
       - MAX_TOOL_INPUT_ELEMENTS=25000
       - NODE_ENV=
       - DEBUG=

@@ -37,16 +37,16 @@ Memory Journal builds your project's long-term memory. It bridges fragmented AI 
 
 **MCP Tools** · **Workflow Prompts** · **Resources** · **Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights)
 
-| Feature                       | Description                                                                                                                                                                                          |
-| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Session Intelligence**      | Auto-query history, create checkpoints, and hand off context between sessions. Briefings adapt dynamically to your workspace.                                                                        |
-| **GitHub Integration**        | Manage Issues, PRs, Actions, Kanban boards, and milestones. Switch contexts across multiple repositories seamlessly.                                                                                 |
-| **Knowledge & Search**        | Find entries instantly using hybrid search and visualize relationships with Mermaid graphs. Auto-prune low-value entries to maintain search relevance.                                               |
-| **Code Mode**                 | Execute multi-step operations efficiently in a secure sandbox to drastically reduce token usage.                                                                                                     |
-| **Team Collaboration**        | Share databases across teams with cross-project insights and role-based access control.                                                                                                              |
-| **Multi-Tenant Workspaces**   | Isolate project journals on a single SQLite database via `workspace_id`, with automatic resolution from `PROJECT_REGISTRY`, tags, or working directory.                                             |
-| **Data & Architecture**       | Export schemas safely, sync Markdown directories, secure data with encryption and automated backups, and handle errors effectively.                                                                  |
-| **Agent Collaboration**       | Share context between agents, suggest reusable rules, and automate tasks like issue triage and PR reviews.                                                                                           |
+| Feature | Description |
+| --- | --- |
+| **Session Intelligence** | Auto-query history, create checkpoints, and hand off context between sessions. Briefings adapt dynamically to your workspace. |
+| **GitHub Integration** | Manage Issues, PRs, Actions, Kanban boards, and milestones. Switch contexts across multiple repositories seamlessly. |
+| **Knowledge & Search** | Find entries instantly using hybrid search and visualize relationships with Mermaid graphs. Auto-prune low-value entries to maintain search relevance. |
+| **Code Mode** | Execute multi-step operations efficiently in a secure sandbox to drastically reduce token usage. |
+| **Team Collaboration** | Share databases across teams with cross-project insights and role-based access control. |
+| **Multi-Tenant Workspaces** | Isolate project journals on a single SQLite database via `workspace_id`, with automatic resolution from `PROJECT_REGISTRY`, tags, or working directory. |
+| **Data & Architecture** | Export schemas safely, sync Markdown directories, secure data with encryption and automated backups, and handle errors effectively. |
+| **Agent Collaboration** | Share context between agents, suggest reusable rules, and automate tasks like issue triage and PR reviews. |
 
 ---
 
@@ -130,7 +130,7 @@ Control which tools and tool groups are exposed using `MEMORY_JOURNAL_MCP_TOOL_F
 
 ### 🎯 **Workflow Prompts**
 
-Specialized workflow prompts for session briefing, standup & retro prep, goal tracking, PR & issue command, session summaries, journal optimization, adversarial plan reviews, exhaustive code & security audits, secure commit workflows, and anti-hallucination healing. **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
+Specialized workflow prompts for session briefing, standup & retro prep, goal tracking, PR & issue command, session summaries, journal optimization, CMS REM supervision (`cms-rem-supervisor`), adversarial plan reviews, exhaustive code & security audits, secure commit workflows, and anti-hallucination healing. **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
 ### 📡 **Resources**
 
@@ -144,7 +144,7 @@ Code executes in a **pre-warmed `worker_threads` V8 isolate pool + secondary `vm
 
 - **V8 code generation restrictions** — `eval()` and `Function()` construction from strings disabled at the V8 engine level via `codeGeneration: { strings: false, wasm: false }`
 - **Frozen prototypes & cross-realm constructor lockdown** — all built-in prototypes (`Object`, `Function`, `Array`, `Error`, etc.) and `mj.*` API bindings are frozen, and `.constructor` is neutered across `Object`, `Function`, `AsyncFunction`, `GeneratorFunction`, and `AsyncGeneratorFunction` prototypes in both the inner `vm` realm and outer worker realm to prevent dynamic constructor chain escapes
-- **Single-pass lexical validation** — pre-validation rate-limiting and 50KB byte caps run before any code normalization, followed by a single-pass lexical comment/string scanner (preserving `${...}` template expressions) and regex rules blocking `require()`, `import()`, `process`, `eval()`, `Reflect.*`, `Symbol.*`, `Object.getPrototypeOf`/`setPrototypeOf`/`defineProperty`, `new Proxy()`, `__proto__`, `constructor`, and filesystem/network access
+- **Single-pass lexical validation** — pre-validation rate-limiting and 50KB byte caps run before any code normalization, followed by a single-pass lexical comment/string scanner (preserving `${...}` template expressions) and regex rules blocking `require()`, `import()`, `process`, `eval()`, `Reflect.*`, `Symbol.*`, `Object.getPrototypeOf`/`setPrototypeOf`/`defineProperty`, `new Proxy()`, `__proto__`, and filesystem/network access
 - **Proxy constructor nullified** — `Proxy: undefined` in the sandbox prevents meta-object protocol abuse
 - **Prototype-safe RPC allowlist** — host-side `Object.hasOwn()` validation, recursion-bounded argument normalization, and `--tool-filter` enforcement prevent workers from invoking unauthorized or filtered API methods
 - **Rate limiting** — 60 executions per minute per client
@@ -285,16 +285,17 @@ Restart Cursor or your MCP client and start journaling!
 
 - **`--config <path>`**: Load settings from `.yaml` or `.json`. Use `--dump-config` to debug precedence.
 - **`ALLOWED_IO_ROOTS` / `--allowed-io-roots`**: Comma-separated allowed filesystem paths (default: none — fail-closed in stdio; mandatory when `--transport http` is used).
-- **`MEMORY_JOURNAL_MCP_TOOL_FILTER` / `--tool-filter`**: Control tool exposure (`full`, `starter`, `codemode`, `readonly`, `-github`; config file key: `"toolFilter"`).
+- **`MEMORY_JOURNAL_MCP_TOOL_FILTER` / `--tool-filter`**: Control tool exposure (`full`, `starter`, `codemode`, `readonly`, `-github`; config key: `"toolFilter"`).
 - **`DB_ENCRYPTION_KEY`**: Enables SQLCipher at-rest encryption.
-- **`CODEMODE_INTERNAL_FULL_ACCESS`**: Allow Code Mode to bypass tool filters internally (default: `false`).
-- **`DEFAULT_WORKSPACE_ID` / `--default-workspace-id`**: Sets the default workspace for multi-tenant isolation (default: `default`).
-- **`PROJECT_REGISTRY`**: Maps repo names to paths and project numbers for automatic `workspace_id` resolution and multi-project GitHub context routing.
-- **`MCP_AGENT_HEALING` / `--no-agent-healing`**: Set `MCP_AGENT_HEALING=false` (or pass `--no-agent-healing`) to disable autonomous MCP tool and parameter healing/interception.
-- **`MAX_TOOL_INPUT_ELEMENTS` / `--max-tool-input-elements`**: Maximum array/object elements allowed in tool input arguments (default: `25000`, `0` = disabled).
-- **`ARCHIVE_OLDER_THAN_DAYS` / `HARD_DELETE_OLDER_THAN_DAYS` / `PRUNE_DRY_RUN`**: Control the auto-prune data lifecycle. Test rules safely with `--prune-dry-run`.
+- **`CODEMODE_INTERNAL_FULL_ACCESS`**: Allow Code Mode to bypass tool filters internally (`false`).
+- **`DEFAULT_WORKSPACE_ID` / `--default-workspace-id`**: Default workspace for multi-tenant isolation (`default`).
+- **`PROJECT_REGISTRY`**: Maps repo names to paths and project numbers for `workspace_id` resolution and multi-project routing.
+- **`MCP_AGENT_HEALING` / `--no-agent-healing`**: Set `MCP_AGENT_HEALING=false` (or `--no-agent-healing`) to disable autonomous tool/parameter healing.
+- **`MAX_TOOL_INPUT_ELEMENTS` / `--max-tool-input-elements`**: Max array/object elements in tool inputs (default: `25000`, `0` = disabled).
+- **`AUDIT_LOG_PATH` / `AUDIT_REDACT` / `AUDIT_READS` / `AUDIT_LOG_MAX_SIZE`**: JSONL audit log path (or `stderr`), redaction, read logging, and rotation size.
+- **`ARCHIVE_OLDER_THAN_DAYS` / `HARD_DELETE_OLDER_THAN_DAYS` / `PRUNE_DRY_RUN`**: Control auto-prune lifecycle. Test rules safely with `--prune-dry-run`.
 
-For a complete list of all extensive environment variables and detailed routing docs, see the **[Configuration Wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki/Configuration)**.
+For all environment variables and routing docs, see the **[Configuration Wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki/Configuration)**.
 
 ### 🔄 Session Management
 

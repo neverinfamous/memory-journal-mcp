@@ -99,7 +99,7 @@ pnpm run bench
 ### Quality Checks
 
 ```bash
-# Full check (lint + typecheck + code-map + unassigned entries check)
+# Full check (lint + 500-line file length check + typecheck + code-map + unassigned entries check + unit tests + E2E tests)
 pnpm run check
 
 # Lint + type check (required before submitting)
@@ -231,12 +231,12 @@ src/
 │   ├── core/                   # Database adapter and connection interfaces
 │   ├── migrations/             # Versioned schema migrations (MigrationManager)
 │   └── sqlite-adapter/         # Native SQLite operations (better-sqlite3)
-├── filtering/                  # Tool filtering system
+├── filtering/                  # Tool group & shortcut meta-group filtering
 ├── git/                        # Local Git repository inspection and commit analysis
 ├── github/
 │   └── github-integration/     # GitHub API integration
 ├── handlers/
-│   ├── tools/                  # tool handlers (multiple groups)
+│   ├── tools/                  # Modular tool group handlers (core, search, analytics, etc.)
 │   ├── resources/              # resource handlers
 │   └── prompts/                # prompt handlers (load-briefing.ts, optimizer.ts, cms-supervisor.ts, etc.)
 ├── markdown/                   # Markdown import/export (round-trip frontmatter parsing)
@@ -249,7 +249,7 @@ src/
 │   └── subscription-manager.ts # Resource subscription management
 ├── transports/                 # HTTP/SSE transport
 ├── types/                      # TypeScript type definitions
-├── utils/                      # Logger, error helpers, progress
+├── utils/                      # Path guard, ReDoS-safe regex, config resolver, logger, query helpers
 ├── vendor/                     # Vendored internal packages
 └── vector/                     # Semantic search (sqlite-vec + transformers)
 
