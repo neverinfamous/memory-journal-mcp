@@ -24,25 +24,17 @@ export { extractBearerToken }
 
 /**
  * Extended Express Request with auth context
- * Uses module augmentation to extend Express.Request interface
  */
-declare global {
-    // eslint-disable-next-line @typescript-eslint/no-namespace
-    namespace Express {
-        interface Request {
-            /** MCP standard auth info */
-            auth?: AuthInfo
-            /** Original Token claims */
-            tokenClaims?: TokenClaims
-            /** Raw access token */
-            accessToken?: string
-            /** Request ID for tracing */
-            requestId?: string
-        }
-    }
+export interface AuthRequest extends Request {
+    /** MCP standard auth info */
+    auth?: AuthInfo
+    /** Original Token claims */
+    tokenClaims?: TokenClaims
+    /** Raw access token */
+    accessToken?: string
+    /** Request ID for tracing */
+    requestId?: string
 }
-
-export type AuthRequest = Request
 
 // =============================================================================
 // Configuration
@@ -116,7 +108,7 @@ export function createAuthMiddleware(config: AuthMiddlewareConfig): RequestHandl
     const { tokenValidator, resourceServer, publicPaths = [] } = config
 
     return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-        const authReq = req
+        const authReq: AuthRequest = req
 
         // Generate request ID for tracing
         const requestId = crypto.randomUUID()
@@ -212,7 +204,7 @@ export function createAuthMiddleware(config: AuthMiddlewareConfig): RequestHandl
  */
 export function requireScope(scope: string): RequestHandler {
     return (req: Request, res: Response, next: NextFunction): void => {
-        const authReq = req
+        const authReq: AuthRequest = req
 
         if (!authReq.auth) {
             // Should not happen if auth middleware is applied first
@@ -258,7 +250,7 @@ export function requireScope(scope: string): RequestHandler {
  */
 export function requireAnyScope(scopes: string[]): RequestHandler {
     return (req: Request, res: Response, next: NextFunction): void => {
-        const authReq = req
+        const authReq: AuthRequest = req
 
         if (!authReq.auth) {
             res.status(401).json({
@@ -306,7 +298,7 @@ export function requireAnyScope(scopes: string[]): RequestHandler {
  */
 export function requireToolScope(toolName: string): RequestHandler {
     return (req: Request, res: Response, next: NextFunction): void => {
-        const authReq = req
+        const authReq: AuthRequest = req
 
         if (!authReq.auth) {
             res.status(401).json({

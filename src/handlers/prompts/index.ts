@@ -55,11 +55,12 @@ export interface InternalPromptDef {
  * Get all prompt definitions for MCP list
  */
 export function getPrompts(): object[] {
-    return getAllPromptDefinitions().map((def) => {
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { handler: _handler, ...rest } = def
-        return rest
-    })
+    return getAllPromptDefinitions().map((def) => ({
+        name: def.name,
+        description: def.description,
+        ...(def.arguments !== undefined ? { arguments: def.arguments } : {}),
+        ...(def.icons !== undefined ? { icons: def.icons } : {}),
+    }))
 }
 
 /**

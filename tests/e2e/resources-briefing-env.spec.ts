@@ -83,8 +83,7 @@ test.describe('Resources: Briefing Environment Configurations', () => {
         await client.connect(transport)
     })
 
-    // eslint-disable-next-line no-empty-pattern
-    test.afterAll(async ({}, testInfo) => {
+    test.afterAll(async (_fixtures, testInfo) => {
         if (client) {
             await client.close()
         }

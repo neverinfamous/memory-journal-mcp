@@ -3,10 +3,14 @@ import { Writable } from 'node:stream';
 import { stripVTControlCharacters } from 'node:util';
 
 const ESC = String.fromCharCode(27);
+const CSI = String.fromCharCode(155);
+const BEL = String.fromCharCode(7);
 const ANSI_REGEX_K0 = new RegExp(`${ESC}\\[[0]?K`, 'g');
 const ANSI_REGEX_K2 = new RegExp(`${ESC}\\[2K`, 'g');
 const ANSI_REGEX_J2 = new RegExp(`${ESC}\\[2J`, 'g');
 const ANSI_REGEX_H = new RegExp(`${ESC}\\[H`, 'g');
+const COMPLETE_OSC_REGEX = new RegExp(`^[${ESC}${CSI}]][^${BEL}${ESC}]*(?:${BEL}|${ESC}\\\\)`);
+const COMPLETE_CSI_REGEX = new RegExp(`^(?:[${ESC}${CSI}]\\[|${CSI})[()#;?]*[\\x30-\\x3F]*[\\x20-\\x2F]*[\\x40-\\x7E]`);
 
 const DEFENSIVE_LINE_LIMIT = 2 * 1024 * 1024;
 const DEFAULT_MAX_OUTPUT_LENGTH = 1024 * 1024 * 1024;
@@ -103,8 +107,7 @@ export class StreamManager {
       const potentialSeq = s.ansiBuffer.substring(lastEscapeIdx);
       
       if (potentialSeq.startsWith('\u001b]') || potentialSeq.startsWith('\u009b]')) {
-        // eslint-disable-next-line no-control-regex
-        const isComplete = /^[\u001b\u009b]][^\x07\x1b]*(?:\x07|\x1b\\)/.test(potentialSeq);
+        const isComplete = COMPLETE_OSC_REGEX.test(potentialSeq);
         if (!isComplete && potentialSeq.length < MAX_ANSI_SEQ_LENGTH_OSC) {
           safeStr = s.ansiBuffer.substring(0, lastEscapeIdx);
           s.ansiBuffer = potentialSeq;
@@ -112,8 +115,7 @@ export class StreamManager {
           s.ansiBuffer = '';
         }
       } else if (potentialSeq.startsWith('\u001b[') || potentialSeq.startsWith('\u009b[')) {
-        // eslint-disable-next-line no-control-regex
-        const isComplete = /^(?:[\u001b\u009b]\[|\u009b)[()#;?]*[\x30-\x3F]*[\x20-\x2F]*[\x40-\x7E]/.test(potentialSeq);
+        const isComplete = COMPLETE_CSI_REGEX.test(potentialSeq);
         if (!isComplete && potentialSeq.length < MAX_ANSI_SEQ_LENGTH_CSI) {
           safeStr = s.ansiBuffer.substring(0, lastEscapeIdx);
           s.ansiBuffer = potentialSeq;

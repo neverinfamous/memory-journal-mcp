@@ -6,7 +6,20 @@
  * Follows RFC 5424 severity levels as per MCP spec.
  */
 
-import type { McpServer } from '@modelcontextprotocol/server'
+import { type McpServer } from '@modelcontextprotocol/server'
+
+/**
+ * Narrow interface for MCP protocol log notification dispatch.
+ * Decouples McpLogger from the SDK's SEP-2577 deprecation annotation on McpServer
+ * while maintaining backward-compatible notifications/message support.
+ */
+export interface McpLoggingReceiver {
+    sendLoggingMessage(params: {
+        level: McpLogLevel
+        logger?: string
+        data: unknown
+    }): Promise<void> | void
+}
 
 /**
  * MCP log levels per RFC 5424
@@ -46,13 +59,13 @@ interface LogData {
  * Falls back to stderr when server not connected.
  */
 export class McpLogger {
-    private server: McpServer | null = null
+    private server: McpLoggingReceiver | null = null
     private minLevel: McpLogLevel = 'info'
 
     /**
      * Connect to MCP server for protocol logging
      */
-    setServer(server: McpServer): void {
+    setServer(server: McpServer | McpLoggingReceiver): void {
         this.server = server
     }
 
@@ -110,7 +123,6 @@ export class McpLogger {
         // Send via MCP protocol if server connected
         if (this.server) {
             try {
-                // eslint-disable-next-line @typescript-eslint/no-deprecated -- Keep for backward compat
                 void this.server.sendLoggingMessage({
                     level,
                     logger: loggerName,
