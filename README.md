@@ -47,26 +47,26 @@ Memory Journal builds your project's long-term memory. It acts as a **Project Co
 
 **MCP Tools** · **Workflow Prompts** · **Resources** · **Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights)
 
-| Feature                       | Description                                                                                                                                                                                          |
-| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Session Intelligence**      | Auto-query project history, create checkpoints, and hand off context between sessions automatically.                                                                                                 |
-| **GitHub Integration**        | Manage Issues, PRs, Actions, Kanban boards, and milestones. Access Copilot reviews and repository insights.                                                                                          |
-| **Dynamic Project Routing**   | Switch contexts seamlessly and access CI/Issue tracking across multiple repositories from a single server instance.                                                                                  |
-| **Knowledge Graphs**          | Link specifications, implementations, tests, and PRs visually using Mermaid diagrams.                                                                                                                |
-| **Hybrid Search**             | Find entries instantly using a blend of keyword, semantic, and date-range searches.                                                                                                                  |
-| **Code Mode**                 | Execute multi-step operations efficiently in a sandboxed environment to reduce token usage.                                                                                                          |
-| **Adaptive Session Briefing** | Deliver real-time workspace context dynamically, including live CI health, local Git status, and unreleased changes.                                                                                 |
-| **Reports & Analytics**       | Generate standups, retrospectives, PR summaries, digests, and period analyses.                                                                                                                       |
-| **Heuristic Scoring**         | Optimize context delivery by scoring entries based on veracity and impact.                                                                                                                           |
-| **Team Collaboration**        | Share databases across teams with cross-project insights, author attribution, and role-based access control.                                                                                         |
-| **Data Interoperability**     | Export schemas safely, sync Markdown directories, and maintain a unified IO namespace.                                                                                                               |
-| **Backup & Restore**          | Secure data with automated scheduling, retention policies, and one-command restores.                                                                                                                 |
-| **Auto-Pruning**              | Soft-delete low-value entries automatically to maintain search relevance over long-running projects.                                                                                                 |
-| **Security & Transport**      | Ensure secure connections with OAuth 2.1, Streamable HTTP, rate limiting, and SQL injection prevention.                                                                                              |
-| **Structured Error Handling** | Provide agents with classification, remediation hints, and recoverability signals on every tool call.                                                                                                |
-| **Agent Collaboration**       | Share context between IDE agents and Copilot. Search review findings and let agents suggest reusable rules.                                                                                          |
-| **Native Agent Skills**       | Establish permanent AI behavior and architecture rules using bundled foundational coding paradigms.                                                                                                  |
-| **GitHub Commander**          | Audit code, triage issues, review PRs, and run sprint milestones via automated pipeline skills.                                                                                                      |
+| Feature                       | Description                                                                                                          |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| **Session Intelligence**      | Auto-query project history, create checkpoints, and hand off context between sessions automatically.                 |
+| **GitHub Integration**        | Manage Issues, PRs, Actions, Kanban boards, and milestones. Access Copilot reviews and repository insights.          |
+| **Dynamic Project Routing**   | Switch contexts seamlessly and access CI/Issue tracking across multiple repositories from a single server instance.  |
+| **Knowledge Graphs**          | Link specifications, implementations, tests, and PRs visually using Mermaid diagrams.                                |
+| **Hybrid Search**             | Find entries instantly using a blend of keyword, semantic, and date-range searches.                                  |
+| **Code Mode**                 | Execute multi-step operations efficiently in a sandboxed environment to reduce token usage.                          |
+| **Adaptive Session Briefing** | Deliver real-time workspace context dynamically, including live CI health, local Git status, and unreleased changes. |
+| **Reports & Analytics**       | Generate standups, retrospectives, PR summaries, digests, and period analyses.                                       |
+| **Heuristic Scoring**         | Optimize context delivery by scoring entries based on veracity and impact.                                           |
+| **Team Collaboration**        | Share databases across teams with cross-project insights, author attribution, and role-based access control.         |
+| **Data Interoperability**     | Export schemas safely, sync Markdown directories, and maintain a unified IO namespace.                               |
+| **Backup & Restore**          | Secure data with automated scheduling, retention policies, and one-command restores.                                 |
+| **Auto-Pruning**              | Soft-delete low-value entries automatically to maintain search relevance over long-running projects.                 |
+| **Security & Transport**      | Ensure secure connections with OAuth 2.1, Streamable HTTP, rate limiting, and SQL injection prevention.              |
+| **Structured Error Handling** | Provide agents with classification, remediation hints, and recoverability signals on every tool call.                |
+| **Agent Collaboration**       | Share context between IDE agents and Copilot. Search review findings and let agents suggest reusable rules.          |
+| **Native Agent Skills**       | Establish permanent AI behavior and architecture rules using bundled foundational coding paradigms.                  |
+| **GitHub Commander**          | Audit code, triage issues, review PRs, and run sprint milestones via automated pipeline skills.                      |
 
 ---
 
@@ -149,19 +149,20 @@ When the user initializes the session context by executing the `load-briefing` p
 > All shortcuts and tool groups always include **Code Mode** (`mj_execute_code`) and **Runtime Configuration** (`update_configuration`) as escape-hatch tools so agents can never lock themselves out of the configuration system or Code Mode.
 
 Control which tools are exposed using any of the 3 configuration sources (precedence: CLI flag > environment variable > config file):
+
 - **CLI flag**: `--tool-filter <filter>`
-- **Environment variable**: `MEMORY_JOURNAL_MCP_TOOL_FILTER` *(Note: `TOOL_FILTER` is only a fallback display variable in the session briefing and does **not** activate tool filtering on its own)*
+- **Environment variable**: `MEMORY_JOURNAL_MCP_TOOL_FILTER` _(Note: `TOOL_FILTER` is only a fallback display variable in the session briefing and does **not** activate tool filtering on its own)_
 - **`memory-journal.config.{yaml,yml,json}` key**: `"toolFilter"`
 
-| Filter               | Use Case                            |
-| -------------------- | ----------------------------------- |
-| `full`               | All tools (default)                 |
-| `starter`            | Core + search + codemode            |
-| `essential`          | Minimal footprint                   |
-| `readonly`           | Disable all mutations               |
-| `codemode`           | `mj_execute_code` + runtime config  |
-| `-github`            | Exclude a group                     |
-| `-github,-analytics` | Exclude multiple groups             |
+| Filter               | Use Case                           |
+| -------------------- | ---------------------------------- |
+| `full`               | All tools (default)                |
+| `starter`            | Core + search + codemode           |
+| `essential`          | Minimal footprint                  |
+| `readonly`           | Disable all mutations              |
+| `codemode`           | `mj_execute_code` + runtime config |
+| `-github`            | Exclude a group                    |
+| `-github,-analytics` | Exclude multiple groups            |
 
 **Filter Syntax:** `shortcut` or `group` or `tool_name` (whitelist mode) · `-group` (disable group) · `-tool` (disable tool) · `+tool` (re-enable after group disable)
 
@@ -177,18 +178,18 @@ Control which tools are exposed using any of the 3 configuration sources (preced
 
 ### 🛠️ **MCP Tools**
 
-| Group           | Description                                                                                                                                                                                       |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `codemode`      | Code Mode (sandboxed code execution) 🌟 **Recommended**                                                                                                                                           |
-| `core`          | Entry creation/read/history, tags, resource & briefing helpers, anchor staleness, test                                                                                                            |
-| `search`        | Text search, date range, semantic, vector stats, deleted entries, cross-team                                                                                                                      |
-| `analytics`     | Statistics, cross-project insights                                                                                                                                                                |
-| `relationships` | Link entries, visualize graphs                                                                                                                                                                    |
-| `io`            | JSON/Markdown export, Markdown directory import/export, and external knowledge base import (Notion, Obsidian, Logseq)                                                                              |
+| Group           | Description                                                                                                                                                                                         |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `codemode`      | Code Mode (sandboxed code execution) 🌟 **Recommended**                                                                                                                                             |
+| `core`          | Entry creation/read/history, tags, resource & briefing helpers, anchor staleness, test                                                                                                              |
+| `search`        | Text search, date range, semantic, vector stats, deleted entries, cross-team                                                                                                                        |
+| `analytics`     | Statistics, cross-project insights                                                                                                                                                                  |
+| `relationships` | Link entries, visualize graphs                                                                                                                                                                      |
+| `io`            | JSON/Markdown export, Markdown directory import/export, and external knowledge base import (Notion, Obsidian, Logseq)                                                                               |
 | `admin`         | Update configuration, project registry management, entry update/delete/restore, rebuild/add to vector index, merge tags, search audit log, auto-prune, bulk operations (batch create/update/delete) |
-| `github`        | Issues, PRs, context, Kanban, **Milestones**, **Insights**, **issue lifecycle**, **Copilot Reviews**                                                                                              |
-| `git`           | Commit history, search, release info, patterns, staleness checks                                                                                                                                  |
-| `backup`        | Backup, list, restore, cleanup                                                                                                                                                                    |
+| `github`        | Issues, PRs, context, Kanban, **Milestones**, **Insights**, **issue lifecycle**, **Copilot Reviews**                                                                                                |
+| `git`           | Commit history, search, release info, patterns, staleness checks                                                                                                                                    |
+| `backup`        | Backup, list, restore, cleanup                                                                                                                                                                      |
 | `team`          | CRUD, search, stats, relationships, IO (Markdown & external import/export), backup, vector search, cross-project insights, matrix, RBAC member management, author aliases (requires `TEAM_DB_PATH`) |
 
 **[Complete tools reference →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tools)**
@@ -198,6 +199,7 @@ Control which tools are exposed using any of the 3 configuration sources (preced
 Specialized workflow prompts cover session briefing, standup & retro prep, goal tracking, PR & issue command, session summaries, and journal optimization. Additional prompts support CMS REM supervision, adversarial plan reviews, code & security audits, secure commit workflows, and anti-hallucination healing. **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
 ### 📡 **Resources**
+
 See the **[Complete resources guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Resources)** for the full list of dynamic context resources, including `memory://briefing`, `memory://instructions`, GitHub integration endpoints, telemetry metrics, and templated views.
 
 - **Dynamic Resource Templates**: Resources `memory://briefing/{+repo}`, `memory://agent-context/{+repo}`, `memory://agent-id/{+repo}`, `memory://actions/recent/{+repo}`, `memory://github/status/{+repo}`, `memory://github/milestones/{+repo}`, `memory://milestones/{+repo}/{number}`, and `memory://kanban/{+repo}/{project_number}` accept an RFC 6570 `{+repo}` path parameter for targeted project context.
@@ -317,11 +319,11 @@ The `memory://briefing` resource is **dynamically assembled** at each session st
 
 You control exactly what additional content your agent sees across three dimensions:
 
-| Dimension             | Variables                                                                                                                                                                        | What It Controls                                                                    |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Dimension             | Variables                                                                                                                                                                        | What It Controls                                                                        |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
 | **Focus**             | `MEMORY_JOURNAL_MCP_TOOL_FILTER` (CLI: `--tool-filter`, config: `"toolFilter"`)                                                                                                  | Control tool exposure: `full` (default), `starter`, `essential`, `readonly`, `codemode` |
-| **Journal Content**   | `BRIEFING_ENTRY_COUNT`, `BRIEFING_SUMMARY_COUNT`, `BRIEFING_COMMIT_COUNT`, `BRIEFING_IMPORTANCE_THRESHOLD`, `BRIEFING_INCLUDE_TEAM`                                              | How many recent entries, session summaries, commits, and whether team entries appear |
-| **GitHub Enrichment** | `BRIEFING_ISSUE_COUNT`, `BRIEFING_PR_COUNT`, `BRIEFING_PR_STATUS`, `BRIEFING_MILESTONE_COUNT`, `BRIEFING_WORKFLOW_COUNT`, `BRIEFING_WORKFLOW_STATUS`, `BRIEFING_COPILOT_REVIEWS` | Issues, PRs, milestones, CI runs, and Copilot review state surfaced in the briefing |
+| **Journal Content**   | `BRIEFING_ENTRY_COUNT`, `BRIEFING_SUMMARY_COUNT`, `BRIEFING_COMMIT_COUNT`, `BRIEFING_IMPORTANCE_THRESHOLD`, `BRIEFING_INCLUDE_TEAM`                                              | How many recent entries, session summaries, commits, and whether team entries appear    |
+| **GitHub Enrichment** | `BRIEFING_ISSUE_COUNT`, `BRIEFING_PR_COUNT`, `BRIEFING_PR_STATUS`, `BRIEFING_MILESTONE_COUNT`, `BRIEFING_WORKFLOW_COUNT`, `BRIEFING_WORKFLOW_STATUS`, `BRIEFING_COPILOT_REVIEWS` | Issues, PRs, milestones, CI runs, and Copilot review state surfaced in the briefing     |
 
 **Context Injections:** Set `RULES_FILE_PATH` and `SKILLS_DIR_PATH` to surface user rules and agent skills as companion resources (`memory://rules`, `memory://skills`) alongside the briefing.
 
@@ -368,14 +370,14 @@ You control exactly what additional content your agent sees across three dimensi
 
 **Variants** (modify the config above):
 
-| Variant                 | Change                                                                                                                       |
-| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| **Minimal (no GitHub)** | Remove the `env` block entirely                                                                                              |
-| **npx (no install)**    | Replace `"command"` with `"npx"` and add `"args": ["-y", "memory-journal-mcp"]`                                              |
-| **From source**         | Replace `"command"` with `"node"` and add `"args": ["dist/cli.js"]`                                                          |
-| **Code Mode minimal**   | Add `"args": ["--tool-filter", "codemode", "--codemode-internal-full-access"]` (`mj_execute_code` + `update_configuration`, all `mj.*` capabilities) |
+| Variant                 | Change                                                                                                                                                                                                                                                              |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Minimal (no GitHub)** | Remove the `env` block entirely                                                                                                                                                                                                                                     |
+| **npx (no install)**    | Replace `"command"` with `"npx"` and add `"args": ["-y", "memory-journal-mcp"]`                                                                                                                                                                                     |
+| **From source**         | Replace `"command"` with `"node"` and add `"args": ["dist/cli.js"]`                                                                                                                                                                                                 |
+| **Code Mode minimal**   | Add `"args": ["--tool-filter", "codemode", "--codemode-internal-full-access"]` (`mj_execute_code` + `update_configuration`, all `mj.*` capabilities)                                                                                                                |
 | **Docker**              | Replace `"command"` with `"docker"` and add `"args": ["run", "-i", "--rm", "-v", "./data:/app/data", "-e", "GITHUB_TOKEN", "-e", "PROJECT_REGISTRY", "-e", "ALLOWED_IO_ROOTS", "writenotenow/memory-journal-mcp:latest"]` (forward any `"env"` keys via `-e <VAR>`) |
-| **Team collaboration**  | Add `"TEAM_DB_PATH": "./team.db"` to `env`                                                                                   |
+| **Team collaboration**  | Add `"TEAM_DB_PATH": "./team.db"` to `env`                                                                                                                                                                                                                          |
 
 Restart your MCP client and start journaling!
 
@@ -407,17 +409,17 @@ memory-journal-mcp --transport http --port 3000 --server-host 0.0.0.0 --digest-i
 
 **Endpoints:**
 
-| Endpoint                                    | Description                                                        | Mode     |
-| ------------------------------------------- | ------------------------------------------------------------------ | -------- |
-| `GET /`                                     | Server info and available endpoints                                | Both     |
-| `POST /mcp`                                 | JSON-RPC requests (initialize, tools/call, etc.)                   | Both     |
-| `GET /mcp`                                  | SSE stream for server-to-client notifications                      | Stateful |
-| `DELETE /mcp`                               | Session termination (`204 No Content`)                             | Both     |
-| `GET / POST /sse`                           | Legacy SSE connection & stateless/stateful POST (MCP 2024-11-05)   | GET: Stateful / POST: Both |
-| `POST /messages`                            | Legacy SSE message endpoint                                        | Stateful |
-| `GET /health`                               | Health check (`{ status, timestamp }`)                             | Both     |
-| `GET /metrics`                              | Prometheus metrics export (requires flag)                          | Both     |
-| `GET /.well-known/oauth-protected-resource` | RFC 9728 Protected Resource Metadata (requires `--oauth-enabled`)  | Both     |
+| Endpoint                                    | Description                                                       | Mode                       |
+| ------------------------------------------- | ----------------------------------------------------------------- | -------------------------- |
+| `GET /`                                     | Server info and available endpoints                               | Both                       |
+| `POST /mcp`                                 | JSON-RPC requests (initialize, tools/call, etc.)                  | Both                       |
+| `GET /mcp`                                  | SSE stream for server-to-client notifications                     | Stateful                   |
+| `DELETE /mcp`                               | Session termination (`204 No Content`)                            | Both                       |
+| `GET / POST /sse`                           | Legacy SSE connection & stateless/stateful POST (MCP 2024-11-05)  | GET: Stateful / POST: Both |
+| `POST /messages`                            | Legacy SSE message endpoint                                       | Stateful                   |
+| `GET /health`                               | Health check (`{ status, timestamp }`)                            | Both                       |
+| `GET /metrics`                              | Prometheus metrics export (requires flag)                         | Both                       |
+| `GET /.well-known/oauth-protected-resource` | RFC 9728 Protected Resource Metadata (requires `--oauth-enabled`) | Both                       |
 
 **Session Management:** The server uses stateful sessions by default. Include the `mcp-session-id` header (returned from initialization) in subsequent requests.
 
@@ -475,31 +477,30 @@ memory-journal-mcp --transport http --port 3000 \
   --rebuild-index-interval 720
 ```
 
-| Flag                                    | Default                  | Description                                                           |
-| --------------------------------------- | ------------------------ | --------------------------------------------------------------------- |
-| `--backup-interval <min>`               | 0 (off)                  | Create timestamped database backups and prune old ones automatically  |
-| `--keep-backups <count>`                | 5                        | Max backups retained during automated cleanup                         |
-| `--vacuum-interval <min>`               | 0 (off)                  | Run `PRAGMA optimize` and flush database to disk                      |
-| `--rebuild-index-interval <min>`        | 0 (off)                  | Full vector index rebuild to maintain semantic search quality         |
-| `--report-interval <min>`               | 0 (off)                  | Scheduled report generation interval in minutes                       |
-| `--report-webhook-url <url>`            | —                        | HTTPS webhook URL for scheduled report delivery                       |
-| `--report-webhook-auth <header>`        | —                        | Custom `Authorization` header for webhook requests                    |
-| `--report-content-type <type>`          | `slack`                  | Webhook payload format: `slack`, `discord`, or `json` (env: `REPORT_CONTENT_TYPE`) |
-| `--digest-interval <min>`               | 0 (off)                  | Scheduled periodic digest analysis report                             |
-| `--auto-prune-interval <min>`           | 0 (off)                  | Run autonomous garbage collection (archive, soft-delete, hard-delete) |
-| `--archive-older-than-days <days>`      | 0 (off)                  | Auto-archive low-importance entries older than N days                 |
-| `--prune-older-than-days <days>`        | 0 (off)                  | Auto soft-delete entries older than N days                            |
-| `--hard-delete-older-than-days <days>`  | 0 (off)                  | Permanently purge soft-deleted entries older than N days              |
-| `--prune-importance-threshold <score>`  | 0.15                     | Max importance score (`0.0`–`1.0`) eligible for archiving/pruning     |
-| `--prune-dry-run`                       | false                    | Log auto-prune candidates without mutating entries                    |
-| `--prune-exclude-tags <tags>`           | —                        | Comma-separated tags exempt from auto-prune (`archived` always kept)  |
+| Flag                                   | Default | Description                                                                        |
+| -------------------------------------- | ------- | ---------------------------------------------------------------------------------- |
+| `--backup-interval <min>`              | 0 (off) | Create timestamped database backups and prune old ones automatically               |
+| `--keep-backups <count>`               | 5       | Max backups retained during automated cleanup                                      |
+| `--vacuum-interval <min>`              | 0 (off) | Run `PRAGMA optimize` and flush database to disk                                   |
+| `--rebuild-index-interval <min>`       | 0 (off) | Full vector index rebuild to maintain semantic search quality                      |
+| `--report-interval <min>`              | 0 (off) | Scheduled report generation interval in minutes                                    |
+| `--report-webhook-url <url>`           | —       | HTTPS webhook URL for scheduled report delivery                                    |
+| `--report-webhook-auth <header>`       | —       | Custom `Authorization` header for webhook requests                                 |
+| `--report-content-type <type>`         | `slack` | Webhook payload format: `slack`, `discord`, or `json` (env: `REPORT_CONTENT_TYPE`) |
+| `--digest-interval <min>`              | 0 (off) | Scheduled periodic digest analysis report                                          |
+| `--auto-prune-interval <min>`          | 0 (off) | Run autonomous garbage collection (archive, soft-delete, hard-delete)              |
+| `--archive-older-than-days <days>`     | 0 (off) | Auto-archive low-importance entries older than N days                              |
+| `--prune-older-than-days <days>`       | 0 (off) | Auto soft-delete entries older than N days                                         |
+| `--hard-delete-older-than-days <days>` | 0 (off) | Permanently purge soft-deleted entries older than N days                           |
+| `--prune-importance-threshold <score>` | 0.15    | Max importance score (`0.0`–`1.0`) eligible for archiving/pruning                  |
+| `--prune-dry-run`                      | false   | Log auto-prune candidates without mutating entries                                 |
+| `--prune-exclude-tags <tags>`          | —       | Comma-separated tags exempt from auto-prune (`archived` always kept)               |
 
 Each job is error-isolated — a failure in one job won't affect the others. Scheduler status (last run, result, next run) is visible via `memory://health`.
 
 ### Integrate Seamlessly with GitHub
 
 The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) auto-detect the repository from your git context when `PROJECT_REGISTRY` is configured or the MCP server is run inside a git repository.
-
 
 **Multi-Project Workflows**: For agents to seamlessly support multiple projects, configure your **`PROJECT_REGISTRY`** (tip: use `npx memory-journal-mcp project create <name> --path <repo-path> [--number <project-number>]`).
 
@@ -523,24 +524,24 @@ When opening an issue or viewing/moving a Kanban card, the server needs a GitHub
 
 For production deployments, enable OAuth 2.1 authentication on the HTTP transport:
 
-| Component                   | Status | Description                                      |
-| --------------------------- | ------ | ------------------------------------------------ |
-| Protected Resource Metadata | ✅     | RFC 9728 `/.well-known/oauth-protected-resource` |
-| Auth Server Discovery       | ✅     | RFC 8414 metadata discovery with caching         |
-| Token Validation            | ✅     | JWT validation with JWKS support                 |
+| Component                   | Status | Description                                                       |
+| --------------------------- | ------ | ----------------------------------------------------------------- |
+| Protected Resource Metadata | ✅     | RFC 9728 `/.well-known/oauth-protected-resource`                  |
+| Auth Server Discovery       | ✅     | RFC 8414 metadata discovery with caching                          |
+| Token Validation            | ✅     | JWT validation with JWKS support                                  |
 | Scope Enforcement           | ✅     | Granular `read`, `write`, `team`, `audit`, `admin`, `full` scopes |
-| HTTP Transport              | ✅     | Streamable HTTP with OAuth middleware            |
+| HTTP Transport              | ✅     | Streamable HTTP with OAuth middleware                             |
 
 **Supported Scopes:**
 
-| Scope   | Tool Groups                                                        |
-| ------- | ------------------------------------------------------------------ |
-| `read`  | `core (read-only), search, analytics, relationships (visualize_relationships), io (export_entries), git` |
+| Scope   | Tool Groups                                                                                                                                                    |
+| ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `read`  | `core (read-only), search, analytics, relationships (visualize_relationships), io (export_entries), git`                                                       |
 | `write` | `github (+ all read groups and create_entry / create_entry_minimal / link_entries / mark_anchors_stale / import_external / import_markdown / export_markdown)` |
-| `team`  | `team (dedicated team collaboration scope; combine with read/write for personal journal access)` |
-| `audit` | `memory://audit resource access (included in admin/full; search_audit_log requires admin or full)` |
-| `admin` | `admin, backup, codemode (+ all read/write/team/audit groups)`     |
-| `full`  | `Unrestricted access to all operations`                            |
+| `team`  | `team (dedicated team collaboration scope; combine with read/write for personal journal access)`                                                               |
+| `audit` | `memory://audit resource access (included in admin/full; search_audit_log requires admin or full)`                                                             |
+| `admin` | `admin, backup, codemode (+ all read/write/team/audit groups)`                                                                                                 |
+| `full`  | `Unrestricted access to all operations`                                                                                                                        |
 
 **Quick Start:**
 
@@ -577,56 +578,56 @@ memory-journal-mcp --transport http --port 3000
 
 ### Environment Variables
 
-| Variable                                       | Description                                                |
-| ---------------------------------------------- | ---------------------------------------------------------- |
-| **Core Database & Server** | |
-| `DB_PATH`                                      | Path to the personal journal SQLite database (CLI: `--db`, `--database`, default: `./memory_journal.db`) |
-| `DB_ENCRYPTION_KEY`                            | SQLCipher at-rest database encryption key (alias: `MJ_DB_ENCRYPTION_KEY`) |
-| `TEAM_DB_PATH`                                 | Path to the shared team SQLite database (CLI: `--team-db`, `--team-database`) |
-| `TEAM_AUTHOR`                                  | Display name attached to team entries (used for local author identity; OAuth identity claims take precedence when creating team entries and RBAC ownership under active OAuth) |
-| `TEAM_DEFAULT_ROLE`                            | Default RBAC role for unlisted team authors: `admin`, `member`, `viewer`, `denied` (CLI: `--team-default-role`, default: `denied`) |
-| `TEAM_ADMIN`                                   | Bootstrap admin author name when the `team_members` table is empty (CLI: `--team-admin`) |
-| `ADDITIONAL_TEAM_DBS`                          | JSON mapping of label to path for additional read-only team SQLite databases (CLI: `--additional-team-dbs`) |
-| `DEFAULT_WORKSPACE_ID`                         | Default workspace ID for multi-tenant isolation (CLI: `--default-workspace-id`, default: `default`; `MCP_WORKSPACE_ID` provides a session-scoped schema-healing fallback on tool payloads) |
-| `MEMORY_JOURNAL_CONFIG`                        | Path to configuration file (`.yaml`, `.yml`, `.json`; CLI: `--config`) |
-| `LOG_LEVEL`                                    | Server log verbosity: `debug`, `info`, `notice`, `warning`, `error`, `critical` (CLI `--log-level` accepts `debug`, `info`, `warning`, `error`; default: `info`) |
-| `TRANSPORT` / `PORT` / `MCP_HOST` / `STATELESS` | Transport mode (`stdio` or `http`; CLI: `--transport`), HTTP port (`--port`, default: `3000`), bind address (`--server-host`, fallback: `HOST`, default: `localhost`), and stateless HTTP mode (`--stateless`, default: `false`) |
-| `CORS_ORIGIN` / `MCP_CORS_ORIGIN` / `MCP_RATE_LIMIT_MAX` | Allowed CORS origins (`--cors-origin`) and per-IP/minute HTTP rate limit (default: `100`) |
-| `GITHUB_TOKEN`                                 | Personal access token for GitHub integrations              |
-| `DEFAULT_PROJECT_NUMBER`                       | Default GitHub Project number for issue auto-assignment (CLI: `--default-project`) |
-| `PROJECT_REGISTRY`                             | JSON map of repo names to local paths and project numbers  |
-| `EMBEDDING_MODEL`                              | HuggingFace transformers model for semantic search (CLI: `--embedding-model`, default: `Xenova/all-MiniLM-L6-v2`) |
-| `AUTO_REBUILD_INDEX`                           | Rebuild vector search index on startup (`true`/`false`, CLI: `--auto-rebuild-index`) |
-| **Security & Tooling** | |
-| `ALLOWED_IO_ROOTS`                             | Comma-separated paths for Code Mode and IO filesystem boundaries (fail-closed in stdio; mandatory when `--transport http` is used) |
-| `MEMORY_JOURNAL_MCP_TOOL_FILTER`               | Control tool exposure (`full`, `starter`, `essential`, `codemode`, `readonly`, `-github`; CLI: `--tool-filter`, `memory-journal.config.{yaml,yml,json}` key: `"toolFilter"`. Note: `TOOL_FILTER` is a display fallback only) |
-| `CODE_MODE_MAX_RESULT_SIZE`                    | Max execution payload buffer size in Code Mode (bytes, default: `102400`) |
-| `CODEMODE_INTERNAL_FULL_ACCESS`                | Allow Code Mode to bypass tool filters internally (default: `false`) |
-| `MCP_AGENT_HEALING`                            | Enable/disable autonomous tool & parameter healing (`true`/`false`, CLI: `--no-agent-healing`) |
-| `MAX_TOOL_INPUT_ELEMENTS`                      | Max array/object elements in tool inputs (default: `25000`, `0` or `Infinity` = disabled) |
-| `MCP_AUTH_TOKEN` / `MCP_AUTH_SCOPES`           | Static Bearer authentication token (`--auth-token`, `--auth-scopes`) and comma-separated granted scopes for HTTP transport (default: `read`) |
-| `MCP_ENABLE_HSTS` / `TRUST_PROXY`              | Enable `Strict-Transport-Security` header (`--enable-hsts`) and reverse-proxy `X-Forwarded-For` trust (`--trust-proxy`) |
-| **Briefing & Context** | |
-| `BRIEFING_ENTRY_COUNT`                         | Number of granular journal entries in briefing (default: 3)|
-| `BRIEFING_SUMMARY_COUNT`                       | Number of session summaries in briefing (default: 1)       |
-| `BRIEFING_COMMIT_COUNT`                        | Number of git commits in briefing (default: 3)             |
-| `BRIEFING_IMPORTANCE_THRESHOLD`                | Minimum importance score for briefing entries (default: 0.3)|
-| `BRIEFING_INCLUDE_TEAM`                        | Include entries from the team database (default: false)    |
-| `BRIEFING_ISSUE_COUNT` / `BRIEFING_PR_COUNT` / `BRIEFING_PR_STATUS` | GitHub Issues (default: `0`), PRs (default: `0`), and PR status breakdown (default: `false`) in briefing |
-| `BRIEFING_MILESTONE_COUNT`                     | GitHub Milestones to list with titles (default: `3`)       |
-| `BRIEFING_WORKFLOW_COUNT` / `BRIEFING_WORKFLOW_STATUS` / `BRIEFING_COPILOT_REVIEWS` | CI workflow runs (default: `0`), status breakdown (default: `false`), and Copilot review state (default: `false`) |
-| `STALENESS_ACTIVE_HOURS` / `STALENESS_RECENT_DAYS` / `STALENESS_STALE_DAYS` | Thresholds for `memory://staleness` project classification (defaults: `24`h / `7`d / `30`d) |
-| `RULES_FILE_PATH` / `SKILLS_DIR_PATH` / `MEMORY_JOURNAL_WORKFLOW_SUMMARY` | Injected behavioral rules, skills boundaries, and workflow summary |
-| **OAuth (HTTP Mode)** | |
-| `OAUTH_ENABLED`                                | Enable OAuth 2.1 authentication (default: false)           |
-| `OAUTH_ISSUER` / `OAUTH_AUDIENCE` / `OAUTH_JWKS_URI` / `OAUTH_CLOCK_TOLERANCE` / `PUBLIC_ORIGIN` / `OAUTH_ALLOW_PLAINTEXT_LOOPBACK` | OAuth token verification parameters (clock tolerance default: 60s), non-loopback RFC 9728 public origin (`--public-origin`), and local dev plaintext loopback issuer flag (`--oauth-allow-plaintext-loopback`) |
-| **Telemetry & Administration** | |
-| `AUDIT_LOG_PATH` / `AUDIT_REDACT` / `AUDIT_READS` / `AUDIT_LOG_MAX_SIZE` | Path to JSONL audit log file, argument/result redaction, read-call logging, and rotation size limit (default: 10MB) |
-| `METRICS_EXPORT` / `PERSIST_METRICS` / `METRICS_PATH` / `MJ_METRICS_PORT` / `MJ_METRICS_HOST` | Prometheus export (`METRICS_EXPORT=prometheus` auto-starts the standalone metrics server on `127.0.0.1:9465` in addition to mounting `/metrics` on the HTTP transport), disk-persisted metrics (`--persist-metrics`, `--metrics-path`), and dedicated scrape port/host |
-| `AUTO_PRUNE_INTERVAL_MINUTES` / `ARCHIVE_OLDER_THAN_DAYS` / `PRUNE_OLDER_THAN_DAYS` / `HARD_DELETE_OLDER_THAN_DAYS` / `PRUNE_IMPORTANCE_THRESHOLD` / `PRUNE_DRY_RUN` / `PRUNE_EXCLUDE_TAGS` | Autonomous lifecycle pruning, archiving (interval/days default: `0` = disabled), importance threshold (default: `0.15`), dry-run (default: `false`), and exclusion tags |
-| `BACKUP_INTERVAL` / `KEEP_BACKUPS` / `VACUUM_INTERVAL` / `REBUILD_INDEX_INTERVAL` / `DIGEST_INTERVAL` | Scheduled HTTP maintenance intervals in minutes (`--backup-interval`, `--vacuum-interval`, `--rebuild-index-interval`, `--digest-interval`) and backup retention count (`--keep-backups`, default: `5`) |
-| `REPORT_INTERVAL` / `REPORT_WEBHOOK_URL` / `REPORT_WEBHOOK_AUTH` / `REPORT_CONTENT_TYPE` / `ALLOW_INSECURE_WEBHOOK_HTTP` | Scheduled HTTP reports, webhook delivery headers/content-type, and local dev HTTP webhook override |
-| `DEBUG` / `DISABLE_ISSUE_LOGGING`              | Verbose debug logging and suppression of automated runtime issue logging |
+| Variable                                                                                                                                                                                    | Description                                                                                                                                                                                                                                                            |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Core Database & Server**                                                                                                                                                                  |                                                                                                                                                                                                                                                                        |
+| `DB_PATH`                                                                                                                                                                                   | Path to the personal journal SQLite database (CLI: `--db`, `--database`, default: `./memory_journal.db`)                                                                                                                                                               |
+| `DB_ENCRYPTION_KEY`                                                                                                                                                                         | SQLCipher at-rest database encryption key (alias: `MJ_DB_ENCRYPTION_KEY`)                                                                                                                                                                                              |
+| `TEAM_DB_PATH`                                                                                                                                                                              | Path to the shared team SQLite database (CLI: `--team-db`, `--team-database`)                                                                                                                                                                                          |
+| `TEAM_AUTHOR`                                                                                                                                                                               | Display name attached to team entries (used for local author identity; OAuth identity claims take precedence when creating team entries and RBAC ownership under active OAuth)                                                                                         |
+| `TEAM_DEFAULT_ROLE`                                                                                                                                                                         | Default RBAC role for unlisted team authors: `admin`, `member`, `viewer`, `denied` (CLI: `--team-default-role`, default: `denied`)                                                                                                                                     |
+| `TEAM_ADMIN`                                                                                                                                                                                | Bootstrap admin author name when the `team_members` table is empty (CLI: `--team-admin`)                                                                                                                                                                               |
+| `ADDITIONAL_TEAM_DBS`                                                                                                                                                                       | JSON mapping of label to path for additional read-only team SQLite databases (CLI: `--additional-team-dbs`)                                                                                                                                                            |
+| `DEFAULT_WORKSPACE_ID`                                                                                                                                                                      | Default workspace ID for multi-tenant isolation (CLI: `--default-workspace-id`, default: `default`; `MCP_WORKSPACE_ID` provides a session-scoped schema-healing fallback on tool payloads)                                                                             |
+| `MEMORY_JOURNAL_CONFIG`                                                                                                                                                                     | Path to configuration file (`.yaml`, `.yml`, `.json`; CLI: `--config`)                                                                                                                                                                                                 |
+| `LOG_LEVEL`                                                                                                                                                                                 | Server log verbosity: `debug`, `info`, `notice`, `warning`, `error`, `critical` (CLI `--log-level` accepts `debug`, `info`, `warning`, `error`; default: `info`)                                                                                                       |
+| `TRANSPORT` / `PORT` / `MCP_HOST` / `STATELESS`                                                                                                                                             | Transport mode (`stdio` or `http`; CLI: `--transport`), HTTP port (`--port`, default: `3000`), bind address (`--server-host`, fallback: `HOST`, default: `localhost`), and stateless HTTP mode (`--stateless`, default: `false`)                                       |
+| `CORS_ORIGIN` / `MCP_CORS_ORIGIN` / `MCP_RATE_LIMIT_MAX`                                                                                                                                    | Allowed CORS origins (`--cors-origin`) and per-IP/minute HTTP rate limit (default: `100`)                                                                                                                                                                              |
+| `GITHUB_TOKEN`                                                                                                                                                                              | Personal access token for GitHub integrations                                                                                                                                                                                                                          |
+| `DEFAULT_PROJECT_NUMBER`                                                                                                                                                                    | Default GitHub Project number for issue auto-assignment (CLI: `--default-project`)                                                                                                                                                                                     |
+| `PROJECT_REGISTRY`                                                                                                                                                                          | JSON map of repo names to local paths and project numbers                                                                                                                                                                                                              |
+| `EMBEDDING_MODEL`                                                                                                                                                                           | HuggingFace transformers model for semantic search (CLI: `--embedding-model`, default: `Xenova/all-MiniLM-L6-v2`)                                                                                                                                                      |
+| `AUTO_REBUILD_INDEX`                                                                                                                                                                        | Rebuild vector search index on startup (`true`/`false`, CLI: `--auto-rebuild-index`)                                                                                                                                                                                   |
+| **Security & Tooling**                                                                                                                                                                      |                                                                                                                                                                                                                                                                        |
+| `ALLOWED_IO_ROOTS`                                                                                                                                                                          | Comma-separated paths for Code Mode and IO filesystem boundaries (fail-closed in stdio; mandatory when `--transport http` is used)                                                                                                                                     |
+| `MEMORY_JOURNAL_MCP_TOOL_FILTER`                                                                                                                                                            | Control tool exposure (`full`, `starter`, `essential`, `codemode`, `readonly`, `-github`; CLI: `--tool-filter`, `memory-journal.config.{yaml,yml,json}` key: `"toolFilter"`. Note: `TOOL_FILTER` is a display fallback only)                                           |
+| `CODE_MODE_MAX_RESULT_SIZE`                                                                                                                                                                 | Max execution payload buffer size in Code Mode (bytes, default: `102400`)                                                                                                                                                                                              |
+| `CODEMODE_INTERNAL_FULL_ACCESS`                                                                                                                                                             | Allow Code Mode to bypass tool filters internally (default: `false`)                                                                                                                                                                                                   |
+| `MCP_AGENT_HEALING`                                                                                                                                                                         | Enable/disable autonomous tool & parameter healing (`true`/`false`, CLI: `--no-agent-healing`)                                                                                                                                                                         |
+| `MAX_TOOL_INPUT_ELEMENTS`                                                                                                                                                                   | Max array/object elements in tool inputs (default: `25000`, `0` or `Infinity` = disabled)                                                                                                                                                                              |
+| `MCP_AUTH_TOKEN` / `MCP_AUTH_SCOPES`                                                                                                                                                        | Static Bearer authentication token (`--auth-token`, `--auth-scopes`) and comma-separated granted scopes for HTTP transport (default: `read`)                                                                                                                           |
+| `MCP_ENABLE_HSTS` / `TRUST_PROXY`                                                                                                                                                           | Enable `Strict-Transport-Security` header (`--enable-hsts`) and reverse-proxy `X-Forwarded-For` trust (`--trust-proxy`)                                                                                                                                                |
+| **Briefing & Context**                                                                                                                                                                      |                                                                                                                                                                                                                                                                        |
+| `BRIEFING_ENTRY_COUNT`                                                                                                                                                                      | Number of granular journal entries in briefing (default: 3)                                                                                                                                                                                                            |
+| `BRIEFING_SUMMARY_COUNT`                                                                                                                                                                    | Number of session summaries in briefing (default: 1)                                                                                                                                                                                                                   |
+| `BRIEFING_COMMIT_COUNT`                                                                                                                                                                     | Number of git commits in briefing (default: 3)                                                                                                                                                                                                                         |
+| `BRIEFING_IMPORTANCE_THRESHOLD`                                                                                                                                                             | Minimum importance score for briefing entries (default: 0.3)                                                                                                                                                                                                           |
+| `BRIEFING_INCLUDE_TEAM`                                                                                                                                                                     | Include entries from the team database (default: false)                                                                                                                                                                                                                |
+| `BRIEFING_ISSUE_COUNT` / `BRIEFING_PR_COUNT` / `BRIEFING_PR_STATUS`                                                                                                                         | GitHub Issues (default: `0`), PRs (default: `0`), and PR status breakdown (default: `false`) in briefing                                                                                                                                                               |
+| `BRIEFING_MILESTONE_COUNT`                                                                                                                                                                  | GitHub Milestones to list with titles (default: `3`)                                                                                                                                                                                                                   |
+| `BRIEFING_WORKFLOW_COUNT` / `BRIEFING_WORKFLOW_STATUS` / `BRIEFING_COPILOT_REVIEWS`                                                                                                         | CI workflow runs (default: `0`), status breakdown (default: `false`), and Copilot review state (default: `false`)                                                                                                                                                      |
+| `STALENESS_ACTIVE_HOURS` / `STALENESS_RECENT_DAYS` / `STALENESS_STALE_DAYS`                                                                                                                 | Thresholds for `memory://staleness` project classification (defaults: `24`h / `7`d / `30`d)                                                                                                                                                                            |
+| `RULES_FILE_PATH` / `SKILLS_DIR_PATH` / `MEMORY_JOURNAL_WORKFLOW_SUMMARY`                                                                                                                   | Injected behavioral rules, skills boundaries, and workflow summary                                                                                                                                                                                                     |
+| **OAuth (HTTP Mode)**                                                                                                                                                                       |                                                                                                                                                                                                                                                                        |
+| `OAUTH_ENABLED`                                                                                                                                                                             | Enable OAuth 2.1 authentication (default: false)                                                                                                                                                                                                                       |
+| `OAUTH_ISSUER` / `OAUTH_AUDIENCE` / `OAUTH_JWKS_URI` / `OAUTH_CLOCK_TOLERANCE` / `PUBLIC_ORIGIN` / `OAUTH_ALLOW_PLAINTEXT_LOOPBACK`                                                         | OAuth token verification parameters (clock tolerance default: 60s), non-loopback RFC 9728 public origin (`--public-origin`), and local dev plaintext loopback issuer flag (`--oauth-allow-plaintext-loopback`)                                                         |
+| **Telemetry & Administration**                                                                                                                                                              |                                                                                                                                                                                                                                                                        |
+| `AUDIT_LOG_PATH` / `AUDIT_REDACT` / `AUDIT_READS` / `AUDIT_LOG_MAX_SIZE`                                                                                                                    | Path to JSONL audit log file, argument/result redaction, read-call logging, and rotation size limit (default: 10MB)                                                                                                                                                    |
+| `METRICS_EXPORT` / `PERSIST_METRICS` / `METRICS_PATH` / `MJ_METRICS_PORT` / `MJ_METRICS_HOST`                                                                                               | Prometheus export (`METRICS_EXPORT=prometheus` auto-starts the standalone metrics server on `127.0.0.1:9465` in addition to mounting `/metrics` on the HTTP transport), disk-persisted metrics (`--persist-metrics`, `--metrics-path`), and dedicated scrape port/host |
+| `AUTO_PRUNE_INTERVAL_MINUTES` / `ARCHIVE_OLDER_THAN_DAYS` / `PRUNE_OLDER_THAN_DAYS` / `HARD_DELETE_OLDER_THAN_DAYS` / `PRUNE_IMPORTANCE_THRESHOLD` / `PRUNE_DRY_RUN` / `PRUNE_EXCLUDE_TAGS` | Autonomous lifecycle pruning, archiving (interval/days default: `0` = disabled), importance threshold (default: `0.15`), dry-run (default: `false`), and exclusion tags                                                                                                |
+| `BACKUP_INTERVAL` / `KEEP_BACKUPS` / `VACUUM_INTERVAL` / `REBUILD_INDEX_INTERVAL` / `DIGEST_INTERVAL`                                                                                       | Scheduled HTTP maintenance intervals in minutes (`--backup-interval`, `--vacuum-interval`, `--rebuild-index-interval`, `--digest-interval`) and backup retention count (`--keep-backups`, default: `5`)                                                                |
+| `REPORT_INTERVAL` / `REPORT_WEBHOOK_URL` / `REPORT_WEBHOOK_AUTH` / `REPORT_CONTENT_TYPE` / `ALLOW_INSECURE_WEBHOOK_HTTP`                                                                    | Scheduled HTTP reports, webhook delivery headers/content-type, and local dev HTTP webhook override                                                                                                                                                                     |
+| `DEBUG` / `DISABLE_ISSUE_LOGGING`                                                                                                                                                           | Verbose debug logging and suppression of automated runtime issue logging                                                                                                                                                                                               |
 
 ### GitHub Integration (Optional)
 
@@ -696,7 +697,7 @@ flowchart TB
 ┌─────────────────────────────────────────────────────────────┐
 │ MCP Server Layer (TypeScript)                               │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐  │
-│  │ Tools            │  │ Resources       │  │ Prompts       │  │
+│  │ Tools           │  │ Resources       │  │ Prompts     │  │
 │  └─────────────────┘  └─────────────────┘  └─────────────┘  │
 ├─────────────────────────────────────────────────────────────┤
 │ Native SQLite Engine                                        │
@@ -741,10 +742,10 @@ pnpm run bench
 
 Extensively tested across two frameworks:
 
-| Suite                     | Command             | Covers                                                                          |
-| ------------------------- | ------------------- | ------------------------------------------------------------------------------- |
+| Suite                     | Command             | Covers                                                                                                                                                  |
+| ------------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Vitest (unit/integration) | `pnpm test`         | Extensive Vitest unit and integration suite with strict quality gates (database, tools, resources, handlers, security, GitHub, vector search, codemode) |
-| Playwright (e2e)          | `pnpm run test:e2e` | HTTP/SSE transport, auth, sessions, CORS, security headers, scheduler           |
+| Playwright (e2e)          | `pnpm run test:e2e` | HTTP/SSE transport, auth, sessions, CORS, security headers, scheduler                                                                                   |
 
 ```bash
 pnpm test          # Unit + integration tests
