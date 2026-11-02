@@ -3,7 +3,7 @@
 All notable changes to this project are documented in this file.
 This changelog is auto-generated from Git history using [lib-git-history](https://github.com/neverinfamous/adamic).
 
-## [Unreleased]
+## [v9.1.0]
 
 ### Features
 
@@ -180,7 +180,7 @@ This changelog is auto-generated from Git history using [lib-git-history](https:
 - align tool registration types with MCP v2 SDK by **Chris LeRoux** ([11f8e8d](https://github.com/neverinfamous/memory-journal-mcp/commit/11f8e8dad90695b7b293fa0c47dfd056603676f1))
 - type check fix for ALIASED_EXECUTE_CODE_NAMES in tool registration by **Chris LeRoux** ([cdc8f52](https://github.com/neverinfamous/memory-journal-mcp/commit/cdc8f528942d79865af6098716b3a51bb98292e4))
 - heal empty code payload and add mysql_execute_code tool alias by **Chris LeRoux** ([4ecff5a](https://github.com/neverinfamous/memory-journal-mcp/commit/4ecff5af77db90be8779b5ac71502fad64eb390d))
-- intercept hallucinated mj_ tool names and harden test suite by **Chris LeRoux** ([4a271eb](https://github.com/neverinfamous/memory-journal-mcp/commit/4a271eb2fc88e03baa3064fbb5baeca787265c75))
+- intercept hallucinated mj\_ tool names and harden test suite by **Chris LeRoux** ([4a271eb](https://github.com/neverinfamous/memory-journal-mcp/commit/4a271eb2fc88e03baa3064fbb5baeca787265c75))
 - harden proxy result unwrapping and add fetch/namespace anti-hallucination shims by **Chris LeRoux** ([99e03db](https://github.com/neverinfamous/memory-journal-mcp/commit/99e03dbc3216dfb7641200bff1cf1a243f463516))
 - correct failed result array proxy and fix security test auto-healing bypasses by **Chris LeRoux** ([44ee6dd](https://github.com/neverinfamous/memory-journal-mcp/commit/44ee6dd1809a5a245e7b000f37f424f4cb0a0e18))
 - implement multi-layer anti-hallucination & auto-healing guardrails by **Chris LeRoux** ([817d3a7](https://github.com/neverinfamous/memory-journal-mcp/commit/817d3a76f36f0f407c57d2c38d1a652cb5b53682))
@@ -280,7 +280,7 @@ This changelog is auto-generated from Git history using [lib-git-history](https:
 - Resolved an issue where Code Mode inadvertently stripped the auto_context payload entirely from memory journal entry creations. The proxy interceptor now properly stringifies plain object payloads and relays valid JSON strings, passing validation while preserving agent resilience. by **Chris LeRoux** ([a88e650](https://github.com/neverinfamous/memory-journal-mcp/commit/a88e6505fd0bfb07748f6fe70080e07588c6e849))
 - Fixed unhandled exception logic in test-cm-team-flags-analytics test script. by **Chris LeRoux** ([d5a05d6](https://github.com/neverinfamous/memory-journal-mcp/commit/d5a05d67ee60480d22f8b907cd250ac9617b20d2))
 - Fixed an issue where the briefing's Latest entries would display as empty if the database query omitted the importance scores, causing all entries to be filtered out regardless of the configured threshold. by **Chris LeRoux** ([6eceb49](https://github.com/neverinfamous/memory-journal-mcp/commit/6eceb492858ac0192dabb1f32b6b07b09b558c2f))
-- Removed the _execute_raw_query_unsafe MCP tool — a SQL injection vector that allowed arbitrary query execution. Replaced internal briefing usage with safe, purpose-built getRelationshipHubs() and getOrphanCount() methods. Tool count corrected from 101 to 100. by **Chris LeRoux** ([7743350](https://github.com/neverinfamous/memory-journal-mcp/commit/77433505965b7c740b5f988e19fe2a4390c0dc46))
+- Removed the \_execute_raw_query_unsafe MCP tool — a SQL injection vector that allowed arbitrary query execution. Replaced internal briefing usage with safe, purpose-built getRelationshipHubs() and getOrphanCount() methods. Tool count corrected from 101 to 100. by **Chris LeRoux** ([7743350](https://github.com/neverinfamous/memory-journal-mcp/commit/77433505965b7c740b5f988e19fe2a4390c0dc46))
 - Fixed an issue in native-connection.ts where providing a raw hex string starting with x' for the encryption key would cause a syntax error due to improper quoting. by **Chris LeRoux** ([321cb3a](https://github.com/neverinfamous/memory-journal-mcp/commit/321cb3a4c86573db586f94bc65c2cafd3e5e037a))
 - Enforced schema validation for commit-narrative contexts and isolated e2e tests to prevent configuration leakage. by **Chris LeRoux** ([7d92f2f](https://github.com/neverinfamous/memory-journal-mcp/commit/7d92f2f48988c6290a54dbb9635da32da7bd3a90))
 - Fixed ConfigResolver bug where dynamically resolved defaults overrode environment paths during strict equality checks, which resolves E2E state pollution and stray db creation. by **Chris LeRoux** ([3af2d19](https://github.com/neverinfamous/memory-journal-mcp/commit/3af2d19ae44d47ddf784afc5ee02b1fc747f0527))
@@ -356,8 +356,8 @@ This changelog is auto-generated from Git history using [lib-git-history](https:
 - add structural anti-hallucination descriptions to MCP tool schemas and test instructions by **Chris LeRoux** ([a52b6a8](https://github.com/neverinfamous/memory-journal-mcp/commit/a52b6a867cb250e45b02f06069480353eada782f))
 - apply effectiveAutoCorrect to searchOptions by **Chris LeRoux** ([a47dfdd](https://github.com/neverinfamous/memory-journal-mcp/commit/a47dfdd58e6a185ea4ff1cc96b69d22e49416640))
 - intercept exact_match hallucination by **Chris LeRoux** ([cc21e8d](https://github.com/neverinfamous/memory-journal-mcp/commit/cc21e8d98f122130dd9a6077616ee361c046c70b))
-- enforce ErrorFieldsMixin on _execute_raw_query_unsafe and update coverage by **Chris LeRoux** ([33051ce](https://github.com/neverinfamous/memory-journal-mcp/commit/33051ce5b9af532959a87da3d8e37b5a363a7d64))
-- resolve z.any schema issue in _execute_raw_query_unsafe by **Chris LeRoux** ([9d78f50](https://github.com/neverinfamous/memory-journal-mcp/commit/9d78f50f2bbcf3068cbc412b818a9cc2607d702d))
+- enforce ErrorFieldsMixin on \_execute_raw_query_unsafe and update coverage by **Chris LeRoux** ([33051ce](https://github.com/neverinfamous/memory-journal-mcp/commit/33051ce5b9af532959a87da3d8e37b5a363a7d64))
+- resolve z.any schema issue in \_execute_raw_query_unsafe by **Chris LeRoux** ([9d78f50](https://github.com/neverinfamous/memory-journal-mcp/commit/9d78f50f2bbcf3068cbc412b818a9cc2607d702d))
 - pass progress context to sandbox bindings by **Chris LeRoux** ([0ec7d3d](https://github.com/neverinfamous/memory-journal-mcp/commit/0ec7d3dddc523e5123f91fc6b6af7ee5e8db9848))
 - correct idempotentHint values for admin and team alias tools by **Chris LeRoux** ([a522cef](https://github.com/neverinfamous/memory-journal-mcp/commit/a522cefb725a80a58b957108a580065050b3c13a))
 - auto-resolve repo/project string params in native tool calls by **Chris LeRoux** ([fde3ada](https://github.com/neverinfamous/memory-journal-mcp/commit/fde3adab0e92153b47c227a35cb2540b84ec0a91))
@@ -379,7 +379,7 @@ This changelog is auto-generated from Git history using [lib-git-history](https:
 - correctly convert L2 distance to Cosine Similarity for normalized unit vectors by **Chris LeRoux** ([6f1284f](https://github.com/neverinfamous/memory-journal-mcp/commit/6f1284f5df23b3bcb76ee3915aeea3f76e5abd72))
 - intercept exact_match hallucination in search tools by **Chris LeRoux** ([f94cb13](https://github.com/neverinfamous/memory-journal-mcp/commit/f94cb1327b59261198c00ce2d6cd63944e0fc9cc))
 - enforce include_archived flags in fts and semantic search modes by **Chris LeRoux** ([1129fb3](https://github.com/neverinfamous/memory-journal-mcp/commit/1129fb3dea38d27634e41ba60b63046db437b491))
-- intercept hallucinated query string for _executeRawQueryUnsafe by **Chris LeRoux** ([2348b84](https://github.com/neverinfamous/memory-journal-mcp/commit/2348b84fafc4b43ebe4b6dd2ac1145ed9a809d49))
+- intercept hallucinated query string for \_executeRawQueryUnsafe by **Chris LeRoux** ([2348b84](https://github.com/neverinfamous/memory-journal-mcp/commit/2348b84fafc4b43ebe4b6dd2ac1145ed9a809d49))
 - strip string literals before static security scans to prevent false positives by **Chris LeRoux** ([898b795](https://github.com/neverinfamous/memory-journal-mcp/commit/898b795993fc927b84fa189bec9eb072bfe77322))
 - fix readonly paradox when tool-filter restricts core tools by **Chris LeRoux** ([56cfb69](https://github.com/neverinfamous/memory-journal-mcp/commit/56cfb69fc8dec02eaa8af38408997fba26e8793b))
 - sandbox basics, timeout mapping, fetch proxy, and internal schema tools by **Chris LeRoux** ([d7095be](https://github.com/neverinfamous/memory-journal-mcp/commit/d7095be633a8e023ab954954c576daf8f4a99d0f))
