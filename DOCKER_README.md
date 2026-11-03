@@ -9,25 +9,14 @@
 
 > [!TIP]
 > **Value Proposition**
-> Bridge disconnected AI sessions seamlessly. Enable persistent project memory instantly. Automate handoffs with robust GitHub integration. Eliminate AI amnesia today.
-
-## 🧠 Eliminate AI Amnesia
-
-Large projects face a critical challenge. You lose context between sessions.
-
-- **Eliminate Session Amnesia** - AI forgets context when sessions end; Memory Journal remembers.
-- **Retain Deep Context** - Decisions and code scatter across threads; Memory Journal preserves them automatically.
-- **End Repeated Work** - AI repeats failed solutions; persistent history tracks every prior attempt.
-- **Prevent Context Overload** - Loading dozens of tool schemas bloats prompts; Code Mode compresses the API into one tool.
-
-Memory Journal builds your project's long-term memory. It bridges fragmented AI sessions seamlessly.
+> Keep project context across AI sessions. Recall past decisions, hand work off through GitHub, and resume without rebuilding the history by hand.
 
 **Experience true context-aware development:**
 
 - _"Why did we choose SQLite over Postgres for this service last month?"_ (Semantic search)
 - _"Run the `/issue-commander` (`triage` workflow) on the top priority ticket in the Kanban board."_ (GitHub operations)
 - _"Who has been touching the auth module recently, and what's our team collaboration density?"_ (Team analytics)
-- _"Commit the changes and automatically generate a structured journal entry using the \`--journal\` wrapper flag."_ (Automated lifecycles)
+- _"Commit the changes and record a structured journal entry with the \`commit\` prompt or \`create_entry\`."_ (Automated lifecycles)
 - _"Draw a visual graph showing how my last 10 architectural decisions relate to each other."_ (Knowledge graph)
 
 **[See complete examples & prompts →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Examples)**
@@ -56,7 +45,7 @@ Memory Journal builds your project's long-term memory. It bridges fragmented AI 
 Memory Journal supports multi-tenancy out of the box via the `workspace_id` construct, acting as a strict isolation barrier for multiple journals sharing the same SQLite database file.
 
 - **Auto-Resolution:** When `workspace_id` is omitted, the server automatically resolves the target workspace by matching `project_number` against `PROJECT_REGISTRY`, matching content/tag keyword aliases, or inspecting `process.cwd()`, before falling back to `DEFAULT_WORKSPACE_ID` (default: `default`).
-- **Data Partitioning & Cross-Workspace Queries:** Core CRUD, Soft-Delete/Restore, FTS5 Search, Vector Semantic Search (`semantic_search`), and Analytics tools enforce `workspace_id` isolation end-to-end. Read and search tools accept `workspace_id: "*"` to query across all workspaces, while external write/mutation paths reject wildcard overrides.
+- **Data Partitioning & Cross-Workspace Queries:** Core CRUD, Soft-Delete/Restore, FTS5 Search, Vector Semantic Search (`semantic_search`), and Analytics tools enforce `workspace_id` isolation end-to-end. Read and search tools accept `workspace_id: "*"` to query across all workspaces. `create_entry` ignores `workspace_id: "*"` and stores a resolved workspace. `update_entry` with `workspace_id: "*"` and `target_workspace_id` moves an entry. `delete_entry`, `restore_entry`, and batch deletes accept `*` and then match by id without a workspace predicate.
 - **Controlled Migration:** A `workspace_id` is assigned on creation and migrated only via `update_entry` (`workspace_id: "*"` + `target_workspace_id`).
 - **Server Config:** Set `--default-workspace-id` (or `DEFAULT_WORKSPACE_ID`) to configure the default fallback workspace for the container.
 
@@ -71,7 +60,7 @@ _Suggested Rule (Add to AGENTS.md, GEMINI.md, system prompts, etc.)_
 
 When the user initializes the session context by executing the `load-briefing` prompt:
 
-1. You will receive the output of the `memory://briefing/{repo_name}` resource.
+1. You will receive the output of the `memory://briefing/{+repo}` resource.
 2. Prepend your response EXACTLY as:
    > **📋 Briefing loaded** — `{repo_name}`
    > _{paste ENTIRE briefing here}_
@@ -89,7 +78,7 @@ When the user initializes the session context by executing the `load-briefing` p
 
 Control which tools and tool groups are exposed using `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or any of the 3 configuration sources; precedence: CLI flag > environment variable > config file):
 - **CLI flag**: `--tool-filter <filter>`
-- **Environment variable**: `MEMORY_JOURNAL_MCP_TOOL_FILTER` *(Note: `TOOL_FILTER` is only a fallback display variable in the session briefing and does **not** activate tool filtering on its own)*
+- **Environment variable**: `MEMORY_JOURNAL_MCP_TOOL_FILTER` (`TOOL_FILTER` is not read)
 - **`memory-journal.config.{yaml,yml,json}` key**: `"toolFilter"`
 
 | Filter               | Use Case                 |
@@ -97,7 +86,7 @@ Control which tools and tool groups are exposed using `MEMORY_JOURNAL_MCP_TOOL_F
 | `full`               | All tools (default)      |
 | `starter`            | Core + search + codemode |
 | `essential`          | Minimal footprint        |
-| `readonly`           | Disable all mutations    |
+| `readonly`           | Exposes `core`, `search`, `analytics`, `relationships`, `io`, `git`, and `codemode`. Direct tools still include `create_entry`, `link_entries`, and the import tools. `update_configuration` stays available. |
 | `-github`            | Exclude a group          |
 | `-github,-analytics` | Exclude multiple groups  |
 
@@ -139,7 +128,7 @@ Comprehensive access to internal state via resources (`memory://briefing`, `memo
 
 ### ⚡ Cut Token Usage with Code Mode
 
-Code Mode (`mj_execute_code`) **reduces token usage by up to 90%** and is included by default in all presets. Instead of spending thousands of tokens on sequential tool calls, AI agents use a single sandboxed execution to reason faster.
+Code Mode (`mj_execute_code`) runs many journal operations in one sandboxed call, so the client does not resend every tool schema.
 
 Code executes in a **pre-warmed `worker_threads` V8 isolate pool + secondary `vm.createContext` boundary** with multiple layers of security. All `mj.*` API calls execute against the journal within the sandbox, providing:
 
@@ -152,7 +141,7 @@ Code executes in a **pre-warmed `worker_threads` V8 isolate pool + secondary `vm
 - **Hard timeouts** — configurable execution limit (default 30s) with bounded async timer tracking (`setTimeout`/`sleep` capped and cleared on completion)
 - **Egress boundary enforcement** — result serialization capped (default 100KB via `CODE_MODE_MAX_RESULT_SIZE`) with automatic payload compaction to prevent OOM
 - **Full API access** — all tool groups are available via `mj.*` (e.g., `mj.core.createEntry()`, `mj.search.searchEntries()`, `mj.github.getGithubIssues()`)
-- **Strict Readonly Contract** — Calling any mutation method under `--tool-filter readonly` safely halts the sandbox to prevent execution, returning a structured error response to the agent instead of a raw MCP protocol exception.
+- **Readonly filter in Code Mode** — A filter containing `readonly` (and not `-readonly`) limits `mj.*` dispatch to tools with `readOnlyHint: true`.
 
 ---
 
@@ -167,6 +156,8 @@ Code executes in a **pre-warmed `worker_threads` V8 isolate pool + secondary `vm
 docker pull writenotenow/memory-journal-mcp:latest
 ```
 
+The image sets `DB_PATH=/app/data/memory_journal.db` and `MCP_HOST=0.0.0.0`. A non-loopback bind still requires `MCP_AUTH_TOKEN` or OAuth.
+
 ### 2. Create Data Directory
 
 ```bash
@@ -179,7 +170,7 @@ Add this to your `~/.cursor/mcp.json`, Claude Desktop config, or equivalent:
 
 ### Basic Configuration
 
-> 💡 **Tip:** Run `npx memory-journal-mcp project create <name> --path <path> [--number <project-number>]` to configure one or more repositories in `PROJECT_REGISTRY` without manual JSON escaping!
+> 💡 **Tip:** `npx memory-journal-mcp project create <name> --path <path> [--number <project-number>]` writes `projectRegistry` to `memory-journal.config.json` (default `~/.gemini/config/memory-journal.config.json`, or `MEMORY_JOURNAL_CONFIG`). It does not edit `PROJECT_REGISTRY`. A client `PROJECT_REGISTRY` overrides the file; leave it unset so the server loads that file.
 
 ```json
 {
@@ -204,8 +195,6 @@ Add this to your `~/.cursor/mcp.json`, Claude Desktop config, or equivalent:
 ```
 
 ### Advanced Configuration (Recommended)
-
-Showcasing the full power of the server, including Multi-Project Routing, Team Collaboration, Copilot awareness, and Context Injections.
 
 ```json
 {
@@ -256,7 +245,7 @@ The `memory://briefing` resource is dynamically assembled at each session start,
 
 Set `RULES_FILE_PATH` and `SKILLS_DIR_PATH` to surface agent rules and skills as companion resources. In multi-repo setups, agents read `memory://briefing/{+repo}` for repo-scoped context.
 
-**[Full briefing customization guide with presets →](https://github.com/neverinfamous/memory-journal-mcp#-customizing-the-session-briefing)**
+**[Full briefing customization guide with presets →](https://github.com/neverinfamous/memory-journal-mcp#customizing-the-session-briefing)**
 
 **Variants** (modify the config array above):
 

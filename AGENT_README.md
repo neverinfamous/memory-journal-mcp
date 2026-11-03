@@ -24,7 +24,7 @@ When orchestrating workflows or performing multi-step operations on behalf of a 
 - **Token Optimization**: Enables multi-step logic composition across all tool groups within a single sandboxed execution.
 - **Sandbox Security**: Executes in a pre-warmed `node:worker_threads` V8 isolate pool + secondary `vm.createContext` boundary with V8 `codeGeneration: { strings: false, wasm: false }`, frozen prototypes and `mj.*` API surfaces, `Proxy: undefined`, host-side RPC allowlist, static validation rules (50KB code cap), 30s timeout, and 100KB result egress cap with auto-compaction.
 - **API Surface**: Exposed via the `mj.*` API (e.g., `mj.core.createEntry()`, `mj.search.searchEntries()`, `mj.github.getGithubIssues()`).
-- **Readonly Contract**: Mutations are safely blocked if the server is running with `--tool-filter readonly` (env: `MEMORY_JOURNAL_MCP_TOOL_FILTER=readonly`, `memory-journal.config.json` key: `"toolFilter": "readonly"`).
+- **Readonly Contract**: `--tool-filter readonly` (env: `MEMORY_JOURNAL_MCP_TOOL_FILTER=readonly`, config key `toolFilter`) still registers `core`, `search`, `analytics`, `relationships`, `io`, `git`, and `codemode`, including `create_entry`. Inside Code Mode, a filter containing `readonly` and not `-readonly` limits `mj.*` dispatch to tools with `readOnlyHint: true`.
 
 ---
 
@@ -71,7 +71,7 @@ The server supports strict data isolation using `workspace_id`.
 - All CRUD, Search, and Analytics tools accept a `workspace_id`. 
 - If omitted, the server auto-resolves `workspace_id` from `project_number` (via `PROJECT_REGISTRY`), content/tag keyword aliases, or `process.cwd()` before falling back to `DEFAULT_WORKSPACE_ID` (default: `default`).
 - The `workspace_id` is assigned upon creation and cannot be overwritten directly on standard updates; cross-workspace entry migration uses `update_entry` with `workspace_id: '*'` and `target_workspace_id`.
-- Read, search, and relationship tools accept `workspace_id: "*"` to query across all workspaces (`resolveWorkspaceId('*')` preserves wildcard sentinel `'*'`); external write/mutation paths reject wildcard overrides.
+- Read, search, and relationship tools accept `workspace_id: "*"` to query across all workspaces (`resolveWorkspaceId('*')` preserves wildcard sentinel `'*'`); `create_entry` uses `resolveProjectContext`, which treats `workspace_id: '*'` as omitted so `'*'` is never stored. `update_entry`, `delete_entry`, and `restore_entry` keep `'*'` via `resolveWorkspaceId` as a cross-workspace caller scope. A stored workspace changes only when `target_workspace_id` is set and is not `'*'`.
 
 ---
 
@@ -94,7 +94,7 @@ Review it thoroughly before proceeding. For mid-session context recovery (projec
 | `DEFAULT_WORKSPACE_ID` | Default tenant workspace ID (default: `default`) |
 | `PROJECT_REGISTRY` | JSON map of repo names to local paths and GitHub project numbers |
 | `ALLOWED_IO_ROOTS` | Comma-separated allowed filesystem roots (fail-closed in stdio; mandatory when `--transport http` is used) |
-| `MEMORY_JOURNAL_MCP_TOOL_FILTER` | Control tool exposure (`full`, `codemode` [`mj_execute_code` + `update_configuration`], `starter`, `essential`, `core`, `readonly`, `-github`; CLI: `--tool-filter`, `memory-journal.config.{yaml,yml,json}` key: `"toolFilter"`. Note: `TOOL_FILTER` is a display fallback only) |
+| `MEMORY_JOURNAL_MCP_TOOL_FILTER` | Control tool exposure (`full`, `codemode` [`mj_execute_code` + `update_configuration`], `starter`, `essential`, `core`, `readonly`, `-github`; CLI: `--tool-filter`, `memory-journal.config.{yaml,yml,json}` key: `"toolFilter"`. `TOOL_FILTER` is not read by the filter parser. Set `MEMORY_JOURNAL_MCP_TOOL_FILTER`, `--tool-filter`, or config key `toolFilter`.) |
 | `CODEMODE_INTERNAL_FULL_ACCESS` | Allow Code Mode (`mj.*`) to bypass tool filters internally across all tool namespaces (`true`/`false`, default: `false`, CLI: `--codemode-internal-full-access`) |
 | `MCP_AGENT_HEALING` | Enable/disable autonomous tool & parameter healing (`true`/`false`, CLI: `--no-agent-healing`) |
 | `MAX_TOOL_INPUT_ELEMENTS` | Max array/object elements in tool inputs (default: `25000`, `0` or `Infinity` = disabled) |
@@ -110,5 +110,5 @@ Development is optimized for **Windows Native Orchestration** using PowerShell. 
 
 ## 🛡️ Testing & Validation Gates
 
-- Static code validation is handled via `pnpm run check` (runs ESLint, 500-line file length ceiling check, `tsc --noEmit`, code-map sync, and unassigned workspace entry check); unit tests run via `pnpm test` (Vitest) and E2E tests via `pnpm run test:e2e` (Playwright).
+- `pnpm run check` runs ESLint, the 500-line ceiling, `tsc --noEmit`, regenerates `test-server/code-map.md`, and the unassigned-entry check, then `pnpm test` and `pnpm run test:e2e`. Static-only runs are `pnpm run lint` and `pnpm run typecheck`.
 - Hard fail on security checks; never use `continue-on-error: true` in CI pipelines.

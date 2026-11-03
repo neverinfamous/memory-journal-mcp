@@ -23,7 +23,7 @@ If you find issues during code review, use `create_entry` with tag `copilot-find
 ## Tooling Standards
 
 - **Copilot CLI**: Always reference and use `gh copilot`, NOT the deprecated binary.
-- **Package Manager**: Always use `pnpm`. Do NOT use `npm` or `yarn` (except for installing `pnpm` globally in CI pipelines or querying the npm registry). Use `pnpm install`, `pnpm run build`, `pnpm test`, etc.
+- **Package Manager**: Always use `pnpm`. Do not use npm or yarn for install, build, or test. Existing CI exceptions: `npm install -g pnpm@11.9.0`, `npm view` in `publish-npm.yml`, and `npx playwright install --with-deps` in `e2e.yml`. Do not add new npm or npx usage.
 
 ## Coding Standards
 
@@ -42,12 +42,10 @@ If you find issues during code review, use `create_entry` with tag `copilot-find
 
 - **Strict TypeScript** — `tsconfig.json` enforces strict mode
 - **Never use `eslint-disable`** to evade standards
-- **Never use `any`** — use `unknown` and narrow with type guards
-- **Never use `as` type assertions** — use `satisfies` operator or strict type guards
-- **Never use `@ts-ignore` or `@ts-expect-error`** — fix the underlying type issue
+- **Never use `any`** (`no-explicit-any` is an error). Never use `!` non-null assertions. `as` assertions are allowed when they pass the type-aware ESLint rules. Prefer a type guard or `satisfies` when an assertion is unnecessary. `@ts-ignore` is not an acceptable fix. Do not reject `@ts-expect-error` unless `pnpm run lint` fails
 - **Zod schemas** for all tool input validation
-- **Output schemas** — All standard domain tools (except `mj_execute_code`, which returns arbitrary sandbox results, and dummy healing tools) define Zod output schemas; error responses must pass validation
-- **Dual Schema Pattern**: All standard domain tool schemas separate strict internal validation (`*Schema` preprocessed by `healAgentHallucinations`), MCP wire input schemas (`*SchemaMcp` using `relaxedNumber()` to accept stringified numbers from LLMs), and output schemas (`*OutputSchema`, omitted on `mj_execute_code` and dummy healing tools). `argsSchema` is omitted for zero-argument prompts AND prompts where all arguments are optional (`!hasRequired` in `src/server/registration.ts`), as `z.object({})` rejects `undefined` when clients omit arguments.
+- **Output schemas** — All standard domain tools define Zod output schemas; error responses must pass validation. `mj_execute_code` sets `outputSchema: undefined`. Dummy healing tools set `outputSchema` to `FLEXIBLE_PASSTHROUGH_SCHEMA` (`z.looseObject` of the error fields), not a per-tool `*OutputSchema`.
+- **Dual Schema Pattern**: All standard domain tool schemas separate strict internal validation (`*Schema` preprocessed by `healAgentHallucinations`), MCP wire input schemas (`*SchemaMcp` using `relaxedNumber()` to accept stringified numbers from LLMs), and output schemas (`*OutputSchema`). `mj_execute_code` sets `outputSchema: undefined`. Dummy healing tools set `outputSchema` to `FLEXIBLE_PASSTHROUGH_SCHEMA` (`z.looseObject` of the error fields), not a per-tool `*OutputSchema`. `argsSchema` is omitted for zero-argument prompts AND prompts where all arguments are optional (`!hasRequired` in `src/server/registration.ts`), as `z.object({})` rejects `undefined` when clients omit arguments.
 
 ### Error Handling
 
@@ -74,10 +72,10 @@ Most JSON resource responses include `_meta.tokenEstimate` using the `Math.ceil(
 - **Team Support**: Team database tools explicitly require `TEAM_DB_PATH`.
 - **Metrics**: Tools support `trust_score`, `impact_score`, and `validation_status` (`passed` | `none` | `failed`) for analytics.
 - **YAML Frontmatter**: Supported natively in entry commands (`memory-journal-mcp entry create`).
-- **Docker Tags**: Always use `:latest` docker tags. Check limits (25,000 char) for DOCKER_README.md.
+- **Docker Tags**: `docker-publish.yml` publishes `docker.io/writenotenow/memory-journal-mcp`. The multi-arch manifest is tagged `latest`, `v<package.json version>`, and `sha-<short>`. Platform images are tagged `sha-<short>-amd64` and `sha-<short>-arm64` before the manifest merge. Keep `DOCKER_README.md` within Docker Hub's 25,000-character full-description limit.
 - **Dual-Schema Pattern**: All schemas must separate stringified input from strict internal domain types. Zod schemas are used.
 - **Vendor Sync**: Ensure vendored libraries in `src/vendor/` (`lib-agent-exec` and `lib-git-history`, tracked in `src/vendor/VENDOR.json`) are kept in sync via `pnpm run sync:vendor` and validated via `pnpm run check:vendor-deps` (executed via `bun scripts/sync-vendor.ts`).
-- **Guardrails**: `GOTCHAS_HELP` (`src/constants/instructions/gotchas.ts`) documents critical usage gotchas (covering search/query, backup/restore, GitHub/Kanban, content formatting, and sandbox execution), `memory://briefing` injects the session initialization guardrail, `healAgentHallucinations` (`src/handlers/tools/schemas/hallucination-healer.ts`) autonomously normalizes malformed tool arguments, and the session briefing health alert surfaces maintenance recommendations (`Consider running mj-mcp-optimize.`, backed by the `optimize-journal` prompt).
+- **Guardrails**: `GOTCHAS_HELP` (`src/constants/instructions/gotchas.ts`) documents critical usage gotchas (covering search/query, backup/restore, GitHub/Kanban, content formatting, and sandbox execution), `memory://briefing` injects the session initialization guardrail, `healAgentHallucinations` (`src/handlers/tools/schemas/hallucination-healer.ts`) autonomously normalizes malformed tool arguments, and the session briefing health alert includes the string `Consider running mj-mcp-optimize`, which is not a bin, script, tool, or prompt. The maintenance prompt is `optimize-journal`.
 - **Code Mode Error Proxy**: Code Mode API, Promise, and Worker proxies intercept and enrich errors with the `🛠️ AUTONOMOUS HEALING:` guidance prefix, while `worker-result-proxy.ts` prefixes `.error` with `[${code}]`.
 
 ## Architecture
@@ -134,6 +132,8 @@ src/
 | `test-server/tool-reference.md`          | Categorized tool inventory                       |
 | `CONTRIBUTING.md`                        | Development setup and PR guidelines                  |
 
+Do not copy tool, prompt, or resource totals out of `test-server/code-map.md` or `test-server/tool-reference.md`. Those blurbs still say 108 tools and 28 resources. Inventory is `getAllToolNames().length` and `getResources()`. Group membership belongs in `TOOL_GROUPS`.
+
 ## Review Checklist
 
 When reviewing PRs, check for:
@@ -145,6 +145,6 @@ When reviewing PRs, check for:
 - [ ] Raw exceptions from tool handlers — forbidden. Must return structured JSON via `formatHandlerError(error)` with exact classification codes
 - [ ] Files approaching 500 lines — flag for splitting
 - [ ] New tools missing from `src/filtering/tool-constants.ts` `TOOL_GROUPS` (re-exported by `src/filtering/tool-filter.ts`)
-- [ ] Missing Zod output schemas on new standard domain tools (except `mj_execute_code` and dummy healing tools)
+- [ ] Missing Zod output schemas on new standard domain tools (`mj_execute_code` sets `outputSchema: undefined`. Dummy healing tools set `outputSchema` to `FLEXIBLE_PASSTHROUGH_SCHEMA` (`z.looseObject` of the error fields), not a per-tool `*OutputSchema`)
 - [ ] Kebab-case violations in new filenames
 - [ ] `continue-on-error: true` in workflow files — forbidden per project standards

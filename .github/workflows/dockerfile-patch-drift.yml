@@ -1,7 +1,12 @@
 name: Dockerfile Patch Drift Check
 
-# Verifies Dockerfile security invariants (npm/npx removal in stage 2) and upstream npm
-# registry versions for CVE overrides. Runs daily and on dependency changes.
+# Fails the job only if Dockerfile no longer contains
+# "rm -rf /usr/local/lib/node_modules/npm".
+# The package.json override loop is informational: it prints registry
+# latest vs the raw override string and does not fail CI.
+# Schedule: 12:00 UTC daily. Also workflow_dispatch, and pull_request
+# when Dockerfile, package.json, pnpm-workspace.yaml, or pnpm-lock.yaml change
+# (no branches filter).
 
 on:
   schedule:

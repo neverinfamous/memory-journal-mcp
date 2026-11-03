@@ -105,8 +105,7 @@ services:
     networks:
       - mcp-net
     stdin_open: true
-    tty: true
-    command: ['node', 'dist/cli.js']
+    tty: false
     restart: unless-stopped
 
   memory-journal-mcp-http:
@@ -216,8 +215,7 @@ services:
       - mcp-net
     ports:
       - '3000:3000'
-    command:
-      ['node', 'dist/cli.js', '--transport', 'http', '--port', '3000', '--server-host', '0.0.0.0']
+    command: ['--transport', 'http', '--port', '3000', '--server-host', '0.0.0.0']
     healthcheck:
       test: ['CMD', 'curl', '-f', 'http://localhost:3000/health']
       interval: 30s

@@ -55,8 +55,8 @@ The server uses the native **better-sqlite3** driver with **sqlite-vec** for vec
 ### **Multi-Tenant Workspace Isolation (`workspace_id`)**
 
 - ✅ **End-to-End Tenant Scoping** — All personal and team entry reads, updates, soft-deletes, restores, FTS5 searches, and vector semantic searches (`semantic_search`, `team_semantic_search`) enforce `workspace_id` isolation.
-- ✅ **External Wildcard Rejection** — The cross-workspace sentinel (`workspace_id: '*'`) is reserved strictly for internal maintenance/read workflows; external tool callers passing `workspace_id: '*'` on write or mutation paths are rejected or automatically scoped to their resolved workspace.
-- ✅ **Execution-Layer `--tool-filter` Parity** — `--tool-filter` (including `readonly`, `-group`, and `-tool`) is enforced at execution time across `tools/call`, Code Mode (`mj.*`), and agent-healing fallbacks unless `--codemode-internal-full-access` was explicitly granted at server startup (which cannot be escalated via config file hot-reload).
+- ✅ **Wildcard workspace writes** — `create_entry` ignores `workspace_id: "*"` and stores a resolved workspace. `update_entry` with `workspace_id: "*"` and `target_workspace_id` moves an entry. `delete_entry`, `restore_entry`, and batch deletes accept `*` and then match by id without a workspace predicate.
+- ✅ **`--tool-filter` allow-list** — `--tool-filter` is an allow-list on `tools/call`. `readonly` blocks mutating `mj.*` calls and mutating healing aliases. It does not remove `create_entry` or `link_entries` from `tools/call`. `--codemode-internal-full-access`, if granted at server startup, cannot be escalated via config file hot-reload.
 
 ### **Prompt-Injection Defense (`<untrusted_remote_content>`)**
 
@@ -191,7 +191,7 @@ ALLOWED_IO_ROOTS="/path/to/allow1,/path/to/allow2"
 GITHUB_TOKEN=ghp_...            # GitHub personal access token
 
 # Optional
-PROJECT_REGISTRY='{"my-repo":{"path":"/path/to/repo","project_number":1}}'  # Multi-project routing (Tip: Use `npx memory-journal-mcp project create <name> --path <path>`)
+PROJECT_REGISTRY='{"my-repo":{"path":"/path/to/repo","project_number":1}}'  # Client override. `project create` writes projectRegistry to memory-journal.config.json (default ~/.gemini/config/memory-journal.config.json, or MEMORY_JOURNAL_CONFIG) and does not edit this variable. Leave it unset to load that file.
 DEFAULT_PROJECT_NUMBER=1         # Default project for issue assignment
 CORS_ORIGIN=                     # CORS origin (default: none)
 MCP_HOST=localhost               # Server bind host
@@ -217,14 +217,14 @@ AUTO_REBUILD_INDEX=true          # Rebuild vector index on startup
 
 ```bash
 # Secure volume mounting
-docker run -v ./data:/app/data:rw,noexec,nosuid,nodev memory-journal-mcp
+docker run -v ./data:/app/data:rw,noexec,nosuid,nodev writenotenow/memory-journal-mcp
 ```
 
 ### **Resource Limits**
 
 ```bash
 # Apply resource limits
-docker run --memory=1g --cpus=1 memory-journal-mcp
+docker run --memory=1g --cpus=1 writenotenow/memory-journal-mcp
 ```
 
 ## ⛓️ **Supply Chain Security**
@@ -268,7 +268,7 @@ Code Mode (`mj_execute_code`) executes user-provided JavaScript in a hardened `w
 
 ### **Static Code Validation**
 
-- ✅ **Pre-validation ordering** — Code Mode enablement checks, client rate-limiting, and the 50KB byte-size cap execute *before* any code healer or SQL auto-recovery pass, and SQL recovery uses a linear `O(N)` state-machine parser (zero `node:vm` execution on the host thread)
+- ✅ **Pre-validation ordering** — Code Mode enablement checks, client rate-limiting, and the 50KB byte-size cap execute *before* any code healer or SQL auto-recovery pass. SQL-shaped payloads are rewritten into `mj.*` calls with regular expressions before sandbox execution. That rewrite does not use `node:vm`.
 - ✅ **Single-pass lexical scanner** — `stripCommentsAndStrings` uses a single-pass character state machine that preserves `${...}` template literal interpolation expressions and `'constructor'`/`'__proto__'`/`'prototype'` strings so regex/comment interleaving cannot hide forbidden tokens
 - ✅ **Comprehensive blocked patterns** — regex rules blocking `require()`, `import()`, `process.*`, `global.*`, `eval()`, `Function()`, `__proto__`, `constructor.constructor`, `['constructor']`, `Object.getPrototypeOf`, `Object.setPrototypeOf`, `Object.defineProperty`, `Reflect.*`, `Symbol.*`, `new Proxy()`, `child_process`, `fs.*`, `net.*`, `http.*`, `https.*`
 - ✅ **50KB code size limit** — prevents payload-based resource exhaustion
@@ -349,8 +349,8 @@ chmod 600 ./memory_journal.db  # or your configured DB_PATH
 **Docker installation:**
 
 ```bash
-# Volume mount with appropriate permissions
-mkdir -m 755 data
+# A bind mount replaces the image's /app/data (mode 700, UID 1001).
+# The host directory must be writable by UID 1001.
 ```
 
 ### **Team Database Security**
@@ -481,18 +481,10 @@ chmod 700 /shared/team-data
 
 **GDPR-friendly:**
 
-- No data collection
-- No data transmission
+- The server does not send product analytics to a vendor. Journal text, team author names, and optional OAuth identity claims stay in your database. GitHub and Hugging Face are contacted only when those features are configured.
 - Local storage only
 - User controls all data
 - Easy data export/deletion
-
-**No PII collection:**
-
-- No names
-- No email addresses
-- No tracking
-- No analytics
 
 ## 📦 **Supported Versions**
 
