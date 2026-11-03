@@ -194,7 +194,7 @@ async function main() {
 
     console.log(`\n=== RESULTS: ${pass} pass, ${fail} fail (${pass + fail} total) ===`)
     proc.kill()
-    
+
     // Clean up test databases
     const filesToClean = [
         'test-prompts.db',
@@ -210,7 +210,7 @@ async function main() {
         'test-team-prompts-test.db-shm',
         'test-team-prompts-test.db-wal'
     ]
-    
+
     // Wait briefly to allow process to release file locks
     setTimeout(() => {
         for (const file of filesToClean) {
