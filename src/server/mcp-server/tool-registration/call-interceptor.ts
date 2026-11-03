@@ -191,7 +191,7 @@ async function tryAutonomousUnknownToolFallback(
             .filter(
                 (t) =>
                     enabledSet.has(t.name) &&
-                    isToolVisibleForFilter(t.name, t.annotations.readOnlyHint, raw)
+                    isToolVisibleForFilter(t.name, t.annotations?.readOnlyHint, raw)
             )
             .map((t) => ({ name: t.name, title: t.title, description: t.description, annotations: t.annotations }))
         return formatSuccessPayload({

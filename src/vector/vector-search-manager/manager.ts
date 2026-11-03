@@ -7,12 +7,22 @@ import type { ProgressContext } from '../../utils/progress-utils.js'
 import { DEFAULT_MODEL, type SemanticSearchResult } from './types.js'
 import { rebuildIndex } from './rebuild.js'
 
-function resolveEmbeddingCacheDir(dbPath: string): string {
+function dbPathFromAdapter(adapter: { getDbPath?: () => string }): string | undefined {
+    if (typeof adapter.getDbPath !== 'function') {
+        return undefined
+    }
+    return adapter.getDbPath()
+}
+
+function resolveEmbeddingCacheDir(dbPath: string | undefined): string {
     const override = process.env['EMBEDDING_CACHE_DIR']
     if (override !== undefined && override !== '') {
         return override
     }
-    return path.join(path.dirname(dbPath), '.cache', 'huggingface')
+    if (dbPath !== undefined && dbPath !== '') {
+        return path.join(path.dirname(dbPath), '.cache', 'huggingface')
+    }
+    return path.join('.cache', 'huggingface')
 }
 
 export class VectorSearchManager {
@@ -90,7 +100,7 @@ export class VectorSearchManager {
                     this.transformers = transformersModule
                     // Configure transformers to only use local models if we're in a completely offline environment,
                     // otherwise let it download models to cache.
-                    const cacheDir = resolveEmbeddingCacheDir(this.dbAdapter.getDbPath())
+                    const cacheDir = resolveEmbeddingCacheDir(dbPathFromAdapter(this.dbAdapter))
                     transformersModule.env.allowRemoteModels = true
                     transformersModule.env.cacheDir = cacheDir
                     transformersModule.env.localModelPath = cacheDir

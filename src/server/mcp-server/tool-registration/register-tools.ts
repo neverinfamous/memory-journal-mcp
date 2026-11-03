@@ -34,6 +34,13 @@ import { attachCallToolInterceptor } from './call-interceptor.js'
  */
 export const DEFAULT_MAX_TOOL_INPUT_ELEMENTS = 25_000
 
+function readOnlyHintOf(tool: { annotations?: { readOnlyHint?: boolean } }): boolean | undefined {
+    if (tool.annotations === undefined) {
+        return undefined
+    }
+    return tool.annotations.readOnlyHint
+}
+
 /**
  * Resolves the configured `maxToolInputElements` option into the value passed to `McpServer`.
  * - `undefined` -> `DEFAULT_MAX_TOOL_INPUT_ELEMENTS` (25,000)
@@ -259,7 +266,7 @@ export function createServerInstance(
                         const isMutation =
                             MUTATING_TOOLS.has(tool.name) ||
                             (tool.name.startsWith('team_') &&
-                                tool.annotations.readOnlyHint !== true)
+                                readOnlyHintOf(tool) !== true)
 
                         if (isMutation) {
                             void globalSubscriptionManager.notifyResourceUpdated('memory://briefing')
@@ -435,7 +442,7 @@ export function createServerInstance(
 
     const readOnlyHints = new Map<string, boolean | undefined>()
     for (const tool of allTools) {
-        readOnlyHints.set(tool.name, tool.annotations.readOnlyHint)
+        readOnlyHints.set(tool.name, readOnlyHintOf(tool))
     }
     attachListToolsInterceptor(requestHandlers, configManager, allToolNames, readOnlyHints)
     attachCallToolInterceptor(
