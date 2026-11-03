@@ -392,7 +392,12 @@ function buildFallbackTools(
             group: 'core',
             inputSchema: FLEXIBLE_PASSTHROUGH_SCHEMA,
             outputSchema: FLEXIBLE_PASSTHROUGH_SCHEMA,
-            annotations: { readOnlyHint: true, openWorldHint: false },
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
             handler: makeHandler(name),
         })
     )

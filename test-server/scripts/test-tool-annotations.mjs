@@ -25,15 +25,19 @@
  */
 
 import { spawn } from 'child_process'
+import { mkdtempSync } from 'fs'
+import { tmpdir } from 'os'
+import { dirname, join } from 'path'
+import { fileURLToPath } from 'url'
 
 // =============================================================================
 // Configuration
 // =============================================================================
 
-const projectDir = 'C:\\Users\\chris\\Desktop\\memory-journal-mcp'
+const projectDir = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
 
-/** Expected total tool count: 100 (10 groups + codemode) */
-const EXPECTED_TOOL_COUNT = 100
+/** Expected total tool count returned by tools/list under --tool-filter full */
+const EXPECTED_TOOL_COUNT = 113
 
 /**
  * Exact allowlist of tools that legitimately need openWorldHint=true.
@@ -84,6 +88,8 @@ const DESTRUCTIVE_ALLOWLIST = new Set([
     'delete_entry', // Soft/hard delete journal entry
     'batch_delete_entries', // Bulk delete journal entries
     'delete_github_milestone', // Permanently deletes GitHub milestone
+    'run_auto_prune', // Archives, soft-deletes, and hard-deletes journal rows
+    'delete_project', // Removes a project from the registry
     'restore_backup', // Replaces entire database with backup
     'team_delete_entry', // Soft delete team entry
     'team_batch_delete_entries', // Bulk soft delete team entries
@@ -104,6 +110,11 @@ const READ_ONLY_ALLOWLIST = new Set([
     'test_simple',
     'list_tags',
     'trigger_progress',
+    'read_resource',
+    'mj_read_resource',
+    'memory_read_resource',
+    'load-briefing',
+    'mj_session_summary',
     'test_error_handling',
     // Search reads
     'search_entries',
@@ -121,6 +132,15 @@ const READ_ONLY_ALLOWLIST = new Set([
     'export_entries',
     // Backup reads
     'list_backups',
+    // Project reads
+    'list_projects',
+    'get_project',
+    // Git reads
+    'get_commit_history',
+    'search_commits',
+    'get_release_info',
+    'get_unreleased_commits',
+    'analyze_commit_patterns',
     // GitHub reads
     'get_github_issues',
     'get_github_prs',
@@ -484,81 +504,109 @@ function pct(count, total) {
 // Server Communication (JSON-RPC over stdio)
 // =============================================================================
 
-const proc = spawn('node', ['dist/cli.js', '--instruction-level', 'essential'], {
-    cwd: projectDir,
-    stdio: ['pipe', 'pipe', 'pipe'],
-})
+const tempDir = mkdtempSync(join(tmpdir(), 'mj-annotations-'))
+const proc = spawn(
+    process.execPath,
+    [
+        'dist/cli.js',
+        '--db',
+        join(tempDir, 'annotations.db'),
+        '--team-db',
+        join(tempDir, 'annotations-team.db'),
+        '--log-level',
+        'error',
+        '--tool-filter',
+        'full',
+    ],
+    {
+        cwd: projectDir,
+        stdio: ['pipe', 'pipe', 'pipe'],
+    }
+)
 
 let buffer = ''
-let finished = false
+let stderr = ''
+const pending = new Map()
 
 proc.stdout.on('data', (chunk) => {
     buffer += chunk.toString()
-
     const lines = buffer.split('\n')
+    buffer = lines.pop() ?? ''
     for (const line of lines) {
         const trimmed = line.trim()
-        if (!trimmed) continue
+        if (trimmed === '') continue
         try {
             const msg = JSON.parse(trimmed)
-            if (msg.id === 1) {
-                // Initialize response — skip
-            } else if (msg.id === 2) {
-                // tools/list response
-                const tools = msg.result?.tools || []
-                const exitCode = validateAnnotations(tools)
-
-                finished = true
-                proc.kill()
-                process.exit(exitCode)
+            const resolve = pending.get(msg.id)
+            if (resolve !== undefined) {
+                pending.delete(msg.id)
+                resolve(msg)
             }
         } catch {
-            // Not complete JSON yet
+            // Incomplete or non-JSON stdout. The remainder stays in buffer.
         }
     }
 })
 
-proc.stderr.on('data', () => {})
+proc.stderr.on('data', (chunk) => {
+    stderr += chunk.toString()
+})
 
-// Send initialize
-proc.stdin.write(
-    JSON.stringify({
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'initialize',
-        params: {
-            protocolVersion: '2025-03-26',
-            capabilities: {},
-            clientInfo: { name: 'test', version: '1.0' },
-        },
-    }) + '\n'
-)
+function rpc(id, method, params) {
+    return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+            pending.delete(id)
+            reject(new Error(`Timeout waiting for ${method}`))
+        }, 30000)
+        pending.set(id, (msg) => {
+            clearTimeout(timer)
+            resolve(msg)
+        })
+        proc.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n')
+    })
+}
 
-// Wait, then send initialized + tools/list
-setTimeout(() => {
-    proc.stdin.write(
-        JSON.stringify({
-            jsonrpc: '2.0',
-            method: 'notifications/initialized',
-        }) + '\n'
-    )
+function notify(method) {
+    proc.stdin.write(JSON.stringify({ jsonrpc: '2.0', method }) + '\n')
+}
 
-    setTimeout(() => {
-        proc.stdin.write(
-            JSON.stringify({
-                jsonrpc: '2.0',
-                id: 2,
-                method: 'tools/list',
-                params: {},
-            }) + '\n'
-        )
-    }, 500)
-}, 1500)
+const exited = new Promise((resolve) => {
+    proc.on('exit', (code) => {
+        resolve(code)
+    })
+})
 
-setTimeout(() => {
-    if (!finished) {
-        console.log('Timeout — killing process')
-        proc.kill()
-        process.exit(1)
+try {
+    const initialize = await rpc(1, 'initialize', {
+        protocolVersion: '2025-03-26',
+        capabilities: {},
+        clientInfo: { name: 'test-tool-annotations', version: '1.0' },
+    })
+    if (initialize.error) {
+        throw new Error(`initialize failed: ${JSON.stringify(initialize.error)}`)
     }
-}, 15000)
+    notify('notifications/initialized')
+    const listed = await rpc(2, 'tools/list', {})
+    if (listed.error) {
+        throw new Error(`tools/list failed: ${JSON.stringify(listed.error)}`)
+    }
+    const tools = listed.result?.tools ?? []
+    const exitCode = validateAnnotations(tools)
+    proc.kill()
+    process.exit(exitCode)
+} catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error(message)
+    if (stderr.trim() !== '') {
+        console.error(stderr.trim())
+    }
+    proc.kill()
+    const code = await Promise.race([
+        exited,
+        new Promise((resolve) => setTimeout(() => resolve(null), 2000)),
+    ])
+    if (code !== null && code !== 0) {
+        console.error(`Server exited with code ${code}`)
+    }
+    process.exit(1)
+}
