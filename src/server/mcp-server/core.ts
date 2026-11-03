@@ -44,6 +44,9 @@ export async function createServer(options: ServerOptions): Promise<void> {
         pruneOlderThanDays: options.pruneOlderThanDays,
         hardDeleteOlderThanDays: options.hardDeleteOlderThanDays,
         pruneImportanceThreshold: options.pruneImportanceThreshold,
+        ...(options.pruneExcludeTags !== undefined
+            ? { pruneExcludeTags: options.pruneExcludeTags }
+            : {}),
     }
 
     const dispatch = (name: string, args: Record<string, unknown>): Promise<unknown> =>

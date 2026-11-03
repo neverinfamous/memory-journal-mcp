@@ -22,6 +22,7 @@ import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import type { VectorSearchManager } from '../../vector/vector-search-manager/index.js'
 import type { GitHubIntegration } from '../../github/github-integration/index.js'
 import type { ProgressContext } from '../../utils/progress-utils.js'
+import { isToolVisibleForFilter } from '../../filtering/tool-filter.js'
 
 import {
     getCoreTools,
@@ -157,11 +158,13 @@ export function getTools(
     if (filterConfig) {
         const mapToUse = config?.runtime?.toolMapCache ?? toolMapCache ?? EMPTY_TOOL_MAP
         const includeDummyTools = config?.agentHealing !== false
+        const raw = filterConfig.raw
         return Array.from(mapToUse.values())
             .filter(
                 (t) =>
-                    filterConfig.enabledTools.has(t.name) ||
-                    isDummyToolAllowedByFilter(t.name, filterConfig, includeDummyTools)
+                    (filterConfig.enabledTools.has(t.name) ||
+                        isDummyToolAllowedByFilter(t.name, filterConfig, includeDummyTools)) &&
+                    isToolVisibleForFilter(t.name, t.annotations.readOnlyHint, raw)
             )
             .map(mapTool)
     }
@@ -338,6 +341,19 @@ export async function callTool(
             DUMMY_HEALING_TOOL_NAMES.has(name) &&
             isDummyAllowed
         if (!isPrimaryEnabled && !isDummyAllowed && !isCodeModeShortcut) {
+            return {
+                success: false,
+                error: `Tool '${name}' is disabled by the active --tool-filter configuration.`,
+                code: 'TOOL_DISABLED',
+                category: 'authorization',
+                suggestion: 'Update the active tool filter or use an enabled tool.',
+                recoverable: false,
+            }
+        }
+        if (
+            isPrimaryEnabled &&
+            !isToolVisibleForFilter(name, tool.annotations.readOnlyHint, config.filterConfig.raw)
+        ) {
             return {
                 success: false,
                 error: `Tool '${name}' is disabled by the active --tool-filter configuration.`,

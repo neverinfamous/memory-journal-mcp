@@ -34,6 +34,22 @@ export function getClientIp(req: Request): string {
 // =============================================================================
 
 /**
+ * Rate-limit key. The limiter runs before authentication, so this hashes the
+ * raw Bearer token when one is present and otherwise hashes the client IP.
+ * It does not read JWT claims.
+ */
+export function rateLimitIdentity(authorization: string | undefined, clientIp: string): string {
+    if (authorization !== undefined) {
+        const match = /^Bearer\s+(\S+)/i.exec(authorization.trim())
+        const token = match?.[1]
+        if (token !== undefined && token.length > 0) {
+            return createHash('sha256').update(token).digest('hex')
+        }
+    }
+    return createHash('sha256').update(clientIp).digest('hex')
+}
+
+/**
  * Check rate limit for a request.
  * Returns object with `allowed` flag and optional `retryAfterSeconds`.
  */
@@ -46,20 +62,7 @@ export function checkRateLimit(
         return { allowed: true }
     }
 
-    const authReq = req as unknown as {
-        tokenClaims?: { sub?: string; client_id?: string }
-        auth?: { sub?: string; subject?: string; clientId?: string }
-    }
-    const subject =
-        authReq.tokenClaims?.sub ??
-        authReq.tokenClaims?.client_id ??
-        authReq.auth?.sub ??
-        authReq.auth?.subject ??
-        authReq.auth?.clientId
-    const ip = getClientIp(req)
-    // Ignore user-agent to prevent DoS via UA randomization
-    const rawIdentity = typeof subject === 'string' && subject ? subject : ip
-    const clientIdentity = createHash('sha256').update(rawIdentity).digest('hex')
+    const clientIdentity = rateLimitIdentity(req.headers.authorization, getClientIp(req))
     const now = Date.now()
     const windowMs = config.rateLimitWindowMs ?? DEFAULT_RATE_LIMIT_WINDOW_MS
     let envMaxRequests = process.env['MCP_RATE_LIMIT_MAX']

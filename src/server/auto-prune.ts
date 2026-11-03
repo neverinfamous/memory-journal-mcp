@@ -12,8 +12,35 @@
  *   3. Clean up stale vector embeddings.
  */
 
+import * as fs from 'node:fs'
 import type { IDatabaseAdapter } from '../database/core/interfaces.js'
 import { logger } from '../utils/logger.js'
+
+const PRE_PRUNE_KEEP = 5
+
+export function prePruneBackupName(now: Date): string {
+    return `pre-prune-${now.toISOString().replace(/[:.]/g, '-')}`
+}
+
+export function prePruneBackupPathsToDelete(
+    backups: { filename: string; path: string }[],
+    keepCount = PRE_PRUNE_KEEP
+): { filename: string; path: string }[] {
+    return backups.filter((backup) => backup.filename.startsWith('pre-prune-')).slice(keepCount)
+}
+
+function rotatePrePruneBackups(db: IDatabaseAdapter): void {
+    for (const backup of prePruneBackupPathsToDelete(db.listBackups())) {
+        try {
+            fs.unlinkSync(backup.path)
+        } catch (error: unknown) {
+            logger.warning('Failed to delete old pre-prune backup', {
+                filename: backup.filename,
+                error: error instanceof Error ? error.message : 'Unknown error',
+            })
+        }
+    }
+}
 
 // ============================================================================
 // Types
@@ -67,7 +94,8 @@ export async function runAutoPrune(
     let backupFile: string | null = null
     if (!dryRun) {
         try {
-            const backup = await db.exportToFile('pre-prune-backup')
+            const backup = await db.exportToFile(prePruneBackupName(new Date()))
+        rotatePrePruneBackups(db)
             backupFile = backup.filename
             logger.info('Pre-prune backup created', {
                 module: 'AutoPrune',

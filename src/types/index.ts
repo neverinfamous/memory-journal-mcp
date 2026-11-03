@@ -239,6 +239,8 @@ export interface ToolHandlerConfig {
     hardDeleteOlderThanDays?: number
     /** Server-configured auto-prune importance threshold (0.0-1.0) */
     pruneImportanceThreshold?: number
+    /** Tags skipped by archive, soft-delete, and hard-delete */
+    pruneExcludeTags?: string[]
 }
 
 /**

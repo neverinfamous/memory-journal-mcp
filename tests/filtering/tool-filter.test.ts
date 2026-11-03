@@ -11,6 +11,8 @@ import {
     getAllToolNames,
     getToolGroup,
     parseToolFilter,
+    isReadonlyMetaActive,
+    isToolVisibleForFilter,
     isToolEnabled,
     filterTools,
     getToolFilterFromEnv,
@@ -318,5 +320,22 @@ describe('parseToolFilter edge cases', () => {
         expect(config.enabledTools.has('delete_entry')).toBe(false)
         expect(config.enabledTools.has('backup_journal')).toBe(false)
         expect(config.enabledTools.has('get_github_issues')).toBe(false)
+    })
+})
+
+describe('readonly registration gate', () => {
+    it('hides write tools while keeping configuration and code mode', () => {
+        const config = parseToolFilter('readonly')
+        expect(config.enabledTools.has('create_entry')).toBe(true)
+        expect(isReadonlyMetaActive(config.raw)).toBe(true)
+        expect(isToolVisibleForFilter('create_entry', false, config.raw)).toBe(false)
+        expect(isToolVisibleForFilter('search_entries', true, config.raw)).toBe(true)
+        expect(isToolVisibleForFilter('update_configuration', false, config.raw)).toBe(true)
+        expect(isToolVisibleForFilter('mj_execute_code', false, config.raw)).toBe(true)
+    })
+
+    it('keeps write tools when readonly is excluded', () => {
+        expect(isReadonlyMetaActive('core,-readonly')).toBe(false)
+        expect(isToolVisibleForFilter('create_entry', false, 'core,-readonly')).toBe(true)
     })
 })

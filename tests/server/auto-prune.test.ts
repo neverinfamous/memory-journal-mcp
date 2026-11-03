@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { runAutoPrune } from '../../src/server/auto-prune.js'
+import { prePruneBackupPathsToDelete, runAutoPrune } from '../../src/server/auto-prune.js'
 import type { IDatabaseAdapter } from '../../src/database/core/interfaces.js'
 
 describe('Auto Prune', () => {
@@ -8,6 +8,7 @@ describe('Auto Prune', () => {
     beforeEach(() => {
         mockDb = {
             exportToFile: vi.fn().mockResolvedValue({ filename: 'test-backup.db', sizeBytes: 100 }),
+            listBackups: vi.fn().mockReturnValue([]),
             executeDataLifecycle: vi.fn().mockReturnValue({ archivedCount: 0, prunedCount: 0, hardDeletedCount: 0 }),
             cleanupStaleVectors: vi.fn(),
         }
@@ -21,7 +22,11 @@ describe('Auto Prune', () => {
             importanceThreshold: 2,
         })
 
-        expect(mockDb.exportToFile).toHaveBeenCalledWith('pre-prune-backup')
+        expect(mockDb.exportToFile).toHaveBeenCalledTimes(1)
+        const backupName = mockDb.exportToFile.mock.calls[0][0] as string
+        expect(backupName.startsWith('pre-prune-')).toBe(true)
+        expect(backupName.includes(':')).toBe(false)
+        expect(backupName.length).toBeLessThanOrEqual(50)
         expect(mockDb.executeDataLifecycle).toHaveBeenCalledWith({
             archiveOlderThanDays: 60,
             pruneOlderThanDays: 30,
@@ -148,5 +153,18 @@ describe('Auto Prune', () => {
             excludeTags: ['architecture', 'planning'],
         })
         expect(result.prunedCount).toBe(3)
+    })
+
+    it('selects pre-prune backups beyond the newest five and leaves other backups', () => {
+        const backups = [
+            ...Array.from({ length: 6 }, (_, index) => ({
+                filename: `pre-prune-${index}.db`,
+                path: `/tmp/pre-prune-${index}.db`,
+            })),
+            { filename: 'backup_user.db', path: '/tmp/backup_user.db' },
+        ]
+        expect(prePruneBackupPathsToDelete(backups).map((backup) => backup.path)).toEqual([
+            '/tmp/pre-prune-5.db',
+        ])
     })
 })

@@ -55,12 +55,14 @@ export function getLifecycleTools(context: ToolContext): ToolDefinition[] {
                         dbOpts?.pruneImportanceThreshold ??
                         0.15
 
+                    const excludeTags = context.config?.pruneExcludeTags
                     const pruneResult = await runAutoPrune(db, {
                         archiveOlderThanDays: archiveDays,
                         pruneOlderThanDays: pruneDays,
                         hardDeleteOlderThanDays: hardDeleteDays,
                         importanceThreshold: threshold,
                         dryRun: parsed.dry_run,
+                        ...(excludeTags !== undefined ? { excludeTags } : {}),
                     })
 
                     return {

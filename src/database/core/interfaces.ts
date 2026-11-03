@@ -106,6 +106,7 @@ export interface IDatabaseAdapter {
     applyTeamSchema(): void
     flushSave(): void
     close(): void
+    getDbPath(): string
 
     // Entries Manager
     createEntry(input: CreateEntryInput): JournalEntry

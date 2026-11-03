@@ -40,12 +40,22 @@ export class LifecycleOperations {
 
         // --- Candidates Generation ---
         
+        const hardDeleteExcludeSql =
+            excludeTags.length > 0
+                ? `AND id NOT IN (
+                SELECT entry_id FROM entry_tags
+                JOIN tags ON tags.id = entry_tags.tag_id
+                WHERE tags.name IN (${excludeTags.map(() => '?').join(',')})
+            )`
+                : ''
         const hardDeleteSelect = `
             SELECT id, CAST((julianday('now') - julianday(deleted_at)) AS INTEGER) as age_days
             FROM memory_journal
             WHERE deleted_at IS NOT NULL
               AND julianday('now') - julianday(deleted_at) > ?
+              ${hardDeleteExcludeSql}
         `
+        const hardDeleteParams: unknown[] = [options.hardDeleteOlderThanDays, ...excludeTags]
 
         const pruneSelect = `
             SELECT e.id, ${importanceExpr} as importance_score
@@ -90,7 +100,7 @@ export class LifecycleOperations {
 
         if (options.dryRun) {
             if (options.hardDeleteOlderThanDays > 0) {
-                const rows = db.prepare(hardDeleteSelect).all(options.hardDeleteOlderThanDays) as { id: number | bigint, age_days: number }[]
+                const rows = db.prepare(hardDeleteSelect).all(...hardDeleteParams) as { id: number | bigint, age_days: number }[]
                 candidates.hardDeleted = rows.map(r => ({
                     id: typeof r.id === 'bigint' ? Number(r.id) : r.id,
                     age_days: r.age_days
@@ -120,7 +130,7 @@ export class LifecycleOperations {
 
         const runTx = db.transaction(() => {
             if (options.hardDeleteOlderThanDays > 0) {
-                const rows = db.prepare(hardDeleteSelect).all(options.hardDeleteOlderThanDays) as { id: number | bigint }[]
+                const rows = db.prepare(hardDeleteSelect).all(...hardDeleteParams) as { id: number | bigint }[]
                 const ids = rows.map(r => typeof r.id === 'bigint' ? Number(r.id) : r.id)
                 if (ids.length > 0) {
                     const placeholders = ids.map(() => '?').join(',')

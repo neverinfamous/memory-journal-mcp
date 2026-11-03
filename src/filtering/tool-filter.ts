@@ -255,3 +255,28 @@ export function getFilterSummary(filterConfig: ToolFilterConfig): string {
 
     return `${enabled}/${total} tools enabled (${reduction.toFixed(0)}% reduction)`
 }
+
+const READONLY_REGISTRATION_EXEMPT = new Set<string>(ALWAYS_ENABLED_TOOLS)
+
+/**
+ * True when the active filter contains the readonly meta-group and does not exclude it.
+ */
+export function isReadonlyMetaActive(raw: string | undefined): boolean {
+    if (raw === undefined || raw === '') return false
+    return raw.includes('readonly') && !raw.includes('-readonly')
+}
+
+/**
+ * Registration, tools/list, and tools/call share this gate.
+ * update_configuration and mj_execute_code stay available. Code Mode still
+ * limits mj.* dispatch to readOnlyHint on its own.
+ */
+export function isToolVisibleForFilter(
+    name: string,
+    readOnlyHint: boolean | undefined,
+    raw: string | undefined
+): boolean {
+    if (!isReadonlyMetaActive(raw)) return true
+    if (READONLY_REGISTRATION_EXEMPT.has(name)) return true
+    return readOnlyHint === true
+}

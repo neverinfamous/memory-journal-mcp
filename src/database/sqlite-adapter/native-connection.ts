@@ -272,7 +272,14 @@ export class NativeConnectionManager implements IDatabaseConnection {
     }
 
     flushSave(): void {
-        // No-op for Native SQLite
+        if (this.db === null) {
+            return
+        }
+        try {
+            this.db.pragma('wal_checkpoint(PASSIVE)')
+        } catch {
+            // A passive checkpoint can fail while readers hold the WAL. close() still truncates.
+        }
     }
 
     close(): void {

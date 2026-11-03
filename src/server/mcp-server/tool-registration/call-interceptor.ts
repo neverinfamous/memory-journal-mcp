@@ -22,6 +22,7 @@ import {
     handleListDir,
 } from '../../../handlers/tools/core/dummy-healing.js'
 import { TOOL_GROUPS } from '../../../filtering/tool-constants.js'
+import { isToolVisibleForFilter } from '../../../filtering/tool-filter.js'
 import type { PromptDefinition } from '../../registration.js'
 import { logAgentIssue } from '../../../utils/issue-logger.js'
 import { applyArgInterceptions } from '../../../codemode/param-normalizer.js'
@@ -185,8 +186,13 @@ async function tryAutonomousUnknownToolFallback(
     if (matchesSuffixes(requestedTool, DUMMY_LIST_TOOL_NAMES, ['_list_tools', 'ListTools'])) {
         enforceAccessBoundary('list_tools', 'tool', undefined, runtime.auditLogger)
         const enabledSet = currentConfig.toolFilterConfig?.enabledTools ?? allToolNames
+        const raw = currentConfig.toolFilterConfig?.raw
         const toolsList = allTools
-            .filter((t) => enabledSet.has(t.name))
+            .filter(
+                (t) =>
+                    enabledSet.has(t.name) &&
+                    isToolVisibleForFilter(t.name, t.annotations.readOnlyHint, raw)
+            )
             .map((t) => ({ name: t.name, title: t.title, description: t.description, annotations: t.annotations }))
         return formatSuccessPayload({
             success: true,

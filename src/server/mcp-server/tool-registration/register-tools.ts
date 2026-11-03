@@ -433,7 +433,11 @@ export function createServerInstance(
     }
     const requestHandlers = serverObj._requestHandlers
 
-    attachListToolsInterceptor(requestHandlers, configManager, allToolNames)
+    const readOnlyHints = new Map<string, boolean | undefined>()
+    for (const tool of allTools) {
+        readOnlyHints.set(tool.name, tool.annotations.readOnlyHint)
+    }
+    attachListToolsInterceptor(requestHandlers, configManager, allToolNames, readOnlyHints)
     attachCallToolInterceptor(
         requestHandlers,
         context,

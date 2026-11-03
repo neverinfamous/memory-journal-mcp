@@ -72,6 +72,10 @@ export class AdapterDelegates {
         this.connection.close()
     }
 
+    getDbPath(): string {
+        return this.connection.getDbPath()
+    }
+
     pragma(command: string): void {
         this.connection.pragma(command)
     }
