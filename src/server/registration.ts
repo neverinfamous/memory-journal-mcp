@@ -136,10 +136,11 @@ export function registerResources(
 /**
  * Register all prompts with the MCP server.
  *
- * Builds Zod schemas from prompt argument definitions.
- * Only creates argsSchema when there are actual arguments; passing an empty
- * shape causes the SDK to wrap it in z.object({}) which rejects undefined
- * when the client omits arguments (e.g. session-summary with no args).
+ * Builds Zod schemas from prompt argument definitions. Prompts with no
+ * arguments omit argsSchema, because an empty object schema rejects a
+ * missing arguments payload. Prompts whose arguments are all optional still
+ * get a schema of optional strings so prompts/get receives those values.
+ * The SDK validates with `args ?? {}`, so omitting the arguments still works.
  */
 export function registerPrompts(
     server: McpServer,
@@ -152,16 +153,11 @@ export function registerPrompts(
 ): void {
     for (const promptDef of prompts) {
         let argsSchema: Record<string, z.ZodType> | undefined
-        if (promptDef.arguments && promptDef.arguments.length > 0) {
-            const hasRequired = promptDef.arguments.some((a) => a.required)
-            if (hasRequired) {
-                argsSchema = {}
-                for (const arg of promptDef.arguments) {
-                    argsSchema[arg.name] =
-                        arg.required === true
-                            ? z.string().describe(arg.description)
-                            : z.string().optional().describe(arg.description)
-                }
+        if (promptDef.arguments !== undefined && promptDef.arguments.length > 0) {
+            argsSchema = {}
+            for (const arg of promptDef.arguments) {
+                const described = z.string().describe(arg.description)
+                argsSchema[arg.name] = arg.required === true ? described : described.optional()
             }
         }
 

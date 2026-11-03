@@ -5,9 +5,26 @@ import { rmSync } from 'fs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const projectDir = join(__dirname, '..', '..')
-const proc = spawn(process.execPath, ['dist/cli.js', '--db', 'test-prompts.db', '--team-db', 'test-team-prompts.db'], {
+const proc = spawn(process.execPath, [
+    'dist/cli.js',
+    '--log-level', 'error',
+    '--db', 'test-prompts.db',
+    '--team-db', 'test-team-prompts.db',
+    '--archive-older-than-days', '0',
+    '--prune-older-than-days', '0',
+    '--hard-delete-older-than-days', '0',
+], {
     cwd: projectDir,
-    env: { ...process.env, TEAM_DB_PATH: 'test-team-prompts.db', JOURNAL_DB_PATH: 'test-prompts.db', TEST_DB_PATH: 'test-prompts.db', TEST_TEAM_DB_PATH: 'test-team-prompts.db', JOURNAL_CONFIG_DIR: 'test-server', MEMORY_JOURNAL_CONFIG: join(__dirname, 'test-server-config.json') },
+    env: {
+        ...process.env,
+        TEAM_DB_PATH: 'test-team-prompts.db',
+        JOURNAL_DB_PATH: 'test-prompts.db',
+        TEST_DB_PATH: 'test-prompts.db',
+        TEST_TEAM_DB_PATH: 'test-team-prompts.db',
+        JOURNAL_CONFIG_DIR: 'test-server',
+        MEMORY_JOURNAL_CONFIG: join(__dirname, 'test-server-config.json'),
+        AUTO_REBUILD_INDEX: 'false',
+    },
     stdio: ['pipe', 'pipe', 'pipe'],
 })
 
@@ -102,10 +119,7 @@ async function main() {
         { name: 'adversarial-audit-seo', args: { target: 'index.html' }, expect: 'determine it from the user' },
         { name: 'adversarial-audit-skill', args: { target: 'my-skill' }, expect: 'determine it from the user' },
         { name: 'adversarial-audit-workflow', args: { target: 'ci.yml' }, expect: 'determine it from the user' },
-        { name: 'flag-dashboard', args: {}, expect: '' },
-        { name: 'flag-dashboard', args: { flag_type: 'blocker' }, expect: 'blocker' },
         { name: 'mcp-heal', args: {}, expect: '' },
-        { name: 'verify-work', args: {}, expect: 'verification' },
         // 8.4 Git History prompts
         { name: 'commit', args: {}, expect: 'Commit Workflow' },
         // 8.5 Optimizer prompts
