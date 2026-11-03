@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
-import { resolveProjectContext, resolveWorkspaceId } from '../../src/utils/workspace-resolver.js'
+import path from 'node:path'
+import { cwdMatchesRegistryPath, resolveProjectContext, resolveWorkspaceId } from '../../src/utils/workspace-resolver.js'
 import type { ToolHandlerConfig } from '../../src/types/index.js'
 
 describe('workspace-resolver with keyword and tag inference', () => {
@@ -121,6 +122,15 @@ describe('workspace-resolver with keyword and tag inference', () => {
         } finally {
             spy.mockRestore()
         }
+    })
+
+    it('does not treat a prefixed sibling directory as the registered project', () => {
+        const root = path.join('C:\\Users\\chris\\Desktop', 'memory-journal-mcp')
+        const wiki = path.join('C:\\Users\\chris\\Desktop', 'memory-journal-mcp.wiki')
+        const child = path.join(root, 'src')
+        expect(cwdMatchesRegistryPath(root, wiki)).toBe(false)
+        expect(cwdMatchesRegistryPath(root, child)).toBe(true)
+        expect(cwdMatchesRegistryPath(root, root)).toBe(true)
     })
 
     it('resolveWorkspaceId helper delegates accurately', () => {

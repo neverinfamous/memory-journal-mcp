@@ -232,7 +232,16 @@ describe('WorkerSandbox', () => {
         const result = await sandbox.execute(code, {})
         expect(result.success).toBe(false)
         expect(result.error).toMatch(/timed out|timeout|code 1/i)
+        sandbox.dispose()
     }, 30000)
+
+    it('terminates async work that outlives the vm timeout', async () => {
+        const sandbox = new WorkerSandbox({ timeoutMs: 200 })
+        const result = await sandbox.execute('await new Promise(() => {})', {})
+        expect(result.success).toBe(false)
+        expect(result.error).toMatch(/timed out|timeout|code 1/i)
+        sandbox.dispose()
+    }, 10000)
 
     it('should catch synchronous syntax errors or throw', async () => {
         const sandbox = new WorkerSandbox()

@@ -4,6 +4,7 @@ import { formatHandlerError } from '../../utils/error-helpers.js'
 import { sendProgress } from '../../utils/progress-utils.js'
 import { ResourceNotFoundError } from '../../types/errors.js'
 import { resolveWorkspaceId } from '../../utils/workspace-resolver.js'
+import { stalenessFailure } from './git-staleness.js'
 import { coerceNumber } from '../../utils/query-helpers.js'
 import { ErrorFieldsMixin } from './error-fields-mixin.js'
 import { relaxedNumber } from './schemas.js'
@@ -459,16 +460,10 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                                     commitsSince,
                                     isDeleted
                                 })
-                            } catch {
-                                results.push({
-                                    anchorId: anchor.id ?? 0,
-                                    path: anchor.anchorPath,
-                                    oldStatus: anchor.status,
-                                    newStatus: 'unresolvable',
-                                    commitsSince: 0,
-                                    isDeleted: false
-                                })
-                                if (anchor.status !== 'unresolvable' && anchor.id !== undefined) {
+                            } catch (err: unknown) {
+                                const failure = stalenessFailure(anchor, err)
+                                results.push(failure.row)
+                                if (failure.persistUnresolvable && anchor.id !== undefined) {
                                     db.updateAnchorStatus(anchor.id, 'unresolvable')
                                 }
                             }

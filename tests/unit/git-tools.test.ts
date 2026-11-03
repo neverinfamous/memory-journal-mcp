@@ -267,5 +267,31 @@ describe('Git Tools Handler', () => {
             )
             expect(traversalAnchor?.newStatus).toBe('unresolvable')
         })
+
+        it('does not persist unresolvable when git fails', async () => {
+            mockStreamGitRecords.mockImplementation(() => {
+                throw new Error('git failed')
+            })
+            const update = vi.spyOn(db, 'updateAnchorStatus')
+            const entry = db.createEntry({ content: 'Entry whose git lookup fails' })
+            const nativeDb = (
+                db as unknown as { connection: { getNativeDb: () => never } }
+            ).connection.getNativeDb()
+            insertAnchors({ db: nativeDb } as never, entry.id, [
+                { anchorPath: 'package.json', anchorType: 'file' },
+            ])
+
+            const tools = getGitTools(context)
+            const tool = tools.find((t) => t.name === 'check_entry_staleness')
+            if (tool === undefined) throw new Error('check_entry_staleness missing')
+            const res = (await tool.handler({ entryId: entry.id })) as {
+                success: boolean
+                results: { path: string; newStatus: string }[]
+            }
+
+            expect(res.success).toBe(true)
+            expect(res.results[0]?.newStatus).toBe('pending')
+            expect(update).not.toHaveBeenCalled()
+        })
     })
 })

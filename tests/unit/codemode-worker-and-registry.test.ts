@@ -161,6 +161,8 @@ describe('Code Mode Worker Core & Project Registry Ops', () => {
             const fsShim = createSafeFsShim({ content: 'hello-from-context' })
             expect(fsShim.existsSync(undefined)).toBe(false)
             expect(fsShim.existsSync('memory_journal.db')).toBe(true)
+            expect(fsShim.existsSync('notes.txt')).toBe(false)
+            expect(fsShim.existsSync('')).toBe(false)
             expect(fsShim.statSync('test.db').isFile()).toBe(true)
             expect(fsShim.statSync('test.db').isDirectory()).toBe(false)
             expect(fsShim.lstatSync('test.db').isFile()).toBe(true)

@@ -387,6 +387,24 @@ describe('ConfigManager & Configuration Tools', () => {
             expect(delMissing.success).toBe(false)
             expect(delMissing.error).toContain('Project not found')
         })
+
+        it('does not overwrite a truncated project registry', async () => {
+            const truncated = '{ "projectRegistry": { "kept": { "path": "C:/kept" } '
+            fs.writeFileSync(configPath, truncated, 'utf-8')
+            const tools = getProjectTools(context)
+            const registerTool = tools.find((t) => t.name === 'register_project')
+            if (registerTool === undefined) {
+                throw new Error('register_project tool missing')
+            }
+            const regRes = (await registerTool.handler({
+                name: 'test-proj',
+                absolute_path: path.join(tmpDir, 'test-proj'),
+                project_number: 10,
+            })) as { success: boolean; error?: string }
+            expect(regRes.success).toBe(false)
+            expect(regRes.error).toContain('invalid JSON')
+            expect(fs.readFileSync(configPath, 'utf-8')).toBe(truncated)
+        })
     })
 
     describe('Lifecycle & Misc Admin Tools', () => {

@@ -8,6 +8,30 @@ import type { ConfigResolver } from '../utils/config-resolver.js'
 import { defaultDbPath, defaultTeamDbPath } from './option-groups.js'
 import type { ServerOptions } from '../server/mcp-server/types.js'
 
+function isNodeErrorCode(err: unknown, code: string): boolean {
+    if (typeof err !== 'object' || err === null || !('code' in err)) return false
+    return err.code === code
+}
+
+/**
+ * Reject symlink team-db paths. A missing path is allowed so a database
+ * file can be created later. Every other lstat failure propagates.
+ */
+export function assertAdditionalTeamDbIsNotSymlink(
+    resolvedPath: string,
+    lstat: (targetPath: string) => { isSymbolicLink: () => boolean }
+): void {
+    let stat: { isSymbolicLink: () => boolean }
+    try {
+        stat = lstat(resolvedPath)
+    } catch (err: unknown) {
+        if (isNodeErrorCode(err, 'ENOENT')) return
+        throw err
+    }
+    if (stat.isSymbolicLink()) {
+        throw new Error(`Additional team DB path cannot be a symlink: ${resolvedPath}`)
+    }
+}
 
 export function buildServerOptions(
     resolver: ConfigResolver,
@@ -174,14 +198,7 @@ export function buildServerOptions(
                 for (const [label, dbPath] of Object.entries(validated)) {
                     if (!path.isAbsolute(dbPath)) throw new Error(`Additional team DB path must be absolute: ${dbPath}`);
                     const resolvedPath = path.resolve(dbPath);
-                    try {
-                        if (fs.existsSync(resolvedPath)) {
-                            const stat = fs.lstatSync(resolvedPath);
-                            if (stat.isSymbolicLink()) throw new Error(`Additional team DB path cannot be a symlink: ${resolvedPath}`);
-                        }
-                    } catch {
-                        // ignore
-                    }
+                    assertAdditionalTeamDbIsNotSymlink(resolvedPath, (targetPath) => fs.lstatSync(targetPath));
                     validated[label] = resolvedPath;
                 }
                 return validated;

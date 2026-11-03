@@ -154,9 +154,36 @@ export class WorkerSandbox {
             this.currentExecution = null
         }
         if (this.worker) {
-            this.worker.terminate().catch(() => undefined)
+            const worker = this.worker
             this.worker = null
+            worker.terminate().catch((err: unknown) => {
+                const detail = err instanceof Error ? err.message : String(err)
+                process.stderr.write(`Code mode worker terminate failed: ${detail}\n`)
+            })
         }
+    }
+
+    private terminateTimedOutExecution(timedOutId: number): void {
+        const worker = this.worker
+        if (worker === null) {
+            this.handleWorkerDeath('Code execution timed out')
+            return
+        }
+        worker.terminate().then(
+            () => {
+                if (this.currentExecution !== null && this.executionId === timedOutId) {
+                    this.handleWorkerDeath('Code execution timed out')
+                }
+            },
+            (err: unknown) => {
+                const detail = err instanceof Error ? err.message : String(err)
+                if (this.executionId === timedOutId) {
+                    this.handleWorkerDeath(
+                        `Code execution timed out and the worker could not be terminated: ${detail}`
+                    )
+                }
+            }
+        )
     }
 
     /**
@@ -203,6 +230,7 @@ export class WorkerSandbox {
             if (topLevel.length > 0) methodList['_topLevel'] = topLevel
 
             const { port1: hostPort, port2: workerPort } = new MessageChannel()
+            const timedOutId = this.executionId
 
             this.currentExecution = {
                 resolve,
@@ -210,8 +238,8 @@ export class WorkerSandbox {
                 startTime,
                 startRss,
                 timeoutHandle: setTimeout(() => {
-                    this.worker?.terminate().catch(() => undefined)
-                }, effectiveTimeout + 1000),
+                    this.terminateTimedOutExecution(timedOutId)
+                }, effectiveTimeout),
             }
 
             hostPort.on('message', (msg: RpcRequest) => {

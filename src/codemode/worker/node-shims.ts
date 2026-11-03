@@ -60,8 +60,7 @@ export function createSafeFsShim(contextObj?: Record<string, unknown>): SafeFsSh
                 p.includes('.db') ||
                 p.includes('memory') ||
                 p.includes('journal') ||
-                p.includes('sqlite') ||
-                p.length > 0
+                p.includes('sqlite')
             )
         },
         statSync: (_filePath?: unknown) => ({

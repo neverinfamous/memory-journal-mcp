@@ -95,6 +95,15 @@ describe('Prompt Handlers - Coverage', () => {
                 const enabledText = enabledRes.messages[0]?.content.text ?? ''
                 expect(enabledText).toContain('Run `gh copilot -- -p')
                 expect(enabledText).not.toContain('**Optional (Skip by default)**')
+
+                if (name === 'adversarial-audit-code-quality') {
+                    expect(defaultText).toContain('generalPurpose')
+                    expect(defaultText).toContain('code-quality-audit')
+                    expect(defaultText).toContain('param-normalizer.ts')
+                    expect(defaultText).not.toContain('invoke_subagent')
+                    expect(defaultText).not.toContain('bun path/to/commit.ts')
+                    expect(enabledText).toContain('audit on {target}')
+                }
             }
         })
     })

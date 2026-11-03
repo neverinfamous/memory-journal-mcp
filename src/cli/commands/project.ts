@@ -7,6 +7,7 @@ const configPath = path.resolve(os.homedir(), '.gemini', 'config', 'memory-journ
 
 import { DatabaseAdapterFactory } from '../../database/adapter-factory.js'
 import { ConfigResolver } from '../../utils/config-resolver.js'
+import { readProjectRegistryFile } from '../../utils/registry-config-file.js'
 import { buildServerOptions } from '../server-options-builder.js'
 
 function getConfigPath(options?: Record<string, unknown>): string {
@@ -15,17 +16,7 @@ function getConfigPath(options?: Record<string, unknown>): string {
 }
 
 function loadConfig(options?: Record<string, unknown>): Record<string, unknown> {
-    const targetPath = getConfigPath(options)
-    if (!fs.existsSync(targetPath)) {
-        return { projectRegistry: {} }
-    }
-    try {
-        const content = fs.readFileSync(targetPath, 'utf-8')
-        return JSON.parse(content) as Record<string, unknown>
-    } catch (e) {
-        process.stderr.write(`Error reading config file ${targetPath}: ${String(e)}\n`)
-        return { projectRegistry: {} }
-    }
+    return readProjectRegistryFile(getConfigPath(options)).config
 }
 
 function saveConfig(config: Record<string, unknown>, options?: Record<string, unknown>): void {

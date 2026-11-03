@@ -21,11 +21,28 @@ import { serializeAndEnforceEgress } from './worker/result-compactor.js'
 
 hardenOuterFunctionPrototypes()
 
-process.on('unhandledRejection', () => {
-    // Prevent asynchronous promise rejections inside user timers from crashing the worker thread
+let activeExecutionId: number | null = null
+let resultSent = false
+
+function postExecutionFailure(reason: unknown): void {
+    if (activeExecutionId === null || resultSent) return
+    const id = activeExecutionId
+    resultSent = true
+    const error = reason instanceof Error ? reason : new Error(String(reason))
+    const result: SandboxResult = {
+        success: false,
+        error: error.message,
+        metrics: { wallTimeMs: 0, cpuTimeMs: 0, memoryUsedMb: 0 },
+        ...(error.stack !== undefined ? { stack: error.stack } : {}),
+    }
+    parentPort?.postMessage({ type: 'RESULT', id, result })
+}
+
+process.on('unhandledRejection', (reason: unknown) => {
+    postExecutionFailure(reason)
 })
-process.on('uncaughtException', () => {
-    // Prevent synchronous throws inside user timers from crashing the worker thread
+process.on('uncaughtException', (err: unknown) => {
+    postExecutionFailure(err)
 })
 
 let rpcPort: MessagePort | null = null
@@ -221,6 +238,8 @@ parentPort?.on('message', (msg: unknown) => {
         rpcPort = newRpcPort
         rpcIdCounter = 0
         pendingRpcRequests.clear()
+        activeExecutionId = id
+        resultSent = false
 
         rpcPort?.on('message', (response: RpcResponse) => {
             const pending = pendingRpcRequests.get(response.id)
@@ -231,10 +250,19 @@ parentPort?.on('message', (msg: unknown) => {
             }
         })
 
-        const result = await executeCode(code, methodList, schemaList, timeoutMs ?? 30000, contextObj, readonlyMode)
-        serializeAndEnforceEgress(result, maxResultSize)
-        rpcPort?.close()
-        rpcPort = null
-        parentPort?.postMessage({ type: 'RESULT', id, result })
+        try {
+            const result = await executeCode(code, methodList, schemaList, timeoutMs ?? 30000, contextObj, readonlyMode)
+            serializeAndEnforceEgress(result, maxResultSize)
+            if (!resultSent) {
+                resultSent = true
+                parentPort?.postMessage({ type: 'RESULT', id, result })
+            }
+        } catch (err: unknown) {
+            postExecutionFailure(err)
+        } finally {
+            rpcPort?.close()
+            rpcPort = null
+            activeExecutionId = null
+        }
     })()
 })

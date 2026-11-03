@@ -6,6 +6,7 @@ import * as fs from 'node:fs'
 import * as os from 'node:os'
 import * as path from 'node:path'
 import { isRecord, safeString } from '../normalizers/shared-utils.js'
+import { readProjectRegistryFile } from '../../utils/registry-config-file.js'
 import { parseProjectRegistry, type GroupApiRecord } from './types.js'
 
 function getConfigPath(): string {
@@ -15,22 +16,18 @@ function getConfigPath(): string {
     )
 }
 
-function readRegistryConfig(): { configPath: string; config: Record<string, unknown>; registry: Record<string, Record<string, unknown>> } {
+function readRegistryConfig(): {
+    configPath: string
+    config: Record<string, unknown>
+    registry: Record<string, unknown>
+} {
     const configPath = getConfigPath()
-    let config: Record<string, unknown> = { projectRegistry: {} }
-    try {
-        const parsed: unknown = JSON.parse(fs.readFileSync(configPath, 'utf-8'))
-        if (isRecord(parsed)) {
-            config = parsed
-        }
-    } catch {
-        // Ignore missing or unreadable config file
-    }
-    if (!isRecord(config['projectRegistry'])) {
-        config['projectRegistry'] = {}
-    }
-    const registry = config['projectRegistry'] as Record<string, Record<string, unknown>>
+    const { config, registry } = readProjectRegistryFile(configPath)
     return { configPath, config, registry }
+}
+
+function registryError(err: unknown): string {
+    return err instanceof Error ? err.message : String(err)
 }
 
 function saveRegistryConfig(configPath: string, config: Record<string, unknown>): void {
@@ -74,7 +71,17 @@ export function createRegisterProjectFn(
             return { success: false, error: `Invalid project path: '${absolutePath}'. Must be a local absolute path.` }
         }
 
-        const { configPath, config, registry } = readRegistryConfig()
+        let configPath: string
+        let config: Record<string, unknown>
+        let registry: Record<string, unknown>
+        try {
+            const loaded = readRegistryConfig()
+            configPath = loaded.configPath
+            config = loaded.config
+            registry = loaded.registry
+        } catch (err) {
+            return { success: false, error: registryError(err) }
+        }
         const entry: Record<string, unknown> = { path: path.resolve(absolutePath) }
         if (typeof projectNumber === 'number' && !Number.isNaN(projectNumber)) {
             entry['project_number'] = projectNumber
@@ -125,9 +132,19 @@ export function createUpdateProjectFn(): (...args: unknown[]) => Promise<{
             return Promise.resolve({ success: false, error: `Invalid project path: '${absolutePath}'.` })
         }
 
-        const { configPath, config, registry } = readRegistryConfig()
+        let configPath: string
+        let config: Record<string, unknown>
+        let registry: Record<string, unknown>
+        try {
+            const loaded = readRegistryConfig()
+            configPath = loaded.configPath
+            config = loaded.config
+            registry = loaded.registry
+        } catch (err) {
+            return Promise.resolve({ success: false, error: registryError(err) })
+        }
         const project = Object.hasOwn(registry, name) ? registry[name] : undefined
-        if (!project) {
+        if (!isRecord(project)) {
             return Promise.resolve({ success: false, error: `🛠️ AUTONOMOUS HEALING: Project not found: '${name}'` })
         }
 
@@ -155,9 +172,19 @@ export function createDeleteProjectFn(): (...args: unknown[]) => Promise<{
         if (isForbiddenProjectKey(name)) {
             return Promise.resolve({ success: false, error: `Invalid project name: '${name}'` })
         }
-        const { configPath, config, registry } = readRegistryConfig()
+        let configPath: string
+        let config: Record<string, unknown>
+        let registry: Record<string, unknown>
+        try {
+            const loaded = readRegistryConfig()
+            configPath = loaded.configPath
+            config = loaded.config
+            registry = loaded.registry
+        } catch (err) {
+            return Promise.resolve({ success: false, error: registryError(err) })
+        }
 
-        if (!Object.hasOwn(registry, name) || !registry[name]) {
+        if (!Object.hasOwn(registry, name) || !isRecord(registry[name])) {
             return Promise.resolve({ success: false, error: `🛠️ AUTONOMOUS HEALING: Project not found: '${name}'` })
         }
 

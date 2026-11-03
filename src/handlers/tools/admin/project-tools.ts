@@ -12,6 +12,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 import { assertSafeDirectoryPath } from '../../../utils/security-utils.js'
+import { readProjectRegistryFile } from '../../../utils/registry-config-file.js'
 
 const FORBIDDEN_PROJECT_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
 
@@ -45,15 +46,7 @@ function getRegistryConfigPath(): string {
 }
 
 function loadConfig(): Record<string, unknown> {
-    const configPath = getRegistryConfigPath()
-    if (fs.existsSync(configPath)) {
-        try {
-            return JSON.parse(fs.readFileSync(configPath, 'utf-8')) as Record<string, unknown>
-        } catch {
-            return { projectRegistry: {} }
-        }
-    }
-    return { projectRegistry: {} }
+    return readProjectRegistryFile(getRegistryConfigPath()).config
 }
 
 function saveConfig(config: Record<string, unknown>): void {

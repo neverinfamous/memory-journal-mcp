@@ -286,6 +286,24 @@ interface ParsedConfig {
  * Automatically resolves a project number by inspecting the global config
  * and matching the provided working directory against registered paths.
  */
+/**
+ * True when cwd is the registry root or a directory inside it.
+ * A sibling whose name only shares a prefix, such as
+ * `memory-journal-mcp.wiki` next to `memory-journal-mcp`, does not match.
+ * Windows paths are compared case-insensitively. Other platforms are not.
+ */
+export function cwdMatchesRegistryPath(registryPath: string, cwd: string): boolean {
+    const caseFold = process.platform === 'win32'
+    const root = caseFold ? path.resolve(registryPath).toLowerCase() : path.resolve(registryPath)
+    const target = caseFold ? path.resolve(cwd).toLowerCase() : path.resolve(cwd)
+    const relative = path.relative(root, target)
+    if (relative === '') return true
+    if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+        return false
+    }
+    return true
+}
+
 export function resolveProjectNumberFromPath(cwd: string): number | undefined {
     if (process.env['NODE_ENV'] === 'test' || process.env['VITEST'] === 'true') {
         return undefined
@@ -299,8 +317,6 @@ export function resolveProjectNumberFromPath(cwd: string): number | undefined {
         
         if (config.projectRegistry === undefined || config.projectRegistry === null) return undefined
         
-        const normalizedCwd = cwd.replace(/\\/g, '/').toLowerCase()
-        
         // Find the most specific (longest) matching path
         let bestMatchLength = -1
         let bestProjectNumber: number | undefined = undefined
@@ -308,14 +324,12 @@ export function resolveProjectNumberFromPath(cwd: string): number | undefined {
         for (const [, entry] of Object.entries(config.projectRegistry)) {
             const entryPath = entry.path
             if (entryPath === undefined || entryPath === null) continue
-            
-            const normalizedRegPath = entryPath.replace(/\\/g, '/').toLowerCase()
-            
-            if (normalizedCwd.startsWith(normalizedRegPath)) {
-                if (normalizedRegPath.length > bestMatchLength) {
-                    bestMatchLength = normalizedRegPath.length
-                    bestProjectNumber = entry.project_number
-                }
+            if (!cwdMatchesRegistryPath(entryPath, cwd)) continue
+
+            const resolvedLength = path.resolve(entryPath).length
+            if (resolvedLength > bestMatchLength) {
+                bestMatchLength = resolvedLength
+                bestProjectNumber = entry.project_number
             }
         }
         
