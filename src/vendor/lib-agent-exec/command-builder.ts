@@ -439,7 +439,8 @@ export function buildCommand(payload: ExecPayload, cwd: string, isJson: boolean 
   }
 
   if (payload.target === 'wsl2') {
-    const wslCwd = convertToWslPath(cwd);
+    const effectiveCwd = payload.cwd ? path.resolve(payload.cwd) : cwd;
+    const wslCwd = convertToWslPath(effectiveCwd);
     const wslEnvArgs = buildWslEnvArgs(payload.env, envOverrides);
     const patternExprIdx = findPatternExprIndex(path.basename(cmd), args);
 

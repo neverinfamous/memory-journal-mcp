@@ -19,30 +19,41 @@ export function gitInterceptor(ctx: ExecutionContext): void {
   let explicitCwd: string | undefined;
 
   const knownGitCmds = ['add', 'am', 'archive', 'bisect', 'branch', 'bundle', 'checkout', 'cherry-pick', 'citool', 'clean', 'clone', 'commit', 'describe', 'diff', 'fetch', 'format-patch', 'gc', 'gitk', 'grep', 'gui', 'init', 'log', 'merge', 'mv', 'notes', 'pull', 'push', 'range-diff', 'rebase', 'reset', 'restore', 'revert', 'rm', 'shortlog', 'show', 'sparse-checkout', 'stash', 'status', 'submodule', 'switch', 'tag', 'worktree', 'config', 'difftool', 'mergetool', 'remote', 'blame', 'reflog'];
-  const subCmdIdx = args.findIndex(a => knownGitCmds.includes(a) || (!a.startsWith('-') && !a.startsWith('/')));
 
   // -C <path> is a top-level git flag and MUST appear before the git subcommand
-  const searchLimit = subCmdIdx === -1 ? args.length : subCmdIdx;
-  const cIndex = args.findIndex((a, idx) => idx < searchLimit && a === '-C');
-  if (cIndex !== -1 && cIndex + 1 < searchLimit) {
-    const candidate = args[cIndex + 1];
-    if (!/^\d+$/.test(candidate)) {
-      explicitCwd = candidate;
-      args.splice(cIndex, 2);
-    }
-  } else {
-    const cPrefixIndex = args.findIndex((a, idx) => idx < searchLimit && a.startsWith('-C') && a.length > 2);
-    if (cPrefixIndex !== -1) {
-      const candidate = args[cPrefixIndex].slice(2);
-      if (!/^\d+$/.test(candidate)) {
-        explicitCwd = candidate;
-        args.splice(cPrefixIndex, 1);
+  let i = 0;
+  while (i < args.length) {
+    const a = args[i];
+    if (a === '-C') {
+      if (i + 1 < args.length) {
+        const candidate = args[i + 1];
+        if (!/^\d+$/.test(candidate)) {
+          targetCwd = path.isAbsolute(candidate) ? candidate : path.resolve(targetCwd, candidate);
+          explicitCwd = targetCwd;
+          args.splice(i, 2);
+          continue;
+        }
       }
+      i++;
+    } else if (a.startsWith('-C') && a.length > 2) {
+      const candidate = a.slice(2);
+      if (!/^\d+$/.test(candidate)) {
+        targetCwd = path.isAbsolute(candidate) ? candidate : path.resolve(targetCwd, candidate);
+        explicitCwd = targetCwd;
+        args.splice(i, 1);
+        continue;
+      }
+      i++;
+    } else if (a === '-c' || a === '--git-dir' || a === '--work-tree' || a === '--namespace' || a === '--exec-path') {
+      i += 2;
+    } else if (a.startsWith('-')) {
+      i++;
+    } else {
+      break;
     }
   }
 
   if (explicitCwd !== undefined) {
-    targetCwd = path.isAbsolute(explicitCwd) ? explicitCwd : path.resolve(rawCwd, explicitCwd);
     ctx.payload.cwd = targetCwd;
   }
 
@@ -82,7 +93,7 @@ export function gitInterceptor(ctx: ExecutionContext): void {
       ({ args, ctx }) => {
         const cwd = ctx.payload.cwd || process.cwd();
         const fallbackCommitScript = path.resolve(__dirname, '../../commit.ts');
-        const resolvedCommitScript = findEcosystemScript(targetCwd, 'commit.ts') || findEcosystemScript(cwd, 'commit.ts') || (fs.existsSync(fallbackCommitScript) ? fallbackCommitScript : null);
+        const resolvedCommitScript = findEcosystemScript(targetCwd, 'commit.ts') || findEcosystemScript(rawCwd, 'commit.ts') || findEcosystemScript(cwd, 'commit.ts') || (fs.existsSync(fallbackCommitScript) ? fallbackCommitScript : null);
         const commitScriptCandidate = (resolvedCommitScript !== null && path.resolve(targetCwd) === path.resolve(process.cwd()) && fs.existsSync(path.join(targetCwd, '.agents', 'scripts', 'commit.ts')))
           ? '.\\.agents\\scripts\\commit.ts'
           : resolvedCommitScript;
@@ -123,7 +134,7 @@ export function gitInterceptor(ctx: ExecutionContext): void {
             console.error(`   🛠️ AUTONOMOUS HEALING: Transparently rewriting to '${commitScriptCandidate}' with default scores... (Frictionless Recovery)`);
             ctx.cmdBasename = 'bun';
             ctx.args = [commitScriptCandidate, '--msg', message, '--impact', '0.5', '--confidence', '0.5', '--validation', 'passed'];
-            if (path.resolve(targetCwd) !== path.resolve(process.cwd())) {
+            if (explicitCwd !== undefined || path.resolve(targetCwd) !== path.resolve(process.cwd())) {
               ctx.args.push('--cwd', targetCwd);
             }
             return;
@@ -148,7 +159,7 @@ export function gitInterceptor(ctx: ExecutionContext): void {
       ({ ctx, args, cmd }) => {
         const cwd = ctx.payload.cwd || process.cwd();
         const fallbackScript = path.resolve(__dirname, '../../get-git-history-json.ts');
-        const scriptCandidate = findEcosystemScript(targetCwd, 'get-git-history-json.ts') || findEcosystemScript(cwd, 'get-git-history-json.ts') || (fs.existsSync(fallbackScript) ? fallbackScript : null);
+        const scriptCandidate = findEcosystemScript(targetCwd, 'get-git-history-json.ts') || findEcosystemScript(rawCwd, 'get-git-history-json.ts') || findEcosystemScript(cwd, 'get-git-history-json.ts') || (fs.existsSync(fallbackScript) ? fallbackScript : null);
         const isKnownPath = (argStr: string): boolean => {
           if (argStr.includes('/') || argStr.includes('\\') || argStr.includes('.')) return true;
           if (/^(?:Dockerfile|Makefile|Containerfile|Procfile|LICENSE|README|AUTHORS|NOTICE|Brewfile|Vagrantfile|Gemfile)$/i.test(argStr)) return true;
@@ -171,7 +182,7 @@ export function gitInterceptor(ctx: ExecutionContext): void {
           if (cmd === 'status' && ctx.payload.target === 'wsl2') {
             return;
           }
-          const isTargetDifferent = path.resolve(targetCwd) !== path.resolve(process.cwd());
+          const isTargetDifferent = explicitCwd !== undefined || path.resolve(targetCwd) !== path.resolve(process.cwd());
           const scriptToInvoke = scriptCandidate;
           ctx.payload.target = 'windows';
 
