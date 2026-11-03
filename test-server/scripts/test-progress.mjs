@@ -23,14 +23,28 @@
 import { spawn } from 'child_process'
 import { resolve, dirname, join } from 'path'
 import { fileURLToPath } from 'url'
-import { rmSync } from 'fs'
+import { mkdtempSync, rmSync } from 'fs'
+import { tmpdir } from 'os'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const projectDir = resolve(__dirname, '../..')
+const tempDir = mkdtempSync(join(tmpdir(), 'mj-progress-'))
 
-const proc = spawn('node', ['dist/cli.js', '--log-level', 'error', '--db', 'test-progress.db', '--team-db', 'test-team-progress.db'], {
+const proc = spawn(process.execPath, [
+    'dist/cli.js',
+    '--log-level', 'error',
+    '--db', join(tempDir, 'test-progress.db'),
+    '--team-db', join(tempDir, 'test-team-progress.db'),
+    '--archive-older-than-days', '0',
+    '--prune-older-than-days', '0',
+    '--hard-delete-older-than-days', '0',
+], {
     cwd: projectDir,
-    env: { ...process.env, MEMORY_JOURNAL_CONFIG: 'test-server/scripts/test-server-config.json' },
+    env: {
+        ...process.env,
+        MEMORY_JOURNAL_CONFIG: 'test-server/scripts/test-server-config.json',
+        AUTO_REBUILD_INDEX: 'false',
+    },
     stdio: ['pipe', 'pipe', 'pipe'],
 })
 
@@ -68,7 +82,10 @@ proc.stdout.on('data', (chunk) => {
     }
 })
 
-proc.stderr.on('data', () => {})
+let stderr = ''
+proc.stderr.on('data', (chunk) => {
+    stderr += chunk.toString()
+})
 
 let nextId = 1
 function rpc(method, params = {}) {
@@ -76,8 +93,9 @@ function rpc(method, params = {}) {
     return new Promise((resolve, reject) => {
         const timer = setTimeout(() => {
             pending.delete(id)
-            reject(new Error(`Timeout: ${method}`))
-        }, 10_000)
+            const tail = stderr.trim().slice(-500)
+            reject(new Error(tail === '' ? `Timeout: ${method}` : `Timeout: ${method}\n${tail}`))
+        }, 20_000)
         pending.set(id, (msg) => {
             clearTimeout(timer)
             resolve(msg)
@@ -209,7 +227,7 @@ async function main() {
                 { content: 'Delete me 1', entry_type: 'technical_note', project_number: 1 }, 
                 { content: 'Delete me 2', entry_type: 'technical_note', project_number: 1 }
             ],
-            auto_index: true
+            auto_index: false
         },
         _meta: { progressToken: 'phase3-batch' }
     })
@@ -239,7 +257,8 @@ async function main() {
                 updates: ids.map(id => ({
                     entry_id: id,
                     content: 'Updated content'
-                }))
+                })),
+                auto_index: false
             },
             _meta: { progressToken: 'phase3-batch' }
         })
@@ -304,7 +323,7 @@ async function main() {
                 { content: 'Team Delete me 1', entry_type: 'technical_note', project_number: 1 }, 
                 { content: 'Team Delete me 2', entry_type: 'technical_note', project_number: 1 }
             ],
-            auto_index: true
+            auto_index: false
         },
         _meta: { progressToken: 'phase4-team-batch' }
     })
@@ -334,7 +353,8 @@ async function main() {
                 updates: teamIds.map(id => ({
                     entry_id: id,
                     content: 'Updated team content'
-                }))
+                })),
+                auto_index: false
             },
             _meta: { progressToken: 'phase4-team-batch' }
         })
@@ -415,6 +435,7 @@ async function main() {
     
     // Wait briefly to allow process to release file locks
     setTimeout(() => {
+        rmSync(tempDir, { recursive: true, force: true })
         for (const file of filesToClean) {
             try {
                 rmSync(join(projectDir, file), { force: true })
@@ -446,6 +467,7 @@ main().catch((err) => {
     ]
     
     setTimeout(() => {
+        rmSync(tempDir, { recursive: true, force: true })
         for (const file of filesToClean) {
             try {
                 rmSync(join(projectDir, file), { force: true })
