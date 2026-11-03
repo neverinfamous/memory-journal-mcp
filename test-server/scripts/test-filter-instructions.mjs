@@ -129,7 +129,7 @@ function runConfig(config) {
                             msg.result?.instructions ||
                             msg.result?.capabilities?.instructions ||
                             ''
-                        
+
                         proc.stdin.write(
                             JSON.stringify({
                                 jsonrpc: '2.0',

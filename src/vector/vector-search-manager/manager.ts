@@ -214,9 +214,9 @@ export class VectorSearchManager {
             // Text to embed - include entry type and tags for better semantic matching
             const tagsText = entry.tags !== undefined && entry.tags !== null && entry.tags.length > 0 ? ` [Tags: ${entry.tags.join(', ')}]` : ''
             const text = `[${entry.entryType}]${tagsText} ${entry.content}`
-            
+
             const embedding = await this.generateEmbedding(text)
-            
+
             this.dbAdapter.upsertVector(entry.id, embedding)
         } catch (error) {
             logger.error(`Failed to add entry ${entry.id} to vector index`, {
@@ -255,7 +255,7 @@ export class VectorSearchManager {
 
         try {
             const queryEmbedding = await this.generateEmbedding(query)
-            
+
             // searchVectors returns { entry_id: number; distance: number }[]
             const results = this.dbAdapter.searchVectors(queryEmbedding, limit)
 
@@ -335,16 +335,16 @@ export class VectorSearchManager {
             }
 
             let queryEmbedding = this.dbAdapter.getVector(entryId)
-            
+
             if (!queryEmbedding) {
                 const tagsText = sourceEntry.tags !== undefined && sourceEntry.tags !== null && sourceEntry.tags.length > 0 ? ` [Tags: ${sourceEntry.tags.join(', ')}]` : ''
                 const text = `[${sourceEntry.entryType}]${tagsText} ${sourceEntry.content}`
                 queryEmbedding = await this.generateEmbedding(text)
-                
+
                 // Add it to the index while we're at it
                 this.dbAdapter.upsertVector(entryId, queryEmbedding)
             }
-            
+
             // Search (request limit + 1 to account for the entry itself)
             const results = this.dbAdapter.searchVectors(queryEmbedding, limit + 1)
 
@@ -410,14 +410,14 @@ export class VectorSearchManager {
     public getStats(): { itemCount: number; dimensions: number; modelName: string; isReady: boolean } {
         let itemCount = 0
         let isReady = false
-        
+
         try {
             itemCount = this.dbAdapter.getVectorCount()
             isReady = this.pipeline !== null
         } catch (error) {
             logger.warning('Failed to get vector search stats', { error })
         }
-        
+
         return {
             itemCount,
             dimensions: this.dimensions ?? 0,
