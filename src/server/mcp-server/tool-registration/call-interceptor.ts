@@ -419,10 +419,14 @@ export function attachCallToolInterceptor(
                 const resObj = result as { content?: { type?: string; text?: string }[] }
                 if (Array.isArray(resObj.content) && resObj.content.length > 0) {
                     const text = resObj.content[0]?.text
-                    if (typeof text === 'string' && text.includes('MCP error -32602')) {
+                    const prefix = 'MCP error -32602: Input validation error: '
+                    if (
+                        typeof text === 'string' &&
+                        (text.includes('MCP error -32602') || text.includes('Invalid arguments for tool'))
+                    ) {
                         const errorMessage = parseZodErrorsFromMessage(
                             text,
-                            'MCP error -32602: Input validation error: '
+                            text.includes(prefix) ? prefix : undefined
                         )
                         const errorResult = {
                             success: false,

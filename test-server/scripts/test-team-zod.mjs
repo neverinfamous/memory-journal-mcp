@@ -1,123 +1,158 @@
 /**
- * Test Team Zod Boundary
+ * Sends invalid Zod types to team tools and checks that the server returns
+ * a VALIDATION_ERROR payload instead of a raw JSON-RPC -32602 error.
  *
- * Invokes the MCP server subprocess and deliberately sends invalid Zod types
- * (e.g., numbers instead of strings) to ensure that the SDK-level Zod
- * exceptions are gracefully intercepted and formatted as standard
- * VALIDATION_ERROR JSON-RPC payloads, rather than leaking raw -32602 errors.
+ * Usage:
+ *   node test-server/scripts/test-team-zod.mjs
  */
+
 import { spawn } from 'child_process'
-import { fileURLToPath } from 'url'
+import { mkdtempSync, rmSync } from 'fs'
+import { tmpdir } from 'os'
 import { dirname, join } from 'path'
+import { fileURLToPath } from 'url'
 
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = dirname(__filename)
-const cliPath = join(__dirname, '../../dist/cli.js')
+const projectDir = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
+const tempDir = mkdtempSync(join(tmpdir(), 'mj-team-zod-'))
 
-const tests = [
-    {
-        name: 'team_create_entry (type mismatch)',
-        payload: {
-            jsonrpc: '2.0',
-            id: 1,
-            method: 'tools/call',
-            params: {
-                name: 'team_create_entry',
-                arguments: { project_number: 5, content: 123 },
-            },
-        },
-    },
-    {
-        name: 'team_pass_flag (type mismatch)',
-        payload: {
-            jsonrpc: '2.0',
-            id: 2,
-            method: 'tools/call',
-            params: {
-                name: 'team_pass_flag',
-                arguments: { project_number: 5, flag_type: 123, message: 'test' },
-            },
-        },
-    },
-]
+const childEnv = {}
+for (const [key, value] of Object.entries(process.env)) {
+    if (typeof value === 'string') childEnv[key] = value
+}
+childEnv.AUTO_REBUILD_INDEX = 'false'
+childEnv.LOG_LEVEL = 'error'
+childEnv.TEAM_AUTHOR = 'test_author'
+childEnv.TEAM_DEFAULT_ROLE = 'member'
 
-let currentTestIdx = 0
-let output = ''
+const proc = spawn(
+    process.execPath,
+    [
+        'dist/cli.js',
+        '--db',
+        join(tempDir, 'team-zod.db'),
+        '--team-db',
+        join(tempDir, 'team-zod-team.db'),
+        '--tool-filter',
+        'full',
+        '--log-level',
+        'error',
+        '--team-default-role',
+        'member',
+        '--archive-older-than-days',
+        '0',
+        '--prune-older-than-days',
+        '0',
+        '--hard-delete-older-than-days',
+        '0',
+    ],
+    { cwd: projectDir, stdio: ['pipe', 'pipe', 'pipe'], env: childEnv }
+)
 
-console.log('Spawning MCP server for Zod boundary testing...')
-const mcp = spawn('node', [cliPath, '--team-db', ':memory:'], {
-    env: { ...process.env },
-})
+let buffer = ''
+let stderr = ''
+const pending = new Map()
 
-mcp.stdout.on('data', (data) => {
-    output += data.toString()
-
-    // Check if we received a response for the current test
-    const test = tests[currentTestIdx]
-    if (!test) return
-
-    if (output.includes(`"id":${test.payload.id}`)) {
-        const lines = output.split('\n')
-        const responseLine = lines.find((line) => line.includes(`"id":${test.payload.id}`))
-
-        if (responseLine) {
-            try {
-                const parsed = JSON.parse(responseLine)
-                const resultText = parsed?.result?.content?.[0]?.text || ''
-                const structuredContent = parsed?.result?.structuredContent
-
-                // Assert it's a validation error
-                if (
-                    !resultText.includes('-32602') &&
-                    (resultText.includes('VALIDATION_ERROR') ||
-                        structuredContent?.code === 'VALIDATION_ERROR')
-                ) {
-                    console.log(`✅ [PASS] ${test.name}`)
-                } else {
-                    console.log(`❌ [FAIL] ${test.name}`)
-                    console.log(`Expected structured VALIDATION_ERROR but received:`)
-                    console.log(JSON.stringify(parsed, null, 2))
-                    process.exit(1)
-                }
-            } catch (e) {
-                console.log(`❌ [FAIL] ${test.name} - Could not parse response`)
-                console.log('Raw Response:', responseLine)
-                process.exit(1)
+proc.stdout.on('data', (chunk) => {
+    buffer += chunk.toString()
+    const lines = buffer.split('\n')
+    buffer = lines.pop() ?? ''
+    for (const line of lines) {
+        const trimmed = line.trim()
+        if (trimmed === '' || !trimmed.startsWith('{')) continue
+        try {
+            const message = JSON.parse(trimmed)
+            const resolve = pending.get(message.id)
+            if (resolve !== undefined) {
+                pending.delete(message.id)
+                resolve(message)
             }
-
-            // Move to next test or finish
-            currentTestIdx++
-            output = '' // Reset buffer
-            if (currentTestIdx < tests.length) {
-                sendTest(currentTestIdx)
-            } else {
-                console.log('\n✅ All Zod boundary tests passed.')
-                mcp.kill()
-            }
+        } catch {
+            // Incomplete JSON stays in the buffer.
         }
     }
 })
 
-mcp.stderr.on('data', (data) => {
-    if (data.toString().includes('Error:')) {
-        console.error(`\n❌ ERROR: ${data}`)
-    }
+proc.stderr.on('data', (chunk) => {
+    stderr += chunk.toString()
 })
 
-mcp.on('close', (code) => {
-    if (currentTestIdx < tests.length) {
-        console.log(`\nProcess exited prematurely with code ${code}`)
-        process.exit(1)
-    }
-})
-
-function sendTest(idx) {
-    const test = tests[idx]
-    // console.log(`Sending: ${test.name}`)
-    mcp.stdin.write(JSON.stringify(test.payload) + '\n')
+function rpc(id, method, params) {
+    return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+            pending.delete(id)
+            reject(new Error(`Timeout waiting for ${method}`))
+        }, 20000)
+        pending.set(id, (message) => {
+            clearTimeout(timer)
+            resolve(message)
+        })
+        proc.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n')
+    })
 }
 
-// Boot delay
-setTimeout(() => {
-    sendTest(currentTestIdx)
-}, 500)
+function notify(method) {
+    proc.stdin.write(JSON.stringify({ jsonrpc: '2.0', method }) + '\n')
+}
+
+function assertValidation(message, label) {
+    const text = message.result?.content?.[0]?.text ?? ''
+    const code = message.result?.structuredContent?.code
+    const leaked = text.includes('-32602') || message.error?.code === -32602
+    const validated = text.includes('VALIDATION_ERROR') || code === 'VALIDATION_ERROR'
+    if (!leaked && validated) {
+        console.log(`PASS ${label}`)
+        return true
+    }
+    console.error(`FAIL ${label}`)
+    console.error(JSON.stringify(message, null, 2))
+    return false
+}
+
+const cases = [
+    {
+        label: 'team_create_entry content number',
+        name: 'team_create_entry',
+        arguments: { project_number: 5, workspace_id: 'test-ws', content: 123 },
+    },
+    {
+        label: 'team_search query number',
+        name: 'team_search',
+        arguments: { project_number: 5, query: 123 },
+    },
+]
+
+let failures = 0
+
+try {
+    console.log('Spawning MCP server for Zod boundary testing...')
+    const initialized = await rpc(1, 'initialize', {
+        protocolVersion: '2025-03-26',
+        capabilities: {},
+        clientInfo: { name: 'test-team-zod', version: '1.0' },
+    })
+    if (initialized.error) {
+        throw new Error(`initialize failed: ${JSON.stringify(initialized.error)}`)
+    }
+    notify('notifications/initialized')
+
+    let id = 2
+    for (const testCase of cases) {
+        const response = await rpc(id, 'tools/call', {
+            name: testCase.name,
+            arguments: testCase.arguments,
+        })
+        id++
+        if (!assertValidation(response, testCase.label)) failures++
+    }
+    console.log(failures === 0 ? '\nAll Zod boundary tests passed.' : `\n${failures} Zod boundary test(s) failed.`)
+} catch (error) {
+    failures++
+    console.error(error instanceof Error ? error.message : String(error))
+    if (stderr.trim() !== '') console.error(stderr.trim().slice(-800))
+} finally {
+    proc.kill()
+    setTimeout(() => {
+        rmSync(tempDir, { recursive: true, force: true })
+        process.exit(failures === 0 ? 0 : 1)
+    }, 500)
+}
