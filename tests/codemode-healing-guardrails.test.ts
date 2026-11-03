@@ -2265,6 +2265,70 @@ return { success: true, projectId };
             expect(toolsWithoutHealing.some((t) => t.name === 'create_entry')).toBe(true)
         })
     })
+
+    describe('CMS-04 REM Supervisor Regressions: Git Log, Relationship Limit Clamping, and Cross-Workspace Fallback', () => {
+        const mockConfig = {
+            runtime: {
+                maintenanceManager: {
+                    withActiveJob: (fn: any) => fn(),
+                    acquireMaintenanceLock: async () => {},
+                    releaseMaintenanceLock: () => {},
+                },
+            },
+        } as any
+
+        it('should auto-clamp visualize_relationships limit > 500 down to 500', async () => {
+            const { callTool } = await import('../src/handlers/tools/index.js')
+            const mockDb = {
+                visualizeRelationships: vi.fn().mockReturnValue({ nodes: [], edges: [] }),
+                getEntryById: vi.fn(),
+            } as any
+
+            await callTool('visualize_relationships', { limit: 1000 }, mockDb, undefined, undefined, mockConfig)
+            expect(mockDb.visualizeRelationships).toHaveBeenCalledWith(
+                expect.objectContaining({ limit: 500 })
+            )
+        })
+
+        it('should normalize max_count and limit to maxCount in GitHistoryOptionsSchemaMcp and applyGitInterceptions', async () => {
+            const { GitHistoryOptionsSchemaMcp } = await import('../src/handlers/tools/git.js')
+            const { applyGitInterceptions } = await import('../src/codemode/api/git-api.js')
+
+            const parsed = GitHistoryOptionsSchemaMcp.parse({ max_count: 20 })
+            expect(parsed.maxCount).toBe(20)
+
+            const intercepted = applyGitInterceptions('get_commit_history', [{ max_count: 15 }]) as { args: Record<string, unknown>[] }
+            expect(intercepted?.args?.[0]?.['maxCount']).toBe(15)
+        })
+
+        it('should fall back to global lookup across workspaces in get_entry_by_id when not found in caller workspace', async () => {
+            const { callTool } = await import('../src/handlers/tools/index.js')
+            const mockDb = {
+                getEntryById: vi.fn((id: number, wsId: string) => {
+                    if (wsId === '*') return { id: 14051, workspaceId: 'adamic', content: 'test' }
+                    return null
+                }),
+                getRelationships: vi.fn().mockReturnValue([]),
+                calculateImportance: vi.fn().mockReturnValue({ score: 0.5, breakdown: {} }),
+            } as any
+
+            const res = (await callTool(
+                'get_entry_by_id',
+                {
+                    entry_id: 14051,
+                    workspace_id: 'default',
+                },
+                mockDb,
+                undefined,
+                undefined,
+                mockConfig
+            )) as { success: boolean; entry?: { id: number; workspaceId: string } }
+
+            expect(res.success).toBe(true)
+            expect(res.entry?.id).toBe(14051)
+            expect(res.entry?.workspaceId).toBe('adamic')
+        })
+    })
 })
 
 

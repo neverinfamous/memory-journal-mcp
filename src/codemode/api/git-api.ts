@@ -22,14 +22,19 @@ export function applyGitInterceptions(methodName: string, args: unknown[]): { ar
             }
         }
         
-        if (obj['keep'] !== undefined && obj['maxCount'] === undefined && obj['max_count'] === undefined) {
+        if (obj['keep'] !== undefined && obj['maxCount'] === undefined) {
             obj['maxCount'] = obj['keep'];
             delete obj['keep'];
         }
         
-        if (obj['limit'] !== undefined && obj['maxCount'] === undefined && obj['max_count'] === undefined) {
+        if (obj['limit'] !== undefined && obj['maxCount'] === undefined) {
             obj['maxCount'] = obj['limit'];
             delete obj['limit'];
+        }
+
+        if (obj['max_count'] !== undefined && obj['maxCount'] === undefined) {
+            obj['maxCount'] = obj['max_count'];
+            delete obj['max_count'];
         }
 
         // Q/Query error interception for non-search tools

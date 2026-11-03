@@ -238,7 +238,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                 try {
                     const input = GetEntryByIdSchema.parse(params)
                     const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
-                    const hasExplicitWs = input.workspace_id !== undefined || input.project_number !== undefined
+                    const hasExplicitWs = (input.workspace_id !== undefined && input.workspace_id !== 'default') || (input.project_number !== undefined && input.project_number > 0)
                     const entry = db.getEntryById(input.entry_id, wsId) ?? (!hasExplicitWs && wsId !== '*' ? db.getEntryById(input.entry_id, '*') : null)
                     if (!entry) {
                         return {

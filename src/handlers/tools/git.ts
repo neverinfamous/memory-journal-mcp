@@ -31,20 +31,14 @@ export const GitHistoryOptionsSchema = z.object({
 export const GitHistoryOptionsSchemaMcp = z.object({
     ref: z.string().optional().describe('Git reference (branch, tag, commit). Default: HEAD'),
     path: z.string().optional().describe('Filter by specific file or directory path'),
-    maxCount: relaxedNumber()
-        .optional()
-        .describe('Maximum number of commits to return. Default: 50'),
-    since: z
-        .string()
-        .optional()
-        .describe('Show commits more recent than a specific date (e.g. "2023-01-01")'),
+    maxCount: relaxedNumber().optional().describe('Maximum number of commits to return. Default: 50'),
+    max_count: relaxedNumber().optional(),
+    limit: relaxedNumber().optional(),
+    since: z.string().optional().describe('Show commits more recent than a specific date (e.g. "2023-01-01")'),
     sortBy: z.string().optional().describe('Sort commits by date or impact score'),
     scope: z.string().optional().describe('Filter commits by a specific scope'),
-    techDebtAudit: z
-        .boolean()
-        .optional()
-        .describe('Filter for high impact commits with low trust or missing validation'),
-})
+    techDebtAudit: z.boolean().optional().describe('Filter for high impact commits with low trust or missing validation'),
+}).transform((d) => ({ ...d, maxCount: d.maxCount ?? d.max_count ?? d.limit }))
 
 export const GitSearchOptionsSchema = z.object({
     query: z.string().min(1),
@@ -56,16 +50,13 @@ export const GitSearchOptionsSchema = z.object({
 
 export const GitSearchOptionsSchemaMcp = z.object({
     query: z.string().optional().describe('Search query to match in commit messages'),
-    maxCount: relaxedNumber()
-        .optional()
-        .describe('Maximum number of commits to return. Default: 50'),
+    maxCount: relaxedNumber().optional().describe('Maximum number of commits to return. Default: 50'),
+    max_count: relaxedNumber().optional(),
+    limit: relaxedNumber().optional(),
     sortBy: z.string().optional().describe('Sort commits by date or impact score'),
     scope: z.string().optional().describe('Filter commits by a specific scope'),
-    techDebtAudit: z
-        .boolean()
-        .optional()
-        .describe('Filter for high impact commits with low trust or missing validation'),
-})
+    techDebtAudit: z.boolean().optional().describe('Filter for high impact commits with low trust or missing validation'),
+}).transform((d) => ({ ...d, maxCount: d.maxCount ?? d.max_count ?? d.limit }))
 
 export const GitReleaseInfoOptionsSchema = z.object({
     ref: z.string().optional(),
@@ -103,7 +94,7 @@ async function fetchCommits(input: FetchCommitsInput, cwd: string): Promise<Comm
         since: input.since,
         grep: input.query,
     }
-    const gitArgs = buildGitBaseArgs(cliArgs, input.ref || 'HEAD')
+    const gitArgs = ['log', ...buildGitBaseArgs(cliArgs, input.ref || 'HEAD')]
     
     gitArgs.push(
         '--name-status',
@@ -183,7 +174,7 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
             handler: async (params: unknown) => {
                 try {
                     const cwd = process.cwd()
-                    const input = GitHistoryOptionsSchema.parse(params)
+                    const input = GitHistoryOptionsSchema.parse(GitHistoryOptionsSchemaMcp.parse(params))
                     await sendProgress(progress, 0, 1, 'Fetching commit history...')
                     const commits = await fetchCommits(input, cwd)
                     return { success: true, commits }
@@ -208,7 +199,7 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
             handler: async (params: unknown) => {
                 try {
                     const cwd = process.cwd()
-                    const input = GitSearchOptionsSchema.parse(params)
+                    const input = GitSearchOptionsSchema.parse(GitSearchOptionsSchemaMcp.parse(params))
                     await sendProgress(progress, 0, 1, `Searching commits for "${input.query}"...`)
                     const commits = await fetchCommits(input, cwd)
                     return { success: true, commits }

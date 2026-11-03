@@ -126,7 +126,12 @@ const VisualizeInputSchemaMcp = z.object({
     mode: z.string().optional(),
     depth: relaxedNumber().optional().default(2).describe('Relationship traversal depth'),
     path: relaxedNumber().optional(),
-    limit: relaxedNumber().optional().default(20).describe('Maximum entries to include'),
+    limit: relaxedNumber()
+        .optional()
+        .default(20)
+        .describe(
+            'Maximum entries to include (1-500, default: 20). Anti-Hallucination Hint: Values > 500 will be auto-clamped to 500.'
+        ),
     keep: relaxedNumber().optional(),
     project_number: relaxedNumber().optional(),
     workspace_id: z.string().optional(),
@@ -137,12 +142,15 @@ const VisualizeInputSchemaMcp = z.object({
         const queryVal = data.q ?? data.text ?? data.message ?? data.description;
         if (queryVal) extractedTags = [queryVal];
     }
+    const rawLimit = data.keep ?? data.limit
+    const numLimit = rawLimit !== undefined ? Number(rawLimit) : undefined
+    const clampedLimit = numLimit !== undefined && !Number.isNaN(numLimit) ? Math.min(Math.max(1, numLimit), 500) : 20
     return {
         ...data,
         entry_id: data.entry_id ?? data.id,
         relationship_type: data.type ?? data.rel ?? data.mode ?? data.relationship_type,
         depth: data.path ?? data.depth,
-        limit: data.keep ?? data.limit,
+        limit: clampedLimit,
         tags: extractedTags,
     };
 })
