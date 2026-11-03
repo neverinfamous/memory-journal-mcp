@@ -1491,8 +1491,9 @@ return mj.createEntry({
             const esmCode = `
 import fs from 'fs';
 import path from 'path';
-const exists = fs.existsSync('/dummy/path');
-return { exists };
+const dummy = fs.existsSync('/dummy/path');
+const journal = fs.existsSync('/definitely-missing/memory_journal.db');
+return { dummy, journal };
 `;
             const healedEsm = healCodeModeScript(esmCode);
             expect(healedEsm).not.toContain("import fs from 'fs'");
@@ -1501,7 +1502,7 @@ return { exists };
             const sandbox = new WorkerSandbox();
             const result = await sandbox.execute(healedEsm, {});
             expect(result.success).toBe(true);
-            expect(result.result).toEqual({ exists: true });
+            expect(result.result).toEqual({ dummy: false, journal: true });
         });
 
         it('should preserve valid JS containing string literals with embedded createEntry calls without syntax corruption', async () => {
