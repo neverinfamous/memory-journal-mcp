@@ -63,16 +63,19 @@ const TEST_CONFIGS = [
         expectedGroups: ALL_GROUPS
     },
     {
-        label: 'core only (no codemode, no github, no search)',
+        // mj_execute_code stays enabled for every filter, including a core-only
+        // whitelist. The help index lists every group while Code Mode is on.
+        label: 'core only (escape hatch keeps Code Mode)',
         filter: 'core',
-        expect: { CORE: true, CODE_MODE: false, HELP_POINTERS: true },
-        expectedGroups: ['core']
+        expect: { CORE: true, CODE_MODE: true, HELP_POINTERS: true },
+        expectedGroups: ALL_GROUPS
     },
     {
-        label: 'full -codemode (github present, no code mode)',
+        // -codemode removes the group, then the escape hatch adds mj_execute_code back.
+        label: 'full -codemode (escape hatch keeps Code Mode)',
         filter: '-codemode',
-        expect: { CORE: true, CODE_MODE: false, HELP_POINTERS: true },
-        expectedGroups: ALL_GROUPS.filter(g => g !== 'codemode')
+        expect: { CORE: true, CODE_MODE: true, HELP_POINTERS: true },
+        expectedGroups: ALL_GROUPS
     },
     {
         label: 'full -github (no github, no copilot)',
