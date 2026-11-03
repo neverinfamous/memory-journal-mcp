@@ -164,7 +164,7 @@ Control which tools are exposed using any of the 3 configuration sources (preced
 | `-github`            | Exclude a group                    |
 | `-github,-analytics` | Exclude multiple groups            |
 
-`readonly` exposes `core`, `search`, `analytics`, `relationships`, `io`, `git`, and `codemode`. Direct tools still include `create_entry`, `link_entries`, and the import tools. Inside Code Mode, a filter containing `readonly` (and not `-readonly`) limits `mj.*` dispatch to tools with `readOnlyHint: true`. `update_configuration` stays available.
+`readonly` exposes `core`, `search`, `analytics`, `relationships`, `io`, `git`, and `codemode`, then drops tools whose `readOnlyHint` is not `true` from registration, `tools/list`, and `tools/call`. `update_configuration` and `mj_execute_code` stay registered. Code Mode also limits `mj.*` dispatch to `readOnlyHint: true`.
 
 **Filter Syntax:** `shortcut` or `group` or `tool_name` (whitelist mode) · `-group` (disable group) · `-tool` (disable tool) · `+tool` (re-enable after group disable)
 
@@ -223,7 +223,7 @@ Code executes in a **pre-warmed `worker_threads` V8 isolate pool + secondary `vm
 - **Hard timeouts** — configurable execution limit (default 30s) with bounded async timer tracking (`setTimeout`/`sleep` capped and cleared on completion)
 - **Egress boundary enforcement** — result serialization capped (default 100KB via `CODE_MODE_MAX_RESULT_SIZE`) with automatic payload compaction to prevent OOM via oversized payloads
 - **Full API access** — all tool groups are available via `mj.*` (e.g., `mj.core.createEntry()`, `mj.search.searchEntries()`, `mj.github.getGithubIssues()`)
-- **Readonly filter in Code Mode** — A filter containing `readonly` (and not `-readonly`) limits `mj.*` dispatch to tools with `readOnlyHint: true`.
+- **Readonly filter** — A filter containing `readonly` (and not `-readonly`) drops tools whose `readOnlyHint` is not `true` from registration, `tools/list`, and `tools/call`. `update_configuration` and `mj_execute_code` stay registered. Code Mode also limits `mj.*` dispatch to `readOnlyHint: true`.
 
 ### ⚡ Code Mode Minimal Surface (Maximum Token Savings)
 

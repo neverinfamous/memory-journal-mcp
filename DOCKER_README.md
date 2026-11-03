@@ -86,7 +86,7 @@ Control which tools and tool groups are exposed using `MEMORY_JOURNAL_MCP_TOOL_F
 | `full`               | All tools (default)      |
 | `starter`            | Core + search + codemode |
 | `essential`          | Minimal footprint        |
-| `readonly`           | Exposes `core`, `search`, `analytics`, `relationships`, `io`, `git`, and `codemode`. Direct tools still include `create_entry`, `link_entries`, and the import tools. `update_configuration` stays available. |
+| `readonly`           | Exposes those groups, then drops tools whose `readOnlyHint` is not `true`. `update_configuration` and `mj_execute_code` stay registered. |
 | `-github`            | Exclude a group          |
 | `-github,-analytics` | Exclude multiple groups  |
 
@@ -141,7 +141,7 @@ Code executes in a **pre-warmed `worker_threads` V8 isolate pool + secondary `vm
 - **Hard timeouts** — configurable execution limit (default 30s) with bounded async timer tracking (`setTimeout`/`sleep` capped and cleared on completion)
 - **Egress boundary enforcement** — result serialization capped (default 100KB via `CODE_MODE_MAX_RESULT_SIZE`) with automatic payload compaction to prevent OOM
 - **Full API access** — all tool groups are available via `mj.*` (e.g., `mj.core.createEntry()`, `mj.search.searchEntries()`, `mj.github.getGithubIssues()`)
-- **Readonly filter in Code Mode** — A filter containing `readonly` (and not `-readonly`) limits `mj.*` dispatch to tools with `readOnlyHint: true`.
+- **Readonly filter** — A filter containing `readonly` (and not `-readonly`) drops tools whose `readOnlyHint` is not `true`. `update_configuration` and `mj_execute_code` stay registered.
 
 ---
 

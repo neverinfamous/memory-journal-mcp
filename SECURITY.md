@@ -56,7 +56,7 @@ The server uses the native **better-sqlite3** driver with **sqlite-vec** for vec
 
 - ✅ **End-to-End Tenant Scoping** — All personal and team entry reads, updates, soft-deletes, restores, FTS5 searches, and vector semantic searches (`semantic_search`, `team_semantic_search`) enforce `workspace_id` isolation.
 - ✅ **Wildcard workspace writes** — `create_entry` ignores `workspace_id: "*"` and stores a resolved workspace. `update_entry` with `workspace_id: "*"` and `target_workspace_id` moves an entry. `delete_entry`, `restore_entry`, and batch deletes accept `*` and then match by id without a workspace predicate.
-- ✅ **`--tool-filter` allow-list** — `--tool-filter` is an allow-list on `tools/call`. `readonly` blocks mutating `mj.*` calls and mutating healing aliases. It does not remove `create_entry` or `link_entries` from `tools/call`. `--codemode-internal-full-access`, if granted at server startup, cannot be escalated via config file hot-reload.
+- ✅ **`--tool-filter` allow-list** — `--tool-filter` is an allow-list on registration, `tools/list`, and `tools/call`. `readonly` drops tools whose `readOnlyHint` is not `true`, including `create_entry` and `link_entries`, and blocks mutating `mj.*` calls and mutating healing aliases. `update_configuration` and `mj_execute_code` stay registered. `--codemode-internal-full-access`, if granted at server startup, cannot be escalated via config file hot-reload.
 
 ### **Prompt-Injection Defense (`<untrusted_remote_content>`)**
 
@@ -94,7 +94,7 @@ export CORS_ORIGIN="http://localhost:3000,https://my-app.com"
 
 ### **Rate Limiting & Timeouts**
 
-- **Rate limiting**: 100 requests/minute per authenticated subject or fallback client IP (60-second fixed window with `Retry-After` header and 10,000-key LRU eviction)
+- **Rate limiting**: 100 requests per 60-second fixed window (`Retry-After`, 10,000-key LRU eviction). The key is the SHA-256 of the Bearer token when one is present, otherwise the SHA-256 of the client IP. The limiter runs before authentication and does not read JWT claims.
 - ✅ **HTTP Timeouts** — Request timeout (120s), keep-alive timeout (65s), headers timeout (66s)
 
 ### **Session Management (Stateful Mode)**

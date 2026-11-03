@@ -24,7 +24,7 @@ When orchestrating workflows or performing multi-step operations on behalf of a 
 - **Token Optimization**: Enables multi-step logic composition across all tool groups within a single sandboxed execution.
 - **Sandbox Security**: Executes in a pre-warmed `node:worker_threads` V8 isolate pool + secondary `vm.createContext` boundary with V8 `codeGeneration: { strings: false, wasm: false }`, frozen prototypes and `mj.*` API surfaces, `Proxy: undefined`, host-side RPC allowlist, static validation rules (50KB code cap), 30s timeout, and 100KB result egress cap with auto-compaction.
 - **API Surface**: Exposed via the `mj.*` API (e.g., `mj.core.createEntry()`, `mj.search.searchEntries()`, `mj.github.getGithubIssues()`).
-- **Readonly Contract**: `--tool-filter readonly` (env: `MEMORY_JOURNAL_MCP_TOOL_FILTER=readonly`, config key `toolFilter`) still registers `core`, `search`, `analytics`, `relationships`, `io`, `git`, and `codemode`, including `create_entry`. Inside Code Mode, a filter containing `readonly` and not `-readonly` limits `mj.*` dispatch to tools with `readOnlyHint: true`.
+- **Readonly Contract**: `--tool-filter readonly` (env: `MEMORY_JOURNAL_MCP_TOOL_FILTER=readonly`, config key `toolFilter`) keeps the `core`, `search`, `analytics`, `relationships`, `io`, `git`, and `codemode` groups, then drops tools whose `readOnlyHint` is not `true` from registration, `tools/list`, and `tools/call`. `update_configuration` and `mj_execute_code` stay registered. Code Mode also limits `mj.*` dispatch to `readOnlyHint: true`.
 
 ---
 
