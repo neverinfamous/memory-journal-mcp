@@ -224,14 +224,14 @@ async function main() {
         name: 'batch_create_entries',
         arguments: {
             entries: [
-                { content: 'Delete me 1', entry_type: 'technical_note', project_number: 1 }, 
+                { content: 'Delete me 1', entry_type: 'technical_note', project_number: 1 },
                 { content: 'Delete me 2', entry_type: 'technical_note', project_number: 1 }
             ],
             auto_index: false
         },
         _meta: { progressToken: 'phase3-batch' }
     })
-    
+
     let ids = []
     if (seedBatch.error) {
         console.error('FAIL: Could not seed batch entries:', seedBatch.error)
@@ -262,7 +262,7 @@ async function main() {
             },
             _meta: { progressToken: 'phase3-batch' }
         })
-        
+
         if (updateBatch.error) {
             console.error('FAIL: batch_update_entries returned error:', updateBatch.error)
             failures++
@@ -275,7 +275,7 @@ async function main() {
         arguments: { entry_ids: ids },
         _meta: { progressToken: 'phase3-batch' }
     })
-    
+
     if (batchResponse.error) {
         console.error('FAIL: batch_delete_entries returned error:', batchResponse.error)
         failures++
@@ -294,7 +294,7 @@ async function main() {
         if (success) {
             // Wait briefly for any pending stdout data events to process
             await new Promise(resolve => setTimeout(resolve, 500))
-            
+
             console.log('\nBatch operations finished successfully!')
             if (progressEvents.length >= 6) {
                 console.log(
@@ -320,14 +320,14 @@ async function main() {
         name: 'team_batch_create_entries',
         arguments: {
             entries: [
-                { content: 'Team Delete me 1', entry_type: 'technical_note', project_number: 1 }, 
+                { content: 'Team Delete me 1', entry_type: 'technical_note', project_number: 1 },
                 { content: 'Team Delete me 2', entry_type: 'technical_note', project_number: 1 }
             ],
             auto_index: false
         },
         _meta: { progressToken: 'phase4-team-batch' }
     })
-    
+
     let teamIds = []
     if (teamSeedBatch.error) {
         console.error('FAIL: Could not seed team batch entries:', teamSeedBatch.error)
@@ -358,7 +358,7 @@ async function main() {
             },
             _meta: { progressToken: 'phase4-team-batch' }
         })
-        
+
         if (teamUpdateBatch.error) {
             console.error('FAIL: team_batch_update_entries returned error:', teamUpdateBatch.error)
             failures++
@@ -371,7 +371,7 @@ async function main() {
         arguments: { entry_ids: teamIds, project_number: 1 },
         _meta: { progressToken: 'phase4-team-batch' }
     })
-    
+
     if (teamBatchResponse.error) {
         console.error('FAIL: team_batch_delete_entries returned error:', teamBatchResponse.error)
         failures++
@@ -390,7 +390,7 @@ async function main() {
         if (success) {
             // Wait briefly for any pending stdout data events to process
             await new Promise(resolve => setTimeout(resolve, 500))
-            
+
             console.log('\nTeam Batch operations finished successfully!')
             if (progressEvents.length >= 6) {
                 console.log(
@@ -417,7 +417,7 @@ async function main() {
     }
 
     proc.kill()
-    
+
     const filesToClean = [
         'test-progress.db',
         'test-progress.db-shm',
@@ -432,7 +432,7 @@ async function main() {
         'test-team-prompts-test.db-shm',
         'test-team-prompts-test.db-wal'
     ]
-    
+
     // Wait briefly to allow process to release file locks
     setTimeout(() => {
         rmSync(tempDir, { recursive: true, force: true })
@@ -450,7 +450,7 @@ async function main() {
 main().catch((err) => {
     console.error('Script failed:', err)
     proc.kill()
-    
+
     const filesToClean = [
         'test-progress.db',
         'test-progress.db-shm',
@@ -465,7 +465,7 @@ main().catch((err) => {
         'test-team-prompts-test.db-shm',
         'test-team-prompts-test.db-wal'
     ]
-    
+
     setTimeout(() => {
         rmSync(tempDir, { recursive: true, force: true })
         for (const file of filesToClean) {
