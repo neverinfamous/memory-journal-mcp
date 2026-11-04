@@ -193,6 +193,8 @@ describe('Code Mode Worker Proxies & Globals', () => {
         expect(entriesDomain['fetchById']).toBe(getEntryByIdMock)
         expect(entriesDomain['patchEntry']).toBe(updateEntryMock)
         expect(entriesDomain['removeItem']).toBe(deleteEntryMock)
+        expect(entriesDomain['listDeletedEntries']).toBe(getRecentEntriesMock)
+        expect(entriesDomain['listDeletedEntries']).not.toBe(deleteEntryMock)
         expect(entriesDomain['listAll']).toBe(getRecentEntriesMock)
 
         const getRead = createGetReadFindInterceptor(mjApi, shimMj)

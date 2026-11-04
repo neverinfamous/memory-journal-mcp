@@ -3,7 +3,6 @@ import type { Relationship, RelationshipType } from '../../types/index.js'
 import { ResourceNotFoundError } from '../../types/errors.js'
 import type { NativeConnectionManager } from './native-connection.js'
 import type { EntriesManager } from './entries/index.js'
-import { buildImportanceCte, buildImportanceSqlExpression } from './entries/importance.js'
 
 export class RelationshipsManager {
     private ctx: NativeConnectionManager
@@ -172,16 +171,11 @@ export class RelationshipsManager {
             params.push(workspaceId)
         }
 
-        const cte = buildImportanceCte()
-        const importanceExpr = buildImportanceSqlExpression()
         const row = this.db
             .prepare(
-                `WITH ${cte}
-                 SELECT COUNT(*) as orphan_count
+                `SELECT COUNT(*) as orphan_count
                  FROM memory_journal e
-                 LEFT JOIN rel_stats rs ON e.id = rs.entry_id
-                 LEFT JOIN anchor_stats ans ON e.id = ans.entry_id
-                 WHERE e.deleted_at IS NULL${filter} AND (${importanceExpr}) < 0.2 AND e.id NOT IN (
+                 WHERE e.deleted_at IS NULL${filter} AND e.id NOT IN (
                      SELECT from_entry_id FROM relationships
                      UNION
                      SELECT to_entry_id FROM relationships

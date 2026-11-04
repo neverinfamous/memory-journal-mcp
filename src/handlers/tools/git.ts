@@ -367,7 +367,6 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
             handler: async (params: unknown) => {
                 try {
                     const { db } = context
-                    const cwd = process.cwd()
                     const parsedParams = z
                         .object({
                             entry_id: z.preprocess(coerceNumber, z.number().int().optional()),
@@ -382,6 +381,8 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                     const rawWs = parsedParams.workspace_id ?? parsedParams.workspaceId
                     const rawProj = parsedParams.project_number ?? parsedParams.projectNumber
                     const wsId = rawWs === '*' ? '*' : resolveWorkspaceId(rawWs, rawProj, context.config)
+                    const registryPath = wsId === '*' ? undefined : context.config?.projectRegistry?.[wsId]?.path
+                    const cwd = registryPath !== undefined && registryPath.length > 0 ? registryPath : process.cwd()
 
                     const targets: { id: number; timestamp: string }[] = []
                     if (resolvedEntryId !== undefined) {
@@ -400,7 +401,7 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
 
                     const fs = await import('node:fs')
                     const path = await import('node:path')
-                    const workspaceRoot = process.cwd()
+                    const workspaceRoot = cwd
 
                     const results: {
                         anchorId: number

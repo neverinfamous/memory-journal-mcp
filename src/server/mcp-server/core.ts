@@ -125,32 +125,30 @@ export async function createServer(options: ServerOptions): Promise<void> {
         await server.connect(stdioTransport)
         logger.info('MCP server started on stdio', { module: 'McpServer' })
 
+        let stdioShutdownStarted = false
         const handleStdioShutdown = (): void => {
-            logger.info('Shutting down...', { module: 'McpServer' })
-            // Flush audit log before exit
-            if (runtime.auditLogger) {
-                void runtime.auditLogger.close()
-            }
-            if (shutdownMetrics) {
-                void shutdownMetrics().catch((err: unknown) => {
-                    logger.debug('Error shutting down metrics server', { module: 'McpServer', error: String(err) })
-                });
-            }
-            if (activeMetricsPath) {
-                void runtime.metrics.saveToFile(activeMetricsPath).then(() => {
-                    db.close()
-                    testDb?.close()
-                    teamDb?.close()
-                    testTeamDb?.close()
-                    process.exit(0)
-                })
-            } else {
+            if (stdioShutdownStarted) return
+            stdioShutdownStarted = true
+            void (async () => {
+                logger.info('Shutting down...', { module: 'McpServer' })
+                runtime.stopBackgroundTasks?.()
+                if (runtime.auditLogger) {
+                    await runtime.auditLogger.close()
+                }
+                if (shutdownMetrics) {
+                    await shutdownMetrics().catch((err: unknown) => {
+                        logger.debug('Error shutting down metrics server', { module: 'McpServer', error: String(err) })
+                    })
+                }
+                if (activeMetricsPath) {
+                    await runtime.metrics.saveToFile(activeMetricsPath)
+                }
                 db.close()
                 testDb?.close()
                 teamDb?.close()
                 testTeamDb?.close()
                 process.exit(0)
-            }
+            })()
         }
 
         // Handle shutdown for stdio
@@ -187,6 +185,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
 
         const handleHttpShutdown = (): void => {
             void (async () => {
+                runtime.stopBackgroundTasks?.()
                 if (shutdownMetrics) {
                     await shutdownMetrics().catch((err: unknown) => {
                     logger.debug('Error shutting down metrics server', { module: 'McpServer', error: String(err) })

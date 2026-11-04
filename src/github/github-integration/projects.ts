@@ -1,11 +1,17 @@
 import { logger } from '../../utils/logger.js'
 import type { GitHubClient } from './client.js'
-import type {
-    KanbanBoard,
-    KanbanColumn,
-    ProjectV2Item,
-    ProjectV2StatusOption,
-} from '../../types/index.js'
+import { groupItemsIntoColumns, type ProjectV2Data } from './kanban-columns.js'
+import type { KanbanBoard, ProjectV2StatusOption } from '../../types/index.js'
+
+interface UserProjectResponse {
+    user: { projectV2: ProjectV2Data | null } | null
+}
+interface RepoProjectResponse {
+    repository: { projectV2: ProjectV2Data | null } | null
+}
+interface OrgProjectResponse {
+    organization: { projectV2: ProjectV2Data | null } | null
+}
 
 export class ProjectsManager {
     constructor(private client: GitHubClient) {}
@@ -130,59 +136,11 @@ export class ProjectsManager {
             }
         `
 
-        interface ProjectV2Data {
-            id: string
-            title: string
-            fields: {
-                nodes: {
-                    id?: string
-                    name?: string
-                    options?: {
-                        id: string
-                        name: string
-                        color?: string
-                    }[]
-                }[]
-            }
-            items: {
-                pageInfo?: { hasNextPage: boolean }
-                nodes: {
-                    id: string
-                    type: 'ISSUE' | 'PULL_REQUEST' | 'DRAFT_ISSUE'
-                    createdAt: string
-                    updatedAt: string
-                    fieldValues: {
-                        nodes: {
-                            name?: string
-                            field?: { name?: string }
-                        }[]
-                    }
-                    content: {
-                        number?: number
-                        title?: string
-                        url?: string
-                        labels?: { nodes: { name: string }[] }
-                        assignees?: { nodes: { login: string }[] }
-                    } | null
-                }[]
-            }
-        }
-
-        interface UserResponse {
-            user: { projectV2: ProjectV2Data | null } | null
-        }
-        interface RepoResponse {
-            repository: { projectV2: ProjectV2Data | null } | null
-        }
-        interface OrgResponse {
-            organization: { projectV2: ProjectV2Data | null } | null
-        }
-
         let project: ProjectV2Data | null = null
         let source = ''
 
         try {
-            const response = await this.client.graphqlWithAuth<UserResponse>(userQuery, {
+            const response = await this.client.graphqlWithAuth<UserProjectResponse>(userQuery, {
                 owner,
                 number: projectNumber,
                 itemLimit: 100,
@@ -198,7 +156,7 @@ export class ProjectsManager {
 
         if (!project && repo) {
             try {
-                const response = await this.client.graphqlWithAuth<RepoResponse>(repoQuery, {
+                const response = await this.client.graphqlWithAuth<RepoProjectResponse>(repoQuery, {
                     owner,
                     repo,
                     number: projectNumber,
@@ -218,7 +176,7 @@ export class ProjectsManager {
 
         if (!project) {
             try {
-                const response = await this.client.graphqlWithAuth<OrgResponse>(orgQuery, {
+                const response = await this.client.graphqlWithAuth<OrgProjectResponse>(orgQuery, {
                     owner,
                     number: projectNumber,
                     itemLimit: 100,
@@ -256,57 +214,7 @@ export class ProjectsManager {
             color: opt.color,
         }))
 
-        const columnMap = new Map<string, ProjectV2Item[]>()
-
-        for (const opt of statusOptions) {
-            columnMap.set(opt.name, [])
-        }
-        columnMap.set('No Status', [])
-
-        for (const item of project.items.nodes) {
-            const statusValue = item.fieldValues.nodes.find((fv) => fv.field?.name === 'Status')
-            const status = statusValue?.name ?? 'No Status'
-
-            const content = item.content
-            const projectItem: ProjectV2Item = {
-                id: item.id,
-                title: content?.title ?? 'Draft Issue',
-                url: content?.url ?? '',
-                type: item.type,
-                status,
-                number: content?.number,
-                labels: content?.labels?.nodes.map((l) => l.name) ?? [],
-                assignees: content?.assignees?.nodes.map((a) => a.login) ?? [],
-                createdAt: item.createdAt,
-                updatedAt: item.updatedAt,
-            }
-
-            const column = columnMap.get(status)
-            if (column) {
-                column.push(projectItem)
-            } else {
-                columnMap.get('No Status')?.push(projectItem)
-            }
-        }
-
-        const columns: KanbanColumn[] = []
-        for (const opt of statusOptions) {
-            const items = columnMap.get(opt.name) ?? []
-            columns.push({
-                status: opt.name,
-                statusOptionId: opt.id,
-                items,
-            })
-        }
-
-        const noStatusItems = columnMap.get('No Status') ?? []
-        if (noStatusItems.length > 0) {
-            columns.push({
-                status: 'No Status',
-                statusOptionId: '',
-                items: noStatusItems,
-            })
-        }
+        const columns = groupItemsIntoColumns(statusOptions, project.items.nodes)
 
         const totalItems = project.items.nodes.length
         const truncated = project.items.pageInfo?.hasNextPage ?? false

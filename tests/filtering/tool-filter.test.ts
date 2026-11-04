@@ -338,4 +338,17 @@ describe('readonly registration gate', () => {
         expect(isReadonlyMetaActive('core,-readonly')).toBe(false)
         expect(isToolVisibleForFilter('create_entry', false, 'core,-readonly')).toBe(true)
     })
+
+    it('does not treat a substring as the readonly meta-group', () => {
+        expect(isReadonlyMetaActive('notreadonly')).toBe(false)
+        expect(isToolVisibleForFilter('create_entry', false, 'notreadonly')).toBe(true)
+    })
+})
+
+describe('+tool filter', () => {
+    it('adds a tool to the full set', () => {
+        const config = parseToolFilter('+search_entries')
+        expect(config.enabledTools.has('search_entries')).toBe(true)
+        expect(config.enabledTools.has('create_entry')).toBe(true)
+    })
 })

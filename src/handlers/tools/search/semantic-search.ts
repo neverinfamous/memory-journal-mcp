@@ -1,12 +1,17 @@
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
-import { passMetadataFilters } from './helpers.js'
+import {
+    passMetadataFilters,
+    collectTeamSearchEntries,
+    mergeAndDedup,
+    type EntryWithSource,
+} from './helpers.js'
 import { SemanticSearchSchema, SemanticSearchSchemaMcp, SemanticSearchOutputSchema } from './schemas.js'
 import type { SemanticSearchResult } from '../../../vector/vector-search-manager/index.js'
 
 export function getSemanticSearchTool(context: ToolContext): ToolDefinition[] {
-    const { db, vectorManager } = context;
+    const { db, vectorManager, teamDb, teamVectorManager } = context;
     return [
         {
             name: 'semantic_search',
@@ -119,7 +124,7 @@ export function getSemanticSearchTool(context: ToolContext): ToolDefinition[] {
                         workspaceId: wsId,
                     }
 
-                    const entries = results
+                    const personalEntries = results
                         .map((r) => {
                             const entry =
                                 (r as { entry?: typeof r.entry }).entry ??
@@ -134,10 +139,27 @@ export function getSemanticSearchTool(context: ToolContext): ToolDefinition[] {
                             return {
                                 ...entry,
                                 similarity: Math.round(r.score * 100) / 100,
+                                source: 'personal' as const,
                             }
                         })
                         .filter((e): e is NonNullable<typeof e> => e !== null)
-                        .slice(0, input.limit)
+
+                    let entries: EntryWithSource[]
+                    if (
+                        input.include_team &&
+                        input.is_personal !== true &&
+                        teamDb !== undefined &&
+                        input.query !== undefined &&
+                        input.query !== ''
+                    ) {
+                        const teamEntries = await collectTeamSearchEntries(input.query, teamDb, teamVectorManager, {
+                            ...filterOptions,
+                            limit: input.limit,
+                        })
+                        entries = mergeAndDedup(personalEntries, teamEntries, input.limit)
+                    } else {
+                        entries = personalEntries.slice(0, input.limit)
+                    }
 
                     const stats = vectorManager.getStats()
                     const isIndexEmpty = stats.itemCount === 0
@@ -146,7 +168,8 @@ export function getSemanticSearchTool(context: ToolContext): ToolDefinition[] {
                     // Quality gate: if the best match is below this floor,
                     // treat all results as noise and include the hint
                     const QUALITY_FLOOR = 0.5
-                    const bestSimilarity = entries[0]?.similarity ?? 0
+                    const topSimilarity = entries[0]?.['similarity']
+                    const bestSimilarity = typeof topSimilarity === 'number' ? topSimilarity : 0
                     const allNoise = entries.length > 0 && bestSimilarity < QUALITY_FLOOR
 
                     // Build hint: quality gate hint is always shown (not gated by hint_on_empty)

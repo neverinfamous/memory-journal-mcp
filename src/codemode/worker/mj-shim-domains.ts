@@ -114,19 +114,29 @@ export function createEntriesDomainProxy(target: Record<string, unknown>): unkno
         get(targetFn, p, receiver): unknown {
             if (p in targetFn) return Reflect.get(targetFn, p, receiver) as unknown
             if (typeof p === 'string') {
-                const pLower = p.toLowerCase().replace(/_/g, '')
-                if ((pLower.includes('search') || pLower.includes('query') || pLower.includes('find')) && typeof searchFn === 'function') return searchFn
-                if ((pLower.includes('create') || pLower.includes('add') || pLower.includes('insert') || pLower.includes('append')) && typeof createFn === 'function') return createFn
-                if ((pLower.includes('get') || pLower.includes('fetch') || pLower.includes('read') || pLower.includes('byid')) && typeof getFn === 'function') return getFn
-                if ((pLower.includes('update') || pLower.includes('edit') || pLower.includes('patch')) && typeof updateFn === 'function') return updateFn
-                if ((pLower.includes('delete') || pLower.includes('remove')) && typeof deleteFn === 'function') return deleteFn
-                if (pLower.includes('recent') || pLower.includes('list') || pLower.includes('all')) return listFunc
                 const methodOnCore = getGroupProp(target, 'core', p) ?? getGroupProp(target, 'search', p) ?? getGroupProp(target, 'admin', p)
                 if (typeof methodOnCore === 'function') return methodOnCore
+                const tokens = methodTokens(p)
+                const has = (token: string): boolean => tokens.has(token)
+                if ((has('search') || has('query') || has('find')) && typeof searchFn === 'function') return searchFn
+                if ((has('create') || has('add') || has('insert') || has('append')) && typeof createFn === 'function') return createFn
+                if ((has('get') || has('fetch') || has('read') || has('byid')) && typeof getFn === 'function') return getFn
+                if ((has('update') || has('edit') || has('patch')) && typeof updateFn === 'function') return updateFn
+                if ((has('delete') || has('remove')) && typeof deleteFn === 'function') return deleteFn
+                if (has('recent') || has('list') || has('all')) return listFunc
             }
             return Reflect.get(targetFn, p, receiver) as unknown
         },
     })
+}
+
+/** Whole method-name tokens. `listDeletedEntries` contains `deleted`, not `delete`. */
+function methodTokens(name: string): Set<string> {
+    const spaced = name
+        .replace(/[_-]+/g, ' ')
+        .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+        .toLowerCase()
+    return new Set(spaced.split(/[^a-z0-9]+/).filter((token) => token.length > 0))
 }
 
 export function createGetReadFindInterceptor(

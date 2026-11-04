@@ -225,10 +225,12 @@ export function assertSafeFilePath(filePath: string, providedRoots: string[]): v
             )
         }
     } catch (err: unknown) {
-        // If file doesn't exist, that's fine, but if it's our error, throw it
         if (err instanceof PathTraversalError) {
             throw err
         }
+        const code = typeof err === 'object' && err !== null && 'code' in err ? err.code : undefined
+        if (code === 'ENOENT') return
+        throw err
     }
 }
 

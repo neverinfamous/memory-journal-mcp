@@ -2,7 +2,7 @@ import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { ValidationError } from '../../../types/errors.js'
-import { passMetadataFilters } from './helpers.js'
+import { passMetadataFilters, collectTeamSearchEntries, mergeAndDedup, type EntryWithSource } from './helpers.js'
 import { resolveSearchMode } from './auto.js'
 import { ftsSearch } from './fts.js'
 import { hybridSearch } from './hybrid.js'
@@ -10,7 +10,7 @@ import { SearchEntriesSchema, SearchEntriesSchemaMcp } from './schemas.js'
 import { EntriesListOutputSchema } from '../schemas.js'
 
 export function getSearchEntriesTool(context: ToolContext): ToolDefinition[] {
-    const { db, teamDb, vectorManager } = context;
+    const { db, teamDb, vectorManager, teamVectorManager } = context;
     return [
         {
             name: 'search_entries',
@@ -150,35 +150,58 @@ export function getSearchEntriesTool(context: ToolContext): ToolDefinition[] {
                                 }
                             }
 
-                            let entries = semanticResults
-                                .map((r) => {
-                                    const entry = entriesMap.get(r.entryId)
-                                    if (!entry) return null
-                                    if (!passMetadataFilters(entry, searchOptions, db)) return null
-                                    return { ...entry, source: 'personal' as const }
+                            const entries: EntryWithSource[] = []
+                            for (const result of semanticResults) {
+                                const entry = entriesMap.get(result.entryId)
+                                if (entry === undefined) continue
+                                if (!passMetadataFilters(entry, searchOptions, db)) continue
+                                entries.push({
+                                    ...entry,
+                                    content: entry.content,
+                                    timestamp: entry.timestamp,
+                                    source: 'personal',
                                 })
-                                .filter((e): e is NonNullable<typeof e> => e !== null)
+                            }
+                            let ranked = entries
+
+                            if (searchOptions.includeTeam && input.is_personal !== true && teamDb !== undefined) {
+                                const teamEntries = await collectTeamSearchEntries(query, teamDb, teamVectorManager, {
+                                    ...searchOptions,
+                                    limit: input.limit,
+                                })
+                                ranked = mergeAndDedup(ranked, teamEntries, input.limit)
+                            }
 
                             // Post-fetch importance re-sort for vector results
                             if (input.sort_by === 'importance') {
-                                const ids = entries.map((e) => e.id)
+                                const ids: number[] = []
+                                for (const entry of ranked) {
+                                    const id = entry['id']
+                                    if (typeof id === 'number') ids.push(id)
+                                }
                                 const importanceMap = db.getEntriesByIdsWithImportance(ids)
-                                const scored = entries.map((e) => {
-                                    const imp = importanceMap.get(e.id)?.importance.score ?? 0
-                                    return { ...e, importanceScore: Math.round(imp * 100) / 100 }
+                                const scored = ranked.map((entry) => {
+                                    const id = entry['id']
+                                    const score =
+                                        typeof id === 'number'
+                                            ? (importanceMap.get(id)?.importance.score ?? 0)
+                                            : 0
+                                    return { ...entry, importanceScore: Math.round(score * 100) / 100 }
                                 })
-                                scored.sort(
-                                    (a, b) => (b.importanceScore ?? 0) - (a.importanceScore ?? 0)
-                                )
-                                entries = scored
+                                scored.sort((a, b) => {
+                                    const left = typeof a.importanceScore === 'number' ? a.importanceScore : 0
+                                    const right = typeof b.importanceScore === 'number' ? b.importanceScore : 0
+                                    return right - left
+                                })
+                                ranked = scored
                             }
 
-                            entries = entries.slice(0, input.limit)
+                            ranked = ranked.slice(0, input.limit)
 
                             return {
                                 success: true,
-                                entries,
-                                count: entries.length,
+                                entries: ranked,
+                                count: ranked.length,
                                 searchMode: isAuto ? 'semantic (auto)' : 'semantic',
                                 degraded: false,
                                 facets,
@@ -190,7 +213,7 @@ export function getSearchEntriesTool(context: ToolContext): ToolDefinition[] {
                                 const result = ftsSearch(input.query, db, teamDb, searchOptions)
                                 return { ...result, searchMode: 'fts (fallback)' }
                             }
-                            const { entries, degraded } = await hybridSearch(
+                            const { entries: hybridEntries, degraded } = await hybridSearch(
                                 query,
                                 db,
                                 vectorManager,
@@ -198,14 +221,16 @@ export function getSearchEntriesTool(context: ToolContext): ToolDefinition[] {
                                     ...searchOptions,
                                     ftsWeight: input.fts_weight,
                                     semanticWeight: input.semantic_weight,
+                                    ...(teamDb !== undefined ? { teamDb } : {}),
+                                    ...(teamVectorManager !== undefined ? { teamVectorManager } : {}),
                                 }
                             )
 
                             // Post-fetch importance re-sort for vector results
                             if (input.sort_by === 'importance') {
-                                const ids = entries.map((e) => e['id'] as number)
+                                const ids = hybridEntries.map((e) => e['id'] as number)
                                 const importanceMap = db.getEntriesByIdsWithImportance(ids)
-                                const scored = entries.map((e) => {
+                                const scored = hybridEntries.map((e) => {
                                     const entryId = e['id'] as number
                                     const imp = importanceMap.get(entryId)?.importance.score ?? 0
                                     return { ...e, importanceScore: Math.round(imp * 100) / 100 }
@@ -225,8 +250,8 @@ export function getSearchEntriesTool(context: ToolContext): ToolDefinition[] {
 
                             return {
                                 success: true,
-                                entries,
-                                count: entries.length,
+                                entries: hybridEntries,
+                                count: hybridEntries.length,
                                 searchMode: isAuto ? 'hybrid (auto)' : 'hybrid',
                                 degraded: degraded === true,
                                 facets,

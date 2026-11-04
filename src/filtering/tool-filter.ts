@@ -108,6 +108,9 @@ export function parseToolFilter(filterString: string): ToolFilterConfig {
     // If first item has no prefix and is a group/metagroup, we're in whitelist mode
     let enabledTools = new Set<string>()
     let isWhitelistMode = false
+    if (parts[0]?.startsWith('+')) {
+        enabledTools = new Set(getAllToolNames())
+    }
 
     for (let i = 0; i < parts.length; i++) {
         const part = parts[i]
@@ -263,7 +266,10 @@ const READONLY_REGISTRATION_EXEMPT = new Set<string>(ALWAYS_ENABLED_TOOLS)
  */
 export function isReadonlyMetaActive(raw: string | undefined): boolean {
     if (raw === undefined || raw === '') return false
-    return raw.includes('readonly') && !raw.includes('-readonly')
+    const tokens = raw.split(',').map((part) => part.trim()).filter((part) => part.length > 0)
+    const hasReadonly = tokens.some((token) => token === 'readonly' || token === '+readonly')
+    const excludesReadonly = tokens.some((token) => token === '-readonly')
+    return hasReadonly && !excludesReadonly
 }
 
 /**

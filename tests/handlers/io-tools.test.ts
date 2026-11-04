@@ -256,6 +256,23 @@ describe('getIoTools', () => {
             expect(result['created']).toBe(1)
         })
 
+        it('passes project_number into the importer', async () => {
+            const { importMarkdownEntries } = await import('../../src/markdown/index.js')
+            const context = createMockContext()
+            const tools = getIoTools(context as never)
+            const handler = tools.find((t) => t.name === 'import_markdown')!.handler
+
+            await handler({ source_dir: '/tmp/in', dry_run: true, project_number: 5 })
+
+            expect(importMarkdownEntries).toHaveBeenCalledWith(
+                '/tmp/in',
+                expect.anything(),
+                expect.objectContaining({ project_number: 5 }),
+                undefined,
+                expect.any(Array)
+            )
+        })
+
         it('should trap errors via formatHandlerError on missing source_dir', async () => {
             const context = createMockContext()
             const tools = getIoTools(context as never)

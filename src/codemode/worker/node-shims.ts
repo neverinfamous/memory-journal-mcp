@@ -311,7 +311,8 @@ export function createPreparedStatementShim(
             for (const arg of args) {
                 if (typeof arg === 'number') entryId = arg
             }
-            return { action: 'delete', params: { entry_id: entryId ?? 0 } }
+            if (entryId === undefined) return { action: 'unmapped', params: {} }
+            return { action: 'delete', params: { entry_id: entryId } }
         }
 
         if (isSelect) {
@@ -339,26 +340,42 @@ export function createPreparedStatementShim(
             return (
                 invokeGroupMethod(shimMj, 'admin', 'updateEntry', 'update_entry', params) ??
                 invokeGroupMethod(shimMj, 'core', 'updateEntry', 'update_entry', params) ??
-                Promise.resolve({ success: true, changes: 1 })
+                Promise.resolve({
+                    success: false,
+                    code: 'VALIDATION_ERROR',
+                    error: 'Statement could not be mapped to a journal method',
+                })
             )
         }
         if (action === 'create') {
             return (
                 invokeGroupMethod(shimMj, 'core', 'createEntry', 'create_entry', params) ??
-                Promise.resolve({ success: true, changes: 1 })
+                Promise.resolve({
+                    success: false,
+                    code: 'VALIDATION_ERROR',
+                    error: 'Statement could not be mapped to a journal method',
+                })
             )
         }
         if (action === 'delete') {
             return (
                 invokeGroupMethod(shimMj, 'admin', 'deleteEntry', 'delete_entry', params) ??
                 invokeGroupMethod(shimMj, 'core', 'deleteEntry', 'delete_entry', params) ??
-                Promise.resolve({ success: true, changes: 1 })
+                Promise.resolve({
+                    success: false,
+                    code: 'VALIDATION_ERROR',
+                    error: 'Statement could not be mapped to a journal method',
+                })
             )
         }
         if (action === 'get_by_id') {
             return (
                 invokeGroupMethod(shimMj, 'core', 'getEntryById', 'get_entry_by_id', params) ??
-                Promise.resolve({ success: true, changes: 1 })
+                Promise.resolve({
+                    success: false,
+                    code: 'VALIDATION_ERROR',
+                    error: 'Statement could not be mapped to a journal method',
+                })
             )
         }
         if (action === 'list') {
@@ -369,10 +386,18 @@ export function createPreparedStatementShim(
                     'getRecentEntries',
                     'get_recent_entries',
                     params
-                ) ?? Promise.resolve({ success: true, changes: 1 })
+                ) ?? Promise.resolve({
+                    success: false,
+                    code: 'VALIDATION_ERROR',
+                    error: 'Statement could not be mapped to a journal method',
+                })
             )
         }
-        return Promise.resolve({ success: true, changes: 1 })
+        return Promise.resolve({
+                    success: false,
+                    code: 'VALIDATION_ERROR',
+                    error: 'Statement could not be mapped to a journal method',
+                })
     }
 
     const stmtObj: Record<string, unknown> = {

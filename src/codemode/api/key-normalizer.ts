@@ -11,11 +11,6 @@ import {
     healAutoContext,
 } from '../normalizers/shared-utils.js'
 
-const VALID_SIGNIFICANCE_TYPES = new Set([
-    'milestone', 'breakthrough', 'decision', 'architecture',
-    'lesson_learned', 'blocker_resolved', 'release', 'security',
-])
-
 const CONTENT_LIKE_KEYS = new Set(['message', 'msg', 'name', 'heading', 'subject', 'description', 'content', 'comment'])
 
 /**
@@ -148,13 +143,6 @@ export function convertKeysToSnakeCase(obj: Record<string, unknown>, methodName?
             }
         }
 
-        if (snakeKey === 'role' && typeof value === 'string' && value.toLowerCase() === 'contributor') {
-            result[snakeKey] = 'member'
-            continue
-        }
-        if (snakeKey === 'significance_type' && typeof value === 'string' && !VALID_SIGNIFICANCE_TYPES.has(value.toLowerCase())) {
-            continue
-        }
         if ((snakeKey.endsWith('_id') || snakeKey === 'id' || snakeKey === 'project_number') && typeof value === 'string') {
             const num = Number(value)
             if (!Number.isNaN(num) && value.trim() !== '') {

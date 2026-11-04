@@ -281,7 +281,7 @@ export class JournalApi {
             if (!groupApi) continue
             for (const [aliasName, canonicalMethod] of Object.entries(aliases)) {
                 if (typeof groupApi[canonicalMethod] === 'function') {
-                    groupApi[aliasName] ??= groupApi[canonicalMethod]
+                    groupApi[aliasName] = groupApi[canonicalMethod]
                 }
             }
         }

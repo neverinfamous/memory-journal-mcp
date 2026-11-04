@@ -192,7 +192,9 @@ export class TokenValidator {
             )
         }
 
+        const clientId = payload['client_id']
         return {
+            ...payload,
             sub: payload.sub ?? 'unknown',
             scopes,
             exp,
@@ -201,9 +203,7 @@ export class TokenValidator {
             aud: payload.aud,
             nbf: payload.nbf ?? undefined,
             jti: payload.jti,
-            client_id: payload['client_id'] as string | undefined,
-            // Include all other claims
-            ...payload,
+            ...(typeof clientId === 'string' ? { client_id: clientId } : {}),
         }
     }
 

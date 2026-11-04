@@ -11,7 +11,7 @@
 import type { JournalEntry, EntryType } from '../../../types/index.js'
 import type { IDatabaseAdapter } from '../../../database/core/interfaces.js'
 import type { VectorSearchManager } from '../../../vector/vector-search-manager/index.js'
-import { passMetadataFilters, type ISearchFilters, type EntryWithSource } from './helpers.js'
+import { passMetadataFilters, collectTeamSearchEntries, mergeAndDedup, type ISearchFilters, type EntryWithSource } from './helpers.js'
 import { logger } from '../../../utils/logger.js'
 
 /** RRF tuning constant (standard value from Cormack et al. 2009) */
@@ -75,6 +75,8 @@ export async function hybridSearch(
         limit: number
         ftsWeight?: number
         semanticWeight?: number
+        teamDb?: IDatabaseAdapter
+        teamVectorManager?: VectorSearchManager
     }
 ): Promise<{ entries: EntryWithSource[]; fusionScores: Map<number, number>; degraded?: boolean }> {
     const overfetchLimit = Math.min(options.limit * OVERFETCH_MULTIPLIER, 500)
@@ -152,6 +154,11 @@ export async function hybridSearch(
     }
 
     const isDegraded = ftsResults.degraded === true || semanticDegraded
+    let output = entries
+    if (options.includeTeam === true && options.isPersonal !== true && options.teamDb !== undefined) {
+        const teamEntries = await collectTeamSearchEntries(query, options.teamDb, options.teamVectorManager, options)
+        output = mergeAndDedup(entries, teamEntries, options.limit)
+    }
 
-    return { entries, fusionScores, degraded: isDegraded }
+    return { entries: output, fusionScores, degraded: isDegraded }
 }

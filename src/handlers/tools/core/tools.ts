@@ -197,18 +197,21 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                                 projectNumber: projectNumber,
                                 projectOwner: input.project_owner,
                                 issueNumber: input.issue_number,
-                                issueUrl: input.issue_url,
+                                issueUrl: resolvedIssueUrl,
                                 prNumber: input.pr_number,
                                 prUrl: input.pr_url,
                                 prStatus: input.pr_status,
                                 workflowRunId: input.workflow_run_id,
                                 workflowName: input.workflow_name,
                                 workflowStatus: input.workflow_status as 'queued' | 'in_progress' | 'completed' | undefined,
+                                autoContext: input.auto_context,
                                 author: author,
                                 workspaceId: wsId,
                                 impactScore: input.impact_score,
                                 trustScore: input.trust_score,
                                 validationStatus: input.validation_status,
+                                sessionId: input.session_id,
+                                ...(resolvedAnchors !== undefined ? { anchors: resolvedAnchors } : {}),
                             })
                             context.teamDb.flushSave()
                             sharedWithTeam = true

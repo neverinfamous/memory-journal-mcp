@@ -160,18 +160,23 @@ This prompt is shared by every project. Audit the repository the user named. Do 
      4. **Schema-to-Handler Parameter Drift Check**: Every input-schema property is consumed by the handler or rewritten by that project's own parameter-normalization layer. Do not assume a file named \`param-normalizer.ts\` exists. Quote the schema field and the handler or normalizer read. Ignore fields that are forwarded as a whole parsed object.
      5. **Uncleaned Timer / EventListener Detector**: Flag \`setInterval\`, retained \`setTimeout\` handles, \`fs.watch\`, and \`process\` / server / filesystem / worker \`.on(\` registrations that lack \`unref()\`, \`clear*\`, or \`close()\` / \`finally\` cleanup. An awaited one-shot delay is not a leak.
      6. **Type-safety Detector**: Flag \`any\`, \`as any\`, double assertions (\`as unknown as\`), non-null \`!\`, and casts of JSON, roles, or enums. Do not file every \`as\` on a database row.
-2. **Scan for files exceeding 500 lines using two redundant methods.** Run both from the target repository root. Scope them to \`src\` and \`scripts\` when those directories exist. Skip test files and vendored or synced third-party trees in every detector, not only this count. Common vendored names are \`vendor\`, \`src/vendor\`, \`third_party\`, \`node_modules\`, and \`dist\`. If \`scripts\` is absent, scan \`src\` only. Method 1 can print an empty table on some PowerShell versions even when files exist, so an empty Method 1 result counts only when Method 2 also reports nothing.
+     7. **Fuzzy method dispatch**: Flag \`includes\` or \`startsWith\` on a method or tool name used to choose a handler. Quote the token and the name that would take the wrong branch, such as \`listDeletedEntries\` matching \`delete\`.
+     8. **Accepted-but-ignored parameters**: A schema field is ignored when the handler passes a literal \`undefined\` in its place, or copies the field into a bag that no callee reads. Quote both sites. A whole parsed object that is forwarded counts as consumed.
+     9. **False success**: Flag a \`success: true\` result, or a resolved promise of one, on a path that did not perform the requested operation.
+2. **Scan for files exceeding 500 lines using two redundant methods.** Run both from the target repository root. Scope them to \`src\` and \`scripts\` when those directories exist. Skip test files and vendored or synced third-party trees in every detector, not only this count. Common vendored names are \`vendor\`, \`src/vendor\`, \`third_party\`, \`node_modules\`, and \`dist\`. If \`scripts\` is absent, scan \`src\` only. Skip those directories by name before descending. Method 1 can print an empty table on some PowerShell versions even when files exist, so an empty Method 1 result counts only when Method 2 also prints \`SCAN_OK\`. A scan that does not print \`SCAN_OK scanned=<n> over500=<n>\` failed. Do not treat that as zero files over 500 lines.
    - **Method 1 (Native PowerShell)**:
      \`\`\`powershell
      Get-ChildItem -Path src,scripts -Recurse -File -Include *.ts,*.tsx,*.js,*.mjs,*.cjs | Where-Object { $_.FullName -notmatch '[\\\\/](vendor|third_party|node_modules|dist)[\\\\/]' -and $_.Name -notmatch '\\.(test|spec)\\.' } | ForEach-Object { $lines = [System.IO.File]::ReadAllLines($_.FullName).Count; if ($lines -gt 500) { [PSCustomObject]@{ Lines = $lines; Path = $_.FullName } } } | Sort-Object Lines -Descending
      \`\`\`
    - **Method 2 (Bun or Node)**:
      \`\`\`powershell
-     bun -e "import {readdirSync as r,statSync as s,readFileSync as f} from 'fs';import {join as j} from 'path';function w(d){if(!s(d,{throwIfNoEntry:false}))return;for(const x of r(d)){const p=j(d,x);if(/[\\\\/](vendor|third_party|node_modules|dist)[\\\\/]/.test(p))continue;if(s(p).isDirectory())w(p);else if(/\\.(ts|tsx|js|mjs|cjs)$/.test(x)&&!/\\.(test|spec)\\./.test(x)){const l=f(p,'utf8').split(/\\r?\\n/).length;if(l>500)console.log(l,p)}}}w('src');w('scripts');"
+     bun -e "import {readdirSync as r,statSync as s,readFileSync as f} from 'fs';import {join as j} from 'path';const skip=new Set(['vendor','third_party','node_modules','dist']);let n=0,over=0;function w(d){if(!s(d,{throwIfNoEntry:false}))return;for(const x of r(d)){if(skip.has(x))continue;const p=j(d,x);if(s(p).isDirectory())w(p);else if(/\\.(ts|tsx|js|mjs|cjs)$/.test(x)&&!/\\.(test|spec)\\./.test(x)){n++;const l=f(p,'utf8').split(/\\r?\\n/).length;if(l>500){over++;console.log(l,p)}}}}w('src');w('scripts');console.log('SCAN_OK scanned='+n+' over500='+over);"
      \`\`\`
 
 > [!IMPORTANT]
-> **High Priority — File Size**: Any file exceeding 500 lines is a high-priority finding. Flag all such files in the findings table with severity **High**. Do NOT begin refactoring automatically — present them to the user for approval.
+> **High Priority — File Size**: Any file exceeding 500 lines is a high-priority finding. Flag all such files in the findings table with severity **High**. A function over 80 lines, or nesting deeper than 4, is **Moderate** unless that nesting hides one of the defects above. Do not mark length by itself as High. Do NOT begin refactoring automatically — present them to the user for approval.
+
+Prompt revision: 2026-11-03-scan-sentinel.
 
 3. Group findings by category and severity (**Critical**, **High**, **Moderate**, **Low**). File-size findings are **High**.
 4. **External Validation (Copilot — Opt-In)**: ${copilotInstruction}
@@ -212,7 +217,7 @@ Target: ${target}
 
 If the target is '{target}', determine it from the user's request. If the user hasn't specified a target file or module, ask them for it now.
 
-1. Perform a multi-pass security audit. For large targets or full-repository audits, spawn parallel \`research\` subagents by architectural domain using \`invoke_subagent\`. Treat all external inputs as untrusted until verified. Depending on the target, evaluate:
+1. Perform a multi-pass security audit. For large targets or full-repository audits, spawn parallel read-only subagents by architectural domain. In Cursor use the Task tool with subagent type \`explore\` or \`generalPurpose\`. On any other host use that host's read-only subagent tool. Treat all external inputs as untrusted until verified. Depending on the target, evaluate:
    - **General Code**: Injection vectors, auth/authz gaps, data boundary validation.
    - **Agent Skills / MCP Tools**: Privilege escalation (excessive agency), indirect prompt injection via tool outputs, tool poisoning / supply chain risks, and cross-plugin attacks.
    - **External Integrations**: Data exfiltration paths and excessive API permission scopes.
@@ -224,9 +229,9 @@ If the target is '{target}', determine it from the user's request. If the user h
      5. **Transitive Prompt-Injection Taint Trace**: Trace external strings (Git commits, GitHub issues/PRs/workflows/milestones, DB content) into MCP Resources and Prompts to ensure \`markUntrustedContent\` tags are applied and never stripped by downstream table formatters.
 2. **External Validation (Copilot — Opt-In)**: ${copilotInstruction}
 3. Present findings table (incorporating Copilot findings if applicable).
-4. Await HITL approval before applying fixes. **CRITICAL**: You are strictly forbidden from modifying any project files or running any scripts until the user explicitly approves the implementation plan. Only create the markdown artifact and stop.
-5. Commit fixes using \`bun path/to/commit.ts\`
-**Rule**: If you do not make changes, do not commit. If you make only minor documentation changes, commit.`
+4. Await approval before applying fixes. Diagnostic scans are part of the audit. Do not edit project files until the user approves the plan.
+5. Commit with the target repository's own commit helper when one exists. Discover that helper. Do not invent a script path. Do not commit the audit write-up unless the user asked.
+**Rule**: If you don't make changes, do not commit.`
                         }
                     }]
                 }

@@ -100,9 +100,16 @@ describe('Prompt Handlers - Coverage', () => {
                     expect(defaultText).toContain('generalPurpose')
                     expect(defaultText).toContain('code-quality-audit')
                     expect(defaultText).toContain('param-normalizer.ts')
+                    expect(defaultText).toContain('SCAN_OK scanned=')
+                    expect(defaultText).toContain('Prompt revision: 2026-11-03-scan-sentinel')
                     expect(defaultText).not.toContain('invoke_subagent')
                     expect(defaultText).not.toContain('bun path/to/commit.ts')
                     expect(enabledText).toContain('audit on {target}')
+                }
+                if (name === 'adversarial-audit-security') {
+                    expect(defaultText).toContain('generalPurpose')
+                    expect(defaultText).not.toContain('invoke_subagent')
+                    expect(defaultText).not.toContain('bun path/to/commit.ts')
                 }
             }
         })

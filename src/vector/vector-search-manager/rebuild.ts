@@ -21,6 +21,7 @@ export async function rebuildIndex(
         force?: boolean
         batchSize?: number
         pageSize?: number
+        projectNumber?: number
     }
 ): Promise<{ success: boolean; indexed: number; failed: number; firstError: string | null }> {
     const force = options?.force ?? false
@@ -59,6 +60,10 @@ export async function rebuildIndex(
             const vectorsToUpsert: { entryId: number; embedding: Float32Array }[] = []
 
             for (const entry of batch) {
+                if (options?.projectNumber !== undefined && entry.projectNumber !== options.projectNumber) {
+                    skipped++
+                    continue
+                }
                 // Check if already indexed unless forced
                 if (!force) {
                     try {

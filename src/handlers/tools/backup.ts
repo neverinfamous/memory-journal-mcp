@@ -111,6 +111,7 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
                     const input = z
                         .object({
                             name: z.string().optional(),
+                            compress: z.boolean().optional(),
                         }).strict()
                         .parse(params)
                     await sendProgress(progress, 0, 2, 'Creating backup...')

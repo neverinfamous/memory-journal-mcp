@@ -149,8 +149,8 @@ export const POSITIONAL_PARAM_MAP: Record<string, string | string[]> = {
     getProject: 'name',
     getProjectByName: 'name',
     get_project_by_name: 'name',
-    getProjectByNumber: 'name',
-    get_project_by_number: 'name',
+    getProjectByNumber: 'project_number',
+    get_project_by_number: 'project_number',
     findProject: 'name',
     find_project: 'name',
 

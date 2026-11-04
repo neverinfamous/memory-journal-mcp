@@ -36,7 +36,7 @@ export function registerMcpProtocolRoutes(
     serverFactory: McpServerFactory,
     activeServers: Set<McpServer>,
     sseTransports: SseTransportMap
-): void {
+): () => void {
     const statelessMcpHandler = toNodeHandler(
         createMcpHandler(
             () => {
@@ -278,4 +278,8 @@ export function registerMcpProtocolRoutes(
         }
         res.status(204).end()
     })
+
+    return () => {
+        clearInterval(sweepTimer)
+    }
 }

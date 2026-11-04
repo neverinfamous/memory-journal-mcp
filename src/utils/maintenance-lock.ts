@@ -112,6 +112,7 @@ export class ServerRuntime {
     public cachedContextRefs: unknown = null
     public githubClientPool: Map<string, GitHubIntegration> | null = null
     public configManager: unknown = null
+    public stopBackgroundTasks: (() => void) | null = null
 }
 
 // Legacy Fallbacks removed. Consumers MUST provide a valid ServerRuntime to use MaintenanceManager logic.

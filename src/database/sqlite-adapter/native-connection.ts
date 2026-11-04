@@ -26,6 +26,7 @@ export class NativeConnectionManager implements IDatabaseConnection {
     private db: Database | null = null
     private readonly dbPath: string
     private initialized = false
+    private ftsRebuildTimer: ReturnType<typeof setTimeout> | null = null
 
     constructor(dbPath: string) {
         this.dbPath = dbPath
@@ -167,7 +168,9 @@ export class NativeConnectionManager implements IDatabaseConnection {
             if (needsRebuild) {
                 // Defer rebuilding FTS5 index to prevent blocking server startup
                 const deferMs = process.env['NODE_ENV'] === 'test' ? 10 : 5000
-                setTimeout(() => {
+                this.ftsRebuildTimer = setTimeout(() => {
+                    this.ftsRebuildTimer = null
+                    if (this.db === null) return
                     // Start a detached node process to rebuild the index without blocking the main event loop
                     const code = `
                         const Database = require('better-sqlite3');
@@ -190,6 +193,7 @@ export class NativeConnectionManager implements IDatabaseConnection {
                         }
                     })
                 }, deferMs)
+                this.ftsRebuildTimer.unref()
             }
         })()
     }
@@ -283,6 +287,10 @@ export class NativeConnectionManager implements IDatabaseConnection {
     }
 
     close(): void {
+        if (this.ftsRebuildTimer !== null) {
+            clearTimeout(this.ftsRebuildTimer)
+            this.ftsRebuildTimer = null
+        }
         if (this.db) {
             // Ensure WAL checkpoint
             try {

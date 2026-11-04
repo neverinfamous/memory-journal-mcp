@@ -44,7 +44,7 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
             handler: async (params: unknown) => {
                 try {
                     const input = ExportEntriesSchema.parse(params)
-                    const wsId = resolveWorkspaceId(input.workspace_id, undefined, context.config)
+                    const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
                     const limit = input.limit ?? 100
 
                     await sendProgress(progress, 0, 2, 'Fetching entries...')
@@ -63,6 +63,7 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
                             tags: input.tags,
                             limit: fetchLimit,
                             workspaceId: wsId,
+                            ...(input.project_number !== undefined ? { projectNumber: input.project_number } : {}),
                         }).entries
                     } else if ((input.tags && input.tags.length > 0) || hasTypeFilter) {
                         // Tags/types filter: use a wide date range to scan the full database
@@ -70,9 +71,13 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
                             tags: input.tags,
                             limit: fetchLimit,
                             workspaceId: wsId,
+                            ...(input.project_number !== undefined ? { projectNumber: input.project_number } : {}),
                         }).entries
                     } else {
-                        entries = db.getRecentEntries(fetchLimit, undefined, undefined, undefined, undefined, wsId).entries
+                        entries = (input.project_number !== undefined
+                            ? db.getRecentEntries(fetchLimit, undefined, undefined, undefined, undefined, wsId, input.project_number)
+                            : db.getRecentEntries(fetchLimit, undefined, undefined, undefined, undefined, wsId)
+                        ).entries
                     }
 
                     // Post-filter by entry_types, then cap to requested limit
@@ -155,7 +160,7 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
             handler: async (params: unknown) => {
                 try {
                     const input = ExportMarkdownSchema.parse(params)
-                    const wsId = resolveWorkspaceId(input.workspace_id, undefined, context.config)
+                    const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
 
                     // Determine allowed roots
                     // Security fix: Use explicitly configured roots, without CWD fallback
@@ -172,15 +177,20 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
                             tags: input.tags,
                             limit,
                             workspaceId: wsId,
+                            ...(input.project_number !== undefined ? { projectNumber: input.project_number } : {}),
                         }).entries
                     } else if (input.tags && input.tags.length > 0) {
                         entries = db.searchByDateRange(DATE_MIN_SENTINEL, DATE_MAX_SENTINEL, {
                             tags: input.tags,
                             limit,
                             workspaceId: wsId,
+                            ...(input.project_number !== undefined ? { projectNumber: input.project_number } : {}),
                         }).entries
                     } else {
-                        entries = db.getRecentEntries(limit, undefined, undefined, undefined, undefined, wsId).entries
+                        entries = (input.project_number !== undefined
+                            ? db.getRecentEntries(limit, undefined, undefined, undefined, undefined, wsId, input.project_number)
+                            : db.getRecentEntries(limit, undefined, undefined, undefined, undefined, wsId)
+                        ).entries
                     }
 
                     // Post-filter by entry_types
@@ -248,7 +258,7 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
             handler: async (params: unknown) => {
                 try {
                     const input = ImportMarkdownSchema.parse(params)
-                    const wsId = resolveWorkspaceId(input.workspace_id, undefined, context.config)
+                    const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
 
                     // Determine allowed roots
                     // Security fix: Use explicitly configured roots, without CWD fallback
@@ -265,6 +275,7 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
                             dry_run: input.dry_run,
                             limit: input.limit,
                             workspaceId: wsId,
+                            ...(input.project_number !== undefined ? { project_number: input.project_number } : {}),
                         },
                         context.vectorManager,
                         allowedRoots
@@ -312,7 +323,7 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
             handler: async (params: unknown) => {
                 try {
                     const input = ImportExternalSchema.parse(params)
-                    const wsId = resolveWorkspaceId(input.workspace_id, undefined, context.config)
+                    const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
 
                     // Determine allowed roots
                     const allowedRoots = context.config?.allowedIoRoots ?? []
@@ -381,6 +392,7 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
                     const result = await processImportBatch(parsedFiles, db, {
                         dry_run: input.dry_run,
                         workspaceId: wsId,
+                        ...(input.project_number !== undefined ? { project_number: input.project_number } : {}),
                     }, context.vectorManager)
 
                     // Merge conversion phase errors

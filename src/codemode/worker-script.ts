@@ -52,6 +52,13 @@ const pendingRpcRequests = new Map<
     { resolve: (value: unknown) => void; reject: (reason: Error) => void }
 >()
 
+function rejectPendingRpcRequests(message: string): void {
+    for (const pending of pendingRpcRequests.values()) {
+        pending.reject(new Error(message))
+    }
+    pendingRpcRequests.clear()
+}
+
 function rpcCall(group: string, method: string, args: unknown[]): Promise<unknown> {
     return new Promise((resolve, reject) => {
         if (!rpcPort) {
@@ -135,7 +142,8 @@ async function executeCode(
                 const isNaturalPrompt =
                     /^(?:write|document|create|include|record|summary|log|add|added|note|task|fix|implement)\b/i.test(trimmed) &&
                     !/\b(const|let|var|function|return|await|import|export)\b/.test(trimmed)
-                if (isNaturalPrompt || /^(?:create|add|new|record|log)?\s*entry\b/i.test(trimmed)) {
+                const looksLikeCode = /[{}()=]/.test(trimmed)
+                if (!looksLikeCode && (isNaturalPrompt || /^(?:create|add|new|record|log)?\s*entry\b/i.test(trimmed))) {
                     const firstLine = (trimmed.split('\n')[0] ?? '')
                         .replace(/^(?:create|add|new|record|log|insert)?\s*entry\s*(?:for|:)?\s*/i, '')
                         .replace(/[:.]+$/, '')
@@ -237,7 +245,7 @@ parentPort?.on('message', (msg: unknown) => {
         const { id, code, methodList, schemaList, timeoutMs, maxResultSize, rpcPort: newRpcPort, contextObj, readonlyMode } = msg
         rpcPort = newRpcPort
         rpcIdCounter = 0
-        pendingRpcRequests.clear()
+        rejectPendingRpcRequests('Sandbox execution ended before the call completed')
         activeExecutionId = id
         resultSent = false
 
@@ -260,6 +268,7 @@ parentPort?.on('message', (msg: unknown) => {
         } catch (err: unknown) {
             postExecutionFailure(err)
         } finally {
+            rejectPendingRpcRequests('Sandbox execution ended before the call completed')
             rpcPort?.close()
             rpcPort = null
             activeExecutionId = null

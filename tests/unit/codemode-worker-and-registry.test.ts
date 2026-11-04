@@ -300,6 +300,16 @@ describe('Code Mode Worker Core & Project Registry Ops', () => {
             await (deleteStmt['get'] as (...a: unknown[]) => Promise<unknown>)()
             expect(mockDelete).toHaveBeenCalledWith({ entry_id: 77 })
 
+            const deleteMissingId = createPreparedStatementShim(
+                'DELETE FROM memory_journal',
+                fakeShimMj
+            )
+            await expect((deleteMissingId['run'] as () => Promise<unknown>)()).resolves.toMatchObject({
+                success: false,
+                code: 'VALIDATION_ERROR',
+            })
+            expect(mockDelete).toHaveBeenCalledTimes(1)
+
             const selectByIdStmt = createPreparedStatementShim(
                 'SELECT * FROM memory_journal WHERE id = ?',
                 fakeShimMj
@@ -319,8 +329,9 @@ describe('Code Mode Worker Core & Project Registry Ops', () => {
                 fakeShimMj
             )
             await expect((pragmaStmt['iterate'] as () => Promise<unknown>)()).resolves.toEqual({
-                success: true,
-                changes: 1,
+                success: false,
+                code: 'VALIDATION_ERROR',
+                error: 'Statement could not be mapped to a journal method',
             })
             expect((pragmaStmt['bind'] as () => unknown)()).toBe(pragmaStmt)
             expect((pragmaStmt['columns'] as () => unknown[])()).toEqual([])

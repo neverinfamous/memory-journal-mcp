@@ -33,6 +33,51 @@ import type { ServerRuntime } from '../../../utils/maintenance-lock.js'
 import type { LegacySSEServerTransport } from './legacy-sse.js'
 import { registerMcpProtocolRoutes } from './protocol-handlers.js'
 
+function assertHttpBindIsSafe(
+    host: string,
+    authToken: string | undefined,
+    corsOrigins: string[] | undefined,
+    oauthEnabled: boolean | undefined
+): void {
+    const isLocalhost = host === 'localhost' || host === '127.0.0.1' || host === '::1'
+    const hasCorsOpen = corsOrigins?.includes('*') ?? false
+    const hasAuth = Boolean(authToken) || oauthEnabled === true
+
+    if (!hasAuth && hasCorsOpen) {
+        const errorMsg = `FATAL: Refusing to bind HTTP with open wildcard CORS ('*') without explicit authentication. You MUST specify --auth-token (or OAuth) or restrict --cors-origin to specific trusted origins.`
+        logger.error(errorMsg, { module: 'HTTP' })
+        throw new Error(errorMsg)
+    }
+
+    if (authToken === 'change_this_to_a_secure_token_for_production') {
+        const errorMsg = `FATAL: Default auth token detected. You MUST change MCP_AUTH_TOKEN to a secure, cryptographically random value for production.`
+        logger.error(errorMsg, { module: 'HTTP' })
+        throw new Error(errorMsg)
+    }
+
+    if (!isLocalhost && !hasAuth) {
+        const errorMsg = `FATAL: Refusing to bind public HTTP on '${host}' without explicit authentication. You MUST specify --auth-token (or OAuth).`
+        logger.error(errorMsg, { module: 'HTTP' })
+        throw new Error(errorMsg)
+    }
+
+    if (hasCorsOpen) {
+        logger.warning(
+            'CORS origin is set to "*" (all origins). ' +
+                'Set --cors-origin or MCP_CORS_ORIGIN for production deployments.',
+            { module: 'HTTP' }
+        )
+    }
+
+    if (!hasAuth) {
+        logger.warning(
+            'No authentication configured for HTTP transport. ' +
+                'Set --auth-token or MCP_AUTH_TOKEN for production deployments.',
+            { module: 'HTTP' }
+        )
+    }
+}
+
 /**
  * HTTP Transport for Memory Journal MCP Server
  *
@@ -53,6 +98,7 @@ export class HttpTransport {
 
     private readonly rateLimitMap = new Map<string, RateLimitEntry>()
     private rateLimitCleanupTimer: ReturnType<typeof setInterval> | null = null
+    private stopSessionSweep: (() => void) | null = null
 
     constructor(config: HttpTransportConfig) {
         this.config = {
@@ -72,44 +118,8 @@ export class HttpTransport {
         runtime: ServerRuntime
     ): Promise<void> {
         const { port, host, authToken, corsOrigins } = this.config
-
+        assertHttpBindIsSafe(host, authToken, corsOrigins, this.config.oauthEnabled)
         const isLocalhost = host === 'localhost' || host === '127.0.0.1' || host === '::1'
-        const hasCorsOpen = corsOrigins?.includes('*') ?? false
-        const hasAuth = Boolean(authToken) || this.config.oauthEnabled === true
-
-        if (!hasAuth && hasCorsOpen) {
-            const errorMsg = `FATAL: Refusing to bind HTTP with open wildcard CORS ('*') without explicit authentication. You MUST specify --auth-token (or OAuth) or restrict --cors-origin to specific trusted origins.`
-            logger.error(errorMsg, { module: 'HTTP' })
-            throw new Error(errorMsg)
-        }
-
-        if (authToken === 'change_this_to_a_secure_token_for_production') {
-            const errorMsg = `FATAL: Default auth token detected. You MUST change MCP_AUTH_TOKEN to a secure, cryptographically random value for production.`
-            logger.error(errorMsg, { module: 'HTTP' })
-            throw new Error(errorMsg)
-        }
-
-        if (!isLocalhost && !hasAuth) {
-            const errorMsg = `FATAL: Refusing to bind public HTTP on '${host}' without explicit authentication. You MUST specify --auth-token (or OAuth).`
-            logger.error(errorMsg, { module: 'HTTP' })
-            throw new Error(errorMsg)
-        }
-
-        if (hasCorsOpen) {
-            logger.warning(
-                'CORS origin is set to "*" (all origins). ' +
-                    'Set --cors-origin or MCP_CORS_ORIGIN for production deployments.',
-                { module: 'HTTP' }
-            )
-        }
-
-        if (!hasAuth) {
-            logger.warning(
-                'No authentication configured for HTTP transport. ' +
-                    'Set --auth-token or MCP_AUTH_TOKEN for production deployments.',
-                { module: 'HTTP' }
-            )
-        }
 
         const isLocalHostHeader = host === 'localhost' || host === '127.0.0.1' || host === '::1'
         this.app.use(
@@ -337,7 +347,7 @@ export class HttpTransport {
 
         this.app.get('/', handleRootInfo)
 
-        registerMcpProtocolRoutes(
+        this.stopSessionSweep = registerMcpProtocolRoutes(
             this.app,
             this.config,
             serverFactory,
@@ -387,6 +397,8 @@ export class HttpTransport {
             clearInterval(this.rateLimitCleanupTimer)
             this.rateLimitCleanupTimer = null
         }
+        this.stopSessionSweep?.()
+        this.stopSessionSweep = null
 
         for (const server of this.activeServers) {
             try {

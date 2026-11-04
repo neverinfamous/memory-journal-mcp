@@ -12,6 +12,7 @@
 import { MAX_QUERY_LIMIT } from '../schemas.js'
 import type { JournalEntry } from '../../../types/index.js'
 import type { IDatabaseAdapter } from '../../../database/core/interfaces.js'
+import type { VectorSearchManager } from '../../../vector/vector-search-manager/index.js'
 import * as crypto from 'node:crypto'
 
 // ============================================================================
@@ -153,4 +154,63 @@ export function passMetadataFilters(
     }
     if (!options.includeArchived && entry.isArchived) return false
     return true
+}
+
+/**
+ * Team hits for hybrid and semantic search. Vector hits come first. Full-text
+ * hits fill the rest so include_team is not a no-op when the team index is absent.
+ */
+export async function collectTeamSearchEntries(
+    query: string,
+    teamDb: IDatabaseAdapter,
+    teamVectorManager: VectorSearchManager | undefined,
+    options: ISearchFilters & { limit: number }
+): Promise<EntryWithSource[]> {
+    const seen = new Set<number>()
+    const ranked: EntryWithSource[] = []
+    const limit = Math.min(Math.max(options.limit, 1), 500)
+
+    const pushEntry = (entry: JournalEntry, similarity?: number): void => {
+        if (seen.has(entry.id)) return
+        if (!passMetadataFilters(entry, options, teamDb)) return
+        seen.add(entry.id)
+        ranked.push({
+            ...entry,
+            content: entry.content,
+            timestamp: entry.timestamp,
+            source: 'team',
+            ...(similarity !== undefined ? { similarity } : {}),
+        })
+    }
+
+    if (teamVectorManager !== undefined && query.trim() !== '') {
+        try {
+            const hits = await teamVectorManager.search(query, limit, 0.15, options.workspaceId)
+            const ids = hits.map((hit) => hit.entryId)
+            const hydrated = teamDb.getEntriesByIds(ids)
+            for (const hit of hits) {
+                const entry = hydrated.get(hit.entryId)
+                if (entry !== undefined) pushEntry(entry, Math.round(hit.score * 100) / 100)
+            }
+        } catch {
+            // Team vector search is best-effort. Full-text results still apply.
+        }
+    }
+
+    const fts = teamDb.searchEntries(query, {
+        limit,
+        ...(options.projectNumber !== undefined ? { projectNumber: options.projectNumber } : {}),
+        ...(options.issueNumber !== undefined ? { issueNumber: options.issueNumber } : {}),
+        ...(options.prNumber !== undefined ? { prNumber: options.prNumber } : {}),
+        ...(options.prStatus !== undefined ? { prStatus: options.prStatus } : {}),
+        ...(options.workflowRunId !== undefined ? { workflowRunId: options.workflowRunId } : {}),
+        ...(options.tags !== undefined ? { tags: options.tags } : {}),
+        ...(options.entryType !== undefined ? { entryType: options.entryType as JournalEntry['entryType'] } : {}),
+        ...(options.startDate !== undefined ? { startDate: options.startDate } : {}),
+        ...(options.endDate !== undefined ? { endDate: options.endDate } : {}),
+        ...(options.includeArchived !== undefined ? { includeArchived: options.includeArchived } : {}),
+        ...(options.workspaceId !== undefined ? { workspaceId: options.workspaceId } : {}),
+    })
+    for (const entry of fts.entries) pushEntry(entry)
+    return ranked
 }

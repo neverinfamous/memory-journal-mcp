@@ -9,6 +9,42 @@ import type { IDatabaseConnection } from '../core/interfaces.js'
 /** Maximum length for user-supplied backup names after sanitization */
 const MAX_BACKUP_NAME_LENGTH = 50
 
+async function assertIncomingBackupIntact(backupPath: string): Promise<void> {
+    try {
+        const Database = (await import('better-sqlite3')).default
+        const tempDb = new Database(backupPath, { fileMustExist: true, readonly: true })
+
+        const rawKey = process.env['MJ_DB_ENCRYPTION_KEY'] || process.env['DB_ENCRYPTION_KEY']
+        if (rawKey) {
+            const key = rawKey
+            if (key.startsWith("x'") && key.endsWith("'")) {
+                if (!/^x'[0-9a-fA-F]+'$/.test(key)) {
+                    tempDb.close()
+                    throw new Error('Invalid hex encryption key format')
+                }
+                tempDb.pragma(`key = "${key}"`)
+            } else {
+                const escapedKey = key.replace(/'/g, "''")
+                tempDb.pragma(`key = '${escapedKey}'`)
+            }
+        }
+
+        const tempStmt = tempDb.prepare('PRAGMA integrity_check')
+        const result = tempStmt.get() as Record<string, unknown>
+        const integrityResult = Object.values(result ?? {})[0]
+        if (integrityResult !== 'ok') {
+            tempDb.close()
+            throw new Error(`Integrity check failed: ${String(integrityResult)}`)
+        }
+        tempDb.close()
+    } catch (err) {
+        throw new Error(
+            `Incoming backup file is invalid or corrupt. Rejecting restore. Details: ${err instanceof Error ? err.message : String(err)}`,
+            { cause: err }
+        )
+    }
+}
+
 export class BackupManager {
     constructor(private ctx: IDatabaseConnection) {}
 
@@ -152,7 +188,7 @@ export class BackupManager {
         const backupPath = path.resolve(backupsDir, filename)
         const relToBackups = path.relative(resolvedBackupsDir, backupPath)
 
-        if (relToBackups.startsWith('..') || path.isAbsolute(relToBackups)) {
+        if (relToBackups.startsWith(`..${path.sep}`) || relToBackups === '..' || path.isAbsolute(relToBackups)) {
             throw new ValidationError(`Path traversal detected during restore resolution.`)
         }
 
@@ -172,44 +208,11 @@ export class BackupManager {
         const realBackupPath = await fs.promises.realpath(backupPath)
         const realBackupsDir = await fs.promises.realpath(backupsDir)
         const realRel = path.relative(realBackupsDir, realBackupPath)
-        if (realRel.startsWith('..') || path.isAbsolute(realRel)) {
+        if (realRel.startsWith(`..${path.sep}`) || realRel === '..' || path.isAbsolute(realRel)) {
             throw new ValidationError('Resolved backup path escapes the backups directory.')
         }
 
-        try {
-            const Database = (await import('better-sqlite3')).default
-            const tempDb = new Database(backupPath, { fileMustExist: true, readonly: true })
-            
-            // Apply encryption key if present
-            const rawKey = process.env['MJ_DB_ENCRYPTION_KEY'] || process.env['DB_ENCRYPTION_KEY']
-            if (rawKey) {
-                const key = rawKey
-                if (key.startsWith("x'") && key.endsWith("'")) {
-                    if (!/^x'[0-9a-fA-F]+'$/.test(key)) {
-                        tempDb.close()
-                        throw new Error('Invalid hex encryption key format')
-                    }
-                    tempDb.pragma(`key = "${key}"`)
-                } else {
-                    const escapedKey = key.replace(/'/g, "''")
-                    tempDb.pragma(`key = '${escapedKey}'`)
-                }
-            }
-            
-            const tempStmt = tempDb.prepare('PRAGMA integrity_check')
-            const result = tempStmt.get() as Record<string, unknown>
-            const integrityResult = Object.values(result ?? {})[0]
-            if (integrityResult !== 'ok') {
-                tempDb.close()
-                throw new Error(`Integrity check failed: ${String(integrityResult)}`)
-            }
-            tempDb.close()
-        } catch (err) {
-            throw new Error(
-                `Incoming backup file is invalid or corrupt. Rejecting restore. Details: ${err instanceof Error ? err.message : String(err)}`,
-                { cause: err }
-            )
-        }
+        await assertIncomingBackupIntact(backupPath)
 
         const lockDir = `${this.ctx.getDbPath()}.lock.d`
         const lockFile = path.join(lockDir, 'lock.json')

@@ -66,6 +66,26 @@ export async function loadBundledSkillCatalog(
     }
 }
 
+async function configureMetricsPersistence(
+    runtime: ServerRuntime,
+    options: ServerOptions,
+    dbPath: string
+): Promise<string | undefined> {
+    if (!options.persistMetrics) return undefined
+    const configuredPath = options.metricsPath ?? dbPath.replace(/\.db$/, '') + '_metrics.json'
+    await runtime.metrics.loadFromFile(configuredPath)
+    const metricsTimer = setInterval(() => {
+        void runtime.metrics.saveToFile(configuredPath)
+    }, 5 * 60 * 1000)
+    metricsTimer.unref()
+    const previousStop = runtime.stopBackgroundTasks
+    runtime.stopBackgroundTasks = () => {
+        previousStop?.()
+        clearInterval(metricsTimer)
+    }
+    return configuredPath
+}
+
 export async function initializeDependencies(options: ServerOptions): Promise<ServerContext> {
     const { transport, dbPath, teamDbPath, testDbPath, testTeamDbPath } = options
 
@@ -124,15 +144,7 @@ export async function initializeDependencies(options: ServerOptions): Promise<Se
     // Configure metrics persistence path
     let activeMetricsPath: string | undefined
     if (options.persistMetrics) {
-        const configuredPath = options.metricsPath ?? (dbPath.replace(/\.db$/, '') + '_metrics.json')
-        activeMetricsPath = configuredPath
-        
-        await runtime.metrics.loadFromFile(configuredPath)
-        
-        // Periodic save every 5 minutes
-        setInterval(() => {
-            void runtime.metrics.saveToFile(configuredPath)
-        }, 5 * 60 * 1000).unref()
+        activeMetricsPath = await configureMetricsPersistence(runtime, options, dbPath)
     }
 
     // Initialize team database if configured

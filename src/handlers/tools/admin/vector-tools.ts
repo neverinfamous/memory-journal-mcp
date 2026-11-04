@@ -7,6 +7,7 @@ import {
 } from './schemas.js'
 import { relaxedNumber } from '../schemas.js'
 import { logger } from '../../../utils/logger.js'
+import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 
 export function getVectorTools(context: ToolContext): ToolDefinition[] {
     const { db, vectorManager, progress } = context;
@@ -26,7 +27,7 @@ export function getVectorTools(context: ToolContext): ToolDefinition[] {
             },
             handler: async (params: unknown) => {
                 try {
-                    z.object({project_number: z.number().int().optional()}).strict().parse(params)
+                    const parsed = z.object({ project_number: z.number().int().optional() }).strict().parse(params)
                     if (!vectorManager) {
                         return {
                             success: false,
@@ -40,7 +41,10 @@ export function getVectorTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
                     const { success, indexed, failed, firstError } =
-                        await vectorManager.rebuildIndex(progress)
+                        await vectorManager.rebuildIndex(
+                            progress,
+                            parsed.project_number !== undefined ? { projectNumber: parsed.project_number } : undefined
+                        )
                     
                     if (!success && firstError) {
                         logger.warning(`Vector index rebuild had errors: ${firstError}`)
@@ -92,7 +96,7 @@ export function getVectorTools(context: ToolContext): ToolDefinition[] {
             },
             handler: async (params: unknown) => {
                 try {
-                    const { entry_id } = z.preprocess(
+                    const { entry_id, project_number } = z.preprocess(
                         (val: unknown) => {
                             if (typeof val === 'object' && val !== null) {
                                 const obj = { ...(val as Record<string, unknown>) };
@@ -118,15 +122,16 @@ export function getVectorTools(context: ToolContext): ToolDefinition[] {
                             recoverable: false,
                         }
                     }
-                    const entry = db.getEntryById(entry_id, '*')
-                    if (!entry) {
+                    const wsId = resolveWorkspaceId(undefined, project_number, context.config)
+                    const entry = db.getEntryById(entry_id, project_number !== undefined ? wsId : '*')
+                    if (!entry || (project_number !== undefined && entry.projectNumber !== project_number)) {
                         return {
                             success: false,
                             entryId: entry_id,
                             error: `Entry ${String(entry_id)} not found`,
                             code: 'RESOURCE_NOT_FOUND',
                             category: 'resource',
-                            suggestion: 'Verify the entry ID and try again',
+                            suggestion: 'Verify the entry ID and project number, then try again',
                             recoverable: true,
                         }
                     }

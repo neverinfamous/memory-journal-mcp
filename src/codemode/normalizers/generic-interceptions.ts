@@ -1,4 +1,4 @@
-import { resolveProjectContext } from '../../utils/workspace-resolver.js'
+import { loadProjectRegistryFromConfig, resolveProjectContext } from '../../utils/workspace-resolver.js'
 import { isRecord, safeString } from './shared-utils.js'
 
 const NUMERIC_ID_KEYS = [
@@ -223,14 +223,31 @@ function normalizeGenericFieldAliases(obj: Record<string, unknown>): void {
     }
 
     for (const projAlias of ['project_name', 'projectName'] as const) {
-        if (obj[projAlias] !== undefined) {
-            if (obj['project_number'] === undefined) {
-                const num = Number(obj[projAlias])
-                const strVal = typeof obj[projAlias] === 'string' || typeof obj[projAlias] === 'number' ? String(obj[projAlias]) : ''
-                if (!Number.isNaN(num) && strVal.trim() !== '') obj['project_number'] = num
+        if (obj[projAlias] === undefined) continue
+        if (obj['project_number'] === undefined) {
+            const num = Number(obj[projAlias])
+            const strVal = typeof obj[projAlias] === 'string' || typeof obj[projAlias] === 'number' ? String(obj[projAlias]) : ''
+            if (!Number.isNaN(num) && strVal.trim() !== '') {
+                obj['project_number'] = num
+                Reflect.deleteProperty(obj, projAlias)
+                continue
             }
-            Reflect.deleteProperty(obj, projAlias)
+            if (typeof obj[projAlias] === 'string' && obj[projAlias].trim() !== '') {
+                const name = obj[projAlias].trim()
+                const registry = loadProjectRegistryFromConfig()
+                const matchedKey = registry === undefined
+                    ? undefined
+                    : Object.keys(registry).find((key) => key.toLowerCase() === name.toLowerCase())
+                if (matchedKey !== undefined && registry !== undefined) {
+                    const projectNumber = registry[matchedKey]?.project_number
+                    if (projectNumber !== undefined) obj['project_number'] = projectNumber
+                    if (obj['workspace_id'] === undefined) obj['workspace_id'] = matchedKey
+                    Reflect.deleteProperty(obj, projAlias)
+                }
+                continue
+            }
         }
+        Reflect.deleteProperty(obj, projAlias)
     }
     if (obj['project'] !== undefined) {
         if (obj['project_number'] === undefined) {

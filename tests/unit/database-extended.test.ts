@@ -279,6 +279,8 @@ describe('SQLite Database Extended Operations', () => {
             expect(decodeCursor(encoded)).toEqual({ offset: 25 })
 
             expect(decodeCursor('!!!not-valid-base64-json!!!')).toBeNull()
+            const wrongShape = Buffer.from(JSON.stringify({ hello: 'world' })).toString('base64')
+            expect(decodeCursor(wrongShape)).toBeNull()
         })
     })
 })

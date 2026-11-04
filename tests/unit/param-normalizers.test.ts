@@ -471,6 +471,18 @@ describe('src/codemode/param-normalizer.ts (applyArgInterceptions)', () => {
             })
         }
     })
+
+    it('keeps an unknown project_name instead of dropping it', () => {
+        const res = applyArgInterceptions('create_entry', [{
+            content: 'note',
+            project_name: 'not-a-registered-project-name-xyz',
+        }])
+        expect('args' in res).toBe(true)
+        if ('args' in res && isRecord(res.args[0])) {
+            expect(res.args[0]['project_name']).toBe('not-a-registered-project-name-xyz')
+            expect(res.args[0]['project_number']).toBeUndefined()
+        }
+    })
 })
 
 describe('src/codemode/api/param-normalizer.ts (convertKeysToSnakeCase & normalizeParams)', () => {
@@ -493,8 +505,8 @@ describe('src/codemode/api/param-normalizer.ts (convertKeysToSnakeCase & normali
         )
         expect(res1['entry_id']).toBe(10)
         expect(res1['entry_type']).toBe('retrospective')
-        expect(res1['role']).toBe('member')
-        expect(res1['significance_type']).toBeUndefined()
+        expect(res1['role']).toBe('contributor')
+        expect(res1['significance_type']).toBe('invalid_sig')
         expect(res1['entry_ids']).toEqual([1, 2])
         expect(res1['tags']).toEqual(['session-summary'])
         expect(res1['relationships']).toEqual([{ targetId: 5, relationType: 'relates_to' }])
