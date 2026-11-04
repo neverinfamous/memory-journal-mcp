@@ -152,14 +152,15 @@ function applyGithubInterceptions(
             delete obj['keep']
         }
     }
-    if (
-        methodName.includes('get_github_milestone') ||
-        methodName.includes('getGithubMilestone') ||
-        methodName.includes('update_github_milestone') ||
-        methodName.includes('updateGithubMilestone') ||
-        methodName.includes('delete_github_milestone') ||
-        methodName.includes('deleteGithubMilestone')
-    ) {
+    const singularMilestoneMethods = new Set([
+        'get_github_milestone',
+        'getGithubMilestone',
+        'update_github_milestone',
+        'updateGithubMilestone',
+        'delete_github_milestone',
+        'deleteGithubMilestone',
+    ])
+    if (singularMilestoneMethods.has(methodName)) {
         if (obj['keep'] !== undefined && obj['milestone_number'] === undefined) {
             obj['milestone_number'] = obj['keep']
             delete obj['keep']

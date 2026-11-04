@@ -109,7 +109,11 @@ export function createShimMjProxy(options: CreateShimMjOptions): Record<string, 
                         const fn = getGroupProp(target, 'codemode', 'mjExecuteCode') ?? getGroupProp(target, 'codemode', 'executeCode')
                         if (typeof fn === 'function') return (fn as (...a: unknown[]) => unknown)(arg)
                     }
-                    return Promise.resolve({ success: true })
+                    return Promise.resolve({
+                        success: false,
+                        error: 'Code execution is not available in this sandbox',
+                        code: 'CONFIGURATION_ERROR',
+                    })
                 }
             }
 

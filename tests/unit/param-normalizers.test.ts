@@ -378,7 +378,8 @@ describe('src/codemode/param-normalizer.ts (applyArgInterceptions)', () => {
         const delVer = applyArgInterceptions('delete_entry', [
             { path: 10, version: 2, project_number: 5 },
         ])
-        if ('args' in delVer) expect(delVer.args[0]).toEqual({ entry_id: 10, expected_version: 2 })
+        if ('args' in delVer)
+            expect(delVer.args[0]).toEqual({ entry_id: 10, expected_version: 2, project_number: 5 })
 
         const upd2 = applyArgInterceptions('update_entry', [15, { text: 'updated' }])
         if ('args' in upd2) expect(upd2.args[0]).toEqual({ entry_id: 15, content: 'updated' })

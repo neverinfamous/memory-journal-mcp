@@ -11,6 +11,7 @@ export class LifecycleOperations {
         importanceThreshold: number
         dryRun?: boolean
         excludeTags?: string[]
+        workspaceId?: string
     }): {
         archivedCount: number
         prunedCount: number
@@ -48,14 +49,25 @@ export class LifecycleOperations {
                 WHERE tags.name IN (${excludeTags.map(() => '?').join(',')})
             )`
                 : ''
+        const scopedWorkspace =
+            options.workspaceId !== undefined && options.workspaceId !== '*'
+                ? options.workspaceId
+                : undefined
+        const hardDeleteWorkspaceSql =
+            scopedWorkspace !== undefined ? 'AND workspace_id = ?' : ''
         const hardDeleteSelect = `
             SELECT id, CAST((julianday('now') - julianday(deleted_at)) AS INTEGER) as age_days
             FROM memory_journal
             WHERE deleted_at IS NOT NULL
               AND julianday('now') - julianday(deleted_at) > ?
               ${hardDeleteExcludeSql}
+              ${hardDeleteWorkspaceSql}
         `
-        const hardDeleteParams: unknown[] = [options.hardDeleteOlderThanDays, ...excludeTags]
+        const hardDeleteParams: unknown[] = [
+            options.hardDeleteOlderThanDays,
+            ...excludeTags,
+            ...(scopedWorkspace !== undefined ? [scopedWorkspace] : []),
+        ]
 
         const pruneSelect = `
             SELECT e.id, ${importanceExpr} as importance_score
@@ -69,11 +81,13 @@ export class LifecycleOperations {
               AND COALESCE(e.impact_score, 0.0) < 0.5
               AND COALESCE(rs.rel_count, 0) = 0
               ${excludeTagsSql}
+              ${scopedWorkspace !== undefined ? 'AND e.workspace_id = ?' : ''}
         `
         const pruneParams: unknown[] = [
             options.pruneOlderThanDays,
             options.importanceThreshold,
             ...excludeTags,
+            ...(scopedWorkspace !== undefined ? [scopedWorkspace] : []),
         ]
 
         const archiveSelect = `
@@ -85,11 +99,13 @@ export class LifecycleOperations {
             AND julianday('now') - julianday(e.timestamp) > ?
             AND ${importanceExpr} < ?
             ${excludeTagsSql}
+            ${scopedWorkspace !== undefined ? 'AND e.workspace_id = ?' : ''}
         `
         const archiveParams: unknown[] = [
             options.archiveOlderThanDays,
             options.importanceThreshold,
             ...excludeTags,
+            ...(scopedWorkspace !== undefined ? [scopedWorkspace] : []),
         ]
 
         let archivedCount = 0

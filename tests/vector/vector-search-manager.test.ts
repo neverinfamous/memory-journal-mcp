@@ -79,9 +79,10 @@ function createMockDbAdapter() {
                 mockRun(BigInt(vec.entryId), vec.embedding)
             }
         },
-        deleteVector: (entryId: number) => {
+        deleteVector: (entryId: number): boolean => {
             mockPrepare('DELETE FROM vec_embeddings WHERE entry_id = ?')
             mockRun(BigInt(entryId))
+            return true
         },
         clearVectors: () => mockPrepare('DELETE FROM vec_embeddings'),
         cleanupStaleVectors: () => {

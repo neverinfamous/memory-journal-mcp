@@ -18,8 +18,6 @@ export interface SandboxOptions {
     memoryLimitMb?: number
     /** Execution timeout in milliseconds (default: 30000) */
     timeoutMs?: number
-    /** CPU time limit in milliseconds (default: 10000) */
-    cpuLimitMs?: number
 }
 
 /**
@@ -42,7 +40,6 @@ export interface PoolOptions {
 export const DEFAULT_SANDBOX_OPTIONS: Required<SandboxOptions> = {
     memoryLimitMb: 128,
     timeoutMs: 30000,
-    cpuLimitMs: 10000,
 }
 
 /**

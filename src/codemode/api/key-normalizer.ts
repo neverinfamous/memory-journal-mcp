@@ -10,7 +10,7 @@ import {
     healSessionSummaryContent,
     healAutoContext,
 } from '../normalizers/shared-utils.js'
-import { methodTokens } from '../method-tokens.js'
+import { hasMethodToken, methodTokens } from '../method-tokens.js'
 
 const CONTENT_LIKE_KEYS = new Set(['message', 'msg', 'name', 'heading', 'subject', 'description', 'content', 'comment'])
 
@@ -109,7 +109,12 @@ export function convertKeysToSnakeCase(obj: Record<string, unknown>, methodName?
         } else if (useAlias && (snakeKey === 'text' || snakeKey === 'body' || snakeKey === 'note' || snakeKey === 'title')) {
             if (
                 methodLower !== undefined &&
-                !(isGithubTool || methodLower.includes('create') || methodLower.includes('update') || methodLower.includes('entry'))
+                !(
+                    isGithubTool ||
+                    hasMethodToken(methodLower, 'create') ||
+                    hasMethodToken(methodLower, 'update') ||
+                    hasMethodToken(methodLower, 'entry')
+                )
             ) {
                 useAlias = false
             }

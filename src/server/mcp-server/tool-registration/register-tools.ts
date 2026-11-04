@@ -173,6 +173,13 @@ export function createServerInstance(
             }
         })
 
+        const instructionConfig = {
+            ...(currentConfig.briefingConfig ?? {}),
+            ...(options.instructionLevel !== undefined
+                ? { instructionLevel: options.instructionLevel }
+                : {}),
+        }
+
         if (isCodeModeOnly || currentConfig.toolFilterConfig?.raw === 'codemode') {
             const finalGroups =
                 currentConfig.codemodeInternalFullAccess === true
@@ -186,7 +193,7 @@ export function createServerInstance(
                 mappedPrompts,
                 undefined,
                 finalGroups,
-                currentConfig.briefingConfig
+                instructionConfig
             )
         }
 
@@ -195,7 +202,7 @@ export function createServerInstance(
             mappedPrompts,
             undefined,
             groups,
-            currentConfig.briefingConfig
+            instructionConfig
         )
     }
 

@@ -10,6 +10,7 @@ import { TOOL_GROUPS } from '../filtering/tool-constants.js'
 import { SCOPES, TOOL_GROUP_SCOPES, TOOL_SCOPE_OVERRIDES } from './scopes.js'
 import type { StandardScope } from './scopes.js'
 import type { ToolGroup } from '../types/index.js'
+import { hasMethodToken } from '../codemode/method-tokens.js'
 import {
     DUMMY_HEALING_TOOL_NAMES,
     DUMMY_SQL_EXECUTION_TOOL_NAMES,
@@ -49,6 +50,33 @@ for (const [toolName, scope] of Object.entries(TOOL_SCOPE_OVERRIDES)) {
     toolScopeMap.set(toolName, scope)
 }
 
+const CORE_ADMIN_VERBS = ['delete', 'update', 'merge', 'restore', 'remove', 'prune', 'archive', 'rebuild']
+const CORE_WRITE_VERBS = ['create', 'add', 'link', 'import', 'register']
+const CORE_READ_VERBS = [
+    'get',
+    'list',
+    'search',
+    'count',
+    'read',
+    'help',
+    'recent',
+    'exists',
+    'status',
+    'health',
+    'describe',
+    'visualize',
+    'stats',
+    'statistics',
+    'find',
+]
+
+function scopeForCoreMethod(toolName: string): StandardScope {
+    if (CORE_ADMIN_VERBS.some((verb) => hasMethodToken(toolName, verb))) return SCOPES.ADMIN
+    if (CORE_WRITE_VERBS.some((verb) => hasMethodToken(toolName, verb))) return SCOPES.WRITE
+    if (CORE_READ_VERBS.some((verb) => hasMethodToken(toolName, verb))) return SCOPES.READ
+    return SCOPES.ADMIN
+}
+
 export function getRequiredScope(toolName: string): StandardScope {
     const scope = toolScopeMap.get(toolName)
     if (scope) {
@@ -60,14 +88,7 @@ export function getRequiredScope(toolName: string): StandardScope {
         return SCOPES.ADMIN
     }
     if (toolName.startsWith('mj.core.') || toolName.startsWith('mj_core_')) {
-        const lower = toolName.toLowerCase()
-        if (lower.includes('update') || lower.includes('delete')) {
-            return SCOPES.ADMIN
-        }
-        if (lower.includes('create')) {
-            return SCOPES.WRITE
-        }
-        return SCOPES.READ
+        return scopeForCoreMethod(toolName)
     }
     if (DUMMY_SQL_EXEC_SET.has(toolName) || DUMMY_FS_TOOL_SET.has(toolName)) {
         return SCOPES.ADMIN

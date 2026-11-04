@@ -289,6 +289,7 @@ export async function handleServerInfo(
     context?: ToolContext
 ): Promise<unknown> {
     let healthData: Record<string, unknown> | undefined
+    let healthReadFailed = false
     if (context !== undefined) {
         try {
             const res = await readResource(
@@ -306,15 +307,21 @@ export async function handleServerInfo(
                 healthData = res.data as Record<string, unknown>
             }
         } catch {
-            // Fallback to manual db status if readResource fails
+            healthReadFailed = true
         }
     }
 
     const dbHealth = healthData ?? context?.db.getHealthStatus()
+    const reportedStatus =
+        !healthReadFailed && healthData !== undefined && typeof healthData['status'] === 'string'
+            ? healthData['status']
+            : healthReadFailed
+              ? 'degraded'
+              : 'healthy'
 
     return {
-        success: true,
-        status: 'healthy',
+        success: !healthReadFailed,
+        status: reportedStatus,
         server: {
             name: 'memory-journal-mcp',
             version: VERSION,

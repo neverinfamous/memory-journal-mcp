@@ -269,8 +269,7 @@ export class VectorSearchManager {
         if ((this.dbAdapter as unknown) == null) return false;
 
         try {
-            this.dbAdapter.deleteVector(entryId)
-            return true;
+            return this.dbAdapter.deleteVector(entryId)
         } catch (error) {
             logger.warning(`Failed to remove entry ${entryId} from vector index`, { error })
             // Non-fatal
@@ -293,7 +292,8 @@ export class VectorSearchManager {
             const queryEmbedding = await this.generateEmbedding(query)
 
             // searchVectors returns { entry_id: number; distance: number }[]
-            const results = this.dbAdapter.searchVectors(queryEmbedding, limit)
+            const targetWs = workspaceId ?? '*'
+            const results = this.dbAdapter.searchVectors(queryEmbedding, limit, targetWs)
 
             const candidates: { entryId: number; distance: number; similarityScore: number }[] = []
             for (const result of results) {
@@ -314,7 +314,6 @@ export class VectorSearchManager {
                 return []
             }
 
-            const targetWs = workspaceId ?? '*'
             const entriesMap =
                 typeof (this.dbAdapter as { getEntriesByIds?: unknown }).getEntriesByIds ===
                 'function'
@@ -326,12 +325,7 @@ export class VectorSearchManager {
                 const entry = entriesMap
                     ? (entriesMap.get(candidate.entryId) ?? null)
                     : this.dbAdapter.getEntryById(candidate.entryId, targetWs)
-                if (
-                    entry &&
-                    (targetWs === '*' ||
-                        entry.workspaceId === undefined ||
-                        entry.workspaceId === targetWs)
-                ) {
+                if (entry && (targetWs === '*' || entry.workspaceId === targetWs)) {
                     searchResults.push({
                         entryId: candidate.entryId,
                         entry,
@@ -365,7 +359,8 @@ export class VectorSearchManager {
         await this.initialize()
 
         try {
-            const sourceEntry = this.dbAdapter.getEntryById(entryId, workspaceId ?? '*')
+            const targetWs = workspaceId ?? '*'
+            const sourceEntry = this.dbAdapter.getEntryById(entryId, targetWs)
             if (!sourceEntry) {
                 throw new Error(`Entry ${entryId} not found`)
             }
@@ -382,7 +377,7 @@ export class VectorSearchManager {
             }
 
             // Search (request limit + 1 to account for the entry itself)
-            const results = this.dbAdapter.searchVectors(queryEmbedding, limit + 1)
+            const results = this.dbAdapter.searchVectors(queryEmbedding, limit + 1, targetWs)
 
             const candidates: { entryId: number; distance: number; similarityScore: number }[] = []
             for (const result of results) {
@@ -402,7 +397,6 @@ export class VectorSearchManager {
                 return []
             }
 
-            const targetWs = workspaceId ?? '*'
             const entriesMap =
                 typeof (this.dbAdapter as { getEntriesByIds?: unknown }).getEntriesByIds ===
                 'function'
@@ -414,12 +408,7 @@ export class VectorSearchManager {
                 const entry = entriesMap
                     ? (entriesMap.get(candidate.entryId) ?? null)
                     : this.dbAdapter.getEntryById(candidate.entryId, targetWs)
-                if (
-                    entry &&
-                    (targetWs === '*' ||
-                        entry.workspaceId === undefined ||
-                        entry.workspaceId === targetWs)
-                ) {
+                if (entry && (targetWs === '*' || entry.workspaceId === targetWs)) {
                     searchResults.push({
                         entryId: candidate.entryId,
                         entry,

@@ -111,6 +111,13 @@ export function buildServerOptions(
           }
         : undefined;
 
+    const instructionLevel = catchConfig((): 'essential' | 'detailed' | 'full' | undefined => {
+        const raw = resolver.resolve<string>('instructionLevel', 'INSTRUCTION_LEVEL')
+        if (raw === undefined || raw.trim() === '') return undefined
+        if (raw === 'essential' || raw === 'detailed' || raw === 'full') return raw
+        throw new Error(`Invalid --instruction-level '${raw}'. Use essential, detailed, or full.`)
+    }, undefined)
+
     const serverOptions = {
         transport: transport as 'stdio' | 'http',
         port: catchConfig(() => resolver.resolveInt('port', 'PORT', 1, 65535) ?? 3000, 3000),
@@ -279,6 +286,7 @@ export function buildServerOptions(
         pruneDryRun: catchConfig(() => resolver.resolveBool('pruneDryRun', 'PRUNE_DRY_RUN') ?? false, false),
         pruneExcludeTags: catchConfig(() => resolver.resolveStringArray('pruneExcludeTags', 'PRUNE_EXCLUDE_TAGS'), undefined),
         embeddingModel: catchConfig(() => resolver.resolve<string>('embeddingModel', 'EMBEDDING_MODEL'), undefined),
+        ...(instructionLevel !== undefined ? { instructionLevel } : {}),
         metricsExport: catchConfig<'prometheus' | undefined>(() => {
             const raw = resolver.resolve<string>('metricsExport', 'METRICS_EXPORT');
             if (raw) {

@@ -332,7 +332,7 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                         return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
-                    const { source_tag, target_tag } = TeamMergeTagsSchema.parse(params)
+                    const { source_tag, target_tag, workspace_id } = TeamMergeTagsSchema.parse(params)
 
                     if (source_tag === target_tag) {
                         return {
@@ -345,7 +345,8 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    const result = teamDb.mergeTags(source_tag, target_tag)
+                    const wsId = resolveWorkspaceId(workspace_id, undefined, context.config)
+                    const result = teamDb.mergeTags(source_tag, target_tag, wsId)
 
                     triggerTeamNotifications(context)
 

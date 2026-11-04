@@ -1691,7 +1691,7 @@ return { success: true, projectId };
                 _search_path: 'src/non-existent-subdir/schemas',
             })) as Record<string, unknown>
 
-            expect(res['success']).toBe(true)
+            expect(res['success']).toBe(false)
             expect(res['totalMatches']).toBe(0)
             expect(res['_healing_note']).toBeDefined()
         })

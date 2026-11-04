@@ -205,10 +205,6 @@ export const DeleteEntrySchemaMcp = z.preprocess(
                 delete obj['id']
                 modified = true
             }
-            if ('project_number' in obj) {
-                delete obj['project_number']
-                modified = true
-            }
             return modified ? obj : val
         }
         return val
@@ -232,7 +228,7 @@ export const DeleteEntrySchemaMcp = z.preprocess(
                 .describe(
                     'REQUIRED for safe deletion to prevent optimistic concurrency gaps. Get this from get_entry_by_id.'
                 ),
-            project_number: relaxedNumber().optional().describe('Ignored. Provided for agent compatibility.'),
+            project_number: relaxedNumber().optional().describe('Project whose workspace owns the entry. Resolved with workspace_id.'),
             workspace_id: z.string().optional().describe(WORKSPACE_DESC),
         })
         .strict()

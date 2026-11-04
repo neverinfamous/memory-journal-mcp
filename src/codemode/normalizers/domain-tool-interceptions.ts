@@ -88,7 +88,17 @@ export function applyDomainToolInterceptions(
         args.length === 1 &&
         (typeof args[0] === 'boolean' || typeof args[0] === 'string' || typeof args[0] === 'number')
     ) {
-        args[0] = {}
+        const personalRebuild = methodName === 'rebuild_vector_index' || methodName === 'rebuildVectorIndex'
+        if (personalRebuild && typeof args[0] === 'number') {
+            args[0] = { project_number: args[0] }
+        } else {
+            return validationErr(
+                `${methodName} does not accept that positional value.`,
+                personalRebuild
+                    ? 'Pass a project number or an object with project_number.'
+                    : 'Call team_rebuild_vector_index with no arguments.'
+            )
+        }
     }
 
     if (
@@ -102,7 +112,10 @@ export function applyDomainToolInterceptions(
             return validationErr(`${methodName} does not support search queries, path, or mode. It returns all deleted entries.`, 'Remove these parameters.')
         }
         remapKeys(obj, ['keep'], 'limit')
-        if (obj['project_id'] !== undefined) delete obj['project_id']
+        if (obj['project_id'] !== undefined) {
+            if (obj['project_number'] === undefined) obj['project_number'] = obj['project_id']
+            delete obj['project_id']
+        }
     }
 
     if (ANALYTICS_METHODS.includes(methodName) && args.length === 1 && isRecord(args[0])) {

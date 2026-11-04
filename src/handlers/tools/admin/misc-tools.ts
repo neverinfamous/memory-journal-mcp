@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
+import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import {
     MergeTagsOutputSchema,
     SearchAuditLogSchema,
@@ -23,6 +24,7 @@ export function getMiscTools(context: ToolContext): ToolDefinition[] {
                 target_tag: z
                     .union([z.string(), z.number()])
                     .describe('Tag to merge into (will be created if not exists)'),
+                workspace_id: z.string().optional().describe('Workspace whose entries are retagged'),
             }).strict(),
             outputSchema: MergeTagsOutputSchema,
             annotations: {
@@ -33,10 +35,11 @@ export function getMiscTools(context: ToolContext): ToolDefinition[] {
             },
             handler: (params: unknown) => {
                 try {
-                    const { source_tag, target_tag } = z
+                    const { source_tag, target_tag, workspace_id } = z
                         .object({
                             source_tag: z.preprocess((v) => v !== undefined ? String(v as string | number) : v, z.string().min(1)),
                             target_tag: z.preprocess((v) => v !== undefined ? String(v as string | number) : v, z.string().min(1)),
+                            workspace_id: z.string().optional(),
                         }).strict()
                         .parse(params)
 
@@ -56,7 +59,8 @@ export function getMiscTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    const result = db.mergeTags(source_tag, target_tag)
+                    const wsId = resolveWorkspaceId(workspace_id, undefined, context.config)
+                    const result = db.mergeTags(source_tag, target_tag, wsId)
                     return {
                         success: true,
                         sourceTag: source_tag,

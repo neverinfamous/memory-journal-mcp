@@ -109,6 +109,7 @@ export async function exportEntriesToMarkdown(
 
     const files: string[] = []
     let skipped = 0
+    let writeFailures = 0
 
     const validEntries = entries.filter((e) => e.content.trim())
     skipped += entries.length - validEntries.length
@@ -206,6 +207,7 @@ export async function exportEntriesToMarkdown(
                             filepath,
                         })
                         skipped++
+                        writeFailures++
                     } else {
                         logger.error('Failed to write markdown file', {
                             module: 'Exporter',
@@ -213,6 +215,7 @@ export async function exportEntriesToMarkdown(
                             error: err instanceof Error ? err.message : String(err),
                         })
                         skipped++
+                        writeFailures++
                     }
                 } finally {
                     if (handle) {
@@ -228,7 +231,7 @@ export async function exportEntriesToMarkdown(
     }
 
     return {
-        success: true,
+        success: writeFailures === 0,
         exported_count: files.length,
         output_dir: resolvedOutputDir,
         files,

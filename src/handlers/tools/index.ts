@@ -199,9 +199,7 @@ let cachedContextRefs: {
 
 function safeIsAvailable(gh: GitHubIntegration | undefined | null): boolean | undefined {
     if (!gh) return undefined
-    const ghObj = gh as unknown as Record<string, unknown>
-    const isAvail = ghObj['isAvailable']
-    return typeof isAvail === 'function' ? Boolean(isAvail.call(gh)) : undefined
+    return gh.isApiAvailable()
 }
 
 function safeIsInitialized(vm: VectorSearchManager | undefined | null): boolean | undefined {

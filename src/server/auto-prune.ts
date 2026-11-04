@@ -102,10 +102,20 @@ export async function runAutoPrune(
                 context: { filename: backup.filename, sizeBytes: backup.sizeBytes },
             })
         } catch (backupError) {
-            logger.warning('Failed to create pre-prune backup — proceeding anyway', {
+            logger.error('Failed to create pre-prune backup — aborting prune', {
                 module: 'AutoPrune',
                 error: backupError instanceof Error ? backupError.message : String(backupError),
             })
+            return {
+                archivedCount: 0,
+                prunedCount: 0,
+                hardDeletedCount: 0,
+                backupFile: null,
+                archiveOlderThanDays,
+                pruneOlderThanDays,
+                hardDeleteOlderThanDays,
+                importanceThreshold,
+            }
         }
     }
 

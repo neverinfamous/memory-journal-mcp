@@ -379,9 +379,16 @@ export class HttpTransport {
                     endpoint: `http://${host}:${String(port)}/mcp`,
                 }
             )
+            scheduler?.start()
         })
 
-        scheduler?.start()
+        this.httpServer.on('error', (err: Error) => {
+            logger.error('HTTP server failed to bind', {
+                module: 'HTTP',
+                error: err.message,
+            })
+            scheduler?.stop()
+        })
 
         this.httpServer.on('close', () => {
             logger.info('HTTP server closed', { module: 'HTTP' })
@@ -413,7 +420,13 @@ export class HttpTransport {
         this.activeServers.clear()
 
         if (this.httpServer !== null) {
-            this.httpServer.close()
+            const server = this.httpServer
+            await new Promise<void>((resolve, reject) => {
+                server.close((err) => {
+                    if (err) reject(err)
+                    else resolve()
+                })
+            })
         }
 
         logger.info('Shutdown complete', { module: 'HTTP' })

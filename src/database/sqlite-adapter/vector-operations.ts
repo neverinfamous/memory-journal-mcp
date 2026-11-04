@@ -50,18 +50,26 @@ export class VectorOperations {
 
     searchVectors(
         embedding: Float32Array,
-        limit: number
+        limit: number,
+        workspaceId?: string
     ): { entry_id: number; distance: number }[] {
         const db = this.connection.getNativeDb()
-        return db
-            .prepare(
-                `SELECT v.entry_id, v.distance 
+        const scoped = workspaceId !== undefined && workspaceId !== '*'
+        const sql = scoped
+            ? `SELECT v.entry_id, v.distance 
+                 FROM vec_embeddings v
+                 INNER JOIN memory_journal mj ON v.entry_id = mj.id
+                 WHERE v.embedding MATCH ? AND v.k = ? AND mj.deleted_at IS NULL AND mj.workspace_id = ?
+                 LIMIT ?`
+            : `SELECT v.entry_id, v.distance 
                  FROM vec_embeddings v
                  INNER JOIN memory_journal mj ON v.entry_id = mj.id
                  WHERE v.embedding MATCH ? AND v.k = ? AND mj.deleted_at IS NULL 
                  LIMIT ?`
-            )
-            .all(embedding, limit * 4, limit) as { entry_id: number; distance: number }[]
+        const params = scoped
+            ? [embedding, limit * 4, workspaceId, limit]
+            : [embedding, limit * 4, limit]
+        return db.prepare(sql).all(...params) as { entry_id: number; distance: number }[]
     }
 
     getVector(entryId: number): Float32Array | null {
@@ -80,15 +88,16 @@ export class VectorOperations {
         }
     }
 
-    deleteVector(entryId: number): void {
+    deleteVector(entryId: number): boolean {
         try {
-            this.connection
+            const result = this.connection
                 .getNativeDb()
                 .prepare('DELETE FROM vec_embeddings WHERE entry_id = ?')
                 .run(BigInt(entryId))
+            return result.changes > 0
         } catch (error: unknown) {
             if (error instanceof Error && error.message.includes('no such table')) {
-                return
+                return false
             }
             throw error
         }

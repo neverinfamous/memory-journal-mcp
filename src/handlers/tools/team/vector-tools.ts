@@ -339,7 +339,10 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    const entry = teamDb.getEntryById(entry_id, workspace_id)
+                    const entry = teamDb.getEntryById(
+                        entry_id,
+                        resolveWorkspaceId(workspace_id, project_number, context.config)
+                    )
                     if (!entry || entry.projectNumber !== project_number) {
                         return {
                             success: false,

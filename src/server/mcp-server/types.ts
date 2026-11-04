@@ -67,6 +67,7 @@ export interface ServerOptions {
     maxToolInputElements?: number
     // Autonomous MCP tool and parameter healing/interception (default: true; disabled via --no-agent-healing / MCP_AGENT_HEALING=false)
     agentHealing?: boolean
+    instructionLevel?: 'essential' | 'detailed' | 'full'
 }
 
 import type { McpServer } from '@modelcontextprotocol/server'

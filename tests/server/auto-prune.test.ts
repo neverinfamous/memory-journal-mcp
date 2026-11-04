@@ -63,7 +63,7 @@ describe('Auto Prune', () => {
         expect(result.prunedCount).toBe(5)
     })
 
-    it('should proceed even if backup fails', async () => {
+    it('aborts the prune when the safety backup fails', async () => {
         mockDb.exportToFile.mockRejectedValue(new Error('Backup failed'))
         mockDb.executeDataLifecycle.mockReturnValue({ archivedCount: 0, prunedCount: 2, hardDeletedCount: 0 })
 
@@ -75,9 +75,9 @@ describe('Auto Prune', () => {
         })
 
         expect(result.backupFile).toBeNull()
-        expect(mockDb.executeDataLifecycle).toHaveBeenCalled()
-        expect(mockDb.cleanupStaleVectors).toHaveBeenCalled()
-        expect(result.prunedCount).toBe(2)
+        expect(mockDb.executeDataLifecycle).not.toHaveBeenCalled()
+        expect(mockDb.cleanupStaleVectors).not.toHaveBeenCalled()
+        expect(result.prunedCount).toBe(0)
     })
 
     it('should proceed even if cleanupStaleVectors fails', async () => {

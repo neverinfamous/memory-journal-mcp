@@ -111,7 +111,8 @@ export class TagsManager {
 
     mergeTags(
         sourceTag: string,
-        targetTag: string
+        targetTag: string,
+        workspaceId?: string
     ): { entriesUpdated: number; sourceDeleted: boolean } {
         const db = this.db
 
@@ -140,13 +141,20 @@ export class TagsManager {
             ).run(targetTagId)
 
             // Select only valid entries (join ensures no orphans)
+            const scopedWorkspace = workspaceId !== undefined && workspaceId !== '*' ? workspaceId : undefined
             const entryRows = db
                 .prepare(
-                    `SELECT et.entry_id FROM entry_tags et
+                    scopedWorkspace !== undefined
+                        ? `SELECT et.entry_id FROM entry_tags et
+                     JOIN memory_journal mj ON et.entry_id = mj.id
+                     WHERE et.tag_id = ? AND mj.workspace_id = ?`
+                        : `SELECT et.entry_id FROM entry_tags et
                      JOIN memory_journal mj ON et.entry_id = mj.id
                      WHERE et.tag_id = ?`
                 )
-                .all(sourceTagId) as { entry_id: number }[]
+                .all(
+                    ...(scopedWorkspace !== undefined ? [sourceTagId, scopedWorkspace] : [sourceTagId])
+                ) as { entry_id: number }[]
             const entryIds = entryRows.map((r) => r.entry_id)
 
             // Pre-fetch entries already linked to targetTag in one query (O(1) vs O(N))
@@ -173,10 +181,27 @@ export class TagsManager {
                 )
             }
 
-            db.prepare('DELETE FROM entry_tags WHERE tag_id = ?').run(sourceTagId)
-            db.prepare('DELETE FROM tags WHERE id = ?').run(sourceTagId)
+            if (scopedWorkspace !== undefined && entryIds.length > 0) {
+                const idPlaceholders = entryIds.map(() => '?').join(', ')
+                db.prepare(
+                    `DELETE FROM entry_tags WHERE tag_id = ? AND entry_id IN (${idPlaceholders})`
+                ).run(sourceTagId, ...entryIds)
+                db.prepare(
+                    'UPDATE tags SET usage_count = MAX(0, usage_count - ?) WHERE id = ?'
+                ).run(entryIds.length, sourceTagId)
+            } else if (scopedWorkspace === undefined) {
+                db.prepare('DELETE FROM entry_tags WHERE tag_id = ?').run(sourceTagId)
+            }
 
-            return { entriesUpdated: newEntryIds.length, sourceDeleted: true }
+            const remaining = db
+                .prepare('SELECT COUNT(*) as count FROM entry_tags WHERE tag_id = ?')
+                .get(sourceTagId) as { count: number }
+            const sourceDeleted = remaining.count === 0
+            if (sourceDeleted) {
+                db.prepare('DELETE FROM tags WHERE id = ?').run(sourceTagId)
+            }
+
+            return { entriesUpdated: newEntryIds.length, sourceDeleted }
         })
 
         const result = mergeOp()

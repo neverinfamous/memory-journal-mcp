@@ -12,6 +12,19 @@ import { methodTokens } from './method-tokens.js'
 export type InvokeRpcFn = (group: string, method: string, args: unknown[]) => Promise<unknown>
 export type SafeRpcCallFn = (group: string, method: string, args: unknown[]) => Promise<unknown>
 
+function unavailableTool(tool: string): Promise<unknown> {
+    return wrapPromise(
+        Promise.resolve(
+            wrapResult({
+                success: false,
+                error: `${tool} is not available`,
+                code: 'CONFIGURATION_ERROR',
+            })
+        ),
+        tool
+    )
+}
+
 const TABLES = [
     'memory_journal',
     'tags',
@@ -82,8 +95,7 @@ export function createProjectsProxy(
         ? (...args: unknown[]): Promise<unknown> => invokeRpc('admin', 'list_projects', args)
         : methods['analytics']?.includes('get_cross_project_insights')
           ? (...args: unknown[]): Promise<unknown> => invokeRpc('analytics', 'get_cross_project_insights', args)
-          : (): Promise<unknown> =>
-                wrapPromise(Promise.resolve(wrapResult({ success: true, projects: {}, items: [], data: [] })), 'list_projects')
+          : (): Promise<unknown> => unavailableTool('list_projects')
 
     const adminGetProject = methods['admin']?.includes('get_project')
         ? (nameOrParams: unknown): Promise<unknown> => {
@@ -93,19 +105,19 @@ export function createProjectsProxy(
                       : [nameOrParams ?? {}]
               return invokeRpc('admin', 'get_project', params)
           }
-        : (): Promise<unknown> => wrapPromise(Promise.resolve(wrapResult({ success: true })), 'get_project')
+        : (): Promise<unknown> => unavailableTool('get_project')
 
     const adminRegisterProject = methods['admin']?.includes('register_project')
         ? (...args: unknown[]): Promise<unknown> => invokeRpc('admin', 'register_project', args)
-        : (): Promise<unknown> => wrapPromise(Promise.resolve(wrapResult({ success: true })), 'register_project')
+        : (): Promise<unknown> => unavailableTool('register_project')
 
     const adminUpdateProject = methods['admin']?.includes('update_project')
         ? (...args: unknown[]): Promise<unknown> => invokeRpc('admin', 'update_project', args)
-        : (): Promise<unknown> => wrapPromise(Promise.resolve(wrapResult({ success: true })), 'update_project')
+        : (): Promise<unknown> => unavailableTool('update_project')
 
     const adminDeleteProject = methods['admin']?.includes('delete_project')
         ? (...args: unknown[]): Promise<unknown> => invokeRpc('admin', 'delete_project', args)
-        : (): Promise<unknown> => wrapPromise(Promise.resolve(wrapResult({ success: true })), 'delete_project')
+        : (): Promise<unknown> => unavailableTool('delete_project')
 
     const projectsCallable = (...args: unknown[]): Promise<unknown> => adminListProjects(...args)
     Object.assign(projectsCallable, {

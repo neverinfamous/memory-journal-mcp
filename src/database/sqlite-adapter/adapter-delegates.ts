@@ -173,9 +173,10 @@ export class AdapterDelegates {
 
     mergeTags(
         sourceTag: string,
-        targetTag: string
+        targetTag: string,
+        workspaceId?: string
     ): { entriesUpdated: number; sourceDeleted: boolean } {
-        return this.tagsMgr.mergeTags(sourceTag, targetTag)
+        return this.tagsMgr.mergeTags(sourceTag, targetTag, workspaceId)
     }
 
     linkEntries(
@@ -271,17 +272,18 @@ export class AdapterDelegates {
 
     searchVectors(
         embedding: Float32Array,
-        limit: number
+        limit: number,
+        workspaceId?: string
     ): { entry_id: number; distance: number }[] {
-        return this.vectorOps.searchVectors(embedding, limit)
+        return this.vectorOps.searchVectors(embedding, limit, workspaceId)
     }
 
     getVector(entryId: number): Float32Array | null {
         return this.vectorOps.getVector(entryId)
     }
 
-    deleteVector(entryId: number): void {
-        this.vectorOps.deleteVector(entryId)
+    deleteVector(entryId: number): boolean {
+        return this.vectorOps.deleteVector(entryId)
     }
 
     clearVectors(): void {
@@ -303,6 +305,7 @@ export class AdapterDelegates {
         importanceThreshold: number
         dryRun?: boolean
         excludeTags?: string[]
+        workspaceId?: string
     }): ReturnType<IDatabaseAdapter['executeDataLifecycle']> {
         return this.lifecycleOps.executeDataLifecycle(options)
     }

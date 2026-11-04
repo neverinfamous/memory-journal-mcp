@@ -191,12 +191,8 @@ export class JournalApi {
 
         const statsFn = this.analytics['getStatistics']
         if (statsFn) {
-            for (const k of ['count', 'listTables', 'describeTable', 'serverInfo', 'serverHealth', 'health', 'status']) {
-                this.core[k] = statsFn
-            }
-            for (const k of ['analyze', 'serverInfo', 'serverHealth', 'health', 'status']) {
-                this.admin[k] = statsFn
-            }
+            this.core['count'] = statsFn
+            this.admin['analyze'] = statsFn
         }
         if (this.core['getEntryById']) this.core['exists'] = this.core['getEntryById']
     }

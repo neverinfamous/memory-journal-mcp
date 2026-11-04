@@ -52,7 +52,7 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                         project_number,
                         workspace_id,
                     } = TeamLinkEntriesSchema.parse(params)
-                    const wsId = workspace_id ? resolveWorkspaceId(workspace_id, project_number, context.config) : '*'
+                    const wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
 
                     // Guard: self-referential links are not meaningful
                     if (from_entry_id === to_entry_id) {

@@ -295,7 +295,8 @@ export interface IDatabaseAdapter {
     listTags(): Tag[]
     mergeTags(
         sourceTag: string,
-        targetTag: string
+        targetTag: string,
+        workspaceId?: string
     ): { entriesUpdated: number; sourceDeleted: boolean }
 
     // Relationships Manager
@@ -409,9 +410,13 @@ export interface IDatabaseAdapter {
 
     upsertVector(entryId: number, embedding: Float32Array): void
     upsertVectors(vectors: { entryId: number; embedding: Float32Array }[]): void
-    searchVectors(embedding: Float32Array, limit: number): { entry_id: number; distance: number }[]
+    searchVectors(
+        embedding: Float32Array,
+        limit: number,
+        workspaceId?: string
+    ): { entry_id: number; distance: number }[]
     getVector(entryId: number): Float32Array | null
-    deleteVector(entryId: number): void
+    deleteVector(entryId: number): boolean
     clearVectors(): void
     getVectorCount(): number
     cleanupStaleVectors(): void
@@ -424,6 +429,7 @@ export interface IDatabaseAdapter {
         importanceThreshold: number
         dryRun?: boolean
         excludeTags?: string[]
+        workspaceId?: string
     }): {
         archivedCount: number
         prunedCount: number

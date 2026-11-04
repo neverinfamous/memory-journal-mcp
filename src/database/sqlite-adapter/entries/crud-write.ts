@@ -224,7 +224,8 @@ function performUpdateEntry(
         values.push(input.targetWorkspaceId)
     }
 
-    const query = `UPDATE memory_journal SET ${updates.join(', ')} WHERE id = ? AND deleted_at IS NULL`
+    const scopeUpdate = callerWorkspace !== '*'
+    const query = `UPDATE memory_journal SET ${updates.join(', ')} WHERE id = ? AND deleted_at IS NULL${scopeUpdate ? ' AND workspace_id = ?' : ''}`
 
     const txn = db.transaction(() => {
         const maxRevStmt = db.prepare(
@@ -251,7 +252,7 @@ function performUpdateEntry(
         evictStmt.run(id, id)
 
         const stmt = db.prepare(query)
-        const result = stmt.run(...values, id)
+        const result = scopeUpdate ? stmt.run(...values, id, callerWorkspace) : stmt.run(...values, id)
         if (result.changes === 0) return false
 
         if (input.tags !== undefined) {

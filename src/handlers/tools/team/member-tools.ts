@@ -37,6 +37,10 @@ const preprocessMember = (val: unknown): unknown => {
                 break;
             }
         }
+        if ('workspace_id' in obj) {
+            Reflect.deleteProperty(obj, 'workspace_id');
+            modified = true;
+        }
         return modified ? obj : val;
     }
     return val;
@@ -49,12 +53,6 @@ const TeamAddMemberSchema = z.preprocess(
             author: z.string().min(1).describe('The author ID/username to add'),
             role: z.enum(['admin', 'member', 'viewer']).describe('The role to assign'),
             display_name: z.string().optional().describe('Optional display name'),
-            workspace_id: z
-                .string()
-                .optional()
-                .describe(
-                    'Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'
-                ),
         })
         .strict()
 )
@@ -66,12 +64,6 @@ const TeamAddMemberSchemaMcp = z.preprocess(
             author: z.string().optional().describe('The author ID/username to add'),
             role: z.string().optional().describe('The role to assign (admin, member, viewer)'),
             display_name: z.string().optional().describe('Optional display name'),
-            workspace_id: z
-                .string()
-                .optional()
-                .describe(
-                    'Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'
-                ),
         })
         .strict()
 )
@@ -81,12 +73,6 @@ const TeamRemoveMemberSchema = z.preprocess(
     z
         .object({
             author: z.string().min(1).describe('The author ID/username to remove'),
-            workspace_id: z
-                .string()
-                .optional()
-                .describe(
-                    'Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'
-                ),
         })
         .strict()
 )
@@ -96,12 +82,6 @@ const TeamRemoveMemberSchemaMcp = z.preprocess(
     z
         .object({
             author: z.string().optional().describe('The author ID/username to remove'),
-            workspace_id: z
-                .string()
-                .optional()
-                .describe(
-                    'Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'
-                ),
         })
         .strict()
 )
@@ -112,12 +92,6 @@ const TeamUpdateMemberRoleSchema = z.preprocess(
         .object({
             author: z.string().min(1).describe('The author ID/username to update'),
             role: z.enum(['admin', 'member', 'viewer']).describe('The new role to assign'),
-            workspace_id: z
-                .string()
-                .optional()
-                .describe(
-                    'Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'
-                ),
         })
         .strict()
 )
@@ -128,12 +102,6 @@ const TeamUpdateMemberRoleSchemaMcp = z.preprocess(
         .object({
             author: z.string().optional().describe('The author ID/username to update'),
             role: z.string().optional().describe('The new role to assign (admin, member, viewer)'),
-            workspace_id: z
-                .string()
-                .optional()
-                .describe(
-                    'Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'
-                ),
         })
         .strict()
 )
@@ -143,12 +111,6 @@ const TeamGetMemberSchema = z.preprocess(
     z
         .object({
             author: z.string().min(1).describe('The author ID/username to fetch'),
-            workspace_id: z
-                .string()
-                .optional()
-                .describe(
-                    'Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'
-                ),
         })
         .strict()
 )
@@ -158,12 +120,6 @@ const TeamGetMemberSchemaMcp = z.preprocess(
     z
         .object({
             author: z.string().optional().describe('The author ID/username to fetch'),
-            workspace_id: z
-                .string()
-                .optional()
-                .describe(
-                    'Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'
-                ),
         })
         .strict()
 )

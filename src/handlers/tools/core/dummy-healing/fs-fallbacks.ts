@@ -282,7 +282,7 @@ export async function handleGrepSearch(
     }
 
     return {
-        success: true,
+        success: false,
         matches: [],
         totalMatches: 0,
         _healing_note: `🛠️ AUTONOMOUS HEALING: '${toolName}' was executed, but directory was not found or yielded 0 matches. For codebase search, provide a valid 'search_path'. For journal search, use 'search_entries'.`,

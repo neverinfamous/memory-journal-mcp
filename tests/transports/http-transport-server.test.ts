@@ -25,7 +25,9 @@ const {
     mockSetupStateless: vi.fn().mockResolvedValue(undefined),
     mockSetupLegacySSE: vi.fn(),
     mockListen: vi.fn(),
-    mockClose: vi.fn(),
+    mockClose: vi.fn((cb?: (err?: Error) => void) => {
+        cb?.()
+    }),
     mockOn: vi.fn(),
     mockUse: vi.fn(),
     mockGet: vi.fn(),

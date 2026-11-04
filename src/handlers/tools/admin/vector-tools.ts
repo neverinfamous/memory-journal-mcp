@@ -123,7 +123,7 @@ export function getVectorTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
                     const wsId = resolveWorkspaceId(undefined, project_number, context.config)
-                    const entry = db.getEntryById(entry_id, project_number !== undefined ? wsId : '*')
+                    const entry = db.getEntryById(entry_id, wsId)
                     if (!entry || (project_number !== undefined && entry.projectNumber !== project_number)) {
                         return {
                             success: false,

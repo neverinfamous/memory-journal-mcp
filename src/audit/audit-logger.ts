@@ -38,6 +38,12 @@ const DEFAULT_RECENT_COUNT = 50
 /** Special logPath value that routes audit output to stderr */
 const STDERR_SENTINEL = 'stderr'
 
+function nodeErrorCode(err: unknown): string | undefined {
+    if (typeof err !== 'object' || err === null || !('code' in err)) return undefined
+    const code = err.code
+    return typeof code === 'string' ? code : undefined
+}
+
 /**
  * Maximum bytes to read from the end of the audit log for `recent()`.
  * 64 KB is enough for ~100+ typical JSONL audit entries (~500 bytes each).
@@ -59,6 +65,7 @@ export class AuditLogger {
     private flushTimer: ReturnType<typeof setInterval> | null = null
     private flushQueue: Promise<void> = Promise.resolve()
     private closed = false
+    private flushError: Error | null = null
     private dirEnsured = false
     private readonly stderrMode: boolean
 
@@ -191,8 +198,8 @@ export class AuditLogger {
                     }
                 }
             })
-            .catch(() => {
-                /* ignore */
+            .catch((err: unknown) => {
+                this.flushError = err instanceof Error ? err : new Error(String(err))
             })
 
         await this.flushQueue
@@ -210,6 +217,11 @@ export class AuditLogger {
         }
 
         await this.flush()
+        if (this.flushError !== null) {
+            const flushError = this.flushError
+            this.flushError = null
+            throw flushError
+        }
     }
 
     /**
@@ -346,9 +358,14 @@ export class AuditLogger {
         try {
             await mkdir(dirname(this.config.logPath), { recursive: true })
             this.dirEnsured = true
-        } catch {
-            // Directory may already exist — that's fine
-            this.dirEnsured = true
+        } catch (err: unknown) {
+            if (nodeErrorCode(err) === 'EEXIST') {
+                this.dirEnsured = true
+                return
+            }
+            const message = err instanceof Error ? err.message : String(err)
+            logger.error(`Failed to create audit directory: ${message}`, { module: 'Audit' })
+            throw err
         }
     }
 

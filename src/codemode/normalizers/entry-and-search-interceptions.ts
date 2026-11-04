@@ -268,9 +268,6 @@ function applyBatchAndMutationInterceptions(
             obj['expected_version'] = obj['version']
             delete obj['version']
         }
-        if ((methodName === 'delete_entry' || methodName === 'deleteEntry') && obj['project_number'] !== undefined) {
-            delete obj['project_number']
-        }
     }
 
     if (CREATE_METHODS.has(methodName) && args.length === 1 && isRecord(args[0])) {
