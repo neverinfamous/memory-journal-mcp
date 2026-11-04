@@ -54,7 +54,13 @@ function createMockDbAdapter() {
         getRawDb: vi.fn().mockReturnValue(mockDb),
         getActiveEntryCount: vi.fn().mockReturnValue(0),
         getEntriesPage: vi.fn().mockReturnValue({ entries: [] }),
-        getEntryById: vi.fn().mockImplementation((id: number) => ({ id, content: `Entry ${id}`, entryType: 'note', tags: [] })),
+        getEntryById: vi.fn().mockImplementation((id: number) => ({
+            id,
+            content: `Entry ${id}`,
+            entryType: 'note',
+            tags: [],
+            workspaceId: 'default',
+        })),
 
         // Proxy new adapter primitives to the original test assertions
         getVector: (entryId: number) => {

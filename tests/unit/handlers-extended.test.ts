@@ -381,6 +381,7 @@ describe('Extended Tool Handlers (Team, IO, Admin, Core)', () => {
 
             const restoreOk = (await findTool(adminTools, 'restore_entry').handler({
                 id: createdId,
+                workspace_id: 'memory-journal-mcp',
             })) as { success: boolean }
             expect(restoreOk.success).toBe(true)
 

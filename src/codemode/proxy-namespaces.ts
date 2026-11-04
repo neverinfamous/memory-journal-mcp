@@ -211,10 +211,7 @@ export function createTagsProxy(
         get(t, p): unknown {
             if (typeof p === 'symbol' || p === 'then') return undefined
             if (p in t) return Reflect.get(t, p) as unknown
-            if (typeof p === 'string') {
-                const normalized = p.toLowerCase().replace(/_/g, '')
-                if (normalized === 'merge' || normalized === 'mergetags') return adminMergeTags
-            }
+            if (typeof p === 'string' && methodTokens(p).includes('merge')) return adminMergeTags
             return coreListTags
         },
     })

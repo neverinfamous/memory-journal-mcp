@@ -163,7 +163,7 @@ describe('Code Mode Extended Coverage', () => {
             expect(failed['0']).toBeUndefined()
             expect(failed['entries']).toEqual([])
             expect(typeof failed['map']).toBe('function')
-            expect((failed['map'] as () => unknown[])()).toEqual([])
+            expect(() => (failed['map'] as () => unknown[])()).toThrow('Invalid input')
             expect([...(failed as unknown as Iterable<unknown>)]).toEqual([])
 
             // 3. Array result proxy

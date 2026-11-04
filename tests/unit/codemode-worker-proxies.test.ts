@@ -220,7 +220,7 @@ describe('Code Mode Worker Proxies & Globals', () => {
         ).resolves.toMatchObject({
             success: true,
         })
-        expect((dbDomain['close'] as () => { success: boolean })().success).toBe(true)
+        expect((dbDomain['close'] as () => { success: boolean })().success).toBe(false)
         expect((dbDomain['getDb'] as () => unknown)()).toBe(shimMj)
         const unknownDbCall = await (dbDomain['rawCustom'] as () => Promise<{
             success: boolean
@@ -254,7 +254,7 @@ describe('Code Mode Worker Proxies & Globals', () => {
             limit: 3,
             sort_by: 'importance',
         })
-        expect((shimMj['close'] as () => { success: boolean })().success).toBe(true)
+        expect((shimMj['close'] as () => { success: boolean })().success).toBe(false)
         expect((shimMj['execSync'] as () => string)()).toBe('')
         const spawnRes = (shimMj['spawn'] as (c: string, cb: () => void) => { kill: () => boolean })(
             'ls',

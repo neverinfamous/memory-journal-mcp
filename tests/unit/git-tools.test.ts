@@ -205,7 +205,7 @@ describe('Git Tools Handler', () => {
             expect(res.results).toEqual([])
         })
 
-        it('should locate entry across workspaces or with explicit workspace_id', async () => {
+        it('should locate an entry only in its own workspace', async () => {
             const entry = db.createEntry({ content: 'Non-default workspace entry', workspaceId: 'custom-ws' })
             const tools = getGitTools(context)
             const tool = tools.find((t) => t.name === 'check_entry_staleness')!
@@ -216,12 +216,12 @@ describe('Git Tools Handler', () => {
             expect(res.success).toBe(true)
             expect(res.results).toEqual([])
 
-            const resFallback = (await tool.handler({ entry_id: entry.id })) as {
+            const resOmitted = (await tool.handler({ entry_id: entry.id })) as {
                 success: boolean
-                results: unknown[]
+                error?: string
             }
-            expect(resFallback.success).toBe(true)
-            expect(resFallback.results).toEqual([])
+            expect(resOmitted.success).toBe(false)
+            expect(resOmitted.error).toContain('not found')
         })
 
         it('should detect existing modified files, deleted files, and path traversal anchors', async () => {

@@ -13,7 +13,8 @@ function createTagsManager(): { conn: NativeConnectionManager; manager: TagsMana
 
     db.exec(`
         CREATE TABLE IF NOT EXISTS memory_journal (
-            id INTEGER PRIMARY KEY AUTOINCREMENT
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            workspace_id TEXT DEFAULT 'default'
         );
         CREATE TABLE IF NOT EXISTS tags (
             id INTEGER PRIMARY KEY AUTOINCREMENT,

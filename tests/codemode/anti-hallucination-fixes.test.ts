@@ -152,7 +152,7 @@ describe('Anti-Hallucination Fixes', () => {
             expect(wrapped.relationships).toEqual([])
             expect(wrapped.entries).toEqual([])
             expect(typeof wrapped.map).toBe('function')
-            expect((wrapped.map as () => unknown[])()).toEqual([])
+            expect(() => (wrapped.map as () => unknown[])()).toThrow('Entry 6259 not found')
         })
     })
 
