@@ -78,7 +78,7 @@ export const cliSchema = z.object({
     const normalized = val.replace(/\r\n/g, '\n');
     let firstLine = normalized.trim().split('\n')[0];
     let corrected = false;
-
+    
     const strictMatch = firstLine.match(CONVENTIONAL_COMMIT_REGEX);
     if (strictMatch) {
       const [, type, scope, bang, subject] = strictMatch;
@@ -97,7 +97,7 @@ export const cliSchema = z.object({
           corrected = true;
         }
       }
-
+      
       if (!corrected) {
         const lowerFirst = firstLine.toLowerCase();
         let matchedType = 'chore';
@@ -123,7 +123,7 @@ export const cliSchema = z.object({
         corrected = true;
       }
     }
-
+    
     if (corrected) {
       console.warn(`⚠️ AUTONOMOUS HEALING: Auto-corrected commit message to conventional format: "${firstLine}"`);
       const lines = normalized.trim().split('\n');
@@ -175,7 +175,7 @@ export const cliSchema = z.object({
       if (typeof val !== 'string') return val;
       const cap = capitalize(val);
       if ((VALID_CATEGORIES as readonly string[]).includes(cap)) return cap;
-
+      
       const mapped = TYPE_TO_CATEGORY[val.toLowerCase()];
       if (mapped) {
         console.warn(`⚠️ AUTONOMOUS HEALING: Invalid category '${val}' mapped to '${mapped}'.`);
@@ -224,7 +224,7 @@ function parseArguments(): CliArgs {
         .otherwise((e) => fatalError(`Error parsing CLI arguments: ${getErrorMessage(e)}`));
     }
   }
-
+  
   const cliResult = parseCLI();
   const values = cliResult.values;
   const positionals = cliResult.positionals;
@@ -271,7 +271,7 @@ function parseArguments(): CliArgs {
     console.error("🛠️ AUTONOMOUS HEALING: Invalid CLI arguments provided to commit.ts");
     parsed.error.issues.forEach(err => {
       const field = err.path.join('.');
-
+      
       const formattedMsg = match(err)
         .with({ code: 'too_small', type: 'string' }, (e) => `Too small: expected string length to be ${e.inclusive ? '>=' : '>'}${e.minimum}`)
         .with({ code: 'too_small', type: 'array' }, (e) => `Too small: expected array length to be ${e.inclusive ? '>=' : '>'}${e.minimum}`)
@@ -343,7 +343,7 @@ Options:
   --journal              Automatically create a memory journal entry for this commit.
   --journal-project <id> Specify the project ID for the journal entry (defaults to omitting it).
   --help                 Show this help message.
-
+  
 🤖 AI AGENT INSTRUCTIONS:
 - MULTI-LINE HISTORY: ALWAYS write history to a scratch file (e.g. \`scratch/hist.txt\`) and use \`--history-file <path>\` instead of \`--history\` to prevent shell escaping failures.
 - MESSAGE FORMAT: The commit message (\`--msg\` or first positional argument) MUST strictly follow conventional commits: \`type(scope): subject\`.
@@ -356,71 +356,8 @@ Options:
 
 
 // [INTENT]: Validates the git index state to prevent accidental staging of agent scratch payloads. [SIDE-EFFECT]: Aborts process if '.agents/scratch' paths are detected in the staging area. [AGENT-HINT]: Do NOT bypass this check; it is a critical safeguard for the project repository.
-const BINARY_EXTENSIONS = new Set([
-  '.db', '.wasm', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.ico',
-  '.woff', '.woff2', '.pdf', '.zip', '.gz', '.node',
-])
-
-/** Match the workspace save rules: LF, no trailing spaces, one final newline. */
-function canonicalizeText(text: string): string {
-  const lf = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-  const lines = lf.split('\n');
-  if (lf.endsWith('\n')) lines.pop();
-  const trimmed = lines.map((line) => line.replace(/[ \t]+$/g, ''));
-  while (trimmed.length > 0 && trimmed[trimmed.length - 1] === '') trimmed.pop();
-  if (trimmed.length === 0) return '';
-  return `${trimmed.join('\n')}\n`;
-}
-
-function normalizeTextFile(filePath: string): void {
-  let stat: fs.Stats;
-  try {
-    stat = fs.statSync(filePath);
-  } catch {
-    return;
-  }
-  if (!stat.isFile()) return;
-  if (BINARY_EXTENSIONS.has(path.extname(filePath).toLowerCase())) return;
-  const buf = fs.readFileSync(filePath);
-  if (buf.includes(0)) return;
-  const text = buf.toString('utf8');
-  const next = canonicalizeText(text);
-  if (next !== text) fs.writeFileSync(filePath, next);
-}
-
-function filesToNormalize(cwd: string, target: string): string[] {
-  if (!fs.existsSync(target)) return [];
-  if (fs.statSync(target).isFile()) return [target];
-  let status = '';
-  try {
-    status = execFileSync('git', ['status', '-z', '--', target], { cwd, encoding: 'utf8' });
-  } catch {
-    return [];
-  }
-  const files: string[] = [];
-  const parts = status.split('\0');
-  for (let i = 0; i < parts.length; i++) {
-    const part = parts[i];
-    if (part === undefined || part.length < 4) continue;
-    const statusCode = part.slice(0, 2);
-    if (statusCode.includes('D')) continue;
-    let filepath = part.slice(3);
-    if (statusCode.includes('R') || statusCode.includes('C')) {
-      i += 1;
-      const renamed = parts[i];
-      if (renamed !== undefined && renamed !== '') filepath = renamed;
-    }
-    if (filepath === '') continue;
-    files.push(path.resolve(cwd, filepath));
-  }
-  return files;
-}
-
 function ensureStagedFiles(cwd: string, filesToAdd?: string[]): void {
   if (filesToAdd && filesToAdd.length > 0) {
-    for (const target of filesToAdd) {
-      for (const filePath of filesToNormalize(cwd, target)) normalizeTextFile(filePath)
-    }
     try {
       execFileSync('git', ['add', ...filesToAdd], { stdio: 'inherit', cwd });
     } catch (e) {
@@ -450,7 +387,7 @@ function ensureStagedFiles(cwd: string, filesToAdd?: string[]): void {
   const parts = status.split('\0');
   const stagedScratchFiles: string[] = [];
   let hasStagedFiles = false;
-
+  
   let i = 0;
   while (i < parts.length) {
     const part = parts[i];
@@ -461,7 +398,7 @@ function ensureStagedFiles(cwd: string, filesToAdd?: string[]): void {
     const indexStatus = part[0];
     const workTreeStatus = part[1];
     const filepath = part.substring(3);
-
+    
     if (indexStatus !== ' ' && indexStatus !== '?') {
       hasStagedFiles = true;
       if (indexStatus !== 'D') {
@@ -470,14 +407,14 @@ function ensureStagedFiles(cwd: string, filesToAdd?: string[]): void {
         }
       }
     }
-
+    
     if (indexStatus === 'R' || indexStatus === 'C' || workTreeStatus === 'R' || workTreeStatus === 'C') {
       i += 2;
     } else {
       i += 1;
     }
   }
-
+  
   if (!hasStagedFiles) {
     console.error('🛠️ AUTONOMOUS HEALING: No files staged for commit.');
     console.error('You MUST explicitly stage the files you want to commit using `git add <file-path>` before running this wrapper.');
@@ -507,7 +444,7 @@ function parseCategory(history: string, type: string): { category: string; entry
   if (categoryMatch) {
     const matchedCat = categoryMatch[1];
     const capitalizedMatch = capitalize(matchedCat);
-
+    
     if (isValidCategory(capitalizedMatch)) {
       return { category: capitalizedMatch, entry: categoryMatch[2].trim() };
     }
@@ -560,7 +497,7 @@ function generateHistoryEntry(args: CliArgs, type: string, historyContent: strin
   }
 
   let body = `\n\nHistory-Category: ${category}`;
-
+  
   if (entry || !args['no-history']) {
       body += `\nHistory-Entry: ${entry}`;
   }
@@ -595,7 +532,7 @@ function executeCommit(header: string, body: string, cwd?: string): string {
   const sha = execSync('git log -1 --format=%h', { encoding: 'utf-8', cwd }).trim();
   console.log(`\n✅ Successfully committed ${sha}`);
   console.log(`__COMMIT_SHA__:${sha}`);
-
+  
   return sha;
 }
 
@@ -611,27 +548,27 @@ function createJournalEntry(sha: string, header: string, args: CliArgs, historyC
       'type: "architecture"',
       'tags: ["commit-narrative"]'
     ];
-
+    
     if (args['journal-project']) {
       frontmatterLines.push(`project: ${args['journal-project']}`);
     }
-
+    
     frontmatterLines.push(`impact: ${args.impact}`);
     frontmatterLines.push(`trust: ${args.confidence}`);
     frontmatterLines.push(`validation_status: "${args.validation}"`);
-
+    
     frontmatterLines.push('auto_context:');
     frontmatterLines.push('  type: "session-commits"');
     frontmatterLines.push(`  commits: ["${sha}"]`);
     frontmatterLines.push('---');
-
+    
     const journalBody = historyContent || header;
     const journalContent = `${frontmatterLines.join('\n')}\n${journalBody}\n\nCommit: ${sha}`;
-
+    
     const journalFile = path.join(os.tmpdir(), `${JOURNAL_PREFIX}${sha}.md`);
     tempFilesToCleanup.add(journalFile);
     fs.writeFileSync(journalFile, journalContent);
-
+    
     try {
       execFileSync('memory-journal-mcp', ['entry', 'create', '--file', journalFile], { stdio: 'inherit', shell: process.platform === 'win32', cwd });
     } finally {
@@ -670,7 +607,7 @@ function main(): void {
     const commitMatch = firstLine.match(CONVENTIONAL_COMMIT_REGEX);
     const type = commitMatch ? commitMatch[1] : 'chore';
     ensureStagedFiles(cwd, args.add);
-
+    
     let historyContent = args.history ? args.history.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n') : '';
     if (args['history-file']) {
       const resolvedPath = path.resolve(args['history-file']);
