@@ -37,6 +37,15 @@ export function applyGitInterceptions(methodName: string, args: unknown[]): { ar
             delete obj['max_count'];
         }
 
+        if (obj['repository'] !== undefined && obj['repo'] === undefined) {
+            obj['repo'] = obj['repository'];
+            delete obj['repository'];
+        }
+        if (obj['workspace'] !== undefined && obj['workspace_id'] === undefined) {
+            obj['workspace_id'] = obj['workspace'];
+            delete obj['workspace'];
+        }
+
         // Q/Query error interception for non-search tools
         if (!methodName.includes('search') && (obj['q'] !== undefined || obj['query'] !== undefined || obj['search'] !== undefined)) {
              return { error: {

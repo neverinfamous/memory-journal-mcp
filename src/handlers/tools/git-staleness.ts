@@ -1,5 +1,64 @@
-import type { AnchorStatus } from '../../types/index.js'
+import * as fs from 'node:fs'
+import * as path from 'node:path'
+import type { AnchorStatus, ToolHandlerConfig } from '../../types/index.js'
 import { mcpLogger } from '../../utils/mcp-logger.js'
+import {
+    loadProjectRegistryFromConfig,
+    findCanonicalRegistryKey,
+    cwdMatchesRegistryPath,
+} from '../../utils/workspace-resolver.js'
+
+export interface GitWorkingDirInput {
+    cwd?: string
+    repo?: string
+    workspace_id?: string
+    workspaceId?: string
+    project_number?: number | string
+    path?: string
+}
+
+export function resolveGitWorkingDir(
+    input: GitWorkingDirInput,
+    config?: ToolHandlerConfig
+): string {
+    if (input.cwd && fs.existsSync(input.cwd)) {
+        return input.cwd
+    }
+    const target = input.repo ?? input.workspace_id ?? input.workspaceId
+    const registry = config?.projectRegistry ?? loadProjectRegistryFromConfig()
+    if (target && registry) {
+        const canonicalKey = findCanonicalRegistryKey(target, registry)
+        const entry = canonicalKey ? registry[canonicalKey] : registry[target]
+        if (entry?.path && fs.existsSync(entry.path)) {
+            return entry.path
+        }
+    }
+    const pNum = typeof input.project_number === 'string' ? Number(input.project_number) : input.project_number
+    if (pNum !== undefined && !Number.isNaN(pNum) && registry) {
+        for (const entry of Object.values(registry)) {
+            if (entry.project_number === pNum && entry.path && fs.existsSync(entry.path)) {
+                return entry.path
+            }
+        }
+    }
+    const currentCwd = process.cwd()
+    if (fs.existsSync(path.join(currentCwd, '.git'))) {
+        return currentCwd
+    }
+    if (registry) {
+        for (const entry of Object.values(registry)) {
+            if (entry.path && cwdMatchesRegistryPath(entry.path, currentCwd)) {
+                return entry.path
+            }
+        }
+        const defaultWs = config?.defaultWorkspaceId ?? 'memory-journal-mcp'
+        const defaultEntry = registry[defaultWs]
+        if (defaultEntry?.path && fs.existsSync(defaultEntry.path)) {
+            return defaultEntry.path
+        }
+    }
+    return currentCwd
+}
 
 export interface StalenessCheckRow {
     anchorId: number

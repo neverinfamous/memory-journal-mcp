@@ -53,7 +53,7 @@ export const PROJECT_KEYWORD_ALIASES: Record<string, string[]> = {
     'do-test-worker': ['do-test-worker', 'do_test_worker']
 }
 
-function findCanonicalRegistryKey(aliasOrKey: string, registry?: Record<string, RegistryEntry>): string | undefined {
+export function findCanonicalRegistryKey(aliasOrKey: string, registry?: Record<string, RegistryEntry>): string | undefined {
     const lower = aliasOrKey.toLowerCase().trim()
     if (!registry) return undefined
     

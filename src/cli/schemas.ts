@@ -31,7 +31,8 @@ export const coreOptionsSchema = z.object({
     dumpConfig: z.boolean().optional(),
     logLevel: z.string().optional(),
     maxToolInputElements: z.string().optional(),
-    agentHealing: z.boolean().optional()
+    agentHealing: z.boolean().optional(),
+    instructionLevel: z.string().optional()
 })
 
 export const databaseOptionsSchema = z.object({

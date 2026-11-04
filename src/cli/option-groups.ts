@@ -18,6 +18,7 @@ export function addCoreOptions(command: Command): Command {
                 '--no-agent-healing',
                 'Disable autonomous MCP tool and parameter healing/interception (env: MCP_AGENT_HEALING=false)'
             )
+            .option('--instruction-level <level>', 'Instruction verbosity level: essential, detailed, full (env: INSTRUCTION_LEVEL)')
     })
 }
 

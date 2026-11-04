@@ -181,8 +181,17 @@ export function wrapResult(result: unknown): unknown {
             }
 
             const entryObj = targetRecord['entry']
-            if ((prop === 'id' || prop === 'entryId') && isObject(entryObj) && 'id' in entryObj) {
-                return entryObj['id']
+            if (isObject(entryObj)) {
+                if (prop === 'id' || prop === 'entryId') {
+                    if ('id' in entryObj) return entryObj['id']
+                }
+                if (prop === 'created_at' && 'timestamp' in entryObj) {
+                    return entryObj['timestamp']
+                }
+                if (typeof prop === 'string' && prop in entryObj) {
+                    const val = entryObj[prop]
+                    return val !== null && typeof val === 'object' && !Array.isArray(val) ? wrapResult(val) : val
+                }
             }
 
             const projObj = targetRecord['project']

@@ -65,6 +65,9 @@ export class LifecycleOperations {
             WHERE e.deleted_at IS NULL
               AND julianday('now') - julianday(e.timestamp) > ?
               AND ${importanceExpr} < ?
+              AND e.significance_type IS NULL
+              AND COALESCE(e.impact_score, 0.0) < 0.5
+              AND COALESCE(rs.rel_count, 0) = 0
               ${excludeTagsSql}
         `
         const pruneParams: unknown[] = [

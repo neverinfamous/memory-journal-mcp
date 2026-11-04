@@ -2329,6 +2329,63 @@ return { success: true, projectId };
             expect(res.entry?.id).toBe(14051)
             expect(res.entry?.workspaceId).toBe('adamic')
         })
+
+        it('should proxy entry properties through worker-result-proxy when entry object is present', async () => {
+            const { wrapResult } = await import('../src/codemode/worker-result-proxy.js')
+            const wrapped = wrapResult({
+                success: true,
+                entry: {
+                    id: 14040,
+                    title: 'Code Quality Audit',
+                    content: 'Detailed audit report content',
+                    tags: ['audit', 'code-quality'],
+                    timestamp: '2026-11-01T01:42:19.879Z'
+                }
+            }) as any
+
+            expect(wrapped.id).toBe(14040)
+            expect(wrapped.content).toBe('Detailed audit report content')
+            expect(wrapped.title).toBe('Code Quality Audit')
+            expect(wrapped.tags).toEqual(['audit', 'code-quality'])
+            expect(wrapped.created_at).toBe('2026-11-01T01:42:19.879Z')
+            expect(wrapped.content.slice(0, 8)).toBe('Detailed')
+        })
+
+        it('should recognize workspace_id as a filter in search_entries without query', async () => {
+            const { callTool } = await import('../src/handlers/tools/index.js')
+            const mockDb = {
+                getRecentEntries: vi.fn().mockReturnValue({ entries: [{ id: 1, content: 'test' }], count: 1 }),
+                searchEntries: vi.fn().mockReturnValue({ entries: [{ id: 1, content: 'test' }], count: 1 }),
+            } as any
+
+            const res = (await callTool(
+                'search_entries',
+                {
+                    workspace_id: '*',
+                    limit: 1
+                },
+                mockDb,
+                undefined,
+                undefined,
+                mockConfig
+            )) as { success?: boolean; error?: string; entries?: unknown[] }
+
+            expect(res.error).toBeUndefined()
+            expect(res.entries).toBeDefined()
+        })
+
+        it('should resolve git working directory using repo and projectRegistry', async () => {
+            const { resolveGitWorkingDir } = await import('../src/handlers/tools/git-staleness.js')
+            const resolved = resolveGitWorkingDir({ repo: 'memory-journal-mcp' }, {
+                projectRegistry: {
+                    'memory-journal-mcp': {
+                        path: process.cwd(),
+                        project_number: 5
+                    }
+                }
+            } as any)
+            expect(resolved).toBe(process.cwd())
+        })
     })
 })
 

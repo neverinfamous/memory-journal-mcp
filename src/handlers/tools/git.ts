@@ -4,7 +4,7 @@ import { formatHandlerError } from '../../utils/error-helpers.js'
 import { sendProgress } from '../../utils/progress-utils.js'
 import { ResourceNotFoundError } from '../../types/errors.js'
 import { resolveWorkspaceId } from '../../utils/workspace-resolver.js'
-import { stalenessFailure } from './git-staleness.js'
+import { stalenessFailure, resolveGitWorkingDir } from './git-staleness.js'
 import { coerceNumber } from '../../utils/query-helpers.js'
 import { ErrorFieldsMixin } from './error-fields-mixin.js'
 import { relaxedNumber } from './schemas.js'
@@ -20,51 +20,64 @@ import type { CommitEntry } from '../../vendor/lib-git-history/schema.js'
 
 // --- Schemas ---
 export const GitHistoryOptionsSchema = z.object({
-    ref: z.string().optional(),
-    path: z.string().optional(),
-    maxCount: z.number().optional(),
-    since: z.string().optional(),
-    sortBy: z.enum(['date', 'impact']).optional(),
-    scope: z.string().optional(),
-    techDebtAudit: z.boolean().optional(),
+    ref: z.string().optional(), path: z.string().optional(), maxCount: z.number().optional(),
+    since: z.string().optional(), sortBy: z.enum(['date', 'impact']).optional(),
+    scope: z.string().optional(), techDebtAudit: z.boolean().optional(),
+    repo: z.string().optional(), workspace_id: z.string().optional(), workspaceId: z.string().optional(),
+    project_number: z.number().optional(), cwd: z.string().optional(),
 })
 
 export const GitHistoryOptionsSchemaMcp = z.object({
     ref: z.string().optional().describe('Git reference (branch, tag, commit). Default: HEAD'),
     path: z.string().optional().describe('Filter by specific file or directory path'),
     maxCount: relaxedNumber().optional().describe('Maximum number of commits to return. Default: 50'),
-    max_count: relaxedNumber().optional(),
-    limit: relaxedNumber().optional(),
-    since: z.string().optional().describe('Show commits more recent than a specific date (e.g. "2023-01-01")'),
+    max_count: relaxedNumber().optional(), limit: relaxedNumber().optional(),
+    repo: z.string().optional().describe('Target repository or workspace name'),
+    workspace_id: z.string().optional(), workspaceId: z.string().optional(),
+    project_number: relaxedNumber().optional(), cwd: z.string().optional(),
+    since: z.string().optional().describe('Show commits more recent than a specific date'),
     sortBy: z.string().optional().describe('Sort commits by date or impact score'),
     scope: z.string().optional().describe('Filter commits by a specific scope'),
     techDebtAudit: z.boolean().optional().describe('Filter for high impact commits with low trust or missing validation'),
 }).transform((d) => ({ ...d, maxCount: d.maxCount ?? d.max_count ?? d.limit }))
 
 export const GitSearchOptionsSchema = z.object({
-    query: z.string().min(1),
-    maxCount: z.number().optional(),
-    sortBy: z.enum(['date', 'impact']).optional(),
-    scope: z.string().optional(),
-    techDebtAudit: z.boolean().optional(),
+    query: z.string().min(1), maxCount: z.number().optional(),
+    sortBy: z.enum(['date', 'impact']).optional(), scope: z.string().optional(),
+    techDebtAudit: z.boolean().optional(), repo: z.string().optional(),
+    workspace_id: z.string().optional(), workspaceId: z.string().optional(),
+    project_number: z.number().optional(), cwd: z.string().optional(),
 })
 
 export const GitSearchOptionsSchemaMcp = z.object({
     query: z.string().optional().describe('Search query to match in commit messages'),
     maxCount: relaxedNumber().optional().describe('Maximum number of commits to return. Default: 50'),
-    max_count: relaxedNumber().optional(),
-    limit: relaxedNumber().optional(),
+    max_count: relaxedNumber().optional(), limit: relaxedNumber().optional(),
+    repo: z.string().optional().describe('Target repository or workspace name'),
+    workspace_id: z.string().optional(), workspaceId: z.string().optional(),
+    project_number: relaxedNumber().optional(), cwd: z.string().optional(),
     sortBy: z.string().optional().describe('Sort commits by date or impact score'),
     scope: z.string().optional().describe('Filter commits by a specific scope'),
     techDebtAudit: z.boolean().optional().describe('Filter for high impact commits with low trust or missing validation'),
 }).transform((d) => ({ ...d, maxCount: d.maxCount ?? d.max_count ?? d.limit }))
 
 export const GitReleaseInfoOptionsSchema = z.object({
-    ref: z.string().optional(),
+    ref: z.string().optional(), repo: z.string().optional(), workspace_id: z.string().optional(), cwd: z.string().optional(),
 })
 
 export const GitReleaseInfoOptionsSchemaMcp = z.object({
     ref: z.string().optional().describe('Git reference (branch, tag, commit). Default: HEAD'),
+    repo: z.string().optional().describe('Target repository or workspace name'),
+    workspace_id: z.string().optional(), cwd: z.string().optional(),
+})
+
+export const GitUnreleasedOptionsSchema = z.object({
+    repo: z.string().optional(), workspace_id: z.string().optional(), cwd: z.string().optional(),
+})
+
+export const GitAnalyzePatternsOptionsSchema = z.object({
+    maxCount: relaxedNumber().optional().default(50), repo: z.string().optional(),
+    workspace_id: z.string().optional(), cwd: z.string().optional(),
 })
 
 export const GitOutputSchema = z.object({
@@ -174,8 +187,9 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
             },
             handler: async (params: unknown) => {
                 try {
-                    const cwd = process.cwd()
-                    const input = GitHistoryOptionsSchema.parse(GitHistoryOptionsSchemaMcp.parse(params))
+                    const parsedMcp = GitHistoryOptionsSchemaMcp.parse(params)
+                    const cwd = resolveGitWorkingDir(parsedMcp, context.config)
+                    const input = GitHistoryOptionsSchema.parse(parsedMcp)
                     await sendProgress(progress, 0, 1, 'Fetching commit history...')
                     const commits = await fetchCommits(input, cwd)
                     return { success: true, commits }
@@ -199,8 +213,9 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
             },
             handler: async (params: unknown) => {
                 try {
-                    const cwd = process.cwd()
-                    const input = GitSearchOptionsSchema.parse(GitSearchOptionsSchemaMcp.parse(params))
+                    const parsedMcp = GitSearchOptionsSchemaMcp.parse(params)
+                    const cwd = resolveGitWorkingDir(parsedMcp, context.config)
+                    const input = GitSearchOptionsSchema.parse(parsedMcp)
                     await sendProgress(progress, 0, 1, `Searching commits for "${input.query}"...`)
                     const commits = await fetchCommits(input, cwd)
                     return { success: true, commits }
@@ -224,8 +239,9 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
             },
             handler: async (params: unknown) => {
                 try {
-                    const cwd = process.cwd()
-                    const input = GitReleaseInfoOptionsSchema.parse(params)
+                    const parsedMcp = GitReleaseInfoOptionsSchemaMcp.parse(params)
+                    const cwd = resolveGitWorkingDir(parsedMcp, context.config)
+                    const input = GitReleaseInfoOptionsSchema.parse(parsedMcp)
                     await sendProgress(progress, 0, 1, 'Fetching release info...')
                     const commits = await fetchCommits({ ref: input.ref, maxCount: 10 }, cwd)
                     return { success: true, commits }
@@ -239,17 +255,13 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
             title: 'Get Unreleased Commits',
             description: 'Get commits since the last tag/release',
             group: 'git',
-            inputSchema: z.object({}),
+            inputSchema: GitUnreleasedOptionsSchema,
             outputSchema: GitOutputSchema,
-            annotations: {
-                readOnlyHint: true,
-                destructiveHint: false,
-                idempotentHint: true,
-                openWorldHint: false,
-            },
-            handler: async () => {
+            annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+            handler: async (params?: unknown) => {
                 try {
-                    const cwd = process.cwd()
+                    const input = GitUnreleasedOptionsSchema.parse(params ?? {})
+                    const cwd = resolveGitWorkingDir(input, context.config)
                     await sendProgress(progress, 0, 1, 'Fetching unreleased commits...')
                     const changelog = await getUnreleasedChangelog(cwd)
                     return { success: true, changelog }
@@ -263,28 +275,20 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
             title: 'Analyze Commit Patterns',
             description: 'Analyze patterns in a list of commits or recent history',
             group: 'git',
-            inputSchema: z.object({
-                maxCount: relaxedNumber()
-                    .optional()
-                    .describe('Maximum number of commits to analyze. Default: 50'),
-            }),
+            inputSchema: GitAnalyzePatternsOptionsSchema,
             outputSchema: z.object({
                 success: z.boolean(),
                 analysis: z.unknown().optional(),
                 error: z.string().optional()
             }).extend(ErrorFieldsMixin.shape),
-            annotations: {
-                readOnlyHint: true,
-                destructiveHint: false,
-                idempotentHint: true,
-                openWorldHint: false,
-            },
+            annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
             handler: async (params: unknown) => {
                 try {
-                    const cwd = process.cwd()
-                    const input = z.object({ maxCount: z.number().optional().default(50) }).parse(params)
+                    const input = GitAnalyzePatternsOptionsSchema.parse(params ?? {})
+                    const cwd = resolveGitWorkingDir(input, context.config)
                     await sendProgress(progress, 0, 2, 'Fetching commits for analysis...')
-                    const commits = await fetchCommits({ maxCount: input.maxCount }, cwd)
+                    const max = typeof input.maxCount === 'number' ? input.maxCount : Number(input.maxCount)
+                    const commits = await fetchCommits({ maxCount: Number.isNaN(max) ? 50 : max }, cwd)
                     await sendProgress(progress, 1, 2, 'Analyzing commits...')
 
                     const analysis = {
