@@ -92,6 +92,30 @@ export function registerMcpProtocolRoutes(
         isLegacySse = false
     ): void => {
         if (sseTransports.size >= MAX_ACTIVE_SESSIONS) {
+            // Evict the oldest idle stateful session (LRU) if there are idle sessions
+            // past a brief grace window (5s), preventing multi-client test suites from
+            // exhausting the cap while still enforcing the hard cap under burst floods.
+            let oldestSid: string | undefined
+            let oldestTime = Infinity
+            for (const [candidateSid, lastActive] of sessionLastActivity.entries()) {
+                if (lastActive < oldestTime) {
+                    oldestTime = lastActive
+                    oldestSid = candidateSid
+                }
+            }
+            if (oldestSid !== undefined && Date.now() - oldestTime > 5_000) {
+                const staleTransport = sseTransports.get(oldestSid)
+                if (staleTransport !== undefined) {
+                    void staleTransport.close()
+                    sseTransports.delete(oldestSid)
+                }
+                sessionOwners.delete(oldestSid)
+                sessionLastActivity.delete(oldestSid)
+                globalSubscriptionManager.unregisterServer(oldestSid)
+            }
+        }
+
+        if (sseTransports.size >= MAX_ACTIVE_SESSIONS) {
             res.status(503).json({
                 error: { message: 'Service Unavailable: Maximum active stateful sessions reached' },
             })

@@ -67,6 +67,17 @@ export async function createClient(port?: number, authToken?: string): Promise<C
         { capabilities: { experimental: { progress: {} }, progress: {} } }
     )
     await client.connect(transport)
+
+    const originalClose = client.close.bind(client)
+    client.close = async () => {
+        try {
+            await transport.terminateSession()
+        } catch {
+            // Ignore termination errors if server is already closed or in stateless mode
+        }
+        await originalClose()
+    }
+
     return client
 }
 

@@ -1,3 +1,4 @@
+import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { logger } from '../../utils/logger.js'
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
@@ -23,6 +24,22 @@ function resolveEmbeddingCacheDir(dbPath: string | undefined): string {
         return path.join(path.dirname(dbPath), '.cache', 'huggingface')
     }
     return path.join('.cache', 'huggingface')
+}
+
+function isModelCachedOnDisk(cacheDir: string, modelName: string): boolean {
+    try {
+        const modelParts = modelName.split('/')
+        const onnxPath = path.join(cacheDir, ...modelParts, 'onnx', 'model.onnx')
+        const configPath = path.join(cacheDir, ...modelParts, 'config.json')
+        return fs.existsSync(onnxPath) && fs.existsSync(configPath)
+    } catch {
+        return false
+    }
+}
+
+function isTransientFileLockError(err: unknown): boolean {
+    const msg = err instanceof Error ? err.message : String(err)
+    return msg.includes('EPERM') || msg.includes('EBUSY') || msg.includes('EACCES')
 }
 
 export class VectorSearchManager {
@@ -95,29 +112,48 @@ export class VectorSearchManager {
                 logger.info(`Detected ${this.dimensions} dimensions for ${this.modelName}`)
             } else {
                 // Lazy load transformers
+                const cacheDir = resolveEmbeddingCacheDir(dbPathFromAdapter(this.dbAdapter))
                 if (this.transformers === null) {
                     const transformersModule = await import('@huggingface/transformers')
                     this.transformers = transformersModule
-                    // Configure transformers to only use local models if we're in a completely offline environment,
-                    // otherwise let it download models to cache.
-                    const cacheDir = resolveEmbeddingCacheDir(dbPathFromAdapter(this.dbAdapter))
-                    transformersModule.env.allowRemoteModels = true
+                    // Configure transformers to use local models directly if already cached on disk,
+                    // avoiding concurrent Hub re-validation and model.onnx rename EPERM races on Windows.
+                    const cachedLocally = isModelCachedOnDisk(cacheDir, this.modelName)
+                    transformersModule.env.allowRemoteModels = !cachedLocally
                     transformersModule.env.cacheDir = cacheDir
                     transformersModule.env.localModelPath = cacheDir
                 }
 
-                // Load model
+                // Load model (with retry backoff for transient Windows file lock races across processes)
                 logger.info(`Loading embedding model: ${this.modelName}`)
                 const transformersModule = this.transformers as {
                     pipeline: (task: string, model: string, options: unknown) => Promise<unknown>
+                    env: { allowRemoteModels: boolean; cacheDir: string; localModelPath: string }
                 }
-                this.pipeline = await transformersModule.pipeline(
-                    'feature-extraction',
-                    this.modelName,
-                    {
-                        dtype: 'fp32',
+
+                const maxAttempts = 5
+                for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+                    try {
+                        if (isModelCachedOnDisk(cacheDir, this.modelName)) {
+                            transformersModule.env.allowRemoteModels = false
+                        }
+                        this.pipeline = await transformersModule.pipeline(
+                            'feature-extraction',
+                            this.modelName,
+                            {
+                                dtype: 'fp32',
+                            }
+                        )
+                        break
+                    } catch (pipelineErr) {
+                        if (attempt < maxAttempts && isTransientFileLockError(pipelineErr)) {
+                            transformersModule.env.allowRemoteModels = true
+                            await new Promise((r) => setTimeout(r, 250 * attempt))
+                            continue
+                        }
+                        throw pipelineErr
                     }
-                )
+                }
                 logger.info('Embedding model loaded')
 
                 // Detect dimensions dynamically by doing a test embedding
