@@ -590,7 +590,7 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
             }, mockConfig as unknown as import('../src/types/index.js').ToolHandlerConfig)
             expect(res3.workspaceId).toBe('adamic-blog')
             expect(res3.projectNumber).toBe(22)
-            
+
             // Shorter project name should still match if only it is present
             const res4 = resolveProjectContext({
                 content: "Updated adamic to latest version"
@@ -1140,13 +1140,13 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
         it('should route list_projects and get_project tool fallbacks correctly (Issue 2 regression)', async () => {
             const { getDummyHealingTools } = await import('../src/handlers/tools/core/dummy-healing.js')
             const { getAdminTools } = await import('../src/handlers/tools/admin/index.js')
-            
+
             const context = { config: { projectRegistry: {} }, db: {}, runtime: {}, github: {}, teamDb: {}, vectorManager: {} } as any
             const dummyTools = getDummyHealingTools(context)
-            
+
             const listProjectsTool = dummyTools.find(t => t.name === 'list_projects')
             expect(listProjectsTool).toBeDefined()
-            
+
             const getProjectTool = dummyTools.find(t => t.name === 'mj.admin.getProject')
             expect(getProjectTool).toBeDefined()
         })
@@ -1894,7 +1894,7 @@ return { success: true, projectId };
             expect(typeof proxy['getDatabase']).toBe('function')
             expect(typeof proxy['getDb']).toBe('function')
             expect(typeof proxy['connectToDatabase']).toBe('function')
-            
+
             const dbInstance = (proxy['getDatabase'] as () => unknown)()
             expect(dbInstance).toBeDefined()
         })
@@ -2388,6 +2388,3 @@ return { success: true, projectId };
         })
     })
 })
-
-
-

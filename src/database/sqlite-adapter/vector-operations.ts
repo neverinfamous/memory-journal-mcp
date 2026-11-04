@@ -56,15 +56,15 @@ export class VectorOperations {
         const db = this.connection.getNativeDb()
         const scoped = workspaceId !== undefined && workspaceId !== '*'
         const sql = scoped
-            ? `SELECT v.entry_id, v.distance 
+            ? `SELECT v.entry_id, v.distance
                  FROM vec_embeddings v
                  INNER JOIN memory_journal mj ON v.entry_id = mj.id
                  WHERE v.embedding MATCH ? AND v.k = ? AND mj.deleted_at IS NULL AND mj.workspace_id = ?
                  LIMIT ?`
-            : `SELECT v.entry_id, v.distance 
+            : `SELECT v.entry_id, v.distance
                  FROM vec_embeddings v
                  INNER JOIN memory_journal mj ON v.entry_id = mj.id
-                 WHERE v.embedding MATCH ? AND v.k = ? AND mj.deleted_at IS NULL 
+                 WHERE v.embedding MATCH ? AND v.k = ? AND mj.deleted_at IS NULL
                  LIMIT ?`
         const params = scoped
             ? [embedding, limit * 4, workspaceId, limit]

@@ -265,9 +265,9 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     if (!teamDb) return { ...TEAM_DB_ERROR_RESPONSE }
-                    
+
                     const { entry_id, project_number, workspace_id } = TeamRestoreEntrySchema.parse(params)
-                    
+
                     const projectNumber = project_number
                     if (projectNumber === undefined || projectNumber === null) {
                         return {
@@ -291,7 +291,7 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                             error: `Team entry ${String(entry_id)} not found or lacks permission for project ${projectNumber}`,
                         }
                     }
-                    
+
                     const success = teamDb.restoreEntry(entry_id, wsId)
                     if (!success) {
                         return {

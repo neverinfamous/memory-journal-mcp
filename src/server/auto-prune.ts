@@ -128,7 +128,7 @@ export async function runAutoPrune(
         dryRun,
         excludeTags
     })
-    
+
     const archivedCount = result.archivedCount
     const prunedCount = result.prunedCount
     const hardDeletedCount = result.hardDeletedCount
@@ -137,7 +137,7 @@ export async function runAutoPrune(
         const cArchived = result.candidates?.archived.length ?? 0
         const cPruned = result.candidates?.pruned.length ?? 0
         const cHard = result.candidates?.hardDeleted.length ?? 0
-        
+
         if (cArchived > 0 || cPruned > 0 || cHard > 0) {
             logger.info(`Auto-prune dry-run: found candidates`, {
                 module: 'AutoPrune',

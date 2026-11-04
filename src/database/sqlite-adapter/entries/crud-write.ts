@@ -240,12 +240,12 @@ function performUpdateEntry(
         snapshotStmt.run(id, nextRev, existing.content, new Date().toISOString(), null)
 
         const evictStmt = db.prepare(`
-            DELETE FROM entry_revisions 
-            WHERE entry_id = ? 
+            DELETE FROM entry_revisions
+            WHERE entry_id = ?
               AND revision_number IN (
-                  SELECT revision_number FROM entry_revisions 
-                  WHERE entry_id = ? 
-                  ORDER BY revision_number DESC 
+                  SELECT revision_number FROM entry_revisions
+                  WHERE entry_id = ?
+                  ORDER BY revision_number DESC
                   LIMIT -1 OFFSET 10
               )
         `)

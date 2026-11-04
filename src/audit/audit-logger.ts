@@ -295,18 +295,18 @@ export class AuditLogger {
      */
     async search(filters: AuditSearchFilters): Promise<AuditEntry[]> {
         if (this.stderrMode) return []
-        
+
         await this.flush()
-        
+
         const results: AuditEntry[] = []
         const limit = filters.limit ?? 100
-        
+
         // Search current log first, then older rotated logs .1 through .5
         const files = [this.config.logPath]
         for (let i = 1; i <= MAX_ARCHIVES; i++) {
             files.push(`${this.config.logPath}.${String(i)}`)
         }
-        
+
         for (const file of files) {
             try {
                 const content = await readFile(file, 'utf-8')
@@ -317,7 +317,7 @@ export class AuditLogger {
                         const line = lines[i]
                         if (!line) continue
                         const entry = JSON.parse(line) as AuditEntry
-                        
+
                         // Apply filters
                         if (filters.tool_name && entry.tool !== filters.tool_name) continue
                         if (filters.user && entry.user !== filters.user) continue
@@ -325,9 +325,9 @@ export class AuditLogger {
                         if (filters.category && entry.category !== filters.category) continue
                         if (filters.date_range?.start && entry.timestamp < filters.date_range.start) continue
                         if (filters.date_range?.end && entry.timestamp > filters.date_range.end) continue
-                        
+
                         results.push(entry)
-                        
+
                         if (results.length >= limit) {
                             return results
                         }
@@ -342,7 +342,7 @@ export class AuditLogger {
                 }
             }
         }
-        
+
         return results
     }
 

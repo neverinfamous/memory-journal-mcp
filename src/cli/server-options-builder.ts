@@ -66,7 +66,7 @@ export function buildServerOptions(
     } else if ((db === defaultDbPath || db === undefined) && configDbPath) {
         db = configDbPath;
     }
-    
+
     const configTestDbPath = catchConfig(() => resolver.resolve<string>('testDbPath'), undefined);
     const rawTestDb = catchConfig(() => resolver.resolve<string>('testDb', 'TEST_DB_PATH'), undefined);
     const testDb = rawTestDb ?? configTestDbPath;
@@ -163,7 +163,7 @@ export function buildServerOptions(
         trustProxy: catchConfig(() => resolver.resolveBool('trustProxy', 'TRUST_PROXY') ?? false, false),
         publicOrigin: catchConfig(() => resolver.resolve<string>('publicOrigin', 'PUBLIC_ORIGIN'), undefined),
         codemodeInternalFullAccess: catchConfig(() => resolver.resolveBool('codemodeInternalFullAccess', 'CODEMODE_INTERNAL_FULL_ACCESS') ?? false, false),
-        
+
         projectRegistry: catchConfig(() => {
             const raw = resolver.resolve<unknown>('projectRegistry', 'PROJECT_REGISTRY');
             if (raw === undefined || raw === null || raw === '') return undefined;
@@ -193,7 +193,7 @@ export function buildServerOptions(
                 throw new Error(`Failed to parse PROJECT_REGISTRY: ${e instanceof Error ? e.message : String(e)}`, { cause: e });
             }
         }, undefined),
-        
+
         additionalTeamDbs: catchConfig(() => {
             const raw = resolver.resolve<unknown>('additionalTeamDbs', 'ADDITIONAL_TEAM_DBS');
             if (raw === undefined || raw === null || raw === '') return undefined;

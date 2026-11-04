@@ -284,7 +284,7 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
 
                     const { success, indexed, failed, firstError } =
                         await teamVectorManager.rebuildIndex(progress)
-                    
+
                     if (!success && firstError) {
                         logger.warning(`Team vector index rebuild had errors: ${firstError}`)
                     }
@@ -376,4 +376,3 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
         },
     ]
 }
-
