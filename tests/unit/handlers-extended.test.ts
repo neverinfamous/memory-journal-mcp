@@ -375,6 +375,7 @@ describe('Extended Tool Handlers (Team, IO, Admin, Core)', () => {
             // 5. delete_entry & restore_entry (using 'id' alias)
             const delOk = (await findTool(adminTools, 'delete_entry').handler({
                 entry_id: createdId,
+                workspace_id: 'memory-journal-mcp',
             })) as { success: boolean }
             expect(delOk.success).toBe(true)
 

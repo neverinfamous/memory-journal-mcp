@@ -50,7 +50,13 @@ const {
         }),
         listen: vi.fn().mockImplementation((_port: number, _host: string, cb?: () => void) => {
             if (cb) cb()
-            return { close: vi.fn(), on: vi.fn(), setTimeout: vi.fn() }
+            return {
+                close: vi.fn((cb?: (err?: Error) => void) => {
+                    cb?.()
+                }),
+                on: vi.fn(),
+                setTimeout: vi.fn(),
+            }
         }),
     }
 

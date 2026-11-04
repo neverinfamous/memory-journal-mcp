@@ -259,7 +259,9 @@ vi.mock('express', function () {
             if (cb) cb()
             return {
                 on: vi.fn(),
-                close: vi.fn(),
+                close: vi.fn((cb?: (err?: Error) => void) => {
+                    cb?.()
+                }),
             }
         }),
     }
