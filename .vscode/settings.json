@@ -62,6 +62,7 @@
     "source.fixAll.eslint": "explicit",
     "source.organizeImports": "never"
   },
+  "files.eol": "\n",
   "files.trimTrailingWhitespace": true,
   "files.insertFinalNewline": true,
   "files.trimFinalNewlines": true,
