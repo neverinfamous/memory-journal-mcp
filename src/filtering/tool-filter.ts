@@ -13,9 +13,9 @@ export type { ToolFilterConfig } from '../types/index.js'
 
 export { TOOL_GROUPS, META_GROUPS }
 
-/** 
+/**
  * Tools that are always enabled regardless of filter configuration.
- * Prevents agents from locking themselves out of the config system or Code Mode. 
+ * Prevents agents from locking themselves out of the config system or Code Mode.
  */
 export const ALWAYS_ENABLED_TOOLS = ['update_configuration', 'mj_execute_code'] as const
 

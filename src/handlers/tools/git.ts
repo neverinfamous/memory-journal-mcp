@@ -96,7 +96,7 @@ async function fetchCommits(input: FetchCommitsInput, cwd: string): Promise<Comm
         grep: input.query,
     }
     const gitArgs = ['log', ...buildGitBaseArgs(cliArgs, input.ref || 'HEAD')]
-    
+
     gitArgs.push(
         '--name-status',
         '-z',
@@ -110,7 +110,7 @@ async function fetchCommits(input: FetchCommitsInput, cwd: string): Promise<Comm
         if (parsed) batch.push(parsed)
     }
     const commits = await processBatch(batch, cliArgs, [])
-    
+
     let processedCommits = commits
 
     if (input.scope !== undefined) {
@@ -286,7 +286,7 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                     await sendProgress(progress, 0, 2, 'Fetching commits for analysis...')
                     const commits = await fetchCommits({ maxCount: input.maxCount }, cwd)
                     await sendProgress(progress, 1, 2, 'Analyzing commits...')
-                    
+
                     const analysis = {
                         totalCommits: commits.length,
                         byType: {} as Record<string, number>,
@@ -297,7 +297,7 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                         totalImpact: 0,
                         byCategory: {} as Record<string, number>
                     }
-                    
+
                     for (const c of commits) {
                         if (c.type) {
                             analysis.byType[c.type] = (analysis.byType[c.type] ?? 0) + 1
@@ -308,21 +308,21 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                         if (c.isBreaking) {
                             analysis.breakingCount++
                         }
-                        
+
                         analysis.totalInsertions += (c.totalInsertions ?? 0)
                         analysis.totalDeletions += (c.totalDeletions ?? 0)
-                        
+
                         if (c.metadata?.impact !== undefined) {
                             const imp = typeof c.metadata.impact === 'number' ? c.metadata.impact : parseFloat(c.metadata.impact ?? '0')
                             if (!isNaN(imp)) analysis.totalImpact += imp
                         }
-                        
+
                         const categories = c.metadata?.category ?? []
                         for (const cat of categories) {
                             analysis.byCategory[cat] = (analysis.byCategory[cat] ?? 0) + 1
                         }
                     }
-                    
+
                     return { success: true, analysis }
                 } catch (err) {
                     return formatHandlerError(err)
@@ -411,7 +411,7 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                         commitsSince: number
                         isDeleted: boolean
                     }[] = []
-                    
+
                     for (const target of targets) {
                         const anchors = db.getAnchorsByEntryId(target.id)
                         for (const anchor of anchors) {
@@ -431,7 +431,7 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                                 }
 
                                 isDeleted = !fs.existsSync(fullPath)
-                                
+
                                 if (isDeleted) {
                                     newStatus = 'invalidated'
                                 } else {
@@ -446,7 +446,7 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                                         newStatus = 'valid'
                                     }
                                 }
-                                
+
                                 if (newStatus !== anchor.status) {
                                     if (anchor.id !== undefined) {
                                         db.updateAnchorStatus(anchor.id, newStatus)

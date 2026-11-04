@@ -125,7 +125,7 @@ export async function rebuildIndex(
 
         offset += pageSize
     }
-    
+
     if (errorsCount === 0) {
         try {
             dbAdapter.cleanupStaleVectors()

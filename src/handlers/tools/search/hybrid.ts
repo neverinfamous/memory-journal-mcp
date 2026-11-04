@@ -46,7 +46,7 @@ export function computeRRFScores(rankedLists: number[][], weights?: number[]): M
         const list = rankedLists[i]
         const weight = weights?.[i] ?? 1.0
         if (!list) continue
-        
+
         for (let rank = 0; rank < list.length; rank++) {
             const entryId = list[rank]
             if (entryId === undefined) continue

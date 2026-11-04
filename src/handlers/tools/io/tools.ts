@@ -285,7 +285,7 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
                         const successCount = result.created + result.updated + result.skipped
                         const total = successCount + result.errors.length
                         const message = `Importing ${total} entries: ${successCount} succeeded, ${result.errors.length} failed.`
-                        
+
                         throw new AggregateMcpError(
                             message,
                             result.errors.map(e => ({ message: e.error, file: e.file })),

@@ -59,7 +59,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                 try {
                     coerceSignificanceAlias(params)
                     const input = CreateEntrySchema.parse(params)
-                    
+
                     const resolved = resolveProjectContext(
                         {
                             workspace_id: input.workspace_id,
@@ -451,14 +451,14 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         error_type: z.enum(['zod', 'type', 'database', 'generic', 'memory_journal']),
                         message: z.string().optional().default('Test error message'),
                     }).parse(params)
-                    
+
                     // Helper to simulate database errors which SQLite often throws as raw Error objects
                     if (input.error_type === 'database') {
                         const err = new Error(`SQLITE_CONSTRAINT: ${input.message}`)
                         Object.defineProperty(err, 'code', { value: 'SQLITE_CONSTRAINT', enumerable: true })
                         throw err
                     }
-                    
+
                     if (input.error_type === 'type') {
                         throw new TypeError(input.message)
                     }
@@ -470,12 +470,12 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                             'internal'
                         )
                     }
-                    
+
                     if (input.error_type === 'zod') {
                         // Force a zod error
                         z.object({ required_field: z.string() }).parse({})
                     }
-                    
+
                     throw new Error(input.message)
                 } catch (err) {
                     return formatHandlerError(err)

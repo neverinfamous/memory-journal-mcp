@@ -247,7 +247,7 @@ export async function initializeDependencies(options: ServerOptions): Promise<Se
             .initialize()
             .then(async () => {
                 if (testVectorManager) await testVectorManager.initialize()
-                
+
                 // Initialize team vector sequentially to avoid concurrent ONNX model loading crashes
                 if (primaryTeamVectorManager) {
                     logger.info(
@@ -360,7 +360,7 @@ export async function initializeDependencies(options: ServerOptions): Promise<Se
             options.scheduler.pruneImportanceThreshold = options.pruneImportanceThreshold
             options.scheduler.pruneDryRun = options.pruneDryRun
             options.scheduler.pruneExcludeTags = options.pruneExcludeTags
-            
+
             scheduler = new Scheduler(options.scheduler, db, vectorManager, runtime)
         }
     }

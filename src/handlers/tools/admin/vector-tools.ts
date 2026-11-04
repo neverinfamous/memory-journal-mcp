@@ -45,7 +45,7 @@ export function getVectorTools(context: ToolContext): ToolDefinition[] {
                             progress,
                             parsed.project_number !== undefined ? { projectNumber: parsed.project_number } : undefined
                         )
-                    
+
                     if (!success && firstError) {
                         logger.warning(`Vector index rebuild had errors: ${firstError}`)
                     }

@@ -22,7 +22,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
     const { transport, defaultProjectNumber } = options;
 
     const filterConfig = configManager.getConfig().toolFilterConfig;
-    
+
     const baseConfig: ToolHandlerConfig = {
         defaultProjectNumber,
         defaultWorkspaceId: options.defaultWorkspaceId,
@@ -212,5 +212,3 @@ export async function createServer(options: ServerOptions): Promise<void> {
         process.on('SIGTERM', handleHttpShutdown)
     }
 }
-
-
