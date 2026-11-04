@@ -335,22 +335,26 @@ export function buildSandboxUserContext(
     }
 
     const resolvedProjectNumber =
-        numericProjectId ?? (typeof projectId === 'number' ? projectId : (sessionContext.config?.defaultProjectNumber ?? 1))
+        numericProjectId ?? (typeof projectId === 'number' ? projectId : sessionContext.config?.defaultProjectNumber)
     const sessionFromUser = getNonEmptyString(userContext, {}, ['session_id', 'sessionId'])
     const resolvedSessionId =
         typeof input['session_id'] === 'string' && input['session_id'].length > 0
             ? input['session_id']
             : (sessionFromUser ?? getRequestContext()?.sessionId ?? 'session-default')
-    const resolvedWorkspaceId = workspaceId ?? sessionContext.config?.defaultWorkspaceId ?? 'default'
+    const resolvedWorkspaceId = workspaceId ?? sessionContext.config?.defaultWorkspaceId
 
-    userContext['project_number'] ??= resolvedProjectNumber
-    userContext['projectNumber'] ??= resolvedProjectNumber
+    if (resolvedProjectNumber !== undefined) {
+        userContext['project_number'] ??= resolvedProjectNumber
+        userContext['projectNumber'] ??= resolvedProjectNumber
+        userContext['project_id'] ??= resolvedProjectNumber
+        userContext['projectId'] ??= resolvedProjectNumber
+    }
     userContext['session_id'] ??= resolvedSessionId
     userContext['sessionId'] ??= resolvedSessionId
-    userContext['workspace_id'] ??= resolvedWorkspaceId
-    userContext['workspaceId'] ??= resolvedWorkspaceId
-    userContext['project_id'] ??= resolvedProjectNumber
-    userContext['projectId'] ??= resolvedProjectNumber
+    if (resolvedWorkspaceId !== undefined) {
+        userContext['workspace_id'] ??= resolvedWorkspaceId
+        userContext['workspaceId'] ??= resolvedWorkspaceId
+    }
 
     const directSize = parseSizeInBytes(
         input.max_result_size ?? input.maxResultSize ?? input.max_result_size_bytes ?? input.maxResultSizeBytes ??

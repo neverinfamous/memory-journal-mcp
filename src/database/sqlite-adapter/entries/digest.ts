@@ -205,7 +205,7 @@ export function computeDigest(db: Database, workspaceId = 'default'): DigestSnap
 export function saveAnalyticsSnapshot(
     db: Database,
     type: string,
-    data: Record<string, unknown>
+    data: object
 ): number {
     const stmt = db.prepare(`INSERT INTO analytics_snapshots (snapshot_type, data) VALUES (?, ?)`)
     const result = stmt.run(type, JSON.stringify(data))

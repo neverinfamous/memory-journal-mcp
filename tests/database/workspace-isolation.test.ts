@@ -97,4 +97,21 @@ describe('DatabaseAdapter Workspace Isolation', () => {
         expect(afterBeta).toBe(beforeBeta)
     })
 
+    it('does not delete or restore another workspace when workspace is omitted', () => {
+        const alpha = db.createEntry({ content: 'Scoped delete alpha', workspaceId: 'alpha' })
+        const beta = db.createEntry({ content: 'Scoped delete beta', workspaceId: 'beta' })
+
+        expect(db.deleteEntry(alpha.id)).toBe(false)
+        expect(db.getEntryById(alpha.id, 'alpha')?.id).toBe(alpha.id)
+
+        expect(db.deleteEntry(alpha.id, false, 'alpha')).toBe(true)
+        expect(db.getDeletedEntries().entries.some((entry) => entry.id === alpha.id)).toBe(false)
+        expect(db.getDeletedEntries({ workspaceId: 'alpha' }).entries.some((entry) => entry.id === alpha.id)).toBe(true)
+
+        expect(db.restoreEntry(alpha.id)).toBe(false)
+        expect(db.restoreEntry(alpha.id, 'alpha')).toBe(true)
+        expect(db.getEntryById(alpha.id, 'alpha')?.content).toBe('Scoped delete alpha')
+        expect(db.getEntryById(beta.id, 'beta')?.content).toBe('Scoped delete beta')
+    })
+
 })

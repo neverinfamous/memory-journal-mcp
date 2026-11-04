@@ -252,12 +252,13 @@ export function attachImportanceScoresToEntries(
 
 export function getEntriesByIdsWithImportance(
     context: EntriesSharedContext,
-    entryIds: number[]
+    entryIds: number[],
+    workspaceId?: string
 ): Map<number, { entry: JournalEntry; importance: ImportanceResult }> {
     const result = new Map<number, { entry: JournalEntry; importance: ImportanceResult }>()
     if (entryIds.length === 0) return result
 
-    const entriesMap = getEntriesByIds(context, entryIds)
+    const entriesMap = getEntriesByIds(context, entryIds, workspaceId)
     if (entriesMap.size === 0) return result
 
     const { db } = context

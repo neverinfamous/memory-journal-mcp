@@ -157,7 +157,7 @@ export function getSearchEntriesTool(context: ToolContext): ToolDefinition[] {
                                 wsId
                             )
                             const entryIds = semanticResults.map((r) => r.entryId)
-                            const entriesMap = db.getEntriesByIds(entryIds)
+                            const entriesMap = db.getEntriesByIds(entryIds, wsId)
 
                             // Pre-hydrate tags to avoid N+1 queries during metadata filtering
                             if (input.tags && input.tags.length > 0) {
@@ -196,7 +196,7 @@ export function getSearchEntriesTool(context: ToolContext): ToolDefinition[] {
                                     const id = entry['id']
                                     if (typeof id === 'number') ids.push(id)
                                 }
-                                const importanceMap = db.getEntriesByIdsWithImportance(ids)
+                                const importanceMap = db.getEntriesByIdsWithImportance(ids, wsId)
                                 const scored = ranked.map((entry) => {
                                     const id = entry['id']
                                     const score =
@@ -250,7 +250,7 @@ export function getSearchEntriesTool(context: ToolContext): ToolDefinition[] {
                             // Post-fetch importance re-sort for vector results
                             if (input.sort_by === 'importance') {
                                 const ids = hybridEntries.map((e) => e['id'] as number)
-                                const importanceMap = db.getEntriesByIdsWithImportance(ids)
+                                const importanceMap = db.getEntriesByIdsWithImportance(ids, wsId)
                                 const scored = hybridEntries.map((e) => {
                                     const entryId = e['id'] as number
                                     const imp = importanceMap.get(entryId)?.importance.score ?? 0

@@ -388,7 +388,7 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                     
                     const existingMap =
                         typeof teamDb.getEntriesByIds === 'function'
-                            ? teamDb.getEntriesByIds(input.entry_ids)
+                            ? teamDb.getEntriesByIds(input.entry_ids, wsId)
                             : null
                     const authorMap =
                         typeof teamDb.getAuthorsForEntries === 'function'

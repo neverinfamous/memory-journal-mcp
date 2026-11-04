@@ -75,7 +75,7 @@ export function getMiscSearchTools(context: ToolContext): ToolDefinition[] {
                     }).parse(params)
                     const rawWs = parsed.workspace_id ?? parsed.workspaceId
                     const rawProj = parsed.project_number ?? parsed.projectNumber
-                    const wsId = rawWs === '*' ? '*' : (rawWs !== undefined || rawProj !== undefined ? resolveWorkspaceId(rawWs, rawProj, context.config) : undefined)
+                    const wsId = rawWs === '*' ? '*' : resolveWorkspaceId(rawWs, rawProj, context.config)
                     const result = db.getDeletedEntries({ limit: parsed.limit, offset: parsed.offset, workspaceId: wsId })
                     return {
                         success: true,

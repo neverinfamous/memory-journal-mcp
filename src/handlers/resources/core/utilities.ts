@@ -10,6 +10,7 @@ import {
     ASSISTANT_FOCUSED,
 } from '../../../utils/resource-annotations.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from '../shared.js'
+import { resourceWorkspace } from '../shared.js'
 // removed transformEntryRow
 import * as fs from 'node:fs'
 import * as path from 'node:path'
@@ -32,7 +33,7 @@ export const recentResource: InternalResourceDef = {
     icons: [ICON_CLOCK],
     annotations: withPriority(0.8, ASSISTANT_FOCUSED),
     handler: (_uri: string, context: ResourceContext): ResourceResult => {
-        const { entries } = context.db.getRecentEntries(10)
+        const { entries } = context.db.getRecentEntries(10, undefined, 'timestamp', undefined, false, resourceWorkspace(context))
         const lastModified = entries[0]?.timestamp ?? new Date().toISOString()
         const payloadData = { entries, count: entries.length }
         const tokenEstimate = Math.ceil(JSON.stringify(payloadData).length / 4)

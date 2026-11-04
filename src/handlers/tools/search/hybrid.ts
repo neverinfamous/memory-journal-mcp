@@ -133,7 +133,7 @@ export async function hybridSearch(
         .map(([id]) => id)
 
     // Batch fetch entries
-    const entriesMap = db.getEntriesByIds(sortedIds)
+    const entriesMap = db.getEntriesByIds(sortedIds, options.workspaceId ?? 'default')
 
     // Pre-hydrate tags to avoid N+1 queries during metadata filtering
     if (options.tags && options.tags.length > 0) {

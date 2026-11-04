@@ -188,7 +188,9 @@ export function buildSandboxGlobals(
         (getGroupMethod(shimMj, 'admin', 'update_configuration') ??
             getGroupMethod(shimMj, 'admin', 'updateConfiguration'))?.(arg)
     const saveMemoryFn = (arg?: unknown): unknown =>
-        arg !== undefined && arg !== null ? updateMemoryFn(arg) : Promise.resolve({ success: true })
+        arg !== undefined && arg !== null
+            ? updateMemoryFn(arg)
+            : Promise.resolve({ success: false, code: 'VALIDATION_ERROR', error: 'saveMemory requires a payload' })
 
     const sandbox: Record<string, unknown> = {
         mj: shimMj,
@@ -309,7 +311,8 @@ export function buildSandboxGlobals(
         createMemory: updateMemoryFn,
         create_memory: updateMemoryFn,
         loadJournal: (): Promise<unknown> => Promise.resolve(shimMj),
-        saveJournal: (): Promise<unknown> => Promise.resolve({ success: true }),
+        saveJournal: (): Promise<unknown> =>
+            Promise.resolve({ success: false, code: 'VALIDATION_ERROR', error: 'saveJournal is not available in the sandbox' }),
         readJournal: (): unknown =>
             getGroupMethod(shimMj, 'core', 'getRecentEntries')?.({ limit: 50 }),
         loadMemory: (): Promise<unknown> => Promise.resolve(shimMj),

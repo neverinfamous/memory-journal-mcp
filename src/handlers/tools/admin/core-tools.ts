@@ -207,7 +207,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                             workspace_id: z.string().optional(),
                         })
                     ).parse(params)
-                    const wsId = workspace_id ? resolveWorkspaceId(workspace_id, project_number, context.config) : undefined
+                    const wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
                     const success = db.restoreEntry(entry_id, wsId)
                     if (!success) {
                         return {

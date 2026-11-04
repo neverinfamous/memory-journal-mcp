@@ -6,6 +6,7 @@ import {
     rowToObject,
     rowsToEntries,
 } from './shared.js'
+import { effectiveWorkspace } from '../../workspace-scope.js'
 
 export function getEntryById(
     context: EntriesSharedContext,
@@ -31,17 +32,21 @@ export function getEntryById(
 
 export function getEntriesByIds(
     context: EntriesSharedContext,
-    ids: number[]
+    ids: number[],
+    workspaceId?: string
 ): Map<number, JournalEntry> {
     const result = new Map<number, JournalEntry>()
     if (ids.length === 0) return result
 
     const { db, tagsMgr } = context
+    const scopeId = effectiveWorkspace(workspaceId)
     const placeholders = ids.map(() => '?').join(', ')
     const stmt = db.prepare(
-        `SELECT ${ENTRY_COLUMNS} FROM memory_journal WHERE id IN (${placeholders}) AND deleted_at IS NULL`
+        scopeId === '*'
+            ? `SELECT ${ENTRY_COLUMNS} FROM memory_journal WHERE id IN (${placeholders}) AND deleted_at IS NULL`
+            : `SELECT ${ENTRY_COLUMNS} FROM memory_journal WHERE id IN (${placeholders}) AND deleted_at IS NULL AND workspace_id = ?`
     )
-    const rows = stmt.all(ids)
+    const rows = scopeId === '*' ? stmt.all(ids) : stmt.all(...ids, scopeId)
 
     if (rows.length === 0) return result
 
@@ -93,9 +98,10 @@ export function getActiveEntries(
     const { db, tagsMgr } = context
     let query = `SELECT ${ENTRY_COLUMNS} FROM memory_journal WHERE deleted_at IS NULL`
     const params: unknown[] = []
-    if (workspaceId !== undefined && workspaceId !== '*') {
+    const scopeId = effectiveWorkspace(workspaceId)
+    if (scopeId !== '*') {
         query += ' AND workspace_id = ?'
-        params.push(workspaceId)
+        params.push(scopeId)
     }
     query += ' ORDER BY timestamp DESC, id DESC'
     const rows = db.prepare(query).all(...params)
@@ -106,9 +112,10 @@ export function getActiveEntryCount(context: EntriesSharedContext, workspaceId?:
     const { db } = context
     let query = 'SELECT COUNT(*) as count FROM memory_journal WHERE deleted_at IS NULL'
     const params: unknown[] = []
-    if (workspaceId !== undefined && workspaceId !== '*') {
+    const scopeId = effectiveWorkspace(workspaceId)
+    if (scopeId !== '*') {
         query += ' AND workspace_id = ?'
-        params.push(workspaceId)
+        params.push(scopeId)
     }
     const stmt = db.prepare(query)
     const row = rowToObject(stmt.get(...params))
@@ -122,13 +129,13 @@ export function getDeletedEntries(
     const { db, tagsMgr } = context
     const limit = options?.limit ?? 50
     const offset = options?.offset ?? 0
-    const workspaceId = options?.workspaceId
+    const scopeId = effectiveWorkspace(options?.workspaceId)
 
     let wsFilter = ''
     const wsParams: unknown[] = []
-    if (workspaceId !== undefined && workspaceId !== '*') {
+    if (scopeId !== '*') {
         wsFilter = ' AND workspace_id = ?'
-        wsParams.push(workspaceId)
+        wsParams.push(scopeId)
     }
 
     const countStmt = db.prepare(

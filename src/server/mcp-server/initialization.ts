@@ -360,6 +360,9 @@ export async function initializeDependencies(options: ServerOptions): Promise<Se
             options.scheduler.pruneImportanceThreshold = options.pruneImportanceThreshold
             options.scheduler.pruneDryRun = options.pruneDryRun
             options.scheduler.pruneExcludeTags = options.pruneExcludeTags
+            if (options.defaultWorkspaceId !== undefined) {
+                options.scheduler.defaultWorkspaceId = options.defaultWorkspaceId
+            }
 
             scheduler = new Scheduler(options.scheduler, db, vectorManager, runtime)
         }
@@ -371,7 +374,7 @@ export async function initializeDependencies(options: ServerOptions): Promise<Se
     try {
         const existingSnapshot = db.getLatestAnalyticsSnapshot('digest')
         if (!existingSnapshot) {
-            const digest = db.computeDigest()
+            const digest = db.computeDigest(options.defaultWorkspaceId ?? 'default')
             db.saveAnalyticsSnapshot('digest', digest)
             logger.info('Initial analytics digest seeded', { module: 'McpServer' })
         }

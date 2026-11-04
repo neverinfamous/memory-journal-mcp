@@ -10,6 +10,7 @@ import type { InternalPromptDef } from './index.js'
 import { markUntrustedContent } from '../../utils/security-utils.js'
 import { z } from 'zod'
 import { coerceNumber } from '../../utils/query-helpers.js'
+import { logger } from '../../utils/logger.js'
 
 export function getCmsSupervisorPromptDefinitions(): InternalPromptDef[] {
     return [
@@ -57,8 +58,11 @@ export function getCmsSupervisorPromptDefinitions(): InternalPromptDef[] {
                     if (latest !== undefined) {
                         latestNremSnippet = `ID: #${String(latest.id)} | Timestamp: ${latest.timestamp} | Type: ${latest.entryType} | Tags: ${latest.tags.join(', ')}\n${latest.content.slice(0, 1200)}`
                     }
-                } catch {
-                    // ignore
+                } catch (error: unknown) {
+                    logger.warning('CMS supervisor could not read the latest NREM entry', {
+                        error: error instanceof Error ? error.message : String(error),
+                    })
+                    latestNremSnippet = '_Latest NREM entry query failed._'
                 }
 
                 let deletedSnippet = '_No soft-deleted entries found._'
@@ -76,8 +80,11 @@ export function getCmsSupervisorPromptDefinitions(): InternalPromptDef[] {
                         })
                         deletedSnippet = `Total Soft-Deleted Count: ${String(deletedRes.count)} (Flagged High-Value in recent 25: ${String(flaggedDeletionsCount)})\n` + rows.join('\n---\n')
                     }
-                } catch {
-                    // ignore
+                } catch (error: unknown) {
+                    logger.warning('CMS supervisor could not read soft-deleted entries', {
+                        error: error instanceof Error ? error.message : String(error),
+                    })
+                    deletedSnippet = '_Soft-deleted entry query failed._'
                 }
 
                 let orphanCount: number | string = 'Unknown'

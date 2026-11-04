@@ -59,14 +59,15 @@ export class EntriesManager {
         return getEntryById(this.sharedContext, id, workspaceId)
     }
 
-    getEntriesByIds(ids: number[]): Map<number, JournalEntry> {
-        return getEntriesByIds(this.sharedContext, ids)
+    getEntriesByIds(ids: number[], workspaceId?: string): Map<number, JournalEntry> {
+        return getEntriesByIds(this.sharedContext, ids, workspaceId)
     }
 
     getEntriesByIdsWithImportance(
-        ids: number[]
+        ids: number[],
+        workspaceId?: string
     ): Map<number, { entry: JournalEntry; importance: ImportanceResult }> {
-        return getEntriesByIdsWithImportance(this.sharedContext, ids)
+        return getEntriesByIdsWithImportance(this.sharedContext, ids, workspaceId)
     }
 
     getEntryByIdIncludeDeleted(id: number, workspaceId?: string): JournalEntry | null {
@@ -155,8 +156,8 @@ export class EntriesManager {
         return getRecentEntriesQuery(this.sharedContext, limit, sortBy, cursor, includeArchived, workspaceId, projectNumber, offset)
     }
 
-    getEntriesPage(offset: number, limit: number, order: 'asc' | 'desc' = 'desc'): { entries: JournalEntry[]; nextCursor?: string } {
-        return getEntriesPage(this.sharedContext, offset, limit, order)
+    getEntriesPage(offset: number, limit: number, order: 'asc' | 'desc' = 'desc', workspaceId = 'default'): { entries: JournalEntry[]; nextCursor?: string } {
+        return getEntriesPage(this.sharedContext, offset, limit, order, workspaceId)
     }
 
     searchEntries(

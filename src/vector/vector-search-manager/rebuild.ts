@@ -35,7 +35,7 @@ export async function rebuildIndex(
 
     let totalEntries: number
     try {
-        totalEntries = dbAdapter.getActiveEntryCount()
+        totalEntries = dbAdapter.getActiveEntryCount('*')
     } catch (err) {
         const errorMessage = err instanceof Error ? err.message : String(err)
         logger.error('Failed to count entries for vector indexing', { error: err })
@@ -50,7 +50,7 @@ export async function rebuildIndex(
 
     let offset = 0
     while (offset < totalEntries) {
-        const result = dbAdapter.getEntriesPage(offset, pageSize)
+        const result = dbAdapter.getEntriesPage(offset, pageSize, '*')
         const entries = result.entries
         if (entries.length === 0) break
 

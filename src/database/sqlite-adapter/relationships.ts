@@ -166,9 +166,10 @@ export class RelationshipsManager {
     getOrphanCount(workspaceId?: string): number {
         let filter = ''
         const params: unknown[] = []
-        if (workspaceId !== undefined && workspaceId !== '*') {
+        const scopeId = workspaceId ?? 'default'
+        if (scopeId !== '*') {
             filter = ' AND e.workspace_id = ?'
-            params.push(workspaceId)
+            params.push(scopeId)
         }
 
         const row = this.db

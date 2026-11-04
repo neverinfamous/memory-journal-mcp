@@ -5,6 +5,7 @@ import {
     getLatestAnalyticsSnapshot as getLatestSnapshot,
     getAnalyticsSnapshots as getSnapshots,
     computeDigest as computeDigestCore,
+    type DigestSnapshot,
 } from '../entries/digest.js'
 
 export function getWorkflowActionEntries(
@@ -17,9 +18,10 @@ export function getWorkflowActionEntries(
         WHERE workflow_run_id IS NOT NULL AND deleted_at IS NULL
     `
     const params: unknown[] = []
-    if (workspaceId !== undefined && workspaceId !== '*') {
+    const scopeId = workspaceId ?? 'default'
+    if (scopeId !== '*') {
         sql += ` AND workspace_id = ?`
-        params.push(workspaceId)
+        params.push(scopeId)
     }
     sql += ` ORDER BY timestamp DESC LIMIT ?`
     params.push(limit)
@@ -90,9 +92,10 @@ export function getSignificantEntries(
         sql += ` AND project_number = ?`
         params.push(projectNumber)
     }
-    if (workspaceId !== undefined && workspaceId !== '*') {
+    const scopeId = workspaceId ?? 'default'
+    if (scopeId !== '*') {
         sql += ` AND workspace_id = ?`
-        params.push(workspaceId)
+        params.push(scopeId)
     }
     sql += ` ORDER BY timestamp DESC LIMIT ?`
     params.push(limit)
@@ -146,7 +149,7 @@ export function getSignificantEntries(
 export function saveAnalyticsDigest(
     connection: NativeConnectionManager,
     type: string,
-    data: Record<string, unknown>
+    data: object
 ): number {
     return saveSnapshot(connection.getNativeDb(), type, data)
 }
@@ -169,7 +172,6 @@ export function getAnalyticsSnapshots(
 export function computeDigest(
     connection: NativeConnectionManager,
     workspaceId?: string
-): Record<string, unknown> {
-    const digest = computeDigestCore(connection.getNativeDb(), workspaceId)
-    return { ...digest }
+): DigestSnapshot {
+    return computeDigestCore(connection.getNativeDb(), workspaceId ?? 'default')
 }

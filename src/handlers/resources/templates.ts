@@ -9,7 +9,7 @@
 import { ICON_ISSUE, ICON_PR } from '../../constants/icons.js'
 import { ASSISTANT_FOCUSED, MEDIUM_PRIORITY } from '../../utils/resource-annotations.js'
 import type { InternalResourceDef, ResourceContext } from './shared.js'
-import { resolveGitHubRepo, isResourceError } from './shared.js'
+import { resolveGitHubRepo, isResourceError, resourceWorkspace } from './shared.js'
 import { parseSessionCommitContext } from '../../types/auto-context.js'
 import { enrichCommits } from '../../github/commit-references/index.js'
 import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server'
@@ -34,7 +34,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                     throw new ProtocolError(ProtocolErrorCode.InvalidParams,  'Invalid project number')
                 }
 
-                const { entries } = context.db.searchEntries('', { projectNumber, limit: 50 })
+                const { entries } = context.db.searchEntries('', { workspaceId: resourceWorkspace(context),  projectNumber, limit: 50 })
                 const data = { projectNumber, entries, count: entries.length }
                 const tokenEstimate = Math.ceil(JSON.stringify(data).length / 4)
                 return { ...data, _meta: { tokenEstimate } }
@@ -56,7 +56,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                     throw new ProtocolError(ProtocolErrorCode.InvalidParams,  'Invalid issue number')
                 }
 
-                const { entries } = context.db.searchEntries('', { issueNumber, limit: 100 })
+                const { entries } = context.db.searchEntries('', { workspaceId: resourceWorkspace(context),  issueNumber, limit: 100 })
                 const data = { issueNumber, entries, count: entries.length }
                 const tokenEstimate = Math.ceil(JSON.stringify(data).length / 4)
                 return { ...data, _meta: { tokenEstimate } }
@@ -78,7 +78,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                     throw new ProtocolError(ProtocolErrorCode.InvalidParams,  'Invalid PR number')
                 }
 
-                const { entries } = context.db.searchEntries('', { prNumber, limit: 100 })
+                const { entries } = context.db.searchEntries('', { workspaceId: resourceWorkspace(context),  prNumber, limit: 100 })
                 const data = {
                     prNumber,
                     entries,
@@ -148,7 +148,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                     }
                 }
 
-                const { entries } = context.db.searchEntries('', { prNumber, limit: 100 })
+                const { entries } = context.db.searchEntries('', { workspaceId: resourceWorkspace(context),  prNumber, limit: 100 })
 
                 let timelineNote: string
                 if (prMetadata) {
@@ -192,7 +192,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                     throw new ProtocolError(ProtocolErrorCode.InvalidParams,  'Invalid project number')
                 }
 
-                const { entries } = context.db.searchEntries('', { projectNumber, limit: 200 })
+                const { entries } = context.db.searchEntries('', { workspaceId: resourceWorkspace(context),  projectNumber, limit: 200 })
 
                 const commits: string[] = []
                 const metadata: Record<string, unknown>[] = []
@@ -252,7 +252,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                     throw new ProtocolError(ProtocolErrorCode.InvalidParams,  'Invalid project number')
                 }
 
-                const { entries } = context.db.searchEntries('', { projectNumber, limit: 200 })
+                const { entries } = context.db.searchEntries('', { workspaceId: resourceWorkspace(context),  projectNumber, limit: 200 })
                 const commits: string[] = []
 
                 for (const entry of entries) {
@@ -329,7 +329,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                     throw new ProtocolError(ProtocolErrorCode.InvalidParams,  'Invalid project number')
                 }
 
-                const { entries } = context.db.searchEntries('', { projectNumber, limit: 200 })
+                const { entries } = context.db.searchEntries('', { workspaceId: resourceWorkspace(context),  projectNumber, limit: 200 })
                 const commits: string[] = []
 
                 for (const entry of entries) {

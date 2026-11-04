@@ -9,6 +9,7 @@
 import { ICON_ANALYTICS } from '../../constants/icons.js'
 import { withPriority, ASSISTANT_FOCUSED } from '../../utils/resource-annotations.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from './shared.js'
+import { resourceWorkspace } from './shared.js'
 import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server'
 
 // ============================================================================
@@ -42,7 +43,7 @@ export const digestInsightsResource: InternalResourceDef = {
 
         // Live compute fallback (stdio transport, fresh databases)
         try {
-            const liveDigest = context.db?.computeDigest?.()
+            const liveDigest = context.db?.computeDigest?.(resourceWorkspace(context))
             if (liveDigest !== undefined) {
                 const data = {
                     success: true,

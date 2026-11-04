@@ -1,4 +1,5 @@
 import type { JournalEntry } from '../../types/index.js'
+import type { DigestSnapshot } from './entries/digest.js'
 import type { NativeConnectionManager } from './native-connection.js'
 import {
     getWorkflowActionEntries,
@@ -46,7 +47,7 @@ export class InsightsOperations {
         return getAuthorsForEntries(this.connection, entryIds)
     }
 
-    saveAnalyticsSnapshot(type: string, data: Record<string, unknown>): number {
+    saveAnalyticsSnapshot(type: string, data: DigestSnapshot | Record<string, unknown>): number {
         return saveAnalyticsDigest(this.connection, type, data)
     }
 
@@ -63,7 +64,7 @@ export class InsightsOperations {
         return getAnalyticsSnapshots(this.connection, type, limit)
     }
 
-    computeDigest(workspaceId?: string): Record<string, unknown> {
+    computeDigest(workspaceId?: string): DigestSnapshot {
         return computeDigest(this.connection, workspaceId)
     }
 

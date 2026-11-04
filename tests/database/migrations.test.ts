@@ -19,11 +19,13 @@ describe('Database Migration Framework', () => {
             name: string
         }[]
 
-        expect(applied.length).toBe(13) // 1 to 6, plus 8 through 14 (7 is team-only)
+        expect(applied.length).toBe(14) // 1 to 6, plus 8 through 15 (7 is team-only)
         expect(applied[0].version).toBe(1)
         expect(applied[0].name).toBe('001-init')
         expect(applied[12].version).toBe(14)
         expect(applied[12].name).toBe('014-add-alias-workspace')
+        expect(applied[13].version).toBe(15)
+        expect(applied[13].name).toBe('015-alias-workspace-unique')
 
         // Verify tables exist
         const tables = db
@@ -66,7 +68,7 @@ describe('Database Migration Framework', () => {
             name: string
         }[]
 
-        expect(applied.length).toBe(14)
+        expect(applied.length).toBe(15)
         expect(applied[6].version).toBe(7)
         expect(applied[6].name).toBe('007-add-team-author')
 
@@ -159,13 +161,14 @@ describe('Database Migration Framework', () => {
             name: string
         }[]
 
-        expect(applied.length).toBe(13)
+        expect(applied.length).toBe(14)
         expect(applied[0].version).toBe(1)
         expect(applied[1].version).toBe(2)
         expect(applied[2].version).toBe(3) // applied in run
         expect(applied[6].version).toBe(8) // applied in run
         expect(applied[11].version).toBe(13) // applied in run
         expect(applied[12].version).toBe(14)
+        expect(applied[13].version).toBe(15)
 
         // Verify newer tables like entry_revisions exist now
         const tables = db
@@ -197,8 +200,8 @@ describe('Database Migration Framework', () => {
             c: number
         }).c
 
-        expect(count1).toBe(13)
-        expect(count2).toBe(13)
+        expect(count1).toBe(14)
+        expect(count2).toBe(14)
 
         db.close()
     })

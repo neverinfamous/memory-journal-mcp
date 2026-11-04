@@ -54,7 +54,8 @@ export class VectorOperations {
         workspaceId?: string
     ): { entry_id: number; distance: number }[] {
         const db = this.connection.getNativeDb()
-        const scoped = workspaceId !== undefined && workspaceId !== '*'
+        const scopeId = workspaceId ?? 'default'
+        const scoped = scopeId !== '*'
         const sql = scoped
             ? `SELECT v.entry_id, v.distance
                  FROM vec_embeddings v
@@ -67,7 +68,7 @@ export class VectorOperations {
                  WHERE v.embedding MATCH ? AND v.k = ? AND mj.deleted_at IS NULL
                  LIMIT ?`
         const params = scoped
-            ? [embedding, limit * 4, workspaceId, limit]
+            ? [embedding, limit * 4, scopeId, limit]
             : [embedding, limit * 4, limit]
         return db.prepare(sql).all(...params) as { entry_id: number; distance: number }[]
     }

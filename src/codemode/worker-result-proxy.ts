@@ -108,7 +108,12 @@ export function wrapResult(result: unknown): unknown {
                 if (typeof prop === 'string' && /^\d+$/.test(prop)) return undefined
                 if (prop === Symbol.iterator) return function* () { yield* [] }
                 if (typeof prop === 'string' && RESULT_COLLECTION_KEYS.includes(prop)) return []
-                if (typeof prop === 'string' && FAILED_ARRAY_METHODS.includes(prop)) return () => []
+                if (typeof prop === 'string' && FAILED_ARRAY_METHODS.includes(prop)) {
+                    const message = typeof errVal === 'string' ? errVal : 'Operation failed'
+                    return () => {
+                        throw new Error(message)
+                    }
+                }
                 return undefined
             },
         })

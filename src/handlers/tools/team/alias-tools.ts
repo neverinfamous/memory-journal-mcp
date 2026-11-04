@@ -134,10 +134,8 @@ const ConsolidateAuthorsOutputSchema = z.object({
 // Handlers
 // ============================================================================
 
-function scopedWorkspace(workspaceId: string | undefined, context: ToolContext): string | undefined {
-    if (workspaceId === undefined) return undefined
-    const resolved = resolveWorkspaceId(workspaceId, undefined, context.config)
-    return resolved === '*' ? undefined : resolved
+function scopedWorkspace(workspaceId: string | undefined, context: ToolContext): string {
+    return resolveWorkspaceId(workspaceId, undefined, context.config)
 }
 
 function handleAddAuthorAlias(context: ToolContext) {
@@ -160,9 +158,8 @@ function handleAddAuthorAlias(context: ToolContext) {
             }
 
             const caller = getCallerIdentity(params as Record<string, unknown>)
-            const createdAlias = workspaceId === undefined
-                ? teamDb.addAuthorAlias(alias, canonical_author, caller)
-                : teamDb.addAuthorAlias(alias, canonical_author, caller, workspaceId)
+            const storedWorkspace = workspaceId === '*' ? undefined : workspaceId
+            const createdAlias = teamDb.addAuthorAlias(alias, canonical_author, caller, storedWorkspace)
 
             return {
                 success: true,
@@ -184,9 +181,7 @@ function handleRemoveAuthorAlias(context: ToolContext) {
             const { alias, workspace_id } = RemoveAuthorAliasSchema.parse(params)
             const workspaceId = scopedWorkspace(workspace_id, context)
 
-            const success = workspaceId === undefined
-                ? teamDb.removeAuthorAlias(alias)
-                : teamDb.removeAuthorAlias(alias, workspaceId)
+            const success = teamDb.removeAuthorAlias(alias, workspaceId)
             if (!success) {
                 throw new ResourceNotFoundError('AuthorAlias', alias)
             }
@@ -232,9 +227,7 @@ function handleResolveAuthor(context: ToolContext) {
             const { author, workspace_id } = ResolveAuthorSchema.parse(params)
             const workspaceId = scopedWorkspace(workspace_id, context)
 
-            const resolved = workspaceId === undefined
-                ? teamDb.resolveAuthor(author)
-                : teamDb.resolveAuthor(author, workspaceId)
+            const resolved = teamDb.resolveAuthor(author, workspaceId)
 
             return {
                 original_author: author,
@@ -257,9 +250,7 @@ function handleConsolidateAuthors(context: ToolContext) {
             const { canonical_author, workspace_id } = ConsolidateAuthorsSchema.parse(params)
             const workspaceId = scopedWorkspace(workspace_id, context)
 
-            const updatedCount = workspaceId === undefined
-                ? teamDb.consolidateAuthors(canonical_author)
-                : teamDb.consolidateAuthors(canonical_author, workspaceId)
+            const updatedCount = teamDb.consolidateAuthors(canonical_author, workspaceId)
 
             return {
                 success: true,

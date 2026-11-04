@@ -224,6 +224,11 @@ export const DEFAULT_BRIEFING_CONFIG: BriefingConfig = {
 /**
  * Resource context for handlers that need extended access
  */
+export function resourceWorkspace(context: { briefingConfig?: BriefingConfig }): string {
+    const id = context.briefingConfig?.defaultWorkspaceId
+    return id !== undefined && id.length > 0 ? id : 'default'
+}
+
 export interface ResourceContext {
     db: IDatabaseAdapter
     teamDb?: IDatabaseAdapter

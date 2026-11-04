@@ -39,7 +39,7 @@ describe('Team Alias Tools', () => {
 
             expect(result.success).toBe(true)
             expect(result.alias.canonicalAuthor).toBe('christopher')
-            expect(mockContext.teamDb!.addAuthorAlias).toHaveBeenCalledWith('chris', 'christopher', 'test-author')
+            expect(mockContext.teamDb!.addAuthorAlias).toHaveBeenCalledWith('chris', 'christopher', 'test-author', 'default')
         })
 
         it('rejects if alias is an existing member role', async () => {
@@ -59,7 +59,7 @@ describe('Team Alias Tools', () => {
             const result = await tool.handler({ alias: 'chris' }) as any
 
             expect(result.success).toBe(true)
-            expect(mockContext.teamDb!.removeAuthorAlias).toHaveBeenCalledWith('chris')
+            expect(mockContext.teamDb!.removeAuthorAlias).toHaveBeenCalledWith('chris', 'default')
         })
 
         it('returns RESOURCE_NOT_FOUND if alias does not exist', async () => {
@@ -114,7 +114,7 @@ describe('Team Alias Tools', () => {
 
             expect(result.success).toBe(true)
             expect(result.updated_count).toBe(42)
-            expect(mockContext.teamDb!.consolidateAuthors).toHaveBeenCalledWith('christopher')
+            expect(mockContext.teamDb!.consolidateAuthors).toHaveBeenCalledWith('christopher', 'default')
         })
 
         it('passes a concrete workspace into consolidateAuthors', async () => {

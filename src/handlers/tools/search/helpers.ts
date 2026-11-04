@@ -187,7 +187,7 @@ export async function collectTeamSearchEntries(
         try {
             const hits = await teamVectorManager.search(query, limit, 0.15, options.workspaceId)
             const ids = hits.map((hit) => hit.entryId)
-            const hydrated = teamDb.getEntriesByIds(ids)
+            const hydrated = teamDb.getEntriesByIds(ids, options.workspaceId ?? 'default')
             for (const hit of hits) {
                 const entry = hydrated.get(hit.entryId)
                 if (entry !== undefined) pushEntry(entry, Math.round(hit.score * 100) / 100)

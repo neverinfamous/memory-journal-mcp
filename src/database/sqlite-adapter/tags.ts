@@ -141,7 +141,8 @@ export class TagsManager {
             ).run(targetTagId)
 
             // Select only valid entries (join ensures no orphans)
-            const scopedWorkspace = workspaceId !== undefined && workspaceId !== '*' ? workspaceId : undefined
+            const scopeId = workspaceId ?? 'default'
+            const scopedWorkspace = scopeId === '*' ? undefined : scopeId
             const entryRows = db
                 .prepare(
                     scopedWorkspace !== undefined

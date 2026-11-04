@@ -86,7 +86,7 @@ export function buildJournalContext(
             }
         }
         if (missingIds.length > 0 && typeof context.db.getEntriesByIdsWithImportance === 'function') {
-            const hydratedMap = context.db.getEntriesByIdsWithImportance(missingIds)
+            const hydratedMap = context.db.getEntriesByIdsWithImportance(missingIds, activeWorkspaceId)
             for (const [id, hydrated] of hydratedMap) {
                 importanceScoreCache.set(id, hydrated.importance.score)
             }
@@ -195,7 +195,7 @@ export function buildJournalContext(
         }
     })
 
-    const targetWsForCount = config.defaultWorkspaceId || undefined
+    const targetWsForCount = config.defaultWorkspaceId ?? 'default'
     const totalEntries = context.db.getActiveEntryCount(targetWsForCount)
     const lastModified = recentEntries[0]?.timestamp ?? new Date().toISOString()
 
@@ -222,11 +222,12 @@ export function buildTeamContext(
     if (!context.teamDb) return undefined
 
     try {
-        const teamTotalEntries = context.teamDb.getActiveEntryCount()
+        const teamWorkspace = config.defaultWorkspaceId ?? 'default'
+        const teamTotalEntries = context.teamDb.getActiveEntryCount(teamWorkspace)
         const teamRecent =
             typeof projectNumber === 'number'
-                ? extractEntries(context.teamDb.searchEntries('', { limit: 1, projectNumber }))
-                : extractEntries(context.teamDb.getRecentEntries(1))
+                ? extractEntries(context.teamDb.searchEntries('', { limit: 1, projectNumber, workspaceId: teamWorkspace }))
+                : extractEntries(context.teamDb.getRecentEntries(1, undefined, 'timestamp', undefined, false, teamWorkspace))
         const teamLatestEntry = teamRecent[0] as Record<string, unknown> | undefined
         const teamContent = teamLatestEntry
             ? ((teamLatestEntry['content'] as string | undefined) ?? '')
@@ -246,8 +247,8 @@ export function buildTeamContext(
         if (config.includeTeam) {
             const teamEntries =
                 typeof projectNumber === 'number'
-                    ? extractEntries(context.teamDb.searchEntries('', { limit: config.entryCount, projectNumber }))
-                    : extractEntries(context.teamDb.getRecentEntries(config.entryCount))
+                    ? extractEntries(context.teamDb.searchEntries('', { limit: config.entryCount, projectNumber, workspaceId: teamWorkspace }))
+                    : extractEntries(context.teamDb.getRecentEntries(config.entryCount, undefined, 'timestamp', undefined, false, teamWorkspace))
             teamLatestEntries = teamEntries.map((e) => {
                 return {
                     id: e.id,
@@ -293,7 +294,7 @@ export interface GraphSummary {
 
 export function buildGraphContext(context: ResourceContext, workspaceId?: string): GraphSummary | undefined {
     try {
-        const stats = context.db.getStatistics('week')
+        const stats = context.db.getStatistics('week', undefined, undefined, false, workspaceId ?? 'default')
         const comp = stats['relationshipComplexity'] as
             | { totalRelationships: number; avgPerEntry: number }
             | undefined

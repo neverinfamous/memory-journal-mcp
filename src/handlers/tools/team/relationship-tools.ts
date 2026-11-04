@@ -170,7 +170,7 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                     }
 
                     const { entry_id, tag, depth, workspace_id } = TeamVisualizeRelationshipsSchema.parse(params)
-                    const wsId = workspace_id ? resolveWorkspaceId(workspace_id, undefined, context.config) : '*'
+                    const wsId = resolveWorkspaceId(workspace_id, undefined, context.config)
 
                     // Collect entry IDs to visualize
                     let entryIds: number[] = []
@@ -254,7 +254,7 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                     const entryIdSet = new Set<number>(entryIds)
                     const batchEntries =
                         typeof teamDb.getEntriesByIds === 'function'
-                            ? teamDb.getEntriesByIds(entryIds)
+                            ? teamDb.getEntriesByIds(entryIds, wsId)
                             : null
                     const batchRels =
                         typeof teamDb.getRelationshipsForEntries === 'function'

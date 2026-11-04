@@ -70,7 +70,7 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
     })
 
     describe('Layer 3: Worker Result Proxy Failed Result Safety', () => {
-        it('should safely return empty arrays and 0 length on failed result object without throwing', () => {
+        it('throws from array methods on a failed result instead of pretending the call returned no rows', () => {
             const failedResult = wrapResult({
                 success: false,
                 error: 'Entry 9999 not found',
@@ -83,7 +83,7 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
             expect(failedResult['projects']).toEqual([])
             expect(failedResult['length']).toBe(0)
             expect(typeof failedResult['map']).toBe('function')
-            expect((failedResult['map'] as (fn: (x: unknown) => unknown) => unknown[])(() => 1)).toEqual([])
+            expect(() => (failedResult['map'] as () => unknown)()).toThrow('Entry 9999 not found')
         })
     })
 
@@ -1502,7 +1502,7 @@ return { dummy, journal };
             const sandbox = new WorkerSandbox();
             const result = await sandbox.execute(healedEsm, {});
             expect(result.success).toBe(true);
-            expect(result.result).toEqual({ dummy: false, journal: true });
+            expect(result.result).toEqual({ dummy: false, journal: false });
         });
 
         it('should preserve valid JS containing string literals with embedded createEntry calls without syntax corruption', async () => {

@@ -53,16 +53,7 @@ export function createSafeFsShim(contextObj?: Record<string, unknown>): SafeFsSh
             : ''
 
     return {
-        existsSync: (filePath?: unknown): boolean => {
-            if (filePath === undefined || filePath === null) return false
-            const p = toStr(filePath).toLowerCase()
-            return (
-                p.includes('.db') ||
-                p.includes('memory') ||
-                p.includes('journal') ||
-                p.includes('sqlite')
-            )
-        },
+        existsSync: (_filePath?: unknown): boolean => false,
         statSync: (_filePath?: unknown) => ({
             size: 1048576,
             isFile: () => true,
@@ -327,7 +318,7 @@ export function createPreparedStatementShim(
             if (entryId !== undefined) {
                 return { action: 'get_by_id', params: { entry_id: entryId } }
             }
-            return { action: 'list', params: { limit: 50 } }
+            return { action: 'unmapped', params: {} }
         }
 
         return { action: 'other', params: {} }

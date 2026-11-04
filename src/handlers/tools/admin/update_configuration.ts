@@ -157,6 +157,7 @@ export function handleUpdateConfiguration(
     if (args.briefing_workflows !== undefined) { newBc.workflowCount = args.briefing_workflows; bcChanged = true; updatedKeys.push('briefing_workflows'); }
     if (args.briefing_workflow_status !== undefined) { newBc.workflowStatusBreakdown = args.briefing_workflow_status; bcChanged = true; updatedKeys.push('briefing_workflow_status'); }
     if (args.briefing_copilot !== undefined) { newBc.copilotReviews = args.briefing_copilot; bcChanged = true; updatedKeys.push('briefing_copilot'); }
+    if (args.project_number !== undefined) { newBc.defaultProjectNumber = args.project_number; bcChanged = true; updatedKeys.push('project_number'); }
 
     if (bcChanged) {
         updates.briefingConfig = newBc

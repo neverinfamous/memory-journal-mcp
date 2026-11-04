@@ -12,6 +12,7 @@ import { Migration011AddWorkspaceId } from './011-add-workspace-id.js'
 import { Migration012AddTrustAndAnchors } from './012-add-trust-and-anchors.js'
 import { Migration013AddSessionId } from './013-add-session-id.js'
 import { Migration014AddAliasWorkspace } from './014-add-alias-workspace.js'
+import { Migration015AliasWorkspaceUnique } from './015-alias-workspace-unique.js'
 import type { Migration } from './migration.js'
 
 export const MIGRATIONS: Migration[] = [
@@ -29,4 +30,5 @@ export const MIGRATIONS: Migration[] = [
     Migration012AddTrustAndAnchors,
     Migration013AddSessionId,
     Migration014AddAliasWorkspace,
+    Migration015AliasWorkspaceUnique,
 ]

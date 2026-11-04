@@ -142,7 +142,9 @@ export function createShimMjProxy(options: CreateShimMjOptions): Record<string, 
 
             if (prop === 'saveMemory' || prop === 'save_memory') {
                 return (arg?: unknown): unknown =>
-                    arg !== undefined && arg !== null ? getUpdateMemoryFn()(arg) : Promise.resolve({ success: true })
+                    arg !== undefined && arg !== null
+                        ? getUpdateMemoryFn()(arg)
+                        : Promise.resolve({ success: false, code: 'VALIDATION_ERROR', error: 'saveMemory requires a payload' })
             }
 
             if ((prop === 'get' || prop === 'read' || prop === 'find' || prop === 'fetch') && 'core' in target && 'search' in target) {
@@ -187,7 +189,9 @@ export function createShimMjProxy(options: CreateShimMjOptions): Record<string, 
                 }
             }
 
-            if (typeof prop === 'string' && LIFECYCLE_PROPS.has(prop)) return () => ({ success: true })
+            if (typeof prop === 'string' && LIFECYCLE_PROPS.has(prop)) {
+                return () => ({ success: false, code: 'VALIDATION_ERROR', error: `${prop} is not executed in the sandbox` })
+            }
             if (prop === 'execSync' || prop === 'spawnSync' || prop === 'execFileSync') return () => ''
             if (prop === 'spawn' || prop === 'fork' || prop === 'execFile') {
                 return (_cmd?: unknown, cbOrOptions?: unknown, maybeCb?: unknown) => {

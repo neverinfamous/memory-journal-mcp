@@ -390,10 +390,7 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
 
                     const targets: { id: number; timestamp: string }[] = []
                     if (resolvedEntryId !== undefined) {
-                        let entry = db.getEntryByIdIncludeDeleted(resolvedEntryId, wsId)
-                        if (!entry && wsId !== '*') {
-                            entry = db.getEntryByIdIncludeDeleted(resolvedEntryId, '*')
-                        }
+                        const entry = db.getEntryByIdIncludeDeleted(resolvedEntryId, wsId)
                         if (!entry) throw new ResourceNotFoundError('entry', String(resolvedEntryId))
                         targets.push({ id: entry.id, timestamp: entry.timestamp })
                     } else {

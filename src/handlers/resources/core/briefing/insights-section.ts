@@ -8,6 +8,7 @@
 
 import type { DigestSnapshot } from '../../../../database/sqlite-adapter/entries/digest.js'
 import type { ResourceContext } from '../../shared.js'
+import { resourceWorkspace } from '../../shared.js'
 import { logger } from '../../../../utils/logger.js'
 
 /** Compact insights payload for the briefing JSON */
@@ -62,9 +63,9 @@ function resolveDigestSnapshot(context: ResourceContext): DigestSnapshot | null 
     }
 
     try {
-        const liveDigest = context.db?.computeDigest?.()
+        const liveDigest = context.db?.computeDigest?.(resourceWorkspace(context))
         if (liveDigest !== undefined) {
-            const snapshot = liveDigest as unknown as DigestSnapshot
+            const snapshot: DigestSnapshot = liveDigest
             liveDigestCache = { snapshot, expiresAt: Date.now() + LIVE_DIGEST_TTL_MS }
             logger.debug('Live digest computed for briefing (no scheduler/persisted snapshot)', {
                 module: 'BRIEFING',

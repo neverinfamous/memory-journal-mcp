@@ -23,6 +23,7 @@ import { HealthOperations } from './health-operations.js'
 import { LifecycleOperations } from './lifecycle-operations.js'
 import { InsightsOperations } from './insights-operations.js'
 import { VectorOperations } from './vector-operations.js'
+import type { DigestSnapshot } from './entries/digest.js'
 
 /**
  * Base delegate layer for SQLite DatabaseAdapter:
@@ -342,7 +343,7 @@ export class AdapterDelegates {
         return this.insightsOps.getAuthorsForEntries(entryIds)
     }
 
-    saveAnalyticsSnapshot(type: string, data: Record<string, unknown>): number {
+    saveAnalyticsSnapshot(type: string, data: DigestSnapshot | Record<string, unknown>): number {
         return this.insightsOps.saveAnalyticsSnapshot(type, data)
     }
 
@@ -359,7 +360,7 @@ export class AdapterDelegates {
         return this.insightsOps.getAnalyticsSnapshots(type, limit)
     }
 
-    computeDigest(workspaceId?: string): Record<string, unknown> {
+    computeDigest(workspaceId?: string): DigestSnapshot {
         return this.insightsOps.computeDigest(workspaceId)
     }
 

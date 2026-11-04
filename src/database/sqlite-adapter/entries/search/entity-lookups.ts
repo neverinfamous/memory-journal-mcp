@@ -15,9 +15,10 @@ export function getEntriesByProject(
     const { db, tagsMgr } = context
     const params: unknown[] = [projectNumber]
     let wsFilter = ''
-    if (workspaceId !== undefined && workspaceId !== '*') {
+    const scopeId = workspaceId ?? 'default'
+    if (scopeId !== '*') {
         wsFilter = ' AND workspace_id = ?'
-        params.push(workspaceId)
+        params.push(scopeId)
     }
     params.push(limit)
     const rows = db
@@ -37,9 +38,10 @@ export function getEntriesByIssue(
     const { db, tagsMgr } = context
     const params: unknown[] = [issueNumber]
     let wsFilter = ''
-    if (workspaceId !== undefined && workspaceId !== '*') {
+    const scopeId = workspaceId ?? 'default'
+    if (scopeId !== '*') {
         wsFilter = ' AND workspace_id = ?'
-        params.push(workspaceId)
+        params.push(scopeId)
     }
     params.push(limit)
     const rows = db
@@ -59,9 +61,10 @@ export function getEntriesByPR(
     const { db, tagsMgr } = context
     const params: unknown[] = [prNumber]
     let wsFilter = ''
-    if (workspaceId !== undefined && workspaceId !== '*') {
+    const scopeId = workspaceId ?? 'default'
+    if (scopeId !== '*') {
         wsFilter = ' AND workspace_id = ?'
-        params.push(workspaceId)
+        params.push(scopeId)
     }
     params.push(limit)
     const rows = db
@@ -81,9 +84,10 @@ export function getEntriesByWorkflowRun(
     const { db, tagsMgr } = context
     const params: unknown[] = [workflowRunId]
     let wsFilter = ''
-    if (workspaceId !== undefined && workspaceId !== '*') {
+    const scopeId = workspaceId ?? 'default'
+    if (scopeId !== '*') {
         wsFilter = ' AND workspace_id = ?'
-        params.push(workspaceId)
+        params.push(scopeId)
     }
     params.push(limit)
     const rows = db
@@ -103,9 +107,10 @@ export function getEntriesBySession(
     const { db, tagsMgr } = context
     const params: unknown[] = [sessionId]
     let wsFilter = ''
-    if (workspaceId !== undefined && workspaceId !== '*') {
+    const scopeId = workspaceId ?? 'default'
+    if (scopeId !== '*') {
         wsFilter = ' AND workspace_id = ?'
-        params.push(workspaceId)
+        params.push(scopeId)
     }
     params.push(limit)
     const rows = db

@@ -196,7 +196,7 @@ export function getOptimizerPromptDefinitions(): InternalPromptDef[] {
 
                 let unverifiedSnippet = '_No unverified entries found._'
                 try {
-                    const { entries } = db.getRecentEntries(50)
+                    const { entries } = db.getRecentEntries(50, undefined, 'timestamp', undefined, false, '*')
                     const unverified = entries
                         .filter(
                             (e) =>

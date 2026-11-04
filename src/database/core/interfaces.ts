@@ -11,6 +11,7 @@ import type {
     CreateEntryInput,
     CreateTeamEntryInput,
 } from '../../types/index.js'
+import type { DigestSnapshot } from '../sqlite-adapter/entries/digest.js'
 
 export type { CreateEntryInput, CreateTeamEntryInput }
 
@@ -113,9 +114,10 @@ export interface IDatabaseAdapter {
     getEntryById(id: number, workspaceId?: string): JournalEntry | null
     getEntryByIdIncludeDeleted(id: number, workspaceId?: string): JournalEntry | null
     getEntryHistory(id: number): EntryRevision[]
-    getEntriesByIds(ids: number[]): Map<number, JournalEntry>
+    getEntriesByIds(ids: number[], workspaceId?: string): Map<number, JournalEntry>
     getEntriesByIdsWithImportance(
-        ids: number[]
+        ids: number[],
+        workspaceId?: string
     ): Map<number, { entry: JournalEntry; importance: ImportanceResult }>
     calculateImportance(entryId: number): ImportanceResult
     getRecentEntries(
@@ -128,7 +130,7 @@ export interface IDatabaseAdapter {
         projectNumber?: number,
         offset?: number
     ): { entries: JournalEntry[]; nextCursor?: string }
-    getEntriesPage(offset: number, limit: number): { entries: JournalEntry[]; nextCursor?: string }
+    getEntriesPage(offset: number, limit: number, workspaceId?: string): { entries: JournalEntry[]; nextCursor?: string }
     getActiveEntryCount(workspaceId?: string): number
     updateEntry(
         id: number,
@@ -341,7 +343,7 @@ export interface IDatabaseAdapter {
     }
 
     // Analytics Snapshots
-    saveAnalyticsSnapshot(type: string, data: Record<string, unknown>): number
+    saveAnalyticsSnapshot(type: string, data: DigestSnapshot | Record<string, unknown>): number
     getLatestAnalyticsSnapshot(
         type: string
     ): { id: number; createdAt: string; data: Record<string, unknown> } | null
@@ -349,7 +351,7 @@ export interface IDatabaseAdapter {
         type: string,
         limit?: number
     ): { id: number; createdAt: string; data: Record<string, unknown> }[]
-    computeDigest(workspaceId?: string): Record<string, unknown>
+    computeDigest(workspaceId?: string): DigestSnapshot
 
     pragma(command: string): void
 

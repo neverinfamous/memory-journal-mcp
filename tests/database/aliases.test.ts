@@ -84,7 +84,7 @@ describe('AliasManager', () => {
     })
 
     it('consolidates authors only in the requested workspace', () => {
-        aliasMgr.addAlias('chris', 'christopher')
+        aliasMgr.addAlias('chris', 'christopher', undefined, 'alpha')
         connection.run(
             `INSERT INTO memory_journal (entry_type, content, author, workspace_id) VALUES ('note', 'alpha', 'chris', 'alpha')`
         )

@@ -276,6 +276,15 @@ export async function resolveCodeModeSessionContext(
         }
     }
 
+    if (typeof projectId === 'string') {
+        const entry = lookupRegistryEntry(context.config?.projectRegistry, projectId)
+        if (entry?.project_number !== undefined) projectId = entry.project_number
+    }
+    if (typeof projectId === 'string') {
+        const parsed = Number(projectId)
+        if (!Number.isNaN(parsed) && Number.isFinite(parsed)) projectId = parsed
+    }
+
     const numericProjectId = typeof projectId === 'number' ? projectId : undefined
     const workspaceId = resolveWorkspaceId(input.workspace_id, numericProjectId, context.config)
 
@@ -309,15 +318,6 @@ export async function resolveCodeModeSessionContext(
                 }
             }
         }
-    }
-
-    if (typeof projectId === 'string') {
-        const entry = lookupRegistryEntry(sessionContext.config?.projectRegistry, projectId)
-        if (entry?.project_number !== undefined) projectId = entry.project_number
-    }
-    if (typeof projectId === 'string') {
-        const parsed = Number(projectId)
-        if (!Number.isNaN(parsed) && Number.isFinite(parsed)) projectId = parsed
     }
 
     if (projectId !== undefined && sessionContext.config?.projectRegistry !== undefined) {

@@ -160,7 +160,7 @@ describe('Code Mode Worker Core & Project Registry Ops', () => {
         it('should provide safe fs, path, and console shims', async () => {
             const fsShim = createSafeFsShim({ content: 'hello-from-context' })
             expect(fsShim.existsSync(undefined)).toBe(false)
-            expect(fsShim.existsSync('memory_journal.db')).toBe(true)
+            expect(fsShim.existsSync('memory_journal.db')).toBe(false)
             expect(fsShim.existsSync('notes.txt')).toBe(false)
             expect(fsShim.existsSync('')).toBe(false)
             expect(fsShim.statSync('test.db').isFile()).toBe(true)
@@ -321,8 +321,11 @@ describe('Code Mode Worker Core & Project Registry Ops', () => {
                 'SELECT * FROM memory_journal LIMIT 10',
                 fakeShimMj
             )
-            await (selectAllStmt['all'] as () => Promise<unknown>)()
-            expect(mockList).toHaveBeenCalledWith({ limit: 50 })
+            await expect((selectAllStmt['all'] as () => Promise<unknown>)()).resolves.toMatchObject({
+                success: false,
+                code: 'VALIDATION_ERROR',
+            })
+            expect(mockList).not.toHaveBeenCalled()
 
             const pragmaStmt = createPreparedStatementShim(
                 'PRAGMA table_info(memory_journal)',

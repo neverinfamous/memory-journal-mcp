@@ -30,14 +30,15 @@ export class DatabaseAdapter extends AdapterDelegates implements IDatabaseAdapte
         return this.entriesMgr.getEntryByIdIncludeDeleted(id, workspaceId)
     }
 
-    getEntriesByIds(ids: number[]): Map<number, JournalEntry> {
-        return this.entriesMgr.getEntriesByIds(ids)
+    getEntriesByIds(ids: number[], workspaceId?: string): Map<number, JournalEntry> {
+        return this.entriesMgr.getEntriesByIds(ids, workspaceId)
     }
 
     getEntriesByIdsWithImportance(
-        ids: number[]
+        ids: number[],
+        workspaceId?: string
     ): Map<number, { entry: JournalEntry; importance: ImportanceResult }> {
-        return this.entriesMgr.getEntriesByIdsWithImportance(ids)
+        return this.entriesMgr.getEntriesByIdsWithImportance(ids, workspaceId)
     }
 
     calculateImportance(entryId: number): ImportanceResult {
@@ -66,8 +67,8 @@ export class DatabaseAdapter extends AdapterDelegates implements IDatabaseAdapte
         )
     }
 
-    getEntriesPage(offset: number, limit: number): { entries: JournalEntry[]; nextCursor?: string } {
-        return this.entriesMgr.getEntriesPage(offset, limit)
+    getEntriesPage(offset: number, limit: number, workspaceId = 'default'): { entries: JournalEntry[]; nextCursor?: string } {
+        return this.entriesMgr.getEntriesPage(offset, limit, 'desc', workspaceId)
     }
 
     getActiveEntryCount(workspaceId?: string): number {

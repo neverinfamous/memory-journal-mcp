@@ -42,14 +42,15 @@ function getProjectRegistryHint(): string {
 function generateSummaryPrompt(
     db: IDatabaseAdapter, 
     teamDb: IDatabaseAdapter | undefined, 
-    target: 'personal' | 'team'
+    target: 'personal' | 'team',
+    workspaceId = 'default'
 ): { messages: PromptMessage[] } {
     if (target === 'team' && !teamDb) {
         throw new ConfigurationError('Team database not configured')
     }
 
     const targetDb = target === 'team' && teamDb ? teamDb : db
-    const { entries: recent } = targetDb.getRecentEntries(5)
+    const { entries: recent } = targetDb.getRecentEntries(5, undefined, 'timestamp', undefined, false, workspaceId)
 
     const entrySummary =
         recent.length > 0
@@ -172,11 +173,16 @@ ${registryHint}- If you lose track of your project number, workspace, or agent I
     }
 }
 
-function generateUpdateEntryPrompt(db: IDatabaseAdapter, teamDb: IDatabaseAdapter | undefined, target: 'personal' | 'team'): { messages: PromptMessage[] } {
+function generateUpdateEntryPrompt(
+    db: IDatabaseAdapter,
+    teamDb: IDatabaseAdapter | undefined,
+    target: 'personal' | 'team',
+    workspaceId = 'default'
+): { messages: PromptMessage[] } {
     const targetDb = target === 'team' && teamDb ? teamDb : db
     let entryContext = ''
     try {
-        const recentRes = targetDb.getRecentEntries(1) as { entries?: unknown[] } | unknown[]
+        const recentRes = targetDb.getRecentEntries(1, undefined, 'timestamp', undefined, false, workspaceId) as { entries?: unknown[] } | unknown[]
         const recent = (Array.isArray(recentRes) ? recentRes[0] : recentRes.entries?.[0]) as Record<string, unknown> | undefined
         if (recent) {
             entryContext = `
@@ -240,10 +246,11 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
                 _args: Record<string, string> | undefined,
                 db: IDatabaseAdapter,
                 teamDb?: IDatabaseAdapter,
-                _github?: unknown
+                _github?: unknown,
+                briefingConfig?: { defaultWorkspaceId?: string }
             ) => {
                 await Promise.resolve()
-                return generateSummaryPrompt(db, teamDb, 'personal')
+                return generateSummaryPrompt(db, teamDb, 'personal', briefingConfig?.defaultWorkspaceId ?? 'default')
             },
         },
         {
@@ -254,10 +261,11 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
                 _args: Record<string, string> | undefined,
                 db: IDatabaseAdapter,
                 teamDb?: IDatabaseAdapter,
-                _github?: unknown
+                _github?: unknown,
+                briefingConfig?: { defaultWorkspaceId?: string }
             ) => {
                 await Promise.resolve()
-                return generateSummaryPrompt(db, teamDb, 'team')
+                return generateSummaryPrompt(db, teamDb, 'team', briefingConfig?.defaultWorkspaceId ?? 'default')
             },
         },
         {
@@ -293,10 +301,12 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
             handler: async (
                 _args: Record<string, string> | undefined,
                 db: IDatabaseAdapter,
-                teamDb?: IDatabaseAdapter
+                teamDb?: IDatabaseAdapter,
+                _github?: unknown,
+                briefingConfig?: { defaultWorkspaceId?: string }
             ) => {
                 await Promise.resolve()
-                return generateUpdateEntryPrompt(db, teamDb, 'personal')
+                return generateUpdateEntryPrompt(db, teamDb, 'personal', briefingConfig?.defaultWorkspaceId ?? 'default')
             },
         },
         {
@@ -306,10 +316,12 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
             handler: async (
                 _args: Record<string, string> | undefined,
                 db: IDatabaseAdapter,
-                teamDb?: IDatabaseAdapter
+                teamDb?: IDatabaseAdapter,
+                _github?: unknown,
+                briefingConfig?: { defaultWorkspaceId?: string }
             ) => {
                 await Promise.resolve()
-                return generateUpdateEntryPrompt(db, teamDb, 'team')
+                return generateUpdateEntryPrompt(db, teamDb, 'team', briefingConfig?.defaultWorkspaceId ?? 'default')
             },
         },
         {

@@ -180,7 +180,14 @@ export function createShimProjectsDomain(
         if (typeof baseProjectsProxy === 'function') {
             return (baseProjectsProxy as (...a: unknown[]) => unknown).apply(this, args)
         }
-        return Promise.resolve({ success: true, projects: {}, items: [], data: [] })
+        return Promise.resolve({
+            success: false,
+            code: 'CONFIGURATION_ERROR',
+            error: 'list_projects is not available',
+            projects: {},
+            items: [],
+            data: [],
+        })
     }
 
     return new Proxy(projectsFn, {
@@ -244,7 +251,11 @@ export function createDbDomainProxy(
                 }
             }
             if (dbProp === 'close' || dbProp === 'dispose' || dbProp === 'disconnect') {
-                return () => ({ success: true })
+                return () => ({
+                    success: false,
+                    code: 'VALIDATION_ERROR',
+                    error: `${dbProp} is not executed in the sandbox`,
+                })
             }
             if (dbProp === 'getDatabase' || dbProp === 'getDb' || dbProp === 'get_database' || dbProp === 'get_db') {
                 return () => shimMj

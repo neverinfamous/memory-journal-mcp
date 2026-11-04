@@ -135,8 +135,8 @@ export function convertKeysToSnakeCase(obj: Record<string, unknown>, methodName?
                 }
             } else if (
                 methodName !== undefined &&
-                (methodName.includes('create') || methodName.includes('update') || methodName.includes('Entry')) &&
-                !methodLower?.includes('link')
+                (hasMethodToken(methodName, 'create') || hasMethodToken(methodName, 'update')) &&
+                !hasMethodToken(methodName, 'link')
             ) {
                 if (!('content' in obj) && !('content' in result)) {
                     snakeKey = 'content'

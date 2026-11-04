@@ -107,7 +107,7 @@ export function getSemanticSearchTool(context: ToolContext): ToolDefinition[] {
                         }
                     }
                     const fallbackMap =
-                        unhydratedIds.length > 0 ? db.getEntriesByIds(unhydratedIds) : null
+                        unhydratedIds.length > 0 ? db.getEntriesByIds(unhydratedIds, wsId) : null
 
                     const filterOptions = {
                         isPersonal: input.is_personal,

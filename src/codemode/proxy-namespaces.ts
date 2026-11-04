@@ -159,7 +159,7 @@ export function createProjectsProxy(
                 if (has('delete') || has('remove')) return adminDeleteProject
                 if (has('update') || has('edit')) return adminUpdateProject
                 if (has('create') || has('register') || has('add')) return adminRegisterProject
-                if (has('list') || has('all') || (has('get') && tokens.some((token) => token.endsWith('s') && token !== 'get'))) {
+                if (has('list') || has('all')) {
                     return adminListProjects
                 }
                 if (has('get') || has('find')) return adminGetProject
@@ -179,11 +179,18 @@ export function createTagsProxy(
     const coreListTags = methods['core']?.includes('list_tags')
         ? (...args: unknown[]): Promise<unknown> => invokeRpc('core', 'list_tags', args)
         : (): Promise<unknown> =>
-              wrapPromise(Promise.resolve(wrapResult({ success: true, tags: [], count: 0 })), 'list_tags')
+              wrapPromise(
+                  Promise.resolve(wrapResult({ success: false, code: 'CONFIGURATION_ERROR', error: 'list_tags is not enabled' })),
+                  'list_tags'
+              )
 
     const adminMergeTags = methods['admin']?.includes('merge_tags')
         ? (...args: unknown[]): Promise<unknown> => invokeRpc('admin', 'merge_tags', args)
-        : (): Promise<unknown> => wrapPromise(Promise.resolve(wrapResult({ success: true })), 'merge_tags')
+        : (): Promise<unknown> =>
+              wrapPromise(
+                  Promise.resolve(wrapResult({ success: false, code: 'CONFIGURATION_ERROR', error: 'merge_tags is not enabled' })),
+                  'merge_tags'
+              )
 
     const tagsCallable = (...args: unknown[]): Promise<unknown> => coreListTags(...args)
     Object.assign(tagsCallable, {
@@ -204,7 +211,10 @@ export function createTagsProxy(
         get(t, p): unknown {
             if (typeof p === 'symbol' || p === 'then') return undefined
             if (p in t) return Reflect.get(t, p) as unknown
-            if (typeof p === 'string' && p.toLowerCase().includes('merge')) return adminMergeTags
+            if (typeof p === 'string') {
+                const normalized = p.toLowerCase().replace(/_/g, '')
+                if (normalized === 'merge' || normalized === 'mergetags') return adminMergeTags
+            }
             return coreListTags
         },
     })
@@ -219,7 +229,11 @@ export function createSystemProxy(
 ): object {
     const getStats = methods['analytics']?.includes('get_statistics')
         ? (...args: unknown[]): Promise<unknown> => invokeRpc('analytics', 'get_statistics', args)
-        : (): Promise<unknown> => wrapPromise(Promise.resolve(wrapResult({ success: true })), 'get_statistics')
+        : (): Promise<unknown> =>
+              wrapPromise(
+                  Promise.resolve(wrapResult({ success: false, code: 'CONFIGURATION_ERROR', error: 'get_statistics is not enabled' })),
+                  'get_statistics'
+              )
 
     const systemCallable = (...args: unknown[]): Promise<unknown> => getStats(...args)
     const statsKeys = [
@@ -253,20 +267,17 @@ export function createContextNamespaceProxy(contextObj?: Record<string, unknown>
     contextProxy: object
     getContextRpc: (keyOrObj?: unknown) => Promise<unknown>
 } {
-    const projNum = contextObj?.['project_number'] ?? contextObj?.['projectNumber'] ?? 1
+    const projNum = contextObj?.['project_number'] ?? contextObj?.['projectNumber']
     const sessId = contextObj?.['session_id'] ?? contextObj?.['sessionId'] ?? 'session-default'
-    const wsId = contextObj?.['workspace_id'] ?? contextObj?.['workspaceId'] ?? 'default'
-    const projId = contextObj?.['project_id'] ?? contextObj?.['projectId'] ?? projNum
+    const wsId = contextObj?.['workspace_id'] ?? contextObj?.['workspaceId']
     const contextData: Record<string, unknown> = {
         success: true,
-        project_number: projNum,
-        projectNumber: projNum,
+        ...(projNum !== undefined
+            ? { project_number: projNum, projectNumber: projNum, project_id: projNum, projectId: projNum }
+            : {}),
         session_id: sessId,
         sessionId: sessId,
-        workspace_id: wsId,
-        workspaceId: wsId,
-        project_id: projId,
-        projectId: projId,
+        ...(wsId !== undefined ? { workspace_id: wsId, workspaceId: wsId } : {}),
         ...(contextObj ?? {}),
     }
 

@@ -25,34 +25,21 @@ export function getLifecycleTools(context: ToolContext): ToolDefinition[] {
                 try {
                     const parsed = RunAutoPruneSchema.parse(params)
 
-                    // Safe config extraction from the adapter if supported
-                    interface DbOpts {
-                        archiveOlderThanDays?: number
-                        pruneOlderThanDays?: number
-                        hardDeleteOlderThanDays?: number
-                        pruneImportanceThreshold?: number
-                    }
-                    const dbOpts = (db as unknown as { options?: DbOpts }).options;
-
                     const archiveDays =
                         parsed.archive_older_than_days ??
                         context.config?.archiveOlderThanDays ??
-                        dbOpts?.archiveOlderThanDays ??
                         0
                     const pruneDays =
                         parsed.prune_older_than_days ??
                         context.config?.pruneOlderThanDays ??
-                        dbOpts?.pruneOlderThanDays ??
                         0
                     const hardDeleteDays =
                         parsed.hard_delete_older_than_days ??
                         context.config?.hardDeleteOlderThanDays ??
-                        dbOpts?.hardDeleteOlderThanDays ??
                         0
                     const threshold =
                         parsed.importance_threshold ??
                         context.config?.pruneImportanceThreshold ??
-                        dbOpts?.pruneImportanceThreshold ??
                         0.15
 
                     const excludeTags = context.config?.pruneExcludeTags

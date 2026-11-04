@@ -8,6 +8,7 @@ import type {
     ResourceContext,
     ResourceResult,
 } from './shared.js'
+import { resourceWorkspace } from './shared.js'
 import { logger } from '../../utils/logger.js'
 import { markUntrustedContent, sanitizeAuthor } from '../../utils/security-utils.js'
 
@@ -64,7 +65,7 @@ export function getTeamResourceDefinitions(): InternalResourceDef[] {
                     }
                 }
 
-                const { entries } = context.teamDb.getRecentEntries(10)
+                const { entries } = context.teamDb.getRecentEntries(10, undefined, 'timestamp', undefined, false, resourceWorkspace(context))
                 const lastModified = entries[0]?.timestamp ?? new Date().toISOString()
                 const enriched = enrichWithAuthor(entries, context)
 
@@ -107,7 +108,7 @@ export function getTeamResourceDefinitions(): InternalResourceDef[] {
                     }
                 }
 
-                const stats = context.teamDb.getStatistics('week')
+                const stats = context.teamDb.getStatistics('week', undefined, undefined, false, resourceWorkspace(context))
 
                 // Author breakdown
                 let authors: { author: string; count: number }[] = []

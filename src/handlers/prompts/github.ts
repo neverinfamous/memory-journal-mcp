@@ -40,7 +40,18 @@ export function getGitHubPromptDefinitions(): InternalPromptDef[] {
             name: 'issue-commander',
             description: 'Issue triage, milestone sprinting, and roadmap kickoff with HITL checkpoints. Optional arguments: project_number, workflow_type',
             icons: [ICON_PROMPT],
-            arguments: [],
+            arguments: [
+                {
+                    name: 'project_number',
+                    description: 'GitHub project number for the commander workflow',
+                    required: false,
+                },
+                {
+                    name: 'workflow_type',
+                    description: 'Commander workflow: triage or milestone',
+                    required: false,
+                },
+            ],
             handler: (args: Record<string, string> | undefined, _db: IDatabaseAdapter) => {
                 const projectNumber = args?.['project_number']
                 const type = args?.['workflow_type'] ?? 'triage'
@@ -81,7 +92,18 @@ If doing a milestone: Provide progress summary, upcoming milestones, timeline.`,
             name: 'pr-commander',
             description: 'Pull request summary, review prep, and dependency updates with validation gates. Optional arguments: pr_number, workflow_type',
             icons: [ICON_PROMPT],
-            arguments: [],
+            arguments: [
+                {
+                    name: 'pr_number',
+                    description: 'Pull request number for the commander workflow',
+                    required: false,
+                },
+                {
+                    name: 'workflow_type',
+                    description: 'Commander workflow: summary, review, or dependencies',
+                    required: false,
+                },
+            ],
             handler: (
                 args: Record<string, string> | undefined,
                 _db: IDatabaseAdapter,

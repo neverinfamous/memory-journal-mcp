@@ -13,9 +13,10 @@ export function getEntryCount(context: EntriesSharedContext, workspaceId?: strin
     const { db } = context
     let query = 'SELECT COUNT(*) as count FROM memory_journal WHERE deleted_at IS NULL'
     const params: unknown[] = []
-    if (workspaceId !== undefined && workspaceId !== '*') {
+    const scopeId = workspaceId ?? 'default'
+    if (scopeId !== '*') {
         query += ' AND workspace_id = ?'
-        params.push(workspaceId)
+        params.push(scopeId)
     }
     const row = rowToObject(db.prepare(query).get(...params))
     return typeof row?.['count'] === 'number' ? row['count'] : 0
@@ -163,19 +164,21 @@ export function getEntriesPage(
     context: EntriesSharedContext,
     offset: number,
     limit: number,
-    order: 'asc' | 'desc' = 'desc'
+    order: 'asc' | 'desc' = 'desc',
+    workspaceId = 'default'
 ): { entries: JournalEntry[]; nextCursor?: string } {
     const { db, tagsMgr } = context
 
     const sortDir = order === 'asc' ? 'ASC' : 'DESC'
+    const scoped = workspaceId !== '*'
 
     const stmt = db.prepare(`
         SELECT ${ENTRY_COLUMNS} FROM memory_journal 
-        WHERE deleted_at IS NULL 
+        WHERE deleted_at IS NULL ${scoped ? 'AND workspace_id = ?' : ''}
         ORDER BY timestamp ${sortDir}, id ${sortDir} 
         LIMIT ? OFFSET ?
     `)
-    const rows = stmt.all([limit, offset])
+    const rows = scoped ? stmt.all([workspaceId, limit, offset]) : stmt.all([limit, offset])
     const entries = rowsToEntries(tagsMgr, rows)
 
     if (entries.length === limit && limit > 0) {

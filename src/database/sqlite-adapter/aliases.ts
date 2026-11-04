@@ -40,15 +40,16 @@ export class AliasManager {
                 throw new QueryError('Cannot alias an author to themselves')
             }
 
+            const storedWorkspace = workspaceId === '*' || workspaceId === undefined ? 'default' : workspaceId
             this.db.run(
                 `INSERT INTO author_aliases (alias, canonical_author, created_by, workspace_id)
                  VALUES (?, ?, ?, ?)`,
-                [alias, canonicalAuthor, createdBy ?? null, workspaceId ?? null]
+                [alias, canonicalAuthor, createdBy ?? null, storedWorkspace]
             )
 
             const results = this.db.exec(
-                `SELECT * FROM author_aliases WHERE alias = ? COLLATE NOCASE`,
-                [alias]
+                `SELECT * FROM author_aliases WHERE alias = ? COLLATE NOCASE AND workspace_id = ?`,
+                [alias, storedWorkspace]
             )
             const row = this.getSingleRow(results)
             if (!row) {
@@ -68,11 +69,12 @@ export class AliasManager {
 
     removeAlias(alias: string, workspaceId?: string): boolean {
         try {
-            const scoped = workspaceId !== undefined && workspaceId !== '*'
+            const scopeId = workspaceId ?? 'default'
+            const scoped = scopeId !== '*'
             const selectSql = scoped
                 ? `SELECT id FROM author_aliases WHERE alias = ? COLLATE NOCASE AND workspace_id = ?`
                 : `SELECT id FROM author_aliases WHERE alias = ? COLLATE NOCASE`
-            const selectParams = scoped ? [alias, workspaceId] : [alias]
+            const selectParams = scoped ? [alias, scopeId] : [alias]
             const results = this.db.exec(selectSql, selectParams)
             const row = this.getSingleRow(results)
             if (!row) return false
@@ -100,9 +102,10 @@ export class AliasManager {
                 clauses.push(`canonical_author = ? COLLATE NOCASE`)
                 params.push(canonicalAuthor)
             }
-            if (workspaceId !== undefined && workspaceId !== '*') {
+            const scopeId = workspaceId ?? 'default'
+            if (scopeId !== '*') {
                 clauses.push(`(workspace_id IS NULL OR workspace_id = ?)`)
-                params.push(workspaceId)
+                params.push(scopeId)
             }
             if (clauses.length > 0) {
                 query += ` WHERE ${clauses.join(' AND ')}`
@@ -138,11 +141,12 @@ export class AliasManager {
 
     resolveAuthor(rawAuthor: string, workspaceId?: string): string {
         try {
-            const scoped = workspaceId !== undefined && workspaceId !== '*'
+            const scopeId = workspaceId ?? 'default'
+            const scoped = scopeId !== '*'
             const sql = scoped
                 ? `SELECT canonical_author FROM author_aliases WHERE alias = ? COLLATE NOCASE AND (workspace_id IS NULL OR workspace_id = ?)`
                 : `SELECT canonical_author FROM author_aliases WHERE alias = ? COLLATE NOCASE`
-            const params = scoped ? [rawAuthor, workspaceId] : [rawAuthor]
+            const params = scoped ? [rawAuthor, scopeId] : [rawAuthor]
             const results = this.db.exec(sql, params)
             const row = this.getSingleRow(results)
             if (row && typeof row['canonical_author'] === 'string') {
@@ -204,11 +208,12 @@ export class AliasManager {
 
     consolidateAuthors(canonicalAuthor: string, workspaceId?: string): number {
         try {
-            const scoped = workspaceId !== undefined && workspaceId !== '*'
+            const scopeId = workspaceId ?? 'default'
+            const scoped = scopeId !== '*'
             const journalFilter = scoped ? ' AND workspace_id = ?' : ''
             const aliasFilter = scoped ? ' AND (workspace_id IS NULL OR workspace_id = ?)' : ''
             const countParams: unknown[] = scoped
-                ? [workspaceId, canonicalAuthor, workspaceId]
+                ? [scopeId, canonicalAuthor, scopeId]
                 : [canonicalAuthor]
             const countResults = this.db.exec(
                 `SELECT COUNT(*) as count FROM memory_journal
@@ -223,7 +228,7 @@ export class AliasManager {
 
             if (count > 0) {
                 const updateParams: unknown[] = scoped
-                    ? [canonicalAuthor, workspaceId, canonicalAuthor, workspaceId]
+                    ? [canonicalAuthor, scopeId, canonicalAuthor, scopeId]
                     : [canonicalAuthor, canonicalAuthor]
                 this.db.run(
                     `UPDATE memory_journal

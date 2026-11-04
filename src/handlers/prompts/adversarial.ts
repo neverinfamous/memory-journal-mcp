@@ -32,17 +32,19 @@ export function getAdversarialPromptDefinitions(): InternalPromptDef[] {
                 'Bootstrap an adversarial planning workflow with structured review dimensions, scoring rubric, and prior plan context from the journal. Optional parameters: topic, depth, copilot.',
             icons: [ICON_PROMPT],
             arguments: PLAN_REVIEW_ARGUMENTS,
-            handler: (args: Record<string, string> | undefined, db: IDatabaseAdapter) => {
+            handler: (args: Record<string, string> | undefined, db: IDatabaseAdapter, _teamDb?: IDatabaseAdapter, _github?: unknown, briefingConfig?: { defaultWorkspaceId?: string }) => {
                 const parsed = planReviewArgsSchema.parse(args ?? {})
                 const topic = parsed.topic ?? '{topic}'
                 const depth: ReviewDepth = parsed.depth ?? 'standard'
                 const useCopilot = parsed.copilot === 'true'
 
                 // Pre-fetch prior finalized plans related to this topic
+                const priorWorkspace = briefingConfig?.defaultWorkspaceId ?? '*'
                 const { entries: priorPlans } = db.searchEntries(topic, {
                     entryType: 'plan_finalized',
                     tags: ['adversarial-planner'],
                     limit: 5,
+                    workspaceId: priorWorkspace,
                 })
 
                 const dimensionsTable = buildDimensionsTable(depth)
@@ -128,7 +130,7 @@ Review prior entries for recurring findings and reusable patterns before draftin
             description: 'Multi-pass adversarial code quality audit (linting, technical debt, consistency) Optional parameters: target, copilot',
             icons: [ICON_PROMPT],
             arguments: AUDIT_ARGUMENTS,
-            handler: (args: Record<string, string> | undefined, db: IDatabaseAdapter) => {
+            handler: (args: Record<string, string> | undefined, db: IDatabaseAdapter, _teamDb?: IDatabaseAdapter, _github?: unknown, briefingConfig?: { defaultWorkspaceId?: string }) => {
                 const parsed = auditArgsSchema.parse(args ?? {})
                 const target = parsed.target ?? '{target}'
                 const copilotTarget = target.replaceAll('"', "'").replaceAll('`', "'")
@@ -136,9 +138,11 @@ Review prior entries for recurring findings and reusable patterns before draftin
                     parsed.copilot === 'true',
                     `gh copilot -- -p "Perform an exhaustive code quality audit on ${copilotTarget}. Focus on dead code, duplication, type safety, magic values, monkey-patching, and anti-patterns." --allow-all`
                 )
+                const priorWorkspace = briefingConfig?.defaultWorkspaceId ?? '*'
                 const { entries: priorAudits } = db.searchEntries('code-quality-audit', {
                     tags: ['code-quality-audit'],
                     limit: 5,
+                    workspaceId: priorWorkspace,
                 })
                 return {
                     messages: [{
@@ -152,18 +156,18 @@ If the target is '{target}', determine it from the user's request. If the user h
 
 This prompt is shared by every project. Audit the repository the user named. Do not assume that repository is memory-journal-mcp, and do not copy this server's directory layout, commit script, or parameter-normalizer filenames onto a different codebase. Discover those in the target.
 
-1. Scan the target for dead code, duplication, type safety, magic values, complexity, boundary validation, monkey-patching, unused variables/exports, unhandled promises, and global scope pollution. For a large or full-repository audit, spawn parallel read-only subagents by subsystem. In Cursor use the Task tool with subagent type \`explore\` or \`generalPurpose\`. On any other host use that host's read-only subagent tool, and do not call a tool name that is not available in the session. Each subagent returns a path, a line number, a one-line quote, a severity, and a one-sentence fix. Severity defaults: a cross-workspace mutation is Critical; wrong-tool dispatch, false success, and a dropped isolation field are High; function length alone is Moderate; a file over 500 lines is High. A database-wide maintenance function that has no scope parameter is a product question, not an automatic Critical. A primary-key update that already rejects a workspace mismatch is Moderate. The parent re-reads every Critical and High citation, and every cross-workspace, authz, and false-success citation even when a subagent marked it Moderate. Quotes are the raw source line. Strip one wrapping backtick pair, then drop the citation if the quote is not on that line. Cap Moderate and Low findings. Do not cap Critical or High. Record which directories were opened and which detectors found nothing.
+1. Scan the target for dead code, duplication, type safety, magic values, complexity, boundary validation, monkey-patching, unused variables/exports, unhandled promises, and global scope pollution. File dead code, duplication, magic values, unused exports, and floating promises only when you quote them, and count those as Low. For a large or full-repository audit, spawn parallel read-only subagents by subsystem and assign each directory to one subagent. The parent dedupes a handler that drops a field and the callee branch it reaches into one finding with both lines. In Cursor use the Task tool with subagent type \`explore\` or \`generalPurpose\`. On any other host use that host's read-only subagent tool, and do not call a tool name that is not available in the session. Each subagent returns a path, a line number, a one-line quote, a severity, and a one-sentence fix. Severity defaults: a cross-workspace mutation is Critical; wrong-tool dispatch, false success, and a dropped isolation field are High; function length alone is Moderate; a file over 500 lines is High. A database-wide maintenance function that has no scope parameter is a product question, not an automatic Critical. A primary-key update that already rejects a workspace mismatch is Moderate. The parent re-reads every Critical and High citation, and every cross-workspace, authz, and false-success citation even when a subagent marked it Moderate. Quotes are the raw source line. Strip one wrapping backtick pair, then drop the citation if the quote is not on that line. Cap Moderate at 8 and Low at 5 per subsystem. The parent table keeps at most 12 Moderate and 8 Low. Do not cap Critical or High. Record which directories were opened and which detectors found nothing.
    - **Mandatory Deep-Quality Detectors (Always Run)**:
      1. **Silent Catch Block Detector**: Find every \`catch\` in production source, including \`catch (e)\` and multiline catches. A catch is silent when its body does not log, rethrow, or return a structured error. Quote the body. Keep intentional best-effort fallbacks out of the table. Do not flag a catch that returns the project's structured handler error.
      2. **Cross-Platform Path Separator Assumption Detector**: Flag filesystem prefix checks (\`startsWith\` / \`endsWith\` on a resolved path without a separator boundary) and hardcoded \`'\\\\'\` or \`'/'\` used to test real filesystem paths. Prefer \`path.relative()\` and \`path.sep\`. Ignore URL, route, glob, and SQL slashes. Case-fold only on Windows.
      3. **Cognitive Complexity & Nesting Hotspot Scan**: Flag functions over 80 lines or control-flow nesting deeper than 4. Do not file a split for a declarative registration factory whose body is a table of tool, prompt, resource, route, or schema definitions. Measure the inner handlers and real helpers. A file over 500 lines is still High when it is mostly declarations.
      4. **Schema-to-Handler Parameter Drift Check**: Every input-schema property is consumed by the handler or rewritten by that project's own parameter-normalization layer. Do not assume a file named \`param-normalizer.ts\` exists. Quote the schema field and the handler or normalizer read. Ignore fields that are forwarded as a whole parsed object.
      5. **Uncleaned Timer / EventListener Detector**: Flag \`setInterval\`, retained \`setTimeout\` handles, \`fs.watch\`, and \`process\` / server / filesystem / worker \`.on(\` registrations that lack \`unref()\`, \`clear*\`, or \`close()\` / \`finally\` cleanup. An awaited one-shot delay is not a leak.
-     6. **Type-safety Detector**: Flag \`any\`, \`as any\`, non-null \`!\`, and a double assertion (\`as unknown as\`) that reads a property the source type does not declare. Leave SDK boundary casts, such as simple-git options, alone. Do not file every \`as\` on a database row.
-     7. **Fuzzy method dispatch**: Flag \`includes\` or \`startsWith\` on a method or tool name used to choose a handler. Quote the token and the name that would take the wrong branch, such as \`listDeletedEntries\` matching \`delete\`.
+     6. **Type-safety Detector**: Flag \`any\`, \`as any\`, TypeScript postfix non-null assertions (\`value!\`), definite assignment (\`!:\`), and a double assertion (\`as unknown as\`) that reads a property the source type does not declare. Ignore GraphQL \`Type!\`, \`!=\`, and \`!condition\`. Leave SDK boundary casts, such as simple-git options, alone. Do not file every \`as\` on a database row.
+     7. **Fuzzy method dispatch**: Flag \`includes\`, \`startsWith\`, or \`endsWith\` on a method or tool name used to choose a handler. Quote the token and the name that would take the wrong branch, such as \`listDeletedEntries\` matching \`delete\`. Exact \`Map\` lookup is not fuzzy.
      8. **Accepted-but-ignored parameters**: A schema field is ignored when the handler passes a literal \`undefined\` in its place, or copies the field into a bag that no callee reads. Quote both sites. A whole parsed object that is forwarded counts as consumed.
-     9. **False success**: Flag a \`success: true\` result, or a resolved promise of one, on a path that did not perform the requested operation. Leave out a documented discovery response that says the operation did not run.
-    10. **Sentinel scope**: Flag \`'*'\`, an omitted workspace that becomes \`'default'\` or every row, and a schema field that is parsed and then left out of the call.
+     9. **False success**: Flag a \`success: true\` result, or a resolved promise of one, on a path that did not perform the requested operation. Leave out a documented discovery response, including a \`_healing_note\` that says the operation did not run. A success with no such note, a failed result whose array methods return an empty collection, and a filesystem shim that returns true from a substring stay in scope.
+    10. **Sentinel scope**: Flag an omitted workspace that selects every row, and a supplied workspace that is replaced or dropped. An omission that becomes the server's configured default is a product note. Explicit \`'*'\` is an admin override. Flag \`'*'\` when a fallback manufactures it after a miss.
     11. **Safety gate**: Flag a \`catch\` that logs and then continues a destructive operation, such as a failed backup followed by a prune.
 2. **Scan for files exceeding 500 lines using two redundant methods.** Run both from the target repository root. Scope them to \`src\` and \`scripts\` when those directories exist. Skip test files and vendored or synced third-party trees in every detector, not only this count. Common vendored names are \`vendor\`, \`src/vendor\`, \`third_party\`, \`node_modules\`, and \`dist\`. If \`scripts\` is absent, scan \`src\` only. Skip those directories by name before descending. Both methods must print \`SCAN_OK scanned=<n> over500=<n>\`. A scan that does not print that line failed. Do not treat that as zero files over 500 lines.
    - **Method 1 (Native PowerShell)**:
@@ -187,7 +191,7 @@ This prompt is shared by every project. Audit the repository the user named. Do 
      Walk 'scripts'
      Write-Output ('SCAN_OK scanned=' + $n + ' over500=' + $over)
      \`\`\`
-   - **Method 2 (Bun or Node)**:
+   - **Method 2 (PowerShell \`bun -e\` only)**: Do not pass this script to \`node -e\`. The walk can take more than 60 seconds. Both methods must print the same \`scanned\` and \`over500\` counts. A Node run uses \`node --input-type=module --eval\` with the same logic and \`node:fs\` / \`node:path\` imports.
      \`\`\`powershell
      bun -e @'
 import {readdirSync as r,statSync as s,readFileSync as f} from 'fs';import {join as j} from 'path';const skip=new Set(['vendor','third_party','node_modules','dist']);let n=0,over=0;function w(d){if(!s(d,{throwIfNoEntry:false}))return;for(const x of r(d)){if(skip.has(x))continue;const p=j(d,x);if(s(p).isDirectory())w(p);else if(/\\.(ts|tsx|js|mjs|cjs)$/.test(x)&&!/\\.(test|spec)\\./.test(x)){n++;const parts=f(p,'utf8').split(/\\r?\\n/);const l=parts.length>0&&parts[parts.length-1]===''?parts.length-1:parts.length;if(l>500){over++;console.log(l,p)}}}}w('src');w('scripts');console.log('SCAN_OK scanned='+n+' over500='+over);
@@ -197,7 +201,7 @@ import {readdirSync as r,statSync as s,readFileSync as f} from 'fs';import {join
 > [!IMPORTANT]
 > **High Priority — File Size**: Any file exceeding 500 lines is a high-priority finding. Flag all such files in the findings table with severity **High**. A function over 80 lines, or nesting deeper than 4, is **Moderate** unless that nesting hides one of the defects above. Do not mark function length by itself as High. Do NOT begin refactoring automatically — present them to the user for approval.
 
-Prompt revision: 2026-11-04-audit-pass4.
+Prompt revision: 2026-11-04-audit-pass5.
 
 3. Group findings by category and severity (**Critical**, **High**, **Moderate**, **Low**). File-size findings are **High**.
 4. **External Validation (Copilot — Opt-In)**: ${copilotInstruction}

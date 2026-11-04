@@ -60,7 +60,7 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     const input = TeamSemanticSearchSchema.parse(params)
-                    const wsId = input.workspace_id ? resolveWorkspaceId(input.workspace_id, input.project_number, context.config) : undefined
+                    const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
 
                     if (!input.query && input.entry_id === undefined) {
                         return {
@@ -110,19 +110,21 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                         results = await teamVectorManager.searchByEntryId(
                             input.entry_id,
                             internalLimit,
-                            input.similarity_threshold ?? 0.25
+                            input.similarity_threshold ?? 0.25,
+                            wsId
                         )
                     } else {
                         results = await teamVectorManager.search(
                             input.query ?? '',
                             internalLimit,
-                            input.similarity_threshold ?? 0.25
+                            input.similarity_threshold ?? 0.25,
+                            wsId
                         )
                     }
 
                     // Batch-fetch all entries (instead of N+1 getEntryById calls)
                     const entryIds = results.map((r) => r.entryId)
-                    const entriesMap = teamDb.getEntriesByIds(entryIds)
+                    const entriesMap = teamDb.getEntriesByIds(entryIds, wsId)
 
                     // Batch-fetch authors
                     const authorMap = batchFetchAuthors(teamDb, entryIds)
@@ -147,7 +149,7 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                             ) {
                                 return null
                             }
-                            if (wsId && entry.workspaceId !== wsId) {
+                            if (wsId !== '*' && entry.workspaceId !== wsId) {
                                 return null
                             }
 

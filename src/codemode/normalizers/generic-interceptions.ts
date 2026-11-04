@@ -300,7 +300,7 @@ function resolveCreateEntryProjectContext(obj: Record<string, unknown>): void {
         } else if (process.env['MCP_WORKSPACE_ID'] !== undefined && process.env['MCP_WORKSPACE_ID'] !== '') {
             obj['workspace_id'] = process.env['MCP_WORKSPACE_ID']
         } else {
-            obj['workspace_id'] = 'default'
+            delete obj['workspace_id']
         }
     }
     if (obj['project_number'] === undefined && resolved.projectNumber !== undefined) {

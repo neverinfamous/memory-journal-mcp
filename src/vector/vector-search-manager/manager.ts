@@ -292,7 +292,7 @@ export class VectorSearchManager {
             const queryEmbedding = await this.generateEmbedding(query)
 
             // searchVectors returns { entry_id: number; distance: number }[]
-            const targetWs = workspaceId ?? '*'
+            const targetWs = workspaceId ?? 'default'
             const results = this.dbAdapter.searchVectors(queryEmbedding, limit, targetWs)
 
             const candidates: { entryId: number; distance: number; similarityScore: number }[] = []
@@ -317,7 +317,7 @@ export class VectorSearchManager {
             const entriesMap =
                 typeof (this.dbAdapter as { getEntriesByIds?: unknown }).getEntriesByIds ===
                 'function'
-                    ? this.dbAdapter.getEntriesByIds(candidates.map((c) => c.entryId))
+                    ? this.dbAdapter.getEntriesByIds(candidates.map((c) => c.entryId), targetWs)
                     : null
 
             const searchResults: SemanticSearchResult[] = []
@@ -359,7 +359,7 @@ export class VectorSearchManager {
         await this.initialize()
 
         try {
-            const targetWs = workspaceId ?? '*'
+            const targetWs = workspaceId ?? 'default'
             const sourceEntry = this.dbAdapter.getEntryById(entryId, targetWs)
             if (!sourceEntry) {
                 throw new Error(`Entry ${entryId} not found`)
@@ -400,7 +400,7 @@ export class VectorSearchManager {
             const entriesMap =
                 typeof (this.dbAdapter as { getEntriesByIds?: unknown }).getEntriesByIds ===
                 'function'
-                    ? this.dbAdapter.getEntriesByIds(candidates.map((c) => c.entryId))
+                    ? this.dbAdapter.getEntriesByIds(candidates.map((c) => c.entryId), targetWs)
                     : null
 
             const searchResults: SemanticSearchResult[] = []

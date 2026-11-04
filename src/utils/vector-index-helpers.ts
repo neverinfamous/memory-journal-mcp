@@ -21,7 +21,7 @@ export async function autoIndexEntry(
 ): Promise<'success' | 'failed' | 'disabled'> {
     if (vectorManager === undefined) return 'disabled'
     try {
-        const entry = db.getEntryById(entryId, workspaceId ?? '*')
+        const entry = db.getEntryById(entryId, workspaceId ?? 'default')
         if (!entry) return 'failed'
         
         await vectorManager.addEntry(entry)

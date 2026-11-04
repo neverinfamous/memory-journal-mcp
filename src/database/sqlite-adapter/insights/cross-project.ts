@@ -16,14 +16,9 @@ export function getCrossProjectInsights(
 } {
     let where = 'WHERE deleted_at IS NULL AND project_number IS NOT NULL'
     const sqlParams: unknown[] = []
-    const wsFilter =
-        options.workspaceId !== undefined && options.workspaceId !== '*'
-            ? ' AND workspace_id = ?'
-            : ''
-    const wsParams: unknown[] =
-        options.workspaceId !== undefined && options.workspaceId !== '*'
-            ? [options.workspaceId]
-            : []
+    const scopeId = options.workspaceId ?? 'default'
+    const wsFilter = scopeId !== '*' ? ' AND workspace_id = ?' : ''
+    const wsParams: unknown[] = scopeId !== '*' ? [scopeId] : []
 
     where += wsFilter
     sqlParams.push(...wsParams)
@@ -70,10 +65,7 @@ export function getCrossProjectInsights(
     if (projects.length > 0) {
         const projectNumbers = projects.map((p) => p['project_number'] as number)
         const placeholders = projectNumbers.map(() => '?').join(',')
-        const mjWsFilter =
-            options.workspaceId !== undefined && options.workspaceId !== '*'
-                ? ' AND mj.workspace_id = ?'
-                : ''
+        const mjWsFilter = scopeId !== '*' ? ' AND mj.workspace_id = ?' : ''
         const tagsResult = connection.exec(
             `
             SELECT mj.project_number, t.name, COUNT(*) as count

@@ -343,8 +343,8 @@ describe('OAuth Scopes, Team RBAC, Audit Boundary & DatabaseAdapterProxy Integra
                 workspaceId: 'ws-beta',
             })
 
-            proxiedDb.deleteEntry(alphaDel.id, false)
-            proxiedDb.deleteEntry(betaDel.id, false)
+            proxiedDb.deleteEntry(alphaDel.id, false, 'ws-alpha')
+            proxiedDb.deleteEntry(betaDel.id, false, 'ws-beta')
 
             expect(proxiedDb.getDeletedEntries({ workspaceId: 'ws-alpha' }).entries[0]?.id).toBe(alphaDel.id)
             expect(proxiedDb.getDeletedEntries({ workspaceId: 'ws-beta' }).entries[0]?.id).toBe(betaDel.id)

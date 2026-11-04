@@ -6,14 +6,13 @@ export function getAuthorStatistics(
 ): { author: string; count: number }[] {
     let authors: { author: string; count: number }[] = []
     try {
-        const wsFilter =
-            workspaceId !== undefined && workspaceId !== '*' ? ' AND mj.workspace_id = ?' : ''
-        const params: unknown[] =
-            workspaceId !== undefined && workspaceId !== '*' ? [workspaceId] : []
+        const scopeId = workspaceId ?? 'default'
+        const wsFilter = scopeId !== '*' ? ' AND mj.workspace_id = ?' : ''
+        const params: unknown[] = scopeId !== '*' ? [scopeId] : []
         const authorResult = connection.exec(
             `SELECT COALESCE(aa.canonical_author, mj.author, 'unknown') as author, COUNT(*) as count
              FROM memory_journal mj
-             LEFT JOIN author_aliases aa ON LOWER(mj.author) = LOWER(aa.alias)
+             LEFT JOIN author_aliases aa ON LOWER(mj.author) = LOWER(aa.alias) AND (aa.workspace_id IS NULL OR aa.workspace_id = mj.workspace_id)
              WHERE mj.deleted_at IS NULL${wsFilter}
              GROUP BY COALESCE(aa.canonical_author, mj.author, 'unknown')
              ORDER BY count DESC`,
@@ -43,7 +42,7 @@ export function getAuthorsForEntries(
         const authorResult = connection.exec(
             `SELECT mj.id, COALESCE(aa.canonical_author, mj.author) as author
              FROM memory_journal mj
-             LEFT JOIN author_aliases aa ON LOWER(mj.author) = LOWER(aa.alias)
+             LEFT JOIN author_aliases aa ON LOWER(mj.author) = LOWER(aa.alias) AND (aa.workspace_id IS NULL OR aa.workspace_id = mj.workspace_id)
              WHERE mj.id IN (${placeholders})`,
             entryIds
         )
@@ -70,8 +69,9 @@ export function getTeamCollaborationMetrics(
 } {
     const limit = options.limit
     const period = options.period
-    const scoped = options.workspaceId !== undefined && options.workspaceId !== '*'
-    const workspaceId = scoped ? options.workspaceId : undefined
+    const scopeId = options.workspaceId ?? 'default'
+    const scoped = scopeId !== '*'
+    const workspaceId = scoped ? scopeId : undefined
 
     const dateExpression =
         period === 'week'
@@ -87,7 +87,7 @@ export function getTeamCollaborationMetrics(
             ${dateExpression} AS period,
             COUNT(*) AS entry_count
         FROM memory_journal mj
-        LEFT JOIN author_aliases aa ON LOWER(mj.author) = LOWER(aa.alias)
+        LEFT JOIN author_aliases aa ON LOWER(mj.author) = LOWER(aa.alias) AND (aa.workspace_id IS NULL OR aa.workspace_id = mj.workspace_id)
         WHERE mj.deleted_at IS NULL${scoped ? ' AND mj.workspace_id = ?' : ''}
         GROUP BY COALESCE(aa.canonical_author, mj.author, 'unknown'), period
         ORDER BY period DESC, entry_count DESC
@@ -110,8 +110,8 @@ export function getTeamCollaborationMetrics(
         FROM relationships r
         JOIN memory_journal m1 ON r.from_entry_id = m1.id
         JOIN memory_journal m2 ON r.to_entry_id = m2.id
-        LEFT JOIN author_aliases aa1 ON LOWER(m1.author) = LOWER(aa1.alias)
-        LEFT JOIN author_aliases aa2 ON LOWER(m2.author) = LOWER(aa2.alias)
+        LEFT JOIN author_aliases aa1 ON LOWER(m1.author) = LOWER(aa1.alias) AND (aa1.workspace_id IS NULL OR aa1.workspace_id = m1.workspace_id)
+        LEFT JOIN author_aliases aa2 ON LOWER(m2.author) = LOWER(aa2.alias) AND (aa2.workspace_id IS NULL OR aa2.workspace_id = m2.workspace_id)
         WHERE m1.deleted_at IS NULL AND m2.deleted_at IS NULL${scoped ? ' AND m1.workspace_id = ? AND m2.workspace_id = ?' : ''}
             AND COALESCE(aa1.canonical_author, m1.author, 'unknown') != COALESCE(aa2.canonical_author, m2.author, 'unknown')
         GROUP BY from_author, to_author
@@ -133,7 +133,7 @@ export function getTeamCollaborationMetrics(
             COUNT(*) AS inbound_links
         FROM relationships r
         JOIN memory_journal m2 ON r.to_entry_id = m2.id
-        LEFT JOIN author_aliases aa2 ON LOWER(m2.author) = LOWER(aa2.alias)
+        LEFT JOIN author_aliases aa2 ON LOWER(m2.author) = LOWER(aa2.alias) AND (aa2.workspace_id IS NULL OR aa2.workspace_id = m2.workspace_id)
         WHERE m2.deleted_at IS NULL${scoped ? ' AND m2.workspace_id = ?' : ''}
         GROUP BY COALESCE(aa2.canonical_author, m2.author, 'unknown')
         ORDER BY inbound_links DESC
@@ -152,7 +152,7 @@ export function getTeamCollaborationMetrics(
             COUNT(DISTINCT COALESCE(aa.canonical_author, mj.author, 'unknown')) AS total_authors,
             COUNT(*) AS total_entries
         FROM memory_journal mj
-        LEFT JOIN author_aliases aa ON LOWER(mj.author) = LOWER(aa.alias)
+        LEFT JOIN author_aliases aa ON LOWER(mj.author) = LOWER(aa.alias) AND (aa.workspace_id IS NULL OR aa.workspace_id = mj.workspace_id)
         WHERE mj.deleted_at IS NULL${scoped ? ' AND mj.workspace_id = ?' : ''}`,
         scoped ? [workspaceId] : []
     )

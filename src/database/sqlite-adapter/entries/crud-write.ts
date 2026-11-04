@@ -1,6 +1,7 @@
 import type { JournalEntry, EntryType } from '../../../types/index.js'
 import type { CreateEntryInput } from '../../core/interfaces.js'
 import type { EntriesSharedContext } from './shared.js'
+import { effectiveWorkspace } from '../../workspace-scope.js'
 import { ConflictError } from '../../../types/errors.js'
 import { insertAnchors } from './anchors.js'
 import { getEntryById, getEntriesByIds } from './crud-read.js'
@@ -294,7 +295,8 @@ export function deleteEntry(
     workspaceId?: string
 ): boolean {
     const { db } = context
-    const hasWorkspaceFilter = workspaceId !== undefined && workspaceId !== '*'
+    const scopeId = effectiveWorkspace(workspaceId)
+    const hasWorkspaceFilter = scopeId !== '*'
 
     if (permanent) {
         const stmt = db.prepare(
@@ -302,7 +304,7 @@ export function deleteEntry(
                 ? 'DELETE FROM memory_journal WHERE id = ? AND workspace_id = ?'
                 : 'DELETE FROM memory_journal WHERE id = ?'
         )
-        const result = hasWorkspaceFilter ? stmt.run(id, workspaceId) : stmt.run(id)
+        const result = hasWorkspaceFilter ? stmt.run(id, scopeId) : stmt.run(id)
         return result.changes > 0
     }
 
@@ -312,7 +314,7 @@ export function deleteEntry(
             : 'UPDATE memory_journal SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL'
     )
     const now = new Date().toISOString()
-    const result = hasWorkspaceFilter ? stmt.run(now, id, workspaceId) : stmt.run(now, id)
+    const result = hasWorkspaceFilter ? stmt.run(now, id, scopeId) : stmt.run(now, id)
     return result.changes > 0
 }
 
@@ -322,13 +324,14 @@ export function restoreEntry(
     workspaceId?: string
 ): boolean {
     const { db } = context
-    const hasWorkspaceFilter = workspaceId !== undefined && workspaceId !== '*'
+    const scopeId = effectiveWorkspace(workspaceId)
+    const hasWorkspaceFilter = scopeId !== '*'
     const stmt = db.prepare(
         hasWorkspaceFilter
             ? 'UPDATE memory_journal SET deleted_at = NULL WHERE id = ? AND deleted_at IS NOT NULL AND workspace_id = ?'
             : 'UPDATE memory_journal SET deleted_at = NULL WHERE id = ? AND deleted_at IS NOT NULL'
     )
-    const result = hasWorkspaceFilter ? stmt.run(id, workspaceId) : stmt.run(id)
+    const result = hasWorkspaceFilter ? stmt.run(id, scopeId) : stmt.run(id)
     return result.changes > 0
 }
 
@@ -367,7 +370,7 @@ export function createEntries(
         return { created: [], errors }
     }
 
-    const resultsMap = getEntriesByIds(context, createdIds)
+    const resultsMap = getEntriesByIds(context, createdIds, '*')
     const created = createdIds
         .map((id) => resultsMap.get(id))
         .filter((entry): entry is JournalEntry => entry !== undefined)
@@ -413,7 +416,7 @@ export function updateEntries(
         return { updated: [], notFound: [], errors }
     }
 
-    const resultsMap = getEntriesByIds(context, updatedIds)
+    const resultsMap = getEntriesByIds(context, updatedIds, '*')
     const updated = updatedIds
         .map((id) => resultsMap.get(id))
         .filter((entry): entry is JournalEntry => entry !== undefined)
@@ -431,12 +434,13 @@ export function deleteEntries(
     if (ids.length === 0) return { deleted: [], notFound: [], errors: [] }
 
     const placeholders = ids.map(() => '?').join(', ')
-    const hasWorkspaceFilter = workspaceId !== undefined && workspaceId !== '*'
+    const scopeId = effectiveWorkspace(workspaceId)
+    const hasWorkspaceFilter = scopeId !== '*'
     const existingRows = db
         .prepare(
             `SELECT id FROM memory_journal WHERE id IN (${placeholders}) ${permanent ? '' : 'AND deleted_at IS NULL'}${hasWorkspaceFilter ? ' AND workspace_id = ?' : ''}`
         )
-        .all(...(hasWorkspaceFilter ? [...ids, workspaceId] : ids)) as { id: number }[]
+        .all(...(hasWorkspaceFilter ? [...ids, scopeId] : ids)) as { id: number }[]
     const existingIds = new Set(existingRows.map((r) => r.id))
     const notFound = ids.filter((id) => !existingIds.has(id))
     const toDelete = ids.filter((id) => existingIds.has(id))
@@ -453,7 +457,7 @@ export function deleteEntries(
                     ? `DELETE FROM memory_journal WHERE id IN (${delPlaceholders}) AND workspace_id = ?`
                     : `DELETE FROM memory_journal WHERE id IN (${delPlaceholders})`
             )
-            stmt.run(...(hasWorkspaceFilter ? [...toDelete, workspaceId] : toDelete))
+            stmt.run(...(hasWorkspaceFilter ? [...toDelete, scopeId] : toDelete))
         } else {
             const now = new Date().toISOString()
             const stmt = db.prepare(
@@ -461,7 +465,7 @@ export function deleteEntries(
                     ? `UPDATE memory_journal SET deleted_at = ? WHERE id IN (${delPlaceholders}) AND deleted_at IS NULL AND workspace_id = ?`
                     : `UPDATE memory_journal SET deleted_at = ? WHERE id IN (${delPlaceholders}) AND deleted_at IS NULL`
             )
-            stmt.run(...(hasWorkspaceFilter ? [now, ...toDelete, workspaceId] : [now, ...toDelete]))
+            stmt.run(...(hasWorkspaceFilter ? [now, ...toDelete, scopeId] : [now, ...toDelete]))
         }
         deleted.push(...toDelete)
     })

@@ -128,8 +128,8 @@ function isSuccessObject(res: unknown): boolean {
     return typeof res === 'object' && res !== null && (res as Record<string, unknown>)['success'] === true
 }
 
-function matchesSuffixes(name: string, list: string[], suffixes: string[]): boolean {
-    return list.includes(name) || suffixes.some((s) => name.endsWith(s))
+function matchesExactName(name: string, list: string[]): boolean {
+    return list.includes(name)
 }
 
 async function tryAutonomousUnknownToolFallback(
@@ -164,7 +164,7 @@ async function tryAutonomousUnknownToolFallback(
     }
 
     if (
-        matchesSuffixes(requestedTool, DUMMY_RESOURCE_TOOL_NAMES, ['_read_resource', 'ReadResource']) ||
+        matchesExactName(requestedTool, DUMMY_RESOURCE_TOOL_NAMES) ||
         requestedTool === 'mjReadResource' ||
         requestedTool.startsWith('memory://')
     ) {
@@ -173,17 +173,17 @@ async function tryAutonomousUnknownToolFallback(
         if (isSuccessObject(res)) return formatSuccessPayload(res)
     }
 
-    if (matchesSuffixes(requestedTool, DUMMY_LIST_RESOURCE_TOOL_NAMES, ['_list_resources', 'ListResources'])) {
+    if (matchesExactName(requestedTool, DUMMY_LIST_RESOURCE_TOOL_NAMES)) {
         enforceAccessBoundary('list_resources', 'tool', undefined, runtime.auditLogger)
         return formatSuccessPayload(handleListResources(requestedTool))
     }
 
-    if (matchesSuffixes(requestedTool, DUMMY_LIST_PROMPT_TOOL_NAMES, ['_list_prompts', 'ListPrompts'])) {
+    if (matchesExactName(requestedTool, DUMMY_LIST_PROMPT_TOOL_NAMES)) {
         enforceAccessBoundary('list_prompts', 'tool', undefined, runtime.auditLogger)
         return formatSuccessPayload(handleListPrompts(requestedTool))
     }
 
-    if (matchesSuffixes(requestedTool, DUMMY_LIST_TOOL_NAMES, ['_list_tools', 'ListTools'])) {
+    if (matchesExactName(requestedTool, DUMMY_LIST_TOOL_NAMES)) {
         enforceAccessBoundary('list_tools', 'tool', undefined, runtime.auditLogger)
         const enabledSet = currentConfig.toolFilterConfig?.enabledTools ?? allToolNames
         const raw = currentConfig.toolFilterConfig?.raw
@@ -201,7 +201,7 @@ async function tryAutonomousUnknownToolFallback(
         })
     }
 
-    if (matchesSuffixes(requestedTool, DUMMY_GET_PROMPT_TOOL_NAMES, ['_get_prompt', 'GetPrompt'])) {
+    if (matchesExactName(requestedTool, DUMMY_GET_PROMPT_TOOL_NAMES)) {
         enforceAccessBoundary('get_prompt', 'tool', undefined, runtime.auditLogger)
         const res = await handleGetPrompt(toolArgs, requestedTool, toolContext)
         if (isSuccessObject(res)) return formatSuccessPayload(res)
@@ -213,24 +213,23 @@ async function tryAutonomousUnknownToolFallback(
     }
 
     if (
-        matchesSuffixes(requestedTool, DUMMY_PROJECT_TOOL_NAMES, ['list_projects', 'listProjects', 'ListProjects']) ||
+        matchesExactName(requestedTool, DUMMY_PROJECT_TOOL_NAMES) ||
         requestedTool === 'projects'
     ) {
         enforceAccessBoundary('list_projects', 'tool', undefined, runtime.auditLogger)
-        const cfg = currentConfig as { projectRegistry?: Record<string, unknown> }
         return formatSuccessPayload({
             success: true,
-            projects: cfg.projectRegistry ?? {},
+            projects: customToolHandlerConfig.projectRegistry ?? {},
             _healing_note: `🛠️ AUTONOMOUS HEALING: '${requestedTool}' was called as an MCP tool. Returned registered projects from projectRegistry successfully.`,
         })
     }
 
-    if (matchesSuffixes(requestedTool, DUMMY_ADAPTER_TOOL_NAMES, ['list_adapters', 'listAdapters', 'ListAdapters'])) {
+    if (matchesExactName(requestedTool, DUMMY_ADAPTER_TOOL_NAMES)) {
         enforceAccessBoundary('list_adapters', 'tool', undefined, runtime.auditLogger)
         return formatSuccessPayload(handleListAdapters(requestedTool, toolContext))
     }
 
-    if (matchesSuffixes(requestedTool, DUMMY_GREP_SEARCH_TOOL_NAMES, ['grep_search', 'grepSearch'])) {
+    if (matchesExactName(requestedTool, DUMMY_GREP_SEARCH_TOOL_NAMES)) {
         enforceAccessBoundary('grep_search', 'tool', undefined, runtime.auditLogger)
         return formatSuccessPayload(await handleGrepSearch(toolArgs, requestedTool, toolContext))
     }

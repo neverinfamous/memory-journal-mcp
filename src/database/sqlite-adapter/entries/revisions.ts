@@ -38,7 +38,8 @@ export function compareEntryVersions(
     context: EntriesSharedContext,
     entryId: number,
     fromRevision: number,
-    toRevision?: number
+    toRevision?: number,
+    workspaceId = 'default'
 ): VersionDiff | null {
     const revisions = getEntryRevisions(context, entryId)
     const fromRev = revisions.find((r) => r.revisionNumber === fromRevision)
@@ -53,7 +54,7 @@ export function compareEntryVersions(
         toContent = toRev.contentSnapshot
         resolvedTo = toRevision
     } else {
-        const currentEntry = getEntryById(context, entryId, '*')
+        const currentEntry = getEntryById(context, entryId, workspaceId)
         if (currentEntry === null) return null
         toContent = currentEntry.content
     }
