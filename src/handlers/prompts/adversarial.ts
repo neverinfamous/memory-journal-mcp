@@ -197,13 +197,13 @@ import {readdirSync as r,statSync as s,readFileSync as f} from 'fs';import {join
 > [!IMPORTANT]
 > **High Priority — File Size**: Any file exceeding 500 lines is a high-priority finding. Flag all such files in the findings table with severity **High**. A function over 80 lines, or nesting deeper than 4, is **Moderate** unless that nesting hides one of the defects above. Do not mark function length by itself as High. Do NOT begin refactoring automatically — present them to the user for approval.
 
-Prompt revision: 2026-11-04-audit-pass3.
+Prompt revision: 2026-11-04-audit-pass4.
 
 3. Group findings by category and severity (**Critical**, **High**, **Moderate**, **Low**). File-size findings are **High**.
 4. **External Validation (Copilot — Opt-In)**: ${copilotInstruction}
-5. Present a summary table to the user (incorporating Copilot findings if applicable) and await approval. Diagnostic scans in step 2, and read-only lint or typecheck when the target defines them, are part of the audit. **CRITICAL**: Do not edit project files, apply fixes, or commit until the user explicitly approves the implementation plan. The audit write-up is the only pre-approval write. Present the plan as markdown in the chat, and write that same markdown to \`docs/audits/\` in the target repository. The write-up must be readable in Cursor and in Antigravity. Say which file path you used.
+5. Present a summary table to the user (incorporating Copilot findings if applicable) and await approval. Diagnostic scans in step 2, and read-only lint or typecheck when the target defines them, are part of the audit. **CRITICAL**: Do not edit project files, apply fixes, or commit until the user explicitly approves the implementation plan. Present the plan as markdown in the chat. Do not add an audit plan file to the repository. The plan must be readable in Cursor and in Antigravity.
 6. After approval, fix critical issues first, then run the target's lint and typecheck and the tests that cover the change.
-7. Commit with the target repository's own commit helper when one exists. Discover that helper. Do not invent a script path. Do not commit the audit write-up unless the user asked.
+7. Commit with the target repository's own commit helper when one exists. Discover that helper. Do not invent a script path. Do not add an audit plan file to the repository.
 **Rule**: If you don't make changes, do not commit.
 
 ## Prior code-quality audits
@@ -251,7 +251,7 @@ If the target is '{target}', determine it from the user's request. If the user h
 2. **External Validation (Copilot — Opt-In)**: ${copilotInstruction}
 3. Present findings table (incorporating Copilot findings if applicable).
 4. Await approval before applying fixes. Diagnostic scans are part of the audit. Do not edit project files until the user approves the plan.
-5. Commit with the target repository's own commit helper when one exists. Discover that helper. Do not invent a script path. Do not commit the audit write-up unless the user asked.
+5. Commit with the target repository's own commit helper when one exists. Discover that helper. Do not invent a script path. Do not add an audit plan file to the repository.
 **Rule**: If you don't make changes, do not commit.`
                         }
                     }]
@@ -292,7 +292,7 @@ If the target is '{target}', determine it from the user's request. If the user h
 3. Present findings table (incorporating Copilot findings if applicable) grouped by subsystem and severity (Critical, High, Medium, Low) with quantified latency/allocation impact.
 4. Await approval before applying fixes. Diagnostic scans are part of the audit. Do not edit project files until the user approves the plan.
 5. After approval, apply fixes in phased stages, run the target's lint and typecheck, the tests that cover the change, and the benchmark command the target defines. Compare before and after telemetry.
-6. Commit with the target repository's own commit helper when one exists. Discover that helper. Do not invent a script path. Do not commit the audit write-up unless the user asked.
+6. Commit with the target repository's own commit helper when one exists. Discover that helper. Do not invent a script path. Do not add an audit plan file to the repository.
 **Rule**: If you don't make changes, do not commit.`
                         }
                     }]
@@ -329,7 +329,7 @@ If the target is '{target}', determine it from the user's request. If the user h
 2. **External Validation (Copilot — Opt-In)**: ${copilotInstruction}
 3. Present findings table (incorporating Copilot findings if applicable).
 4. Await approval before applying fixes. Diagnostic scans are part of the audit. Do not edit project files until the user approves the plan.
-5. Commit with the target repository's own commit helper when one exists. Discover that helper. Do not invent a script path. Do not commit the audit write-up unless the user asked.
+5. Commit with the target repository's own commit helper when one exists. Discover that helper. Do not invent a script path. Do not add an audit plan file to the repository.
 **Rule**: If you don't make changes, do not commit.`
                         }
                     }]
@@ -364,7 +364,7 @@ If the target is '{target}', determine it from the user's request. If the user h
 4. **External Validation (Copilot — Opt-In)**: ${copilotInstruction}
 5. **Presentation**: Present findings table incorporating Copilot structural findings (if applicable) and the new research gaps.
 6. HITL Approval: Await approval before applying fixes. Diagnostic scans are part of the audit. Do not edit project files until the user approves the plan.
-7. Commit with the target repository's own commit helper when one exists. Discover that helper. Do not invent a script path. Do not commit the audit write-up unless the user asked.
+7. Commit with the target repository's own commit helper when one exists. Discover that helper. Do not invent a script path. Do not add an audit plan file to the repository.
 **Rule**: If you don't make changes, do not commit.`
                         }
                     }]
@@ -397,7 +397,7 @@ If the target is '{target}', determine it from the user's request. If the user h
 2. **External Validation (Copilot — Opt-In)**: ${copilotInstruction}
 3. Present findings table (incorporating Copilot findings if applicable).
 4. Await approval before applying fixes. Diagnostic scans are part of the audit. Do not edit project files until the user approves the plan.
-5. Commit with the target repository's own commit helper when one exists. Discover that helper. Do not invent a script path. Do not commit the audit write-up unless the user asked.
+5. Commit with the target repository's own commit helper when one exists. Discover that helper. Do not invent a script path. Do not add an audit plan file to the repository.
 **Rule**: If you don't make changes, do not commit.`
                         }
                     }]
