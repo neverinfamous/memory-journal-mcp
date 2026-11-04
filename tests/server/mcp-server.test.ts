@@ -830,10 +830,11 @@ describe('McpServer', function () {
 
             expect(mockSigintHandlers.length).toBeGreaterThan(0)
 
-            // Execute the last registered SIGINT handler
+            // Shutdown flushes the audit log before closing the database.
             const handler = mockSigintHandlers[mockSigintHandlers.length - 1]
             if (handler) {
                 handler()
+                await new Promise((resolve) => setTimeout(resolve, 50))
                 expect(mockDbClose).toHaveBeenCalled()
             }
         })
