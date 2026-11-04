@@ -20,7 +20,7 @@ const preprocessMember = (val: unknown): unknown => {
     if (typeof val === 'object' && val !== null) {
         const obj = { ...(val as Record<string, unknown>) };
         let modified = false;
-        
+
         for (const key of authorAliases) {
             if (key in obj && !('author' in obj)) {
                 obj['author'] = obj[key];
@@ -243,7 +243,7 @@ export function getTeamMemberTools(context: ToolContext): ToolDefinition[] {
                     if (teamDb.removeTeamMember === undefined) return { success: false, error: 'Unsupported' }
 
                     const { author } = TeamRemoveMemberSchema.parse(params)
-                    
+
                     const caller = getCallerIdentity(params as Record<string, unknown> | undefined)
                     if (author.toLowerCase() === caller.toLowerCase()) {
                         return { success: false, error: 'Cannot remove yourself. Have another admin do it.', code: 'VALIDATION_ERROR' }
@@ -315,9 +315,7 @@ export function getTeamMemberTools(context: ToolContext): ToolDefinition[] {
             title: 'List Team Members',
             description: 'List all registered team members and their roles. Requires TEAM_DB_PATH.',
             group: 'team',
-            inputSchema: z.object({
-                workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
-            }).strict(),
+            inputSchema: z.object({}).strict(),
             outputSchema: z.object({
                 success: z.boolean(),
                 members: z.array(z.unknown()).optional(),
@@ -377,4 +375,3 @@ export function getTeamMemberTools(context: ToolContext): ToolDefinition[] {
         },
     ]
 }
-

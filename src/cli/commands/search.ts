@@ -8,6 +8,7 @@ import { searchOptionsSchema } from '../schemas.js'
 import type { ServerOptionsSchema } from '../schemas.js'
 import type { ServerOptions } from '../../server/mcp-server/types.js'
 import { VectorSearchManager } from '../../vector/vector-search-manager/index.js'
+import { hybridSearch } from '../../handlers/tools/search/hybrid.js'
 
 export const searchSchema = searchOptionsSchema
 
@@ -24,7 +25,7 @@ async function getDb(options: ServerOptionsSchema & { team?: boolean }, command:
     }
 
     const { serverOptions, teamDb } = buildServerOptions(resolver, options, command, configErrors)
-    
+
     if (configErrors.length > 0) {
         process.stderr.write('Startup Configuration Errors:\n')
         configErrors.forEach((err) => process.stderr.write(` - ${err}\n`))
@@ -49,7 +50,7 @@ export async function searchAction(query: string | undefined, options: z.infer<t
     }
 
     const { db, serverOptions } = await getDb(options, command)
-    
+
     try {
         const mode = options.mode || 'auto'
         const limit = options.limit ?? 100
@@ -58,6 +59,9 @@ export async function searchAction(query: string | undefined, options: z.infer<t
         if (mode === 'semantic') {
             const vectorManager = new VectorSearchManager(db, { modelName: serverOptions.embeddingModel })
             result = await vectorManager.search(finalQuery, limit)
+        } else if (mode === 'hybrid') {
+            const vectorManager = new VectorSearchManager(db, { modelName: serverOptions.embeddingModel })
+            result = await hybridSearch(finalQuery, db, vectorManager, { limit })
         } else {
             result = db.searchEntries(finalQuery, {
                 limit,

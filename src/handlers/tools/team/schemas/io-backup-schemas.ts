@@ -32,7 +32,6 @@ export const TeamExportEntriesSchemaMcp = z.object({
 /** team_backup — strict */
 export const TeamBackupSchema = z.object({
     name: z.string().optional(),
-    workspace_id: z.string().optional(),
 })
 
 export const TeamExportOutputSchema = z

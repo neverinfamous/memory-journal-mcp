@@ -41,7 +41,7 @@ export function getAuthorsForEntries(
     const placeholders = entryIds.map(() => '?').join(',')
     try {
         const authorResult = connection.exec(
-            `SELECT mj.id, COALESCE(aa.canonical_author, mj.author) as author 
+            `SELECT mj.id, COALESCE(aa.canonical_author, mj.author) as author
              FROM memory_journal mj
              LEFT JOIN author_aliases aa ON LOWER(mj.author) = LOWER(aa.alias)
              WHERE mj.id IN (${placeholders})`,
@@ -60,7 +60,7 @@ export function getAuthorsForEntries(
 
 export function getTeamCollaborationMetrics(
     connection: NativeConnectionManager,
-    options: { period: string; limit: number }
+    options: { period: string; limit: number; workspaceId?: string }
 ): {
     totalAuthors: number
     totalEntries: number
@@ -70,6 +70,8 @@ export function getTeamCollaborationMetrics(
 } {
     const limit = options.limit
     const period = options.period
+    const scoped = options.workspaceId !== undefined && options.workspaceId !== '*'
+    const workspaceId = scoped ? options.workspaceId : undefined
 
     const dateExpression =
         period === 'week'
@@ -86,11 +88,11 @@ export function getTeamCollaborationMetrics(
             COUNT(*) AS entry_count
         FROM memory_journal mj
         LEFT JOIN author_aliases aa ON LOWER(mj.author) = LOWER(aa.alias)
-        WHERE mj.deleted_at IS NULL
+        WHERE mj.deleted_at IS NULL${scoped ? ' AND mj.workspace_id = ?' : ''}
         GROUP BY COALESCE(aa.canonical_author, mj.author, 'unknown'), period
         ORDER BY period DESC, entry_count DESC
         LIMIT ?`,
-        [limit * 10]
+        scoped ? [workspaceId, limit * 10] : [limit * 10]
     )
     const authorActivity =
         activityResult[0]?.values.map((row: unknown[]) => ({
@@ -110,12 +112,12 @@ export function getTeamCollaborationMetrics(
         JOIN memory_journal m2 ON r.to_entry_id = m2.id
         LEFT JOIN author_aliases aa1 ON LOWER(m1.author) = LOWER(aa1.alias)
         LEFT JOIN author_aliases aa2 ON LOWER(m2.author) = LOWER(aa2.alias)
-        WHERE m1.deleted_at IS NULL AND m2.deleted_at IS NULL
+        WHERE m1.deleted_at IS NULL AND m2.deleted_at IS NULL${scoped ? ' AND m1.workspace_id = ? AND m2.workspace_id = ?' : ''}
             AND COALESCE(aa1.canonical_author, m1.author, 'unknown') != COALESCE(aa2.canonical_author, m2.author, 'unknown')
         GROUP BY from_author, to_author
         ORDER BY link_count DESC
         LIMIT ?`,
-        [limit]
+        scoped ? [workspaceId, workspaceId, limit] : [limit]
     )
     const crossAuthorLinks =
         crossLinkResult[0]?.values.map((row: unknown[]) => ({
@@ -132,11 +134,11 @@ export function getTeamCollaborationMetrics(
         FROM relationships r
         JOIN memory_journal m2 ON r.to_entry_id = m2.id
         LEFT JOIN author_aliases aa2 ON LOWER(m2.author) = LOWER(aa2.alias)
-        WHERE m2.deleted_at IS NULL
+        WHERE m2.deleted_at IS NULL${scoped ? ' AND m2.workspace_id = ?' : ''}
         GROUP BY COALESCE(aa2.canonical_author, m2.author, 'unknown')
         ORDER BY inbound_links DESC
         LIMIT ?`,
-        [limit]
+        scoped ? [workspaceId, limit] : [limit]
     )
     const impactFactor =
         impactResult[0]?.values.map((row: unknown[]) => ({
@@ -151,7 +153,8 @@ export function getTeamCollaborationMetrics(
             COUNT(*) AS total_entries
         FROM memory_journal mj
         LEFT JOIN author_aliases aa ON LOWER(mj.author) = LOWER(aa.alias)
-        WHERE mj.deleted_at IS NULL`
+        WHERE mj.deleted_at IS NULL${scoped ? ' AND mj.workspace_id = ?' : ''}`,
+        scoped ? [workspaceId] : []
     )
     const totalAuthors = (totalsResult[0]?.values[0]?.[0] as number | undefined) ?? 0
     const totalEntries = (totalsResult[0]?.values[0]?.[1] as number | undefined) ?? 0

@@ -8,6 +8,7 @@ import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { TEAM_DB_ERROR_RESPONSE } from './helpers.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { getCallerIdentity } from './rbac.js'
+import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 
 // ============================================================================
 // Schemas
@@ -21,7 +22,7 @@ const preprocessAlias = (val: unknown): unknown => {
     if (typeof val === 'object' && val !== null) {
         const obj = { ...(val as Record<string, unknown>) };
         let modified = false;
-        
+
         for (const key of aliasNames) {
             if (key in obj && !('alias' in obj)) {
                 obj['alias'] = obj[key];
@@ -133,6 +134,12 @@ const ConsolidateAuthorsOutputSchema = z.object({
 // Handlers
 // ============================================================================
 
+function scopedWorkspace(workspaceId: string | undefined, context: ToolContext): string | undefined {
+    if (workspaceId === undefined) return undefined
+    const resolved = resolveWorkspaceId(workspaceId, undefined, context.config)
+    return resolved === '*' ? undefined : resolved
+}
+
 function handleAddAuthorAlias(context: ToolContext) {
     return (params: unknown) => {
         try {
@@ -140,7 +147,8 @@ function handleAddAuthorAlias(context: ToolContext) {
             if (!teamDb) {
                 return { ...TEAM_DB_ERROR_RESPONSE }
             }
-            const { alias, canonical_author } = AddAuthorAliasSchema.parse(params)
+            const { alias, canonical_author, workspace_id } = AddAuthorAliasSchema.parse(params)
+            const workspaceId = scopedWorkspace(workspace_id, context)
 
             // Check if the alias is actually an existing canonical member
             const existingMember = teamDb.getTeamMember(alias)
@@ -151,8 +159,11 @@ function handleAddAuthorAlias(context: ToolContext) {
                 )
             }
 
-            const createdAlias = teamDb.addAuthorAlias(alias, canonical_author, getCallerIdentity(params as Record<string, unknown>))
-            
+            const caller = getCallerIdentity(params as Record<string, unknown>)
+            const createdAlias = workspaceId === undefined
+                ? teamDb.addAuthorAlias(alias, canonical_author, caller)
+                : teamDb.addAuthorAlias(alias, canonical_author, caller, workspaceId)
+
             return {
                 success: true,
                 alias: createdAlias,
@@ -170,13 +181,16 @@ function handleRemoveAuthorAlias(context: ToolContext) {
             if (!teamDb) {
                 return { ...TEAM_DB_ERROR_RESPONSE }
             }
-            const { alias } = RemoveAuthorAliasSchema.parse(params)
+            const { alias, workspace_id } = RemoveAuthorAliasSchema.parse(params)
+            const workspaceId = scopedWorkspace(workspace_id, context)
 
-            const success = teamDb.removeAuthorAlias(alias)
+            const success = workspaceId === undefined
+                ? teamDb.removeAuthorAlias(alias)
+                : teamDb.removeAuthorAlias(alias, workspaceId)
             if (!success) {
                 throw new ResourceNotFoundError('AuthorAlias', alias)
             }
-            
+
             return {
                 success: true,
             }
@@ -193,10 +207,11 @@ function handleListAuthorAliases(context: ToolContext) {
             if (!teamDb) {
                 return { ...TEAM_DB_ERROR_RESPONSE }
             }
-            const { canonical_author } = ListAuthorAliasesSchema.parse(params)
+            const { canonical_author, workspace_id } = ListAuthorAliasesSchema.parse(params)
+            const workspaceId = scopedWorkspace(workspace_id, context)
 
-            const aliases = teamDb.listAuthorAliases(canonical_author)
-            
+            const aliases = teamDb.listAuthorAliases(canonical_author, workspaceId)
+
             return {
                 success: true,
                 aliases,
@@ -214,10 +229,13 @@ function handleResolveAuthor(context: ToolContext) {
             if (!teamDb) {
                 return { ...TEAM_DB_ERROR_RESPONSE }
             }
-            const { author } = ResolveAuthorSchema.parse(params)
+            const { author, workspace_id } = ResolveAuthorSchema.parse(params)
+            const workspaceId = scopedWorkspace(workspace_id, context)
 
-            const resolved = teamDb.resolveAuthor(author)
-            
+            const resolved = workspaceId === undefined
+                ? teamDb.resolveAuthor(author)
+                : teamDb.resolveAuthor(author, workspaceId)
+
             return {
                 original_author: author,
                 canonical_author: resolved,
@@ -236,10 +254,13 @@ function handleConsolidateAuthors(context: ToolContext) {
             if (!teamDb) {
                 return { ...TEAM_DB_ERROR_RESPONSE }
             }
-            const { canonical_author } = ConsolidateAuthorsSchema.parse(params)
+            const { canonical_author, workspace_id } = ConsolidateAuthorsSchema.parse(params)
+            const workspaceId = scopedWorkspace(workspace_id, context)
 
-            const updatedCount = teamDb.consolidateAuthors(canonical_author)
-            
+            const updatedCount = workspaceId === undefined
+                ? teamDb.consolidateAuthors(canonical_author)
+                : teamDb.consolidateAuthors(canonical_author, workspaceId)
+
             return {
                 success: true,
                 updated_count: updatedCount,
@@ -339,4 +360,3 @@ export function getTeamAliasTools(context: ToolContext): ToolDefinition[] {
         },
     ]
 }
-

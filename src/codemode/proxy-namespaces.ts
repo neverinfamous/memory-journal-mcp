@@ -7,6 +7,7 @@ import { wrapResult } from './worker-result-proxy.js'
 import { wrapPromise } from './proxy-helpers.js'
 import { VERSION } from '../version.js'
 import { ENTRY_TYPES, SIGNIFICANCE_TYPES } from '../handlers/tools/schemas/constants-and-primitives.js'
+import { methodTokens } from './method-tokens.js'
 
 export type InvokeRpcFn = (group: string, method: string, args: unknown[]) => Promise<unknown>
 export type SafeRpcCallFn = (group: string, method: string, args: unknown[]) => Promise<unknown>
@@ -141,14 +142,15 @@ export function createProjectsProxy(
             if (typeof p === 'symbol' || p === 'then') return undefined
             if (p in t) return Reflect.get(t, p) as unknown
             if (typeof p === 'string') {
-                const low = p.toLowerCase()
-                if (low.includes('list') || low.includes('all') || (low.includes('get') && low.endsWith('s'))) {
+                const tokens = methodTokens(p)
+                const has = (token: string): boolean => tokens.includes(token)
+                if (has('delete') || has('remove')) return adminDeleteProject
+                if (has('update') || has('edit')) return adminUpdateProject
+                if (has('create') || has('register') || has('add')) return adminRegisterProject
+                if (has('list') || has('all') || (has('get') && tokens.some((token) => token.endsWith('s') && token !== 'get'))) {
                     return adminListProjects
                 }
-                if (low.includes('get') || low.includes('find')) return adminGetProject
-                if (low.includes('create') || low.includes('register') || low.includes('add')) return adminRegisterProject
-                if (low.includes('update') || low.includes('edit')) return adminUpdateProject
-                if (low.includes('delete') || low.includes('remove')) return adminDeleteProject
+                if (has('get') || has('find')) return adminGetProject
             }
             return adminListProjects
         },

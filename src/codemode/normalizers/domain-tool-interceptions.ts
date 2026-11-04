@@ -102,9 +102,6 @@ export function applyDomainToolInterceptions(
             return validationErr(`${methodName} does not support search queries, path, or mode. It returns all deleted entries.`, 'Remove these parameters.')
         }
         remapKeys(obj, ['keep'], 'limit')
-        if ((methodName === 'list_deleted_entries' || methodName === 'listDeletedEntries') && obj['project_number'] !== undefined) {
-            delete obj['project_number']
-        }
         if (obj['project_id'] !== undefined) delete obj['project_id']
     }
 

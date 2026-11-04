@@ -152,31 +152,50 @@ If the target is '{target}', determine it from the user's request. If the user h
 
 This prompt is shared by every project. Audit the repository the user named. Do not assume that repository is memory-journal-mcp, and do not copy this server's directory layout, commit script, or parameter-normalizer filenames onto a different codebase. Discover those in the target.
 
-1. Scan the target for dead code, duplication, type safety, magic values, complexity, boundary validation, monkey-patching, unused variables/exports, unhandled promises, and global scope pollution. For a large or full-repository audit, spawn parallel read-only subagents by subsystem. In Cursor use the Task tool with subagent type \`explore\` or \`generalPurpose\`. On any other host use that host's read-only subagent tool, and do not call a tool name that is not available in the session. Each subagent returns a path, a line number, a one-line quote, a severity, and a one-sentence fix. The parent re-reads every Critical and High citation before publishing it, and records which directories were opened and which detectors found nothing.
+1. Scan the target for dead code, duplication, type safety, magic values, complexity, boundary validation, monkey-patching, unused variables/exports, unhandled promises, and global scope pollution. For a large or full-repository audit, spawn parallel read-only subagents by subsystem. In Cursor use the Task tool with subagent type \`explore\` or \`generalPurpose\`. On any other host use that host's read-only subagent tool, and do not call a tool name that is not available in the session. Each subagent returns a path, a line number, a one-line quote, a severity, and a one-sentence fix. Severity defaults: a cross-workspace mutation is Critical; wrong-tool dispatch, false success, and a dropped isolation field are High; length alone is Moderate; a file over 500 lines is High. The parent re-reads every Critical and High citation before publishing it, drops a citation whose quote is not on that line, and records which directories were opened and which detectors found nothing.
    - **Mandatory Deep-Quality Detectors (Always Run)**:
      1. **Silent Catch Block Detector**: Find every \`catch\` in production source, including \`catch (e)\` and multiline catches. A catch is silent when its body does not log, rethrow, or return a structured error. Quote the body. Keep intentional best-effort fallbacks out of the table. Do not flag a catch that returns the project's structured handler error.
      2. **Cross-Platform Path Separator Assumption Detector**: Flag filesystem prefix checks (\`startsWith\` / \`endsWith\` on a resolved path without a separator boundary) and hardcoded \`'\\\\'\` or \`'/'\` used to test real filesystem paths. Prefer \`path.relative()\` and \`path.sep\`. Ignore URL, route, glob, and SQL slashes. Case-fold only on Windows.
      3. **Cognitive Complexity & Nesting Hotspot Scan**: Flag functions over 80 lines or control-flow nesting deeper than 4. Do not file a split for a declarative registration factory whose body is a table of tool, prompt, resource, route, or schema definitions. Measure the inner handlers and real helpers. A file over 500 lines is still High when it is mostly declarations.
      4. **Schema-to-Handler Parameter Drift Check**: Every input-schema property is consumed by the handler or rewritten by that project's own parameter-normalization layer. Do not assume a file named \`param-normalizer.ts\` exists. Quote the schema field and the handler or normalizer read. Ignore fields that are forwarded as a whole parsed object.
      5. **Uncleaned Timer / EventListener Detector**: Flag \`setInterval\`, retained \`setTimeout\` handles, \`fs.watch\`, and \`process\` / server / filesystem / worker \`.on(\` registrations that lack \`unref()\`, \`clear*\`, or \`close()\` / \`finally\` cleanup. An awaited one-shot delay is not a leak.
-     6. **Type-safety Detector**: Flag \`any\`, \`as any\`, double assertions (\`as unknown as\`), non-null \`!\`, and casts of JSON, roles, or enums. Do not file every \`as\` on a database row.
+     6. **Type-safety Detector**: Flag \`any\`, \`as any\`, non-null \`!\`, and a double assertion (\`as unknown as\`) that reads a property the source type does not declare. Leave SDK boundary casts, such as simple-git options, alone. Do not file every \`as\` on a database row.
      7. **Fuzzy method dispatch**: Flag \`includes\` or \`startsWith\` on a method or tool name used to choose a handler. Quote the token and the name that would take the wrong branch, such as \`listDeletedEntries\` matching \`delete\`.
      8. **Accepted-but-ignored parameters**: A schema field is ignored when the handler passes a literal \`undefined\` in its place, or copies the field into a bag that no callee reads. Quote both sites. A whole parsed object that is forwarded counts as consumed.
      9. **False success**: Flag a \`success: true\` result, or a resolved promise of one, on a path that did not perform the requested operation.
-2. **Scan for files exceeding 500 lines using two redundant methods.** Run both from the target repository root. Scope them to \`src\` and \`scripts\` when those directories exist. Skip test files and vendored or synced third-party trees in every detector, not only this count. Common vendored names are \`vendor\`, \`src/vendor\`, \`third_party\`, \`node_modules\`, and \`dist\`. If \`scripts\` is absent, scan \`src\` only. Skip those directories by name before descending. Method 1 can print an empty table on some PowerShell versions even when files exist, so an empty Method 1 result counts only when Method 2 also prints \`SCAN_OK\`. A scan that does not print \`SCAN_OK scanned=<n> over500=<n>\` failed. Do not treat that as zero files over 500 lines.
+2. **Scan for files exceeding 500 lines using two redundant methods.** Run both from the target repository root. Scope them to \`src\` and \`scripts\` when those directories exist. Skip test files and vendored or synced third-party trees in every detector, not only this count. Common vendored names are \`vendor\`, \`src/vendor\`, \`third_party\`, \`node_modules\`, and \`dist\`. If \`scripts\` is absent, scan \`src\` only. Skip those directories by name before descending. Both methods must print \`SCAN_OK scanned=<n> over500=<n>\`. A scan that does not print that line failed. Do not treat that as zero files over 500 lines.
    - **Method 1 (Native PowerShell)**:
      \`\`\`powershell
-     Get-ChildItem -Path src,scripts -Recurse -File -Include *.ts,*.tsx,*.js,*.mjs,*.cjs | Where-Object { $_.FullName -notmatch '[\\\\/](vendor|third_party|node_modules|dist)[\\\\/]' -and $_.Name -notmatch '\\.(test|spec)\\.' } | ForEach-Object { $lines = [System.IO.File]::ReadAllLines($_.FullName).Count; if ($lines -gt 500) { [PSCustomObject]@{ Lines = $lines; Path = $_.FullName } } } | Sort-Object Lines -Descending
+     $skip = @('vendor','third_party','node_modules','dist')
+     $n = 0
+     $over = 0
+     function Walk($dir) {
+       if (-not (Test-Path -LiteralPath $dir)) { return }
+       foreach ($item in (Get-ChildItem -LiteralPath $dir -Force)) {
+         if ($skip -contains $item.Name) { continue }
+         if ($item.PSIsContainer) { Walk $item.FullName; continue }
+         if ($item.Name -match '\\.(ts|tsx|js|mjs|cjs)$' -and $item.Name -notmatch '\\.(test|spec)\\.') {
+           $script:n++
+           $lines = [System.IO.File]::ReadAllLines($item.FullName).Count
+           if ($lines -gt 500) { $script:over++; Write-Output ($lines.ToString() + ' ' + $item.FullName) }
+         }
+       }
+     }
+     Walk 'src'
+     Walk 'scripts'
+     Write-Output ('SCAN_OK scanned=' + $n + ' over500=' + $over)
      \`\`\`
    - **Method 2 (Bun or Node)**:
      \`\`\`powershell
-     bun -e "import {readdirSync as r,statSync as s,readFileSync as f} from 'fs';import {join as j} from 'path';const skip=new Set(['vendor','third_party','node_modules','dist']);let n=0,over=0;function w(d){if(!s(d,{throwIfNoEntry:false}))return;for(const x of r(d)){if(skip.has(x))continue;const p=j(d,x);if(s(p).isDirectory())w(p);else if(/\\.(ts|tsx|js|mjs|cjs)$/.test(x)&&!/\\.(test|spec)\\./.test(x)){n++;const l=f(p,'utf8').split(/\\r?\\n/).length;if(l>500){over++;console.log(l,p)}}}}w('src');w('scripts');console.log('SCAN_OK scanned='+n+' over500='+over);"
+     bun -e @'
+import {readdirSync as r,statSync as s,readFileSync as f} from 'fs';import {join as j} from 'path';const skip=new Set(['vendor','third_party','node_modules','dist']);let n=0,over=0;function w(d){if(!s(d,{throwIfNoEntry:false}))return;for(const x of r(d)){if(skip.has(x))continue;const p=j(d,x);if(s(p).isDirectory())w(p);else if(/\\.(ts|tsx|js|mjs|cjs)$/.test(x)&&!/\\.(test|spec)\\./.test(x)){n++;const l=f(p,'utf8').split(/\\r?\\n/).length;if(l>500){over++;console.log(l,p)}}}}w('src');w('scripts');console.log('SCAN_OK scanned='+n+' over500='+over);
+'@
      \`\`\`
 
 > [!IMPORTANT]
 > **High Priority — File Size**: Any file exceeding 500 lines is a high-priority finding. Flag all such files in the findings table with severity **High**. A function over 80 lines, or nesting deeper than 4, is **Moderate** unless that nesting hides one of the defects above. Do not mark length by itself as High. Do NOT begin refactoring automatically — present them to the user for approval.
 
-Prompt revision: 2026-11-03-scan-sentinel.
+Prompt revision: 2026-11-03-audit-pass2.
 
 3. Group findings by category and severity (**Critical**, **High**, **Moderate**, **Low**). File-size findings are **High**.
 4. **External Validation (Copilot — Opt-In)**: ${copilotInstruction}
@@ -259,7 +278,7 @@ Target: ${target}
 
 If the target is '{target}', determine it from the user's request. If the user hasn't specified a target file or module, ask them for it now.
 
-1. Perform a multi-pass performance audit looking for N+1 queries, unnecessary allocations, and hot-path bottlenecks. For large targets or full-repository audits, spawn parallel \`research\` subagents by architectural domain (e.g., Database & Query Plans, Vector & Sandbox Execution, Server Dispatch & Observability) using \`invoke_subagent\` so each subsystem is profiled thoroughly without context truncation.
+1. Perform a multi-pass performance audit looking for N+1 queries, unnecessary allocations, and hot-path bottlenecks. For large targets or full-repository audits, spawn parallel read-only subagents by architectural domain (for example Database and Query Plans, Vector and Sandbox Execution, Server Dispatch and Observability). In Cursor use the Task tool with subagent type \`explore\` or \`generalPurpose\`. On any other host use that host's read-only subagent tool.
    - **Mandatory Deep-Performance Gates (Always Run)**:
      1. **SQLite Query Plan & Virtual Table Join Order Audit**: Inspect SQLite queries (especially FTS5 \`fts_content\` and \`sqlite-vec\` \`vec0\` joins) using \`EXPLAIN QUERY PLAN\`. Verify virtual tables are driven as the outer loop (\`CROSS JOIN\` when necessary to prevent planner inversion), check for \`USE TEMP B-TREE FOR DISTINCT\` or \`ORDER BY\`, verify SARGable \`WHERE\` clauses (no \`DATE(col)\` wrappers on indexed columns), and confirm prepared statement caching or reuse on hot paths.
      2. **N+1 Query & Post-Limit Hydration Audit**: Scan for database or vector lookups inside loops (e.g., per-row \`getEntryById\`, \`calculateImportance\`, \`getRelationships\`, \`getAuthorsForEntries\`, or tag hydration). Ensure expensive aggregations (like importance CTEs) are deferred to post-\`LIMIT\` batch hydration (\`WHERE id IN (...)\`) unless explicitly sorting by that computed column.
@@ -269,10 +288,10 @@ If the target is '{target}', determine it from the user's request. If the user h
      6. **Benchmark Suite Realism & Contamination Audit**: Inspect \`tests/**/*.bench.ts\` to verify benchmarks do not silently benchmark validation errors (e.g., missing required parameters under \`VITEST=true\`), do not contaminate read/search benchmarks with thousands of prior write-benchmark rows or orphan vectors, and do not pay cold-start model loading costs when embeddings are mocked.
 2. **External Validation (Copilot — Opt-In)**: ${copilotInstruction}
 3. Present findings table (incorporating Copilot findings if applicable) grouped by subsystem and severity (Critical, High, Medium, Low) with quantified latency/allocation impact.
-4. Await HITL approval before applying fixes. **CRITICAL**: You are strictly forbidden from modifying any project files or running any scripts until the user explicitly approves the implementation plan. Only create the markdown artifact and stop.
-5. After approval, apply fixes in phased stages, run validation gates (\`bun run lint\`, \`bun run typecheck\`, targeted unit tests, and \`pnpm run bench\`), and compare before/after benchmark telemetry.
-6. Commit fixes using \`bun path/to/commit.ts\`.
-**Rule**: If you do not make changes, do not commit. If you make only minor documentation changes, commit.`
+4. Await approval before applying fixes. Diagnostic scans are part of the audit. Do not edit project files until the user approves the plan.
+5. After approval, apply fixes in phased stages, run the target's lint and typecheck, the tests that cover the change, and the benchmark command the target defines. Compare before and after telemetry.
+6. Commit with the target repository's own commit helper when one exists. Discover that helper. Do not invent a script path. Do not commit the audit write-up unless the user asked.
+**Rule**: If you don't make changes, do not commit.`
                         }
                     }]
                 }
@@ -300,14 +319,16 @@ Target: ${target}
 
 If the target is '{target}', determine it from the user's request. If the user hasn't specified a target file or module, ask them for it now.
 
-1. Perform a multi-pass audit checking:
+1. Perform a multi-pass audit. For a large site, spawn read-only subagents. In Cursor use the Task tool with subagent type \`explore\` or \`generalPurpose\`. Check:
    - Technical SEO (meta tags, Open Graph, canonicals, viewport).
    - Semantic HTML and accessibility (ARIA, alt text, structural hierarchy).
    - Core Web Vitals implications (DOM size, layout shifts, LCP elements).
    - Structured data (JSON-LD) and E-E-A-T signals.
 2. **External Validation (Copilot — Opt-In)**: ${copilotInstruction}
 3. Present findings table (incorporating Copilot findings if applicable).
-4. Await HITL approval before applying fixes. **CRITICAL**: You are strictly forbidden from modifying any project files or running any scripts until the user explicitly approves the implementation plan. Only create the markdown artifact and stop.\n5. Commit fixes using \`bun path/to/commit.ts\`.\n**Rule**: If you do not make changes, do not commit. If you make only minor documentation changes, commit.`
+4. Await approval before applying fixes. Diagnostic scans are part of the audit. Do not edit project files until the user approves the plan.
+5. Commit with the target repository's own commit helper when one exists. Discover that helper. Do not invent a script path. Do not commit the audit write-up unless the user asked.
+**Rule**: If you don't make changes, do not commit.`
                         }
                     }]
                 }
@@ -335,14 +356,14 @@ Target: ${target}
 
 If the target is '{target}', determine it from the user's request. If the user hasn't specified a target skill, ask them for it now.
 
-1. **Subagent Research Phase**: Spawn one or more \`research\` subagents using the \`invoke_subagent\` tool to perform deep web searches on high-value resources (e.g. official docs, release notes, credible blogs) for the latest best practices and version changes related to the target skill. Wait for their findings.
+1. **Subagent Research Phase**: Use the host's web search tool for official docs, release notes, and credible write-ups of the latest practices and version changes for the target skill. In Cursor use the Task tool with subagent type \`explore\` or \`generalPurpose\` when the skill tree is large. Wait for those findings.
 2. **Gap Analysis**: Compare the subagent research findings against the current skill's contents to identify missing context, outdated information, or new version features.
 3. **Structural Evaluation**: Evaluate the agent skill for trigger reliability, safety gates, and markdown frontmatter compliance.
 4. **External Validation (Copilot — Opt-In)**: ${copilotInstruction}
 5. **Presentation**: Present findings table incorporating Copilot structural findings (if applicable) and the new research gaps.
-6. HITL Approval: Await HITL approval before applying fixes. **CRITICAL**: You are strictly forbidden from modifying any project files or running any scripts until the user explicitly approves the implementation plan. Only create the markdown artifact and stop.
-7. Commit fixes using \`bun path/to/commit.ts\`.
-**Rule**: If you don't make changes, do not commit. If you make only minor documentation changes, commit.`
+6. HITL Approval: Await approval before applying fixes. Diagnostic scans are part of the audit. Do not edit project files until the user approves the plan.
+7. Commit with the target repository's own commit helper when one exists. Discover that helper. Do not invent a script path. Do not commit the audit write-up unless the user asked.
+**Rule**: If you don't make changes, do not commit.`
                         }
                     }]
                 }
@@ -370,10 +391,12 @@ Target: ${target}
 
 If the target is '{target}', determine it from the user's request. If the user hasn't specified a target workflow, ask them for it now.
 
-1. Evaluate the workflow for sequential clarity, human-in-the-loop safety gates, and infinite loop prevention.
+1. Evaluate the workflow for sequential clarity, human-in-the-loop safety gates, and infinite loop prevention. For a large workflow tree, spawn read-only subagents. In Cursor use the Task tool with subagent type \`explore\` or \`generalPurpose\`.
 2. **External Validation (Copilot — Opt-In)**: ${copilotInstruction}
 3. Present findings table (incorporating Copilot findings if applicable).
-4. Await HITL approval before applying fixes. **CRITICAL**: You are strictly forbidden from modifying any project files or running any scripts until the user explicitly approves the implementation plan. Only create the markdown artifact and stop.\n5. Commit fixes using \`bun path/to/commit.ts\`.\n**Rule**: If you do not make changes, do not commit. If you make only minor documentation changes, commit.`
+4. Await approval before applying fixes. Diagnostic scans are part of the audit. Do not edit project files until the user approves the plan.
+5. Commit with the target repository's own commit helper when one exists. Discover that helper. Do not invent a script path. Do not commit the audit write-up unless the user asked.
+**Rule**: If you don't make changes, do not commit.`
                         }
                     }]
                 }

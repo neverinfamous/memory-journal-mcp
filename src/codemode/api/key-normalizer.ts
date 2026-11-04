@@ -10,6 +10,7 @@ import {
     healSessionSummaryContent,
     healAutoContext,
 } from '../normalizers/shared-utils.js'
+import { methodTokens } from '../method-tokens.js'
 
 const CONTENT_LIKE_KEYS = new Set(['message', 'msg', 'name', 'heading', 'subject', 'description', 'content', 'comment'])
 
@@ -28,12 +29,9 @@ export function convertKeysToSnakeCase(obj: Record<string, unknown>, methodName?
     }
 
     const methodLower = methodName?.toLowerCase()
+    const githubTokens = new Set(['github', 'issue', 'issues', 'pr', 'prs', 'milestone', 'milestones'])
     const isGithubTool =
-        methodLower !== undefined &&
-        (methodLower.includes('github') ||
-            methodLower.includes('issue') ||
-            methodLower.includes('pr') ||
-            methodLower.includes('milestone'))
+        methodName !== undefined && methodTokens(methodName).some((token) => githubTokens.has(token))
 
     const result: Record<string, unknown> = {}
     for (const [key, value] of Object.entries(obj)) {

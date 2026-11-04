@@ -157,7 +157,11 @@ async function executeCode(
                     return (await vm.runInContext(wrapped, vmContextRef.current, { timeout: timeoutMs })) as unknown
                 }
             }
-            return { success: true }
+            return {
+                success: false,
+                error: 'No code was executed',
+                code: 'VALIDATION_ERROR',
+            }
         }
         executeCodeFnRef.current = executeCodeFn
 

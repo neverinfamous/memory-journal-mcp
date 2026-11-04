@@ -57,12 +57,16 @@ export function getTeamExportTools(context: ToolContext): ToolDefinition[] {
 
                     // Fetch entries with optional filters
                     let entries
-                    if (start_date && end_date) {
-                        entries = teamDb.searchByDateRange(start_date, end_date, {
-                            entryType: entry_type,
-                            tags,
-                            limit: fetchLimit,
-                        }).entries
+                    if (start_date !== undefined || end_date !== undefined) {
+                        entries = teamDb.searchByDateRange(
+                            start_date ?? DATE_MIN_SENTINEL,
+                            end_date ?? DATE_MAX_SENTINEL,
+                            {
+                                entryType: entry_type,
+                                tags,
+                                limit: fetchLimit,
+                            }
+                        ).entries
                     } else if (hasTypeFilter || hasTagFilter) {
                         // Use wide date range to scan the full database
                         entries = teamDb.searchByDateRange(DATE_MIN_SENTINEL, DATE_MAX_SENTINEL, {
@@ -153,4 +157,3 @@ export function getTeamExportTools(context: ToolContext): ToolDefinition[] {
         },
     ]
 }
-

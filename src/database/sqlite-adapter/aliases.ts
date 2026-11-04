@@ -14,7 +14,7 @@ export class AliasManager {
         }
         const row = queryResult[0]?.values[0]
         if (!row) return null
-        
+
         const result: Record<string, unknown> = {}
         const columns = queryResult[0]?.columns ?? []
         for (let i = 0; i < columns.length; i++) {
@@ -34,16 +34,16 @@ export class AliasManager {
         }
     }
 
-    addAlias(alias: string, canonicalAuthor: string, createdBy?: string): AuthorAlias {
+    addAlias(alias: string, canonicalAuthor: string, createdBy?: string, workspaceId?: string): AuthorAlias {
         try {
             if (alias.toLowerCase() === canonicalAuthor.toLowerCase()) {
                 throw new QueryError('Cannot alias an author to themselves')
             }
 
             this.db.run(
-                `INSERT INTO author_aliases (alias, canonical_author, created_by)
-                 VALUES (?, ?, ?)`,
-                [alias, canonicalAuthor, createdBy ?? null]
+                `INSERT INTO author_aliases (alias, canonical_author, created_by, workspace_id)
+                 VALUES (?, ?, ?, ?)`,
+                [alias, canonicalAuthor, createdBy ?? null, workspaceId ?? null]
             )
 
             const results = this.db.exec(
@@ -66,17 +66,21 @@ export class AliasManager {
         }
     }
 
-    removeAlias(alias: string): boolean {
+    removeAlias(alias: string, workspaceId?: string): boolean {
         try {
-            // First check if it exists so we can return false if not
-            const results = this.db.exec(
-                `SELECT id FROM author_aliases WHERE alias = ? COLLATE NOCASE`,
-                [alias]
-            )
+            const scoped = workspaceId !== undefined && workspaceId !== '*'
+            const selectSql = scoped
+                ? `SELECT id FROM author_aliases WHERE alias = ? COLLATE NOCASE AND workspace_id = ?`
+                : `SELECT id FROM author_aliases WHERE alias = ? COLLATE NOCASE`
+            const selectParams = scoped ? [alias, workspaceId] : [alias]
+            const results = this.db.exec(selectSql, selectParams)
             const row = this.getSingleRow(results)
             if (!row) return false
 
-            this.db.run(`DELETE FROM author_aliases WHERE alias = ? COLLATE NOCASE`, [alias])
+            const deleteSql = scoped
+                ? `DELETE FROM author_aliases WHERE alias = ? COLLATE NOCASE AND workspace_id = ?`
+                : `DELETE FROM author_aliases WHERE alias = ? COLLATE NOCASE`
+            this.db.run(deleteSql, selectParams)
             return true
         } catch (error) {
             if (error instanceof Error) {
@@ -86,14 +90,22 @@ export class AliasManager {
         }
     }
 
-    listAliases(canonicalAuthor?: string): AuthorAlias[] {
+    listAliases(canonicalAuthor?: string, workspaceId?: string): AuthorAlias[] {
         try {
             let query = `SELECT * FROM author_aliases`
             const params: unknown[] = []
+            const clauses: string[] = []
 
             if (canonicalAuthor) {
-                query += ` WHERE canonical_author = ? COLLATE NOCASE`
+                clauses.push(`canonical_author = ? COLLATE NOCASE`)
                 params.push(canonicalAuthor)
+            }
+            if (workspaceId !== undefined && workspaceId !== '*') {
+                clauses.push(`(workspace_id IS NULL OR workspace_id = ?)`)
+                params.push(workspaceId)
+            }
+            if (clauses.length > 0) {
+                query += ` WHERE ${clauses.join(' AND ')}`
             }
             query += ` ORDER BY canonical_author ASC, alias ASC`
 
@@ -124,12 +136,14 @@ export class AliasManager {
         }
     }
 
-    resolveAuthor(rawAuthor: string): string {
+    resolveAuthor(rawAuthor: string, workspaceId?: string): string {
         try {
-            const results = this.db.exec(
-                `SELECT canonical_author FROM author_aliases WHERE alias = ? COLLATE NOCASE`,
-                [rawAuthor]
-            )
+            const scoped = workspaceId !== undefined && workspaceId !== '*'
+            const sql = scoped
+                ? `SELECT canonical_author FROM author_aliases WHERE alias = ? COLLATE NOCASE AND (workspace_id IS NULL OR workspace_id = ?)`
+                : `SELECT canonical_author FROM author_aliases WHERE alias = ? COLLATE NOCASE`
+            const params = scoped ? [rawAuthor, workspaceId] : [rawAuthor]
+            const results = this.db.exec(sql, params)
             const row = this.getSingleRow(results)
             if (row && typeof row['canonical_author'] === 'string') {
                 return row['canonical_author']
@@ -166,7 +180,7 @@ export class AliasManager {
             if (results[0]) {
                 const aliasIdx = results[0].columns.indexOf('alias')
                 const canonicalIdx = results[0].columns.indexOf('canonical_author')
-                
+
                 results[0].values.forEach((row: unknown[]) => {
                     const alias = String(row[aliasIdx])
                     const canonical = String(row[canonicalIdx])
@@ -188,35 +202,39 @@ export class AliasManager {
         return resultMap
     }
 
-    consolidateAuthors(canonicalAuthor: string): number {
+    consolidateAuthors(canonicalAuthor: string, workspaceId?: string): number {
         try {
-            // SQLite execute typically doesn't return the changes count in the result array format used here,
-            // but we can query changes() if we need to. However, this project's exec doesn't return changes.
-            // Let's use a workaround: run a select before to get the count.
-            // Actually, better to query first, then run update.
-            
+            const scoped = workspaceId !== undefined && workspaceId !== '*'
+            const journalFilter = scoped ? ' AND workspace_id = ?' : ''
+            const aliasFilter = scoped ? ' AND (workspace_id IS NULL OR workspace_id = ?)' : ''
+            const countParams: unknown[] = scoped
+                ? [workspaceId, canonicalAuthor, workspaceId]
+                : [canonicalAuthor]
             const countResults = this.db.exec(
-                `SELECT COUNT(*) as count FROM memory_journal 
-                 WHERE deleted_at IS NULL AND author IN (
-                     SELECT alias FROM author_aliases WHERE canonical_author = ? COLLATE NOCASE
+                `SELECT COUNT(*) as count FROM memory_journal
+                 WHERE deleted_at IS NULL${journalFilter} AND author IN (
+                     SELECT alias FROM author_aliases WHERE canonical_author = ? COLLATE NOCASE${aliasFilter}
                  )`,
-                 [canonicalAuthor]
+                countParams
             )
-            
+
             const countRow = this.getSingleRow(countResults)
             const count = typeof countRow?.['count'] === 'number' ? countRow['count'] : 0
-            
+
             if (count > 0) {
+                const updateParams: unknown[] = scoped
+                    ? [canonicalAuthor, workspaceId, canonicalAuthor, workspaceId]
+                    : [canonicalAuthor, canonicalAuthor]
                 this.db.run(
                     `UPDATE memory_journal
                      SET author = ?
-                     WHERE deleted_at IS NULL AND author IN (
-                         SELECT alias FROM author_aliases WHERE canonical_author = ? COLLATE NOCASE
+                     WHERE deleted_at IS NULL${journalFilter} AND author IN (
+                         SELECT alias FROM author_aliases WHERE canonical_author = ? COLLATE NOCASE${aliasFilter}
                      )`,
-                     [canonicalAuthor, canonicalAuthor]
+                    updateParams
                 )
             }
-            
+
             return count
         } catch (error) {
             if (error instanceof Error && error.message.includes('no such table')) {

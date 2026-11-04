@@ -90,6 +90,7 @@ export class InsightsOperations {
     getTeamCollaborationMatrix(options: {
         period: string
         limit: number
+        workspaceId?: string
     }): ReturnType<typeof getTeamCollaborationMetrics> {
         return getTeamCollaborationMetrics(this.connection, options)
     }

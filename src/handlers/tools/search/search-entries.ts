@@ -6,8 +6,24 @@ import { passMetadataFilters, collectTeamSearchEntries, mergeAndDedup, type Entr
 import { resolveSearchMode } from './auto.js'
 import { ftsSearch } from './fts.js'
 import { hybridSearch } from './hybrid.js'
+import { decodeCursor, encodeCursor } from '../../../database/sqlite-adapter/entries/search/cursor.js'
 import { SearchEntriesSchema, SearchEntriesSchemaMcp } from './schemas.js'
 import { EntriesListOutputSchema } from '../schemas.js'
+
+function cursorOffset(cursor: string | undefined): number {
+    if (cursor === undefined || cursor.length === 0) return 0
+    const decoded = decodeCursor(cursor)
+    if (decoded !== null && 'offset' in decoded) return decoded.offset
+    return 0
+}
+
+function pageRows<T>(rows: T[], cursor: string | undefined, limit: number): { page: T[]; nextCursor?: string } {
+    const offset = cursorOffset(cursor)
+    const page = rows.slice(offset, offset + limit)
+    const next = offset + page.length
+    if (next < rows.length) return { page, nextCursor: encodeCursor({ offset: next }) }
+    return { page }
+}
 
 export function getSearchEntriesTool(context: ToolContext): ToolDefinition[] {
     const { db, teamDb, vectorManager, teamVectorManager } = context;
@@ -196,15 +212,16 @@ export function getSearchEntriesTool(context: ToolContext): ToolDefinition[] {
                                 ranked = scored
                             }
 
-                            ranked = ranked.slice(0, input.limit)
+                            const semanticPage = pageRows(ranked, input.cursor, input.limit)
 
                             return {
                                 success: true,
-                                entries: ranked,
-                                count: ranked.length,
+                                entries: semanticPage.page,
+                                count: semanticPage.page.length,
                                 searchMode: isAuto ? 'semantic (auto)' : 'semantic',
                                 degraded: false,
                                 facets,
+                                ...(semanticPage.nextCursor !== undefined ? { next_cursor: semanticPage.nextCursor } : {}),
                             }
                         }
                         case 'hybrid': {
@@ -213,18 +230,21 @@ export function getSearchEntriesTool(context: ToolContext): ToolDefinition[] {
                                 const result = ftsSearch(input.query, db, teamDb, searchOptions)
                                 return { ...result, searchMode: 'fts (fallback)' }
                             }
+                            const hybridOffset = cursorOffset(input.cursor)
                             const { entries: hybridEntries, degraded } = await hybridSearch(
                                 query,
                                 db,
                                 vectorManager,
                                 {
                                     ...searchOptions,
+                                    limit: input.limit + hybridOffset,
                                     ftsWeight: input.fts_weight,
                                     semanticWeight: input.semantic_weight,
                                     ...(teamDb !== undefined ? { teamDb } : {}),
                                     ...(teamVectorManager !== undefined ? { teamVectorManager } : {}),
                                 }
                             )
+                            const hybridPage = pageRows(hybridEntries, input.cursor, input.limit)
 
                             // Post-fetch importance re-sort for vector results
                             if (input.sort_by === 'importance') {
@@ -238,23 +258,26 @@ export function getSearchEntriesTool(context: ToolContext): ToolDefinition[] {
                                 scored.sort(
                                     (a, b) => (b.importanceScore ?? 0) - (a.importanceScore ?? 0)
                                 )
+                                const scoredPage = pageRows(scored, input.cursor, input.limit)
                                 return {
                                     success: true,
-                                    entries: scored,
-                                    count: scored.length,
+                                    entries: scoredPage.page,
+                                    count: scoredPage.page.length,
                                     searchMode: isAuto ? 'hybrid (auto)' : 'hybrid',
                                     degraded: degraded === true,
                                     facets,
+                                    ...(scoredPage.nextCursor !== undefined ? { next_cursor: scoredPage.nextCursor } : {}),
                                 }
                             }
 
                             return {
                                 success: true,
-                                entries: hybridEntries,
-                                count: hybridEntries.length,
+                                entries: hybridPage.page,
+                                count: hybridPage.page.length,
                                 searchMode: isAuto ? 'hybrid (auto)' : 'hybrid',
                                 degraded: degraded === true,
                                 facets,
+                                ...(hybridPage.nextCursor !== undefined ? { next_cursor: hybridPage.nextCursor } : {}),
                             }
                         }
                         case 'fts':

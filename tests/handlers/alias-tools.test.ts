@@ -36,7 +36,7 @@ describe('Team Alias Tools', () => {
             })
             const tool = getTool('team_add_author_alias')
             const result = await tool.handler({ alias: 'chris', canonical_author: 'christopher' }) as any
-            
+
             expect(result.success).toBe(true)
             expect(result.alias.canonicalAuthor).toBe('christopher')
             expect(mockContext.teamDb!.addAuthorAlias).toHaveBeenCalledWith('chris', 'christopher', 'test-author')
@@ -45,7 +45,7 @@ describe('Team Alias Tools', () => {
         it('rejects if alias is an existing member role', async () => {
             mockContext.teamDb!.getTeamMember = vi.fn().mockReturnValue({ author: 'existing_user', role: 'viewer' })
             const tool = getTool('team_add_author_alias')
-            
+
             const result = await tool.handler({ alias: 'existing_user', canonical_author: 'christopher' }) as any
             expect(result.success).toBe(false)
             expect(result.error).toMatch(/Cannot alias 'existing_user' because it is an existing team member/)
@@ -57,7 +57,7 @@ describe('Team Alias Tools', () => {
             mockContext.teamDb!.removeAuthorAlias = vi.fn().mockReturnValue(true)
             const tool = getTool('team_remove_author_alias')
             const result = await tool.handler({ alias: 'chris' }) as any
-            
+
             expect(result.success).toBe(true)
             expect(mockContext.teamDb!.removeAuthorAlias).toHaveBeenCalledWith('chris')
         })
@@ -65,7 +65,7 @@ describe('Team Alias Tools', () => {
         it('returns RESOURCE_NOT_FOUND if alias does not exist', async () => {
             mockContext.teamDb!.removeAuthorAlias = vi.fn().mockReturnValue(false)
             const tool = getTool('team_remove_author_alias')
-            
+
             const result = await tool.handler({ alias: 'unknown' }) as any
             expect(result.success).toBe(false)
             expect(result.error).toMatch(/not found/)
@@ -79,7 +79,7 @@ describe('Team Alias Tools', () => {
             ])
             const tool = getTool('team_list_author_aliases')
             const result = await tool.handler({}) as any
-            
+
             expect(result.aliases).toHaveLength(1)
             expect(result.aliases[0].alias).toBe('chris')
         })
@@ -90,7 +90,7 @@ describe('Team Alias Tools', () => {
             mockContext.teamDb!.resolveAuthor = vi.fn().mockReturnValue('christopher')
             const tool = getTool('team_resolve_author')
             const result = await tool.handler({ author: 'chris' }) as any
-            
+
             expect(result.original_author).toBe('chris')
             expect(result.canonical_author).toBe('christopher')
             expect(result.is_aliased).toBe(true)
@@ -100,7 +100,7 @@ describe('Team Alias Tools', () => {
             mockContext.teamDb!.resolveAuthor = vi.fn().mockReturnValue('chris')
             const tool = getTool('team_resolve_author')
             const result = await tool.handler({ author: 'chris' }) as any
-            
+
             expect(result.canonical_author).toBe('chris')
             expect(result.is_aliased).toBe(false)
         })
@@ -111,10 +111,27 @@ describe('Team Alias Tools', () => {
             mockContext.teamDb!.consolidateAuthors = vi.fn().mockReturnValue(42)
             const tool = getTool('team_consolidate_authors')
             const result = await tool.handler({ canonical_author: 'christopher' }) as any
-            
+
             expect(result.success).toBe(true)
             expect(result.updated_count).toBe(42)
             expect(mockContext.teamDb!.consolidateAuthors).toHaveBeenCalledWith('christopher')
+        })
+
+        it('passes a concrete workspace into consolidateAuthors', async () => {
+            const consolidate = vi.fn().mockReturnValue(1)
+            mockContext.teamDb!.consolidateAuthors = consolidate
+            mockContext.config = { projectRegistry: {} }
+            const tool = getTool('team_consolidate_authors')
+            const result: unknown = await tool.handler({
+                canonical_author: 'christopher',
+                workspace_id: 'alpha',
+            })
+
+            expect(consolidate).toHaveBeenCalledWith('christopher', 'alpha')
+            if (typeof result !== 'object' || result === null || !('success' in result)) {
+                throw new Error('consolidate handler did not return a result')
+            }
+            expect(result.success).toBe(true)
         })
     })
 })

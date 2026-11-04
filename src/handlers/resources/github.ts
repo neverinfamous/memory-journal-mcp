@@ -70,15 +70,22 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
                     desc: string
                 ): Promise<T> => {
                     const controller = new AbortController()
-                    return Promise.race([
-                        operation(controller.signal),
-                        new Promise<T>((_, reject) =>
-                            setTimeout(() => {
-                                controller.abort()
-                                reject(new Error(`GitHub API timeout: ${desc}`))
-                            }, ms)
-                        ),
-                    ])
+                    return new Promise<T>((resolve, reject) => {
+                        const timer = setTimeout(() => {
+                            controller.abort()
+                            reject(new Error(`GitHub API timeout: ${desc}`))
+                        }, ms)
+                        operation(controller.signal).then(
+                            (value) => {
+                                clearTimeout(timer)
+                                resolve(value)
+                            },
+                            (err: unknown) => {
+                                clearTimeout(timer)
+                                reject(err instanceof Error ? err : new Error(String(err)))
+                            }
+                        )
+                    })
                 }
 
                 // Parallelize independent API calls for performance

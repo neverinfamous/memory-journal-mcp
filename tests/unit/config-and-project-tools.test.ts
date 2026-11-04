@@ -460,7 +460,7 @@ describe('ConfigManager & Configuration Tools', () => {
                 count: number
                 warning?: string
             }
-            expect(disabledRes.success).toBe(true)
+            expect(disabledRes.success).toBe(false)
             expect(disabledRes.count).toBe(0)
             expect(disabledRes.warning).toContain('disabled')
 

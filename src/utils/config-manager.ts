@@ -17,6 +17,7 @@ export class ConfigManager extends EventEmitter {
     private readonly initialCodemodeFullAccess: boolean
     private configFilePath?: string | undefined
     private watcher?: fs.FSWatcher
+    private debounceTimer?: ReturnType<typeof setTimeout>
     private isWriting = false
 
     constructor(initialConfig: DynamicConfig, configFilePath?: string) {
@@ -39,15 +40,16 @@ export class ConfigManager extends EventEmitter {
         if (newConfig.rawToolFilter !== undefined) {
             this.config.toolFilterConfig = newConfig.rawToolFilter ? parseToolFilter(newConfig.rawToolFilter) : null
         }
-        
+
         if (persist && this.configFilePath) {
             this.persistToFile()
         }
-        
+
         this.emit('changed', this.config)
     }
 
     public close(): void {
+        if (this.debounceTimer !== undefined) clearTimeout(this.debounceTimer)
         this.watcher?.close()
     }
 
@@ -62,7 +64,7 @@ export class ConfigManager extends EventEmitter {
             } else {
                 parsed = (parseYaml as (text: string) => Record<string, unknown>)(content) ?? {}
             }
-            
+
             // Update keys
 
             if (this.config.rawToolFilter !== undefined) {
@@ -100,14 +102,12 @@ export class ConfigManager extends EventEmitter {
 
     private watchFile(): void {
         if (!this.configFilePath) return
-        
-        let debounceTimer: NodeJS.Timeout
 
         try {
             this.watcher = fs.watch(this.configFilePath, (eventType) => {
                 if (eventType === 'change' && !this.isWriting) {
-                    clearTimeout(debounceTimer)
-                    debounceTimer = setTimeout(() => {
+                    if (this.debounceTimer !== undefined) clearTimeout(this.debounceTimer)
+                    this.debounceTimer = setTimeout(() => {
                         try {
                             this.reloadFromFile()
                         } catch (err: unknown) {
@@ -131,7 +131,7 @@ export class ConfigManager extends EventEmitter {
 
     private reloadFromFile(): void {
         if (!this.configFilePath || !fs.existsSync(this.configFilePath)) return
-        
+
         try {
             const content = fs.readFileSync(this.configFilePath, 'utf-8')
             let parsed: Record<string, unknown> = {}
@@ -168,14 +168,14 @@ export class ConfigManager extends EventEmitter {
                                       key === 'briefingWorkflows' ? 'workflowCount' :
                                       key === 'briefingWorkflowStatus' ? 'workflowStatusBreakdown' :
                                       key === 'briefingCopilot' ? 'copilotReviews' : undefined;
-                    
+
                     if (mappedKey) {
                         (bc as Record<string, unknown>)[mappedKey] = parsed[key];
                         bcChanged = true;
                     }
                 }
             }
-            
+
             if (bcChanged) {
                 updates.briefingConfig = bc
             }

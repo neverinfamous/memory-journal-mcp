@@ -172,19 +172,19 @@ export interface IDatabaseAdapter {
     getTeamMemberCount(): number
     isTeamRbacActive(): boolean
     resolveTeamRole(author: string, defaultRole?: TeamRole | 'denied'): TeamRole | null
-    
+
     // Author Aliases (Level 2 Identity)
-    addAuthorAlias(alias: string, canonicalAuthor: string, createdBy?: string): AuthorAlias
-    removeAuthorAlias(alias: string): boolean
-    listAuthorAliases(canonicalAuthor?: string): AuthorAlias[]
-    resolveAuthor(rawAuthor: string): string
+    addAuthorAlias(alias: string, canonicalAuthor: string, createdBy?: string, workspaceId?: string): AuthorAlias
+    removeAuthorAlias(alias: string, workspaceId?: string): boolean
+    listAuthorAliases(canonicalAuthor?: string, workspaceId?: string): AuthorAlias[]
+    resolveAuthor(rawAuthor: string, workspaceId?: string): string
     resolveAuthors(rawAuthors: string[]): Map<string, string>
-    consolidateAuthors(canonicalAuthor: string): number
+    consolidateAuthors(canonicalAuthor: string, workspaceId?: string): number
 
     // Soft-Delete Recovery
     restoreEntry(id: number, workspaceId?: string): boolean
     getDeletedEntries(options?: { limit?: number; offset?: number; workspaceId?: string }): { entries: JournalEntry[]; count: number }
-    
+
     // Batch Operations
     createEntries(inputs: CreateEntryInput[]): { created: JournalEntry[]; errors: { index: number; error: Error }[] }
     updateEntries(
@@ -380,7 +380,7 @@ export interface IDatabaseAdapter {
         edges: { from: string | number; to: string | number; label: string; type: string }[]
     }
 
-    getTeamCollaborationMatrix(options: { period: string; limit: number }): {
+    getTeamCollaborationMatrix(options: { period: string; limit: number; workspaceId?: string }): {
         totalAuthors: number
         totalEntries: number
         authorActivity: { author: string; period: string; entryCount: number }[]

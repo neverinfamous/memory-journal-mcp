@@ -25,21 +25,21 @@ export class LifecycleOperations {
         const cte = buildImportanceCte()
         const importanceExpr = buildImportanceSqlExpression()
         const deletedAt = new Date().toISOString()
-        
+
         let excludeTagsSql = ''
         const excludeTags = options.excludeTags ?? []
-        
+
         if (excludeTags.length > 0) {
             const placeholders = excludeTags.map(() => '?').join(',')
             excludeTagsSql = `AND e.id NOT IN (
-                SELECT entry_id FROM entry_tags 
-                JOIN tags ON tags.id = entry_tags.tag_id 
+                SELECT entry_id FROM entry_tags
+                JOIN tags ON tags.id = entry_tags.tag_id
                 WHERE tags.name IN (${placeholders})
             )`
         }
 
         // --- Candidates Generation ---
-        
+
         const hardDeleteExcludeSql =
             excludeTags.length > 0
                 ? `AND id NOT IN (
@@ -137,11 +137,12 @@ export class LifecycleOperations {
                     const deleteSql = `DELETE FROM memory_journal WHERE id IN (${placeholders})`
                     const result = db.prepare(deleteSql).run(...ids)
                     hardDeletedCount = result.changes
-                    
+
                     try {
                         db.prepare(`DELETE FROM vec_embeddings WHERE entry_id IN (${placeholders})`).run(...ids)
-                    } catch {
-                        // ignore vector cleanup error if table doesn't exist
+                    } catch (err) {
+                        const message = err instanceof Error ? err.message : String(err)
+                        if (!message.includes('no such table')) throw err
                     }
                 }
             }
@@ -172,7 +173,7 @@ export class LifecycleOperations {
                 archivedCount = result.changes
             }
         })
-        
+
         try {
             runTx()
         } catch (error: unknown) {
@@ -183,12 +184,12 @@ export class LifecycleOperations {
                 // FTS5 index is out of sync with external content table.
                 // Rebuild it synchronously and retry the transaction.
                 db.prepare("INSERT INTO fts_content(fts_content) VALUES ('rebuild')").run()
-                
+
                 // Reset counters before retry
                 hardDeletedCount = 0
                 prunedCount = 0
                 archivedCount = 0
-                
+
                 runTx()
             } else {
                 throw error

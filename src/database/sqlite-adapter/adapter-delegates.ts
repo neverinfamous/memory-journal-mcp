@@ -125,28 +125,36 @@ export class AdapterDelegates {
 
     // Author Aliases (Level 2 Identity)
 
-    addAuthorAlias(alias: string, canonicalAuthor: string, createdBy?: string): AuthorAlias {
-        return this.aliasMgr.addAlias(alias, canonicalAuthor, createdBy)
+    addAuthorAlias(alias: string, canonicalAuthor: string, createdBy?: string, workspaceId?: string): AuthorAlias {
+        return workspaceId === undefined
+            ? this.aliasMgr.addAlias(alias, canonicalAuthor, createdBy)
+            : this.aliasMgr.addAlias(alias, canonicalAuthor, createdBy, workspaceId)
     }
 
-    removeAuthorAlias(alias: string): boolean {
-        return this.aliasMgr.removeAlias(alias)
+    removeAuthorAlias(alias: string, workspaceId?: string): boolean {
+        return workspaceId === undefined
+            ? this.aliasMgr.removeAlias(alias)
+            : this.aliasMgr.removeAlias(alias, workspaceId)
     }
 
-    listAuthorAliases(canonicalAuthor?: string): AuthorAlias[] {
-        return this.aliasMgr.listAliases(canonicalAuthor)
+    listAuthorAliases(canonicalAuthor?: string, workspaceId?: string): AuthorAlias[] {
+        return this.aliasMgr.listAliases(canonicalAuthor, workspaceId)
     }
 
-    resolveAuthor(rawAuthor: string): string {
-        return this.aliasMgr.resolveAuthor(rawAuthor)
+    resolveAuthor(rawAuthor: string, workspaceId?: string): string {
+        return workspaceId === undefined
+            ? this.aliasMgr.resolveAuthor(rawAuthor)
+            : this.aliasMgr.resolveAuthor(rawAuthor, workspaceId)
     }
 
     resolveAuthors(rawAuthors: string[]): Map<string, string> {
         return this.aliasMgr.resolveAuthors(rawAuthors)
     }
 
-    consolidateAuthors(canonicalAuthor: string): number {
-        return this.aliasMgr.consolidateAuthors(canonicalAuthor)
+    consolidateAuthors(canonicalAuthor: string, workspaceId?: string): number {
+        return workspaceId === undefined
+            ? this.aliasMgr.consolidateAuthors(canonicalAuthor)
+            : this.aliasMgr.consolidateAuthors(canonicalAuthor, workspaceId)
     }
 
     // Tags & Relationships

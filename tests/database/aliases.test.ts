@@ -52,7 +52,7 @@ describe('AliasManager', () => {
     it('allows multiple aliases to same canonical', () => {
         aliasMgr.addAlias('chris', 'christopher')
         aliasMgr.addAlias('neverinfamous', 'christopher')
-        
+
         expect(aliasMgr.resolveAuthor('chris')).toBe('christopher')
         expect(aliasMgr.resolveAuthor('neverinfamous')).toBe('christopher')
     })
@@ -60,7 +60,7 @@ describe('AliasManager', () => {
     it('removes an alias', () => {
         aliasMgr.addAlias('chris', 'christopher')
         expect(aliasMgr.resolveAuthor('chris')).toBe('christopher')
-        
+
         const removed = aliasMgr.removeAlias('chris')
         expect(removed).toBe(true)
         expect(aliasMgr.resolveAuthor('chris')).toBe('chris')
@@ -81,6 +81,28 @@ describe('AliasManager', () => {
         const filtered = aliasMgr.listAliases('christopher')
         expect(filtered).toHaveLength(2)
         expect(filtered.map(a => a.alias).sort()).toEqual(['chris', 'neverinfamous'])
+    })
+
+    it('consolidates authors only in the requested workspace', () => {
+        aliasMgr.addAlias('chris', 'christopher')
+        connection.run(
+            `INSERT INTO memory_journal (entry_type, content, author, workspace_id) VALUES ('note', 'alpha', 'chris', 'alpha')`
+        )
+        connection.run(
+            `INSERT INTO memory_journal (entry_type, content, author, workspace_id) VALUES ('note', 'beta', 'chris', 'beta')`
+        )
+
+        const updated = aliasMgr.consolidateAuthors('christopher', 'alpha')
+        expect(updated).toBe(1)
+
+        const rows = connection.exec(
+            `SELECT workspace_id, author FROM memory_journal ORDER BY workspace_id`
+        )
+        const values = rows[0]?.values ?? []
+        expect(values).toEqual([
+            ['alpha', 'christopher'],
+            ['beta', 'chris'],
+        ])
     })
 
     it('resolves batch of authors', () => {

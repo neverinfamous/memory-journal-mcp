@@ -37,7 +37,7 @@ export interface SchedulerOptions {
     reportDeliveryOptions?: ReportDeliveryOptions
     /** Automated pruning interval in minutes (0 = disabled; recommended: 1440 for daily) */
     pruneIntervalMinutes: number
-    
+
     // Auto-prune configuration
     archiveOlderThanDays?: number
     pruneOlderThanDays?: number
@@ -170,10 +170,7 @@ export class Scheduler {
         }
 
         if (this.options.reportIntervalMinutes > 0) {
-            this.scheduleJob('report', this.options.reportIntervalMinutes, () => {
-                this.runReport()
-                return Promise.resolve()
-            })
+            this.scheduleJob('report', this.options.reportIntervalMinutes, () => this.runReport())
         }
 
         if (this.timers.length > 0) {
@@ -419,7 +416,7 @@ export class Scheduler {
     /**
      * Report job: compute analytics snapshot, persist, and deliver via webhook.
      */
-    private runReport(): void {
+    private async runReport(): Promise<void> {
         const snapshot = this.db.computeDigest()
         this.db.saveAnalyticsSnapshot('report', snapshot)
         logger.info('Scheduled analytics report computed', {
@@ -432,7 +429,14 @@ export class Scheduler {
 
         if (this.options.reportDeliveryOptions?.webhookUrl) {
             const report = formatDigestReport(snapshot as unknown as DigestSnapshot, VERSION)
-            void deliverReport(report, snapshot as unknown as DigestSnapshot, this.options.reportDeliveryOptions)
+            const delivered = await deliverReport(
+                report,
+                snapshot as unknown as DigestSnapshot,
+                this.options.reportDeliveryOptions
+            )
+            if (!delivered) {
+                throw new Error('Scheduled analytics report delivery failed')
+            }
         }
     }
 

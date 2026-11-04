@@ -28,10 +28,17 @@ import {
  * Resolve the worker script path relative to this module.
  * The worker-script.ts compiles to worker-script.js in the dist/ directory.
  */
+export function isSourceCodemodeDir(currentDir: string): boolean {
+    const parts = currentDir.split(/[/\\]/).filter((part) => part.length > 0)
+    const parent = parts[parts.length - 2]
+    const base = parts[parts.length - 1]
+    return parent === 'src' && base === 'codemode'
+}
+
 function getWorkerScriptPath(): string {
     const currentDir = path.dirname(fileURLToPath(import.meta.url))
     // If we're executing directly from src/ (e.g. during vitest runs), point to the built dist/ version
-    if (currentDir.endsWith('src\\codemode') || currentDir.endsWith('src/codemode')) {
+    if (isSourceCodemodeDir(currentDir)) {
         return path.resolve(process.cwd(), 'dist/worker-script.js')
     }
     return path.join(currentDir, 'worker-script.js')

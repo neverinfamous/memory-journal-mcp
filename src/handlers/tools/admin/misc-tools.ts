@@ -110,10 +110,10 @@ export function getMiscTools(context: ToolContext): ToolDefinition[] {
             handler: async (params: unknown) => {
                 try {
                     const input = SearchAuditLogSchema.parse(params)
-                    
+
                     if (!context.config?.runtime?.auditLogger) {
                         return {
-                            success: true, // Graceful fallback
+                            success: false,
                             results: [],
                             count: 0,
                             warning: 'Audit logging is disabled or not configured on this server.',

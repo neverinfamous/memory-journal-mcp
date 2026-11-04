@@ -19,11 +19,11 @@ describe('Database Migration Framework', () => {
             name: string
         }[]
 
-        expect(applied.length).toBe(12) // 1 to 6, plus 8, 9, 10, 11, 12, 13
+        expect(applied.length).toBe(13) // 1 to 6, plus 8 through 14 (7 is team-only)
         expect(applied[0].version).toBe(1)
         expect(applied[0].name).toBe('001-init')
-        expect(applied[11].version).toBe(13)
-        expect(applied[11].name).toBe('013-add-session-id')
+        expect(applied[12].version).toBe(14)
+        expect(applied[12].name).toBe('014-add-alias-workspace')
 
         // Verify tables exist
         const tables = db
@@ -66,7 +66,7 @@ describe('Database Migration Framework', () => {
             name: string
         }[]
 
-        expect(applied.length).toBe(13)
+        expect(applied.length).toBe(14)
         expect(applied[6].version).toBe(7)
         expect(applied[6].name).toBe('007-add-team-author')
 
@@ -81,7 +81,7 @@ describe('Database Migration Framework', () => {
     it('Migration 009 creates version column idempotently', () => {
         const db = new DatabaseAdapter(':memory:')
         db.exec('CREATE TABLE memory_journal (id INTEGER PRIMARY KEY)')
-        
+
         // Run migration on empty DB
         Migration009AddEntryVersion.up(db)
         const columns = db.pragma('table_info(memory_journal)') as { name: string }[]
@@ -94,7 +94,7 @@ describe('Database Migration Framework', () => {
 
     it('Migration 010 creates author_aliases table idempotently', () => {
         const db = new DatabaseAdapter(':memory:')
-        
+
         // Run migration on empty DB
         Migration010AddAuthorAliases.up(db)
         const tables = db.pragma('table_list') as { name: string }[]
@@ -108,7 +108,7 @@ describe('Database Migration Framework', () => {
     it('Migration 011 creates workspace_id column idempotently', () => {
         const db = new DatabaseAdapter(':memory:')
         db.exec('CREATE TABLE memory_journal (id INTEGER PRIMARY KEY, timestamp TEXT DEFAULT CURRENT_TIMESTAMP, deleted_at TEXT, is_archived INTEGER DEFAULT 0)')
-        
+
         // Run migration on empty DB
         Migration011AddWorkspaceId.up(db)
         const columns = db.pragma('table_info(memory_journal)') as { name: string }[]
@@ -121,7 +121,7 @@ describe('Database Migration Framework', () => {
         expect(() => Migration011AddWorkspaceId.up(db)).not.toThrow()
         const rows = db.prepare('SELECT workspace_id FROM memory_journal').all() as { workspace_id: string }[]
         expect(rows[0].workspace_id).toBe('custom')
-        
+
         db.close()
     })
 
@@ -159,12 +159,13 @@ describe('Database Migration Framework', () => {
             name: string
         }[]
 
-        expect(applied.length).toBe(12)
+        expect(applied.length).toBe(13)
         expect(applied[0].version).toBe(1)
         expect(applied[1].version).toBe(2)
         expect(applied[2].version).toBe(3) // applied in run
         expect(applied[6].version).toBe(8) // applied in run
         expect(applied[11].version).toBe(13) // applied in run
+        expect(applied[12].version).toBe(14)
 
         // Verify newer tables like entry_revisions exist now
         const tables = db
@@ -196,8 +197,8 @@ describe('Database Migration Framework', () => {
             c: number
         }).c
 
-        expect(count1).toBe(12)
-        expect(count2).toBe(12)
+        expect(count1).toBe(13)
+        expect(count2).toBe(13)
 
         db.close()
     })

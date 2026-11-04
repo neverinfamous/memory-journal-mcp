@@ -6,6 +6,7 @@ import { getAdminTools } from '../../admin/index.js'
 import { getCodeModeTools } from '../../codemode/handler.js'
 import { ErrorFieldsMixin } from '../../error-fields-mixin.js'
 import { healAgentHallucinations } from '../../schemas.js'
+import { methodTokens } from '../../../../codemode/method-tokens.js'
 import {
     DUMMY_ENTRY_CREATION_TOOL_NAMES,
     DUMMY_MJ_FUNC_TOOL_NAMES,
@@ -93,6 +94,21 @@ async function routeNamedTargetTool(
         : res
 }
 
+export function projectAliasTarget(name: string): 'get_project' | 'list_projects' {
+    const tokens = methodTokens(name)
+    const has = (token: string): boolean => tokens.includes(token)
+    if (has('projects') || has('list') || name.startsWith('mj.projects')) return 'list_projects'
+    if (has('project') && (has('get') || has('find'))) return 'get_project'
+    return 'list_projects'
+}
+
+function isProjectAlias(name: string): boolean {
+    return (
+        name.startsWith('mj.projects') ||
+        methodTokens(name).some((token) => token === 'project' || token === 'projects')
+    )
+}
+
 function resolveTargetFromAlias(
     name: string
 ): { target: string; group: 'core' | 'search' | 'admin' } | undefined {
@@ -114,17 +130,8 @@ function resolveTargetFromAlias(
     if (name.includes('deleteEntry') || name.includes('delete_entry')) {
         return { target: 'delete_entry', group: 'core' }
     }
-    if (name.includes('getProject') || name.includes('get_project')) {
-        return { target: 'get_project', group: 'admin' }
-    }
-    if (
-        name.includes('listProjects') ||
-        name.includes('list_projects') ||
-        name.includes('getProjects') ||
-        name.includes('get_projects') ||
-        name.startsWith('mj.projects')
-    ) {
-        return { target: 'list_projects', group: 'admin' }
+    if (isProjectAlias(name)) {
+        return { target: projectAliasTarget(name), group: 'admin' }
     }
     return undefined
 }
@@ -343,11 +350,7 @@ export function getEntryAndCodemodeFallbackToolDefinitions(
                         typeof params === 'object' && params !== null
                             ? (params as Record<string, unknown>)
                             : {}
-                    const lowerName = name.toLowerCase()
-                    const isGetter =
-                        lowerName.includes('get_project') ||
-                        (lowerName.includes('getproject') && !lowerName.includes('projects'))
-                    const targetTool = isGetter ? 'get_project' : 'list_projects'
+                    const targetTool = projectAliasTarget(name)
 
                     if (context !== undefined) {
                         const tool = getAdminTools(context).find((t) => t.name === targetTool)

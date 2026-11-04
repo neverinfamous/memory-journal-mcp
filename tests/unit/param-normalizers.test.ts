@@ -310,7 +310,7 @@ describe('src/codemode/param-normalizer.ts (applyArgInterceptions)', () => {
         const delList = applyArgInterceptions('list_deleted_entries', [
             { keep: 10, project_number: 5, project_id: 5 },
         ])
-        if ('args' in delList) expect(delList.args[0]).toEqual({ limit: 10 })
+        if ('args' in delList) expect(delList.args[0]).toEqual({ limit: 10, project_number: 5 })
 
         expect('error' in applyArgInterceptions('get_statistics', [{ q: 'x' }])).toBe(true)
         const statOk = applyArgInterceptions('get_statistics', [{ timeframe: 'week' }])

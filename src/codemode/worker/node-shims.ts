@@ -401,20 +401,7 @@ export function createPreparedStatementShim(
     }
 
     const stmtObj: Record<string, unknown> = {
-        run: (...args: unknown[]) => {
-            const res = executeOperation(args)
-            return {
-                changes: 1,
-                lastInsertRowid:
-                    typeof args[2] === 'number'
-                        ? args[2]
-                        : typeof args[0] === 'number'
-                          ? args[0]
-                          : 1,
-                success: true,
-                then: (resolve: (v: unknown) => void) => Promise.resolve(res).then(resolve),
-            }
-        },
+        run: (...args: unknown[]) => executeOperation(args),
         get: (...args: unknown[]) => executeOperation(args),
         all: (...args: unknown[]) => executeOperation(args),
         iterate: (...args: unknown[]) => executeOperation(args),

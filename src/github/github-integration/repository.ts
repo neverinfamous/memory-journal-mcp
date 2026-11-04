@@ -160,7 +160,12 @@ export class RepositoryManager {
                 module: 'GitHub',
                 error: error instanceof Error ? error.message : String(error),
             })
-            return { modified: 0, untracked: 0, isClean: true }
+            return {
+                modified: 0,
+                untracked: 0,
+                isClean: false,
+                error: error instanceof Error ? error.message : String(error),
+            }
         }
     }
 }

@@ -139,14 +139,22 @@ export class NativeConnectionManager implements IDatabaseConnection {
             // We query the fts_content_docsize shadow table to get the true number of indexed documents
             // because querying fts_content directly merely delegates to the content table (memory_journal).
             let ftsCount = 0
+            let ftsCountKnown = false
             try {
                 ftsCount = (
                     db.prepare('SELECT COUNT(*) as c FROM fts_content_docsize').get() as {
                         c: number
                     }
                 ).c
-            } catch {
-                // Shadow table doesn't exist yet or FTS5 disabled
+                ftsCountKnown = true
+            } catch (err) {
+                const message = err instanceof Error ? err.message : String(err)
+                if (!message.includes('no such table')) {
+                    logger.warning('FTS docsize count failed; skipping rebuild', {
+                        module: 'NativeConnectionManager',
+                        error: message,
+                    })
+                }
             }
 
             const entryCount = (
@@ -155,7 +163,7 @@ export class NativeConnectionManager implements IDatabaseConnection {
             let needsRebuild = false
             let rebuildReason = ''
 
-            if (ftsCount === 0 && entryCount > 0) {
+            if (ftsCountKnown && ftsCount === 0 && entryCount > 0) {
                 needsRebuild = true
                 rebuildReason = 'fts5:populated'
             } else if (ftsCount > entryCount) {

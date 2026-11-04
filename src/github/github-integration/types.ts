@@ -51,6 +51,7 @@ export interface LocalGitStatus {
     untracked: number
     isClean: boolean
     resolvedIssues?: number[]
+    error?: string
 }
 
 /** Snapshot of rate limit state from response headers */
