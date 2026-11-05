@@ -2386,5 +2386,73 @@ return { success: true, projectId };
             } as any)
             expect(resolved).toBe(process.cwd())
         })
+
+        it('should parse owner/repo slug in resolveOwnerRepo and resolveOwner without error', async () => {
+            const { resolveOwnerRepo, resolveOwner, resolveProjectNumber } = await import('../src/handlers/tools/github/helpers.js')
+            const mockContext = {
+                config: {
+                    projectRegistry: {
+                        'memory-journal-mcp': {
+                            project_number: 5
+                        }
+                    }
+                },
+                github: {
+                    isApiAvailable: () => true,
+                    getRepoInfo: async () => ({ owner: 'detected-owner', repo: 'detected-repo' })
+                }
+            } as any
+
+            expect(resolveProjectNumber(mockContext, 'neverinfamous/memory-journal-mcp')).toBe(5)
+
+            const resRepo = await resolveOwnerRepo(mockContext, { repo: 'neverinfamous/memory-journal-mcp' })
+            expect('error' in resRepo).toBe(false)
+            if (!('error' in resRepo)) {
+                expect(resRepo.owner).toBe('neverinfamous')
+                expect(resRepo.repo).toBe('memory-journal-mcp')
+            }
+
+            const resOwner = await resolveOwner(mockContext, undefined, 'neverinfamous/memory-journal-mcp')
+            expect('error' in resOwner).toBe(false)
+            if (!('error' in resOwner)) {
+                expect(resOwner.owner).toBe('neverinfamous')
+                expect(resOwner.repo).toBe('memory-journal-mcp')
+            }
+        })
+
+        it('should unpack filters and filter objects in healAgentHallucinations', async () => {
+            const { healAgentHallucinations } = await import('../src/handlers/tools/schemas/hallucination-healer.js')
+            const payload = {
+                workspace_id: '*',
+                filters: {
+                    tags: ['cms'],
+                    entry_type: 'maintenance'
+                }
+            }
+            const healed = healAgentHallucinations(payload) as Record<string, unknown>
+            expect(healed['filters']).toBeUndefined()
+            expect(healed['tags']).toEqual(['cms'])
+            expect(healed['entry_type']).toBe('maintenance')
+            expect(healed['workspace_id']).toBe('*')
+
+            const filterPayload = {
+                filter: {
+                    query: 'test-query'
+                }
+            }
+            const healedFilter = healAgentHallucinations(filterPayload) as Record<string, unknown>
+            expect(healedFilter['filter']).toBeUndefined()
+            expect(healedFilter['query']).toBe('test-query')
+        })
+
+        it('should normalize repo slug in applyGithubInterceptions', async () => {
+            const { applyGithubAndBackupInterceptions } = await import('../src/codemode/normalizers/github-and-backup-interceptions.js')
+            const intercepted = applyGithubAndBackupInterceptions('get_github_issues', [{
+                repo: 'neverinfamous/memory-journal-mcp'
+            }]) as { args: Record<string, unknown>[] }
+
+            expect(intercepted.args[0]?.['owner']).toBe('neverinfamous')
+            expect(intercepted.args[0]?.['repo']).toBe('memory-journal-mcp')
+        })
     })
 })

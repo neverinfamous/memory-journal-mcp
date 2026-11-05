@@ -43,7 +43,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                     .string()
                     .optional()
                     .describe(
-                        'Repository name - LEAVE EMPTY to auto-detect from git. Only specify if user explicitly provides.'
+                        'Repository name - LEAVE EMPTY to auto-detect from git. Accepts repository name or full "owner/repo" slug.'
                     ),
                 state: z.string().optional().default('open'),
                 limit: relaxedNumber().optional().default(20),
@@ -110,7 +110,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                     .string()
                     .optional()
                     .describe(
-                        'Repository name - LEAVE EMPTY to auto-detect from git. Only specify if user explicitly provides.'
+                        'Repository name - LEAVE EMPTY to auto-detect from git. Accepts repository name or full "owner/repo" slug.'
                     ),
                 state: z.string().optional().default('open'),
                 limit: relaxedNumber().optional().default(20),

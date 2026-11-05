@@ -79,6 +79,16 @@ function applyGithubInterceptions(
 ): { obj: Record<string, unknown> } | { error: Record<string, unknown> } {
     const obj = { ...rawObj }
 
+    if (typeof obj['repo'] === 'string' && obj['repo'].includes('/')) {
+        const parts = obj['repo'].split('/')
+        if (parts.length >= 2 && parts[0] && parts[1]) {
+            if (obj['owner'] === undefined) {
+                obj['owner'] = parts[0]
+            }
+            obj['repo'] = parts[1]
+        }
+    }
+
     for (const key of ['text', 'message', 'description'] as const) {
         if (obj[key] !== undefined) {
             if (methodName.includes('create_github_issue') || methodName.includes('createGithubIssue')) {

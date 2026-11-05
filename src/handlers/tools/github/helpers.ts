@@ -5,6 +5,18 @@
 import type { ToolContext } from '../../../types/index.js'
 import { getGitHubIntegration } from '../../../github/github-integration/index.js'
 import type { GitHubIntegration } from '../../../github/github-integration/index.js'
+import { findCanonicalRegistryKey } from '../../../utils/workspace-resolver.js'
+
+function parseRepoSlug(repo?: string): { owner?: string; repo?: string } {
+    if (!repo) return {}
+    if (repo.includes('/')) {
+        const parts = repo.split('/')
+        if (parts.length >= 2 && parts[0] && parts[1]) {
+            return { owner: parts[0], repo: parts[1] }
+        }
+    }
+    return { repo }
+}
 
 /**
  * Resolve project number explicitly or via ProjectRegistry mapping
@@ -16,8 +28,12 @@ export function resolveProjectNumber(
 ): number | undefined {
     if (explicitProjectNumber != null) return explicitProjectNumber
     const registry = context.config?.projectRegistry
-    if (repo && registry && Object.prototype.hasOwnProperty.call(registry, repo)) {
-        const entry = registry[repo]
+    if (!registry || !repo) return undefined
+    const slug = parseRepoSlug(repo)
+    const repoName = slug.repo ?? repo
+    const canonicalKey = findCanonicalRegistryKey(repoName, registry) ?? repoName
+    if (Object.prototype.hasOwnProperty.call(registry, canonicalKey)) {
+        const entry = registry[canonicalKey]
         if (entry?.project_number != null) {
             return entry.project_number
         }
@@ -42,14 +58,21 @@ export async function resolveOwner(
       }
     | { error: true; response: Record<string, unknown> }
 > {
+    const slug = parseRepoSlug(inputRepo)
+    const effectiveRepo = slug.repo ?? inputRepo
+    const parsedOwner = inputOwner ?? slug.owner
+
     let toolGithub: GitHubIntegration | undefined
     const registry = context.config?.projectRegistry
-    const registryEntry =
-        inputRepo && registry && Object.prototype.hasOwnProperty.call(registry, inputRepo)
-            ? registry[inputRepo]
-            : undefined
+    const registryKey = effectiveRepo
+        ? (findCanonicalRegistryKey(effectiveRepo, registry) ??
+          (registry && Object.prototype.hasOwnProperty.call(registry, effectiveRepo)
+              ? effectiveRepo
+              : undefined))
+        : undefined
+    const registryEntry = registryKey && registry ? registry[registryKey] : undefined
 
-    if (registryEntry) {
+    if (registryEntry?.path) {
         toolGithub = getGitHubIntegration(registryEntry.path, context.config?.runtime)
     } else if (context.github) {
         toolGithub = context.github
@@ -72,8 +95,8 @@ export async function resolveOwner(
 
     const repoInfo = await toolGithub.getRepoInfo()
     const detectedOwner = repoInfo.owner
-    const owner = inputOwner ?? detectedOwner ?? undefined
-    const repo = repoInfo.repo ?? undefined
+    const owner = parsedOwner ?? detectedOwner ?? undefined
+    const repo = effectiveRepo ?? repoInfo.repo ?? undefined
 
     if (!owner) {
         return {
@@ -113,14 +136,21 @@ export async function resolveOwnerRepo(
       }
     | { error: true; response: Record<string, unknown> }
 > {
+    const slug = parseRepoSlug(input.repo)
+    const effectiveRepo = slug.repo ?? input.repo
+    const parsedOwner = input.owner ?? slug.owner
+
     let toolGithub: GitHubIntegration | undefined
     const registry = context.config?.projectRegistry
-    const registryEntry =
-        input.repo && registry && Object.prototype.hasOwnProperty.call(registry, input.repo)
-            ? registry[input.repo]
-            : undefined
+    const registryKey = effectiveRepo
+        ? (findCanonicalRegistryKey(effectiveRepo, registry) ??
+          (registry && Object.prototype.hasOwnProperty.call(registry, effectiveRepo)
+              ? effectiveRepo
+              : undefined))
+        : undefined
+    const registryEntry = registryKey && registry ? registry[registryKey] : undefined
 
-    if (registryEntry) {
+    if (registryEntry?.path) {
         toolGithub = getGitHubIntegration(registryEntry.path, context.config?.runtime)
     } else if (context.github) {
         toolGithub = context.github
@@ -146,8 +176,8 @@ export async function resolveOwnerRepo(
     const detectedOwner = repoInfo.owner
     const detectedRepo = repoInfo.repo
 
-    const owner = input.owner ?? detectedOwner ?? undefined
-    const repo = input.repo ?? detectedRepo ?? undefined
+    const owner = parsedOwner ?? detectedOwner ?? undefined
+    const repo = effectiveRepo ?? detectedRepo ?? undefined
 
     if (!owner || !repo) {
         return {

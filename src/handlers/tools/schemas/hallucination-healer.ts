@@ -39,19 +39,11 @@ const CONTENT_ALIASES = [
     'details', 'markdown', 'post', 'journal_entry', 'journalEntry', 'entry_text', 'entryText',
 ]
 
-const PASSED_VALIDATION_ALIASES = new Set([
-    'pass', 'success', 'ok', 'passed', 'validated', 'valid', 'verified', 'true', '1',
-])
+const PASSED_VALIDATION_ALIASES = new Set(['pass', 'success', 'ok', 'passed', 'validated', 'valid', 'verified', 'true', '1'])
 const FAILED_VALIDATION_ALIASES = new Set(['fail', 'failed', 'error', 'failing', 'false', '0'])
-const NONE_VALIDATION_ALIASES = new Set([
-    'none', 'null', 'undefined', 'skip', 'skipped', 'unknown', 'pending',
-])
-const SESSION_SUMMARY_TAG_ALIASES = new Set([
-    'session summary', 'session_summary', 'team-session-summary', 'team_session_summary', 'team session summary',
-])
-const TECHNICAL_NOTE_ALIASES = new Set([
-    'task', 'chore', 'refactor', 'fix', 'update', 'technical', 'note', 'documentation', 'code', 'coding',
-])
+const NONE_VALIDATION_ALIASES = new Set(['none', 'null', 'undefined', 'skip', 'skipped', 'unknown', 'pending'])
+const SESSION_SUMMARY_TAG_ALIASES = new Set(['session summary', 'session_summary', 'team-session-summary', 'team_session_summary', 'team session summary'])
+const TECHNICAL_NOTE_ALIASES = new Set(['task', 'chore', 'refactor', 'fix', 'update', 'technical', 'note', 'documentation', 'code', 'coding'])
 const BUG_FIX_ALIASES = new Set(['bug', 'bugfix', 'bug_fix', 'bug-fix', 'hotfix', 'defect'])
 
 function toStr(v: unknown): string {
@@ -424,6 +416,19 @@ export function healAgentHallucinations(val: unknown): unknown {
             if (!(k in obj) && v !== undefined) obj[k] = v
         }
         modified = true
+    }
+
+    for (const containerKey of ['filters', 'filter']) {
+        if (containerKey in obj) {
+            const val = obj[containerKey]
+            Reflect.deleteProperty(obj, containerKey)
+            if (typeof val === 'object' && val !== null && !Array.isArray(val)) {
+                for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
+                    if (!(k in obj) && v !== undefined) obj[k] = v
+                }
+            }
+            modified = true
+        }
     }
 
     if ('entry' in obj) {
