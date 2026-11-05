@@ -2,7 +2,7 @@
 # Multi-stage build for optimized production image
 #
 # Security Notes:
-# - Last Docker Scout scan: 2026-11-02 on node:26.2.0-alpine (Alpine 3.23), 0 critical / 1 high / 2 medium.
+# - Last Docker Scout scan: 2026-11-04 on node:26.2.0-alpine (Alpine 3.23), 0 critical / 1 high / 2 medium.
 #   All three are Alpine OS packages with NO upstream fix available yet (accepted until fixed;
 #   re-check with `docker scout cves` on each base image or Alpine package update):
 #     - git 2.52.0-r0      HIGH   CVE-2025-66413  (runtime image; only matters when git runs against untrusted repos)
