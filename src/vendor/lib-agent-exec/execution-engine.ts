@@ -59,10 +59,10 @@ export async function acquireWslLock(maxConcurrent = 4, timeoutMs = 30000): Prom
       for (const l of allLocks) {
         const lPath = path.join(WSL_LOCK_DIR, l);
         try {
-          const stats = fs.statSync(lPath);
-          let isStale = Date.now() - stats.mtimeMs > 60000;
+          const content = fs.readFileSync(lPath, 'utf8').trim();
+          const mtimeMs = fs.statSync(lPath).mtimeMs;
+          let isStale = Date.now() - mtimeMs > 60000;
           if (!isStale) {
-            const content = fs.readFileSync(lPath, 'utf8').trim();
             const lockPid = parseInt(content, 10);
             if (!Number.isNaN(lockPid) && lockPid > 0) {
               isStale = !isPidAlive(lockPid);
@@ -76,7 +76,7 @@ export async function acquireWslLock(maxConcurrent = 4, timeoutMs = 30000): Prom
         } catch { /* ignore */ }
       }
       if (activeLockCount < maxConcurrent) {
-        fs.writeFileSync(lockFile, process.pid.toString(), 'utf8');
+        fs.writeFileSync(lockFile, process.pid.toString(), { encoding: 'utf8', mode: 0o600 });
         releaseMutex();
         return lockFile;
       }
@@ -86,7 +86,7 @@ export async function acquireWslLock(maxConcurrent = 4, timeoutMs = 30000): Prom
     await new Promise(resolve => setTimeout(resolve, 100 + Math.random() * 100));
   }
   // If we timeout, we proceed anyway to avoid completely deadlocking the agent, but write the lock
-  try { fs.writeFileSync(lockFile, process.pid.toString(), 'utf8'); } catch { /* ignore */ }
+  try { fs.writeFileSync(lockFile, process.pid.toString(), { encoding: 'utf8', mode: 0o600 }); } catch { /* ignore */ }
   return lockFile;
 }
 

@@ -522,7 +522,7 @@ function generateHistoryEntry(args: CliArgs, type: string, historyContent: strin
 function executeCommit(header: string, body: string, cwd?: string): string {
   const msgFile = path.join(os.tmpdir(), `${COMMIT_MSG_PREFIX}${crypto.randomUUID()}.txt`);
   tempFilesToCleanup.add(msgFile);
-  fs.writeFileSync(msgFile, `${header}${body}`);
+  fs.writeFileSync(msgFile, `${header}${body}`, { mode: 0o600 });
   try {
     execFileSync('git', ['commit', '-F', msgFile], { stdio: 'inherit', cwd });
   } finally {
@@ -567,7 +567,7 @@ function createJournalEntry(sha: string, header: string, args: CliArgs, historyC
     
     const journalFile = path.join(os.tmpdir(), `${JOURNAL_PREFIX}${sha}.md`);
     tempFilesToCleanup.add(journalFile);
-    fs.writeFileSync(journalFile, journalContent);
+    fs.writeFileSync(journalFile, journalContent, { mode: 0o600 });
     
     try {
       execFileSync('memory-journal-mcp', ['entry', 'create', '--file', journalFile], { stdio: 'inherit', shell: process.platform === 'win32', cwd });

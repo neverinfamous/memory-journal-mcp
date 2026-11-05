@@ -521,7 +521,7 @@ for (const file of codemodeFiles) {
   let fixedContent = content;
   
   for (const [bad, good] of Object.entries(codemodeHallucinationFixes)) {
-    fixedContent = fixedContent.replace(new RegExp('\\b' + bad.replace(/\./g, '\\.') + '\\b', 'g'), good);
+    fixedContent = fixedContent.replace(new RegExp('\\b' + bad.replace(/[\\^$.*+?()[\]{}|]/g, '\\$&') + '\\b', 'g'), good);
   }
 
   // Fix PowerShell here-string corruption and unescaped characters in markdown files

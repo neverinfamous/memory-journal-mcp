@@ -361,7 +361,7 @@ describe('Observability, SSE Transport, Utils & Catalog Resource', () => {
 
         it('should bridge --auth-scopes to process.env.MCP_AUTH_SCOPES and use safe default fallbacks in buildServerOptions', () => {
             const emptyConfigPath = path.join(os.tmpdir(), `mj-empty-cfg-${String(Date.now())}.json`)
-            fs.writeFileSync(emptyConfigPath, '{}', 'utf-8')
+            fs.writeFileSync(emptyConfigPath, '{}', { encoding: 'utf-8', mode: 0o600 })
             try {
                 delete process.env['CODEMODE_INTERNAL_FULL_ACCESS']
                 delete process.env['ARCHIVE_OLDER_THAN_DAYS']

@@ -276,7 +276,7 @@ export function buildCommand(payload: ExecPayload, cwd: string, isJson: boolean 
         const content = fs.readFileSync(scriptFile, 'utf-8');
         if (content.includes('\r\n')) {
           tempScriptPath = path.join(os.tmpdir(), `agent-exec-wsl-${crypto.randomUUID()}.sh`);
-          fs.writeFileSync(tempScriptPath, content.replace(/\r\n/g, '\n'), 'utf-8');
+          fs.writeFileSync(tempScriptPath, content.replace(/\r\n/g, '\n'), { encoding: 'utf-8', mode: 0o600 });
           scriptFile = tempScriptPath;
         }
       }
@@ -328,7 +328,7 @@ export function buildCommand(payload: ExecPayload, cwd: string, isJson: boolean 
           console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-wrapping code in async IIFE to capture returned output... (Frictionless Recovery)\x1b[0m`);
           codeToExecute = wrapCodeInAsyncIife(codeToExecute);
         }
-        fs.writeFileSync(tempScriptPath, codeToExecute, 'utf-8');
+        fs.writeFileSync(tempScriptPath, codeToExecute, { encoding: 'utf-8', mode: 0o600 });
       } catch (err) {
         exitWithError(`Failed to write eval code to temporary file ${tempScriptPath}: ${err instanceof Error ? err.message : String(err)}`);
       }

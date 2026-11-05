@@ -1,11 +1,15 @@
 import { spawnSync } from 'node:child_process'
-import { writeFileSync, mkdirSync, existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
+import { writeFileSync, mkdirSync, readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 
 const testOutputDir = join(process.cwd(), '.test-output')
 const healthStatusFile = join(testOutputDir, 'health-status.json')
 
 const target = process.argv[2] // 'lint', 'typecheck', or undefined for all
+
+function isEnoent(error: unknown): boolean {
+    return typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT'
+}
 
 function runCommand(command: string, args: string[]): boolean {
     const fullCommand = `${command} ${args.join(' ')}`
@@ -18,16 +22,22 @@ function checkFileLengths(): boolean {
     const violations: { path: string; lines: number }[] = []
 
     const walk = (dir: string): void => {
-        if (!existsSync(dir)) return
-        for (const entry of readdirSync(dir)) {
-            const fullPath = join(dir, entry)
+        let entries
+        try {
+            entries = readdirSync(dir, { withFileTypes: true })
+        } catch (error) {
+            if (isEnoent(error)) return
+            throw error
+        }
+        for (const entry of entries) {
+            const fullPath = join(dir, entry.name)
             if (/[/\\](vendor|node_modules|dist)[/\\]?/.test(fullPath)) continue
-            const stat = statSync(fullPath)
-            if (stat.isDirectory()) {
+            if (entry.isDirectory()) {
                 walk(fullPath)
             } else if (
-                /\.(ts|tsx|js|mjs|cjs)$/.test(entry) &&
-                !/\.(test|spec)\./.test(entry)
+                entry.isFile() &&
+                /\.(ts|tsx|js|mjs|cjs)$/.test(entry.name) &&
+                !/\.(test|spec)\./.test(entry.name)
             ) {
                 const content = readFileSync(fullPath, 'utf-8')
                 const lines = content.split(/\r?\n/).length
@@ -68,17 +78,15 @@ let lintOk = true
 let typecheckOk = true
 
 // Load existing state if available
-if (existsSync(healthStatusFile)) {
-    try {
-        const existing = JSON.parse(readFileSync(healthStatusFile, 'utf-8')) as {
-            lintOk?: boolean
-            typecheckOk?: boolean
-        }
-        lintOk = existing.lintOk ?? true
-        typecheckOk = existing.typecheckOk ?? true
-    } catch {
-        // ignore
+try {
+    const existing = JSON.parse(readFileSync(healthStatusFile, 'utf-8')) as {
+        lintOk?: boolean
+        typecheckOk?: boolean
     }
+    lintOk = existing.lintOk ?? true
+    typecheckOk = existing.typecheckOk ?? true
+} catch {
+    // missing or unreadable health file
 }
 
 mkdirSync(testOutputDir, { recursive: true })

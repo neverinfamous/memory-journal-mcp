@@ -68,10 +68,7 @@ function updateBadges() {
 
   for (const file of filesToUpdate) {
     const filePath = path.join(ROOT_DIR, file);
-    if (!fs.existsSync(filePath)) {
-      continue;
-    }
-    
+
     try {
       let content = fs.readFileSync(filePath, "utf-8");
       const originalNormalized = content.replace(/\r\n/g, "\n");

@@ -5,3 +5,4 @@ paths-ignore:
   - "tests/**"
   - "test-server/**"
   - "scripts/**"
+  - ".test-output/**"

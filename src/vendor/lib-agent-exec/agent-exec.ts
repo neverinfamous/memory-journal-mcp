@@ -126,14 +126,18 @@ try {
       payloadStr = JSON.stringify(payload);
     }
   } else {
-    const stat = fs.statSync(absPayloadPath);
-    if (!stat.isFile()) fatalError('Payload path must be a regular file.');
+    let payloadBuf;
+    try {
+      payloadBuf = fs.readFileSync(absPayloadPath);
+    } catch (err) {
+      fatalError(`Payload path must be a regular file. ${err instanceof Error ? err.message : String(err)}`);
+    }
     const envSize = process.env.AGENT_EXEC_MAX_PAYLOAD_SIZE ? parseInt(process.env.AGENT_EXEC_MAX_PAYLOAD_SIZE, 10) : NaN;
     const maxPayloadSize = !Number.isNaN(envSize) && envSize > 0 ? envSize : DEFAULT_MAX_PAYLOAD_SIZE;
-    if (stat.size > maxPayloadSize) {
+    if (payloadBuf.length > maxPayloadSize) {
       fatalError(`Payload file exceeds ${maxPayloadSize} bytes limit.`);
     }
-    payloadStr = fs.readFileSync(absPayloadPath, 'utf8');
+    payloadStr = payloadBuf.toString('utf8');
   }
 
   const rawPayload = JSON.parse(payloadStr);

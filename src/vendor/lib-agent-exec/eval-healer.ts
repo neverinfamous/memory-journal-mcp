@@ -131,6 +131,19 @@ export function hasTopLevelReturn(code: string): boolean {
   return false;
 }
 
+function isHoistedImport(trimmed: string): boolean {
+  if (/^import\s+['"][^'"]+['"];?$/.test(trimmed)) return true;
+  if (!trimmed.startsWith('import ')) return false;
+  const marker = ' from ';
+  const fromAt = trimmed.lastIndexOf(marker);
+  if (fromAt < 0) return false;
+  const specifier = trimmed.slice(fromAt + marker.length).trim();
+  if (!/^['"][^'"]+['"];?$/.test(specifier)) return false;
+  const clause = trimmed.slice('import'.length, fromAt);
+  if (!/^\s+\S/.test(clause)) return false;
+  return !/[();]/.test(clause);
+}
+
 export function wrapCodeInAsyncIife(code: string): string {
   const lines = code.split('\n');
   const importLines: string[] = [];
@@ -138,7 +151,7 @@ export function wrapCodeInAsyncIife(code: string): string {
 
   for (const line of lines) {
     const trimmed = line.trim();
-    if (/^import\s+(?:(?:\*\s+as\s+\w+)|(?:\{\s*[^}]*\s*\}|\w+)(?:\s*,\s*(?:\{\s*[^}]*\s*\}|\w+))*)?\s+from\s+['"][^'"]+['"];?$/.test(trimmed) || /^import\s+['"][^'"]+['"];?$/.test(trimmed)) {
+    if (isHoistedImport(trimmed)) {
       importLines.push(line);
     } else {
       bodyLines.push(line);

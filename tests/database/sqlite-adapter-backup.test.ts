@@ -79,10 +79,8 @@ describe('Backup Manager Edge Cases', () => {
         if (fs.existsSync(lockDir)) {
             try {
                 const lockFile = path.join(lockDir, 'lock.json')
-                if (fs.existsSync(lockFile)) {
-                    // Overwrite lock with stale timestamp in case Windows EBUSY prevents rmSync
-                    fs.writeFileSync(lockFile, JSON.stringify({ pid: 999999, timestamp: 0, nonce: '123' }))
-                }
+                // Overwrite lock with stale timestamp in case Windows EBUSY prevents rmSync
+                fs.writeFileSync(lockFile, JSON.stringify({ pid: 999999, timestamp: 0, nonce: '123' }))
                 fs.rmSync(lockDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
             } catch {
                 // ignore cleanup errors in test

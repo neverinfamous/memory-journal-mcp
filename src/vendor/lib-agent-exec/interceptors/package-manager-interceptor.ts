@@ -388,7 +388,7 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
         const scriptContent = args[evalIdx + 1];
         const outDir = os.tmpdir();
         const tmpFile = path.join(outDir, `.agent_inline_script_${Date.now()}.ts`);
-        fs.writeFileSync(tmpFile, scriptContent);
+        fs.writeFileSync(tmpFile, scriptContent, { mode: 0o600 });
         process.on('exit', () => {
           try {
             if (fs.existsSync(tmpFile)) fs.unlinkSync(tmpFile);

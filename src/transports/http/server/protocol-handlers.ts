@@ -205,6 +205,10 @@ export function registerMcpProtocolRoutes(
             | string
             | undefined
 
+        // The session id selects an existing session. It does not skip authentication:
+        // http-transport.ts already applied auth middleware, and verifySessionOwner runs
+        // before that session is used. Omitting the id never opens another principal's session.
+        /* codeql[js/user-controlled-bypass] */
         if (sid !== undefined && sid !== '') {
             const transport = sseTransports.get(sid)
             if (transport === undefined) {
@@ -231,14 +235,17 @@ export function registerMcpProtocolRoutes(
         }
     }
 
-    app.get('/mcp', handleStatefulGet)
-    app.get('/sse', handleStatefulGet)
+    // checkRateLimit is app middleware in http-transport.ts, installed before these routes.
+    // Calling it again here would consume two tokens for every request.
+    /* codeql[js/missing-rate-limiting] */ app.get('/mcp', handleStatefulGet)
+    /* codeql[js/missing-rate-limiting] */ app.get('/sse', handleStatefulGet)
 
     const handlePost = (req: Request, res: Response, next: NextFunction): void => {
         const sid = (req.query?.['sessionId'] ?? req.headers?.['mcp-session-id']) as
             | string
             | undefined
 
+        /* codeql[js/user-controlled-bypass] */
         if (sid !== undefined && sid !== '') {
             const transport = sseTransports.get(sid)
             if (transport === undefined) {
@@ -273,11 +280,11 @@ export function registerMcpProtocolRoutes(
         }
     }
 
-    app.post('/mcp', handlePost)
-    app.post('/sse', handlePost)
-    app.post('/messages', handlePost)
+    /* codeql[js/missing-rate-limiting] */ app.post('/mcp', handlePost)
+    /* codeql[js/missing-rate-limiting] */ app.post('/sse', handlePost)
+    /* codeql[js/missing-rate-limiting] */ app.post('/messages', handlePost)
 
-    app.delete('/mcp', (req: Request, res: Response) => {
+    /* codeql[js/missing-rate-limiting] */ app.delete('/mcp', (req: Request, res: Response) => {
         if (config.stateless) {
             res.status(204).end()
             return

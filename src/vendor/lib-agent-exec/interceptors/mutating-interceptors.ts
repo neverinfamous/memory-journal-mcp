@@ -131,7 +131,7 @@ export function runMutatingInterceptors(
           : rawFile;
         const resolvedFile = path.isAbsolute(wslNormalized) ? path.normalize(wslNormalized) : path.resolve(cwd, wslNormalized);
 
-        if (fs.existsSync(resolvedFile) && fs.statSync(resolvedFile).isFile()) {
+        if (fs.existsSync(resolvedFile)) {
           try {
             const rawContent = fs.readFileSync(resolvedFile, 'utf8');
             let cleaned = rawContent;
@@ -155,7 +155,7 @@ export function runMutatingInterceptors(
               console.error(`\n   🛠️ AUTONOMOUS HEALING: Stripped untrusted wrapper tags / warning preambles from jq input file '${fileArg}'... (Frictionless Recovery)\x1b[0m`);
               const outDir = os.tmpdir();
               const tmpSanitized = path.join(outDir, `.agent_sanitized_jq_${Date.now()}_${path.basename(resolvedFile)}`);
-              fs.writeFileSync(tmpSanitized, cleaned, 'utf8');
+              fs.writeFileSync(tmpSanitized, cleaned, { encoding: 'utf8', mode: 0o600 });
               process.on('exit', () => {
                 try { if (fs.existsSync(tmpSanitized)) fs.unlinkSync(tmpSanitized); } catch { /* ignore */ }
               });

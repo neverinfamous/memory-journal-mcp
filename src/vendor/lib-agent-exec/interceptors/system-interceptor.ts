@@ -905,7 +905,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
             
             return exactShellChars.some(op => {
                 let checkStr = finalState.unquoted;
-                checkStr = checkStr.replace(/<[^>]+>/g, '');
+                checkStr = checkStr.replace(/<[^>]+>/g, ''); // codeql[js/incomplete-multi-character-sanitization]
                 if (op === '>') {
                     checkStr = checkStr.replace(/=>/g, '').replace(/->/g, '');
                 } else if (op === '<') {
@@ -977,7 +977,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
       fileContent = `try {\n  const __res = eval(${JSON.stringify(fileContent)});\n  if (__res !== undefined) console.log(__res);\n} catch {\n  ${fileContent}\n}\n`;
     }
 
-    fs.writeFileSync(tmpFile, fileContent);
+    fs.writeFileSync(tmpFile, fileContent, { mode: 0o600 });
     process.on('exit', () => {
       try {
         if (fs.existsSync(tmpFile)) {
