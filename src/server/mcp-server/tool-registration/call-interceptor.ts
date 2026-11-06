@@ -230,6 +230,154 @@ function normalizeAndAliasToolCall(
     }
 }
 
+interface ToolCallParams {
+    name?: string
+    arguments?: Record<string, unknown>
+}
+
+/** Healing fallbacks and a structured TOOL_NOT_FOUND response for tools that are not registered. */
+async function handleUnknownTool(
+    requestedTool: string,
+    toolArgs: Record<string, unknown>,
+    healingEnabled: boolean,
+    prompts: PromptDefinition[],
+    context: ServerContext,
+    allTools: ToolRegistration[],
+    allToolNames: Set<string>,
+    customToolHandlerConfig: ToolHandlerConfig
+): Promise<unknown> {
+    const normalized = requestedTool.replace(/^mj_/, '').replace(/_/g, '-')
+    const matchingPrompt = prompts.find(
+        (p) =>
+            p.name === normalized ||
+            p.name === requestedTool ||
+            p.name === requestedTool.replace(/^mj_/, '')
+    )
+
+    if (healingEnabled) {
+        const fallbackResponse = await tryAutonomousUnknownToolFallback(
+            requestedTool,
+            toolArgs,
+            matchingPrompt,
+            context,
+            allTools,
+            allToolNames,
+            customToolHandlerConfig
+        )
+        if (fallbackResponse !== undefined) return fallbackResponse
+    }
+
+    let suggestion = `Tool '${requestedTool}' does not exist. Use tools/list to see available tools.`
+    const isFilteredTool = ALL_KNOWN_GROUP_TOOLS.has(requestedTool)
+
+    if (isFilteredTool) {
+        suggestion = `'${requestedTool}' is a valid tool but it is not currently exposed because of your active --tool-filter or codemode restrictions. If you are in Code Mode, invoke it via 'mj_execute_code' (e.g. 'await mj.core.${requestedTool}(...)').`
+    } else if (matchingPrompt !== undefined) {
+        suggestion = `'${requestedTool}' is an MCP Prompt, not an MCP Tool. Please use the 'get_prompt' tool (or your native MCP Prompts integration) to evaluate it, then use 'create_entry' to save the result.`
+    } else if (requestedTool.startsWith('mj_')) {
+        suggestion = `'${requestedTool}' is not a valid root tool. If you are trying to use Code Mode, you must invoke the 'mj_execute_code' tool and write javascript (e.g. 'await mj.core.searchEntries(...)').`
+    }
+
+    const errorResult = {
+        success: false,
+        error: `MCP error -32602: Tool ${requestedTool} not found`,
+        code: 'TOOL_NOT_FOUND',
+        category: 'hallucination',
+        suggestion,
+        recoverable: false,
+    }
+
+    if (healingEnabled) {
+        logAgentIssue({
+            source: 'MCP',
+            action: requestedTool,
+            input: toolArgs,
+            error: errorResult.error,
+        })
+    }
+
+    return formatTokenEstimatedError(errorResult, true)
+}
+
+/** Rewrite an SDK validation-error result into a structured VALIDATION_ERROR payload (or undefined). */
+function toValidationFailureResponse(
+    result: unknown,
+    params: ToolCallParams | undefined
+): ReturnType<typeof formatTokenEstimatedError> | undefined {
+    if (
+        result === null ||
+        result === undefined ||
+        typeof result !== 'object' ||
+        !('isError' in result) ||
+        result.isError !== true
+    ) {
+        return undefined
+    }
+    const resObj = result as { content?: { type?: string; text?: string }[] }
+    if (!Array.isArray(resObj.content) || resObj.content.length === 0) return undefined
+
+    const text = resObj.content[0]?.text
+    const prefix = 'MCP error -32602: Input validation error: '
+    if (
+        typeof text !== 'string' ||
+        !(text.includes('MCP error -32602') || text.includes('Invalid arguments for tool'))
+    ) {
+        return undefined
+    }
+
+    const errorMessage = parseZodErrorsFromMessage(text, text.includes(prefix) ? prefix : undefined)
+    const errorResult = {
+        success: false,
+        error: errorMessage,
+        code: 'VALIDATION_ERROR',
+        category: 'validation',
+        suggestion: 'Check input parameters against the tool schema',
+        recoverable: false,
+    }
+
+    logAgentIssue({
+        source: 'MCP',
+        action: params?.name ?? 'unknown',
+        input: params?.arguments ?? {},
+        error: errorMessage,
+    })
+
+    return formatTokenEstimatedError(errorResult, false)
+}
+
+/** Convert a thrown -32602 error into a structured VALIDATION_ERROR payload (or undefined). */
+function toThrownValidationResponse(
+    error: unknown,
+    request: unknown
+): ReturnType<typeof formatTokenEstimatedError> | undefined {
+    const err = error as { code?: number; message?: string }
+    if (err.code !== -32602) return undefined
+
+    let errorMessage = err.message ?? 'Validation Error'
+    if (typeof errorMessage === 'string' && errorMessage.includes('Invalid arguments for tool')) {
+        errorMessage = parseZodErrorsFromMessage(errorMessage)
+    }
+
+    const errorResult = {
+        success: false,
+        error: errorMessage,
+        code: 'VALIDATION_ERROR',
+        category: 'validation',
+        suggestion: 'Check input parameters against the tool schema',
+        recoverable: false,
+    }
+
+    const fallbackReq = request as { params?: ToolCallParams }
+    logAgentIssue({
+        source: 'MCP',
+        action: fallbackReq.params?.name ?? 'unknown',
+        input: fallbackReq.params?.arguments ?? {},
+        error: errorMessage,
+    })
+
+    return formatTokenEstimatedError(errorResult, true)
+}
+
 export function attachCallToolInterceptor(
     requestHandlers: RequestHandlerMap | undefined,
     context: ServerContext,
@@ -281,133 +429,27 @@ export function attachCallToolInterceptor(
                 req.params.name !== '' &&
                 !allToolNames.has(req.params.name)
             ) {
-                const requestedTool = req.params.name
-                const toolArgs = req.params.arguments ?? {}
-                const normalized = requestedTool.replace(/^mj_/, '').replace(/_/g, '-')
-                const matchingPrompt = prompts.find(
-                    (p) =>
-                        p.name === normalized ||
-                        p.name === requestedTool ||
-                        p.name === requestedTool.replace(/^mj_/, '')
+                return await handleUnknownTool(
+                    req.params.name,
+                    req.params.arguments ?? {},
+                    healingEnabled,
+                    prompts,
+                    context,
+                    allTools,
+                    allToolNames,
+                    customToolHandlerConfig
                 )
-
-                if (healingEnabled) {
-                    const fallbackResponse = await tryAutonomousUnknownToolFallback(
-                        requestedTool,
-                        toolArgs,
-                        matchingPrompt,
-                        context,
-                        allTools,
-                        allToolNames,
-                        customToolHandlerConfig
-                    )
-                    if (fallbackResponse !== undefined) return fallbackResponse
-                }
-
-                let suggestion = `Tool '${requestedTool}' does not exist. Use tools/list to see available tools.`
-                const isFilteredTool = ALL_KNOWN_GROUP_TOOLS.has(requestedTool)
-
-                if (isFilteredTool) {
-                    suggestion = `'${requestedTool}' is a valid tool but it is not currently exposed because of your active --tool-filter or codemode restrictions. If you are in Code Mode, invoke it via 'mj_execute_code' (e.g. 'await mj.core.${requestedTool}(...)').`
-                } else if (matchingPrompt !== undefined) {
-                    suggestion = `'${requestedTool}' is an MCP Prompt, not an MCP Tool. Please use the 'get_prompt' tool (or your native MCP Prompts integration) to evaluate it, then use 'create_entry' to save the result.`
-                } else if (requestedTool.startsWith('mj_')) {
-                    suggestion = `'${requestedTool}' is not a valid root tool. If you are trying to use Code Mode, you must invoke the 'mj_execute_code' tool and write javascript (e.g. 'await mj.core.searchEntries(...)').`
-                }
-
-                const errorResult = {
-                    success: false,
-                    error: `MCP error -32602: Tool ${requestedTool} not found`,
-                    code: 'TOOL_NOT_FOUND',
-                    category: 'hallucination',
-                    suggestion,
-                    recoverable: false,
-                }
-
-                if (healingEnabled) {
-                    logAgentIssue({
-                        source: 'MCP',
-                        action: requestedTool,
-                        input: toolArgs,
-                        error: errorResult.error,
-                    })
-                }
-
-                return formatTokenEstimatedError(errorResult, true)
             }
 
             const result = await originalHandler(request, extra)
 
-            if (
-                result !== null &&
-                result !== undefined &&
-                typeof result === 'object' &&
-                'isError' in result &&
-                result.isError === true
-            ) {
-                const resObj = result as { content?: { type?: string; text?: string }[] }
-                if (Array.isArray(resObj.content) && resObj.content.length > 0) {
-                    const text = resObj.content[0]?.text
-                    const prefix = 'MCP error -32602: Input validation error: '
-                    if (
-                        typeof text === 'string' &&
-                        (text.includes('MCP error -32602') || text.includes('Invalid arguments for tool'))
-                    ) {
-                        const errorMessage = parseZodErrorsFromMessage(
-                            text,
-                            text.includes(prefix) ? prefix : undefined
-                        )
-                        const errorResult = {
-                            success: false,
-                            error: errorMessage,
-                            code: 'VALIDATION_ERROR',
-                            category: 'validation',
-                            suggestion: 'Check input parameters against the tool schema',
-                            recoverable: false,
-                        }
-
-                        logAgentIssue({
-                            source: 'MCP',
-                            action: req.params?.name ?? 'unknown',
-                            input: req.params?.arguments ?? {},
-                            error: errorMessage,
-                        })
-
-                        return formatTokenEstimatedError(errorResult, false)
-                    }
-                }
-            }
+            const validationFailure = toValidationFailureResponse(result, req.params)
+            if (validationFailure !== undefined) return validationFailure
 
             return result
         } catch (error: unknown) {
-            const err = error as { code?: number; message?: string }
-            if (err.code === -32602) {
-                let errorMessage = err.message ?? 'Validation Error'
-                if (typeof errorMessage === 'string' && errorMessage.includes('Invalid arguments for tool')) {
-                    errorMessage = parseZodErrorsFromMessage(errorMessage)
-                }
-
-                const errorResult = {
-                    success: false,
-                    error: errorMessage,
-                    code: 'VALIDATION_ERROR',
-                    category: 'validation',
-                    suggestion: 'Check input parameters against the tool schema',
-                    recoverable: false,
-                }
-
-                const fallbackReq = request as {
-                    params?: { name?: string; arguments?: Record<string, unknown> }
-                }
-                logAgentIssue({
-                    source: 'MCP',
-                    action: fallbackReq.params?.name ?? 'unknown',
-                    input: fallbackReq.params?.arguments ?? {},
-                    error: errorMessage,
-                })
-
-                return formatTokenEstimatedError(errorResult, true)
-            }
+            const handled = toThrownValidationResponse(error, request)
+            if (handled !== undefined) return handled
             throw error
         }
     })

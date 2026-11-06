@@ -260,112 +260,126 @@ export function extractAndRecoverPreparedStatementCode(code: string): string | n
     const isSelect = /^SELECT\b/i.test(cleanSql)
 
     if (isUpdate) {
-        const payload: Record<string, unknown> = {}
-        const idMatch = /\bWHERE\s+[`"']?(?:id|entry_id)[`"']?\s*=\s*(?:\?|(\d+))/i.exec(cleanSql)
-        if (idMatch?.[1] !== undefined) {
-            payload['entry_id'] = parseInt(idMatch[1], 10)
-        }
-
-        for (const arg of parsedArgs) {
-            if (typeof arg === 'number') {
-                payload['entry_id'] = arg
-            } else if (typeof arg === 'string') {
-                let isTags = false
-                if (arg.trim().startsWith('[') && arg.trim().endsWith(']')) {
-                    try {
-                        const parsed: unknown = JSON.parse(arg)
-                        if (Array.isArray(parsed)) {
-                            payload['tags'] = parsed.map(String)
-                            isTags = true
-                        }
-                    } catch {
-                        // ignore
-                    }
-                }
-                if (!isTags) {
-                    if (payload['content'] === undefined) payload['content'] = arg
-                    else if (payload['title'] === undefined) payload['title'] = arg
-                }
-            } else if (Array.isArray(arg)) {
-                payload['tags'] = arg.map(String)
-            } else if (isRecord(arg)) {
-                if (typeof arg['entry_id'] === 'number') payload['entry_id'] = arg['entry_id']
-                if (typeof arg['id'] === 'number') payload['entry_id'] = arg['id']
-                if (typeof arg['content'] === 'string') payload['content'] = arg['content']
-                if (Array.isArray(arg['tags'])) payload['tags'] = arg['tags'].map(String)
-            }
-        }
-
-        if (payload['content'] === undefined) {
-            const setContentMatch = /\bSET\s+[\s\S]*?\bcontent\s*=\s*['"]([\s\S]*?)['"]/i.exec(cleanSql)
-            if (setContentMatch?.[1] !== undefined) {
-                payload['content'] = setContentMatch[1]
-            }
-        }
-
-        if (payload['entry_id'] !== undefined) {
-            return `return await mj.admin.updateEntry(${JSON.stringify(payload)});`
-        }
+        const recovered = recoverPreparedUpdate(cleanSql, parsedArgs)
+        if (recovered !== null) return recovered
     }
 
     if (isInsert) {
-        const payload: Record<string, unknown> = {
-            entry_type: 'technical_decision',
-        }
-        for (const arg of parsedArgs) {
-            if (typeof arg === 'string') {
-                let isTags = false
-                if (arg.trim().startsWith('[') && arg.trim().endsWith(']')) {
-                    try {
-                        const parsed: unknown = JSON.parse(arg)
-                        if (Array.isArray(parsed)) {
-                            payload['tags'] = parsed.map(String)
-                            isTags = true
-                        }
-                    } catch {
-                        // ignore
-                    }
-                }
-                if (!isTags) {
-                    if (typeof payload['content'] !== 'string') payload['content'] = arg
-                    else if (typeof payload['title'] !== 'string') payload['title'] = arg
-                }
-            } else if (Array.isArray(arg)) {
-                payload['tags'] = arg.map(String)
-            } else if (isRecord(arg)) {
-                if (typeof arg['content'] === 'string') payload['content'] = arg['content']
-                if (typeof arg['title'] === 'string') payload['title'] = arg['title']
-                if (Array.isArray(arg['tags'])) payload['tags'] = arg['tags'].map(String)
-            }
-        }
-        if (typeof payload['title'] !== 'string') payload['title'] = 'Journal Entry'
-        return `return await mj.core.createEntry(${JSON.stringify(payload)});`
+        return recoverPreparedInsert(parsedArgs)
     }
 
     if (isDelete) {
-        let entryId: number | undefined
-        const idMatch = /\bWHERE\s+[`"']?(?:id|entry_id)[`"']?\s*=\s*(?:\?|(\d+))/i.exec(cleanSql)
-        if (idMatch?.[1] !== undefined) entryId = parseInt(idMatch[1], 10)
-        for (const arg of parsedArgs) {
-            if (typeof arg === 'number') entryId = arg
-        }
-        if (entryId !== undefined) {
-            return `return await mj.admin.deleteEntry({ entry_id: ${entryId} });`
-        }
+        const recovered = recoverPreparedDelete(cleanSql, parsedArgs)
+        if (recovered !== null) return recovered
     }
 
     if (isSelect) {
-        let entryId: number | undefined
-        const idMatch = /\bWHERE\s+[`"']?(?:id|entry_id)[`"']?\s*=\s*(?:\?|(\d+))/i.exec(cleanSql)
-        if (idMatch?.[1] !== undefined) entryId = parseInt(idMatch[1], 10)
-        for (const arg of parsedArgs) {
-            if (typeof arg === 'number') entryId = arg
-        }
-        if (entryId !== undefined) {
-            return `return await mj.core.getEntryById({ entry_id: ${entryId} });`
-        }
-        return `return await mj.core.getRecentEntries({ limit: 10 });`
+        return recoverPreparedSelect(cleanSql, parsedArgs)
     }
 
     return null
+}
+
+/** Parse a JSON-array string argument into tags; returns undefined when it is not one. */
+function parseTagsArg(arg: string): string[] | undefined {
+    if (arg.trim().startsWith('[') && arg.trim().endsWith(']')) {
+        try {
+            const parsed: unknown = JSON.parse(arg)
+            if (Array.isArray(parsed)) return parsed.map(String)
+        } catch {
+            // ignore
+        }
+    }
+    return undefined
+}
+
+const ENTRY_ID_WHERE_PATTERN = /\bWHERE\s+[`"']?(?:id|entry_id)[`"']?\s*=\s*(?:\?|(\d+))/i
+
+/** Entry id from a `WHERE id = N` clause overridden by a numeric bound argument. */
+function extractEntryId(cleanSql: string, parsedArgs: unknown[]): number | undefined {
+    let entryId: number | undefined
+    const idMatch = ENTRY_ID_WHERE_PATTERN.exec(cleanSql)
+    if (idMatch?.[1] !== undefined) entryId = parseInt(idMatch[1], 10)
+    for (const arg of parsedArgs) {
+        if (typeof arg === 'number') entryId = arg
+    }
+    return entryId
+}
+
+function recoverPreparedUpdate(cleanSql: string, parsedArgs: unknown[]): string | null {
+    const payload: Record<string, unknown> = {}
+    const idMatch = ENTRY_ID_WHERE_PATTERN.exec(cleanSql)
+    if (idMatch?.[1] !== undefined) {
+        payload['entry_id'] = parseInt(idMatch[1], 10)
+    }
+
+    for (const arg of parsedArgs) {
+        if (typeof arg === 'number') {
+            payload['entry_id'] = arg
+        } else if (typeof arg === 'string') {
+            const tags = parseTagsArg(arg)
+            if (tags !== undefined) {
+                payload['tags'] = tags
+            } else if (payload['content'] === undefined) payload['content'] = arg
+            else if (payload['title'] === undefined) payload['title'] = arg
+        } else if (Array.isArray(arg)) {
+            payload['tags'] = arg.map(String)
+        } else if (isRecord(arg)) {
+            if (typeof arg['entry_id'] === 'number') payload['entry_id'] = arg['entry_id']
+            if (typeof arg['id'] === 'number') payload['entry_id'] = arg['id']
+            if (typeof arg['content'] === 'string') payload['content'] = arg['content']
+            if (Array.isArray(arg['tags'])) payload['tags'] = arg['tags'].map(String)
+        }
+    }
+
+    if (payload['content'] === undefined) {
+        const setContentMatch = /\bSET\s+[\s\S]*?\bcontent\s*=\s*['"]([\s\S]*?)['"]/i.exec(cleanSql)
+        if (setContentMatch?.[1] !== undefined) {
+            payload['content'] = setContentMatch[1]
+        }
+    }
+
+    if (payload['entry_id'] !== undefined) {
+        return `return await mj.admin.updateEntry(${JSON.stringify(payload)});`
+    }
+    return null
+}
+
+function recoverPreparedInsert(parsedArgs: unknown[]): string {
+    const payload: Record<string, unknown> = {
+        entry_type: 'technical_decision',
+    }
+    for (const arg of parsedArgs) {
+        if (typeof arg === 'string') {
+            const tags = parseTagsArg(arg)
+            if (tags !== undefined) {
+                payload['tags'] = tags
+            } else if (typeof payload['content'] !== 'string') payload['content'] = arg
+            else if (typeof payload['title'] !== 'string') payload['title'] = arg
+        } else if (Array.isArray(arg)) {
+            payload['tags'] = arg.map(String)
+        } else if (isRecord(arg)) {
+            if (typeof arg['content'] === 'string') payload['content'] = arg['content']
+            if (typeof arg['title'] === 'string') payload['title'] = arg['title']
+            if (Array.isArray(arg['tags'])) payload['tags'] = arg['tags'].map(String)
+        }
+    }
+    if (typeof payload['title'] !== 'string') payload['title'] = 'Journal Entry'
+    return `return await mj.core.createEntry(${JSON.stringify(payload)});`
+}
+
+function recoverPreparedDelete(cleanSql: string, parsedArgs: unknown[]): string | null {
+    const entryId = extractEntryId(cleanSql, parsedArgs)
+    if (entryId !== undefined) {
+        return `return await mj.admin.deleteEntry({ entry_id: ${entryId} });`
+    }
+    return null
+}
+
+function recoverPreparedSelect(cleanSql: string, parsedArgs: unknown[]): string {
+    const entryId = extractEntryId(cleanSql, parsedArgs)
+    if (entryId !== undefined) {
+        return `return await mj.core.getEntryById({ entry_id: ${entryId} });`
+    }
+    return `return await mj.core.getRecentEntries({ limit: 10 });`
 }

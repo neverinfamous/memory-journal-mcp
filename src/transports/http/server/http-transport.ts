@@ -150,6 +150,15 @@ export class HttpTransport {
             next()
         })
 
+        this.installBodyParsing()
+        this.installRateLimiting()
+        await this.installAuthentication(host, port, authToken, isLocalhost)
+        this.installRoutes(serverFactory, runtime)
+        await this.listen(port, host, scheduler)
+    }
+
+    /** Install the body-size guard, JSON parser and body-parser error responses. */
+    private installBodyParsing(): void {
         const maxBody = this.config.maxBodySize ?? DEFAULT_MAX_BODY_BYTES
         const jsonParser = express.json({ limit: maxBody }) as RequestHandler
         this.app.use((req: Request, res: Response, next: NextFunction) => {
@@ -200,6 +209,10 @@ export class HttpTransport {
             next(err)
         })
 
+    }
+
+    /** Install per-IP rate limiting and its periodic cleanup timer. */
+    private installRateLimiting(): void {
         if (this.config.enableRateLimit !== false) {
             this.app.use((req: Request, res: Response, next: () => void) => {
                 const result = checkRateLimit(req, this.config, this.rateLimitMap)
@@ -229,6 +242,15 @@ export class HttpTransport {
             logger.info('Rate limiting enabled (using IP)', { module: 'HTTP' })
         }
 
+    }
+
+    /** Validate OAuth configuration and install OAuth or static bearer-token authentication. */
+    private async installAuthentication(
+        host: string,
+        port: number,
+        authToken: string | undefined,
+        isLocalhost: boolean
+    ): Promise<void> {
         if (
             this.config.oauthEnabled === true &&
             (this.config.oauthIssuer === undefined || this.config.oauthAudience === undefined)
@@ -313,6 +335,10 @@ export class HttpTransport {
             this.app.use(createAuthMiddleware(authToken))
         }
 
+    }
+
+    /** Register context propagation, health/metrics/root endpoints, MCP protocol routes and the 404 handler. */
+    private installRoutes(serverFactory: McpServerFactory, runtime: ServerRuntime): void {
         const propagateContextMiddleware: RequestHandler = (req, _res, next) => {
             const reqRecord = req as unknown as Record<string, unknown>
             const tokenClaims = reqRecord['tokenClaims'] as TokenClaims | undefined
@@ -372,6 +398,10 @@ export class HttpTransport {
             res.status(404).json({ error: 'Not found' })
         })
 
+    }
+
+    /** Bind the HTTP server; rejects on bind errors (e.g. EADDRINUSE) and starts the scheduler once listening. */
+    private async listen(port: number, host: string, scheduler: Scheduler | null): Promise<void> {
         await new Promise<void>((resolve, reject) => {
             const server = this.app.listen(port, host, () => {
                 // The listen callback can run before `this.httpServer` is assigned below.

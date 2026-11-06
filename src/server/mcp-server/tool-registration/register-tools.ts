@@ -5,16 +5,9 @@ import {
     type ToolAnnotations,
     type Icon,
 } from '@modelcontextprotocol/server'
-import { getEnabledGroups } from '../../../filtering/tool-filter.js'
 import { callTool } from '../../../handlers/tools/index.js'
 import { readResource, validateResourceSubscription } from '../../../handlers/resources/index.js'
-import {
-    generateStandardInstructions,
-    generateCodeModeInstructions,
-} from '../../../constants/server-instructions.js'
-import { TOOL_GROUPS } from '../../../filtering/tool-constants.js'
-import type { ToolGroup, ToolRegistration, ToolHandlerConfig } from '../../../types/index.js'
-import { type DEFAULT_BRIEFING_CONFIG } from '../../../handlers/resources/shared.js'
+import type { ToolRegistration, ToolHandlerConfig } from '../../../types/index.js'
 import {
     registerResources,
     registerPrompts,
@@ -23,11 +16,17 @@ import {
 } from '../../registration.js'
 import { VERSION } from '../../../version.js'
 import { globalSubscriptionManager } from '../../subscription-manager.js'
-import { logAgentIssue } from '../../../utils/issue-logger.js'
 import { logger } from '../../../utils/logger.js'
 import type { ServerContext, ServerOptions } from '../types.js'
 import { attachListToolsInterceptor, type RequestHandlerMap } from './list-interceptor.js'
 import { attachCallToolInterceptor } from './call-interceptor.js'
+import {
+    MUTATING_TOOLS,
+    buildServerInstructions,
+    formatToolFailure,
+    notifyMutationSubscribers,
+    resolveActiveBriefingConfig,
+} from './register-tools-helpers.js'
 
 /**
  * Default maximum number of array elements and object properties allowed across a
@@ -52,19 +51,6 @@ export function resolveEffectiveMaxToolInputElements(configured: number | undefi
     if (configured === undefined) return DEFAULT_MAX_TOOL_INPUT_ELEMENTS
     return configured === 0 || configured === Infinity ? Infinity : configured
 }
-
-const MUTATING_TOOLS = new Set([
-    'create_entry',
-    'update_entry',
-    'delete_entry',
-    'restore_entry',
-    'batch_create_entries',
-    'batch_update_entries',
-    'batch_delete_entries',
-    'team_add_member',
-    'team_update_member_role',
-    'team_remove_member',
-])
 
 interface ModernToolConfig {
     title?: string
@@ -166,56 +152,9 @@ export function createServerInstance(
         allowedIoRoots,
         runtime,
     } = context
-    const { defaultProjectNumber } = options
 
-    const getInstructions = (): string => {
-        const currentConfig = configManager.getConfig()
-        const enabledSet = currentConfig.toolFilterConfig?.enabledTools ?? allToolNames
-        const groups = currentConfig.toolFilterConfig
-            ? getEnabledGroups(currentConfig.toolFilterConfig.enabledTools)
-            : undefined
-
-        const isCodeModeOnly = enabledSet.size === 1 && enabledSet.has('mj_execute_code')
-        const mappedPrompts = prompts.map((p) => {
-            const prompt = p as { name: string; description?: string }
-            return {
-                name: prompt.name,
-                ...(prompt.description !== undefined ? { description: prompt.description } : {}),
-            }
-        })
-
-        const instructionConfig = {
-            ...(currentConfig.briefingConfig ?? {}),
-            ...(options.instructionLevel !== undefined
-                ? { instructionLevel: options.instructionLevel }
-                : {}),
-        }
-
-        if (isCodeModeOnly || currentConfig.toolFilterConfig?.raw === 'codemode') {
-            const finalGroups =
-                currentConfig.codemodeInternalFullAccess === true
-                    ? new Set(Object.keys(TOOL_GROUPS) as ToolGroup[])
-                    : groups
-            const finalEnabledTools =
-                currentConfig.codemodeInternalFullAccess === true ? allToolNames : enabledSet
-
-            return generateCodeModeInstructions(
-                finalEnabledTools,
-                mappedPrompts,
-                undefined,
-                finalGroups,
-                instructionConfig
-            )
-        }
-
-        return generateStandardInstructions(
-            enabledSet,
-            mappedPrompts,
-            undefined,
-            groups,
-            instructionConfig
-        )
-    }
+    const getInstructions = (): string =>
+        buildServerInstructions(context, options, prompts, allToolNames)
 
     const server = new McpServer(
         { name: 'memory-journal-mcp', version: VERSION },
@@ -287,20 +226,7 @@ export function createServerInstance(
                                 readOnlyHintOf(tool) !== true)
 
                         if (isMutation) {
-                            void globalSubscriptionManager.notifyResourceUpdated('memory://briefing')
-                            void globalSubscriptionManager.notifyResourceUpdated('memory://recent')
-                            void globalSubscriptionManager.notifyResourceUpdated(
-                                'memory://statistics'
-                            )
-
-                            if (tool.name.startsWith('team_')) {
-                                void globalSubscriptionManager.notifyResourceUpdated(
-                                    'memory://team/recent'
-                                )
-                                void globalSubscriptionManager.notifyResourceUpdated(
-                                    'memory://team/statistics'
-                                )
-                            }
+                            notifyMutationSubscribers(tool.name)
                         }
                     }
 
@@ -316,32 +242,7 @@ export function createServerInstance(
 
                     return { content: [{ type: 'text' as const, text: textContent }] }
                 } catch (error) {
-                    let errorResult: Record<string, unknown>
-                    if (
-                        error instanceof Error &&
-                        'toResponse' in error &&
-                        typeof (error as { toResponse?: unknown }).toResponse === 'function'
-                    ) {
-                        errorResult = (
-                            error as { toResponse: () => Record<string, unknown> }
-                        ).toResponse()
-                    } else {
-                        const errorMessage = error instanceof Error ? error.message : String(error)
-                        errorResult = {
-                            success: false,
-                            error: errorMessage,
-                            code: 'INTERNAL_ERROR',
-                            category: 'internal',
-                            recoverable: false,
-                        }
-                    }
-
-                    logAgentIssue({
-                        source: 'MCP',
-                        action: tool.name,
-                        input: args,
-                        error: (errorResult['error'] as string) ?? 'Unknown error',
-                    })
+                    const errorResult = formatToolFailure(error, tool.name, args)
 
                     return {
                         content: [
@@ -370,22 +271,11 @@ export function createServerInstance(
         }[]
     }> => {
         const currentConfig = configManager.getConfig()
-        const resolvedDefaultProj =
-            currentConfig.briefingConfig.defaultProjectNumber ?? defaultProjectNumber
-        const activeBriefingConfig: typeof DEFAULT_BRIEFING_CONFIG = {
-            ...currentConfig.briefingConfig,
-            ...(resolvedDefaultProj !== undefined
-                ? { defaultProjectNumber: resolvedDefaultProj }
-                : {}),
-            ...(options.projectRegistry !== undefined
-                ? { projectRegistry: options.projectRegistry }
-                : {}),
-            ...(options.defaultWorkspaceId !== undefined &&
-            currentConfig.briefingConfig.defaultWorkspaceId === undefined
-                ? { defaultWorkspaceId: options.defaultWorkspaceId }
-                : {}),
-            allowedIoRoots,
-        }
+        const activeBriefingConfig = resolveActiveBriefingConfig(
+            currentConfig.briefingConfig,
+            options,
+            allowedIoRoots
+        )
 
         try {
             const result = await readResource(

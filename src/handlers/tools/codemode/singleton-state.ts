@@ -35,6 +35,19 @@ let cachedNonCodeModeTools: ToolDefinition[] | null = null
 let cachedCodeModeContext: ToolContext | null = null
 
 /**
+ * Dispose the Code Mode sandbox pool and security manager (cleanup interval).
+ * Safe to call when neither singleton was created; intended for server shutdown.
+ */
+export function disposeCodemodeResources(): void {
+    const pool = globalSandboxPool
+    const security = globalSecurityManager
+    globalSandboxPool = null
+    globalSecurityManager = null
+    pool?.dispose()
+    security?.dispose()
+}
+
+/**
  * Lazily instantiate and cache all non-codemode tools.
  * Note: this is safe only if ToolContext does not change per-request.
  */

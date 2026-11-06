@@ -17,6 +17,16 @@ export type SseTransportMap = Map<
 
 const MAX_ACTIVE_SESSIONS = 100
 
+/** Close an SSE/streamable transport without awaiting; failures are logged, never thrown. */
+function closeTransportQuietly(transport: { close(): Promise<void> }, failureMessage: string): void {
+    transport.close().catch((error: unknown) => {
+        logger.warning(failureMessage, {
+            module: 'HTTP',
+            error: error instanceof Error ? error.message : String(error),
+        })
+    })
+}
+
 function resolveRequestSubject(): string | undefined {
     const claims = getAuthContext()?.claims as
         | { sub?: string; email?: string; client_id?: string; subject?: string; clientId?: string }
@@ -62,12 +72,7 @@ export function registerMcpProtocolRoutes(
             if (now - lastActive > SESSION_TIMEOUT_MS) {
                 const transport = sseTransports.get(sid)
                 if (transport !== undefined) {
-                    transport.close().catch((error: unknown) => {
-                        logger.warning('Failed to close idle SSE transport', {
-                            module: 'HTTP',
-                            error: error instanceof Error ? error.message : String(error),
-                        })
-                    })
+                    closeTransportQuietly(transport, 'Failed to close idle SSE transport')
                     sseTransports.delete(sid)
                 }
                 sessionOwners.delete(sid)
@@ -111,12 +116,7 @@ export function registerMcpProtocolRoutes(
             if (oldestSid !== undefined && Date.now() - oldestTime > 5_000) {
                 const staleTransport = sseTransports.get(oldestSid)
                 if (staleTransport !== undefined) {
-                    staleTransport.close().catch((error: unknown) => {
-                        logger.warning('Failed to close evicted SSE transport', {
-                            module: 'HTTP',
-                            error: error instanceof Error ? error.message : String(error),
-                        })
-                    })
+                    closeTransportQuietly(staleTransport, 'Failed to close evicted SSE transport')
                     sseTransports.delete(oldestSid)
                 }
                 sessionOwners.delete(oldestSid)
@@ -311,12 +311,7 @@ export function registerMcpProtocolRoutes(
         const transport = sseTransports.get(sid)
         if (transport !== undefined) {
             if (!verifySessionOwner(res, sid)) return
-            transport.close().catch((error: unknown) => {
-                logger.warning('Failed to close SSE transport on DELETE', {
-                    module: 'HTTP',
-                    error: error instanceof Error ? error.message : String(error),
-                })
-            })
+            closeTransportQuietly(transport, 'Failed to close SSE transport on DELETE')
             sseTransports.delete(sid)
             sessionOwners.delete(sid)
             sessionLastActivity.delete(sid)

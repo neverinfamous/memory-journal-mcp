@@ -15,39 +15,27 @@ import { initializeDependencies } from './initialization.js'
 import { createServerInstance } from './tool-registration.js'
 import { startMetricsServer } from '../../observability/metrics-server.js'
 import type { DynamicConfig } from '../../utils/config-manager.js'
+import {
+    buildBaseToolConfig,
+    buildHttpTransportConfig,
+    closeServerResources,
+    logShutdownError,
+    runShutdownStep,
+} from './core-helpers.js'
 
 export async function createServer(options: ServerOptions): Promise<void> {
     const context = await initializeDependencies(options);
     const { db, testDb, teamDb, testTeamDb, runtime, vectorManager, teamVectorManager, github, configManager, scheduler, allowedIoRoots, activeMetricsPath } = context;
-    const { transport, defaultProjectNumber } = options;
+    const { transport } = options;
 
     const filterConfig = configManager.getConfig().toolFilterConfig;
 
-    const baseConfig: ToolHandlerConfig = {
-        defaultProjectNumber,
-        defaultWorkspaceId: options.defaultWorkspaceId,
-        projectRegistry: options.projectRegistry,
-        additionalTeamDbs: options.additionalTeamDbs,
-
-        allowedIoRoots,
-        filterConfig,
-        authEnabled: Boolean(options.authToken ?? process.env['MCP_AUTH_TOKEN']),
-        oauthEnabled: options.oauthEnabled,
-        codemodeEnabled: true,
-        codemodeInternalFullAccess: options.codemodeInternalFullAccess,
-        agentHealing: options.agentHealing,
-        teamDefaultRole: options.teamDefaultRole,
-        teamAdmin: options.teamAdmin,
+    const baseConfig: ToolHandlerConfig = buildBaseToolConfig(
+        options,
         runtime,
-        subscriptionManager: globalSubscriptionManager,
-        archiveOlderThanDays: options.archiveOlderThanDays,
-        pruneOlderThanDays: options.pruneOlderThanDays,
-        hardDeleteOlderThanDays: options.hardDeleteOlderThanDays,
-        pruneImportanceThreshold: options.pruneImportanceThreshold,
-        ...(options.pruneExcludeTags !== undefined
-            ? { pruneExcludeTags: options.pruneExcludeTags }
-            : {}),
-    }
+        allowedIoRoots,
+        filterConfig
+    )
 
     const dispatch = (name: string, args: Record<string, unknown>): Promise<unknown> =>
         callTool(
@@ -115,30 +103,8 @@ export async function createServer(options: ServerOptions): Promise<void> {
 
     let shutdownMetrics: (() => Promise<void>) | undefined;
 
-    const logShutdownError = (step: string, error: unknown): void => {
-        logger.error(`Error during ${step}`, {
-            module: 'McpServer',
-            error: error instanceof Error ? error.message : String(error),
-        })
-    }
-
-    /** Run a shutdown step; failures are logged so later steps (DB close, exit) still run. */
-    const runShutdownStep = async (step: string, fn: () => Promise<void>): Promise<void> => {
-        try {
-            await fn()
-        } catch (error: unknown) {
-            logShutdownError(step, error)
-        }
-    }
-
     const closeDatabases = (): void => {
-        for (const handle of [db, testDb, teamDb, testTeamDb]) {
-            try {
-                handle?.close()
-            } catch (error: unknown) {
-                logShutdownError('database close', error)
-            }
-        }
+        closeServerResources([db, testDb, teamDb, testTeamDb])
     }
     if (options.metricsExport === 'prometheus') {
         shutdownMetrics = startMetricsServer(runtime, options.metricsPort);
@@ -192,30 +158,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
         process.on('SIGTERM', handleStdioShutdown)
     } else {
         // HTTP transport
-        const port = options.port ?? 3000
-        const host = options.host ?? 'localhost'
-        const corsRaw = process.env['MCP_CORS_ORIGIN']
-        const corsOrigins =
-            options.corsOrigins ?? (corsRaw ? corsRaw.split(',').map((s) => s.trim()) : [])
-        const authToken = options.authToken ?? process.env['MCP_AUTH_TOKEN'] ?? undefined
-
-        const httpTransport = new HttpTransport({
-            port,
-            host,
-            corsOrigins,
-            stateless: options.statelessHttp === true,
-            authToken,
-            enableHSTS: options.enableHSTS,
-            oauthEnabled: options.oauthEnabled,
-            oauthIssuer: options.oauthIssuer,
-            oauthAudience: options.oauthAudience,
-            oauthJwksUri: options.oauthJwksUri,
-            oauthClockTolerance: options.oauthClockTolerance,
-            allowPlaintextLoopbackOAuth: options.allowPlaintextLoopbackOAuth,
-            trustProxy: options.trustProxy,
-            publicOrigin: options.publicOrigin,
-            metricsExport: options.metricsExport,
-        })
+        const httpTransport = new HttpTransport(buildHttpTransportConfig(options))
 
         await httpTransport.start(getServerInstance, scheduler, runtime)
 

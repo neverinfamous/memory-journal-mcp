@@ -4,21 +4,23 @@ import { loadSkills } from '@modelcontextprotocol/server/ext/skills/node'
 import type { SkillCatalog } from '@modelcontextprotocol/server/ext/skills'
 import { DatabaseAdapterFactory } from '../../database/adapter-factory.js'
 import { DatabaseAdapterProxy } from '../../database/core/DatabaseAdapterProxy.js'
-import { VectorSearchManager } from '../../vector/vector-search-manager/index.js'
-import { VectorSearchManagerProxy } from '../../vector/vector-search-manager/VectorSearchManagerProxy.js'
 import { getGitHubIntegration } from '../../github/github-integration/index.js'
 import { logger } from '../../utils/logger.js'
-import { parseToolFilter, getToolFilterFromEnv, getFilterSummary, getAllToolNames } from '../../filtering/tool-filter.js'
-import { Scheduler } from '../scheduler.js'
+import type { Scheduler } from '../scheduler.js'
 import { DEFAULT_BRIEFING_CONFIG } from '../../handlers/resources/shared.js'
 import { ServerRuntime } from '../../utils/maintenance-lock.js'
 import { ConfigManager } from '../../utils/config-manager.js'
 import { AuditLogger, createAuditInterceptor } from '../../audit/index.js'
-import { runAutoPrune } from '../auto-prune.js'
+import {
+    createSchedulerIfConfigured,
+    createVectorManagers,
+    resolveToolFilterConfig,
+    runStartupAutoPrune,
+    seedInitialDigest,
+} from './initialization-helpers.js'
 
 import type { ServerOptions, ServerContext } from './types.js'
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
-import type { ToolFilterConfig } from '../../filtering/tool-filter.js'
 
 /**
  * Resolves the bundled `skills/` directory relative to the current module,
@@ -87,7 +89,7 @@ async function configureMetricsPersistence(
 }
 
 export async function initializeDependencies(options: ServerOptions): Promise<ServerContext> {
-    const { transport, dbPath, teamDbPath, testDbPath, testTeamDbPath } = options
+    const { dbPath, teamDbPath, testDbPath, testTeamDbPath } = options
 
     // Initialize database
     const primaryDb = await DatabaseAdapterFactory.create(dbPath, options)
@@ -104,27 +106,7 @@ export async function initializeDependencies(options: ServerOptions): Promise<Se
     const db = DatabaseAdapterProxy.create(primaryDb, testDb)
 
     // Auto-prune low-importance old entries if configured
-    const hasAutoPrune = ((options.archiveOlderThanDays ?? 0) > 0) ||
-                         ((options.pruneOlderThanDays ?? 0) > 0) ||
-                         ((options.hardDeleteOlderThanDays ?? 0) > 0)
-
-    if (hasAutoPrune) {
-        const pruneResult = await runAutoPrune(db, {
-            archiveOlderThanDays: options.archiveOlderThanDays ?? 0,
-            pruneOlderThanDays: options.pruneOlderThanDays ?? 0,
-            hardDeleteOlderThanDays: options.hardDeleteOlderThanDays ?? 0,
-            importanceThreshold: options.pruneImportanceThreshold ?? 0.15,
-            dryRun: options.pruneDryRun,
-            excludeTags: options.pruneExcludeTags,
-        })
-        logger.info('Auto-prune completed', {
-            module: 'McpServer',
-            archivedCount: pruneResult.archivedCount,
-            prunedCount: pruneResult.prunedCount,
-            hardDeletedCount: pruneResult.hardDeletedCount,
-            backupFile: pruneResult.backupFile,
-        })
-    }
+    await runStartupAutoPrune(db, options)
 
     // Initialize ServerRuntime (handles instance-scoped globals)
     const runtime = new ServerRuntime()
@@ -176,92 +158,14 @@ export async function initializeDependencies(options: ServerOptions): Promise<Se
         }
     }
 
-    // Initialize vector search manager (lazy loading - model loads on first use)
-    const primaryVectorManager = new VectorSearchManager(primaryDb, { modelName: options.embeddingModel })
-    let testVectorManager: VectorSearchManager | undefined
-    if (testDb) {
-        testVectorManager = new VectorSearchManager(testDb, { modelName: options.embeddingModel })
-    }
-    const vectorManager = VectorSearchManagerProxy.create(primaryVectorManager, testVectorManager)
-
-    // Initialize team vector search manager if team DB is configured
-    let primaryTeamVectorManager: VectorSearchManager | undefined
-    let testTeamVectorManager: VectorSearchManager | undefined
-    let teamVectorManager: VectorSearchManager | undefined
-    if (primaryTeamDb) {
-        primaryTeamVectorManager = new VectorSearchManager(primaryTeamDb, { modelName: options.embeddingModel })
-        if (testTeamDb) {
-            testTeamVectorManager = new VectorSearchManager(testTeamDb, { modelName: options.embeddingModel })
-        }
-        teamVectorManager = VectorSearchManagerProxy.create(primaryTeamVectorManager, testTeamVectorManager)
-        logger.info('Team vector search manager created', { module: 'McpServer' })
-    }
-
-    // Auto-rebuild vector index if enabled (non-blocking)
-    if (options.autoRebuildIndex) {
-        logger.info('Auto-rebuilding vector index in background...', { module: 'McpServer' })
-        primaryVectorManager
-            .initialize()
-            .then(async () => {
-                const { indexed: count } = await primaryVectorManager.rebuildIndex()
-                logger.info('Vector index rebuilt in background', {
-                    module: 'McpServer',
-                    entriesIndexed: count,
-                })
-            })
-            .catch((err: unknown) => {
-                logger.error('Background vector init/rebuild failed', {
-                    module: 'McpServer',
-                    error: err,
-                })
-            })
-
-        if (testVectorManager) {
-            testVectorManager.initialize().catch((err: unknown) => {
-                logger.error('Background test vector init failed', { module: 'McpServer', error: err })
-            })
-        }
-
-        if (primaryTeamVectorManager) {
-            primaryTeamVectorManager.initialize().catch((err: unknown) => {
-                logger.error('Background team vector init failed', {
-                    module: 'McpServer',
-                    error: err,
-                })
-            })
-            if (testTeamVectorManager) {
-                testTeamVectorManager.initialize().catch((err: unknown) => {
-                    logger.error('Background test team vector init failed', { module: 'McpServer', error: err })
-                })
-            }
-            logger.info('Team vector search manager eager initialization started in background', {
-                module: 'McpServer',
-            })
-        }
-    } else {
-        // Otherwise, eager-load the model in the background so the first request isn't blocked
-        logger.info('Vector search manager eager initialization started in background', {
-            module: 'McpServer',
-        })
-        primaryVectorManager
-            .initialize()
-            .then(async () => {
-                if (testVectorManager) await testVectorManager.initialize()
-
-                // Initialize team vector sequentially to avoid concurrent ONNX model loading crashes
-                if (primaryTeamVectorManager) {
-                    logger.info(
-                        'Team vector search manager eager initialization started in background',
-                        { module: 'McpServer' }
-                    )
-                    await primaryTeamVectorManager.initialize()
-                    if (testTeamVectorManager) await testTeamVectorManager.initialize()
-                }
-            })
-            .catch((err: unknown) => {
-                logger.error('Background vector init failed', { module: 'McpServer', error: err })
-            })
-    }
+    // Initialize vector search managers (lazy loading) and start background initialization
+    const { vectorManager, teamVectorManager } = createVectorManagers({
+        options,
+        primaryDb,
+        testDb,
+        primaryTeamDb,
+        testTeamDb,
+    })
 
     // Initialize GitHub integration
     let githubPath = '.'
@@ -298,30 +202,7 @@ export async function initializeDependencies(options: ServerOptions): Promise<Se
     })
 
     // Parse tool filter
-    let filterConfig: ToolFilterConfig | null
-    if (options.toolFilter) {
-        filterConfig = parseToolFilter(options.toolFilter)
-        logger.info('Tool filter applied', {
-            module: 'McpServer',
-            summary: getFilterSummary(filterConfig),
-        })
-    } else {
-        filterConfig = getToolFilterFromEnv()
-        if (filterConfig) {
-            logger.info('Tool filter from env', {
-                module: 'McpServer',
-                summary: getFilterSummary(filterConfig),
-            })
-        }
-    }
-
-    if (!filterConfig) {
-        const totalTools = getAllToolNames().length
-        if (totalTools > 50) {
-            logger.warning(`CONTEXT BLOAT WARNING: ${totalTools} tools are being registered without a tool filter.`)
-            logger.warning(`  This may consume excessive context window in the LLM. Consider using '--tool-filter codemode' or '--tool-filter starter' to save tokens.`)
-        }
-    }
+    const filterConfig = resolveToolFilterConfig(options)
 
     const rawToolFilter = options.toolFilter ?? process.env['MEMORY_JOURNAL_MCP_TOOL_FILTER'] ?? process.env['TOOL_FILTER']
 
@@ -343,54 +224,11 @@ export async function initializeDependencies(options: ServerOptions): Promise<Se
 
     // Initialize scheduler (HTTP/SSE only) — must be before handleResourceRead
     // which captures scheduler in its closure.
-    let scheduler: Scheduler | null = null
-    if (options.scheduler) {
-        const hasAnyJob =
-            options.scheduler.backupIntervalMinutes > 0 ||
-            options.scheduler.vacuumIntervalMinutes > 0 ||
-            options.scheduler.rebuildIndexIntervalMinutes > 0 ||
-            options.scheduler.digestIntervalMinutes > 0 ||
-            options.scheduler.pruneIntervalMinutes > 0 ||
-            options.scheduler.reportIntervalMinutes > 0
-
-        if (hasAnyJob && transport === 'stdio') {
-            logger.warning(
-                'Scheduler options ignored for stdio transport (session is ephemeral). ' +
-                    'Use HTTP/SSE transport for automated scheduling.',
-                { module: 'Scheduler' }
-            )
-        } else if (hasAnyJob) {
-            // Inherit auto-prune thresholds for the scheduler's prune job
-            options.scheduler.archiveOlderThanDays = options.archiveOlderThanDays
-            options.scheduler.pruneOlderThanDays = options.pruneOlderThanDays
-            options.scheduler.hardDeleteOlderThanDays = options.hardDeleteOlderThanDays
-            options.scheduler.pruneImportanceThreshold = options.pruneImportanceThreshold
-            options.scheduler.pruneDryRun = options.pruneDryRun
-            options.scheduler.pruneExcludeTags = options.pruneExcludeTags
-            if (options.defaultWorkspaceId !== undefined) {
-                options.scheduler.defaultWorkspaceId = options.defaultWorkspaceId
-            }
-
-            scheduler = new Scheduler(options.scheduler, db, vectorManager, runtime)
-        }
-    }
+    const scheduler: Scheduler | null = createSchedulerIfConfigured(options, db, vectorManager, runtime)
 
     // Seed initial digest snapshot so first briefing read has analytics.
-    // Runs for both stdio and HTTP transports. Skip if a snapshot already exists
-    // (e.g., from a previous server session or prior scheduler run).
-    try {
-        const existingSnapshot = db.getLatestAnalyticsSnapshot('digest')
-        if (!existingSnapshot) {
-            const digest = db.computeDigest(options.defaultWorkspaceId ?? 'default')
-            db.saveAnalyticsSnapshot('digest', digest)
-            logger.info('Initial analytics digest seeded', { module: 'McpServer' })
-        }
-    } catch (error: unknown) {
-        logger.debug('Failed to seed initial digest (non-critical)', {
-            module: 'McpServer',
-            error: error instanceof Error ? error.message : String(error),
-        })
-    }
+    // Runs for both stdio and HTTP transports.
+    seedInitialDigest(db, options)
 
     let finalAllowedIoRoots = options.allowedIoRoots
     if (!finalAllowedIoRoots) {

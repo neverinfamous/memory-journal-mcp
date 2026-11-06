@@ -10,6 +10,11 @@ import { z } from 'zod'
 import * as p from '@clack/prompts'
 import * as yaml from 'yaml'
 import type { BaseEntryOptionsSchema, createEntryOptionsSchema } from '../schemas.js'
+import {
+    normalizeValidationStatus,
+    relationshipsFromMetadata,
+    resolveAutoContext,
+} from './entry-payload-helpers.js'
 
 /** How long to wait for piped stdin before failing a non-interactive create. */
 const STDIN_TIMEOUT_MS = 3000
@@ -315,69 +320,17 @@ export function buildEntryPayload(
         metadata['validation_status'] ??
         metadata['validationStatus'] ??
         metadata['validation']
-    let validationStatus: 'passed' | 'failed' | 'none' | undefined = undefined
-    if (valStatusRaw !== undefined && valStatusRaw !== null) {
-        if (typeof valStatusRaw === 'boolean') {
-            validationStatus = valStatusRaw ? 'passed' : 'failed'
-        } else if (typeof valStatusRaw === 'string') {
-            const lower = valStatusRaw.trim().toLowerCase()
-            if (
-                [
-                    'passed',
-                    'pass',
-                    'success',
-                    'ok',
-                    'validated',
-                    'valid',
-                    'verified',
-                    'true',
-                    '1',
-                ].includes(lower)
-            ) {
-                validationStatus = 'passed'
-            } else if (['failed', 'fail', 'error', 'failing', 'false', '0'].includes(lower)) {
-                validationStatus = 'failed'
-            } else {
-                validationStatus = 'none'
-            }
-        } else if (typeof valStatusRaw === 'number') {
-            validationStatus = valStatusRaw === 1 ? 'passed' : valStatusRaw === 0 ? 'failed' : 'none'
-        }
-    }
+    const validationStatus = normalizeValidationStatus(valStatusRaw)
 
     const sessionIdRaw =
         options.sessionId ?? options.session_id ?? metadata['session_id'] ?? metadata['sessionId']
     const sessionId = sessionIdRaw as string | undefined
 
-    let autoContextStr = options.autoContext
-    const autoContextFile = options.autoContextFile
-    if (autoContextFile) {
-        try {
-            autoContextStr = readFileSync(autoContextFile, 'utf-8')
-        } catch (e) {
-            process.stderr.write(
-                `Warning: Failed to read --auto-context-file: ${e instanceof Error ? e.message : String(e)}\n`
-            )
-        }
-    } else if (
-        autoContextStr === undefined &&
-        metadata['auto_context'] !== undefined &&
-        metadata['auto_context'] !== null
-    ) {
-        autoContextStr =
-            typeof metadata['auto_context'] === 'string'
-                ? metadata['auto_context']
-                : JSON.stringify(metadata['auto_context'])
-    } else if (
-        autoContextStr === undefined &&
-        metadata['autoContext'] !== undefined &&
-        metadata['autoContext'] !== null
-    ) {
-        autoContextStr =
-            typeof metadata['autoContext'] === 'string'
-                ? metadata['autoContext']
-                : JSON.stringify(metadata['autoContext'])
-    }
+    const autoContextStr = resolveAutoContext(
+        options.autoContext,
+        options.autoContextFile,
+        metadata
+    )
 
     let relationships: { target_id: number; relation_type: string }[]
     if (
@@ -385,20 +338,7 @@ export function buildEntryPayload(
         metadata['relationships'] !== null &&
         Array.isArray(metadata['relationships'])
     ) {
-        relationships = metadata['relationships']
-            .map((r: unknown) => {
-                const rec = r != null ? z.record(z.string(), z.unknown()).parse(r) : null
-                return {
-                    target_id: Number(rec?.['target_id']),
-                    relation_type: String(rec?.['relation_type']),
-                }
-            })
-            .filter(
-                (r) =>
-                    !isNaN(r.target_id) &&
-                    Boolean(r.relation_type) &&
-                    r.relation_type !== 'undefined'
-            )
+        relationships = relationshipsFromMetadata(metadata['relationships'])
     } else {
         relationships = parseRelationships(options.relationships, options.relFile)
     }
