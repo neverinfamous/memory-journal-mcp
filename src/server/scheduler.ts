@@ -9,7 +9,7 @@
 import type { IDatabaseAdapter } from '../database/core/interfaces.js'
 import type { VectorSearchManager } from '../vector/vector-search-manager/index.js'
 import { logger } from '../utils/logger.js'
-import type { DigestSnapshot } from '../database/sqlite-adapter/entries/digest.js'
+import { parseDigestSnapshot, type DigestSnapshot } from '../database/sqlite-adapter/entries/digest.js'
 import type { ServerRuntime } from '../utils/maintenance-lock.js'
 import { deliverReport, formatDigestReport, type ReportDeliveryOptions } from './digest-reporter.js'
 import { runAutoPrune } from './auto-prune.js'
@@ -453,6 +453,6 @@ export class Scheduler {
     getLatestDigest(): DigestSnapshot | null {
         const snapshot = this.db.getLatestAnalyticsSnapshot('digest')
         if (!snapshot) return null
-        return snapshot.data as unknown as DigestSnapshot
+        return parseDigestSnapshot(snapshot.data)
     }
 }

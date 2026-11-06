@@ -6,6 +6,7 @@
  */
 
 import type { Database } from 'better-sqlite3'
+import { z } from 'zod'
 import { buildImportanceSqlExpression, buildImportanceCte } from './importance.js'
 import { queryRow, queryRows } from './shared.js'
 
@@ -45,6 +46,35 @@ export interface DigestSnapshot {
     previousRelDensity: number
     // Top importance
     topImportanceEntries: TopImportanceEntry[]
+}
+
+/** Runtime schema for persisted digest snapshots read back from the database. */
+export const digestSnapshotSchema: z.ZodType<DigestSnapshot> = z.object({
+    computedAt: z.string(),
+    currentPeriodEntries: z.number(),
+    previousPeriodEntries: z.number(),
+    activityGrowthPercent: z.number().nullable(),
+    currentPeriodSignificant: z.number(),
+    historicalAvgSignificant: z.number(),
+    significanceMultiplier: z.number().nullable(),
+    staleProjects: z.array(
+        z.object({
+            projectNumber: z.number(),
+            lastEntryDate: z.string(),
+            daysSilent: z.number(),
+        })
+    ),
+    currentRelDensity: z.number(),
+    previousRelDensity: z.number(),
+    topImportanceEntries: z.array(
+        z.object({ id: z.number(), score: z.number(), preview: z.string() })
+    ),
+})
+
+/** Validate untrusted persisted data as a DigestSnapshot; returns null when it does not match. */
+export function parseDigestSnapshot(data: unknown): DigestSnapshot | null {
+    const result = digestSnapshotSchema.safeParse(data)
+    return result.success ? result.data : null
 }
 
 // ============================================================================

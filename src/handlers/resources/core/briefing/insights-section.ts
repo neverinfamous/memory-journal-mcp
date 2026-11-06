@@ -6,7 +6,10 @@
  * or a snapshot was restored from a previous server session).
  */
 
-import type { DigestSnapshot } from '../../../../database/sqlite-adapter/entries/digest.js'
+import {
+    parseDigestSnapshot,
+    type DigestSnapshot,
+} from '../../../../database/sqlite-adapter/entries/digest.js'
 import type { ResourceContext } from '../../shared.js'
 import { resourceWorkspace } from '../../shared.js'
 import { logger } from '../../../../utils/logger.js'
@@ -84,7 +87,7 @@ function resolveDigestSnapshot(context: ResourceContext): DigestSnapshot | null 
     // Fallback: persisted snapshot in database (survives server restarts)
     // Guards against undefined db (test mocks) and missing method (older adapters)
     const dbSnapshot = context.db?.getLatestAnalyticsSnapshot?.('digest')
-    if (dbSnapshot) return dbSnapshot.data as unknown as DigestSnapshot
+    if (dbSnapshot) return parseDigestSnapshot(dbSnapshot.data)
 
     return null
 }
