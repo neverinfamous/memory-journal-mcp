@@ -69,11 +69,19 @@ export function cloudCliInterceptor({ cmdBasename, args, envOverrides, payload }
     for (let i = 0; i < args.length; i++) {
       const currentArg = args[i];
       if (currentArg === '--json' && i + 1 < args.length) {
-        const jsonArg = args[i + 1];
-        if (jsonArg !== undefined && (jsonArg.includes(' ') || jsonArg.includes(', '))) {
-          const normalized = jsonArg.trim().split(/[\s,]+/).filter(Boolean).join(',');
-          console.error(`\n   🛠️ AUTONOMOUS HEALING: Normalizing gh --json fields from '${jsonArg}' to '${normalized}'... (Frictionless Recovery)`);
-          args[i + 1] = normalized;
+        const fields: string[] = [];
+        let j = i + 1;
+        while (j < args.length && args[j] !== undefined && !args[j].startsWith('-')) {
+          fields.push(args[j]);
+          j++;
+        }
+        if (fields.length > 0) {
+          const rawJoined = fields.join(',');
+          const normalized = rawJoined.trim().split(/[\s,]+/).filter(Boolean).join(',');
+          if (fields.length > 1 || rawJoined !== normalized) {
+            console.error(`\n   🛠️ AUTONOMOUS HEALING: Normalizing gh --json fields from '${fields.join(' ')}' to '${normalized}'... (Frictionless Recovery)`);
+            args.splice(i + 1, fields.length, normalized);
+          }
         }
       } else if (currentArg !== undefined && currentArg.startsWith('--json=')) {
         const jsonVal = currentArg.slice('--json='.length);

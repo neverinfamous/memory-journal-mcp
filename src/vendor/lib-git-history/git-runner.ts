@@ -207,22 +207,7 @@ export async function* streamGitRecords(args: string[], cwd: string = process.cw
   const ac = new AbortController();
   let proc: ReturnType<typeof spawn>;
   try {
-    let finalArgs = args;
-    if (!args.includes('log')) {
-      let insertIdx = 0;
-      while (insertIdx < args.length) {
-        const a = args[insertIdx];
-        if (a === '-c' || a === '-C') {
-          insertIdx += 2;
-        } else if (a?.startsWith('-c') || a?.startsWith('-C')) {
-          insertIdx += 1;
-        } else {
-          break;
-        }
-      }
-      finalArgs = [...args.slice(0, insertIdx), 'log', ...args.slice(insertIdx)];
-    }
-    proc = spawn('git', ['--no-pager', ...finalArgs], { cwd, signal: ac.signal, windowsHide: true });
+    proc = spawn('git', ['--no-pager', ...args], { cwd, signal: ac.signal, windowsHide: true });
     activeProcesses.add(proc);
   } catch (err: unknown) {
     if (isErrnoException(err) && err.code === 'ENOENT') {

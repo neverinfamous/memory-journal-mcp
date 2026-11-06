@@ -98,6 +98,26 @@ export function convertToWslPath(winPath: string): string {
   return winPath;
 }
 
+export function convertToWindowsPath(wslPath: string): string {
+  if (!wslPath || typeof wslPath !== 'string') {
+    return wslPath ?? '';
+  }
+
+  const trimmed = wslPath.trim();
+  const quoteMatch = trimmed.match(/^(['"])(.*)\1$/);
+  const target = quoteMatch !== null && quoteMatch[2] !== undefined ? quoteMatch[2] : trimmed;
+
+  const mntMatch = target.match(/^\/?mnt\/([a-zA-Z])(?:\/(.*))?$/i);
+  if (mntMatch !== null && mntMatch[1] !== undefined) {
+    const drive = mntMatch[1].toUpperCase();
+    const rest = mntMatch[2] !== undefined ? mntMatch[2].replace(/\//g, '\\') : '';
+    const winPath = rest.length > 0 ? `${drive}:\\${rest}` : `${drive}:\\`;
+    return quoteMatch !== null && quoteMatch[1] !== undefined ? `${quoteMatch[1]}${winPath}${quoteMatch[1]}` : winPath;
+  }
+
+  return wslPath;
+}
+
 export function buildPwshWrapper(cmd: string, args: string[]): { cmd: string; args: string[] } {
   const escapedCmd = cmd.replace(/'/g, "''");
   const escapedArgs = args.map(a => `'${a.replace(/'/g, "''")}'`).join(' ');

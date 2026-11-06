@@ -672,8 +672,10 @@ export const BUILD_TO_SRC_SWAPS: Record<string, readonly string[]> = {
   dist: ['src', 'lib', 'build', 'out'],
   build: ['src', 'lib', 'dist', 'out'],
   out: ['src', 'lib', 'dist', 'build'],
-  src: ['dist', 'build', 'out', 'lib'],
+  src: ['lib', 'dist', 'build', 'out'],
 };
+
+const BUILD_OUTPUT_DIRS = new Set(['dist', 'build', 'out']);
 
 export function resolveBuildSrcSwap(resolvedPath: string, allowDirectories = false): string | null {
   for (const [from, toList] of Object.entries(BUILD_TO_SRC_SWAPS)) {
@@ -686,6 +688,9 @@ export function resolveBuildSrcSwap(resolvedPath: string, allowDirectories = fal
         const swapped = resolvedPath.replace(regex, `${sep1}${to}${sep2}`);
         if (fs.existsSync(swapped) && (allowDirectories || !fs.statSync(swapped).isDirectory())) {
           return swapped;
+        }
+        if (from.toLowerCase() === 'src' && BUILD_OUTPUT_DIRS.has(to.toLowerCase())) {
+          continue;
         }
         const neighbor = findNeighborFilePath(swapped, allowDirectories);
         if (neighbor !== null) {

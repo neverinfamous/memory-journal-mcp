@@ -9,6 +9,7 @@ import { buildCommand, customInterceptors } from './command-builder.js';
 import { buildEnvironment } from './environment.js';
 import { PayloadSchema, agentExecCliArgsSchema, normalizeTarget } from './schema.js';
 import { showHelp, showUsageError } from './help.js';
+import { convertToWindowsPath } from './command-utils.js';
 
 const DEFAULT_MAX_PAYLOAD_SIZE = 10 * 1024 * 1024;
 let payloadPath: string;
@@ -162,9 +163,21 @@ try {
     try { fs.unlinkSync(payloadPath); } catch { /* ignore */ }
   }
   fs.appendFileSync(path.join(os.tmpdir(), 'agent-exec-payload.log'), JSON.stringify(payload) + '\n');
-  const cwd = payload.cwd ? path.resolve(payload.cwd) : process.cwd();
+  if (payload.cwd !== undefined && typeof payload.cwd === 'string') {
+    const unquotedCwd = payload.cwd.trim().replace(/^['"]|['"]$/g, '');
+    if (/^\/?mnt\/[a-zA-Z](?:\/.*)?$/i.test(unquotedCwd)) {
+      const converted = convertToWindowsPath(unquotedCwd);
+      console.error(`\n   💡 AGENT HINT: The provided cwd '${payload.cwd}' is a WSL mount path.`);
+      console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-converting WSL mount cwd to Windows path... (Frictionless Recovery)\x1b[0m`);
+      payload.cwd = converted;
+    }
+  }
+
+  const isWslTarget = payload.target === 'wsl2';
+  const isPosixInternalCwd = isWslTarget && payload.cwd !== undefined && typeof payload.cwd === 'string' && (payload.cwd.startsWith('/') || payload.cwd.startsWith('~'));
+  const cwd = payload.cwd !== undefined && payload.cwd.length > 0 ? (isPosixInternalCwd ? process.cwd() : path.resolve(payload.cwd)) : process.cwd();
   
-  if (!fs.existsSync(cwd) || !fs.statSync(cwd).isDirectory()) {
+  if (!isPosixInternalCwd && (!fs.existsSync(cwd) || !fs.statSync(cwd).isDirectory())) {
     fatalError(`The provided cwd '${cwd}' does not exist or is not a directory.`);
   }
 

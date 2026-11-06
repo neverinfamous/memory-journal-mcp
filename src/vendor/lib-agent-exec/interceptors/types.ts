@@ -11,9 +11,9 @@ export interface ExecutionContext {
 export type Interceptor = (ctx: ExecutionContext) => void;
 
 export const AGENT_NATIVE_TOOLS = [
-  'grep_search', 'view_file', 'list_dir', 'replace_file_content',
-  'multi_replace_file_content', 'read_url_content', 'run_command',
-  'write_to_file', 'find_by_name', 'manage_task', 'ask_question',
+  'grep_search', 'view_file', 'read_file', 'list_dir', 'replace_file_content',
+  'multi_replace_file_content', 'edit_file', 'read_url_content', 'run_command',
+  'write_to_file', 'write_file', 'find_by_name', 'manage_task', 'ask_question',
   'invoke_subagent', 'define_subagent', 'manage_subagents', 'schedule',
   'read_resource', 'list_resources', 'call_mcp_tool', 'generate_image',
   'read_browser_page'

@@ -204,11 +204,11 @@ export function systemInterceptor(ctx: ExecutionContext): void {
           payload.interpreter = 'bash';
           payload.code = `ls ${escapeUnixArg(convertToWslPath(targetPath), false)}`;
         } else {
-          const viewFileMatch = trimmedCode.match(/^(?:(?:bun|npm|pnpm|yarn|npx|node|tsx|ts-node)\s+(?:run\s+)?)?(?:(?:\.[/\\])?(?:\.agents[/\\]scripts[/\\]))?view_file(?:\.ts|\.js)?\b\s*(.*)$/i);
+          const viewFileMatch = trimmedCode.match(/^(?:(?:bun|npm|pnpm|yarn|npx|node|tsx|ts-node)\s+(?:run\s+)?)?(?:(?:\.[/\\])?(?:\.agents[/\\]scripts[/\\]))?(?:view_file|read_file)(?:\.ts|\.js)?\b\s*(.*)$/i);
           if (viewFileMatch !== null && (viewFileMatch[1] ?? '').trim().length > 0) {
             const targetPath = (viewFileMatch[1] ?? '').trim().replace(/^['"`]|['"`]$/g, '');
-            console.error(`\n   💡 AGENT HINT: 'view_file' executed directly in eval code.`);
-            console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-translating 'view_file' to cat... (Frictionless Recovery)\x1b[0m`);
+            console.error(`\n   💡 AGENT HINT: 'view_file/read_file' executed directly in eval code.`);
+            console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-translating to cat... (Frictionless Recovery)\x1b[0m`);
             payload.target = 'wsl2';
             payload.interpreter = 'bash';
             payload.code = `cat ${escapeUnixArg(convertToWslPath(targetPath), false)}`;
@@ -886,6 +886,38 @@ export function systemInterceptor(ctx: ExecutionContext): void {
     .otherwise(() => false);
 
   if (shouldCheckPipes) {
+    const isShell = ['pwsh', 'powershell', 'bash', 'sh', 'cmd', 'pwsh.exe', 'powershell.exe', 'cmd.exe'].includes(cmdLower);
+    const textDataFlags = [
+      '-m', '--message',
+      '-b', '--body',
+      '-t', '--title',
+      '-n', '--notes',
+      '--description',
+      '-f', '-F',
+      '--comment',
+      '--query', '-q',
+      '-H', '--header',
+      '-d', '--data', '--data-raw', '--data-binary',
+      '--filter',
+      '--label',
+      '--tag',
+      '-a', '--author'
+    ];
+    const textDataPrefixes = [
+      '--body=', '-b=',
+      '--message=', '-m=',
+      '--title=', '-t=',
+      '--notes=', '-n=',
+      '--description=',
+      '--comment=',
+      '--query=', '-q=',
+      '-H=', '--header=',
+      '-d=', '--data=', '--data-raw=', '--data-binary=',
+      '--filter=',
+      '-f=', '-F=',
+      'body=', 'title=', 'notes=', 'comment=', 'query=', 'message=', 'description='
+    ];
+
     const hasUnsafe = args.some((arg, index) => {
       // Avoid falsely triggering on semicolons or shell characters inside inline script bodies or attached values
       if (index > 0 && inlineFlags.includes(args[index - 1].toLowerCase())) {
@@ -894,9 +926,15 @@ export function systemInterceptor(ctx: ExecutionContext): void {
       if (inlineFlags.some(flag => arg.toLowerCase().startsWith(flag + '=') || (flag.length === 2 && arg.toLowerCase().startsWith(flag) && arg.length > 2))) {
         return false;
       }
+      // Avoid falsely triggering on text, message, body, or query payloads passed to CLI tools
+      if (index > 0 && textDataFlags.includes(args[index - 1].toLowerCase())) {
+        return false;
+      }
+      if (textDataPrefixes.some(prefix => arg.toLowerCase().startsWith(prefix))) {
+        return false;
+      }
       return match(arg)
-        .with(P.string.includes('$('), () => true)
-        .with(P.string.includes('`'), () => true)
+        .with(P.when((a: string) => isShell && (a.includes('$(') || a.includes('`'))), () => true)
         .with(P.when(a => a.includes('\\&') || a.includes('\\|') || a.includes('\\>') || a.includes('\\<') || a.includes('\\;')), () => true)
         .with(P.when((a: string) => {
             if (exactShellChars.includes(a.trim())) return true;
@@ -915,7 +953,6 @@ export function systemInterceptor(ctx: ExecutionContext): void {
                 if (!checkStr.includes(op)) return false;
                 
                 const hasSpacesAround = checkStr.includes(` ${op} `) || checkStr.startsWith(`${op} `) || checkStr.endsWith(` ${op}`);
-                const isShell = ['pwsh', 'powershell', 'bash', 'sh', 'cmd', 'pwsh.exe', 'powershell.exe', 'cmd.exe'].includes(cmdLower);
                 
                 if (checkStr.trim() === op) return true;
                 if (isShell) return true;

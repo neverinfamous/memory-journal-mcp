@@ -247,11 +247,11 @@ export function runStructuralInterceptors(
         }
         return;
       }
-      if (toolName === 'view_file') {
+      if (toolName === 'view_file' || toolName === 'read_file') {
         const fileArg = args.find(a => !a.startsWith('-'));
         if (fileArg) {
-          console.error(`\n   💡 AGENT HINT: 'view_file' executed directly as CLI command.`);
-          console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-translating 'view_file' to cat... (Frictionless Recovery)\x1b[0m`);
+          console.error(`\n   💡 AGENT HINT: '${toolName}' executed directly as CLI command.`);
+          console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-translating '${toolName}' to cat... (Frictionless Recovery)\x1b[0m`);
           ctx.cmdBasename = 'cat';
           ctx.args = [fileArg];
           ctx.payload.target = 'wsl2';

@@ -439,8 +439,13 @@ export function buildCommand(payload: ExecPayload, cwd: string, isJson: boolean 
   }
 
   if (payload.target === 'wsl2') {
-    const effectiveCwd = payload.cwd ? path.resolve(payload.cwd) : cwd;
-    const wslCwd = convertToWslPath(effectiveCwd);
+    let wslCwd: string;
+    if (payload.cwd !== undefined && typeof payload.cwd === 'string' && (payload.cwd.startsWith('/') || payload.cwd.startsWith('~'))) {
+      wslCwd = payload.cwd;
+    } else {
+      const effectiveCwd = payload.cwd !== undefined && payload.cwd.length > 0 ? path.resolve(payload.cwd) : cwd;
+      wslCwd = convertToWslPath(effectiveCwd);
+    }
     const wslEnvArgs = buildWslEnvArgs(payload.env, envOverrides);
     const patternExprIdx = findPatternExprIndex(path.basename(cmd), args);
 
@@ -472,5 +477,7 @@ export function buildCommand(payload: ExecPayload, cwd: string, isJson: boolean 
     cmd = 'wsl.exe';
   }
 
-  return { cmd, args, tempScriptPath, envOverrides, resolvedCwd: payload.cwd ? path.resolve(payload.cwd) : cwd };
+  const isPosixInternalCwd = payload.target === 'wsl2' && payload.cwd !== undefined && typeof payload.cwd === 'string' && (payload.cwd.startsWith('/') || payload.cwd.startsWith('~'));
+  const resolvedCwd = isPosixInternalCwd ? cwd : (payload.cwd !== undefined && payload.cwd.length > 0 ? path.resolve(payload.cwd) : cwd);
+  return { cmd, args, tempScriptPath, envOverrides, resolvedCwd };
 }
