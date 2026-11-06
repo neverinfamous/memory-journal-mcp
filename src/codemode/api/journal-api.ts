@@ -103,15 +103,15 @@ export class JournalApi {
                         if (!Number.isNaN(num) && cleaned !== '') {
                             params['project_number'] = num
                         } else {
-                            if (params['workspace_id'] === undefined || params['workspace_id'] === 'default') {
+                            if (params['workspace_id'] === undefined) {
                                 params['workspace_id'] = cleaned
                             }
                             delete params['project_number']
                         }
                     }
                     if (
-                        (params['workspace_id'] === undefined || params['workspace_id'] === 'default') &&
-                        (params['workspaceId'] === undefined || params['workspaceId'] === 'default')
+                        params['workspace_id'] === undefined &&
+                        params['workspaceId'] === undefined
                     ) {
                         const projNum =
                             typeof params['project_number'] === 'number'

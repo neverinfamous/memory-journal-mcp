@@ -73,6 +73,22 @@ describe('TokenValidator — required exp claim (real jose)', () => {
         expect(result.error).not.toMatch(/missing|claim|"exp"/i)
     })
 
+    it('rejects a validly signed token that has no sub claim', async () => {
+        const token = await new SignJWT({ scope: 'read' })
+            .setProtectedHeader({ alg: 'RS256', kid: 'test-key' })
+            .setIssuer(ISSUER)
+            .setAudience(AUDIENCE)
+            .setIssuedAt()
+            .setExpirationTime('5m')
+            .sign(privateKey)
+
+        const result = await validator.validate(token)
+
+        expect(result.valid).toBe(false)
+        expect(result.claims).toBeUndefined()
+        expect(result.errorCode).toBe(AUTH_ERROR_CODES.TOKEN_INVALID)
+    })
+
     it('still reports an expired token as expired', async () => {
         const past = Math.floor(Date.now() / 1000) - 3600
         const token = await baseToken().setExpirationTime(past).sign(privateKey)

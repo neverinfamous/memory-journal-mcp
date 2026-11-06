@@ -197,10 +197,20 @@ export class TokenValidator {
             )
         }
 
+        const { sub } = payload
+        if (typeof sub !== 'string' || sub.length === 0) {
+            throw new jose.errors.JWTClaimValidationFailed(
+                'missing required "sub" claim',
+                payload,
+                'sub',
+                'missing'
+            )
+        }
+
         const clientId = payload['client_id']
         return {
             ...payload,
-            sub: payload.sub ?? 'unknown',
+            sub,
             scopes,
             exp,
             iat: payload.iat ?? 0,

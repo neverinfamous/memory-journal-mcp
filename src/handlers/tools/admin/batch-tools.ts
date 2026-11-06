@@ -1,10 +1,11 @@
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { autoIndexEntry } from '../../../utils/vector-index-helpers.js'
-import { resolveProjectContext, resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { createBatchProgressReporter, sendProgress } from '../../../utils/progress-utils.js'
-import { resolveEntryAnchors } from '../core/staleness-tools.js'
 import { linkRequestedRelationships } from '../relationship-linking.js'
+import { resolveWriteWorkspaceId } from '../write-workspace.js'
+import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
+import { prepareBatchCreateInputs, shareBatchEntriesWithTeam } from './batch-create-helpers.js'
 import {
     BatchCreateEntriesSchema,
     BatchCreateEntriesSchemaMcp,
@@ -40,62 +41,21 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
                     await sendProgress(progress, 0, 2, 'Creating entries...')
 
 
-                    const { created: results, errors } = db.createEntries(input.entries.map((e) => {
-                        const wsId = e.workspace_id
-                        let pNumber = e.project_number ?? input.project_number
-                        if (pNumber === undefined || pNumber === null || pNumber <= 0) {
-                            const resolved = resolveProjectContext(
-                                {
-                                    workspace_id: wsId,
-                                    project_number: pNumber,
-                                    content: e.content,
-                                    tags: e.tags
-                                },
-                                context.config
-                            )
-                            pNumber = resolved.projectNumber
-                        }
+                    const prepared = await prepareBatchCreateInputs(
+                        input.entries,
+                        input.project_number,
+                        context
+                    )
+                    const { created: results, errors } = db.createEntries(prepared.map((p) => p.input))
 
-                        if (pNumber === undefined || pNumber === null || pNumber <= 0) {
-                            throw new Error(
-                                `project_number is required. Batch entry must be assigned to a valid project (failed to resolve project_number for workspace '${wsId}'). To find your project_number, read memory://agent-id via read_resource, call mj.core.listProjects(), or check memory://briefing/<project-name>.`
-                            )
-                        }
-                        
-                        const resolvedAnchors = resolveEntryAnchors(
-                            e.anchors,
-                            e.auto_context,
-                            wsId,
-                            context
-                        )
-
-                        return {
-                            content: e.content,
-                            entryType: e.entry_type,
-                            tags: e.tags,
-                            isPersonal: e.is_personal,
-                            significanceType: e.significance_type,
-                            autoContext: e.auto_context,
-                            projectNumber: pNumber,
-                            projectOwner: e.project_owner,
-                            issueNumber: e.issue_number,
-                            issueUrl: e.issue_url,
-                            prNumber: e.pr_number,
-                            prUrl: e.pr_url,
-                            prStatus: e.pr_status,
-                            workflowRunId: e.workflow_run_id,
-                            workflowName: e.workflow_name,
-                            workflowStatus: e.workflow_status as 'queued' | 'in_progress' | 'completed' | undefined,
-                            impactScore: e.impact_score,
-                            trustScore: e.trust_score,
-                            validationStatus: e.validation_status,
-                            sessionId: e.session_id,
-                            workspaceId: wsId,
-                            ...(resolvedAnchors !== undefined ? { anchors: resolvedAnchors } : {}),
-                        }
-                    }))
-
+                    const failedIndexes = new Set(errors.map((e) => e.index))
+                    const createdIndexes = input.entries
+                        .map((_, i) => i)
+                        .filter((i) => !failedIndexes.has(i))
                     const relationshipWarnings: string[] = []
+                    relationshipWarnings.push(
+                        ...shareBatchEntriesWithTeam(context, prepared, createdIndexes).warnings
+                    )
                     for (let i = 0; i < results.length; i++) {
                         const createdEntry = results[i]
                         const sourceEntry = input.entries[i]
@@ -194,8 +154,8 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
                         trustScore: u.trust_score,
                         validationStatus: u.validation_status,
                         targetWorkspaceId: u.target_workspace_id,
-                        sessionId: u.session_id ?? undefined,
-                        workspaceId: resolveWorkspaceId(u.workspace_id || input.workspace_id, u.project_number ?? input.project_number, context.config),
+                        sessionId: u.session_id,
+                        workspaceId: resolveWriteWorkspaceId(u.workspace_id || input.workspace_id, u.project_number ?? input.project_number, context.config),
                     }))
 
                     const { updated, notFound, errors } = db.updateEntries(updates)

@@ -1,6 +1,7 @@
 import type { NativeConnectionManager } from '../native-connection.js'
 import { logger } from '../../../utils/logger.js'
 import { effectiveWorkspace } from '../../workspace-scope.js'
+import { isMissingColumnError, isMissingTableError } from '../schema-errors.js'
 
 export function getAuthorStatistics(
     connection: NativeConnectionManager,
@@ -39,10 +40,7 @@ export function getAuthorStatistics(
 }
 
 function isMissingSchemaError(error: unknown): boolean {
-    return (
-        error instanceof Error &&
-        (error.message.includes('no such column') || error.message.includes('no such table'))
-    )
+    return isMissingTableError(error) || isMissingColumnError(error)
 }
 
 export function getAuthorsForEntries(

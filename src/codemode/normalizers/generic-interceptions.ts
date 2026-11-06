@@ -308,7 +308,7 @@ function resolveCreateEntryProjectContext(obj: Record<string, unknown>): void {
     if (
         resolved.workspaceId !== undefined &&
         resolved.workspaceId !== '' &&
-        (obj['workspace_id'] === undefined || obj['workspace_id'] === null || obj['workspace_id'] === '' || obj['workspace_id'] === 'default')
+        obj['workspace_id'] === undefined
     ) {
         if (resolved.workspaceId !== 'default') {
             obj['workspace_id'] = resolved.workspaceId

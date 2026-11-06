@@ -2,6 +2,8 @@
  * Shared parameter normalization utilities, alias maps, and content healers.
  */
 
+import { logger } from '../../utils/logger.js'
+
 export function isRecord(val: unknown): val is Record<string, unknown> {
     return typeof val === 'object' && val !== null && !Array.isArray(val)
 }
@@ -68,8 +70,6 @@ export const PARAM_ALIASES: Record<string, string> = {
     impactScore: 'impact_score',
     trustScore: 'trust_score',
     validationStatus: 'validation_status',
-    team_id: 'workspace_id',
-    team: 'workspace_id',
 }
 
 /**
@@ -197,8 +197,11 @@ export function healAutoContext(result: Record<string, unknown>): void {
             if (changed) {
                 result['auto_context'] = JSON.stringify(parsed)
             }
-        } catch {
-            // ignore JSON parse errors
+        } catch (error) {
+            logger.debug('Failed to parse auto_context JSON during normalization', {
+                module: 'CodeMode',
+                error: error instanceof Error ? error.message : String(error),
+            })
         }
     } else if (isRecord(ac)) {
         for (const alias of ['commit_shas', 'shas', 'commit_sha', 'commitShas']) {

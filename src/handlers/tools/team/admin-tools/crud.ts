@@ -9,7 +9,7 @@ import { formatHandlerError } from '../../../../utils/error-helpers.js'
 import { resolveAuthenticatedAuthor } from '../../../../utils/security-utils.js'
 import { resolveWorkspaceId } from '../../../../utils/workspace-resolver.js'
 import { TEAM_DB_ERROR_RESPONSE, fetchAuthor, triggerTeamNotifications, resolveTeamProjectNumber } from '../helpers.js'
-import { enforceOwnership } from '../rbac.js'
+import { enforceEntryOwnership } from '../rbac.js'
 import {
     TeamUpdateEntrySchema,
     TeamUpdateEntrySchemaMcp,
@@ -99,13 +99,13 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                             ? teamDb.resolveTeamRole(currentUser, context.config?.teamDefaultRole ?? 'denied')
                             : null
 
-                    if (author && !codemodeBypass) {
+                    if (!codemodeBypass) {
                         try {
-                            enforceOwnership(currentUser, author, callerRole)
+                            enforceEntryOwnership(currentUser, author, callerRole)
                         } catch {
                             return {
                                 success: false,
-                                error: `Permission Denied: Only the original author ("${author}") or a team admin can modify this team entry.`,
+                                error: `Permission Denied: Only the original author ("${author ?? 'none recorded'}") or a team admin can modify this team entry.`,
                                 code: 'PERMISSION_DENIED',
                                 category: 'auth',
                                 suggestion: 'You can only update entries that you authored.',
@@ -136,7 +136,7 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                         impactScore: input.impact_score,
                         trustScore: input.trust_score,
                         validationStatus: input.validation_status,
-                        sessionId: input.session_id ?? undefined,
+                        sessionId: input.session_id,
                     })
 
                     triggerTeamNotifications(context)
@@ -219,13 +219,13 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                             ? teamDb.resolveTeamRole(currentUser, context.config?.teamDefaultRole ?? 'denied')
                             : null
 
-                    if (author && !codemodeBypass) {
+                    if (!codemodeBypass) {
                         try {
-                            enforceOwnership(currentUser, author, callerRole)
+                            enforceEntryOwnership(currentUser, author, callerRole)
                         } catch {
                             return {
                                 success: false,
-                                error: `Permission Denied: Only the original author ("${author}") or a team admin can delete this team entry.`,
+                                error: `Permission Denied: Only the original author ("${author ?? 'none recorded'}") or a team admin can delete this team entry.`,
                                 code: 'PERMISSION_DENIED',
                                 category: 'auth',
                                 suggestion: 'You can only delete entries that you authored.',

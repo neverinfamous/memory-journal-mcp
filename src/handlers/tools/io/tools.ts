@@ -4,6 +4,7 @@ import { AggregateMcpError } from '../../../types/errors.js'
 import { sendProgress } from '../../../utils/progress-utils.js'
 import { logger } from '../../../utils/logger.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
+import { resolveWriteWorkspaceId } from '../write-workspace.js'
 
 import { exportEntriesToMarkdown } from '../../../markdown/index.js'
 import { importMarkdownEntries, processImportBatch, convertFile } from '../../../markdown/index.js'
@@ -172,32 +173,36 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
                     await sendProgress(progress, 0, 3, 'Fetching entries...')
 
                     const limit = input.limit ?? 100
+                    // When entry_types filter is active, over-fetch so post-filtering
+                    // doesn't silently return too few results (same as export_entries).
+                    const hasTypeFilter = input.entry_types !== undefined && input.entry_types.length > 0
+                    const fetchLimit = hasTypeFilter ? Math.max(500, limit * 2) : limit
                     let entries
                     if (input.start_date || input.end_date) {
                         const startDate = input.start_date ?? DATE_MIN_SENTINEL
                         const endDate = input.end_date ?? DATE_MAX_SENTINEL
                         entries = db.searchByDateRange(startDate, endDate, {
                             tags: input.tags,
-                            limit,
+                            limit: fetchLimit,
                             workspaceId: wsId,
                             ...(input.project_number !== undefined ? { projectNumber: input.project_number } : {}),
                         }).entries
-                    } else if (input.tags && input.tags.length > 0) {
+                    } else if ((input.tags && input.tags.length > 0) || hasTypeFilter) {
                         entries = db.searchByDateRange(DATE_MIN_SENTINEL, DATE_MAX_SENTINEL, {
                             tags: input.tags,
-                            limit,
+                            limit: fetchLimit,
                             workspaceId: wsId,
                             ...(input.project_number !== undefined ? { projectNumber: input.project_number } : {}),
                         }).entries
                     } else {
                         entries = (input.project_number !== undefined
-                            ? db.getRecentEntries(limit, undefined, undefined, undefined, undefined, wsId, input.project_number)
-                            : db.getRecentEntries(limit, undefined, undefined, undefined, undefined, wsId)
+                            ? db.getRecentEntries(fetchLimit, undefined, undefined, undefined, undefined, wsId, input.project_number)
+                            : db.getRecentEntries(fetchLimit, undefined, undefined, undefined, undefined, wsId)
                         ).entries
                     }
 
                     // Post-filter by entry_types
-                    if (input.entry_types && input.entry_types.length > 0) {
+                    if (hasTypeFilter) {
                         const allowedTypes = new Set(input.entry_types)
                         entries = entries
                             .filter((e) => allowedTypes.has(e.entryType))
@@ -261,7 +266,7 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
             handler: async (params: unknown) => {
                 try {
                     const input = ImportMarkdownSchema.parse(params)
-                    const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
+                    const wsId = resolveWriteWorkspaceId(input.workspace_id, input.project_number, context.config)
 
                     // Determine allowed roots
                     // Security fix: Use explicitly configured roots, without CWD fallback
@@ -326,7 +331,7 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
             handler: async (params: unknown) => {
                 try {
                     const input = ImportExternalSchema.parse(params)
-                    const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
+                    const wsId = resolveWriteWorkspaceId(input.workspace_id, input.project_number, context.config)
 
                     // Determine allowed roots
                     const allowedRoots = context.config?.allowedIoRoots ?? []

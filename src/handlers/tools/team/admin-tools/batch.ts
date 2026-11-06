@@ -11,7 +11,8 @@ import { resolveAuthenticatedAuthor } from '../../../../utils/security-utils.js'
 import { getAuthContext } from '../../../../auth/auth-context.js'
 import { resolveWorkspaceId } from '../../../../utils/workspace-resolver.js'
 import { TEAM_DB_ERROR_RESPONSE, fetchAuthor, batchFetchAuthors, triggerTeamNotifications, resolveTeamProjectNumber } from '../helpers.js'
-import { enforceOwnership } from '../rbac.js'
+import { enforceEntryOwnership } from '../rbac.js'
+import { resolveWriteWorkspaceId } from '../../write-workspace.js'
 import {
     missingProjectNumberResponse,
     permanentDeleteDeniedResponse,
@@ -114,7 +115,7 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                             trustScore: e.trust_score,
                             validationStatus: e.validation_status,
                             sessionId: e.session_id,
-                            workspaceId: resolveWorkspaceId(e.workspace_id ?? input.workspace_id, e.project_number ?? input.project_number, context.config),
+                            workspaceId: resolveWriteWorkspaceId(e.workspace_id ?? input.workspace_id, e.project_number ?? input.project_number, context.config),
                         }
                     })
 
@@ -238,13 +239,13 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                             const author = preFetchedAuthors
                                 ? (preFetchedAuthors.get(u.entry_id) ?? null)
                                 : fetchAuthor(teamDb, u.entry_id)
-                            if (author && !codemodeBypass) {
+                            if (!codemodeBypass) {
                                 try {
-                                    enforceOwnership(currentUser, author, callerRole)
+                                    enforceEntryOwnership(currentUser, author, callerRole)
                                 } catch {
                                     return {
                                         success: false,
-                                        error: `Permission Denied: Only the original author ("${author}") or a team admin can modify team entry ${String(u.entry_id)}.`,
+                                        error: `Permission Denied: Only the original author ("${author ?? 'none recorded'}") or a team admin can modify team entry ${String(u.entry_id)}.`,
                                         code: 'PERMISSION_DENIED',
                                         category: 'auth',
                                         suggestion: 'You can only update entries that you authored.',
@@ -279,8 +280,8 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                             impactScore: u.impact_score,
                             trustScore: u.trust_score,
                             validationStatus: u.validation_status,
-                            sessionId: u.session_id ?? undefined,
-                            workspaceId: resolveWorkspaceId(u.workspace_id ?? input.workspace_id, u.project_number ?? input.project_number, context.config),
+                            sessionId: u.session_id,
+                            workspaceId: resolveWriteWorkspaceId(u.workspace_id ?? input.workspace_id, u.project_number ?? input.project_number, context.config),
                         })
                     }
 

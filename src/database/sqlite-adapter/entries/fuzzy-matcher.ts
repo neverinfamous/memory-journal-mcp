@@ -1,4 +1,5 @@
 import type { Database } from 'better-sqlite3'
+import { isMissingTableError } from '../schema-errors.js'
 
 /**
  * Standard Levenshtein distance algorithm.
@@ -43,13 +44,28 @@ export function levenshteinDistance(a: string, b: string): number {
 /**
  * Builds a vocabulary for fuzzy matching consisting of tag names and entry types.
  * This represents the core ontology of the journal and provides high-value corrections.
+ *
+ * When `workspaceId` is provided (and not '*'), the vocabulary is limited to tags and
+ * entry types used by entries in that workspace; otherwise it is database-wide.
  */
-export function buildVocabulary(db: Database): string[] {
+export function buildVocabulary(db: Database, workspaceId?: string): string[] {
     const vocab = new Set<string>()
+    const scoped = workspaceId !== undefined && workspaceId !== '*'
 
-    // Get all tag names
+    // Get tag names
     try {
-        const tags = db.prepare('SELECT name FROM tags').all() as { name: string }[]
+        const tags = (
+            scoped
+                ? db
+                      .prepare(
+                          `SELECT DISTINCT t.name FROM tags t
+                           JOIN entry_tags et ON et.tag_id = t.id
+                           JOIN memory_journal mj ON mj.id = et.entry_id
+                           WHERE mj.workspace_id = ? AND mj.deleted_at IS NULL`
+                      )
+                      .all(workspaceId)
+                : db.prepare('SELECT name FROM tags').all()
+        ) as { name: string }[]
         for (const tag of tags) {
             vocab.add(tag.name.toLowerCase())
         }
@@ -59,7 +75,19 @@ export function buildVocabulary(db: Database): string[] {
 
     // Get all distinct entry types
     try {
-        const types = db.prepare('SELECT DISTINCT entry_type FROM memory_journal WHERE entry_type IS NOT NULL').all() as { entry_type: string }[]
+        const types = (
+            scoped
+                ? db
+                      .prepare(
+                          'SELECT DISTINCT entry_type FROM memory_journal WHERE entry_type IS NOT NULL AND workspace_id = ? AND deleted_at IS NULL'
+                      )
+                      .all(workspaceId)
+                : db
+                      .prepare(
+                          'SELECT DISTINCT entry_type FROM memory_journal WHERE entry_type IS NOT NULL'
+                      )
+                      .all()
+        ) as { entry_type: string }[]
         for (const type of types) {
             vocab.add(type.entry_type.toLowerCase())
         }
@@ -72,7 +100,7 @@ export function buildVocabulary(db: Database): string[] {
 
 /** Tolerate only a not-yet-created table (fresh database); surface every other failure. */
 function rethrowUnlessMissingTable(error: unknown): void {
-    if (!(error instanceof Error && error.message.includes('no such table'))) {
+    if (!isMissingTableError(error)) {
         throw error
     }
 }

@@ -7,7 +7,7 @@
 import type { ToolContext } from '../../../../types/index.js'
 import type { TeamRole } from '../../../../database/core/interfaces.js'
 import { fetchAuthor, batchFetchAuthors } from '../helpers.js'
-import { enforceOwnership } from '../rbac.js'
+import { enforceEntryOwnership } from '../rbac.js'
 import { createBatchProgressReporter, sendProgress } from '../../../../utils/progress-utils.js'
 
 export type TeamDbInstance = NonNullable<ToolContext['teamDb']>
@@ -83,14 +83,14 @@ export function filterDeletableIds(
         const author = authorMap
             ? (authorMap.get(id) ?? null)
             : fetchAuthor(teamDb, id)
-        if (author && !codemodeBypass) {
+        if (!codemodeBypass) {
             try {
-                enforceOwnership(currentUser, author, callerRole)
+                enforceEntryOwnership(currentUser, author, callerRole)
             } catch {
                 return {
                     errorResponse: {
                         success: false,
-                        error: `Permission Denied: Only the original author ("${author}") or a team admin can delete team entry ${String(id)}.`,
+                        error: `Permission Denied: Only the original author ("${author ?? 'none recorded'}") or a team admin can delete team entry ${String(id)}.`,
                         code: 'PERMISSION_DENIED',
                         category: 'auth',
                         suggestion: 'You can only delete entries that you authored.',

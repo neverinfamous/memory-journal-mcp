@@ -62,7 +62,12 @@ export function registerMcpProtocolRoutes(
             if (now - lastActive > SESSION_TIMEOUT_MS) {
                 const transport = sseTransports.get(sid)
                 if (transport !== undefined) {
-                    void transport.close()
+                    transport.close().catch((error: unknown) => {
+                        logger.warning('Failed to close idle SSE transport', {
+                            module: 'HTTP',
+                            error: error instanceof Error ? error.message : String(error),
+                        })
+                    })
                     sseTransports.delete(sid)
                 }
                 sessionOwners.delete(sid)
@@ -106,7 +111,12 @@ export function registerMcpProtocolRoutes(
             if (oldestSid !== undefined && Date.now() - oldestTime > 5_000) {
                 const staleTransport = sseTransports.get(oldestSid)
                 if (staleTransport !== undefined) {
-                    void staleTransport.close()
+                    staleTransport.close().catch((error: unknown) => {
+                        logger.warning('Failed to close evicted SSE transport', {
+                            module: 'HTTP',
+                            error: error instanceof Error ? error.message : String(error),
+                        })
+                    })
                     sseTransports.delete(oldestSid)
                 }
                 sessionOwners.delete(oldestSid)
@@ -301,7 +311,12 @@ export function registerMcpProtocolRoutes(
         const transport = sseTransports.get(sid)
         if (transport !== undefined) {
             if (!verifySessionOwner(res, sid)) return
-            void transport.close()
+            transport.close().catch((error: unknown) => {
+                logger.warning('Failed to close SSE transport on DELETE', {
+                    module: 'HTTP',
+                    error: error instanceof Error ? error.message : String(error),
+                })
+            })
             sseTransports.delete(sid)
             sessionOwners.delete(sid)
             sessionLastActivity.delete(sid)

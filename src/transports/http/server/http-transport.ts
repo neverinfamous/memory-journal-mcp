@@ -372,35 +372,42 @@ export class HttpTransport {
             res.status(404).json({ error: 'Not found' })
         })
 
-        this.httpServer = this.app.listen(port, host, () => {
-            if (this.httpServer !== null) {
-                this.httpServer.setTimeout(HTTP_REQUEST_TIMEOUT_MS)
-                this.httpServer.keepAliveTimeout = HTTP_KEEP_ALIVE_TIMEOUT_MS
-                this.httpServer.headersTimeout = HTTP_HEADERS_TIMEOUT_MS
-            }
-
-            logger.info(
-                `MCP server started on HTTP (${this.config.stateless ? 'stateless' : 'stateful'})`,
-                {
-                    module: 'HTTP',
-                    port,
-                    host,
-                    endpoint: `http://${host}:${String(port)}/mcp`,
+        await new Promise<void>((resolve, reject) => {
+            const server = this.app.listen(port, host, () => {
+                // The listen callback can run before `this.httpServer` is assigned below.
+                if (this.httpServer !== null) {
+                    this.httpServer.setTimeout(HTTP_REQUEST_TIMEOUT_MS)
+                    this.httpServer.keepAliveTimeout = HTTP_KEEP_ALIVE_TIMEOUT_MS
+                    this.httpServer.headersTimeout = HTTP_HEADERS_TIMEOUT_MS
                 }
-            )
-            scheduler?.start()
-        })
 
-        this.httpServer.on('error', (err: Error) => {
-            logger.error('HTTP server failed to bind', {
-                module: 'HTTP',
-                error: err.message,
+                logger.info(
+                    `MCP server started on HTTP (${this.config.stateless ? 'stateless' : 'stateful'})`,
+                    {
+                        module: 'HTTP',
+                        port,
+                        host,
+                        endpoint: `http://${host}:${String(port)}/mcp`,
+                    }
+                )
+                scheduler?.start()
+                resolve()
             })
-            scheduler?.stop()
-        })
+            this.httpServer = server
 
-        this.httpServer.on('close', () => {
-            logger.info('HTTP server closed', { module: 'HTTP' })
+            server.on('error', (err: Error) => {
+                logger.error('HTTP server failed to bind', {
+                    module: 'HTTP',
+                    error: err.message,
+                })
+                scheduler?.stop()
+                // Rejecting after start() already resolved is a no-op, so only a bind failure surfaces.
+                reject(err)
+            })
+
+            server.on('close', () => {
+                logger.info('HTTP server closed', { module: 'HTTP' })
+            })
         })
     }
 
@@ -435,6 +442,10 @@ export class HttpTransport {
                     if (err) reject(err)
                     else resolve()
                 })
+                // Drop lingering keep-alive sockets so close() cannot hang shutdown
+                if (typeof server.closeAllConnections === 'function') {
+                    server.closeAllConnections()
+                }
             })
         }
 

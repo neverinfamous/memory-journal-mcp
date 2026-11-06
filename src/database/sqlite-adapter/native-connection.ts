@@ -2,8 +2,8 @@ import DatabaseAdapter from 'better-sqlite3'
 import type { Database } from 'better-sqlite3'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
-import { execFile } from 'node:child_process'
 import { logger } from '../../utils/logger.js'
+import { isMissingTableError } from './schema-errors.js'
 import { ConnectionError } from '../../types/errors.js'
 import { MigrationManager } from '../migrations/migration-manager.js'
 import type { IDatabaseConnection, QueryResult } from '../core/interfaces.js'
@@ -165,11 +165,10 @@ export class NativeConnectionManager implements IDatabaseConnection {
                 ).c
                 ftsCountKnown = true
             } catch (err) {
-                const message = err instanceof Error ? err.message : String(err)
-                if (!message.includes('no such table')) {
+                if (!isMissingTableError(err)) {
                     logger.warning('FTS docsize count failed; skipping rebuild', {
                         module: 'NativeConnectionManager',
-                        error: message,
+                        error: err instanceof Error ? err.message : String(err),
                     })
                 }
             }
@@ -197,7 +196,7 @@ export class NativeConnectionManager implements IDatabaseConnection {
     }
 
     /**
-     * Defer rebuilding the FTS5 index to a detached process so server startup is not blocked.
+     * Defer rebuilding the FTS5 index (in-process, on the existing connection) so server startup is not blocked.
      * The timer is unref'd and cleared on close().
      */
     private scheduleFtsRebuild(rebuildReason: string): void {
@@ -206,26 +205,19 @@ export class NativeConnectionManager implements IDatabaseConnection {
         this.ftsRebuildTimer = setTimeout(() => {
             this.ftsRebuildTimer = null
             if (this.db === null) return
-            const code = `
-                const Database = require('better-sqlite3');
-                const db = new Database(process.argv[1]);
-                db.exec("INSERT INTO fts_content(fts_content) VALUES ('rebuild')");
-                db.close();
-            `
-            execFile('node', ['-e', code, this.dbPath], { windowsHide: true }, (err, _stdout, stderr) => {
-                if (err) {
-                    logger.error('Failed to rebuild FTS5 index in background process', {
-                        module: 'NativeConnectionManager',
-                        error: err?.message || 'unknown error',
-                        stderr,
-                    })
-                } else {
-                    logger.info(
-                        `Deferred FTS5 rebuild completed (${rebuildReason}) in background process`,
-                        { module: 'NativeConnectionManager', dbPath: this.dbPath }
-                    )
-                }
-            })
+            try {
+                // In-process rebuild on the existing (keyed, busy_timeout-configured) connection
+                this.db.exec("INSERT INTO fts_content(fts_content) VALUES ('rebuild')")
+                logger.info(`Deferred FTS5 rebuild completed (${rebuildReason})`, {
+                    module: 'NativeConnectionManager',
+                    dbPath: this.dbPath,
+                })
+            } catch (err) {
+                logger.error('Failed to rebuild FTS5 index', {
+                    module: 'NativeConnectionManager',
+                    error: err instanceof Error ? err.message : String(err),
+                })
+            }
         }, deferMs)
         this.ftsRebuildTimer.unref()
     }

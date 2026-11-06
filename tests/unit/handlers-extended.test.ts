@@ -259,9 +259,10 @@ describe('Extended Tool Handlers (Team, IO, Admin, Core)', () => {
             expect(impMdFiles.dry_run).toBe(true)
             expect(impMdFiles.updated).toBe(1)
 
-            // 3. Team export_markdown & team_import_markdown (including 'tmp_team_md' shortcut & date range)
+            // 3. Team export_markdown & team_import_markdown (real directory inside an allowed root, date range)
+            const teamMdDir = path.join(ioRoot, 'team-md')
             const teamExpRes = (await findTool(teamIoTools, 'team_export_markdown').handler({
-                output_dir: 'tmp_team_md',
+                output_dir: teamMdDir,
                 project_number: 5,
                 start_date: '2020-01-01',
             })) as { exported_count: number }
@@ -271,7 +272,7 @@ describe('Extended Tool Handlers (Team, IO, Admin, Core)', () => {
             process.env['TEAM_AUTHOR'] = 'alice'
             try {
                 const teamImpRes = (await findTool(teamIoTools, 'team_import_markdown').handler({
-                    source_dir: 'tmp_team_md',
+                    source_dir: teamMdDir,
                     project_number: 5,
                     dry_run: false,
                 })) as { updated: number }

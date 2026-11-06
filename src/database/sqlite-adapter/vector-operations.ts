@@ -1,5 +1,6 @@
 import type { NativeConnectionManager } from './native-connection.js'
 import { effectiveWorkspace } from '../workspace-scope.js'
+import { isMissingTableError } from './schema-errors.js'
 
 /** Initial KNN over-fetch factor applied before the workspace filter. */
 const VECTOR_KNN_OVERFETCH = 4
@@ -105,7 +106,7 @@ export class VectorOperations {
             )
             return new Float32Array(aligned)
         } catch (error: unknown) {
-            if (error instanceof Error && error.message.includes('no such table')) {
+            if (isMissingTableError(error)) {
                 return null
             }
             throw error
@@ -120,7 +121,7 @@ export class VectorOperations {
                 .run(BigInt(entryId))
             return result.changes > 0
         } catch (error: unknown) {
-            if (error instanceof Error && error.message.includes('no such table')) {
+            if (isMissingTableError(error)) {
                 return false
             }
             throw error
@@ -131,7 +132,7 @@ export class VectorOperations {
         try {
             this.connection.getNativeDb().prepare('DELETE FROM vec_embeddings').run()
         } catch (error: unknown) {
-            if (error instanceof Error && error.message.includes('no such table')) {
+            if (isMissingTableError(error)) {
                 return
             }
             throw error
@@ -146,7 +147,7 @@ export class VectorOperations {
                 .get() as { count: number } | undefined
             return row?.count ?? 0
         } catch (error: unknown) {
-            if (error instanceof Error && error.message.includes('no such table')) {
+            if (isMissingTableError(error)) {
                 return 0
             }
             throw error
@@ -163,7 +164,7 @@ export class VectorOperations {
                 .run()
             return result.changes
         } catch (error: unknown) {
-            if (error instanceof Error && error.message.includes('no such table')) {
+            if (isMissingTableError(error)) {
                 return 0
             }
             throw error

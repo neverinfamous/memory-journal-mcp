@@ -1,5 +1,6 @@
 import { QueryError, ValidationError } from '../../types/errors.js'
 import { effectiveWorkspace } from '../workspace-scope.js'
+import { isMissingTableError } from './schema-errors.js'
 import type { IDatabaseConnection, AuthorAlias } from '../core/interfaces.js'
 
 export class AliasManager {
@@ -135,7 +136,7 @@ export class AliasManager {
                 return this.mapToAuthorAlias(mappedRow)
             })
         } catch (error) {
-            if (error instanceof Error && error.message.includes('no such table')) {
+            if (isMissingTableError(error)) {
                 return []
             }
             if (error instanceof Error) {
@@ -161,7 +162,7 @@ export class AliasManager {
             return rawAuthor
         } catch (error) {
             // If table doesn't exist yet, just return the raw author
-            if (error instanceof Error && error.message.includes('no such table')) {
+            if (isMissingTableError(error)) {
                 return rawAuthor
             }
             if (error instanceof Error) {
@@ -207,7 +208,7 @@ export class AliasManager {
             }
         } catch (error) {
             // Ignore missing table
-            if (!(error instanceof Error) || !error.message.includes('no such table')) {
+            if (!isMissingTableError(error)) {
                 throw error
             }
         }
@@ -251,7 +252,7 @@ export class AliasManager {
 
             return count
         } catch (error) {
-            if (error instanceof Error && error.message.includes('no such table')) {
+            if (isMissingTableError(error)) {
                 return 0
             }
             if (error instanceof Error) {

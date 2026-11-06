@@ -170,7 +170,7 @@ export function searchEntries(
 
             // Fuzzy search integration
             if (result.entries.length === 0 && options?.fuzzy_match === true) {
-                const vocab = buildVocabulary(db)
+                const vocab = buildVocabulary(db, effectiveWorkspace(options.workspaceId))
                 const fuzzyRes = expandFuzzyQuery(queryStr, vocab, options.auto_correct)
 
                 if (fuzzyRes.corrected && fuzzyRes.expanded !== queryStr) {

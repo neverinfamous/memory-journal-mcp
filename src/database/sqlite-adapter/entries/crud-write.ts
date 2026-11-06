@@ -1,34 +1,48 @@
-import type { JournalEntry, EntryType } from '../../../types/index.js'
+import type { JournalEntry } from '../../../types/index.js'
 import type { CreateEntryInput } from '../../core/interfaces.js'
 import type { EntriesSharedContext } from './shared.js'
 import { effectiveWorkspace } from '../../workspace-scope.js'
-import { ConflictError } from '../../../types/errors.js'
 import { insertAnchors } from './anchors.js'
-import { snapshotAndEvictRevisions } from './revisions.js'
 import { getEntryById, getEntriesByIds } from './crud-read.js'
+import { normalizeTag, performUpdateEntry } from './crud-update.js'
+import type { UpdateEntryInput } from './crud-update.js'
 
+export type { UpdateEntryInput }
+
+/** Identifies the failing item (array index or entry id) inside an all-or-nothing batch transaction. */
 class BatchTransactionError extends Error {
-    constructor(public readonly batchError: { index?: number; id?: number; error: Error }) {
+    constructor(
+        public readonly key: number,
+        public readonly batchError: Error
+    ) {
         super('Batch transaction failed')
         this.name = 'BatchTransactionError'
     }
 }
 
-/** Thrown inside the update transaction to roll back revision bookkeeping when no row matched. */
-class NoRowsUpdatedError extends Error {
-    constructor() {
-        super('No rows updated')
-        this.name = 'NoRowsUpdatedError'
+function toError(err: unknown): Error {
+    return err instanceof Error ? err : new Error(String(err))
+}
+
+/**
+ * Runs `body` in a single transaction. Returns null on success, or the failing item's key
+ * (index/id; -1 when the failure was not attributable to a single item) and its error.
+ */
+function runBatchTransaction(
+    db: EntriesSharedContext['db'],
+    body: () => void
+): { key: number; error: Error } | null {
+    try {
+        db.transaction(body)()
+        return null
+    } catch (err: unknown) {
+        if (err instanceof BatchTransactionError) {
+            return { key: err.key, error: err.batchError }
+        }
+        return { key: -1, error: toError(err) }
     }
 }
 
-/** Lowercase a tag and collapse unsupported characters into single hyphens. */
-function normalizeTag(tag: string): string {
-    return tag
-        .toLowerCase()
-        .replace(/[^a-z0-9:@]+/g, '-')
-        .replace(/^-+|-+$/g, '')
-}
 
 export function validateEntryInput(input: CreateEntryInput): { normalizedTimestamp: string } {
     if (input.workspaceId === '*') {
@@ -130,158 +144,6 @@ export function createEntry(context: EntriesSharedContext, input: CreateEntryInp
     return entry
 }
 
-export interface UpdateEntryInput {
-    content?: string | undefined
-    entryType?: EntryType | undefined
-    tags?: string[] | undefined
-    isPersonal?: boolean | undefined
-    significanceType?: string | null | undefined
-    autoContext?: string | null | undefined
-    projectNumber?: number | null | undefined
-    projectOwner?: string | null | undefined
-    issueNumber?: number | null | undefined
-    issueUrl?: string | null | undefined
-    prNumber?: number | null | undefined
-    prUrl?: string | null | undefined
-    prStatus?: string | null | undefined
-    workflowRunId?: number | null | undefined
-    workflowName?: string | null | undefined
-    workflowStatus?: string | null | undefined
-    isArchived?: boolean | undefined
-    expectedVersion?: number | undefined
-    workspaceId?: string | undefined
-    trustScore?: number | undefined
-    validationStatus?: 'passed' | 'failed' | 'none' | undefined
-    impactScore?: number | undefined
-    sessionId?: string | null | undefined
-    targetWorkspaceId?: string | undefined
-}
-
-function performUpdateEntry(
-    context: EntriesSharedContext,
-    id: number,
-    input: UpdateEntryInput
-): boolean {
-    const { db, tagsMgr } = context
-
-    const existing = db
-        .prepare(
-            'SELECT id, content, version, workspace_id as workspaceId FROM memory_journal WHERE id = ? AND deleted_at IS NULL'
-        )
-        .get(id) as
-        | { id: number; content: string; version: number; workspaceId: string }
-        | undefined
-    if (existing === undefined) return false
-
-    const callerWorkspace = effectiveWorkspace(input.workspaceId)
-    if (callerWorkspace !== '*' && existing.workspaceId !== callerWorkspace) {
-        throw new ConflictError(
-            `Entry ${String(id)} belongs to workspace '${existing.workspaceId}', cannot be updated from '${callerWorkspace}'. Moving to another workspace requires explicit overrides (e.g. workspaceId = '*').`,
-            { id: existing.id, version: existing.version, workspaceId: existing.workspaceId }
-        )
-    }
-
-    if (input.expectedVersion !== undefined && existing.version !== input.expectedVersion) {
-        throw new ConflictError(
-            `Version conflict: expected ${String(input.expectedVersion)} but found ${String(existing.version)}`,
-            {
-                id: existing.id,
-                version: existing.version,
-                content: existing.content,
-                workspaceId: existing.workspaceId,
-            }
-        )
-    }
-
-    const updates: string[] = ['version = version + 1']
-    const values: unknown[] = []
-
-    const scalarFields = [
-        ['entryType', 'entry_type', input.entryType],
-        ['content', 'content', input.content],
-        ['isPersonal', 'is_personal', input.isPersonal !== undefined ? (input.isPersonal ? 1 : 0) : undefined],
-        ['significanceType', 'significance_type', input.significanceType],
-        ['autoContext', 'auto_context', input.autoContext !== undefined ? (input.autoContext ?? null) : undefined],
-        ['isArchived', 'is_archived', input.isArchived !== undefined ? (input.isArchived ? 1 : 0) : undefined],
-        ['trustScore', 'trust_score', input.trustScore],
-        ['validationStatus', 'validation_status', input.validationStatus],
-        ['impactScore', 'impact_score', input.impactScore],
-        ['sessionId', 'session_id', input.sessionId],
-    ] as const
-
-    for (const [, col, val] of scalarFields) {
-        if (val !== undefined) {
-            updates.push(`${col} = ?`)
-            values.push(val)
-        }
-    }
-
-    for (const key of [
-        'projectNumber',
-        'projectOwner',
-        'issueNumber',
-        'issueUrl',
-        'prNumber',
-        'prUrl',
-        'prStatus',
-        'workflowRunId',
-        'workflowName',
-        'workflowStatus',
-    ] as const) {
-        if (input[key] !== undefined) {
-            const snakeKey = key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
-            updates.push(`${snakeKey} = ?`)
-            values.push(input[key] ?? null)
-        }
-    }
-
-    if (input.targetWorkspaceId !== undefined) {
-        if (callerWorkspace !== '*') {
-            throw new ConflictError(
-                `Cannot move entry ${String(id)} to workspace '${input.targetWorkspaceId}' from '${callerWorkspace}'. Moving an entry to another workspace requires workspaceId = '*'.`,
-                { id: existing.id, version: existing.version, workspaceId: existing.workspaceId }
-            )
-        }
-        if (input.targetWorkspaceId === '*') {
-            throw new ConflictError(
-                "targetWorkspaceId cannot be '*'. Provide the concrete destination workspace.",
-                { id: existing.id, version: existing.version, workspaceId: existing.workspaceId }
-            )
-        }
-        updates.push('workspace_id = ?')
-        values.push(input.targetWorkspaceId)
-    }
-
-    const scopeUpdate = callerWorkspace !== '*'
-    const query = `UPDATE memory_journal SET ${updates.join(', ')} WHERE id = ? AND deleted_at IS NULL${scopeUpdate ? ' AND workspace_id = ?' : ''}`
-
-    const txn = db.transaction(() => {
-        const stmt = db.prepare(query)
-        const result = scopeUpdate ? stmt.run(...values, id, callerWorkspace) : stmt.run(...values, id)
-        if (result.changes === 0) {
-            throw new NoRowsUpdatedError()
-        }
-
-        snapshotAndEvictRevisions(db, id, existing.content)
-
-        if (input.tags !== undefined) {
-            db.prepare(
-                'UPDATE tags SET usage_count = MAX(0, usage_count - 1) WHERE id IN (SELECT tag_id FROM entry_tags WHERE entry_id = ?)'
-            ).run(id)
-            db.prepare('DELETE FROM entry_tags WHERE entry_id = ?').run(id)
-            tagsMgr.linkTagsToEntry(id, input.tags.map(normalizeTag))
-        }
-
-        return true
-    })
-
-    try {
-        return txn()
-    } catch (err) {
-        if (err instanceof NoRowsUpdatedError) return false
-        throw err
-    }
-}
 
 export function updateEntry(
     context: EntriesSharedContext,
@@ -350,31 +212,20 @@ export function createEntries(
 
     const { db } = context
     const createdIds: number[] = []
-    const errors: { index: number; error: Error }[] = []
 
-    const txn = db.transaction(() => {
+    const failure = runBatchTransaction(db, () => {
         for (let i = 0; i < inputs.length; i++) {
             const input = inputs[i]
             if (input === undefined) continue
             try {
-                const insertId = insertEntryRow(context, input)
-                createdIds.push(insertId)
+                createdIds.push(insertEntryRow(context, input))
             } catch (err) {
-                const error = err instanceof Error ? err : new Error(String(err))
-                throw new BatchTransactionError({ index: i, error })
+                throw new BatchTransactionError(i, toError(err))
             }
         }
     })
-
-    try {
-        txn()
-    } catch (err: unknown) {
-        if (err instanceof BatchTransactionError && err.batchError.index !== undefined) {
-            errors.push({ index: err.batchError.index, error: err.batchError.error })
-        } else {
-            errors.push({ index: -1, error: err instanceof Error ? err : new Error(String(err)) })
-        }
-        return { created: [], errors }
+    if (failure !== null) {
+        return { created: [], errors: [{ index: failure.key, error: failure.error }] }
     }
 
     const resultsMap = getEntriesByIds(context, createdIds, '*')
@@ -382,7 +233,7 @@ export function createEntries(
         .map((id) => resultsMap.get(id))
         .filter((entry): entry is JournalEntry => entry !== undefined)
 
-    return { created, errors }
+    return { created, errors: [] }
 }
 
 export function updateEntries(
@@ -394,9 +245,8 @@ export function updateEntries(
     const { db } = context
     const notFound: number[] = []
     const updatedIds: number[] = []
-    const errors: { id: number; error: Error }[] = []
 
-    const txn = db.transaction(() => {
+    const failure = runBatchTransaction(db, () => {
         for (const input of updates) {
             try {
                 const updated = performUpdateEntry(context, input.id, input)
@@ -406,21 +256,16 @@ export function updateEntries(
                     notFound.push(input.id)
                 }
             } catch (err) {
-                const error = err instanceof Error ? err : new Error(String(err))
-                throw new BatchTransactionError({ id: input.id, error })
+                throw new BatchTransactionError(input.id, toError(err))
             }
         }
     })
-
-    try {
-        txn()
-    } catch (err: unknown) {
-        if (err instanceof BatchTransactionError && err.batchError.id !== undefined) {
-            errors.push({ id: err.batchError.id, error: err.batchError.error })
-        } else {
-            errors.push({ id: -1, error: err instanceof Error ? err : new Error(String(err)) })
+    if (failure !== null) {
+        return {
+            updated: [],
+            notFound: [],
+            errors: [{ id: failure.key, error: failure.error }],
         }
-        return { updated: [], notFound: [], errors }
     }
 
     const resultsMap = getEntriesByIds(context, updatedIds, '*')
@@ -428,7 +273,7 @@ export function updateEntries(
         .map((id) => resultsMap.get(id))
         .filter((entry): entry is JournalEntry => entry !== undefined)
 
-    return { updated, notFound, errors }
+    return { updated, notFound, errors: [] }
 }
 
 export function deleteEntries(
@@ -480,11 +325,8 @@ export function deleteEntries(
     try {
         txn()
     } catch (err: unknown) {
-        if (err instanceof BatchTransactionError && err.batchError.id !== undefined) {
-            errors.push({ id: err.batchError.id, error: err.batchError.error })
-        } else {
-            errors.push({ id: -1, error: err instanceof Error ? err : new Error(String(err)) })
-        }
+        // Only plain DB errors can surface here (no per-item BatchTransactionError is thrown).
+        errors.push({ id: -1, error: toError(err) })
         return { deleted: [], notFound, errors }
     }
 

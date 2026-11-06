@@ -15,6 +15,7 @@ import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { sendProgress } from '../../../utils/progress-utils.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
+import { resolveWriteWorkspaceId } from '../write-workspace.js'
 import { AggregateMcpError } from '../../../types/errors.js'
 import {
     resolveAuthenticatedAuthor,
@@ -234,12 +235,6 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                     // Determine allowed roots from configuration
                     const allowedRoots = context.config?.allowedIoRoots ?? []
 
-                    // Intercept parameter hallucination for test runner
-                    const firstRoot = allowedRoots[0]
-                    if (input.output_dir === 'tmp_team_md' && firstRoot) {
-                        input.output_dir = path.join(firstRoot, 'tmp_team_md')
-                    }
-
                     await sendProgress(progress, 0, 3, 'Fetching team entries...')
 
                     const limit = input.limit ?? 100
@@ -321,16 +316,10 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
             handler: async (params: unknown) => {
                 try {
                     const input = TeamImportMarkdownSchema.parse(params)
-                    const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
+                    const wsId = resolveWriteWorkspaceId(input.workspace_id, input.project_number, context.config)
 
                     // Determine allowed roots from configuration
                     const allowedRoots = context.config?.allowedIoRoots ?? []
-
-                    // Intercept parameter hallucination for test runner
-                    const firstRoot = allowedRoots[0]
-                    if (input.source_dir === 'tmp_team_md' && firstRoot) {
-                        input.source_dir = path.join(firstRoot, 'tmp_team_md')
-                    }
 
                     await sendProgress(progress, 0, 2, 'Reading markdown files...')
 
@@ -381,7 +370,7 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
             handler: async (params: unknown) => {
                 try {
                     const input = TeamImportExternalSchema.parse(params)
-                    const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
+                    const wsId = resolveWriteWorkspaceId(input.workspace_id, input.project_number, context.config)
 
                     const allowedRoots = context.config?.allowedIoRoots ?? []
 

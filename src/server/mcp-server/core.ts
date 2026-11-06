@@ -114,6 +114,32 @@ export async function createServer(options: ServerOptions): Promise<void> {
     );
 
     let shutdownMetrics: (() => Promise<void>) | undefined;
+
+    const logShutdownError = (step: string, error: unknown): void => {
+        logger.error(`Error during ${step}`, {
+            module: 'McpServer',
+            error: error instanceof Error ? error.message : String(error),
+        })
+    }
+
+    /** Run a shutdown step; failures are logged so later steps (DB close, exit) still run. */
+    const runShutdownStep = async (step: string, fn: () => Promise<void>): Promise<void> => {
+        try {
+            await fn()
+        } catch (error: unknown) {
+            logShutdownError(step, error)
+        }
+    }
+
+    const closeDatabases = (): void => {
+        for (const handle of [db, testDb, teamDb, testTeamDb]) {
+            try {
+                handle?.close()
+            } catch (error: unknown) {
+                logShutdownError('database close', error)
+            }
+        }
+    }
     if (options.metricsExport === 'prometheus') {
         shutdownMetrics = startMetricsServer(runtime, options.metricsPort);
     }
@@ -130,26 +156,35 @@ export async function createServer(options: ServerOptions): Promise<void> {
             if (stdioShutdownStarted) return
             stdioShutdownStarted = true
             void (async () => {
-                logger.info('Shutting down...', { module: 'McpServer' })
-                configManager.close()
-                runtime.stopBackgroundTasks?.()
-                if (runtime.auditLogger) {
-                    await runtime.auditLogger.close()
-                }
-                if (shutdownMetrics) {
-                    await shutdownMetrics().catch((err: unknown) => {
-                        logger.debug('Error shutting down metrics server', { module: 'McpServer', error: String(err) })
+                try {
+                    logger.info('Shutting down...', { module: 'McpServer' })
+                    configManager.close()
+                    runtime.stopBackgroundTasks?.()
+                    await runShutdownStep('audit log close', async () => {
+                        if (runtime.auditLogger) {
+                            await runtime.auditLogger.close()
+                        }
                     })
+                    if (shutdownMetrics) {
+                        await shutdownMetrics().catch((err: unknown) => {
+                            logger.debug('Error shutting down metrics server', { module: 'McpServer', error: String(err) })
+                        })
+                    }
+                    if (activeMetricsPath) {
+                        await runShutdownStep('metrics save', () =>
+                            runtime.metrics.saveToFile(activeMetricsPath)
+                        )
+                    }
+                } catch (error: unknown) {
+                    logShutdownError('stdio shutdown', error)
+                } finally {
+                    closeDatabases()
+                    process.exit(0)
                 }
-                if (activeMetricsPath) {
-                    await runtime.metrics.saveToFile(activeMetricsPath)
-                }
-                db.close()
-                testDb?.close()
-                teamDb?.close()
-                testTeamDb?.close()
-                process.exit(0)
-            })()
+            })().catch((error: unknown) => {
+                logShutdownError('stdio shutdown', error)
+                process.exit(1)
+            })
         }
 
         // Handle shutdown for stdio
@@ -184,29 +219,41 @@ export async function createServer(options: ServerOptions): Promise<void> {
 
         await httpTransport.start(getServerInstance, scheduler, runtime)
 
+        let httpShutdownStarted = false
         const handleHttpShutdown = (): void => {
+            if (httpShutdownStarted) return
+            httpShutdownStarted = true
             void (async () => {
-                runtime.stopBackgroundTasks?.()
-                configManager.close()
-                if (shutdownMetrics) {
-                    await shutdownMetrics().catch((err: unknown) => {
-                    logger.debug('Error shutting down metrics server', { module: 'McpServer', error: String(err) })
-                });
+                try {
+                    runtime.stopBackgroundTasks?.()
+                    configManager.close()
+                    if (shutdownMetrics) {
+                        await shutdownMetrics().catch((err: unknown) => {
+                            logger.debug('Error shutting down metrics server', { module: 'McpServer', error: String(err) })
+                        })
+                    }
+                    await runShutdownStep('http transport stop', () => httpTransport.stop(scheduler))
+                    // Flush audit log before exit
+                    await runShutdownStep('audit log close', async () => {
+                        if (runtime.auditLogger) {
+                            await runtime.auditLogger.close()
+                        }
+                    })
+                    if (activeMetricsPath) {
+                        await runShutdownStep('metrics save', () =>
+                            runtime.metrics.saveToFile(activeMetricsPath)
+                        )
+                    }
+                } catch (error: unknown) {
+                    logShutdownError('HTTP shutdown', error)
+                } finally {
+                    closeDatabases()
+                    process.exit(0)
                 }
-                await httpTransport.stop(scheduler)
-                // Flush audit log before exit
-                if (runtime.auditLogger) {
-                    await runtime.auditLogger.close()
-                }
-                if (activeMetricsPath) {
-                    await runtime.metrics.saveToFile(activeMetricsPath)
-                }
-                db.close()
-                testDb?.close()
-                teamDb?.close()
-                testTeamDb?.close()
-                process.exit(0)
-            })()
+            })().catch((error: unknown) => {
+                logShutdownError('HTTP shutdown', error)
+                process.exit(1)
+            })
         }
 
         // Handle shutdown

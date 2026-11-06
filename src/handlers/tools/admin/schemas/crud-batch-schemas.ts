@@ -110,7 +110,7 @@ export const UpdateEntrySchema = z.preprocess(
             impact_score: z.number().min(0).max(1).optional(),
             trust_score: z.number().min(0).max(1).optional(),
             validation_status: z.enum(['passed', 'none', 'failed']).optional(),
-            session_id: z.string().nullable().optional(),
+            session_id: z.string().optional(),
         })
         .strict()
 )
@@ -166,7 +166,7 @@ export const UpdateEntrySchemaMcp = z.preprocess(
                 .string()
                 .optional()
                 .describe('Current validation status of the entry (passed, none, failed).'),
-            session_id: z.string().nullable().optional().describe('Agent session ID for thread isolation.'),
+            session_id: z.string().optional().describe('Agent session ID for thread isolation.'),
         })
         .strict()
 )

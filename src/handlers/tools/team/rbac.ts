@@ -74,6 +74,25 @@ export function enforceOwnership(author: string, resourceAuthor: string, role: T
 }
 
 /**
+ * Ownership check that also covers entries with no recorded author.
+ * When team RBAC is active (`role` is not null), an entry without an author can only be
+ * modified by a team admin. With RBAC inactive (`role` null) the legacy full-access mode applies.
+ */
+export function enforceEntryOwnership(
+    currentUser: string,
+    entryAuthor: string | null | undefined,
+    role: TeamRole | null
+): void {
+    if (entryAuthor === null || entryAuthor === undefined || entryAuthor.trim() === '') {
+        if (role === 'admin' || role === null) return
+        throw new AuthorizationError(
+            'Access denied: this entry has no recorded author. Only a team admin can modify it.'
+        )
+    }
+    enforceOwnership(currentUser, entryAuthor, role)
+}
+
+/**
  * Wraps tool handlers to enforce Team RBAC automatically.
  * Automatically infers 'viewer' for read-only tools, and uses defaultRequiredRole for others.
  * Tools explicitly requiring admin scope will demand 'admin'.

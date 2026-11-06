@@ -62,7 +62,9 @@ export function checkRateLimit(
         return { allowed: true }
     }
 
-    const clientIdentity = rateLimitIdentity(req.headers.authorization, getClientIp(req))
+    // Key on client IP only: this runs before authentication, so keying on the raw
+    // bearer token would let rotating fake tokens mint unlimited buckets.
+    const clientIdentity = rateLimitIdentity(undefined, getClientIp(req))
     const now = Date.now()
     const windowMs = config.rateLimitWindowMs ?? DEFAULT_RATE_LIMIT_WINDOW_MS
     let envMaxRequests = process.env['MCP_RATE_LIMIT_MAX']

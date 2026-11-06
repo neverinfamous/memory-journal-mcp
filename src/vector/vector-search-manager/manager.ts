@@ -8,6 +8,7 @@ import type { ProgressContext } from '../../utils/progress-utils.js'
 import { DEFAULT_MODEL, type SemanticSearchResult } from './types.js'
 import { rebuildIndex } from './rebuild.js'
 import { effectiveWorkspace } from '../../database/workspace-scope.js'
+import { isMissingTableError } from '../../database/sqlite-adapter/schema-errors.js'
 
 function dbPathFromAdapter(adapter: { getDbPath?: () => string }): string | undefined {
     if (typeof adapter.getDbPath !== 'function') {
@@ -41,6 +42,42 @@ function isModelCachedOnDisk(cacheDir: string, modelName: string): boolean {
 function isTransientFileLockError(err: unknown): boolean {
     const msg = err instanceof Error ? err.message : String(err)
     return msg.includes('EPERM') || msg.includes('EBUSY') || msg.includes('EACCES')
+}
+
+/** Base backoff (ms) between embedding-model load retries; multiplied by the attempt number. */
+const MODEL_LOAD_RETRY_DELAY_MS = 250
+
+interface VectorCandidate {
+    entryId: number
+    distance: number
+    similarityScore: number
+}
+
+/**
+ * Convert raw sqlite-vec hits into scored candidates above `threshold`,
+ * optionally skipping `excludeId` (the query entry itself).
+ */
+function collectCandidates(
+    results: { entry_id: number; distance: number }[],
+    threshold: number,
+    excludeId?: number
+): VectorCandidate[] {
+    const candidates: VectorCandidate[] = []
+    for (const result of results) {
+        if (excludeId !== undefined && result.entry_id === excludeId) continue
+        // sqlite-vec MATCH computes L2 distance by default.
+        // For normalized unit vectors: L2_distance^2 = 2 - 2 * cosine_similarity
+        // Therefore: cosine_similarity = 1 - (L2_distance^2 / 2)
+        const similarityScore = Math.max(-1, 1 - (result.distance * result.distance) / 2)
+        if (similarityScore >= threshold) {
+            candidates.push({
+                entryId: result.entry_id,
+                distance: result.distance,
+                similarityScore,
+            })
+        }
+    }
+    return candidates
 }
 
 export class VectorSearchManager {
@@ -83,6 +120,7 @@ export class VectorSearchManager {
      * This loads the huggingface transformer model and creates the virtual table.
      */
     public async initialize(): Promise<void> {
+        // Defensive runtime guard: callers outside the type system (tests, plugins) may omit the adapter.
         if ((this.dbAdapter as unknown) == null) {
             throw new Error('Vector database not available')
         }
@@ -149,7 +187,7 @@ export class VectorSearchManager {
                     } catch (pipelineErr) {
                         if (attempt < maxAttempts && isTransientFileLockError(pipelineErr)) {
                             transformersModule.env.allowRemoteModels = true
-                            await new Promise((r) => setTimeout(r, 250 * attempt))
+                            await new Promise((r) => setTimeout(r, MODEL_LOAD_RETRY_DELAY_MS * attempt))
                             continue
                         }
                         throw pipelineErr
@@ -209,8 +247,7 @@ export class VectorSearchManager {
                 needsRecreation = true
             }
         } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err)
-            if (msg.includes('no such table')) {
+            if (isMissingTableError(err)) {
                 needsRecreation = true
                 logger.warning('Vector metadata table not found, recreating vector index', { error: err })
             } else {
@@ -273,15 +310,56 @@ export class VectorSearchManager {
      * Remove an entry from the vector index
      */
     public removeEntry(entryId: number): boolean {
-        if ((this.dbAdapter as unknown) == null) return false;
+        // Defensive runtime guard, see initialize().
+        if ((this.dbAdapter as unknown) == null) return false
 
         try {
             return this.dbAdapter.deleteVector(entryId)
         } catch (error) {
             logger.warning(`Failed to remove entry ${entryId} from vector index`, { error })
             // Non-fatal
-            return false;
+            return false
         }
+    }
+
+    /**
+     * Hydrate vector-search candidates into entries (workspace-filtered), capped at `limit`.
+     */
+    private resolveCandidates(
+        candidates: VectorCandidate[],
+        limit: number,
+        targetWs: string
+    ): SemanticSearchResult[] {
+        if (candidates.length === 0) {
+            return []
+        }
+
+        const entriesMap =
+            typeof (this.dbAdapter as { getEntriesByIds?: unknown }).getEntriesByIds === 'function'
+                ? this.dbAdapter.getEntriesByIds(
+                      candidates.map((c) => c.entryId),
+                      targetWs
+                  )
+                : null
+
+        const searchResults: SemanticSearchResult[] = []
+        for (const candidate of candidates) {
+            const entry = entriesMap
+                ? (entriesMap.get(candidate.entryId) ?? null)
+                : this.dbAdapter.getEntryById(candidate.entryId, targetWs)
+            if (entry && (targetWs === '*' || entry.workspaceId === targetWs)) {
+                searchResults.push({
+                    entryId: candidate.entryId,
+                    entry,
+                    distance: candidate.distance,
+                    score: candidate.similarityScore,
+                    similarityScore: candidate.similarityScore,
+                })
+            }
+            if (searchResults.length >= limit) break
+        }
+
+        return searchResults
     }
 
     /**
@@ -302,49 +380,9 @@ export class VectorSearchManager {
             const targetWs = effectiveWorkspace(workspaceId)
             const results = this.dbAdapter.searchVectors(queryEmbedding, limit, targetWs)
 
-            const candidates: { entryId: number; distance: number; similarityScore: number }[] = []
-            for (const result of results) {
-                // sqlite-vec MATCH computes L2 distance by default.
-                // For normalized unit vectors: L2_distance^2 = 2 - 2 * cosine_similarity
-                // Therefore: cosine_similarity = 1 - (L2_distance^2 / 2)
-                const similarityScore = Math.max(-1, 1 - (result.distance * result.distance) / 2)
-                if (similarityScore >= threshold) {
-                    candidates.push({
-                        entryId: result.entry_id,
-                        distance: result.distance,
-                        similarityScore,
-                    })
-                }
-            }
+            const candidates = collectCandidates(results, threshold)
 
-            if (candidates.length === 0) {
-                return []
-            }
-
-            const entriesMap =
-                typeof (this.dbAdapter as { getEntriesByIds?: unknown }).getEntriesByIds ===
-                'function'
-                    ? this.dbAdapter.getEntriesByIds(candidates.map((c) => c.entryId), targetWs)
-                    : null
-
-            const searchResults: SemanticSearchResult[] = []
-            for (const candidate of candidates) {
-                const entry = entriesMap
-                    ? (entriesMap.get(candidate.entryId) ?? null)
-                    : this.dbAdapter.getEntryById(candidate.entryId, targetWs)
-                if (entry && (targetWs === '*' || entry.workspaceId === targetWs)) {
-                    searchResults.push({
-                        entryId: candidate.entryId,
-                        entry,
-                        distance: candidate.distance,
-                        score: candidate.similarityScore,
-                        similarityScore: candidate.similarityScore,
-                    })
-                }
-                if (searchResults.length >= limit) break
-            }
-
-            return searchResults
+            return this.resolveCandidates(candidates, limit, targetWs)
         } catch (error) {
             logger.error('Semantic search failed', {
                 error: error instanceof Error ? error.message : String(error),
@@ -386,48 +424,9 @@ export class VectorSearchManager {
             // Search (request limit + 1 to account for the entry itself)
             const results = this.dbAdapter.searchVectors(queryEmbedding, limit + 1, targetWs)
 
-            const candidates: { entryId: number; distance: number; similarityScore: number }[] = []
-            for (const result of results) {
-                const candidateId = result.entry_id
-                if (candidateId === entryId) continue
-                const similarityScore = Math.max(-1, 1 - (result.distance * result.distance) / 2)
-                if (similarityScore >= threshold) {
-                    candidates.push({
-                        entryId: candidateId,
-                        distance: result.distance,
-                        similarityScore,
-                    })
-                }
-            }
+            const candidates = collectCandidates(results, threshold, entryId)
 
-            if (candidates.length === 0) {
-                return []
-            }
-
-            const entriesMap =
-                typeof (this.dbAdapter as { getEntriesByIds?: unknown }).getEntriesByIds ===
-                'function'
-                    ? this.dbAdapter.getEntriesByIds(candidates.map((c) => c.entryId), targetWs)
-                    : null
-
-            const searchResults: SemanticSearchResult[] = []
-            for (const candidate of candidates) {
-                const entry = entriesMap
-                    ? (entriesMap.get(candidate.entryId) ?? null)
-                    : this.dbAdapter.getEntryById(candidate.entryId, targetWs)
-                if (entry && (targetWs === '*' || entry.workspaceId === targetWs)) {
-                    searchResults.push({
-                        entryId: candidate.entryId,
-                        entry,
-                        distance: candidate.distance,
-                        score: candidate.similarityScore,
-                        similarityScore: candidate.similarityScore,
-                    })
-                }
-                if (searchResults.length >= limit) break
-            }
-
-            return searchResults
+            return this.resolveCandidates(candidates, limit, targetWs)
         } catch (error) {
             logger.error(`Semantic search by entry ID ${entryId} failed`, {
                 error: error instanceof Error ? error.message : String(error)

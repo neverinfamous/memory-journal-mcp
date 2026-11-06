@@ -1,5 +1,6 @@
 import type { NativeConnectionManager } from './native-connection.js'
 import { buildImportanceCte, buildImportanceSqlExpression } from './entries/importance.js'
+import { isMissingTableError } from './schema-errors.js'
 
 type NativeDb = ReturnType<NativeConnectionManager['getNativeDb']>
 
@@ -209,8 +210,7 @@ function runLifecycleTx(
                         ...ids
                     )
                 } catch (err) {
-                    const message = err instanceof Error ? err.message : String(err)
-                    if (!message.includes('no such table')) throw err
+                    if (!isMissingTableError(err)) throw err
                 }
             }
         }

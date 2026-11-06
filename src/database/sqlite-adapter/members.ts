@@ -1,4 +1,5 @@
 import { QueryError } from '../../types/errors.js'
+import { isMissingTableError } from './schema-errors.js'
 import type { IDatabaseConnection, TeamMember, TeamRole } from '../core/interfaces.js'
 
 export class MembersManager {
@@ -121,7 +122,7 @@ export class MembersManager {
             if (!row) return null
             return this.mapToTeamMember(row)
         } catch (error) {
-            if (error instanceof Error && error.message.includes('no such table')) {
+            if (isMissingTableError(error)) {
                 // Table might not exist yet if legacy DB or schema not fully applied
                 return null
             }
@@ -151,7 +152,7 @@ export class MembersManager {
                 return this.mapToTeamMember(mappedRow)
             })
         } catch (error) {
-            if (error instanceof Error && error.message.includes('no such table')) {
+            if (isMissingTableError(error)) {
                 return []
             }
             if (error instanceof Error) {
@@ -167,7 +168,7 @@ export class MembersManager {
             const row = this.getSingleRow(results)
             return typeof row?.['count'] === 'number' ? row['count'] : 0
         } catch (error) {
-             if (error instanceof Error && error.message.includes('no such table')) {
+             if (isMissingTableError(error)) {
                 return 0
             }
             if (error instanceof Error) {
