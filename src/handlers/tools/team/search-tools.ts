@@ -8,7 +8,7 @@ import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { MAX_QUERY_LIMIT } from '../schemas.js'
-import { TEAM_DB_ERROR_RESPONSE, batchFetchAuthors } from './helpers.js'
+import { TEAM_DB_ERROR_RESPONSE, batchFetchAuthors, resolveTeamProjectNumber } from './helpers.js'
 import {
     TeamSearchSchema,
     TeamSearchSchemaMcp,
@@ -51,12 +51,7 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         TeamSearchSchema.parse(params)
 
                     const wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
-                    const projectNumber =
-                        project_number ??
-                        (wsId !== 'default' && wsId !== '*'
-                            ? context.config?.projectRegistry?.[wsId]?.project_number
-                            : undefined) ??
-                        context.config?.defaultProjectNumber
+                    const projectNumber = resolveTeamProjectNumber(context, wsId, project_number)
 
                     if (projectNumber == null) {
                         return {
@@ -161,12 +156,7 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
 
 
                     const wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
-                    const projectNumber =
-                        project_number ??
-                        (wsId !== 'default' && wsId !== '*'
-                            ? context.config?.projectRegistry?.[wsId]?.project_number
-                            : undefined) ??
-                        context.config?.defaultProjectNumber
+                    const projectNumber = resolveTeamProjectNumber(context, wsId, project_number)
 
                     if (projectNumber == null) {
                         return {

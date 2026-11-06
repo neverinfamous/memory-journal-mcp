@@ -2,6 +2,7 @@ import type { Database } from 'better-sqlite3'
 import type { Relationship, RelationshipType } from '../../types/index.js'
 import { ResourceNotFoundError } from '../../types/errors.js'
 import type { NativeConnectionManager } from './native-connection.js'
+import { effectiveWorkspace } from '../workspace-scope.js'
 
 export class RelationshipsManager {
     private ctx: NativeConnectionManager
@@ -138,7 +139,7 @@ export class RelationshipsManager {
         limit: number,
         workspaceId?: string
     ): { entryId: number; content: string; totalLinks: number }[] {
-        const scopeId = workspaceId ?? 'default'
+        const scopeId = effectiveWorkspace(workspaceId)
         const wsFilter = scopeId !== '*' ? ' AND m.workspace_id = ?' : ''
         const params: unknown[] = scopeId !== '*' ? [scopeId, limit] : [limit]
         const rows = this.db
@@ -171,7 +172,7 @@ export class RelationshipsManager {
     getOrphanCount(workspaceId?: string): number {
         let filter = ''
         const params: unknown[] = []
-        const scopeId = workspaceId ?? 'default'
+        const scopeId = effectiveWorkspace(workspaceId)
         if (scopeId !== '*') {
             filter = ' AND e.workspace_id = ?'
             params.push(scopeId)

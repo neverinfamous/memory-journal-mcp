@@ -61,3 +61,21 @@ export function triggerTeamNotifications(context: ToolContext): void {
     }
 }
 
+
+/**
+ * Derive the project number for a team tool call: explicit input first, then the project
+ * registry entry for the resolved workspace, then the configured default.
+ */
+export function resolveTeamProjectNumber(
+    context: ToolContext,
+    wsId: string,
+    explicitProjectNumber: number | undefined
+): number | null | undefined {
+    return (
+        explicitProjectNumber ??
+        (wsId !== 'default' && wsId !== '*'
+            ? context.config?.projectRegistry?.[wsId]?.project_number
+            : undefined) ??
+        context.config?.defaultProjectNumber
+    )
+}

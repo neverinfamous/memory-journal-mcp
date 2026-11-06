@@ -12,6 +12,22 @@ export interface DynamicConfig {
     codemodeInternalFullAccess?: boolean | undefined
 }
 
+/** Config-file keys that map onto `BriefingConfig` fields, with the expected value type. */
+const BRIEFING_CONFIG_KEY_MAP: Readonly<
+    Record<string, { target: string; kind: 'number' | 'boolean' }>
+> = {
+    briefingEntries: { target: 'entryCount', kind: 'number' },
+    briefingSummaries: { target: 'summaryCount', kind: 'number' },
+    briefingIncludeTeam: { target: 'includeTeam', kind: 'boolean' },
+    briefingIssues: { target: 'issueCount', kind: 'number' },
+    briefingPrs: { target: 'prCount', kind: 'number' },
+    briefingPrStatus: { target: 'prStatusBreakdown', kind: 'boolean' },
+    briefingMilestones: { target: 'milestoneCount', kind: 'number' },
+    briefingWorkflows: { target: 'workflowCount', kind: 'number' },
+    briefingWorkflowStatus: { target: 'workflowStatusBreakdown', kind: 'boolean' },
+    briefingCopilot: { target: 'copilotReviews', kind: 'boolean' },
+}
+
 export class ConfigManager extends EventEmitter {
     private config: DynamicConfig
     private readonly initialCodemodeFullAccess: boolean
@@ -155,25 +171,19 @@ export class ConfigManager extends EventEmitter {
             // Update briefing config if present
             const bc = { ...this.config.briefingConfig }
             let bcChanged = false
-            const bcKeys = ['briefingEntries', 'briefingSummaries', 'briefingIncludeTeam', 'briefingIssues', 'briefingPrs', 'briefingPrStatus', 'briefingMilestones', 'briefingWorkflows', 'briefingWorkflowStatus', 'briefingCopilot']
-            for (const key of bcKeys) {
-                if (key in parsed) {
-                    const mappedKey = key === 'briefingEntries' ? 'entryCount' :
-                                      key === 'briefingSummaries' ? 'summaryCount' :
-                                      key === 'briefingIncludeTeam' ? 'includeTeam' :
-                                      key === 'briefingIssues' ? 'issueCount' :
-                                      key === 'briefingPrs' ? 'prCount' :
-                                      key === 'briefingPrStatus' ? 'prStatusBreakdown' :
-                                      key === 'briefingMilestones' ? 'milestoneCount' :
-                                      key === 'briefingWorkflows' ? 'workflowCount' :
-                                      key === 'briefingWorkflowStatus' ? 'workflowStatusBreakdown' :
-                                      key === 'briefingCopilot' ? 'copilotReviews' : undefined;
-
-                    if (mappedKey) {
-                        (bc as Record<string, unknown>)[mappedKey] = parsed[key];
-                        bcChanged = true;
-                    }
+            for (const [key, mapping] of Object.entries(BRIEFING_CONFIG_KEY_MAP)) {
+                if (!(key in parsed)) continue
+                const value = parsed[key]
+                if (typeof value !== mapping.kind) {
+                    logger.warning('Ignoring briefing config value with unexpected type', {
+                        module: 'ConfigManager',
+                        key,
+                        expected: mapping.kind,
+                    })
+                    continue
                 }
+                Object.assign(bc, { [mapping.target]: value })
+                bcChanged = true
             }
 
             if (bcChanged) {

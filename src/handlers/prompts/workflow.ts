@@ -13,7 +13,7 @@ import { ICON_PROMPT } from '../../constants/icons.js'
 import type { InternalPromptDef, PromptMessage } from './index.js'
 import { ConfigurationError } from '../../types/errors.js'
 import { markUntrustedContent } from '../../utils/security-utils.js'
-
+import { logger } from '../../utils/logger.js'
 
 import { readFileSync, existsSync } from 'node:fs'
 import * as path from 'node:path'
@@ -33,8 +33,11 @@ function getProjectRegistryHint(): string {
                 }
             }
         }
-    } catch {
-        // fail silently
+    } catch (err) {
+        logger.debug('Project registry hint unavailable', {
+            module: 'workflow-prompts',
+            error: String(err),
+        })
     }
     return ''
 }
@@ -195,8 +198,11 @@ function generateUpdateEntryPrompt(
 ${markUntrustedContent(String(recent['content']))}
 `
         }
-    } catch {
-        // fail silently
+    } catch (err) {
+        logger.debug('Target entry pre-fetch failed', {
+            module: 'workflow-prompts',
+            error: String(err),
+        })
     }
 
     return {

@@ -33,8 +33,6 @@ import {
     DUMMY_HEALING_TOOL_NAMES,
     DUMMY_ENTRY_CREATION_TOOL_NAMES,
     DUMMY_SQL_EXECUTION_TOOL_NAMES,
-    DUMMY_MJ_FUNC_TOOL_NAMES,
-    DUMMY_DOTTED_TOOL_NAMES,
 } from './core/dummy-healing/alias-catalog.js'
 import { getSearchTools } from './search/index.js'
 import { getAnalyticsTools } from './analytics.js'
@@ -119,11 +117,6 @@ function isDummyToolAllowedByFilter(
             (name === 'create_entry' || DUMMY_ENTRY_CREATION_TOOL_NAMES.includes(name)))
     if (isExplicitDisallow) {
         return false
-    }
-    const isCodeModeShortcutMode =
-        filterConfig.enabledTools.has('mj_execute_code') && filterConfig.enabledTools.size <= 5
-    if (!isCodeModeShortcutMode && (DUMMY_MJ_FUNC_TOOL_NAMES.includes(name) || DUMMY_DOTTED_TOOL_NAMES.includes(name))) {
-        return true
     }
     return true
 }

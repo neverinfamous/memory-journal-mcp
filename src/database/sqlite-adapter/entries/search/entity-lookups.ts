@@ -5,6 +5,22 @@ import {
     rowsToEntries,
 } from '../shared.js'
 import { sanitizeFtsQuery } from './fts-sanitizer.js'
+import { effectiveWorkspace } from '../../../workspace-scope.js'
+
+interface SearchFacetOptions {
+    isPersonal?: boolean
+    projectNumber?: number
+    issueNumber?: number
+    prNumber?: number
+    prStatus?: string
+    workflowRunId?: number
+    tags?: string[]
+    entryType?: EntryType
+    startDate?: string
+    endDate?: string
+    includeArchived?: boolean
+    workspaceId?: string
+}
 
 export function getEntriesByProject(
     context: EntriesSharedContext,
@@ -15,7 +31,7 @@ export function getEntriesByProject(
     const { db, tagsMgr } = context
     const params: unknown[] = [projectNumber]
     let wsFilter = ''
-    const scopeId = workspaceId ?? 'default'
+    const scopeId = effectiveWorkspace(workspaceId)
     if (scopeId !== '*') {
         wsFilter = ' AND workspace_id = ?'
         params.push(scopeId)
@@ -38,7 +54,7 @@ export function getEntriesByIssue(
     const { db, tagsMgr } = context
     const params: unknown[] = [issueNumber]
     let wsFilter = ''
-    const scopeId = workspaceId ?? 'default'
+    const scopeId = effectiveWorkspace(workspaceId)
     if (scopeId !== '*') {
         wsFilter = ' AND workspace_id = ?'
         params.push(scopeId)
@@ -61,7 +77,7 @@ export function getEntriesByPR(
     const { db, tagsMgr } = context
     const params: unknown[] = [prNumber]
     let wsFilter = ''
-    const scopeId = workspaceId ?? 'default'
+    const scopeId = effectiveWorkspace(workspaceId)
     if (scopeId !== '*') {
         wsFilter = ' AND workspace_id = ?'
         params.push(scopeId)
@@ -84,7 +100,7 @@ export function getEntriesByWorkflowRun(
     const { db, tagsMgr } = context
     const params: unknown[] = [workflowRunId]
     let wsFilter = ''
-    const scopeId = workspaceId ?? 'default'
+    const scopeId = effectiveWorkspace(workspaceId)
     if (scopeId !== '*') {
         wsFilter = ' AND workspace_id = ?'
         params.push(scopeId)
@@ -107,7 +123,7 @@ export function getEntriesBySession(
     const { db, tagsMgr } = context
     const params: unknown[] = [sessionId]
     let wsFilter = ''
-    const scopeId = workspaceId ?? 'default'
+    const scopeId = effectiveWorkspace(workspaceId)
     if (scopeId !== '*') {
         wsFilter = ' AND workspace_id = ?'
         params.push(scopeId)
@@ -124,27 +140,14 @@ export function getEntriesBySession(
 export function getSearchFacets(
     context: EntriesSharedContext,
     queryStr: string,
-    options?: {
-        isPersonal?: boolean
-        projectNumber?: number
-        issueNumber?: number
-        prNumber?: number
-        prStatus?: string
-        workflowRunId?: number
-        tags?: string[]
-        entryType?: EntryType
-        startDate?: string
-        endDate?: string
-        includeArchived?: boolean
-        workspaceId?: string
-    }
+    options?: SearchFacetOptions
 ): { tags: { name: string; count: number }[]; entryTypes: { name: string; count: number }[] } {
     const { db } = context
 
     const params: unknown[] = []
     const conditions: string[] = ['e.deleted_at IS NULL']
 
-    const targetWs = options?.workspaceId ?? 'default'
+    const targetWs = effectiveWorkspace(options?.workspaceId)
     if (targetWs !== '*') {
         conditions.push('e.workspace_id = ?')
         params.push(targetWs)
@@ -161,6 +164,54 @@ export function getSearchFacets(
         params.push(sanitizeFtsQuery(queryStr))
     }
 
+    appendFacetFilterConditions(conditions, params, options)
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
+    const fromClause = useFts
+        ? `FROM fts_content fts CROSS JOIN memory_journal e ON e.id = fts.rowid`
+        : `FROM memory_journal e`
+
+    const tagsSql = `
+        SELECT t.name, COUNT(DISTINCT e.id) AS cnt
+        ${fromClause}
+        JOIN entry_tags et ON e.id = et.entry_id
+        JOIN tags t ON et.tag_id = t.id
+        ${whereClause}
+        GROUP BY t.name ORDER BY cnt DESC LIMIT 20
+    `
+
+    const entryTypesJoinTags =
+        options?.tags !== undefined && options.tags.length > 0
+            ? `JOIN entry_tags et ON e.id = et.entry_id JOIN tags t ON et.tag_id = t.id`
+            : ''
+    const entryTypesSql = `
+        SELECT e.entry_type AS name, COUNT(DISTINCT e.id) AS cnt
+        ${fromClause}
+        ${entryTypesJoinTags}
+        ${whereClause}
+        GROUP BY e.entry_type ORDER BY cnt DESC
+    `
+
+    const tagsStmt = db.prepare(tagsSql)
+    const entryTypesStmt = db.prepare(entryTypesSql)
+
+    const tagsRows = tagsStmt.all(params) as { name: string; cnt: number }[]
+    const entryTypesRows = entryTypesStmt.all(params) as { name: string; cnt: number }[]
+
+    return {
+        tags: tagsRows.map((r) => ({ name: r.name, count: r.cnt })),
+        entryTypes: entryTypesRows.map((r) => ({ name: r.name, count: r.cnt })),
+    }
+}
+
+/**
+ * Appends the optional attribute/tag/date filter conditions for getSearchFacets.
+ */
+function appendFacetFilterConditions(
+    conditions: string[],
+    params: unknown[],
+    options: SearchFacetOptions | undefined
+): void {
     if (options?.isPersonal !== undefined) {
         conditions.push(`e.is_personal = ?`)
         params.push(options.isPersonal ? 1 : 0)
@@ -214,42 +265,5 @@ export function getSearchFacets(
         if (!end.includes('T')) end += 'T23:59:59.999Z'
         conditions.push(`e.timestamp <= ?`)
         params.push(end)
-    }
-
-    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
-    const fromClause = useFts
-        ? `FROM fts_content fts CROSS JOIN memory_journal e ON e.id = fts.rowid`
-        : `FROM memory_journal e`
-
-    const tagsSql = `
-        SELECT t.name, COUNT(DISTINCT e.id) AS cnt
-        ${fromClause}
-        JOIN entry_tags et ON e.id = et.entry_id
-        JOIN tags t ON et.tag_id = t.id
-        ${whereClause}
-        GROUP BY t.name ORDER BY cnt DESC LIMIT 20
-    `
-
-    const entryTypesJoinTags =
-        options?.tags !== undefined && options.tags.length > 0
-            ? `JOIN entry_tags et ON e.id = et.entry_id JOIN tags t ON et.tag_id = t.id`
-            : ''
-    const entryTypesSql = `
-        SELECT e.entry_type AS name, COUNT(DISTINCT e.id) AS cnt
-        ${fromClause}
-        ${entryTypesJoinTags}
-        ${whereClause}
-        GROUP BY e.entry_type ORDER BY cnt DESC
-    `
-
-    const tagsStmt = db.prepare(tagsSql)
-    const entryTypesStmt = db.prepare(entryTypesSql)
-
-    const tagsRows = tagsStmt.all(params) as { name: string; cnt: number }[]
-    const entryTypesRows = entryTypesStmt.all(params) as { name: string; cnt: number }[]
-
-    return {
-        tags: tagsRows.map((r) => ({ name: r.name, count: r.cnt })),
-        entryTypes: entryTypesRows.map((r) => ({ name: r.name, count: r.cnt })),
     }
 }

@@ -1,4 +1,6 @@
 import type { NativeConnectionManager } from '../native-connection.js'
+import { logger } from '../../../utils/logger.js'
+import { effectiveWorkspace } from '../../workspace-scope.js'
 
 export function getAuthorStatistics(
     connection: NativeConnectionManager,
@@ -6,7 +8,7 @@ export function getAuthorStatistics(
 ): { author: string; count: number }[] {
     let authors: { author: string; count: number }[] = []
     try {
-        const scopeId = workspaceId ?? 'default'
+        const scopeId = effectiveWorkspace(workspaceId)
         const wsFilter = scopeId !== '*' ? ' AND mj.workspace_id = ?' : ''
         const params: unknown[] = scopeId !== '*' ? [scopeId] : []
         const authorResult = connection.exec(
@@ -25,14 +27,22 @@ export function getAuthorStatistics(
             }))
         }
     } catch (error: unknown) {
-        if (
-            !(error instanceof Error) ||
-            (!error.message.includes('no such column') && !error.message.includes('no such table'))
-        ) {
+        if (!isMissingSchemaError(error)) {
             throw error
         }
+        logger.warning('Author statistics unavailable: schema is missing a table or column', {
+            module: 'team-collaboration',
+            error: String(error),
+        })
     }
     return authors
+}
+
+function isMissingSchemaError(error: unknown): boolean {
+    return (
+        error instanceof Error &&
+        (error.message.includes('no such column') || error.message.includes('no such table'))
+    )
 }
 
 export function getAuthorsForEntries(
@@ -57,12 +67,13 @@ export function getAuthorsForEntries(
             })
         }
     } catch (error: unknown) {
-        if (
-            !(error instanceof Error) ||
-            (!error.message.includes('no such column') && !error.message.includes('no such table'))
-        ) {
+        if (!isMissingSchemaError(error)) {
             throw error
         }
+        logger.warning('Entry author lookup unavailable: schema is missing a table or column', {
+            module: 'team-collaboration',
+            error: String(error),
+        })
     }
     return authorMap
 }
@@ -79,7 +90,7 @@ export function getTeamCollaborationMetrics(
 } {
     const limit = options.limit
     const period = options.period
-    const scopeId = options.workspaceId ?? 'default'
+    const scopeId = effectiveWorkspace(options.workspaceId)
     const scoped = scopeId !== '*'
     const workspaceId = scoped ? scopeId : undefined
 

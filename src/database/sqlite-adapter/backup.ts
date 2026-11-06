@@ -5,6 +5,7 @@ import { logger } from '../../utils/logger.js'
 import { assertNoPathTraversal } from '../../utils/security-utils.js'
 import { ResourceNotFoundError, ValidationError } from '../../types/errors.js'
 import type { IDatabaseConnection } from '../core/interfaces.js'
+import { acquireRestoreLock } from './restore-lock.js'
 
 /** Maximum length for user-supplied backup names after sanitization */
 const MAX_BACKUP_NAME_LENGTH = 50
@@ -216,144 +217,7 @@ export class BackupManager {
 
         const lockDir = `${this.ctx.getDbPath()}.lock.d`
         const lockFile = path.join(lockDir, 'lock.json')
-        const nonce = randomUUID()
-        try {
-            fs.mkdirSync(lockDir)
-            fs.writeFileSync(
-                lockFile,
-                JSON.stringify({ pid: process.pid, timestamp: Date.now(), nonce })
-            )
-        } catch (lockError: unknown) {
-            if (
-                typeof lockError === 'object' &&
-                lockError !== null &&
-                'code' in lockError &&
-                lockError.code === 'EEXIST'
-            ) {
-                let isStale = false
-                try {
-                    const lockContent = fs.readFileSync(lockFile, 'utf-8').trim()
-                    if (lockContent) {
-                        let holdingPid: number | undefined
-                        let lockTimestamp: number | undefined
-                        try {
-                            const parsed = JSON.parse(lockContent) as {
-                                pid?: number
-                                timestamp?: number
-                            }
-                            holdingPid = typeof parsed.pid === 'number' ? parsed.pid : undefined
-                            lockTimestamp =
-                                typeof parsed.timestamp === 'number' ? parsed.timestamp : undefined
-                        } catch {
-                            // Legacy raw PID string format fallback
-                            holdingPid = parseInt(lockContent, 10)
-                        }
-
-                        if (holdingPid !== undefined && !isNaN(holdingPid)) {
-                            // Check timestamp first: if older than 30 seconds, consider it stale due to crash
-                            if (
-                                lockTimestamp !== undefined &&
-                                Date.now() - lockTimestamp > 30 * 1000
-                            ) {
-                                isStale = true
-                                logger.warning(
-                                    'Found stale database restore lock (expired timestamp)',
-                                    {
-                                        path: lockDir,
-                                        holdingPid,
-                                        ageMs: Date.now() - lockTimestamp,
-                                        module: 'SqliteAdapter',
-                                    }
-                                )
-                            } else if (
-                                runtime !== undefined &&
-                                runtime !== null &&
-                                typeof runtime === 'object' &&
-                                'maintenanceManager' in runtime
-                            ) {
-                                // Delegate to ServerRuntime MaintenanceManager logic
-                                const mm = (
-                                    runtime as {
-                                        maintenanceManager?: { isMaintenanceModeActive(): boolean }
-                                    }
-                                ).maintenanceManager
-                                if (mm !== undefined && !mm.isMaintenanceModeActive()) {
-                                    isStale = true
-                                    logger.warning(
-                                        'Found stale database restore lock (maintenance mode inactive)',
-                                        { path: lockDir, module: 'SqliteAdapter' }
-                                    )
-                                }
-                            } else {
-                                try {
-                                    process.kill(holdingPid, 0)
-                                } catch (e: unknown) {
-                                    // ESRCH means the process does not exist
-                                    if (
-                                        e instanceof Error &&
-                                        (e as NodeJS.ErrnoException).code === 'ESRCH'
-                                    ) {
-                                        isStale = true
-                                    }
-                                }
-                            }
-                        }
-                    }
-                } catch (readErr: unknown) {
-                    // If the directory exists but the lock file is missing, it's an orphaned lock
-                    if (
-                        typeof readErr === 'object' &&
-                        readErr !== null &&
-                        'code' in readErr &&
-                        (readErr as NodeJS.ErrnoException).code === 'ENOENT'
-                    ) {
-                        isStale = true
-                    }
-                }
-
-                if (isStale) {
-                    logger.warning(
-                        'Found stale database restore lock (dead PID), atomically renaming',
-                        { path: lockDir, module: 'SqliteAdapter' }
-                    )
-                    try {
-                        fs.renameSync(lockDir, `${lockDir}.${randomUUID()}.stale`)
-                    } catch (renameErr) {
-                        // On Windows or concurrent environments, renaming a directory with files can throw EPERM/EBUSY.
-                        // Fall back to safely removing the stale lock directory.
-                        try {
-                            fs.rmSync(lockDir, {
-                                recursive: true,
-                                force: true,
-                                maxRetries: 5,
-                                retryDelay: 50,
-                            })
-                        } catch {
-                            // If rename and rmSync fail, another process likely beat us to it.
-                            throw new Error(
-                                `Another process is currently holding the database lock at ${lockDir}. Backup restore cannot safely proceed.`,
-                                { cause: renameErr }
-                            )
-                        }
-                    }
-                    // Retry acquiring the lock
-                    if (!fs.existsSync(lockDir)) {
-                        fs.mkdirSync(lockDir, { recursive: true })
-                    }
-                    fs.writeFileSync(
-                        lockFile,
-                        JSON.stringify({ pid: process.pid, timestamp: Date.now(), nonce })
-                    )
-                } else {
-                    throw new Error(
-                        `Another process is currently holding the database lock at ${lockDir}. Backup restore cannot safely proceed.`,
-                        { cause: lockError }
-                    )
-                }
-            } else {
-                throw lockError
-            }
-        }
+        acquireRestoreLock(lockDir, lockFile, runtime)
 
         try {
             const currentCountResult = this.ctx.exec(
@@ -364,96 +228,7 @@ export class BackupManager {
             // Close old DB via manager
             this.ctx.closeDbBeforeRestore()
 
-            const oldDbBackupPath = `${this.ctx.getDbPath()}.old_tmp_${randomUUID()}`
-            const tempDbPath = `${this.ctx.getDbPath()}.restore_tmp_${randomUUID()}`
-            await fs.promises.copyFile(backupPath, tempDbPath)
-
-            try {
-                // Copy current DB out of the way for rollback (bypasses Windows EBUSY locks on rename)
-                await fs.promises.copyFile(this.ctx.getDbPath(), oldDbBackupPath)
-
-                try {
-                    // Attempt atomic swap of new DB into place
-                    await fs.promises.rename(tempDbPath, this.ctx.getDbPath())
-                } catch {
-                    // Fallback to copyFile if atomic rename fails (e.g., Windows EBUSY or cross-device links)
-                    await fs.promises.copyFile(tempDbPath, this.ctx.getDbPath())
-                }
-
-                try {
-                    await fs.promises.unlink(`${this.ctx.getDbPath()}-wal`)
-                } catch {
-                    // Ignore missing files
-                }
-                try {
-                    await fs.promises.unlink(`${this.ctx.getDbPath()}-shm`)
-                } catch {
-                    // Ignore missing files
-                }
-
-                // Re-initialize using the connection's standard initialize method
-                // This ensures extensions like sqlite-vec are properly loaded
-                await this.ctx.initialize()
-
-                // Run explicit integrity check
-                const integrityResult = this.ctx.exec('PRAGMA integrity_check')
-                if (integrityResult[0]?.values[0]?.[0] !== 'ok') {
-                    throw new Error(
-                        `Integrity check failed: ${String(integrityResult[0]?.values[0]?.[0])}`
-                    )
-                }
-
-                // Success: clean up old DB backup
-                try {
-                    await fs.promises.unlink(oldDbBackupPath)
-                    await fs.promises.unlink(tempDbPath)
-                } catch {
-                    /* ignore cleanup errors */
-                }
-            } catch (error) {
-                logger.error('Restore failed, rolling back to pre-restore backup using copy', {
-                    module: 'SqliteAdapter',
-                    operation: 'restoreFromFile',
-                    error: error instanceof Error ? error.message : String(error),
-                    stack: error instanceof Error ? error.stack : undefined,
-                })
-                // Close DB to ensure handles are released before rollback
-                this.ctx.closeDbBeforeRestore()
-                // Rollback using copy to bypass EBUSY
-                let rollbackSuccess = false
-                try {
-                    await fs.promises.copyFile(oldDbBackupPath, this.ctx.getDbPath())
-                    rollbackSuccess = true
-                } catch (rollbackErr) {
-                    if ((rollbackErr as NodeJS.ErrnoException).code !== 'ENOENT') {
-                        logger.error('Rollback copy failed', { error: rollbackErr })
-                    }
-                }
-
-                // Best-effort cleanup of temp files
-                if (rollbackSuccess) {
-                    try {
-                        await fs.promises.unlink(oldDbBackupPath)
-                    } catch {
-                        /* ignore cleanup errors */
-                    }
-                }
-                try {
-                    await fs.promises.unlink(tempDbPath)
-                } catch {
-                    /* ignore cleanup errors */
-                }
-
-                if (!rollbackSuccess) {
-                    throw new Error(
-                        `CRITICAL: Database restore failed AND rollback failed. The database may be in an inconsistent state. Your previous database is preserved at: ${oldDbBackupPath}. Original error: ${error instanceof Error ? error.message : String(error)}`,
-                        { cause: error }
-                    )
-                }
-
-                await this.ctx.initialize()
-                throw error
-            }
+            await this.swapDatabase(backupPath)
 
             const newCountResult = this.ctx.exec(
                 'SELECT COUNT(*) FROM memory_journal WHERE deleted_at IS NULL'
@@ -477,6 +252,100 @@ export class BackupManager {
                     error: err instanceof Error ? err.message : String(err),
                 })
             }
+        }
+    }
+
+    /** Swap the backup into place, re-initialize and verify; roll back to the pre-restore copy on failure. */
+    private async swapDatabase(backupPath: string): Promise<void> {
+        const oldDbBackupPath = `${this.ctx.getDbPath()}.old_tmp_${randomUUID()}`
+        const tempDbPath = `${this.ctx.getDbPath()}.restore_tmp_${randomUUID()}`
+        await fs.promises.copyFile(backupPath, tempDbPath)
+
+        try {
+            // Copy current DB out of the way for rollback (bypasses Windows EBUSY locks on rename)
+            await fs.promises.copyFile(this.ctx.getDbPath(), oldDbBackupPath)
+
+            try {
+                // Attempt atomic swap of new DB into place
+                await fs.promises.rename(tempDbPath, this.ctx.getDbPath())
+            } catch {
+                // Fallback to copyFile if atomic rename fails (e.g., Windows EBUSY or cross-device links)
+                await fs.promises.copyFile(tempDbPath, this.ctx.getDbPath())
+            }
+
+            try {
+                await fs.promises.unlink(`${this.ctx.getDbPath()}-wal`)
+            } catch {
+                // Ignore missing files
+            }
+            try {
+                await fs.promises.unlink(`${this.ctx.getDbPath()}-shm`)
+            } catch {
+                // Ignore missing files
+            }
+
+            // Re-initialize using the connection's standard initialize method
+            // This ensures extensions like sqlite-vec are properly loaded
+            await this.ctx.initialize()
+
+            // Run explicit integrity check
+            const integrityResult = this.ctx.exec('PRAGMA integrity_check')
+            if (integrityResult[0]?.values[0]?.[0] !== 'ok') {
+                throw new Error(
+                    `Integrity check failed: ${String(integrityResult[0]?.values[0]?.[0])}`
+                )
+            }
+
+            // Success: clean up old DB backup
+            try {
+                await fs.promises.unlink(oldDbBackupPath)
+                await fs.promises.unlink(tempDbPath)
+            } catch {
+                /* ignore cleanup errors */
+            }
+        } catch (error) {
+            logger.error('Restore failed, rolling back to pre-restore backup using copy', {
+                module: 'SqliteAdapter',
+                operation: 'restoreFromFile',
+                error: error instanceof Error ? error.message : String(error),
+                stack: error instanceof Error ? error.stack : undefined,
+            })
+            // Close DB to ensure handles are released before rollback
+            this.ctx.closeDbBeforeRestore()
+            // Rollback using copy to bypass EBUSY
+            let rollbackSuccess = false
+            try {
+                await fs.promises.copyFile(oldDbBackupPath, this.ctx.getDbPath())
+                rollbackSuccess = true
+            } catch (rollbackErr) {
+                if ((rollbackErr as NodeJS.ErrnoException).code !== 'ENOENT') {
+                    logger.error('Rollback copy failed', { error: rollbackErr })
+                }
+            }
+
+            // Best-effort cleanup of temp files
+            if (rollbackSuccess) {
+                try {
+                    await fs.promises.unlink(oldDbBackupPath)
+                } catch {
+                    /* ignore cleanup errors */
+                }
+            }
+            try {
+                await fs.promises.unlink(tempDbPath)
+            } catch {
+                /* ignore cleanup errors */
+            }
+
+            if (!rollbackSuccess) {
+                throw new Error(
+                    `CRITICAL: Database restore failed AND rollback failed. The database may be in an inconsistent state. Your previous database is preserved at: ${oldDbBackupPath}. Original error: ${error instanceof Error ? error.message : String(error)}`,
+                    { cause: error }
+                )
+            }
+
+            await this.ctx.initialize()
+            throw error
         }
     }
 }

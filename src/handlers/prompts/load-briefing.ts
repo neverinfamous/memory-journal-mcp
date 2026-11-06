@@ -4,6 +4,7 @@ import type { BriefingConfig } from '../resources/shared.js'
 import * as path from 'node:path'
 import * as os from 'node:os'
 import { readFileSync, existsSync } from 'node:fs'
+import { logger } from '../../utils/logger.js'
 
 /**
  * Fallback to reading the config file if briefingConfig is not provided
@@ -17,8 +18,11 @@ function getRegistryFromConfigFallback(): Record<string, unknown> | null {
                 return config['projectRegistry'] as Record<string, unknown>
             }
         }
-    } catch {
-        // fail silently
+    } catch (err) {
+        logger.debug('Config registry fallback unavailable', {
+            module: 'load-briefing-prompt',
+            error: String(err),
+        })
     }
     return null
 }

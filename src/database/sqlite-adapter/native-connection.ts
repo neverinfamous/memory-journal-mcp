@@ -88,11 +88,22 @@ export class NativeConnectionManager implements IDatabaseConnection {
                 logger.info('sqlite-vec extension loaded via npm package', {
                     module: 'NativeConnectionManager',
                 })
-            } catch {
+            } catch (npmLoadError) {
+                logger.warning('sqlite-vec npm package failed to load; trying compiled fallback', {
+                    module: 'NativeConnectionManager',
+                    error: String(npmLoadError),
+                })
                 // Fallback: try loading the compiled .so directly (for Alpine Docker)
                 // In production, the .so is placed in /app/vec0.so, so we resolve relative to the process root or a known path.
                 const fallbackPath = path.resolve(process.cwd(), 'vec0')
-                db.loadExtension(fallbackPath)
+                try {
+                    db.loadExtension(fallbackPath)
+                } catch (fallbackError) {
+                    throw new Error(
+                        `sqlite-vec failed to load via npm (${String(npmLoadError)}) and via fallback ${fallbackPath} (${String(fallbackError)})`,
+                        { cause: fallbackError }
+                    )
+                }
                 logger.info('sqlite-vec extension loaded via compiled fallback', {
                     module: 'NativeConnectionManager',
                     path: fallbackPath,

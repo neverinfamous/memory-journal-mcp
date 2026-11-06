@@ -14,6 +14,25 @@ import { sanitizeSearchQuery } from '../../../../utils/security-utils.js'
 import { buildVocabulary, expandFuzzyQuery } from '../fuzzy-matcher.js'
 import { encodeCursor, decodeCursor, type SortBy } from './cursor.js'
 import { sanitizeFtsQuery } from './fts-sanitizer.js'
+import { effectiveWorkspace } from '../../../workspace-scope.js'
+
+interface SearchQueryOptions {
+    limit?: number
+    isPersonal?: boolean
+    projectNumber?: number
+    issueNumber?: number
+    prNumber?: number
+    prStatus?: string
+    workflowRunId?: number
+    tags?: string[]
+    entryType?: EntryType
+    startDate?: string
+    endDate?: string
+    sortBy?: SortBy
+    includeArchived?: boolean
+    includeHighlights?: boolean
+    workspaceId?: string
+}
 
 export interface SearchQueryRow {
     id: number
@@ -81,14 +100,15 @@ export function searchEntries(
 
     if (options?.cursor !== undefined) {
         const decoded = decodeCursor(options.cursor)
-        if (decoded !== null) {
-            if ('t' in decoded) {
-                hasKeyset = true
-                keysetT = decoded.t
-                keysetId = decoded.id
-            } else if ('offset' in decoded) {
-                offset = decoded.offset
-            }
+        if (decoded === null) {
+            throw new ValidationError('Invalid pagination cursor. Re-run the search without a cursor.')
+        }
+        if ('t' in decoded) {
+            hasKeyset = true
+            keysetT = decoded.t
+            keysetId = decoded.id
+        } else {
+            offset = decoded.offset
         }
     }
 
@@ -187,36 +207,9 @@ export function searchEntries(
 }
 
 /**
- * Builds the SQL query and params for searchEntries.
+ * Builds the SELECT ... FROM prefix (with optional importance CTE/joins and snippet column).
  */
-function buildSearchQuery(
-    queryStr: string,
-    options:
-        | {
-              limit?: number
-              isPersonal?: boolean
-              projectNumber?: number
-              issueNumber?: number
-              prNumber?: number
-              prStatus?: string
-              workflowRunId?: number
-              tags?: string[]
-              entryType?: EntryType
-              startDate?: string
-              endDate?: string
-              sortBy?: SortBy
-              includeArchived?: boolean
-              includeHighlights?: boolean
-              workspaceId?: string
-          }
-        | undefined,
-    useFts: boolean,
-    offset: number,
-    hasKeyset: boolean,
-    keysetT: string,
-    keysetId: number
-): { sql: string; params: unknown[] } {
-    let query: string
+function buildBaseSelect(options: SearchQueryOptions | undefined, useFts: boolean): string {
     const useImportance = options?.sortBy === 'importance'
     const importanceCol = useImportance
         ? `, ${buildImportanceSqlExpression()} AS importanceScore`
@@ -233,26 +226,41 @@ function buildSearchQuery(
             : ''
 
     if (useFts) {
-        query = `
+        return `
             ${ctePrefix}
             SELECT ${ALIASED_ENTRY_COLUMNS}${importanceCol}${snippetCol}
             FROM fts_content fts
             CROSS JOIN memory_journal e ON e.id = fts.rowid
             ${joinClause}
         `
-    } else {
-        query = `
+    }
+    return `
             ${ctePrefix}
             SELECT ${ALIASED_ENTRY_COLUMNS}${importanceCol}
             FROM memory_journal e
             ${joinClause}
         `
-    }
+}
+
+/**
+ * Builds the SQL query and params for searchEntries.
+ */
+function buildSearchQuery(
+    queryStr: string,
+    options: SearchQueryOptions | undefined,
+    useFts: boolean,
+    offset: number,
+    hasKeyset: boolean,
+    keysetT: string,
+    keysetId: number
+): { sql: string; params: unknown[] } {
+    const useImportance = options?.sortBy === 'importance'
+    let query = buildBaseSelect(options, useFts)
 
     const params: unknown[] = []
     const conditions: string[] = ['e.deleted_at IS NULL']
 
-    const targetWs = options?.workspaceId ?? 'default'
+    const targetWs = effectiveWorkspace(options?.workspaceId)
     if (targetWs !== '*') {
         conditions.push('e.workspace_id = ?')
         params.push(targetWs)
@@ -272,6 +280,39 @@ function buildSearchQuery(
         }
     }
 
+    appendFilterConditions(conditions, params, options)
+
+    if (hasKeyset && !useFts && !useImportance) {
+        conditions.push(`(e.timestamp < ? OR (e.timestamp = ? AND e.id < ?))`)
+        params.push(keysetT, keysetT, keysetId)
+    }
+
+    if (conditions.length > 0) {
+        query += ` WHERE ${conditions.join(' AND ')}`
+    }
+
+    if (useImportance) {
+        query += ` ORDER BY importanceScore DESC, e.timestamp DESC, e.id DESC`
+    } else if (useFts) {
+        query += ` ORDER BY rank, e.timestamp DESC, e.id DESC`
+    } else {
+        query += ` ORDER BY e.timestamp DESC, e.id DESC`
+    }
+
+    query += ` LIMIT ? OFFSET ?`
+    params.push(options?.limit ?? 10, offset)
+
+    return { sql: query, params }
+}
+
+/**
+ * Appends the optional attribute/tag/date filter conditions for searchEntries.
+ */
+function appendFilterConditions(
+    conditions: string[],
+    params: unknown[],
+    options: SearchQueryOptions | undefined
+): void {
     if (options?.isPersonal !== undefined) {
         conditions.push(`e.is_personal = ?`)
         params.push(options.isPersonal ? 1 : 0)
@@ -328,26 +369,5 @@ function buildSearchQuery(
         conditions.push(`e.timestamp <= ?`)
         params.push(end)
     }
-
-    if (hasKeyset && !useFts && !useImportance) {
-        conditions.push(`(e.timestamp < ? OR (e.timestamp = ? AND e.id < ?))`)
-        params.push(keysetT, keysetT, keysetId)
-    }
-
-    if (conditions.length > 0) {
-        query += ` WHERE ${conditions.join(' AND ')}`
-    }
-
-    if (useImportance) {
-        query += ` ORDER BY importanceScore DESC, e.timestamp DESC, e.id DESC`
-    } else if (useFts) {
-        query += ` ORDER BY rank, e.timestamp DESC, e.id DESC`
-    } else {
-        query += ` ORDER BY e.timestamp DESC, e.id DESC`
-    }
-
-    query += ` LIMIT ? OFFSET ?`
-    params.push(options?.limit ?? 10, offset)
-
-    return { sql: query, params }
 }
+

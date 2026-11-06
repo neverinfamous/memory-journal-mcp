@@ -11,6 +11,9 @@ import * as p from '@clack/prompts'
 import * as yaml from 'yaml'
 import type { BaseEntryOptionsSchema, createEntryOptionsSchema } from '../schemas.js'
 
+/** How long to wait for piped stdin before failing a non-interactive create. */
+const STDIN_TIMEOUT_MS = 3000
+
 export interface EntryPayload {
     entryType: EntryType | undefined
     tags: string[] | undefined
@@ -86,7 +89,7 @@ export async function parseContent(
                 )
                 process.exit(1)
             }
-        }, 3000)
+        }, STDIN_TIMEOUT_MS)
 
         for await (const chunk of process.stdin) {
             stdinStr += chunk

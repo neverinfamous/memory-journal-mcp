@@ -4,16 +4,19 @@ import { validateDateFormatPattern } from '../../../utils/security-utils.js'
 /** Maximum number of period rows returned in the activity timeline */
 const MAX_PERIOD_ROWS = 52
 
-export function getStatistics(
-    context: EntriesSharedContext,
-    groupBy: 'day' | 'week' | 'month' | 'year' = 'week',
-    startDate?: string,
-    endDate?: string,
-    projectBreakdown?: boolean,
-    workspaceId = 'default'
-): Record<string, unknown> {
-    const { db } = context
+type StatsDb = EntriesSharedContext['db']
 
+interface PeriodRow {
+    period: string
+    total_count: number
+    significant_count: number
+}
+
+function buildDateFilter(
+    workspaceId: string,
+    startDate?: string,
+    endDate?: string
+): { dateFilter: string; dateParams: unknown[] } {
     let dateFilter = ''
     const dateParams: unknown[] = []
 
@@ -34,9 +37,16 @@ export function getStatistics(
         dateFilter += ' AND timestamp <= ?'
         dateParams.push(end)
     }
+    return { dateFilter, dateParams }
+}
 
-    let totalEntries: number
+function getTypeCounts(
+    db: StatsDb,
+    dateFilter: string,
+    dateParams: unknown[]
+): { totalEntries: number; entriesByType: Record<string, number> } {
     const entriesByType: Record<string, number> = {}
+    let totalEntries: number
 
     if (dateParams.length > 0) {
         const countRow = db
@@ -69,9 +79,16 @@ export function getStatistics(
             entriesByType[row.entry_type] = row.count
         }
     }
+    return { totalEntries, entriesByType }
+}
 
-    const dateFormat = validateDateFormatPattern(groupBy)
-    const periodRows = db
+function getPeriodRows(
+    db: StatsDb,
+    dateFormat: string,
+    dateFilter: string,
+    dateParams: unknown[]
+): PeriodRow[] {
+    return db
         .prepare(
             `SELECT
         strftime(?, timestamp) as period,
@@ -83,24 +100,18 @@ export function getStatistics(
     ORDER BY period DESC
     LIMIT ${String(MAX_PERIOD_ROWS)}`
         )
-        .all(dateFormat, ...dateParams) as {
-        period: string
-        total_count: number
-        significant_count: number
-    }[]
+        .all(dateFormat, ...dateParams) as PeriodRow[]
+}
 
-    const entriesByPeriod = periodRows.map((r) => ({
-        period: r.period,
-        count: r.total_count,
-    }))
-
-    const decisionDensity = periodRows
-        .filter((r) => r.significant_count > 0)
-        .map((r) => ({
-            period: r.period,
-            significantCount: r.significant_count,
-        }))
-
+function getRelationshipCounts(
+    db: StatsDb,
+    dateFilter: string,
+    dateParams: unknown[]
+): {
+    totalRelationships: number
+    linkedCount: number
+    relTypeRows: { relationship_type: string; count: number }[]
+} {
     const relCountRow = db
         .prepare(
             `SELECT COUNT(*) as count FROM relationships r JOIN memory_journal m ON r.from_entry_id = m.id WHERE m.deleted_at IS NULL${dateFilter}`
@@ -135,22 +146,17 @@ export function getStatistics(
         )
         .get(...dateParams) as { count: number }
 
-    const totalRelationships = relCountRow.count
-    const avgPerEntry = totalEntries > 0 ? totalRelationships / totalEntries : 0
-    const density =
-        totalEntries > 0
-            ? Math.round((linkedEntriesRow.count / totalEntries) * 10000) / 10000
-            : 0
+    return {
+        totalRelationships: relCountRow.count,
+        linkedCount: linkedEntriesRow.count,
+        relTypeRows,
+    }
+}
 
-    const currentPeriod = entriesByPeriod[0]?.period ?? ''
-    const previousPeriod = entriesByPeriod[1]?.period ?? ''
-    const currentCount = entriesByPeriod[0]?.count ?? 0
-    const previousCount = entriesByPeriod[1]?.count ?? 0
-    const growthPercent =
-        previousCount > 0
-            ? Math.round(((currentCount - previousCount) / previousCount) * 100)
-            : null
-
+function buildRelationshipBreakdown(relTypeRows: { relationship_type: string; count: number }[]): {
+    causalMetrics: { blocked_by: number; resolved: number; caused: number }
+    relationshipBreakdown: Record<string, number>
+} {
     const causalMetrics = { blocked_by: 0, resolved: 0, caused: 0 }
     const relationshipBreakdown: Record<string, number> = {
         evolves_from: 0,
@@ -169,6 +175,57 @@ export function getStatistics(
             causalMetrics[canonicalKey] = (causalMetrics[canonicalKey] ?? 0) + row.count
         }
     }
+    return { causalMetrics, relationshipBreakdown }
+}
+
+export function getStatistics(
+    context: EntriesSharedContext,
+    groupBy: 'day' | 'week' | 'month' | 'year' = 'week',
+    startDate?: string,
+    endDate?: string,
+    projectBreakdown?: boolean,
+    workspaceId = 'default'
+): Record<string, unknown> {
+    const { db } = context
+
+    const { dateFilter, dateParams } = buildDateFilter(workspaceId, startDate, endDate)
+
+    const { totalEntries, entriesByType } = getTypeCounts(db, dateFilter, dateParams)
+
+    const dateFormat = validateDateFormatPattern(groupBy)
+    const periodRows = getPeriodRows(db, dateFormat, dateFilter, dateParams)
+
+    const entriesByPeriod = periodRows.map((r) => ({
+        period: r.period,
+        count: r.total_count,
+    }))
+
+    const decisionDensity = periodRows
+        .filter((r) => r.significant_count > 0)
+        .map((r) => ({
+            period: r.period,
+            significantCount: r.significant_count,
+        }))
+
+    const { totalRelationships, linkedCount, relTypeRows } = getRelationshipCounts(
+        db,
+        dateFilter,
+        dateParams
+    )
+    const avgPerEntry = totalEntries > 0 ? totalRelationships / totalEntries : 0
+    const density =
+        totalEntries > 0 ? Math.round((linkedCount / totalEntries) * 10000) / 10000 : 0
+
+    const currentPeriod = entriesByPeriod[0]?.period ?? ''
+    const previousPeriod = entriesByPeriod[1]?.period ?? ''
+    const currentCount = entriesByPeriod[0]?.count ?? 0
+    const previousCount = entriesByPeriod[1]?.count ?? 0
+    const growthPercent =
+        previousCount > 0
+            ? Math.round(((currentCount - previousCount) / previousCount) * 100)
+            : null
+
+    const { causalMetrics, relationshipBreakdown } = buildRelationshipBreakdown(relTypeRows)
 
     const result: Record<string, unknown> = {
         totalEntries,
@@ -197,9 +254,21 @@ export function getStatistics(
     }
 
     if (projectBreakdown) {
-        const projRows = db
-            .prepare(
-                `SELECT 
+        result['projectBreakdown'] = buildProjectBreakdown(context, dateFilter, dateParams)
+    }
+
+    return result
+}
+
+function buildProjectBreakdown(
+    context: EntriesSharedContext,
+    dateFilter: string,
+    dateParams: unknown[]
+): Record<string, unknown>[] {
+    const { db } = context
+    const projRows = db
+        .prepare(
+            `SELECT 
                     project_number, 
                     COUNT(*) as entry_count,
                     MAX(issue_url) as sample_issue_url,
@@ -208,50 +277,47 @@ export function getStatistics(
             WHERE deleted_at IS NULL AND project_number IS NOT NULL${dateFilter}
             GROUP BY project_number
             ORDER BY entry_count DESC`
-            )
-            .all(...dateParams) as {
-                project_number: number
-                entry_count: number
-                sample_issue_url: string | null
-                sample_pr_url: string | null
-            }[]
+        )
+        .all(...dateParams) as {
+        project_number: number
+        entry_count: number
+        sample_issue_url: string | null
+        sample_pr_url: string | null
+    }[]
 
-        result['projectBreakdown'] = projRows.map((r) => {
-            let name: string | undefined = undefined
-            
-            // 1. Try to resolve from config registry by matching project_number
-            if (context.config?.projectRegistry) {
-                for (const [key, val] of Object.entries(context.config.projectRegistry)) {
-                    if (val.project_number === r.project_number) {
-                        name = key
-                        break
-                    }
+    return projRows.map((r) => {
+        let name: string | undefined = undefined
+
+        // 1. Try to resolve from config registry by matching project_number
+        if (context.config?.projectRegistry) {
+            for (const [key, val] of Object.entries(context.config.projectRegistry)) {
+                if (val.project_number === r.project_number) {
+                    name = key
+                    break
                 }
             }
-            
-            // 2. Fallback to URL parsing if not found in config
-            if (!name) {
-                const url = r.sample_issue_url || r.sample_pr_url
-                if (url) {
-                    try {
-                        const parsed = new URL(url)
-                        const parts = parsed.pathname.split('/').filter(Boolean)
-                        if (parts.length >= 2) {
-                            name = parts[1]
-                        }
-                    } catch {
-                        // Ignore URL parsing errors
+        }
+
+        // 2. Fallback to URL parsing if not found in config
+        if (!name) {
+            const url = r.sample_issue_url || r.sample_pr_url
+            if (url) {
+                try {
+                    const parsed = new URL(url)
+                    const parts = parsed.pathname.split('/').filter(Boolean)
+                    if (parts.length >= 2) {
+                        name = parts[1]
                     }
+                } catch {
+                    // Ignore URL parsing errors
                 }
             }
-            
-            return {
-                project_number: r.project_number,
-                entry_count: r.entry_count,
-                ...(name ? { name } : {}),
-            }
-        })
-    }
+        }
 
-    return result
+        return {
+            project_number: r.project_number,
+            entry_count: r.entry_count,
+            ...(name ? { name } : {}),
+        }
+    })
 }

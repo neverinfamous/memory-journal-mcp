@@ -1,5 +1,6 @@
 import type { JournalEntry, EntryType } from '../../../types/index.js'
 import type { NativeConnectionManager } from '../native-connection.js'
+import { effectiveWorkspace } from '../../workspace-scope.js'
 import {
     saveAnalyticsSnapshot as saveSnapshot,
     getLatestAnalyticsSnapshot as getLatestSnapshot,
@@ -18,7 +19,7 @@ export function getWorkflowActionEntries(
         WHERE workflow_run_id IS NOT NULL AND deleted_at IS NULL
     `
     const params: unknown[] = []
-    const scopeId = workspaceId ?? 'default'
+    const scopeId = effectiveWorkspace(workspaceId)
     if (scopeId !== '*') {
         sql += ` AND workspace_id = ?`
         params.push(scopeId)
@@ -92,7 +93,7 @@ export function getSignificantEntries(
         sql += ` AND project_number = ?`
         params.push(projectNumber)
     }
-    const scopeId = workspaceId ?? 'default'
+    const scopeId = effectiveWorkspace(workspaceId)
     if (scopeId !== '*') {
         sql += ` AND workspace_id = ?`
         params.push(scopeId)
@@ -173,5 +174,5 @@ export function computeDigest(
     connection: NativeConnectionManager,
     workspaceId?: string
 ): DigestSnapshot {
-    return computeDigestCore(connection.getNativeDb(), workspaceId ?? 'default')
+    return computeDigestCore(connection.getNativeDb(), effectiveWorkspace(workspaceId))
 }

@@ -8,7 +8,7 @@ import type { ToolDefinition, ToolContext } from '../../../../types/index.js'
 import { formatHandlerError } from '../../../../utils/error-helpers.js'
 import { resolveAuthenticatedAuthor } from '../../../../utils/security-utils.js'
 import { resolveWorkspaceId } from '../../../../utils/workspace-resolver.js'
-import { TEAM_DB_ERROR_RESPONSE, fetchAuthor, triggerTeamNotifications } from '../helpers.js'
+import { TEAM_DB_ERROR_RESPONSE, fetchAuthor, triggerTeamNotifications, resolveTeamProjectNumber } from '../helpers.js'
 import { enforceOwnership } from '../rbac.js'
 import {
     TeamUpdateEntrySchema,
@@ -173,12 +173,7 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                     const { entry_id, project_number, expected_version, workspace_id } = TeamDeleteEntrySchema.parse(params)
 
                     const wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
-                    const projectNumber =
-                        project_number ??
-                        (wsId !== 'default' && wsId !== '*'
-                            ? context.config?.projectRegistry?.[wsId]?.project_number
-                            : undefined) ??
-                        context.config?.defaultProjectNumber
+                    const projectNumber = resolveTeamProjectNumber(context, wsId, project_number)
                     if (projectNumber === undefined || projectNumber === null) {
                         return {
                             success: false,
@@ -273,12 +268,7 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                     const { entry_id, project_number, workspace_id } = TeamRestoreEntrySchema.parse(params)
 
                     const wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
-                    const projectNumber =
-                        project_number ??
-                        (wsId !== 'default' && wsId !== '*'
-                            ? context.config?.projectRegistry?.[wsId]?.project_number
-                            : undefined) ??
-                        context.config?.defaultProjectNumber
+                    const projectNumber = resolveTeamProjectNumber(context, wsId, project_number)
                     if (projectNumber === undefined || projectNumber === null) {
                         return {
                             success: false,

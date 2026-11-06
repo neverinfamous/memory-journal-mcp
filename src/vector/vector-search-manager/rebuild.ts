@@ -72,8 +72,12 @@ export async function rebuildIndex(
                             skipped++
                             continue
                         }
-                    } catch {
+                    } catch (err) {
                         // Ignore check error and try to index anyway
+                        logger.debug('Vector existence check failed; indexing entry anyway', {
+                            entryId: entry.id,
+                            error: err instanceof Error ? err.message : String(err),
+                        })
                     }
                 }
 

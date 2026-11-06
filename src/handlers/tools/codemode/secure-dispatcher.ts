@@ -143,76 +143,15 @@ export function createSecureDispatcher(
             )
         }
 
-        let finalParams = deepCamelToSnake(toolParams)
+        const normalized = await normalizeDispatchParams(tool, toolParams, {
+            sessionContext,
+            projectId,
+            workspaceId,
+        })
+        if ('errorResult' in normalized) return normalized.errorResult
+        let finalParams = normalized.params
 
-        if (isRecord(finalParams)) {
-            const paramsObj = { ...finalParams }
-            if (paramsObj['project_number'] === undefined && projectId !== undefined && checkSchemaAcceptsKey(tool.inputSchema, 'project_number')) {
-                paramsObj['project_number'] = projectId
-            }
-            if (paramsObj['workspace'] !== undefined && paramsObj['workspace_id'] === undefined) {
-                paramsObj['workspace_id'] = paramsObj['workspace']
-            }
-            if (typeof paramsObj['workspace_id'] === 'number') {
-                paramsObj['workspace_id'] = String(paramsObj['workspace_id'])
-            }
-            if (paramsObj['workspace_id'] === undefined && workspaceId !== undefined && checkSchemaAcceptsKey(tool.inputSchema, 'workspace_id')) {
-                paramsObj['workspace_id'] = workspaceId
-            }
-
-            if (
-                (paramsObj['issue_number'] !== undefined && paramsObj['issue_url'] === undefined) ||
-                (paramsObj['pr_number'] !== undefined && paramsObj['pr_url'] === undefined)
-            ) {
-                if (sessionContext.github !== undefined) {
-                    try {
-                        const repoInfo = await sessionContext.github.getRepoInfo()
-                        if (repoInfo?.owner && repoInfo?.repo) {
-                            if (paramsObj['issue_number'] !== undefined && paramsObj['issue_url'] === undefined) {
-                                paramsObj['issue_url'] = `https://github.com/${repoInfo.owner}/${repoInfo.repo}/issues/${String(Number(paramsObj['issue_number']))}`
-                            }
-                            if (paramsObj['pr_number'] !== undefined && paramsObj['pr_url'] === undefined) {
-                                paramsObj['pr_url'] = `https://github.com/${repoInfo.owner}/${repoInfo.repo}/pull/${String(Number(paramsObj['pr_number']))}`
-                            }
-                        }
-                    } catch {
-                        // Ignore errors and proceed without auto-populated github URLs
-                    }
-                }
-            }
-
-            if (typeof paramsObj['project_number'] === 'string') {
-                const regEntry = lookupRegistryEntry(sessionContext.config?.projectRegistry, paramsObj['project_number'])
-                if (regEntry?.project_number !== undefined) paramsObj['project_number'] = regEntry.project_number
-            }
-
-            if (typeof paramsObj['project_number'] === 'string') {
-                const parsed = Number(paramsObj['project_number'])
-                if (!Number.isNaN(parsed) && Number.isFinite(parsed)) {
-                    paramsObj['project_number'] = parsed
-                } else {
-                    return {
-                        success: false,
-                        error: `Invalid project_number: '${paramsObj['project_number']}'. Code Mode failed to resolve this to a known numeric ID. You can pass the exact numeric ID (e.g. 14), the repo name (e.g. 'mysql-mcp'), or simply OMIT the project_number field entirely to let the system auto-inject the current workspace's ID.`,
-                    }
-                }
-            }
-
-            finalParams = paramsObj
-        }
-
-        if (autoVersion && VERSION_AWARE_TOOL_NAMES.has(toolName) && isRecord(finalParams)) {
-            const paramsObj = { ...finalParams }
-            if (paramsObj['expected_version'] === undefined && typeof paramsObj['entry_id'] === 'number') {
-                const entryId = paramsObj['entry_id']
-                const targetDb = toolName.startsWith('team_') ? sessionContext.teamDb : sessionContext.db
-                const existingEntry = targetDb?.getEntryById(entryId)
-                if (existingEntry !== null && existingEntry !== undefined && 'version' in existingEntry) {
-                    paramsObj['expected_version'] = existingEntry.version
-                }
-            }
-            finalParams = paramsObj
-        }
+        finalParams = applyAutoVersion(toolName, finalParams, autoVersion, sessionContext)
 
         if (tool.annotations?.readOnlyHint === false && dryRun) {
             return {
@@ -227,26 +166,134 @@ export function createSecureDispatcher(
             return { success: true, simulated: true, params: finalParams }
         }
 
-        // Critical C-3 Fix: Enforce OAuth access boundary, metrics collection, audit logging, and resource notifications
-        const runtime = sessionContext.config?.runtime
-        enforceAccessBoundary(tool.name, 'tool', tool.capabilities, runtime?.auditLogger)
-        if (tool.name !== 'restore_backup') {
-            runtime?.maintenanceManager.assertNotInMaintenanceMode()
-        }
-
-        const argsRecord = isRecord(finalParams) ? finalParams : {}
-        const rawInvoke = (a: Record<string, unknown>): Promise<unknown> => Promise.resolve(tool.handler(a))
-        const metricsWrapped = runtime?.metrics !== undefined ? wrapWithMetrics(tool.name, rawInvoke, runtime.metrics) : rawInvoke
-        const auditInterceptor = runtime?.auditInterceptor
-        const result =
-            auditInterceptor !== null && auditInterceptor !== undefined
-                ? await auditInterceptor.around(tool.name, argsRecord, () => metricsWrapped(argsRecord))
-                : await metricsWrapped(argsRecord)
-
-        injectProjectNames(result, sessionContext.config?.projectRegistry)
-        notifySubscriptionsIfMutated(tool, result, sessionContext)
-        return result
+        return invokeToolWithGuards(tool, finalParams, sessionContext)
     }
+}
+
+interface DispatchParamContext {
+    sessionContext: ToolContext
+    projectId: number | string | undefined
+    workspaceId: string | undefined
+}
+
+async function autoPopulateGithubUrls(
+    paramsObj: Record<string, unknown>,
+    sessionContext: ToolContext
+): Promise<void> {
+    if (
+        !(
+            (paramsObj['issue_number'] !== undefined && paramsObj['issue_url'] === undefined) ||
+            (paramsObj['pr_number'] !== undefined && paramsObj['pr_url'] === undefined)
+        )
+    ) {
+        return
+    }
+    if (sessionContext.github === undefined) return
+    try {
+        const repoInfo = await sessionContext.github.getRepoInfo()
+        if (repoInfo?.owner && repoInfo?.repo) {
+            if (paramsObj['issue_number'] !== undefined && paramsObj['issue_url'] === undefined) {
+                paramsObj['issue_url'] = `https://github.com/${repoInfo.owner}/${repoInfo.repo}/issues/${String(Number(paramsObj['issue_number']))}`
+            }
+            if (paramsObj['pr_number'] !== undefined && paramsObj['pr_url'] === undefined) {
+                paramsObj['pr_url'] = `https://github.com/${repoInfo.owner}/${repoInfo.repo}/pull/${String(Number(paramsObj['pr_number']))}`
+            }
+        }
+    } catch {
+        // Ignore errors and proceed without auto-populated github URLs
+    }
+}
+
+async function normalizeDispatchParams(
+    tool: ToolDefinition,
+    toolParams: unknown,
+    ctx: DispatchParamContext
+): Promise<{ params: unknown } | { errorResult: Record<string, unknown> }> {
+    const { sessionContext, projectId, workspaceId } = ctx
+    const finalParams = deepCamelToSnake(toolParams)
+    if (!isRecord(finalParams)) return { params: finalParams }
+
+    const paramsObj = { ...finalParams }
+    if (paramsObj['project_number'] === undefined && projectId !== undefined && checkSchemaAcceptsKey(tool.inputSchema, 'project_number')) {
+        paramsObj['project_number'] = projectId
+    }
+    if (paramsObj['workspace'] !== undefined && paramsObj['workspace_id'] === undefined) {
+        paramsObj['workspace_id'] = paramsObj['workspace']
+    }
+    if (typeof paramsObj['workspace_id'] === 'number') {
+        paramsObj['workspace_id'] = String(paramsObj['workspace_id'])
+    }
+    if (paramsObj['workspace_id'] === undefined && workspaceId !== undefined && checkSchemaAcceptsKey(tool.inputSchema, 'workspace_id')) {
+        paramsObj['workspace_id'] = workspaceId
+    }
+
+    await autoPopulateGithubUrls(paramsObj, sessionContext)
+
+    if (typeof paramsObj['project_number'] === 'string') {
+        const regEntry = lookupRegistryEntry(sessionContext.config?.projectRegistry, paramsObj['project_number'])
+        if (regEntry?.project_number !== undefined) paramsObj['project_number'] = regEntry.project_number
+    }
+
+    if (typeof paramsObj['project_number'] === 'string') {
+        const parsed = Number(paramsObj['project_number'])
+        if (!Number.isNaN(parsed) && Number.isFinite(parsed)) {
+            paramsObj['project_number'] = parsed
+        } else {
+            return {
+                errorResult: {
+                    success: false,
+                    error: `Invalid project_number: '${paramsObj['project_number']}'. Code Mode failed to resolve this to a known numeric ID. You can pass the exact numeric ID (e.g. 14), the repo name (e.g. 'mysql-mcp'), or simply OMIT the project_number field entirely to let the system auto-inject the current workspace's ID.`,
+                },
+            }
+        }
+    }
+
+    return { params: paramsObj }
+}
+
+function applyAutoVersion(
+    toolName: string,
+    finalParams: unknown,
+    autoVersion: boolean,
+    sessionContext: ToolContext
+): unknown {
+    if (!(autoVersion && VERSION_AWARE_TOOL_NAMES.has(toolName) && isRecord(finalParams))) return finalParams
+    const paramsObj = { ...finalParams }
+    if (paramsObj['expected_version'] === undefined && typeof paramsObj['entry_id'] === 'number') {
+        const entryId = paramsObj['entry_id']
+        const targetDb = toolName.startsWith('team_') ? sessionContext.teamDb : sessionContext.db
+        const existingEntry = targetDb?.getEntryById(entryId)
+        if (existingEntry !== null && existingEntry !== undefined && 'version' in existingEntry) {
+            paramsObj['expected_version'] = existingEntry.version
+        }
+    }
+    return paramsObj
+}
+
+async function invokeToolWithGuards(
+    tool: ToolDefinition,
+    finalParams: unknown,
+    sessionContext: ToolContext
+): Promise<unknown> {
+    // Critical C-3 Fix: Enforce OAuth access boundary, metrics collection, audit logging, and resource notifications
+    const runtime = sessionContext.config?.runtime
+    enforceAccessBoundary(tool.name, 'tool', tool.capabilities, runtime?.auditLogger)
+    if (tool.name !== 'restore_backup') {
+        runtime?.maintenanceManager.assertNotInMaintenanceMode()
+    }
+
+    const argsRecord = isRecord(finalParams) ? finalParams : {}
+    const rawInvoke = (a: Record<string, unknown>): Promise<unknown> => Promise.resolve(tool.handler(a))
+    const metricsWrapped = runtime?.metrics !== undefined ? wrapWithMetrics(tool.name, rawInvoke, runtime.metrics) : rawInvoke
+    const auditInterceptor = runtime?.auditInterceptor
+    const result =
+        auditInterceptor !== null && auditInterceptor !== undefined
+            ? await auditInterceptor.around(tool.name, argsRecord, () => metricsWrapped(argsRecord))
+            : await metricsWrapped(argsRecord)
+
+    injectProjectNames(result, sessionContext.config?.projectRegistry)
+    notifySubscriptionsIfMutated(tool, result, sessionContext)
+    return result
 }
 
 export async function resolveCodeModeSessionContext(

@@ -1,5 +1,6 @@
 import type { NativeConnectionManager } from '../native-connection.js'
 import type { QueryResult } from '../../core/interfaces.js'
+import { effectiveWorkspace } from '../../workspace-scope.js'
 
 export function getCrossProjectInsights(
     connection: NativeConnectionManager,
@@ -16,7 +17,7 @@ export function getCrossProjectInsights(
 } {
     let where = 'WHERE deleted_at IS NULL AND project_number IS NOT NULL'
     const sqlParams: unknown[] = []
-    const scopeId = options.workspaceId ?? 'default'
+    const scopeId = effectiveWorkspace(options.workspaceId)
     const wsFilter = scopeId !== '*' ? ' AND workspace_id = ?' : ''
     const wsParams: unknown[] = scopeId !== '*' ? [scopeId] : []
 
@@ -145,7 +146,7 @@ export function visualizeRelationships(
     edges: { from: string | number; to: string | number; label: string; type: string }[]
 } {
     let entriesResult: QueryResult[]
-    const scopeId = options.workspaceId ?? 'default'
+    const scopeId = effectiveWorkspace(options.workspaceId)
     const wsFilter = scopeId !== '*' ? ' AND mj.workspace_id = ?' : ''
     const wsParam = scopeId !== '*' ? [scopeId] : []
 
@@ -273,7 +274,7 @@ export function getRecentGraphRelationships(
     from_content: string
     to_content: string
 }[] {
-    const scopeId = workspaceId ?? 'default'
+    const scopeId = effectiveWorkspace(workspaceId)
     const wsFilter = scopeId !== '*' ? ' AND e1.workspace_id = ? AND e2.workspace_id = ?' : ''
     const params: unknown[] = scopeId !== '*' ? [scopeId, scopeId, limit] : [limit]
     const rows = connection.exec(

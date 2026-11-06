@@ -2,6 +2,7 @@ import { simpleGit, type SimpleGitOptions } from 'simple-git'
 import type { GitHubIntegration } from '../github-integration/index.js'
 import { parseCommitReferences } from './parser.js'
 import { resolveReferences, type ResolvedReference } from './resolver.js'
+import { logger } from '../../utils/logger.js'
 
 export interface EnrichedCommit {
     hash: string
@@ -32,8 +33,11 @@ export async function enrichCommits(
             const repoInfo = github.getCachedRepoInfo() ?? (await github.getRepoInfo())
             defaultOwner = repoInfo.owner
             defaultRepo = repoInfo.repo
-        } catch {
-            // ignore
+        } catch (err) {
+            logger.warning('GitHub repo info unavailable; commit references stay unresolved', {
+                module: 'CommitEnricher',
+                error: String(err),
+            })
         }
     }
 
@@ -61,8 +65,12 @@ export async function enrichCommits(
                 date: commit.date,
                 references: resolvedRefs,
             })
-        } catch {
-            // Ignore git errors for single commits
+        } catch (err) {
+            logger.warning('Skipping commit enrichment for a single commit', {
+                module: 'CommitEnricher',
+                hash,
+                error: String(err),
+            })
         }
     }
 

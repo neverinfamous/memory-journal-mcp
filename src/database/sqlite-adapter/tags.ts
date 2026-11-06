@@ -3,6 +3,7 @@ import { logger } from '../../utils/logger.js'
 import { ResourceNotFoundError, QueryError } from '../../types/errors.js'
 import type { Tag } from '../../types/index.js'
 import type { NativeConnectionManager } from './native-connection.js'
+import { effectiveWorkspace } from '../workspace-scope.js'
 
 export class TagsManager {
     private ctx: NativeConnectionManager
@@ -141,7 +142,7 @@ export class TagsManager {
             ).run(targetTagId)
 
             // Select only valid entries (join ensures no orphans)
-            const scopeId = workspaceId ?? 'default'
+            const scopeId = effectiveWorkspace(workspaceId)
             const scopedWorkspace = scopeId === '*' ? undefined : scopeId
             const entryRows = db
                 .prepare(

@@ -8,12 +8,13 @@ import {
 } from '../shared.js'
 import { buildImportanceSqlExpression, buildImportanceCte } from '../importance.js'
 import { encodeCursor, decodeCursor, type SortBy } from './cursor.js'
+import { effectiveWorkspace } from '../../../workspace-scope.js'
 
 export function getEntryCount(context: EntriesSharedContext, workspaceId?: string): number {
     const { db } = context
     let query = 'SELECT COUNT(*) as count FROM memory_journal WHERE deleted_at IS NULL'
     const params: unknown[] = []
-    const scopeId = workspaceId ?? 'default'
+    const scopeId = effectiveWorkspace(workspaceId)
     if (scopeId !== '*') {
         query += ' AND workspace_id = ?'
         params.push(scopeId)
@@ -36,7 +37,7 @@ export function getFilteredEntryCount(
     const conditions = ['deleted_at IS NULL']
     const params: unknown[] = []
 
-    const targetWs = options?.workspaceId ?? 'default'
+    const targetWs = effectiveWorkspace(options?.workspaceId)
     if (targetWs !== '*') {
         conditions.push('workspace_id = ?')
         params.push(targetWs)
@@ -215,7 +216,7 @@ export function searchByDateRange(
     const conditions = ['e.deleted_at IS NULL', 'e.timestamp >= ?']
     const params: unknown[] = [start]
 
-    const targetWs = options?.workspaceId ?? 'default'
+    const targetWs = effectiveWorkspace(options?.workspaceId)
     if (targetWs !== '*') {
         conditions.push('e.workspace_id = ?')
         params.push(targetWs)
@@ -237,22 +238,7 @@ export function searchByDateRange(
         ? `, ${buildImportanceSqlExpression()} AS importanceScore`
         : ''
 
-    let offset = 0
-    let hasKeyset = false
-    let keysetT = ''
-    let keysetId = 0
-    if (options?.cursor !== undefined) {
-        const decoded = decodeCursor(options.cursor)
-        if (decoded !== null) {
-            if ('t' in decoded) {
-                hasKeyset = true
-                keysetT = decoded.t
-                keysetId = decoded.id
-            } else if ('offset' in decoded) {
-                offset = decoded.offset
-            }
-        }
-    }
+    const { offset, hasKeyset, keysetT, keysetId } = decodeDateRangeCursor(options?.cursor)
 
     let query = ''
     if (useImportance) {
@@ -267,6 +253,87 @@ export function searchByDateRange(
         query += `LEFT JOIN anchor_stats ans ON e.id = ans.entry_id `
     }
 
+    appendDateRangeFilters(conditions, params, options)
+
+    if (hasKeyset && !useImportance) {
+        conditions.push(`(e.timestamp < ? OR (e.timestamp = ? AND e.id < ?))`)
+        params.push(keysetT, keysetT, keysetId)
+    }
+
+    if (useImportance) {
+        query += ` WHERE ${conditions.join(' AND ')} ORDER BY importanceScore DESC, e.timestamp DESC, e.id DESC`
+    } else {
+        query += ` WHERE ${conditions.join(' AND ')} ORDER BY e.timestamp DESC, e.id DESC`
+    }
+
+    query += ` LIMIT ? OFFSET ?`
+    params.push(options?.limit ?? 500, offset)
+
+    const stmt = db.prepare(query)
+    const rows = stmt.all(params)
+
+    const entries = rowsToEntries(tagsMgr, rows)
+    const limit = options?.limit ?? 500
+    if (entries.length === limit && limit > 0) {
+        if (!useImportance && entries.length > 0) {
+            const last = entries[entries.length - 1]
+            if (last !== undefined) {
+                return { entries, nextCursor: encodeCursor({ t: last.timestamp, id: last.id }) }
+            }
+        } else {
+            return { entries, nextCursor: encodeCursor({ offset: offset + limit }) }
+        }
+    }
+
+    return { entries }
+}
+
+/**
+ * Decodes a pagination cursor into keyset/offset state for searchByDateRange.
+ */
+function decodeDateRangeCursor(cursor: string | undefined): {
+    offset: number
+    hasKeyset: boolean
+    keysetT: string
+    keysetId: number
+} {
+    let offset = 0
+    let hasKeyset = false
+    let keysetT = ''
+    let keysetId = 0
+    if (cursor !== undefined) {
+        const decoded = decodeCursor(cursor)
+        if (decoded !== null) {
+            if ('t' in decoded) {
+                hasKeyset = true
+                keysetT = decoded.t
+                keysetId = decoded.id
+            } else if ('offset' in decoded) {
+                offset = decoded.offset
+            }
+        }
+    }
+    return { offset, hasKeyset, keysetT, keysetId }
+}
+
+/**
+ * Appends the optional tag/type/attribute filter conditions for searchByDateRange.
+ */
+function appendDateRangeFilters(
+    conditions: string[],
+    params: unknown[],
+    options:
+        | {
+              entryType?: EntryType
+              tags?: string[]
+              isPersonal?: boolean
+              projectNumber?: number
+              issueNumber?: number
+              prNumber?: number
+              workflowRunId?: number
+          }
+        | undefined
+): void {
     if (options?.tags !== undefined && options.tags.length > 0) {
         const placeholders = options.tags.map(() => '?').join(',')
         conditions.push(
@@ -304,36 +371,4 @@ export function searchByDateRange(
         conditions.push(`e.workflow_run_id = ?`)
         params.push(options.workflowRunId)
     }
-
-    if (hasKeyset && !useImportance) {
-        conditions.push(`(e.timestamp < ? OR (e.timestamp = ? AND e.id < ?))`)
-        params.push(keysetT, keysetT, keysetId)
-    }
-
-    if (useImportance) {
-        query += ` WHERE ${conditions.join(' AND ')} ORDER BY importanceScore DESC, e.timestamp DESC, e.id DESC`
-    } else {
-        query += ` WHERE ${conditions.join(' AND ')} ORDER BY e.timestamp DESC, e.id DESC`
-    }
-
-    query += ` LIMIT ? OFFSET ?`
-    params.push(options?.limit ?? 500, offset)
-
-    const stmt = db.prepare(query)
-    const rows = stmt.all(params)
-
-    const entries = rowsToEntries(tagsMgr, rows)
-    const limit = options?.limit ?? 500
-    if (entries.length === limit && limit > 0) {
-        if (!useImportance && entries.length > 0) {
-            const last = entries[entries.length - 1]
-            if (last !== undefined) {
-                return { entries, nextCursor: encodeCursor({ t: last.timestamp, id: last.id }) }
-            }
-        } else {
-            return { entries, nextCursor: encodeCursor({ offset: offset + limit }) }
-        }
-    }
-
-    return { entries }
 }
