@@ -1,4 +1,5 @@
-import { QueryError } from '../../types/errors.js'
+import { QueryError, ValidationError } from '../../types/errors.js'
+import { effectiveWorkspace } from '../workspace-scope.js'
 import type { IDatabaseConnection, AuthorAlias } from '../core/interfaces.js'
 
 export class AliasManager {
@@ -35,12 +36,17 @@ export class AliasManager {
     }
 
     addAlias(alias: string, canonicalAuthor: string, createdBy?: string, workspaceId?: string): AuthorAlias {
+        if (workspaceId === '*') {
+            throw new ValidationError(
+                "Aliases are stored per workspace; workspaceId '*' is not a valid destination. Provide a concrete workspace."
+            )
+        }
         try {
             if (alias.toLowerCase() === canonicalAuthor.toLowerCase()) {
                 throw new QueryError('Cannot alias an author to themselves')
             }
 
-            const storedWorkspace = workspaceId === '*' || workspaceId === undefined ? 'default' : workspaceId
+            const storedWorkspace = effectiveWorkspace(workspaceId)
             this.db.run(
                 `INSERT INTO author_aliases (alias, canonical_author, created_by, workspace_id)
                  VALUES (?, ?, ?, ?)`,
@@ -69,7 +75,7 @@ export class AliasManager {
 
     removeAlias(alias: string, workspaceId?: string): boolean {
         try {
-            const scopeId = workspaceId ?? 'default'
+            const scopeId = effectiveWorkspace(workspaceId)
             const scoped = scopeId !== '*'
             const selectSql = scoped
                 ? `SELECT id FROM author_aliases WHERE alias = ? COLLATE NOCASE AND workspace_id = ?`
@@ -102,7 +108,7 @@ export class AliasManager {
                 clauses.push(`canonical_author = ? COLLATE NOCASE`)
                 params.push(canonicalAuthor)
             }
-            const scopeId = workspaceId ?? 'default'
+            const scopeId = effectiveWorkspace(workspaceId)
             if (scopeId !== '*') {
                 clauses.push(`(workspace_id IS NULL OR workspace_id = ?)`)
                 params.push(scopeId)
@@ -141,7 +147,7 @@ export class AliasManager {
 
     resolveAuthor(rawAuthor: string, workspaceId?: string): string {
         try {
-            const scopeId = workspaceId ?? 'default'
+            const scopeId = effectiveWorkspace(workspaceId)
             const scoped = scopeId !== '*'
             const sql = scoped
                 ? `SELECT canonical_author FROM author_aliases WHERE alias = ? COLLATE NOCASE AND (workspace_id IS NULL OR workspace_id = ?)`
@@ -176,7 +182,7 @@ export class AliasManager {
 
         try {
             const placeholders = rawAuthors.map(() => '?').join(',')
-            const scopeId = workspaceId ?? 'default'
+            const scopeId = effectiveWorkspace(workspaceId)
             const scoped = scopeId !== '*'
             const sql = scoped
                 ? `SELECT alias, canonical_author FROM author_aliases WHERE alias IN (${placeholders}) COLLATE NOCASE AND (workspace_id IS NULL OR workspace_id = ?)`
@@ -211,7 +217,7 @@ export class AliasManager {
 
     consolidateAuthors(canonicalAuthor: string, workspaceId?: string): number {
         try {
-            const scopeId = workspaceId ?? 'default'
+            const scopeId = effectiveWorkspace(workspaceId)
             const scoped = scopeId !== '*'
             const journalFilter = scoped ? ' AND workspace_id = ?' : ''
             const aliasFilter = scoped ? ' AND (workspace_id IS NULL OR workspace_id = ?)' : ''

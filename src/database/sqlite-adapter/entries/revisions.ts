@@ -77,3 +77,38 @@ export function compareEntryVersions(
         removedLines,
     }
 }
+
+/** Number of historical revisions retained per entry. */
+const MAX_REVISIONS_PER_ENTRY = 10
+
+/**
+ * Snapshot an entry's previous content as a new revision and evict revisions beyond the retention limit.
+ * Must run inside the caller's transaction.
+ */
+export function snapshotAndEvictRevisions(
+    db: EntriesSharedContext['db'],
+    entryId: number,
+    previousContent: string
+): void {
+    const maxRevRow = db
+        .prepare('SELECT MAX(revision_number) as maxRev FROM entry_revisions WHERE entry_id = ?')
+        .get(entryId) as { maxRev: number | null }
+    const nextRev = (maxRevRow.maxRev ?? 0) + 1
+
+    db.prepare(
+        'INSERT INTO entry_revisions (entry_id, revision_number, content_snapshot, changed_at, changed_by) VALUES (?, ?, ?, ?, ?)'
+    ).run(entryId, nextRev, previousContent, new Date().toISOString(), null)
+
+    db.prepare(
+        `
+        DELETE FROM entry_revisions
+        WHERE entry_id = ?
+          AND revision_number IN (
+              SELECT revision_number FROM entry_revisions
+              WHERE entry_id = ?
+              ORDER BY revision_number DESC
+              LIMIT -1 OFFSET ${String(MAX_REVISIONS_PER_ENTRY)}
+          )
+    `
+    ).run(entryId, entryId)
+}

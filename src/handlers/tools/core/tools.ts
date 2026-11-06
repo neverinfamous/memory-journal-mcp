@@ -29,6 +29,13 @@ import type { RelationshipType } from '../../../types/index.js'
 import { ErrorFieldsMixin } from '../error-fields-mixin.js'
 import { resolveEntryAnchors } from './staleness-tools.js'
 
+/** Delay between steps of the `trigger_progress` demo tool. */
+const PROGRESS_DEMO_STEP_DELAY_MS = 500
+
+function sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
 
 export function getCoreTools(context: ToolContext): ToolDefinition[] {
     const { db, progress } = context
@@ -245,11 +252,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                 try {
                     const input = GetEntryByIdSchema.parse(params)
                     const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
-                    const allowGlobalFallback =
-                        input.workspace_id === undefined || input.workspace_id === 'default'
-                    const entry =
-                        db.getEntryById(input.entry_id, wsId) ??
-                        (allowGlobalFallback ? db.getEntryById(input.entry_id, '*') : null)
+                    const entry = db.getEntryById(input.entry_id, wsId)
                     if (!entry) {
                         return {
                             success: false,
@@ -423,12 +426,11 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             handler: async () => {
                 try {
                     await sendProgress(progress, 0, 3, 'Starting operation...')
-                    // Wait 500ms
-                    await new Promise((resolve) => setTimeout(resolve, 500))
+                    await sleep(PROGRESS_DEMO_STEP_DELAY_MS)
                     await sendProgress(progress, 1, 3, 'Processing step 1...')
-                    await new Promise((resolve) => setTimeout(resolve, 500))
+                    await sleep(PROGRESS_DEMO_STEP_DELAY_MS)
                     await sendProgress(progress, 2, 3, 'Processing step 2...')
-                    await new Promise((resolve) => setTimeout(resolve, 500))
+                    await sleep(PROGRESS_DEMO_STEP_DELAY_MS)
                     await sendProgress(progress, 3, 3, 'Operation complete')
                     return { success: true, message: 'Progress notifications completed successfully' }
                 } catch (err) {

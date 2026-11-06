@@ -1,6 +1,7 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import type { AnchorStatus, ToolHandlerConfig } from '../../types/index.js'
+import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import { mcpLogger } from '../../utils/mcp-logger.js'
 import {
     loadProjectRegistryFromConfig,
@@ -71,6 +72,61 @@ export interface StalenessCheckRow {
 
 function isEnoent(err: unknown): boolean {
     return typeof err === 'object' && err !== null && 'code' in err && err.code === 'ENOENT'
+}
+
+/**
+ * Evaluate one anchor against the repository at `workspaceRoot`, persist any status change,
+ * and return the result row. Failures are mapped through `stalenessFailure`.
+ * `countCommitsSince` returns how many commits touched `anchorPath` since `since`.
+ */
+export async function evaluateAnchorStaleness(
+    db: Pick<IDatabaseAdapter, 'updateAnchorStatus'>,
+    anchor: { id?: number; anchorPath: string; status: AnchorStatus },
+    entryTimestamp: string,
+    workspaceRoot: string,
+    countCommitsSince: (anchorPath: string, since: string) => Promise<number>
+): Promise<StalenessCheckRow> {
+    try {
+        const fullPath = path.resolve(workspaceRoot, anchor.anchorPath)
+        const relPath = path.relative(workspaceRoot, fullPath)
+        if (relPath === '..' || relPath.startsWith('..' + path.sep) || path.isAbsolute(relPath)) {
+            throw new Error(`Path traversal detected: ${anchor.anchorPath}`)
+        }
+
+        const isDeleted = !fs.existsSync(fullPath)
+        let commitsSince = 0
+        let newStatus: AnchorStatus = anchor.status
+
+        if (isDeleted) {
+            newStatus = 'invalidated'
+        } else {
+            commitsSince = await countCommitsSince(anchor.anchorPath, entryTimestamp)
+            if (commitsSince > 0) {
+                newStatus = 'stale'
+            } else if (anchor.status === 'pending') {
+                newStatus = 'valid'
+            }
+        }
+
+        if (newStatus !== anchor.status && anchor.id !== undefined) {
+            db.updateAnchorStatus(anchor.id, newStatus)
+        }
+
+        return {
+            anchorId: anchor.id ?? 0,
+            path: anchor.anchorPath,
+            oldStatus: anchor.status,
+            newStatus,
+            commitsSince,
+            isDeleted,
+        }
+    } catch (err: unknown) {
+        const failure = stalenessFailure(anchor, err)
+        if (failure.persistUnresolvable && anchor.id !== undefined) {
+            db.updateAnchorStatus(anchor.id, 'unresolvable')
+        }
+        return failure.row
+    }
 }
 
 /**

@@ -29,11 +29,34 @@ export function getAnchorsByEntryId(context: EntriesSharedContext, entryId: numb
     return stmt.all(entryId) as Anchor[]
 }
 
-export function updateAnchorStatus(context: EntriesSharedContext, id: number, status: AnchorStatus): void {
+/**
+ * Update an anchor's status. When `workspaceId` is provided and is not '*', the anchor must
+ * belong to an entry in that workspace. Returns true when a row was changed.
+ */
+export function updateAnchorStatus(
+    context: EntriesSharedContext,
+    id: number,
+    status: AnchorStatus,
+    workspaceId?: string
+): boolean {
     const { db } = context
-    db.prepare(`
+    if (workspaceId !== undefined && workspaceId !== '*') {
+        const result = db
+            .prepare(
+                `
+        UPDATE entry_anchors
+        SET status = ?, last_checked_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+          AND entry_id IN (SELECT id FROM memory_journal WHERE workspace_id = ?)
+    `
+            )
+            .run(status, id, workspaceId)
+        return result.changes > 0
+    }
+    const result = db.prepare(`
         UPDATE entry_anchors 
         SET status = ?, last_checked_at = CURRENT_TIMESTAMP
         WHERE id = ?
     `).run(status, id)
+    return result.changes > 0
 }

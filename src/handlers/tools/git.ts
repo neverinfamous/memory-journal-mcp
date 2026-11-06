@@ -1,10 +1,10 @@
 import { z } from 'zod'
-import type { ToolDefinition, ToolContext, AnchorStatus } from '../../types/index.js'
+import type { ToolDefinition, ToolContext } from '../../types/index.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
 import { sendProgress } from '../../utils/progress-utils.js'
-import { ResourceNotFoundError } from '../../types/errors.js'
+import { ResourceNotFoundError, ValidationError } from '../../types/errors.js'
 import { resolveWorkspaceId } from '../../utils/workspace-resolver.js'
-import { stalenessFailure, resolveGitWorkingDir } from './git-staleness.js'
+import { evaluateAnchorStaleness, resolveGitWorkingDir } from './git-staleness.js'
 import { coerceNumber } from '../../utils/query-helpers.js'
 import { ErrorFieldsMixin } from './error-fields-mixin.js'
 import { relaxedNumber } from './schemas.js'
@@ -384,8 +384,15 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                     const resolvedEntryId = parsedParams.entry_id ?? parsedParams.entryId
                     const rawWs = parsedParams.workspace_id ?? parsedParams.workspaceId
                     const rawProj = parsedParams.project_number ?? parsedParams.projectNumber
-                    const wsId = rawWs === '*' ? '*' : resolveWorkspaceId(rawWs, rawProj, context.config)
-                    const registryPath = wsId === '*' ? undefined : context.config?.projectRegistry?.[wsId]?.path
+                    if (rawWs === '*') {
+                        // Anchors are checked against a single repository root; a cross-workspace
+                        // sweep would invalidate anchors of other repos against the wrong root.
+                        throw new ValidationError(
+                            "check_stale_anchors mutates anchor status against one repository root and does not accept workspace_id '*'. Pass a specific workspace_id or project_number."
+                        )
+                    }
+                    const wsId = resolveWorkspaceId(rawWs, rawProj, context.config)
+                    const registryPath = context.config?.projectRegistry?.[wsId]?.path
                     const cwd = registryPath !== undefined && registryPath.length > 0 ? registryPath : process.cwd()
 
                     const targets: { id: number; timestamp: string }[] = []
@@ -400,8 +407,6 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    const fs = await import('node:fs')
-                    const path = await import('node:path')
                     const workspaceRoot = cwd
 
                     const results: {
@@ -414,61 +419,17 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                     }[] = []
 
                     for (const target of targets) {
-                        const anchors = db.getAnchorsByEntryId(target.id)
-                        for (const anchor of anchors) {
-                            let isDeleted = false
-                            let commitsSince = 0
-                            let newStatus: AnchorStatus = anchor.status
-
-                            try {
-                                const fullPath = path.resolve(workspaceRoot, anchor.anchorPath)
-                                const relPath = path.relative(workspaceRoot, fullPath)
-                                if (
-                                    relPath === '..' ||
-                                    relPath.startsWith('..' + path.sep) ||
-                                    path.isAbsolute(relPath)
-                                ) {
-                                    throw new Error(`Path traversal detected: ${anchor.anchorPath}`)
-                                }
-
-                                isDeleted = !fs.existsSync(fullPath)
-
-                                if (isDeleted) {
-                                    newStatus = 'invalidated'
-                                } else {
-                                    const commits = await fetchCommits({
-                                        path: anchor.anchorPath,
-                                        since: target.timestamp
-                                    }, cwd)
-                                    commitsSince = commits.length
-                                    if (commitsSince > 0) {
-                                        newStatus = 'stale'
-                                    } else if (anchor.status === 'pending') {
-                                        newStatus = 'valid'
-                                    }
-                                }
-
-                                if (newStatus !== anchor.status) {
-                                    if (anchor.id !== undefined) {
-                                        db.updateAnchorStatus(anchor.id, newStatus)
-                                    }
-                                }
-
-                                results.push({
-                                    anchorId: anchor.id ?? 0,
-                                    path: anchor.anchorPath,
-                                    oldStatus: anchor.status,
-                                    newStatus,
-                                    commitsSince,
-                                    isDeleted
-                                })
-                            } catch (err: unknown) {
-                                const failure = stalenessFailure(anchor, err)
-                                results.push(failure.row)
-                                if (failure.persistUnresolvable && anchor.id !== undefined) {
-                                    db.updateAnchorStatus(anchor.id, 'unresolvable')
-                                }
-                            }
+                        for (const anchor of db.getAnchorsByEntryId(target.id)) {
+                            results.push(
+                                await evaluateAnchorStaleness(
+                                    db,
+                                    anchor,
+                                    target.timestamp,
+                                    workspaceRoot,
+                                    async (anchorPath, since) =>
+                                        (await fetchCommits({ path: anchorPath, since }, workspaceRoot)).length
+                                )
+                            )
                         }
                     }
 

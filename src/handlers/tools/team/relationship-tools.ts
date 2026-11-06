@@ -5,6 +5,7 @@
  */
 
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
+import type { IDatabaseAdapter } from '../../../database/core/interfaces.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { TEAM_DB_ERROR_RESPONSE, triggerTeamNotifications } from './helpers.js'
@@ -16,6 +17,81 @@ import {
     TeamLinkEntriesOutputSchema,
     TeamVisualizeOutputSchema,
 } from './schemas.js'
+
+// ============================================================================
+// Helpers
+// ============================================================================
+
+/** Breadth-first walk of relationships from `startId`, returning the start id plus neighbors up to `depth`. */
+function collectNeighborhood(teamDb: IDatabaseAdapter, startId: number, depth: number): number[] {
+    const entryIds: number[] = [startId]
+    const visited = new Set<number>(entryIds)
+    let frontier = [startId]
+
+    for (let d = 0; d < depth && frontier.length > 0; d++) {
+        const relMap =
+            typeof teamDb.getRelationshipsForEntries === 'function'
+                ? teamDb.getRelationshipsForEntries(frontier)
+                : null
+        const nextFrontier: number[] = []
+        for (const fid of frontier) {
+            const rels = relMap ? (relMap.get(fid) ?? []) : teamDb.getRelationships(fid)
+            for (const r of rels) {
+                const otherId = r.fromEntryId === fid ? r.toEntryId : r.fromEntryId
+                if (!visited.has(otherId)) {
+                    visited.add(otherId)
+                    nextFrontier.push(otherId)
+                }
+            }
+        }
+        frontier = nextFrontier
+        entryIds.push(...nextFrontier)
+    }
+    return entryIds
+}
+
+/** Build graph nodes and edges for `entryIds` using batch lookups when available. */
+function buildRelationshipGraph(
+    teamDb: IDatabaseAdapter,
+    entryIds: number[],
+    wsId: string
+): { nodes: Map<number, string>; edges: { from: number; to: number; type: string }[] } {
+    const nodes = new Map<number, string>()
+    const edges: { from: number; to: number; type: string }[] = []
+    const seenEdges = new Set<string>()
+    const entryIdSet = new Set<number>(entryIds)
+    const batchEntries =
+        typeof teamDb.getEntriesByIds === 'function' ? teamDb.getEntriesByIds(entryIds, wsId) : null
+    const batchRels =
+        typeof teamDb.getRelationshipsForEntries === 'function'
+            ? teamDb.getRelationshipsForEntries(entryIds)
+            : null
+
+    for (const eid of entryIds) {
+        const rawEntry = batchEntries ? (batchEntries.get(eid) ?? null) : teamDb.getEntryById(eid, wsId)
+        const entry =
+            rawEntry &&
+            (wsId === '*' || rawEntry.workspaceId === undefined || rawEntry.workspaceId === wsId)
+                ? rawEntry
+                : null
+        if (entry) {
+            let label = entry.content.substring(0, 40).replace(/\n/g, ' ')
+            if (entry.content.length > 40) label += '...'
+            label = label.replace(/"/g, "'").replace(/\[/g, '(').replace(/\]/g, ')')
+            nodes.set(eid, label)
+        }
+
+        const rels = batchRels ? (batchRels.get(eid) ?? []) : teamDb.getRelationships(eid)
+        for (const r of rels) {
+            const edgeKey = `${String(r.fromEntryId)}-${String(r.toEntryId)}`
+            if (!seenEdges.has(edgeKey) && entryIdSet.has(r.fromEntryId) && entryIdSet.has(r.toEntryId)) {
+                seenEdges.add(edgeKey)
+                edges.push({ from: r.fromEntryId, to: r.toEntryId, type: r.relationshipType })
+            }
+        }
+    }
+    return { nodes, edges }
+}
 
 // ============================================================================
 // Tool Definitions
@@ -176,11 +252,7 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                     let entryIds: number[] = []
 
                     if (entry_id !== undefined) {
-                        const fromEntry =
-                            teamDb.getEntryById(entry_id, wsId) ??
-                            (workspace_id === undefined
-                                ? teamDb.getEntryById(entry_id, '*')
-                                : null)
+                        const fromEntry = teamDb.getEntryById(entry_id, wsId)
                         if (!fromEntry) {
                             return {
                                 success: false,
@@ -192,42 +264,7 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                             }
                         }
                         // Start from a specific entry and traverse
-                        entryIds = [entry_id]
-                        const visited = new Set<number>(entryIds)
-                        let frontier = [...entryIds]
-
-                        for (let d = 0; d < depth; d++) {
-                            if (frontier.length === 0) break
-                            const nextFrontier: number[] = []
-                            if (typeof teamDb.getRelationshipsForEntries === 'function') {
-                                const relMap = teamDb.getRelationshipsForEntries(frontier)
-                                for (const fid of frontier) {
-                                    const rels = relMap.get(fid) ?? []
-                                    for (const r of rels) {
-                                        const otherId =
-                                            r.fromEntryId === fid ? r.toEntryId : r.fromEntryId
-                                        if (!visited.has(otherId)) {
-                                            visited.add(otherId)
-                                            nextFrontier.push(otherId)
-                                        }
-                                    }
-                                }
-                            } else {
-                                for (const fid of frontier) {
-                                    const rels = teamDb.getRelationships(fid)
-                                    for (const r of rels) {
-                                        const otherId =
-                                            r.fromEntryId === fid ? r.toEntryId : r.fromEntryId
-                                        if (!visited.has(otherId)) {
-                                            visited.add(otherId)
-                                            nextFrontier.push(otherId)
-                                        }
-                                    }
-                                }
-                            }
-                            frontier = nextFrontier
-                            entryIds.push(...nextFrontier)
-                        }
+                        entryIds = collectNeighborhood(teamDb, entry_id, depth)
                     } else if (tag) {
                         // Get entries by tag using an all-time date range to bypass date filtering
                         const { entries: tagEntries } = teamDb.searchByDateRange('1970-01-01', '2999-12-31', {
@@ -251,57 +288,7 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                         }
                     }
 
-                    // Build graph using batch entry & relationship lookups when available
-                    const nodes = new Map<number, string>()
-                    const edges: { from: number; to: number; type: string }[] = []
-                    const seenEdges = new Set<string>()
-                    const entryIdSet = new Set<number>(entryIds)
-                    const batchEntries =
-                        typeof teamDb.getEntriesByIds === 'function'
-                            ? teamDb.getEntriesByIds(entryIds, wsId)
-                            : null
-                    const batchRels =
-                        typeof teamDb.getRelationshipsForEntries === 'function'
-                            ? teamDb.getRelationshipsForEntries(entryIds)
-                            : null
-
-                    for (const eid of entryIds) {
-                        const rawEntry = batchEntries
-                            ? batchEntries.get(eid) ?? null
-                            : teamDb.getEntryById(eid, wsId)
-                        const entry =
-                            rawEntry &&
-                            (wsId === '*' ||
-                                rawEntry.workspaceId === undefined ||
-                                rawEntry.workspaceId === wsId)
-                                ? rawEntry
-                                : null
-                        if (entry) {
-                            let label = entry.content.substring(0, 40).replace(/\n/g, ' ')
-                            if (entry.content.length > 40) label += '...'
-                            label = label.replace(/"/g, "'").replace(/\[/g, '(').replace(/\]/g, ')')
-                            nodes.set(eid, label)
-                        }
-
-                        const rels = batchRels
-                            ? batchRels.get(eid) ?? []
-                            : teamDb.getRelationships(eid)
-                        for (const r of rels) {
-                            const edgeKey = `${String(r.fromEntryId)}-${String(r.toEntryId)}`
-                            if (
-                                !seenEdges.has(edgeKey) &&
-                                entryIdSet.has(r.fromEntryId) &&
-                                entryIdSet.has(r.toEntryId)
-                            ) {
-                                seenEdges.add(edgeKey)
-                                edges.push({
-                                    from: r.fromEntryId,
-                                    to: r.toEntryId,
-                                    type: r.relationshipType,
-                                })
-                            }
-                        }
-                    }
+                    const { nodes, edges } = buildRelationshipGraph(teamDb, entryIds, wsId)
 
                     // Generate Mermaid
                     let mermaid = 'graph LR\n'

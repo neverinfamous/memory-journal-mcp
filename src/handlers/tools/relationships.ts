@@ -322,11 +322,7 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                     const input = VisualizeInputSchema.parse(VisualizeInputSchemaMcp.parse(params))
                     const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
                     if (input.entry_id !== undefined) {
-                        const entry =
-                            db.getEntryById(input.entry_id, wsId) ??
-                            (input.workspace_id === undefined
-                                ? db.getEntryById(input.entry_id, '*')
-                                : null)
+                        const entry = db.getEntryById(input.entry_id, wsId)
                         if (!entry || entry.deletedAt) {
                             return {
                                 ...formatHandlerError(

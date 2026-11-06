@@ -4,7 +4,8 @@ import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { ErrorFieldsMixin } from '../error-fields-mixin.js'
 import { relaxedNumber } from '../schemas.js'
-import { loadProjectRegistryFromConfig } from '../../../utils/workspace-resolver.js'
+import { mcpLogger } from '../../../utils/mcp-logger.js'
+import { loadProjectRegistryFromConfig, resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 
 const MAX_AUTO_ANCHORS = 25
 const SHA_REGEX = /^[0-9a-f]{7,40}$/i
@@ -65,7 +66,10 @@ export function resolveEntryAnchors(
 
         if (uniqueFiles.length === 0) return undefined
         return uniqueFiles.map((anchorPath) => ({ anchorPath, anchorType: 'file' }))
-    } catch {
+    } catch (err) {
+        mcpLogger.warning('git', 'Auto-anchor extraction failed', {
+            error: err instanceof Error ? err.message : String(err),
+        })
         return undefined
     }
 }
@@ -77,6 +81,8 @@ export const MarkAnchorsStaleSchema = z.object({
             status: z.enum(['pending', 'valid', 'stale', 'invalidated', 'unresolvable']),
         })
     ),
+    workspace_id: z.string().optional(),
+    project_number: z.number().optional(),
 })
 
 export const MarkAnchorsStaleSchemaMcp = z.object({
@@ -88,6 +94,8 @@ export const MarkAnchorsStaleSchemaMcp = z.object({
             })
         )
         .optional(),
+    workspace_id: z.string().optional(),
+    project_number: relaxedNumber().optional(),
 })
 
 export function getStalenessTools(context: ToolContext): ToolDefinition[] {
@@ -101,7 +109,13 @@ export function getStalenessTools(context: ToolContext): ToolDefinition[] {
                 'Update the status of multiple anchors (e.g. to stale or invalidated) based on validation rules or git history checks.',
             group: 'core',
             inputSchema: MarkAnchorsStaleSchemaMcp,
-            outputSchema: z.object({ success: z.boolean(), updated_count: z.number() }).extend(ErrorFieldsMixin.shape),
+            outputSchema: z
+                .object({
+                    success: z.boolean(),
+                    updated_count: z.number(),
+                    not_found_ids: z.array(z.number()).optional(),
+                })
+                .extend(ErrorFieldsMixin.shape),
             annotations: {
                 readOnlyHint: false,
                 destructiveHint: false,
@@ -111,14 +125,25 @@ export function getStalenessTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     const input = MarkAnchorsStaleSchema.parse(params)
-                    
+                    const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
+
+                    let updatedCount = 0
+                    const missingIds: number[] = []
                     db.executeInTransaction(() => {
                         for (const update of input.updates) {
-                            db.updateAnchorStatus(update.id, update.status)
+                            if (db.updateAnchorStatus(update.id, update.status, wsId)) {
+                                updatedCount++
+                            } else {
+                                missingIds.push(update.id)
+                            }
                         }
                     })
 
-                    return { success: true, updated_count: input.updates.length }
+                    return {
+                        success: true,
+                        updated_count: updatedCount,
+                        ...(missingIds.length > 0 ? { not_found_ids: missingIds } : {}),
+                    }
                 } catch (err) {
                     return formatHandlerError(err)
                 }

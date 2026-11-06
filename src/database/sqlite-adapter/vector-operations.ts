@@ -1,4 +1,10 @@
 import type { NativeConnectionManager } from './native-connection.js'
+import { effectiveWorkspace } from '../workspace-scope.js'
+
+/** Initial KNN over-fetch factor applied before the workspace filter. */
+const VECTOR_KNN_OVERFETCH = 4
+/** sqlite-vec rejects k above 4096. */
+const VECTOR_KNN_MAX_K = 4096
 
 export class VectorOperations {
     constructor(private connection: NativeConnectionManager) {}
@@ -54,7 +60,7 @@ export class VectorOperations {
         workspaceId?: string
     ): { entry_id: number; distance: number }[] {
         const db = this.connection.getNativeDb()
-        const scopeId = workspaceId ?? 'default'
+        const scopeId = effectiveWorkspace(workspaceId)
         const scoped = scopeId !== '*'
         const sql = scoped
             ? `SELECT v.entry_id, v.distance
@@ -67,10 +73,19 @@ export class VectorOperations {
                  INNER JOIN memory_journal mj ON v.entry_id = mj.id
                  WHERE v.embedding MATCH ? AND v.k = ? AND mj.deleted_at IS NULL
                  LIMIT ?`
-        const params = scoped
-            ? [embedding, limit * 4, scopeId, limit]
-            : [embedding, limit * 4, limit]
-        return db.prepare(sql).all(...params) as { entry_id: number; distance: number }[]
+        const params = (k: number): unknown[] =>
+            scoped ? [embedding, k, scopeId, limit] : [embedding, k, limit]
+        const stmt = db.prepare(sql)
+
+        // The vec0 KNN runs globally before the workspace JOIN filter, so a workspace holding a
+        // small share of the vectors can be under-filled. Widen k until `limit` rows are found.
+        let k = Math.min(limit * VECTOR_KNN_OVERFETCH, VECTOR_KNN_MAX_K)
+        let rows = stmt.all(...params(k)) as { entry_id: number; distance: number }[]
+        while (scoped && rows.length < limit && k < VECTOR_KNN_MAX_K) {
+            k = Math.min(k * 2, VECTOR_KNN_MAX_K)
+            rows = stmt.all(...params(k)) as { entry_id: number; distance: number }[]
+        }
+        return rows
     }
 
     getVector(entryId: number): Float32Array | null {

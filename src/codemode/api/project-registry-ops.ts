@@ -7,6 +7,7 @@ import * as os from 'node:os'
 import * as path from 'node:path'
 import { isRecord, safeString } from '../normalizers/shared-utils.js'
 import { readProjectRegistryFile } from '../../utils/registry-config-file.js'
+import { mcpLogger } from '../../utils/mcp-logger.js'
 import { parseProjectRegistry, type GroupApiRecord } from './types.js'
 
 function getConfigPath(): string {
@@ -96,6 +97,7 @@ export function createRegisterProjectFn(
                 message: `Project '${name}' registered, but createEntry tool is missing. DB init skipped.`,
             }
         }
+        let dbInitError: string | undefined
         try {
             await createEntryFn({
                 entryType: 'project_decision',
@@ -107,8 +109,18 @@ export function createRegisterProjectFn(
                 impactScore: 0.8,
                 autoContext: JSON.stringify({ action: 'register_project', target: name }),
             })
-        } catch {
-            // Ignore DB initialization failures natively
+        } catch (err) {
+            dbInitError = registryError(err)
+            mcpLogger.warning('codemode', 'Project initialization entry failed', {
+                project: name,
+                error: dbInitError,
+            })
+        }
+        if (dbInitError !== undefined) {
+            return {
+                success: true,
+                message: `Project '${name}' registered, but the initialization journal entry failed: ${dbInitError}`,
+            }
         }
         return { success: true, message: `Project '${name}' successfully registered.` }
     }
@@ -200,8 +212,10 @@ export function createListProjectsFn(analyticsApi: GroupApiRecord): () => Promis
         try {
             const registry = parseProjectRegistry()
             if (registry !== undefined && registry.length > 0) return registry
-        } catch {
-            // Ignore parse errors and fallback to admin / analytics
+        } catch (err) {
+            mcpLogger.warning('codemode', 'Registry parse failed; falling back to config registry', {
+                error: registryError(err),
+            })
         }
 
         try {
@@ -218,8 +232,10 @@ export function createListProjectsFn(analyticsApi: GroupApiRecord): () => Promis
                     }
                 })
             }
-        } catch {
-            // Fallback to analytics
+        } catch (err) {
+            mcpLogger.warning('codemode', 'Registry read failed; falling back to analytics', {
+                error: registryError(err),
+            })
         }
 
         const statsFn = analyticsApi['getStatistics']
@@ -229,8 +245,10 @@ export function createListProjectsFn(analyticsApi: GroupApiRecord): () => Promis
                 if (isRecord(stats) && Array.isArray(stats['projectBreakdown'])) {
                     return stats['projectBreakdown']
                 }
-            } catch {
-                // Ignore error
+            } catch (err) {
+                mcpLogger.warning('codemode', 'Project statistics fallback failed', {
+                    error: registryError(err),
+                })
             }
         }
         return []
@@ -276,8 +294,8 @@ export function createGetProjectFn(
                     if (found !== undefined) return found
                 }
             }
-        } catch {
-            // Ignore error
+        } catch (err) {
+            throw new Error(`Project lookup failed: ${registryError(err)}`, { cause: err })
         }
         throw new Error(`Project not found: ${JSON.stringify(params)}`)
     }

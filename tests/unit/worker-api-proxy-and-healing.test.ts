@@ -319,7 +319,7 @@ describe('Dummy Healing Tools (getDummyHealingTools & searchDirectory)', () => {
             ]
         ).toBeDefined()
         expect(
-            ((await findTool('get_entry_by_id').handler({ entry_id: 1 })) as Record<string, unknown>)[
+            ((await findTool('get_entry_by_id').handler({ entry_id: 1, workspace_id: 'ws-1' })) as Record<string, unknown>)[
                 'entry'
             ]
         ).toBeDefined()

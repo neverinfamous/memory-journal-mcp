@@ -109,6 +109,26 @@ function isProjectAlias(name: string): boolean {
     )
 }
 
+/** True when the alias's whole tokens end with `suffix` (e.g. `mj_core_delete_entry` ends with `delete entry`). */
+function endsWithTokens(tokens: string[], suffix: string[]): boolean {
+    if (tokens.length < suffix.length) return false
+    const offset = tokens.length - suffix.length
+    return suffix.every((token, i) => tokens[offset + i] === token)
+}
+
+const ENTRY_ALIAS_TARGETS: readonly {
+    tokens: string[]
+    target: string
+    group: 'core' | 'search' | 'admin'
+}[] = [
+    { tokens: ['create', 'entry'], target: 'create_entry', group: 'core' },
+    { tokens: ['search', 'entries'], target: 'search_entries', group: 'search' },
+    { tokens: ['get', 'recent', 'entries'], target: 'get_recent_entries', group: 'core' },
+    { tokens: ['get', 'entry', 'by', 'id'], target: 'get_entry_by_id', group: 'core' },
+    { tokens: ['update', 'entry'], target: 'update_entry', group: 'admin' },
+    { tokens: ['delete', 'entry'], target: 'delete_entry', group: 'admin' },
+]
+
 function resolveTargetFromAlias(
     name: string
 ): { target: string; group: 'core' | 'search' | 'admin' } | undefined {
@@ -116,23 +136,10 @@ function resolveTargetFromAlias(
     const has = (t: string): boolean => tokens.includes(t)
     if (has('team') || has('batch')) return undefined
 
-    if (name.includes('createEntry') || name.includes('create_entry')) {
-        return { target: 'create_entry', group: 'core' }
-    }
-    if (name.includes('searchEntries') || name.includes('search_entries')) {
-        return { target: 'search_entries', group: 'search' }
-    }
-    if (name.includes('getRecentEntries') || name.includes('get_recent_entries')) {
-        return { target: 'get_recent_entries', group: 'core' }
-    }
-    if (name.includes('getEntryById') || name.includes('get_entry_by_id')) {
-        return { target: 'get_entry_by_id', group: 'core' }
-    }
-    if (name.includes('updateEntry') || name.includes('update_entry')) {
-        return { target: 'update_entry', group: 'admin' }
-    }
-    if (name.includes('deleteEntry') || name.includes('delete_entry')) {
-        return { target: 'delete_entry', group: 'admin' }
+    for (const candidate of ENTRY_ALIAS_TARGETS) {
+        if (endsWithTokens(tokens, candidate.tokens)) {
+            return { target: candidate.target, group: candidate.group }
+        }
     }
     if (isProjectAlias(name)) {
         return { target: projectAliasTarget(name), group: 'admin' }

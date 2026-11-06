@@ -4,6 +4,7 @@ import type { EntriesSharedContext } from './shared.js'
 import { effectiveWorkspace } from '../../workspace-scope.js'
 import { ConflictError } from '../../../types/errors.js'
 import { insertAnchors } from './anchors.js'
+import { snapshotAndEvictRevisions } from './revisions.js'
 import { getEntryById, getEntriesByIds } from './crud-read.js'
 
 class BatchTransactionError extends Error {
@@ -11,6 +12,22 @@ class BatchTransactionError extends Error {
         super('Batch transaction failed')
         this.name = 'BatchTransactionError'
     }
+}
+
+/** Thrown inside the update transaction to roll back revision bookkeeping when no row matched. */
+class NoRowsUpdatedError extends Error {
+    constructor() {
+        super('No rows updated')
+        this.name = 'NoRowsUpdatedError'
+    }
+}
+
+/** Lowercase a tag and collapse unsupported characters into single hyphens. */
+function normalizeTag(tag: string): string {
+    return tag
+        .toLowerCase()
+        .replace(/[^a-z0-9:@]+/g, '-')
+        .replace(/^-+|-+$/g, '')
 }
 
 export function validateEntryInput(input: CreateEntryInput): { normalizedTimestamp: string } {
@@ -64,7 +81,7 @@ function insertEntryRow(context: EntriesSharedContext, input: CreateEntryInput):
             nonEmpty(input.workflowName),
             input.workflowStatus ?? null,
             input.isArchived === true ? 1 : 0,
-            input.workspaceId ?? 'default',
+            effectiveWorkspace(input.workspaceId),
             input.trustScore ?? 0.5,
             input.validationStatus ?? 'none',
             input.impactScore ?? 0.0,
@@ -84,13 +101,7 @@ function insertEntryRow(context: EntriesSharedContext, input: CreateEntryInput):
         const insertId = Number(result.lastInsertRowid)
 
         if (input.tags !== undefined && input.tags.length > 0) {
-            const formattedTags = input.tags.map((t) =>
-                t
-                    .toLowerCase()
-                    .replace(/[^a-z0-9:@]+/g, '-')
-                    .replace(/^-+|-+$/g, '')
-            )
-            tagsMgr.linkTagsToEntry(insertId, formattedTags)
+            tagsMgr.linkTagsToEntry(insertId, input.tags.map(normalizeTag))
         }
 
         if (input.anchors !== undefined && input.anchors.length > 0) {
@@ -105,7 +116,7 @@ function insertEntryRow(context: EntriesSharedContext, input: CreateEntryInput):
 export function createEntry(context: EntriesSharedContext, input: CreateEntryInput): JournalEntry {
     const insertId = insertEntryRow(context, input)
 
-    const entry = getEntryById(context, insertId, input.workspaceId ?? 'default')
+    const entry = getEntryById(context, insertId, effectiveWorkspace(input.workspaceId))
     if (entry === null) {
         throw new Error(
             `Storage Inconsistency Anomaly: Entry with ID ${String(insertId)} successfully written but could not be read back.`
@@ -157,7 +168,7 @@ function performUpdateEntry(
         | undefined
     if (existing === undefined) return false
 
-    const callerWorkspace = input.workspaceId ?? 'default'
+    const callerWorkspace = effectiveWorkspace(input.workspaceId)
     if (callerWorkspace !== '*' && existing.workspaceId !== callerWorkspace) {
         throw new ConflictError(
             `Entry ${String(id)} belongs to workspace '${existing.workspaceId}', cannot be updated from '${callerWorkspace}'. Moving to another workspace requires explicit overrides (e.g. workspaceId = '*').`,
@@ -219,7 +230,19 @@ function performUpdateEntry(
         }
     }
 
-    if (input.targetWorkspaceId !== undefined && input.targetWorkspaceId !== '*') {
+    if (input.targetWorkspaceId !== undefined) {
+        if (callerWorkspace !== '*') {
+            throw new ConflictError(
+                `Cannot move entry ${String(id)} to workspace '${input.targetWorkspaceId}' from '${callerWorkspace}'. Moving an entry to another workspace requires workspaceId = '*'.`,
+                { id: existing.id, version: existing.version, workspaceId: existing.workspaceId }
+            )
+        }
+        if (input.targetWorkspaceId === '*') {
+            throw new ConflictError(
+                "targetWorkspaceId cannot be '*'. Provide the concrete destination workspace.",
+                { id: existing.id, version: existing.version, workspaceId: existing.workspaceId }
+            )
+        }
         updates.push('workspace_id = ?')
         values.push(input.targetWorkspaceId)
     }
@@ -228,51 +251,31 @@ function performUpdateEntry(
     const query = `UPDATE memory_journal SET ${updates.join(', ')} WHERE id = ? AND deleted_at IS NULL${scopeUpdate ? ' AND workspace_id = ?' : ''}`
 
     const txn = db.transaction(() => {
-        const maxRevStmt = db.prepare(
-            'SELECT MAX(revision_number) as maxRev FROM entry_revisions WHERE entry_id = ?'
-        )
-        const maxRevRow = maxRevStmt.get(id) as { maxRev: number | null }
-        const nextRev = (maxRevRow.maxRev ?? 0) + 1
-
-        const snapshotStmt = db.prepare(
-            'INSERT INTO entry_revisions (entry_id, revision_number, content_snapshot, changed_at, changed_by) VALUES (?, ?, ?, ?, ?)'
-        )
-        snapshotStmt.run(id, nextRev, existing.content, new Date().toISOString(), null)
-
-        const evictStmt = db.prepare(`
-            DELETE FROM entry_revisions
-            WHERE entry_id = ?
-              AND revision_number IN (
-                  SELECT revision_number FROM entry_revisions
-                  WHERE entry_id = ?
-                  ORDER BY revision_number DESC
-                  LIMIT -1 OFFSET 10
-              )
-        `)
-        evictStmt.run(id, id)
-
         const stmt = db.prepare(query)
         const result = scopeUpdate ? stmt.run(...values, id, callerWorkspace) : stmt.run(...values, id)
-        if (result.changes === 0) return false
+        if (result.changes === 0) {
+            throw new NoRowsUpdatedError()
+        }
+
+        snapshotAndEvictRevisions(db, id, existing.content)
 
         if (input.tags !== undefined) {
             db.prepare(
                 'UPDATE tags SET usage_count = MAX(0, usage_count - 1) WHERE id IN (SELECT tag_id FROM entry_tags WHERE entry_id = ?)'
             ).run(id)
             db.prepare('DELETE FROM entry_tags WHERE entry_id = ?').run(id)
-            const formattedTags = input.tags.map((t) =>
-                t
-                    .toLowerCase()
-                    .replace(/[^a-z0-9:@]+/g, '-')
-                    .replace(/^-+|-+$/g, '')
-            )
-            tagsMgr.linkTagsToEntry(id, formattedTags)
+            tagsMgr.linkTagsToEntry(id, input.tags.map(normalizeTag))
         }
 
         return true
     })
 
-    return txn()
+    try {
+        return txn()
+    } catch (err) {
+        if (err instanceof NoRowsUpdatedError) return false
+        throw err
+    }
 }
 
 export function updateEntry(
@@ -283,7 +286,7 @@ export function updateEntry(
     const updated = performUpdateEntry(context, id, input)
     if (!updated) return null
 
-    const readWs = input.targetWorkspaceId ?? input.workspaceId ?? 'default'
+    const readWs = effectiveWorkspace(input.targetWorkspaceId ?? input.workspaceId)
     return getEntryById(context, id, readWs)
 }
 

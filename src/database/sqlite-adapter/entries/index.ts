@@ -250,8 +250,8 @@ export class EntriesManager {
         return getDeletedEntries(this.sharedContext, options)
     }
 
-    updateAnchorStatus(id: number, status: AnchorStatus): void {
-        updateAnchorStatus(this.sharedContext, id, status)
+    updateAnchorStatus(id: number, status: AnchorStatus, workspaceId?: string): boolean {
+        return updateAnchorStatus(this.sharedContext, id, status, workspaceId)
     }
 
     getAnchorsByEntryId(entryId: number): Anchor[] {

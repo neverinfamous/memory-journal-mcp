@@ -341,6 +341,7 @@ describe('Extended Tool Handlers (Team, IO, Admin, Core)', () => {
             // 2. get_entry_by_id (with relationships & importance)
             const getRes = (await findTool(coreTools, 'get_entry_by_id').handler({
                 entry_id: createdId,
+                workspace_id: 'memory-journal-mcp',
                 include_relationships: true,
             })) as { success: boolean; importance: number }
             expect(getRes.success).toBe(true)

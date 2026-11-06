@@ -2302,7 +2302,7 @@ return { success: true, projectId };
             expect(intercepted?.args?.[0]?.['maxCount']).toBe(15)
         })
 
-        it('should fall back to global lookup across workspaces in get_entry_by_id when not found in caller workspace', async () => {
+        it('should not fall back to a cross-workspace lookup in get_entry_by_id when not found in caller workspace', async () => {
             const { callTool } = await import('../src/handlers/tools/index.js')
             const mockDb = {
                 getEntryById: vi.fn((id: number, wsId: string) => {
@@ -2323,11 +2323,12 @@ return { success: true, projectId };
                 undefined,
                 undefined,
                 mockConfig
-            )) as { success: boolean; entry?: { id: number; workspaceId: string } }
+            )) as { success: boolean; code?: string; entry?: { id: number; workspaceId: string } }
 
-            expect(res.success).toBe(true)
-            expect(res.entry?.id).toBe(14051)
-            expect(res.entry?.workspaceId).toBe('adamic')
+            expect(res.success).toBe(false)
+            expect(res.code).toBe('RESOURCE_NOT_FOUND')
+            expect(res.entry).toBeUndefined()
+            expect(mockDb.getEntryById).not.toHaveBeenCalledWith(14051, '*')
         })
 
         it('should proxy entry properties through worker-result-proxy when entry object is present', async () => {
@@ -2497,7 +2498,7 @@ return { success: true, projectId };
             expect(resSpecific['entries']).toBeDefined()
         })
 
-        it('should allow visualize_relationships to fallback to wildcard when workspace_id is omitted', async () => {
+        it('should not fall back to wildcard in visualize_relationships when workspace_id is omitted', async () => {
             const { callTool } = await import('../src/handlers/tools/index.js')
             const mockDb = {
                 getEntryById: vi.fn().mockImplementation((id: number, wsId: string) => {
@@ -2514,9 +2515,9 @@ return { success: true, projectId };
             } as any
 
             const res = (await callTool('visualize_relationships', { entry_id: 14361, depth: 1 }, mockDb, undefined, undefined, mockConfig)) as Record<string, unknown>
-            expect(res['error']).toBeUndefined()
-            expect(res['mermaid']).toBeDefined()
-            expect(res['entry_count']).toBe(1)
+            expect(res['error']).toBeDefined()
+            expect(res['mermaid']).toBeUndefined()
+            expect(mockDb.getEntryById).not.toHaveBeenCalledWith(14361, '*')
         })
     })
 })
