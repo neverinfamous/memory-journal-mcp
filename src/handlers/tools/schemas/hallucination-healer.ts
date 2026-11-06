@@ -8,45 +8,15 @@ import {
     SIGNIFICANCE_TYPES,
     coerceSignificanceAlias,
     safeString,
+    KEY_ALIAS_MAP,
+    CONTENT_ALIASES,
+    PASSED_VALIDATION_ALIASES,
+    FAILED_VALIDATION_ALIASES,
+    NONE_VALIDATION_ALIASES,
+    SESSION_SUMMARY_TAG_ALIASES,
+    TECHNICAL_NOTE_ALIASES,
+    BUG_FIX_ALIASES,
 } from './constants-and-primitives.js'
-
-const KEY_ALIAS_MAP: Record<string, string> = {
-    id: 'entry_id', ids: 'entry_ids', entryId: 'entry_id',
-    project_id: 'project_number', projectId: 'project_number', projectNumber: 'project_number', project: 'project_number',
-    workspaceId: 'workspace_id', workspace: 'workspace_id', repo: 'workspace_id', repository: 'workspace_id', repo_name: 'workspace_id',
-    isPersonal: 'is_personal', personal: 'is_personal',
-    entryType: 'entry_type',
-    significanceType: 'significance_type', significance: 'significance_type',
-    autoContext: 'auto_context',
-    impactScore: 'impact_score', impact: 'impact_score',
-    trustScore: 'trust_score', trust: 'trust_score', confidence: 'trust_score',
-    validationStatus: 'validation_status', validation: 'validation_status',
-    workflowRunId: 'workflow_run_id', workflowName: 'workflow_name', workflowStatus: 'workflow_status',
-    prNumber: 'pr_number', prUrl: 'pr_url', prStatus: 'pr_status',
-    issueNumber: 'issue_number', issueUrl: 'issue_url', projectOwner: 'project_owner',
-    shareWithTeam: 'share_with_team', share_team: 'share_with_team', team: 'share_with_team',
-    anchorPath: 'anchor_path', anchorType: 'anchor_type',
-    sourceTag: 'source_tag', targetTag: 'target_tag',
-    old_tag: 'source_tag', oldTag: 'source_tag', from_tag: 'source_tag', fromTag: 'source_tag',
-    new_tag: 'target_tag', newTag: 'target_tag', to_tag: 'target_tag', toTag: 'target_tag',
-    fromEntryId: 'from_entry_id', fromId: 'from_entry_id',
-    toEntryId: 'to_entry_id', toId: 'to_entry_id',
-    relationshipType: 'relationship_type',
-    session: 'session_id', sessionId: 'session_id', conversation_id: 'session_id',
-    conversationId: 'session_id', thread_id: 'session_id', threadId: 'session_id',
-}
-
-const CONTENT_ALIASES = [
-    'entry', 'text', 'message', 'description', 'summary', 'notes', 'body', 'instructions',
-    'details', 'markdown', 'post', 'journal_entry', 'journalEntry', 'entry_text', 'entryText',
-]
-
-const PASSED_VALIDATION_ALIASES = new Set(['pass', 'success', 'ok', 'passed', 'validated', 'valid', 'verified', 'true', '1'])
-const FAILED_VALIDATION_ALIASES = new Set(['fail', 'failed', 'error', 'failing', 'false', '0'])
-const NONE_VALIDATION_ALIASES = new Set(['none', 'null', 'undefined', 'skip', 'skipped', 'unknown', 'pending'])
-const SESSION_SUMMARY_TAG_ALIASES = new Set(['session summary', 'session_summary', 'team-session-summary', 'team_session_summary', 'team session summary'])
-const TECHNICAL_NOTE_ALIASES = new Set(['task', 'chore', 'refactor', 'fix', 'update', 'technical', 'note', 'documentation', 'code', 'coding'])
-const BUG_FIX_ALIASES = new Set(['bug', 'bugfix', 'bug_fix', 'bug-fix', 'hotfix', 'defect'])
 
 function toStr(v: unknown): string {
     if (typeof v === 'string') return v
@@ -253,6 +223,13 @@ function healWorkspaceAndProjectContext(obj: Record<string, unknown>): boolean {
     const tagsArr = Array.isArray(obj['tags'])
         ? obj['tags'].filter((t): t is string => typeof t === 'string')
         : undefined
+
+    // Only infer workspace/project from environment/cwd for entry creation/mutation payloads
+    const isEntryMutation =
+        'content' in obj || 'entry_type' in obj || 'title' in obj || 'entry' in obj
+    if (!isEntryMutation) {
+        return modified
+    }
 
     if (wsId === undefined || wsId === '' || wsId === 'default' || projNum === undefined) {
         const resolved = resolveProjectContext({

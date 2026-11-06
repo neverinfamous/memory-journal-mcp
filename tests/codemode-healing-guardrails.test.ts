@@ -2474,7 +2474,7 @@ return { success: true, projectId };
             expect(healedCamel['target_tag']).toBe('new-name')
         })
 
-        it('should allow search_entries with workspace_id without query string', async () => {
+        it('should allow search_entries with specific non-default workspace_id without query string, but reject default workspace without query', async () => {
             const { callTool } = await import('../src/handlers/tools/index.js')
             const mockDb = {
                 getRecentEntries: vi.fn().mockReturnValue({ entries: [{ id: 1, content: 'test' }], count: 1 }),
@@ -2487,13 +2487,14 @@ return { success: true, projectId };
                 getSearchFacets: vi.fn().mockReturnValue({ tags: [], entryTypes: [] })
             } as any
 
+            // Default workspace without query is rejected to prevent unbounded scans
             const resDefault = (await callTool('search_entries', { workspace_id: 'default', limit: 10 }, mockDb, undefined, undefined, mockConfig)) as Record<string, unknown>
-            expect(resDefault['error']).toBeUndefined()
-            expect(resDefault['entries']).toBeDefined()
+            expect(resDefault['code']).toBe('VALIDATION_ERROR')
 
-            const resWildcard = (await callTool('search_entries', { workspace_id: '*', limit: 10 }, mockDb, undefined, undefined, mockConfig)) as Record<string, unknown>
-            expect(resWildcard['error']).toBeUndefined()
-            expect(resWildcard['entries']).toBeDefined()
+            // Specific non-default workspace without query is treated as an intentional filter
+            const resSpecific = (await callTool('search_entries', { workspace_id: 'alpha', limit: 10 }, mockDb, undefined, undefined, mockConfig)) as Record<string, unknown>
+            expect(resSpecific['error']).toBeUndefined()
+            expect(resSpecific['entries']).toBeDefined()
         })
 
         it('should allow visualize_relationships to fallback to wildcard when workspace_id is omitted', async () => {

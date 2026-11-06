@@ -151,3 +151,42 @@ export function preprocessRelationshipItem(item: unknown): unknown {
     }
     return item
 }
+
+export const KEY_ALIAS_MAP: Record<string, string> = {
+    id: 'entry_id', ids: 'entry_ids', entryId: 'entry_id',
+    project_id: 'project_number', projectId: 'project_number', projectNumber: 'project_number', project: 'project_number',
+    workspaceId: 'workspace_id', workspace: 'workspace_id', repo: 'workspace_id', repository: 'workspace_id', repo_name: 'workspace_id',
+    isPersonal: 'is_personal', personal: 'is_personal',
+    entryType: 'entry_type',
+    significanceType: 'significance_type', significance: 'significance_type',
+    autoContext: 'auto_context',
+    impactScore: 'impact_score', impact: 'impact_score',
+    trustScore: 'trust_score', trust: 'trust_score', confidence: 'trust_score',
+    validationStatus: 'validation_status', validation: 'validation_status',
+    workflowRunId: 'workflow_run_id', workflowName: 'workflow_name', workflowStatus: 'workflow_status',
+    prNumber: 'pr_number', prUrl: 'pr_url', prStatus: 'pr_status',
+    issueNumber: 'issue_number', issueUrl: 'issue_url', projectOwner: 'project_owner',
+    shareWithTeam: 'share_with_team', share_team: 'share_with_team', team: 'share_with_team',
+    anchorPath: 'anchor_path', anchorType: 'anchor_type',
+    sourceTag: 'source_tag', targetTag: 'target_tag',
+    old_tag: 'source_tag', oldTag: 'source_tag', from_tag: 'source_tag', fromTag: 'source_tag',
+    new_tag: 'target_tag', newTag: 'target_tag', to_tag: 'target_tag', toTag: 'target_tag',
+    fromEntryId: 'from_entry_id', fromId: 'from_entry_id',
+    toEntryId: 'to_entry_id', toId: 'to_entry_id',
+    relationshipType: 'relationship_type',
+    session: 'session_id', sessionId: 'session_id', conversation_id: 'session_id',
+    conversationId: 'session_id', thread_id: 'session_id', threadId: 'session_id',
+}
+
+export const CONTENT_ALIASES = [
+    'entry', 'text', 'message', 'description', 'summary', 'notes', 'body', 'instructions',
+    'details', 'markdown', 'post', 'journal_entry', 'journalEntry', 'entry_text', 'entryText',
+]
+
+export const PASSED_VALIDATION_ALIASES = new Set(['pass', 'success', 'ok', 'passed', 'validated', 'valid', 'verified', 'true', '1'])
+export const FAILED_VALIDATION_ALIASES = new Set(['fail', 'failed', 'error', 'failing', 'false', '0'])
+export const NONE_VALIDATION_ALIASES = new Set(['none', 'null', 'undefined', 'skip', 'skipped', 'unknown', 'pending'])
+export const SESSION_SUMMARY_TAG_ALIASES = new Set(['session summary', 'session_summary', 'team-session-summary', 'team_session_summary', 'team session summary'])
+export const TECHNICAL_NOTE_ALIASES = new Set(['task', 'chore', 'refactor', 'fix', 'update', 'technical', 'note', 'documentation', 'code', 'coding'])
+export const BUG_FIX_ALIASES = new Set(['bug', 'bugfix', 'bug_fix', 'bug-fix', 'hotfix', 'defect'])
+
