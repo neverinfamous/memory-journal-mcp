@@ -20,6 +20,7 @@ import {
     formatPriorEntries,
     buildCopilotStep,
     sanitizeCopilotTarget,
+    sanitizePromptTarget,
     buildPriorAuditSection,
 } from './adversarial-helpers.js'
 
@@ -36,7 +37,7 @@ export function getAdversarialPromptDefinitions(): InternalPromptDef[] {
             arguments: PLAN_REVIEW_ARGUMENTS,
             handler: (args: Record<string, string> | undefined, db: IDatabaseAdapter, _teamDb?: IDatabaseAdapter, _github?: unknown, briefingConfig?: { defaultWorkspaceId?: string }) => {
                 const parsed = planReviewArgsSchema.parse(args ?? {})
-                const topic = parsed.topic ?? '{topic}'
+                const topic = sanitizePromptTarget(parsed.topic ?? '{topic}')
                 const depth: ReviewDepth = parsed.depth ?? 'standard'
                 const useCopilot = parsed.copilot === 'true'
 
@@ -129,12 +130,12 @@ Review prior entries for recurring findings and reusable patterns before draftin
         },
         {
             name: 'adversarial-audit-code-quality',
-            description: 'Multi-pass adversarial code quality audit (linting, technical debt, consistency) Optional parameters: target, copilot',
+            description: 'Multi-pass adversarial code quality audit (dead code, type safety, silent failures, workspace isolation, complexity, file size). Optional parameters: target, copilot',
             icons: [ICON_PROMPT],
             arguments: AUDIT_ARGUMENTS,
             handler: (args: Record<string, string> | undefined, db: IDatabaseAdapter, _teamDb?: IDatabaseAdapter, _github?: unknown, briefingConfig?: { defaultWorkspaceId?: string }) => {
                 const parsed = auditArgsSchema.parse(args ?? {})
-                const target = parsed.target ?? '{target}'
+                const target = sanitizePromptTarget(parsed.target ?? '{target}')
                 const copilotTarget = sanitizeCopilotTarget(target)
                 const copilotInstruction = buildCopilotStep(
                     parsed.copilot === 'true',
@@ -152,13 +153,14 @@ Review prior entries for recurring findings and reusable patterns before draftin
                         content: {
                             type: 'text',
                             text: `# Adversarial Code Quality Audit
+Prompt revision: 2026-11-06-audit-pass6.
 Target: ${target}
 
 If the target is '{target}', determine it from the user's request. If the user hasn't specified a target file or module, ask them for it now.
 
 This prompt is shared by every project. Audit the repository the user named. Do not assume that repository is memory-journal-mcp, and do not copy this server's directory layout, commit script, or parameter-normalizer filenames onto a different codebase. Discover those in the target.
 
-1. Scan the target for dead code, duplication, type safety, magic values, complexity, boundary validation, monkey-patching, unused variables/exports, unhandled promises, and global scope pollution. File dead code, duplication, magic values, unused exports, and floating promises only when you quote them, and count those as Low. For a large or full-repository audit, spawn parallel read-only subagents by subsystem and assign each directory to one subagent. The parent dedupes a handler that drops a field and the callee branch it reaches into one finding with both lines. In Cursor use the Task tool with subagent type \`explore\` or \`generalPurpose\`. On any other host use that host's read-only subagent tool, and do not call a tool name that is not available in the session. Each subagent returns a path, a line number, a one-line quote, a severity, and a one-sentence fix. Severity defaults: a cross-workspace mutation is Critical; wrong-tool dispatch, false success, and a dropped isolation field are High; function length alone is Moderate; a file over 500 lines is High. A database-wide maintenance function that has no scope parameter is a product question, not an automatic Critical. A primary-key update that already rejects a workspace mismatch is Moderate. The parent re-reads every Critical and High citation, and every cross-workspace, authz, and false-success citation even when a subagent marked it Moderate. Quotes are the raw source line. Strip one wrapping backtick pair, then drop the citation if the quote is not on that line. Cap Moderate at 8 and Low at 5 per subsystem. The parent table keeps at most 12 Moderate and 8 Low. Do not cap Critical or High. Record which directories were opened and which detectors found nothing.
+1. Scan the target for dead code, duplication, type safety, magic values, complexity, boundary validation, monkey-patching, unused variables/exports, unhandled promises, and global scope pollution. File dead code, duplication, magic values, unused exports, and floating promises only when you quote them, and count those as Low. For a large or full-repository audit, spawn parallel read-only subagents by subsystem and assign each directory to one subagent. The parent dedupes a handler that drops a field and the callee branch it reaches into one finding with both lines. In Cursor use the Task tool with subagent type \`explore\` or \`generalPurpose\`. On any other host use that host's read-only subagent tool, and do not call a tool name that is not available in the session. Each subagent returns a path, a line number, a one-line quote, a severity, and a one-sentence fix. Severity defaults: a cross-workspace mutation is Critical; wrong-tool dispatch, false success, and a dropped isolation field are High; function length alone is Moderate; a file over 500 lines is High. A database-wide maintenance function that has no scope parameter is a product question, not an automatic Critical. A primary-key update that already rejects a workspace mismatch is Moderate. The parent re-reads every Critical and High citation, and every cross-workspace, authz, and false-success citation even when a subagent marked it Moderate. Quotes are the raw source line. Strip one wrapping backtick pair, then drop the citation if the quote is not on that line. Cap Moderate at 8 and Low at 5 per subsystem. The parent table keeps at most 12 Moderate and 8 Low. Do not cap Critical or High. Record which directories were opened and which detectors found nothing. Put the parent conversation id in every subagent prompt so replies reach the parent. Each subagent returns one coverage line per detector (run, not run, or nothing found); the parent runs any detector a subagent skipped, including function length, nesting, unused exports, schema drift, and accepted-but-ignored parameters, before it reports that detector as clean. An explicit \`'*'\` that drives a mutation against a single repository root (for example \`process.cwd()\`) is High, not an admin override. An optional workspace on a maintenance function that recent commits kept database-wide on purpose is a product note.
    - **Mandatory Deep-Quality Detectors (Always Run)**:
      1. **Silent Catch Block Detector**: Find every \`catch\` in production source, including \`catch (e)\` and multiline catches. A catch is silent when its body does not log, rethrow, or return a structured error. Quote the body. Keep intentional best-effort fallbacks out of the table. Do not flag a catch that returns the project's structured handler error.
      2. **Cross-Platform Path Separator Assumption Detector**: Flag filesystem prefix checks (\`startsWith\` / \`endsWith\` on a resolved path without a separator boundary) and hardcoded \`'\\\\'\` or \`'/'\` used to test real filesystem paths. Prefer \`path.relative()\` and \`path.sep\`. Ignore URL, route, glob, and SQL slashes. Case-fold only on Windows.
@@ -203,8 +205,6 @@ import {readdirSync as r,statSync as s,readFileSync as f} from 'fs';import {join
 > [!IMPORTANT]
 > **High Priority — File Size**: Any file exceeding 500 lines is a high-priority finding. Flag all such files in the findings table with severity **High**. A function over 80 lines, or nesting deeper than 4, is **Moderate** unless that nesting hides one of the defects above. Do not mark function length by itself as High. Do NOT begin refactoring automatically — present them to the user for approval.
 
-Prompt revision: 2026-11-04-audit-pass5.
-
 3. Group findings by category and severity (**Critical**, **High**, **Moderate**, **Low**). File-size findings are **High**.
 4. **External Validation (Copilot — Opt-In)**: ${copilotInstruction}
 5. Present a summary table to the user (incorporating Copilot findings if applicable) and await approval. Diagnostic scans in step 2, and read-only lint or typecheck when the target defines them, are part of the audit. **CRITICAL**: Do not edit project files, apply fixes, or commit until the user explicitly approves the implementation plan. Present the plan as markdown in the chat. Do not add an audit plan file to the repository. The plan must be readable in Cursor and in Antigravity.
@@ -225,7 +225,7 @@ ${priorAuditSection}`
             arguments: AUDIT_ARGUMENTS,
             handler: (args: Record<string, string> | undefined, db: IDatabaseAdapter, _teamDb?: IDatabaseAdapter, _github?: unknown, briefingConfig?: { defaultWorkspaceId?: string }) => {
                 const parsed = auditArgsSchema.parse(args ?? {})
-                const target = parsed.target ?? '{target}'
+                const target = sanitizePromptTarget(parsed.target ?? '{target}')
                 const copilotTarget = sanitizeCopilotTarget(target)
                 const copilotInstruction = buildCopilotStep(
                     parsed.copilot === 'true',
@@ -276,7 +276,7 @@ ${priorAuditSection}`
             arguments: AUDIT_ARGUMENTS,
             handler: (args: Record<string, string> | undefined, db: IDatabaseAdapter, _teamDb?: IDatabaseAdapter, _github?: unknown, briefingConfig?: { defaultWorkspaceId?: string }) => {
                 const parsed = auditArgsSchema.parse(args ?? {})
-                const target = parsed.target ?? '{target}'
+                const target = sanitizePromptTarget(parsed.target ?? '{target}')
                 const copilotTarget = sanitizeCopilotTarget(target)
                 const copilotInstruction = buildCopilotStep(
                     parsed.copilot === 'true',
@@ -326,7 +326,7 @@ ${priorAuditSection}`
             arguments: AUDIT_ARGUMENTS,
             handler: (args: Record<string, string> | undefined, db: IDatabaseAdapter, _teamDb?: IDatabaseAdapter, _github?: unknown, briefingConfig?: { defaultWorkspaceId?: string }) => {
                 const parsed = auditArgsSchema.parse(args ?? {})
-                const target = parsed.target ?? '{target}'
+                const target = sanitizePromptTarget(parsed.target ?? '{target}')
                 const copilotTarget = sanitizeCopilotTarget(target)
                 const copilotInstruction = buildCopilotStep(
                     parsed.copilot === 'true',
@@ -372,7 +372,7 @@ ${priorAuditSection}`
             arguments: AUDIT_ARGUMENTS,
             handler: (args: Record<string, string> | undefined, db: IDatabaseAdapter, _teamDb?: IDatabaseAdapter, _github?: unknown, briefingConfig?: { defaultWorkspaceId?: string }) => {
                 const parsed = auditArgsSchema.parse(args ?? {})
-                const target = parsed.target ?? '{target}'
+                const target = sanitizePromptTarget(parsed.target ?? '{target}')
                 const copilotTarget = sanitizeCopilotTarget(target)
                 const copilotInstruction = buildCopilotStep(
                     parsed.copilot === 'true',
@@ -416,7 +416,7 @@ ${priorAuditSection}`
             arguments: AUDIT_ARGUMENTS,
             handler: (args: Record<string, string> | undefined, db: IDatabaseAdapter, _teamDb?: IDatabaseAdapter, _github?: unknown, briefingConfig?: { defaultWorkspaceId?: string }) => {
                 const parsed = auditArgsSchema.parse(args ?? {})
-                const target = parsed.target ?? '{target}'
+                const target = sanitizePromptTarget(parsed.target ?? '{target}')
                 const copilotTarget = sanitizeCopilotTarget(target)
                 const copilotInstruction = buildCopilotStep(
                     parsed.copilot === 'true',
