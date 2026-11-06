@@ -25,6 +25,9 @@ import {
     ImportExternalOutputSchema,
 } from './schemas.js'
 
+/** Maximum size of a single markdown file accepted by the import tools. */
+export const MAX_IMPORT_FILE_BYTES = 5 * 1024 * 1024
+
 export function getIoTools(context: ToolContext): ToolDefinition[] {
     const { db, progress } = context
     return [
@@ -359,8 +362,8 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
 
                             handle = await fs.open(filepath, constants.O_RDONLY | constants.O_NOFOLLOW)
                             const stats = await handle.stat()
-                            if (stats.size > 5 * 1024 * 1024) {
-                                throw new Error(`File exceeds maximum size limit of 5MB (${stats.size} bytes)`)
+                            if (stats.size > MAX_IMPORT_FILE_BYTES) {
+                                throw new Error(`File exceeds maximum size limit of ${String(MAX_IMPORT_FILE_BYTES / (1024 * 1024))}MB (${stats.size} bytes)`)
                             }
 
                             const content = await handle.readFile('utf-8')

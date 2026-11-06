@@ -393,7 +393,14 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                     }
                     const wsId = resolveWorkspaceId(rawWs, rawProj, context.config)
                     const registryPath = context.config?.projectRegistry?.[wsId]?.path
-                    const cwd = registryPath !== undefined && registryPath.length > 0 ? registryPath : process.cwd()
+                    const hasRegistryPath = registryPath !== undefined && registryPath.length > 0
+                    // Anchors of another workspace must not be checked (and persisted as stale)
+                    // against the server's own working directory, so a missing registry path is
+                    // only tolerated for the default workspace.
+                    const lacksRepositoryRoot =
+                        !hasRegistryPath &&
+                        wsId !== resolveWorkspaceId(undefined, undefined, context.config)
+                    const cwd = hasRegistryPath ? registryPath : process.cwd()
 
                     const targets: { id: number; timestamp: string }[] = []
                     if (resolvedEntryId !== undefined) {
@@ -420,6 +427,11 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
 
                     for (const target of targets) {
                         for (const anchor of db.getAnchorsByEntryId(target.id)) {
+                            if (lacksRepositoryRoot) {
+                                throw new ValidationError(
+                                    `No registered repository path for workspace '${wsId}'. Register the project path before checking its anchors.`
+                                )
+                            }
                             results.push(
                                 await evaluateAnchorStaleness(
                                     db,

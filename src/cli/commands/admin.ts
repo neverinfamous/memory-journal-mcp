@@ -185,9 +185,18 @@ export async function rebuildIndexAction(options: z.infer<typeof rebuildIndexSch
         const vectorManager = new VectorSearchManager(db, { modelName: serverOptions.embeddingModel })
 
         process.stderr.write('Rebuilding vector index...\n')
-        await vectorManager.rebuildIndex()
+        const result = await vectorManager.rebuildIndex()
         const stats = vectorManager.getStats()
-        
+
+        if (!result.success) {
+            process.stderr.write(
+                `Rebuild index failed: ${String(result.failed)} entries could not be indexed${result.firstError !== null ? ` (${result.firstError})` : ''}\n`
+            )
+            process.stdout.write(JSON.stringify({ status: 'failed', ...result, stats }, null, 2) + '\n')
+            process.exitCode = 1
+            return
+        }
+
         process.stdout.write(JSON.stringify({ status: 'success', stats }, null, 2) + '\n')
     } catch (e) {
         process.stderr.write("Rebuild index failed: " + (e instanceof Error ? e.message : String(e)) + '\n')

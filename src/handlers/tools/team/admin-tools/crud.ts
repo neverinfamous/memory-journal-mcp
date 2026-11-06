@@ -234,7 +234,17 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    teamDb.deleteEntry(entry_id, false, wsId)
+                    const deleted = teamDb.deleteEntry(entry_id, false, wsId)
+                    if (!deleted) {
+                        return {
+                            success: false,
+                            error: `Team entry ${String(entry_id)} not found`,
+                            code: 'RESOURCE_NOT_FOUND',
+                            category: 'resource',
+                            suggestion: 'Verify the entry id and workspace_id.',
+                            recoverable: true,
+                        }
+                    }
                     teamDb.deleteVector(entry_id)
 
                     triggerTeamNotifications(context)

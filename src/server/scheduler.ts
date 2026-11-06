@@ -357,7 +357,13 @@ export class Scheduler {
             return
         }
 
-        const { indexed: count } = await this.vectorManager.rebuildIndex()
+        const result = await this.vectorManager.rebuildIndex()
+        if (!result.success) {
+            throw new Error(
+                `Vector index rebuild failed: ${String(result.failed)} entries could not be indexed${result.firstError !== null ? ` (${result.firstError})` : ''}`
+            )
+        }
+        const count = result.indexed
         logger.info(`Scheduled vector index rebuild: ${String(count)} entries indexed`, {
             module: 'Scheduler',
             operation: 'rebuild-index',

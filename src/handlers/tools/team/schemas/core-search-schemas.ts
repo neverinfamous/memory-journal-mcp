@@ -387,6 +387,7 @@ export const TeamCreateOutputSchema = z
         entry: TeamEntryOutputSchema.optional(),
         author: z.string().optional(),
         error: z.string().optional(),
+        relationshipWarnings: z.array(z.string()).optional(),
     })
     .extend(ErrorFieldsMixin.shape)
 

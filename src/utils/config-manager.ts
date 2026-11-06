@@ -28,6 +28,9 @@ const BRIEFING_CONFIG_KEY_MAP: Readonly<
     briefingCopilot: { target: 'copilotReviews', kind: 'boolean' },
 }
 
+/** Delay before a config-file change is reloaded, so bursts of writes collapse into one reload. */
+const CONFIG_RELOAD_DEBOUNCE_MS = 500
+
 export class ConfigManager extends EventEmitter {
     private config: DynamicConfig
     private readonly initialCodemodeFullAccess: boolean
@@ -51,17 +54,20 @@ export class ConfigManager extends EventEmitter {
         return this.config
     }
 
-    public updateConfig(newConfig: Partial<DynamicConfig>, persist = false): void {
+    /**
+     * Apply a config update. When `persist` is set and a config file is in use, the change is
+     * also written to disk; the returned string is the write error, or undefined on success.
+     */
+    public updateConfig(newConfig: Partial<DynamicConfig>, persist = false): string | undefined {
         this.config = { ...this.config, ...newConfig }
-        if (newConfig.rawToolFilter !== undefined) {
+        if ('rawToolFilter' in newConfig) {
             this.config.toolFilterConfig = newConfig.rawToolFilter ? parseToolFilter(newConfig.rawToolFilter) : null
         }
 
-        if (persist && this.configFilePath) {
-            this.persistToFile()
-        }
+        const persistError = persist && this.configFilePath ? this.persistToFile() : undefined
 
         this.emit('changed', this.config)
+        return persistError
     }
 
     public close(): void {
@@ -69,8 +75,8 @@ export class ConfigManager extends EventEmitter {
         this.watcher?.close()
     }
 
-    private persistToFile(): void {
-        if (!this.configFilePath) return
+    private persistToFile(): string | undefined {
+        if (!this.configFilePath) return undefined
         this.isWriting = true
         try {
             const content = fs.readFileSync(this.configFilePath, 'utf-8')
@@ -110,17 +116,20 @@ export class ConfigManager extends EventEmitter {
                 fs.writeFileSync(this.configFilePath, yamlStr, 'utf-8')
             }
         } catch (e: unknown) {
-            logger.error('Failed to persist configuration to file', { module: 'ConfigManager', error: e instanceof Error ? e.message : String(e) })
+            const message = e instanceof Error ? e.message : String(e)
+            logger.error('Failed to persist configuration to file', { module: 'ConfigManager', error: message })
+            return message
         } finally {
             this.isWriting = false
         }
+        return undefined
     }
 
     private watchFile(): void {
         if (!this.configFilePath) return
 
         try {
-            this.watcher = fs.watch(this.configFilePath, (eventType) => {
+            this.watcher = fs.watch(this.configFilePath, { persistent: false }, (eventType) => {
                 if (eventType === 'change' && !this.isWriting) {
                     if (this.debounceTimer !== undefined) clearTimeout(this.debounceTimer)
                     this.debounceTimer = setTimeout(() => {
@@ -129,7 +138,7 @@ export class ConfigManager extends EventEmitter {
                         } catch (err: unknown) {
                             logger.error('Failed to reload config file', { module: 'ConfigManager', error: err instanceof Error ? err.message : String(err) })
                         }
-                    }, 500)
+                    }, CONFIG_RELOAD_DEBOUNCE_MS)
                 }
             })
             this.watcher.on('error', (err: unknown) => {

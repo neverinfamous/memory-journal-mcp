@@ -93,7 +93,7 @@ function notifySubscriptionsIfMutated(tool: ToolDefinition, result: unknown, ses
     if (!isRecord(result) || result['success'] !== true) return
     const isMutation =
         MUTATING_TOOL_NAMES.has(tool.name) ||
-        (tool.name.startsWith('team_') && tool.annotations.readOnlyHint !== true)
+        (tool.group === 'team' && tool.annotations.readOnlyHint !== true)
     if (!isMutation) return
 
     const subMgr = sessionContext.config?.subscriptionManager ?? globalSubscriptionManager
@@ -101,7 +101,7 @@ function notifySubscriptionsIfMutated(tool: ToolDefinition, result: unknown, ses
     void subMgr.notifyResourceUpdated('memory://recent')
     void subMgr.notifyResourceUpdated('memory://statistics')
 
-    if (tool.name.startsWith('team_')) {
+    if (tool.group === 'team') {
         void subMgr.notifyResourceUpdated('memory://team/recent')
         void subMgr.notifyResourceUpdated('memory://team/statistics')
     }
@@ -151,7 +151,7 @@ export function createSecureDispatcher(
         if ('errorResult' in normalized) return normalized.errorResult
         let finalParams = normalized.params
 
-        finalParams = applyAutoVersion(toolName, finalParams, autoVersion, sessionContext)
+        finalParams = applyAutoVersion(tool, finalParams, autoVersion, sessionContext)
 
         if (tool.annotations?.readOnlyHint === false && dryRun) {
             return {
@@ -252,17 +252,21 @@ async function normalizeDispatchParams(
 }
 
 function applyAutoVersion(
-    toolName: string,
+    tool: ToolDefinition,
     finalParams: unknown,
     autoVersion: boolean,
     sessionContext: ToolContext
 ): unknown {
-    if (!(autoVersion && VERSION_AWARE_TOOL_NAMES.has(toolName) && isRecord(finalParams))) return finalParams
+    if (!(autoVersion && VERSION_AWARE_TOOL_NAMES.has(tool.name) && isRecord(finalParams))) return finalParams
     const paramsObj = { ...finalParams }
     if (paramsObj['expected_version'] === undefined && typeof paramsObj['entry_id'] === 'number') {
         const entryId = paramsObj['entry_id']
-        const targetDb = toolName.startsWith('team_') ? sessionContext.teamDb : sessionContext.db
-        const existingEntry = targetDb?.getEntryById(entryId)
+        const targetDb = tool.group === 'team' ? sessionContext.teamDb : sessionContext.db
+        // Look the entry up in the workspace the call targets; without it the lookup silently
+        // defaults to 'default' and returns null for entries in any other workspace.
+        const lookupWorkspace =
+            typeof paramsObj['workspace_id'] === 'string' ? paramsObj['workspace_id'] : undefined
+        const existingEntry = targetDb?.getEntryById(entryId, lookupWorkspace)
         if (existingEntry !== null && existingEntry !== undefined && 'version' in existingEntry) {
             paramsObj['expected_version'] = existingEntry.version
         }
@@ -384,8 +388,15 @@ export async function resolveCodeModeSessionContext(
                 try {
                     const injectedGithub = getGitHubIntegration(registryEntry.path, undefined, process.env['GITHUB_TOKEN'])
                     sessionContext = { ...sessionContext, github: injectedGithub }
-                } catch {
-                    // Ignore injection failures; tools will fallback to global context or throw
+                } catch (error) {
+                    return {
+                        errorResponse: {
+                            success: false,
+                            error: `Failed to initialize GitHub context for project ${String(projectId)}: ${error instanceof Error ? error.message : String(error)}`,
+                            project_id: undefined,
+                            executionTimeMs: 0,
+                        },
+                    }
                 }
             }
         }

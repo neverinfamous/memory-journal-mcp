@@ -9,6 +9,7 @@ import type {
 import type { IDatabaseAdapter, CreateEntryInput } from '../core/interfaces.js'
 import type { EntriesManager } from './entries/index.js'
 import { AdapterDelegates } from './adapter-delegates.js'
+import { logger } from '../../utils/logger.js'
 
 /**
  * SQLite Database Adapter for Memory Journal using better-sqlite3 native driver
@@ -185,8 +186,12 @@ export class DatabaseAdapter extends AdapterDelegates implements IDatabaseAdapte
             for (const id of result.deleted) {
                 try {
                     this.deleteVector(id)
-                } catch {
-                    // Vectors failure shouldn't fail the entry deletion
+                } catch (error: unknown) {
+                    // A vector failure must not fail the entry deletion, but leaves an orphan to reconcile
+                    logger.warning(
+                        `Vector delete failed for entry ${String(id)}: ${error instanceof Error ? error.message : String(error)}`,
+                        { module: 'DatabaseAdapter' }
+                    )
                 }
             }
             return result

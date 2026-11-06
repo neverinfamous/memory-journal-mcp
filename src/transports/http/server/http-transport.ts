@@ -231,6 +231,15 @@ export class HttpTransport {
 
         if (
             this.config.oauthEnabled === true &&
+            (this.config.oauthIssuer === undefined || this.config.oauthAudience === undefined)
+        ) {
+            const errorMsg = `FATAL: OAuth is enabled but 'oauthIssuer' and/or 'oauthAudience' is missing. Refusing to start without a complete OAuth configuration, because the server would otherwise run without authentication.`
+            logger.error(errorMsg, { module: 'HTTP', operation: 'oauth-config' })
+            throw new Error(errorMsg)
+        }
+
+        if (
+            this.config.oauthEnabled === true &&
             this.config.oauthIssuer !== undefined &&
             this.config.oauthAudience !== undefined
         ) {

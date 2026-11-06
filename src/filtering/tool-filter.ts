@@ -7,6 +7,7 @@
 
 import type { ToolGroup, MetaGroup, ToolFilterRule, ToolFilterConfig } from '../types/index.js'
 import { TOOL_GROUPS, META_GROUPS } from './tool-constants.js'
+import { logger } from '../utils/logger.js'
 
 // Re-export ToolFilterConfig from types
 export type { ToolFilterConfig } from '../types/index.js'
@@ -88,6 +89,43 @@ function isMetaGroup(name: string): name is MetaGroup {
 }
 
 /**
+ * Return a new set with a meta-group, group, or single tool added.
+ * An unknown single-tool name is still added (so filters stay forward compatible)
+ * but is reported, because a typo would otherwise enable nothing without any signal.
+ */
+function applyInclude(enabledTools: Set<string>, name: string): Set<string> {
+    if (isMetaGroup(name)) {
+        const expanded = new Set(enabledTools)
+        for (const group of META_GROUPS[name]) {
+            for (const tool of TOOL_GROUPS[group]) expanded.add(tool)
+        }
+        return expanded
+    }
+    if (isGroup(name)) {
+        const resolved = resolveGroupAlias(name) as ToolGroup
+        return new Set([...enabledTools, ...TOOL_GROUPS[resolved]])
+    }
+    if (!getAllToolNames().includes(name)) {
+        logger.warning(`Tool filter references unknown tool or group '${name}'`, {
+            module: 'ToolFilter',
+        })
+    }
+    return new Set([...enabledTools, name])
+}
+
+/** Remove a group or single tool from the set in place. */
+function applyExclude(enabledTools: Set<string>, name: string): void {
+    if (isGroup(name)) {
+        const resolved = resolveGroupAlias(name) as ToolGroup
+        for (const tool of TOOL_GROUPS[resolved]) {
+            enabledTools.delete(tool)
+        }
+    } else {
+        enabledTools.delete(name)
+    }
+}
+
+/**
  * Parse a tool filter string into configuration
  *
  * Syntax:
@@ -124,18 +162,7 @@ export function parseToolFilter(filterString: string): ToolFilterConfig {
             // First item without prefix - whitelist mode
             isWhitelistMode = true
 
-            if (isMetaGroup(name)) {
-                // Expand meta-group to groups
-                for (const group of META_GROUPS[name]) {
-                    enabledTools = new Set([...enabledTools, ...TOOL_GROUPS[group]])
-                }
-            } else if (isGroup(name)) {
-                const resolved = resolveGroupAlias(name) as ToolGroup
-                enabledTools = new Set([...enabledTools, ...TOOL_GROUPS[resolved]])
-            } else {
-                // Single tool
-                enabledTools.add(name)
-            }
+            enabledTools = applyInclude(enabledTools, name)
 
             rules.push({
                 type: 'include',
@@ -144,14 +171,7 @@ export function parseToolFilter(filterString: string): ToolFilterConfig {
             })
         } else if (isRemove) {
             // Remove group or tool
-            if (isGroup(name)) {
-                const resolved = resolveGroupAlias(name) as ToolGroup
-                for (const tool of TOOL_GROUPS[resolved]) {
-                    enabledTools.delete(tool)
-                }
-            } else {
-                enabledTools.delete(name)
-            }
+            applyExclude(enabledTools, name)
 
             rules.push({
                 type: 'exclude',
@@ -160,16 +180,7 @@ export function parseToolFilter(filterString: string): ToolFilterConfig {
             })
         } else {
             // Add group or tool (with or without + prefix)
-            if (isMetaGroup(name)) {
-                for (const group of META_GROUPS[name]) {
-                    enabledTools = new Set([...enabledTools, ...TOOL_GROUPS[group]])
-                }
-            } else if (isGroup(name)) {
-                const resolved = resolveGroupAlias(name) as ToolGroup
-                enabledTools = new Set([...enabledTools, ...TOOL_GROUPS[resolved]])
-            } else {
-                enabledTools.add(name)
-            }
+            enabledTools = applyInclude(enabledTools, name)
 
             rules.push({
                 type: 'include',
@@ -185,14 +196,7 @@ export function parseToolFilter(filterString: string): ToolFilterConfig {
         // Re-apply rules
         for (const rule of rules) {
             if (rule.type === 'exclude') {
-                if (isGroup(rule.target)) {
-                    const resolved = resolveGroupAlias(rule.target) as ToolGroup
-                    for (const tool of TOOL_GROUPS[resolved]) {
-                        enabledTools.delete(tool)
-                    }
-                } else {
-                    enabledTools.delete(rule.target)
-                }
+                applyExclude(enabledTools, rule.target)
             }
         }
     }

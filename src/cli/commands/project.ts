@@ -91,8 +91,15 @@ export async function projectCreateAction(name: string, options: Record<string, 
     const cliConfigPath = (options['config'] as string | undefined) ?? process.env['MEMORY_JOURNAL_CONFIG']
     try {
         resolver = new ConfigResolver(command, options, cliConfigPath)
-    } catch {
-        resolver = new ConfigResolver(command, {}, undefined)
+    } catch (e) {
+        process.stderr.write(
+            `\nInvalid configuration, skipping database initialization: ${e instanceof Error ? e.message : String(e)}\n`
+        )
+        process.stderr.write(
+            `Fix the configuration and run 'memory-journal-mcp entry create' manually.\n`
+        )
+        process.exitCode = 1
+        return
     }
 
     const { serverOptions } = buildServerOptions(resolver, options, command, [])

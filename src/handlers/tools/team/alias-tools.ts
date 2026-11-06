@@ -158,8 +158,12 @@ function handleAddAuthorAlias(context: ToolContext) {
             }
 
             const caller = getCallerIdentity(params as Record<string, unknown>)
-            const storedWorkspace = workspaceId === '*' ? undefined : workspaceId
-            const createdAlias = teamDb.addAuthorAlias(alias, canonical_author, caller, storedWorkspace)
+            if (workspaceId === '*') {
+                throw new ValidationError(
+                    "workspace_id '*' cannot be used when adding an alias; pass a specific workspace_id or omit it"
+                )
+            }
+            const createdAlias = teamDb.addAuthorAlias(alias, canonical_author, caller, workspaceId)
 
             return {
                 success: true,

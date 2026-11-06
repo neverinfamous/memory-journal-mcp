@@ -399,6 +399,7 @@ export const BatchDeleteEntriesSchemaMcp = z.preprocess(
 export const BatchCreateEntriesOutputSchema = BatchResultOutputSchema.extend({
     entries: z.array(EntryOutputSchema).optional(),
     indexStatuses: z.array(z.string()).optional(),
+    relationshipWarnings: z.array(z.string()).optional(),
 })
 
 export const BatchUpdateEntriesOutputSchema = BatchResultOutputSchema.extend({

@@ -2,6 +2,7 @@ import type { ToolHandlerConfig } from '../types/index.js'
 import * as os from 'node:os'
 import * as path from 'node:path'
 import * as fs from 'node:fs'
+import { logger } from './logger.js'
 
 export interface ResolutionInput {
     workspace_id?: string
@@ -307,24 +308,38 @@ export function cwdMatchesRegistryPath(registryPath: string, cwd: string): boole
     return true
 }
 
-export function resolveProjectNumberFromPath(cwd: string): number | undefined {
-    if (process.env['NODE_ENV'] === 'test' || process.env['VITEST'] === 'true') {
+/**
+ * Resolve a project number from the registry entry whose path contains `cwd`.
+ * Pass `registryOverride` to resolve against an explicit registry; without it the global
+ * config file is read, and that read is skipped under test runners so unit tests stay hermetic.
+ */
+export function resolveProjectNumberFromPath(
+    cwd: string,
+    registryOverride?: Record<string, RegistryEntry>
+): number | undefined {
+    if (
+        registryOverride === undefined &&
+        (process.env['NODE_ENV'] === 'test' || process.env['VITEST'] === 'true')
+    ) {
         return undefined
     }
     try {
-        const configPath = getConfigPath()
-        if (!fs.existsSync(configPath)) return undefined
-        
-        const content = fs.readFileSync(configPath, 'utf-8')
-        const config = JSON.parse(content) as ParsedConfig
-        
-        if (config.projectRegistry === undefined || config.projectRegistry === null) return undefined
-        
+        let projectRegistry = registryOverride
+        if (projectRegistry === undefined) {
+            const configPath = getConfigPath()
+            if (!fs.existsSync(configPath)) return undefined
+
+            const content = fs.readFileSync(configPath, 'utf-8')
+            projectRegistry = (JSON.parse(content) as ParsedConfig).projectRegistry
+        }
+
+        if (projectRegistry === undefined || projectRegistry === null) return undefined
+
         // Find the most specific (longest) matching path
         let bestMatchLength = -1
         let bestProjectNumber: number | undefined = undefined
-        
-        for (const [, entry] of Object.entries(config.projectRegistry)) {
+
+        for (const [, entry] of Object.entries(projectRegistry)) {
             const entryPath = entry.path
             if (entryPath === undefined || entryPath === null) continue
             if (!cwdMatchesRegistryPath(entryPath, cwd)) continue
@@ -337,8 +352,11 @@ export function resolveProjectNumberFromPath(cwd: string): number | undefined {
         }
         
         return bestProjectNumber
-    } catch {
-        // Silently fail if auto-resolution fails
+    } catch (err) {
+        logger.warning(
+            `Project auto-resolution from path failed: ${err instanceof Error ? err.message : String(err)}`,
+            { module: 'WorkspaceResolver' }
+        )
         return undefined
     }
 }

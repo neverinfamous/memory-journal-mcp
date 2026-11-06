@@ -6,6 +6,7 @@ import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { ValidationError } from '../../../types/errors.js'
+import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { relaxedNumber } from '../schemas.js'
 import { CloseGitHubIssueWithEntryOutputSchema } from './schemas.js'
 import { resolveOwnerRepo, resolveProjectNumber } from './helpers.js'
@@ -106,6 +107,11 @@ export function getCloseGitHubIssueTool(context: ToolContext): ToolDefinition {
                     `[PENDING] Closing GitHub issue #${String(input.issue_number)}: ${safeIssueTitle}\n` +
                     (input.resolution_notes ? `\nResolution: ${input.resolution_notes}` : '')
 
+                const entryProjectNumber = resolveProjectNumber(
+                    context,
+                    resolved.repo,
+                    input.project_number
+                )
                 const entry = db.createEntry({
                     content: entryContent,
                     entryType: 'bug_fix',
@@ -113,7 +119,9 @@ export function getCloseGitHubIssueTool(context: ToolContext): ToolDefinition {
                     isPersonal: false,
                     significanceType: 'blocker_resolved',
                     issueNumber: input.issue_number,
+                    projectNumber: entryProjectNumber,
                     projectOwner: resolved.owner,
+                    workspaceId: resolveWorkspaceId(undefined, entryProjectNumber, context.config),
                 })
 
                 // 2. Perform external mutation

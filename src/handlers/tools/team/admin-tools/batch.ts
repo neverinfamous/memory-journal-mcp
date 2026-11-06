@@ -4,7 +4,8 @@
  * Tools: team_batch_create_entries, team_batch_update_entries, team_batch_delete_entries
  */
 
-import type { ToolDefinition, ToolContext, RelationshipType } from '../../../../types/index.js'
+import type { ToolDefinition, ToolContext } from '../../../../types/index.js'
+import { linkRequestedRelationships } from '../../relationship-linking.js'
 import { formatHandlerError } from '../../../../utils/error-helpers.js'
 import { resolveAuthenticatedAuthor } from '../../../../utils/security-utils.js'
 import { getAuthContext } from '../../../../auth/auth-context.js'
@@ -119,25 +120,18 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
 
                     const { created: results, errors } = teamDb.createEntries(inputs)
 
+                    const relationshipWarnings: string[] = []
                     for (let i = 0; i < results.length; i++) {
                         const createdEntry = results[i]
                         const sourceEntry = input.entries[i]
-                        if (createdEntry && sourceEntry?.relationships && sourceEntry.relationships.length > 0) {
-                            for (const rel of sourceEntry.relationships) {
-                                try {
-                                    const canonicalRelType: RelationshipType =
-                                        rel.relationType === 'resolves'
-                                            ? 'resolved'
-                                            : rel.relationType === 'relates_to'
-                                              ? 'references'
-                                              : rel.relationType === 'depends_on'
-                                                ? 'blocked_by'
-                                                : rel.relationType
-                                    teamDb.linkEntries(createdEntry.id, rel.targetId, canonicalRelType)
-                                } catch {
-                                    // Ignore link failures if target doesn't exist
-                                }
-                            }
+                        if (createdEntry) {
+                            relationshipWarnings.push(
+                                ...linkRequestedRelationships(
+                                    teamDb,
+                                    createdEntry.id,
+                                    sourceEntry?.relationships
+                                )
+                            )
                         }
                     }
 
@@ -179,7 +173,13 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
 
                     triggerTeamNotifications(context)
 
-                    return { success: true, count: entries.length, entries, indexStatuses }
+                    return {
+                        success: true,
+                        count: entries.length,
+                        entries,
+                        indexStatuses,
+                        ...(relationshipWarnings.length > 0 ? { relationshipWarnings } : {}),
+                    }
                 } catch (err) {
                     return formatHandlerError(err)
                 }

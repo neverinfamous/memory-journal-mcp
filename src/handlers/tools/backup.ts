@@ -119,7 +119,10 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
                     await sendProgress(progress, 2, 2, 'Backup complete')
                     return {
                         success: true,
-                        message: `Backup created successfully`,
+                        message:
+                            input.compress === undefined
+                                ? `Backup created successfully`
+                                : `Backup created successfully (the 'compress' parameter was ignored; compression is handled by the database engine)`,
                         filename: result.filename,
                         path: path.basename(result.path),
                         sizeBytes: result.sizeBytes,

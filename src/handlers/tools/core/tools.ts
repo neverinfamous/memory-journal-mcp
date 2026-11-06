@@ -25,8 +25,8 @@ import {
     TestSimpleOutputSchema,
 } from './schemas.js'
 import { EntryOutputSchema, coerceSignificanceAlias } from '../schemas.js'
-import type { RelationshipType } from '../../../types/index.js'
 import { ErrorFieldsMixin } from '../error-fields-mixin.js'
+import { linkRequestedRelationships } from '../relationship-linking.js'
 import { resolveEntryAnchors } from './staleness-tools.js'
 
 /** Delay between steps of the `trigger_progress` demo tool. */
@@ -133,23 +133,11 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                     })
                     const id = createdEntry.id
 
-                    if (input.relationships && input.relationships.length > 0) {
-                        for (const rel of input.relationships) {
-                            try {
-                                const canonicalRelType: RelationshipType =
-                                    rel.relationType === 'resolves'
-                                        ? 'resolved'
-                                        : rel.relationType === 'relates_to'
-                                          ? 'references'
-                                          : rel.relationType === 'depends_on'
-                                            ? 'blocked_by'
-                                            : rel.relationType
-                                db.linkEntries(id, rel.targetId, canonicalRelType)
-                            } catch {
-                                // Ignore link failures if target doesn't exist
-                            }
-                        }
-                    }
+                    const relationshipWarnings = linkRequestedRelationships(
+                        db,
+                        id,
+                        input.relationships
+                    )
 
                     // Vectorize entry
                     let vectorWarning: string | undefined
@@ -229,6 +217,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         entry: finalEntry,
                         ...(vectorWarning ? { error: vectorWarning } : {}),
                         ...(sharedWithTeam ? { sharedWithTeam, author } : {}),
+                        ...(relationshipWarnings.length > 0 ? { relationshipWarnings } : {}),
                     }
                 } catch (err) {
                     return formatHandlerError(err)

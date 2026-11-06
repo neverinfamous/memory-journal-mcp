@@ -163,12 +163,20 @@ export function handleUpdateConfiguration(
         updates.briefingConfig = newBc
     }
 
-    if (Object.keys(updates).length > 0) {
-        configManager.updateConfig(updates, true)
-    }
+    const persistError =
+        Object.keys(updates).length > 0 ? configManager.updateConfig(updates, true) : undefined
 
     return Promise.resolve({
         success: true,
         updated: updatedKeys,
+        ...(updatedKeys.length === 0
+            ? { warning: 'No recognized configuration keys were supplied; nothing was changed.' }
+            : {}),
+        ...(persistError !== undefined
+            ? {
+                  persisted: false,
+                  warning: `Configuration applied to the running server but could not be written to the config file: ${persistError}`,
+              }
+            : {}),
     })
 }

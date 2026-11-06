@@ -1,9 +1,10 @@
-import type { ToolDefinition, ToolContext, RelationshipType } from '../../../types/index.js'
+import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { autoIndexEntry } from '../../../utils/vector-index-helpers.js'
 import { resolveProjectContext, resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { createBatchProgressReporter, sendProgress } from '../../../utils/progress-utils.js'
 import { resolveEntryAnchors } from '../core/staleness-tools.js'
+import { linkRequestedRelationships } from '../relationship-linking.js'
 import {
     BatchCreateEntriesSchema,
     BatchCreateEntriesSchemaMcp,
@@ -94,25 +95,18 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
                         }
                     }))
 
+                    const relationshipWarnings: string[] = []
                     for (let i = 0; i < results.length; i++) {
                         const createdEntry = results[i]
                         const sourceEntry = input.entries[i]
-                        if (createdEntry && sourceEntry?.relationships && sourceEntry.relationships.length > 0) {
-                            for (const rel of sourceEntry.relationships) {
-                                try {
-                                    const canonicalRelType: RelationshipType =
-                                        rel.relationType === 'resolves'
-                                            ? 'resolved'
-                                            : rel.relationType === 'relates_to'
-                                              ? 'references'
-                                              : rel.relationType === 'depends_on'
-                                                ? 'blocked_by'
-                                                : rel.relationType
-                                    db.linkEntries(createdEntry.id, rel.targetId, canonicalRelType)
-                                } catch {
-                                    // Ignore link failures if target doesn't exist
-                                }
-                            }
+                        if (createdEntry) {
+                            relationshipWarnings.push(
+                                ...linkRequestedRelationships(
+                                    db,
+                                    createdEntry.id,
+                                    sourceEntry?.relationships
+                                )
+                            )
                         }
                     }
                     
@@ -147,7 +141,13 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
                         throw new AggregateError(allErrors, `Batch create partially failed: ${allErrors.length} operations failed`);
                     }
 
-                    return { success: true, count: results.length, entries: results, indexStatuses }
+                    return {
+                        success: true,
+                        count: results.length,
+                        entries: results,
+                        indexStatuses,
+                        ...(relationshipWarnings.length > 0 ? { relationshipWarnings } : {}),
+                    }
                 } catch (err) {
                     return formatHandlerError(err)
                 }

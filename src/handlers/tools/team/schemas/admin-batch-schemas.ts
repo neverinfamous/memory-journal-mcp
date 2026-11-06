@@ -356,6 +356,7 @@ export const TeamMergeTagsOutputSchema = z
 export const TeamBatchCreateEntriesOutputSchema = BatchResultOutputSchema.extend({
     entries: z.array(TeamEntryOutputSchema).optional(),
     indexStatuses: z.array(z.string()).optional(),
+    relationshipWarnings: z.array(z.string()).optional(),
 })
 
 export const TeamBatchUpdateEntriesOutputSchema = BatchResultOutputSchema.extend({

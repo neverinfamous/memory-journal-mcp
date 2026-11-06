@@ -33,6 +33,7 @@ export type { RepoInfo, IssueDetails, PullRequestDetails }
  */
 import { createHash } from 'node:crypto'
 import type { ServerRuntime } from '../../utils/maintenance-lock.js'
+import { logger } from '../../utils/logger.js'
 
 export function getGitHubIntegration(
     workingDir = '.',
@@ -237,14 +238,17 @@ export class GitHubIntegration {
             milestones: [],
         }
 
+        const degraded: string[] = []
         try {
             const log = await this.client.git.log({ maxCount: 1 })
             context.commit = log.latest?.hash ?? null
-        } catch {
-            // Ignore error
+        } catch (err) {
+            logger.debug(
+                `git log failed: ${err instanceof Error ? err.message : String(err)}`,
+                { module: 'GitHubIntegration' }
+            )
+            degraded.push('commit')
         }
-
-        const degraded: string[] = []
         if (repoInfo.owner && repoInfo.repo) {
             const [issuesResult, prsResult, runsResult, milestonesResult] =
                 await Promise.allSettled([

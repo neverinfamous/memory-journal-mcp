@@ -5,6 +5,7 @@
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
+import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { relaxedNumber } from '../schemas.js'
 import { CreateGitHubIssueWithEntryOutputSchema } from './schemas.js'
 import { resolveOwnerRepo, resolveProjectNumber } from './helpers.js'
@@ -99,6 +100,7 @@ export function getCreateGitHubIssueTool(context: ToolContext): ToolDefinition {
                     significanceType: null,
                     projectNumber: projectNumber,
                     projectOwner: resolved.owner,
+                    workspaceId: resolveWorkspaceId(undefined, projectNumber, context.config),
                 })
 
                 // 2. Perform external mutation

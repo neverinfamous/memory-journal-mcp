@@ -1,5 +1,6 @@
 import type { Anchor, AnchorStatus } from '../../../types/index.js'
 import type { EntriesSharedContext } from './shared.js'
+import { effectiveWorkspace } from '../../workspace-scope.js'
 
 export function insertAnchors(context: EntriesSharedContext, entryId: number, anchors?: { anchorPath: string; anchorType: string }[]): void {
     if (!anchors || anchors.length === 0) return
@@ -30,8 +31,9 @@ export function getAnchorsByEntryId(context: EntriesSharedContext, entryId: numb
 }
 
 /**
- * Update an anchor's status. When `workspaceId` is provided and is not '*', the anchor must
- * belong to an entry in that workspace. Returns true when a row was changed.
+ * Update an anchor's status. The anchor must belong to an entry in `workspaceId`
+ * (an omitted workspace means the default workspace); only an explicit '*' skips the scope.
+ * Returns true when a row was changed.
  */
 export function updateAnchorStatus(
     context: EntriesSharedContext,
@@ -40,7 +42,8 @@ export function updateAnchorStatus(
     workspaceId?: string
 ): boolean {
     const { db } = context
-    if (workspaceId !== undefined && workspaceId !== '*') {
+    const scope = effectiveWorkspace(workspaceId)
+    if (scope !== '*') {
         const result = db
             .prepare(
                 `
@@ -50,7 +53,7 @@ export function updateAnchorStatus(
           AND entry_id IN (SELECT id FROM memory_journal WHERE workspace_id = ?)
     `
             )
-            .run(status, id, workspaceId)
+            .run(status, id, scope)
         return result.changes > 0
     }
     const result = db.prepare(`

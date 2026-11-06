@@ -31,6 +31,11 @@ function normalizeTag(tag: string): string {
 }
 
 export function validateEntryInput(input: CreateEntryInput): { normalizedTimestamp: string } {
+    if (input.workspaceId === '*') {
+        throw new Error(
+            "workspace_id '*' is a read-only cross-workspace selector and cannot be used to create an entry. Pass a specific workspace_id."
+        )
+    }
     let timestamp = input.timestamp ?? new Date().toISOString()
 
     // Accept broad ISO-8601 input shapes, then normalize to canonical UTC ISO format for storage.

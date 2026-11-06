@@ -11,6 +11,7 @@ import type { AuthorizationServerMetadata, AuthServerDiscoveryConfig } from './t
 import { AuthServerDiscoveryError } from './errors.js'
 import { ConfigurationError } from '../types/errors.js'
 import { logger } from '../utils/logger.js'
+import { isPrivateOrLoopbackAddress } from '../utils/network-safety.js'
 import * as https from 'node:https'
 
 // =============================================================================
@@ -84,23 +85,7 @@ export class AuthorizationServerDiscovery {
             const { promises: dns } = await import('node:dns')
             const { address } = await dns.lookup(host)
 
-            const normalizedAddr = address.toLowerCase().replace(/^::ffff:/, '')
-            const isLoopback =
-                normalizedAddr === 'localhost' ||
-                normalizedAddr === '127.0.0.1' ||
-                normalizedAddr === '::1' ||
-                normalizedAddr.startsWith('127.') ||
-                normalizedAddr === '0.0.0.0' ||
-                normalizedAddr === '::'
-            const isPrivateV4 =
-                normalizedAddr.startsWith('10.') ||
-                normalizedAddr.startsWith('192.168.') ||
-                /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(normalizedAddr)
-            const isLinkLocal =
-                normalizedAddr.startsWith('169.254.') || normalizedAddr.startsWith('fe80:')
-            const isPrivateV6 = normalizedAddr.startsWith('fc') || normalizedAddr.startsWith('fd')
-
-            if (isLoopback || isPrivateV4 || isLinkLocal || isPrivateV6) {
+            if (isPrivateOrLoopbackAddress(address)) {
                 throw new ConfigurationError(
                     `SSRF Protection: Requests to private/loopback network addresses are prohibited. Resolved IP: ${address}`
                 )

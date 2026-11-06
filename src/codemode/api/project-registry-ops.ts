@@ -54,7 +54,9 @@ function isForbiddenProjectKey(name: string): boolean {
 function isValidProjectPath(dirPath: string): boolean {
     if (dirPath.trim().length === 0) return false
     if (dirPath.includes('\0') || dirPath.startsWith('\\\\') || dirPath.startsWith('//')) return false
-    return path.isAbsolute(dirPath)
+    if (!path.isAbsolute(dirPath)) return false
+    // Reject any `..` segment so the registered path is the canonical location the caller named.
+    return !dirPath.split(/[\\/]+/).includes('..')
 }
 
 export function createRegisterProjectFn(

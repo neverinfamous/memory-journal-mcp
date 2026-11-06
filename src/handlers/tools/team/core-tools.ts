@@ -27,7 +27,7 @@ import {
     TeamTagsListOutputSchema,
 } from './schemas.js'
 import { coerceSignificanceAlias } from '../schemas.js'
-import type { RelationshipType } from '../../../types/index.js'
+import { linkRequestedRelationships } from '../relationship-linking.js'
 
 // ============================================================================
 // Tool Definitions
@@ -165,23 +165,11 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                         sessionId: input.session_id,
                     })
 
-                    if (input.relationships && input.relationships.length > 0) {
-                        for (const rel of input.relationships) {
-                            try {
-                                const canonicalRelType: RelationshipType =
-                                    rel.relationType === 'resolves'
-                                        ? 'resolved'
-                                        : rel.relationType === 'relates_to'
-                                          ? 'references'
-                                          : rel.relationType === 'depends_on'
-                                            ? 'blocked_by'
-                                            : rel.relationType
-                                teamDb.linkEntries(entry.id, rel.targetId, canonicalRelType)
-                            } catch {
-                                // Ignore link failures if target doesn't exist
-                            }
-                        }
-                    }
+                    const relationshipWarnings = linkRequestedRelationships(
+                        teamDb,
+                        entry.id,
+                        input.relationships
+                    )
 
                     teamDb.flushSave()
 
@@ -197,6 +185,7 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                         success: true,
                         entry: { ...entry, author },
                         author,
+                        ...(relationshipWarnings.length > 0 ? { relationshipWarnings } : {}),
                     }
                 } catch (err) {
                     return formatHandlerError(err)

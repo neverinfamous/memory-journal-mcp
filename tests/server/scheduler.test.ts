@@ -44,7 +44,9 @@ function createMockDb() {
  */
 function createMockVectorManager() {
     return {
-        rebuildIndex: vi.fn().mockResolvedValue(42),
+        rebuildIndex: vi
+            .fn()
+            .mockResolvedValue({ success: true, indexed: 42, failed: 0, firstError: null }),
     }
 }
 
@@ -308,6 +310,31 @@ describe('Scheduler', () => {
             const status = scheduler.getStatus()
             const job = status.jobs.find((j) => j.name === 'rebuild-index')
             expect(job!.lastResult).toBe('success')
+
+            scheduler.stop()
+        })
+
+        it('should record an error result when the rebuild reports failure', async () => {
+            const db = createMockDb()
+            const vectorManager = createMockVectorManager()
+            vectorManager.rebuildIndex.mockResolvedValue({
+                success: false,
+                indexed: 0,
+                failed: 3,
+                firstError: 'embedding model unavailable',
+            })
+
+            const scheduler = new Scheduler(
+                defaultOptions({ rebuildIndexIntervalMinutes: 1 }),
+                db as never,
+                vectorManager as never
+            )
+            scheduler.start()
+
+            await vi.advanceTimersByTimeAsync(60_000)
+
+            const job = scheduler.getStatus().jobs.find((j) => j.name === 'rebuild-index')
+            expect(job!.lastResult).toBe('error')
 
             scheduler.stop()
         })

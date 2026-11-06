@@ -1,6 +1,7 @@
 import * as dns from 'node:dns'
 import type { DigestSnapshot } from '../database/sqlite-adapter/entries/digest.js'
 import { logger } from '../utils/logger.js'
+import { isPrivateOrLoopbackAddress } from '../utils/network-safety.js'
 
 export interface ReportDeliveryOptions {
     webhookUrl: string
@@ -10,30 +11,8 @@ export interface ReportDeliveryOptions {
 
 function isBlockedWebhookIp(ip: string): boolean {
     const normalized = ip.toLowerCase()
-    if (
-        normalized === 'localhost' ||
-        normalized === '::1' ||
-        normalized === '0.0.0.0' ||
-        normalized === '::' ||
-        normalized.startsWith('127.') ||
-        normalized.startsWith('10.') ||
-        normalized.startsWith('192.168.') ||
-        normalized.startsWith('169.254.') ||
-        normalized.startsWith('fe80:') ||
-        normalized.startsWith('fc00:') ||
-        normalized.startsWith('fd00:') ||
-        normalized.startsWith('::ffff:')
-    ) {
-        return true
-    }
-    const octets = normalized.split('.')
-    if (octets.length === 4 && octets[0] === '172') {
-        const second = Number(octets[1])
-        if (second >= 16 && second <= 31) {
-            return true
-        }
-    }
-    return false
+    // IPv4-mapped IPv6 addresses are rejected outright for webhooks.
+    return normalized.startsWith('::ffff:') || isPrivateOrLoopbackAddress(normalized)
 }
 
 export async function validateWebhookUrl(webhookUrl: string): Promise<void> {

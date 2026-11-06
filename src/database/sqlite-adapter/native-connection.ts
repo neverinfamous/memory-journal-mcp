@@ -21,6 +21,12 @@ const ALLOWED_PRAGMAS_RE =
 
 const HEX_CIPHER_KEY_RE = /^x'[0-9a-fA-F]+'$/
 
+/** Delay before the deferred FTS5 rebuild starts, so server startup is not blocked. */
+const FTS_REBUILD_DEFER_MS = 5000
+
+/** Shortened FTS5 rebuild delay used when NODE_ENV is 'test'. */
+const FTS_REBUILD_DEFER_TEST_MS = 10
+
 
 export class NativeConnectionManager implements IDatabaseConnection {
     private db: Database | null = null
@@ -185,36 +191,43 @@ export class NativeConnectionManager implements IDatabaseConnection {
             }
 
             if (needsRebuild) {
-                // Defer rebuilding FTS5 index to prevent blocking server startup
-                const deferMs = process.env['NODE_ENV'] === 'test' ? 10 : 5000
-                this.ftsRebuildTimer = setTimeout(() => {
-                    this.ftsRebuildTimer = null
-                    if (this.db === null) return
-                    // Start a detached node process to rebuild the index without blocking the main event loop
-                    const code = `
-                        const Database = require('better-sqlite3');
-                        const db = new Database(process.argv[1]);
-                        db.exec("INSERT INTO fts_content(fts_content) VALUES ('rebuild')");
-                        db.close();
-                    `
-                    execFile('node', ['-e', code, this.dbPath], { windowsHide: true }, (err, _stdout, stderr) => {
-                        if (err) {
-                            logger.error('Failed to rebuild FTS5 index in background process', {
-                                module: 'NativeConnectionManager',
-                                error: err?.message || 'unknown error',
-                                stderr,
-                            })
-                        } else {
-                            logger.info(
-                                `Deferred FTS5 rebuild completed (${rebuildReason}) in background process`,
-                                { module: 'NativeConnectionManager', dbPath: this.dbPath }
-                            )
-                        }
-                    })
-                }, deferMs)
-                this.ftsRebuildTimer.unref()
+                this.scheduleFtsRebuild(rebuildReason)
             }
         })()
+    }
+
+    /**
+     * Defer rebuilding the FTS5 index to a detached process so server startup is not blocked.
+     * The timer is unref'd and cleared on close().
+     */
+    private scheduleFtsRebuild(rebuildReason: string): void {
+        const deferMs =
+            process.env['NODE_ENV'] === 'test' ? FTS_REBUILD_DEFER_TEST_MS : FTS_REBUILD_DEFER_MS
+        this.ftsRebuildTimer = setTimeout(() => {
+            this.ftsRebuildTimer = null
+            if (this.db === null) return
+            const code = `
+                const Database = require('better-sqlite3');
+                const db = new Database(process.argv[1]);
+                db.exec("INSERT INTO fts_content(fts_content) VALUES ('rebuild')");
+                db.close();
+            `
+            execFile('node', ['-e', code, this.dbPath], { windowsHide: true }, (err, _stdout, stderr) => {
+                if (err) {
+                    logger.error('Failed to rebuild FTS5 index in background process', {
+                        module: 'NativeConnectionManager',
+                        error: err?.message || 'unknown error',
+                        stderr,
+                    })
+                } else {
+                    logger.info(
+                        `Deferred FTS5 rebuild completed (${rebuildReason}) in background process`,
+                        { module: 'NativeConnectionManager', dbPath: this.dbPath }
+                    )
+                }
+            })
+        }, deferMs)
+        this.ftsRebuildTimer.unref()
     }
 
     applyTeamSchema(): void {

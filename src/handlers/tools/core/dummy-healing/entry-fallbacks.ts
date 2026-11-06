@@ -52,9 +52,13 @@ export async function handleCreateEntry(
         if (createTool !== undefined) {
             const result = await Promise.resolve(createTool.handler(args))
             if (typeof result === 'object' && result !== null) {
+                const resultRecord = result as Record<string, unknown>
+                const succeeded = resultRecord['success'] !== false
                 return {
-                    ...(result as Record<string, unknown>),
-                    _healing_note: `🛠️ AUTONOMOUS HEALING: '${toolName}' was invoked directly as an MCP tool. The entry was created successfully. In Code Mode, prefer using 'mj_execute_code' with 'mj.core.createEntry({ ... })'.`,
+                    ...resultRecord,
+                    _healing_note: succeeded
+                        ? `🛠️ AUTONOMOUS HEALING: '${toolName}' was invoked directly as an MCP tool. The entry was created successfully. In Code Mode, prefer using 'mj_execute_code' with 'mj.core.createEntry({ ... })'.`
+                        : `🛠️ AUTONOMOUS HEALING: '${toolName}' was invoked directly as an MCP tool and routed to create_entry, but the entry was NOT created. Fix the reported error and retry, preferring 'mj_execute_code' with 'mj.core.createEntry({ ... })'.`,
                 }
             }
             return result
@@ -86,12 +90,15 @@ async function routeNamedTargetTool(
     const tool = tools.find((t) => t.name === targetToolName)
     if (tool === undefined) return undefined
     const res = await Promise.resolve(tool.handler(args))
-    return typeof res === 'object' && res !== null
-        ? {
-              ...(res as Record<string, unknown>),
-              _healing_note: `🛠️ AUTONOMOUS HEALING: '${name}' was routed to '${targetToolName}' and executed successfully.`,
-          }
-        : res
+    if (typeof res !== 'object' || res === null) return res
+    const resRecord = res as Record<string, unknown>
+    return {
+        ...resRecord,
+        _healing_note:
+            resRecord['success'] !== false
+                ? `🛠️ AUTONOMOUS HEALING: '${name}' was routed to '${targetToolName}' and executed successfully.`
+                : `🛠️ AUTONOMOUS HEALING: '${name}' was routed to '${targetToolName}', but the operation did not succeed. See the reported error.`,
+    }
 }
 
 export function projectAliasTarget(name: string): 'get_project' | 'list_projects' {

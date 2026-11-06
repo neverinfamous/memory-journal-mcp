@@ -42,20 +42,25 @@ const CREATE_ENTRY_ALIAS_NAMES = [
     'memory_journal_create', 'journal_create', 'create_entry',
 ]
 
+/** Exact resource-URI match, ignoring only a trailing query string or fragment. */
+function isResourceUri(uri: string, base: string): boolean {
+    return uri === base || uri.startsWith(base + '?') || uri.startsWith(base + '#')
+}
+
 export function createHandleReadResource(api: SandboxBindingsSource): (uri?: string) => unknown {
     return (uri?: string): unknown => {
         if (typeof uri === 'string') {
-            if (uri.startsWith('memory://briefing') && typeof api.core['getBriefing'] === 'function') return api.core['getBriefing']()
-            if ((uri.startsWith('memory://agent-id') || uri.startsWith('memory://config')) && typeof api.core['getConfig'] === 'function') {
+            if (isResourceUri(uri, 'memory://briefing') && typeof api.core['getBriefing'] === 'function') return api.core['getBriefing']()
+            if ((isResourceUri(uri, 'memory://agent-id') || isResourceUri(uri, 'memory://config')) && typeof api.core['getConfig'] === 'function') {
                 return api.core['getConfig']()
             }
-            if (uri.startsWith('memory://recent') && typeof api.core['getRecentEntries'] === 'function') return api.core['getRecentEntries']()
-            if (uri.startsWith('memory://statistics') && typeof api.analytics['getStatistics'] === 'function') return api.analytics['getStatistics']()
-            if (uri.startsWith('memory://tags') && typeof api.core['listTags'] === 'function') return api.core['listTags']()
-            if (uri.startsWith('memory://flags') && typeof api.team['teamListFlags'] === 'function') {
+            if (isResourceUri(uri, 'memory://recent') && typeof api.core['getRecentEntries'] === 'function') return api.core['getRecentEntries']()
+            if (isResourceUri(uri, 'memory://statistics') && typeof api.analytics['getStatistics'] === 'function') return api.analytics['getStatistics']()
+            if (isResourceUri(uri, 'memory://tags') && typeof api.core['listTags'] === 'function') return api.core['listTags']()
+            if (isResourceUri(uri, 'memory://flags') && typeof api.team['teamListFlags'] === 'function') {
                 return api.team['teamListFlags']({ status: 'active' })
             }
-            if (uri.startsWith('memory://insights') && typeof api.analytics['getCrossProjectInsights'] === 'function') {
+            if (isResourceUri(uri, 'memory://insights') && typeof api.analytics['getCrossProjectInsights'] === 'function') {
                 return api.analytics['getCrossProjectInsights']()
             }
         }
@@ -69,7 +74,7 @@ export function createHandleReadResource(api: SandboxBindingsSource): (uri?: str
         }
         let hint = ''
         if (typeof uri === 'string') {
-            const match = Object.entries(suggestions).find(([k]) => uri.startsWith(k))
+            const match = Object.entries(suggestions).find(([k]) => isResourceUri(uri, k))
             if (match !== undefined) hint = ` Try: ${match[1]}`
         }
         return Promise.reject(

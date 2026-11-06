@@ -25,6 +25,7 @@ import { exportEntriesToMarkdown } from '../../../markdown/index.js'
 import { importMarkdownEntries, processImportBatch, convertFile } from '../../../markdown/index.js'
 import type { ExportableEntry, ParsedFile } from '../../../markdown/index.js'
 import { ErrorFieldsMixin } from '../error-fields-mixin.js'
+import { MAX_IMPORT_FILE_BYTES } from '../io/tools.js'
 import { batchFetchAuthors, triggerTeamNotifications } from './helpers.js'
 import {
     DATE_FORMAT_REGEX,
@@ -410,8 +411,8 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
 
                             handle = await fs.open(filepath, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW)
                             const stats = await handle.stat()
-                            if (stats.size > 5 * 1024 * 1024) {
-                                throw new Error(`File exceeds maximum size limit of 5MB (${stats.size} bytes)`)
+                            if (stats.size > MAX_IMPORT_FILE_BYTES) {
+                                throw new Error(`File exceeds maximum size limit of ${String(MAX_IMPORT_FILE_BYTES / (1024 * 1024))}MB (${stats.size} bytes)`)
                             }
 
                             const content = await handle.readFile('utf-8')

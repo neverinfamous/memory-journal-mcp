@@ -53,8 +53,8 @@ export function buildVocabulary(db: Database): string[] {
         for (const tag of tags) {
             vocab.add(tag.name.toLowerCase())
         }
-    } catch {
-        // Ignore if table doesn't exist yet
+    } catch (error: unknown) {
+        rethrowUnlessMissingTable(error)
     }
 
     // Get all distinct entry types
@@ -63,11 +63,18 @@ export function buildVocabulary(db: Database): string[] {
         for (const type of types) {
             vocab.add(type.entry_type.toLowerCase())
         }
-    } catch {
-        // Ignore if table doesn't exist yet
+    } catch (error: unknown) {
+        rethrowUnlessMissingTable(error)
     }
 
     return Array.from(vocab)
+}
+
+/** Tolerate only a not-yet-created table (fresh database); surface every other failure. */
+function rethrowUnlessMissingTable(error: unknown): void {
+    if (!(error instanceof Error && error.message.includes('no such table'))) {
+        throw error
+    }
 }
 
 /**
