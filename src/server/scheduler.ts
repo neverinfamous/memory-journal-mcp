@@ -331,6 +331,24 @@ export class Scheduler {
                 }
             )
         }
+
+        // The adapter may report per-file deletion failures (not part of the declared interface)
+        if ('failed' in cleanup) {
+            const failedFiles: unknown = cleanup.failed
+            const failedCount = Array.isArray(failedFiles)
+                ? failedFiles.length
+                : typeof failedFiles === 'number'
+                  ? failedFiles
+                  : 0
+            if (failedCount > 0) {
+                logger.error(`Backup cleanup failed to delete ${String(failedCount)} file(s)`, {
+                    module: 'Scheduler',
+                    operation: 'backup-cleanup',
+                    context: { failed: failedFiles },
+                })
+                throw new Error(`Backup cleanup failed to delete ${String(failedCount)} old backup(s)`)
+            }
+        }
     }
 
     /**

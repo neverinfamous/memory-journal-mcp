@@ -7,6 +7,21 @@ import { ResourceNotFoundError, ValidationError } from '../../types/errors.js'
 import type { IDatabaseConnection } from '../core/interfaces.js'
 import { acquireRestoreLock } from './restore-lock.js'
 
+/** Unlink a file, ignoring a missing file (ENOENT) and logging any other failure at debug. */
+async function unlinkBestEffort(filePath: string): Promise<void> {
+    try {
+        await fs.promises.unlink(filePath)
+    } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+            logger.debug('Best-effort file cleanup failed', {
+                module: 'BackupManager',
+                path: filePath,
+                error: error instanceof Error ? error.message : String(error),
+            })
+        }
+    }
+}
+
 /** Maximum length for user-supplied backup names after sanitization */
 const MAX_BACKUP_NAME_LENGTH = 50
 
@@ -273,16 +288,8 @@ export class BackupManager {
                 await fs.promises.copyFile(tempDbPath, this.ctx.getDbPath())
             }
 
-            try {
-                await fs.promises.unlink(`${this.ctx.getDbPath()}-wal`)
-            } catch {
-                // Ignore missing files
-            }
-            try {
-                await fs.promises.unlink(`${this.ctx.getDbPath()}-shm`)
-            } catch {
-                // Ignore missing files
-            }
+            await unlinkBestEffort(`${this.ctx.getDbPath()}-wal`)
+            await unlinkBestEffort(`${this.ctx.getDbPath()}-shm`)
 
             // Re-initialize using the connection's standard initialize method
             // This ensures extensions like sqlite-vec are properly loaded
@@ -297,12 +304,8 @@ export class BackupManager {
             }
 
             // Success: clean up old DB backup
-            try {
-                await fs.promises.unlink(oldDbBackupPath)
-                await fs.promises.unlink(tempDbPath)
-            } catch {
-                /* ignore cleanup errors */
-            }
+            await unlinkBestEffort(oldDbBackupPath)
+            await unlinkBestEffort(tempDbPath)
         } catch (error) {
             logger.error('Restore failed, rolling back to pre-restore backup using copy', {
                 module: 'SqliteAdapter',
@@ -325,17 +328,9 @@ export class BackupManager {
 
             // Best-effort cleanup of temp files
             if (rollbackSuccess) {
-                try {
-                    await fs.promises.unlink(oldDbBackupPath)
-                } catch {
-                    /* ignore cleanup errors */
-                }
+                await unlinkBestEffort(oldDbBackupPath)
             }
-            try {
-                await fs.promises.unlink(tempDbPath)
-            } catch {
-                /* ignore cleanup errors */
-            }
+            await unlinkBestEffort(tempDbPath)
 
             if (!rollbackSuccess) {
                 throw new Error(

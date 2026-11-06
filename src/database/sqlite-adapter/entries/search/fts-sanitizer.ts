@@ -2,6 +2,41 @@
 // FTS5 Helpers
 // ============================================================================
 
+/** True when a non-operator token exists at or after `startIndex` (FTS5 operators need an operand). */
+function hasValidNextToken(tokens: string[], startIndex: number): boolean {
+    for (let j = startIndex; j < tokens.length; j++) {
+        const rawNext = tokens[j]
+        if (!rawNext) continue
+
+        let nextToken = rawNext.replace(/[^a-zA-Z0-9_*-]/g, '')
+        nextToken = nextToken.replace(/\*/g, '')
+        if (nextToken && !/^(?:AND|OR|NOT|NEAR(?:\d+)?)$/i.test(nextToken)) {
+            return true
+        }
+    }
+    return false
+}
+
+/**
+ * Extract balanced quoted phrases (sanitised) and return them with the remaining text.
+ * Tokens inside a phrase keep only alphanumerics, hyphen and underscore.
+ */
+function extractQuotedPhrases(query: string): { phrases: string[]; remaining: string } {
+    const phrases: string[] = []
+    const remaining = query.replace(/"([^"]+)"/g, (_match, inner: string) => {
+        const safeInner = inner
+            .split(/\s+/)
+            .map((t: string) => t.replace(/[^a-zA-Z0-9_-]/g, ''))
+            .filter((t: string) => t.length > 0)
+            .join(' ')
+        if (safeInner) {
+            phrases.push(`"${safeInner}"`)
+        }
+        return ' ' // Replace the matched phrase with space in the remaining text
+    })
+    return { phrases, remaining }
+}
+
 /**
  * Rigorous FTS5 Query Sanitization
  *
@@ -19,19 +54,7 @@ export function sanitizeFtsQuery(query: string): string {
     if (!query) return ''
 
     // Phase 1: Extract balanced quoted phrases and protect them
-    const phrases: string[] = []
-    const withoutPhrases = query.replace(/"([^"]+)"/g, (_match, inner: string) => {
-        // Sanitize tokens inside the phrase (strip special chars, keep alphanumeric + hyphen + underscore)
-        const safeInner = inner
-            .split(/\s+/)
-            .map((t: string) => t.replace(/[^a-zA-Z0-9_-]/g, ''))
-            .filter((t: string) => t.length > 0)
-            .join(' ')
-        if (safeInner) {
-            phrases.push(`"${safeInner}"`)
-        }
-        return ' ' // Replace the matched phrase with space in the remaining text
-    })
+    const { phrases, remaining: withoutPhrases } = extractQuotedPhrases(query)
 
     // Phase 2: Strip any remaining unbalanced quotes and replace hyphens with spaces
     // Bare hyphens in FTS5 cause syntax errors. We replace them with spaces so they become implicit AND matches.
@@ -78,20 +101,7 @@ export function sanitizeFtsQuery(query: string): string {
             }
 
             // Operators must have a valid subsequent non-operator token
-            let hasValidNext = false
-            for (let j = i + 1; j < tokens.length; j++) {
-                const rawNext = tokens[j]
-                if (!rawNext) continue
-
-                let nextToken = rawNext.replace(/[^a-zA-Z0-9_*-]/g, '')
-                nextToken = nextToken.replace(/\*/g, '')
-                if (nextToken && !/^(?:AND|OR|NOT|NEAR(?:\d+)?)$/i.test(nextToken)) {
-                    hasValidNext = true
-                    break
-                }
-            }
-
-            if (!hasValidNext) continue
+            if (!hasValidNextToken(tokens, i + 1)) continue
         }
 
         safeTokens.push(sanitizedToken)

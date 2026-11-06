@@ -86,6 +86,27 @@ export function compactOversizedResult(
 }
 
 /**
+ * Attempts to replace an oversized object result with a compacted copy that fits the limit.
+ * Returns true when the result was compacted successfully.
+ */
+function tryCompactIntoResult(result: SandboxResult, egressLimit: number): boolean {
+    if (result.result === null || typeof result.result !== 'object') return false
+    try {
+        const compacted = compactOversizedResult(result.result, egressLimit)
+        if (compacted === undefined) return false
+        const compactedJson = JSON.stringify(compacted)
+        const compactedBytes = Buffer.byteLength(compactedJson, 'utf8')
+        if (compactedBytes > egressLimit) return false
+        result.result = JSON.parse(compactedJson) as unknown
+        result.success = true
+        delete result.error
+        return true
+    } catch {
+        return false
+    }
+}
+
+/**
  * Enforces the egress byte limit during JSON serialization and applies
  * `compactOversizedResult` fallback when an object/array exceeds the boundary.
  */
@@ -141,24 +162,7 @@ export function serializeAndEnforceEgress(
                 actualBytesStr !== undefined ? Number(actualBytesStr) : egressLimit + 1
             const actualKb = (actualBytes / 1024).toFixed(1)
 
-            let compactedSuccessfully = false
-            if (result.result !== null && typeof result.result === 'object') {
-                try {
-                    const compacted = compactOversizedResult(result.result, egressLimit)
-                    if (compacted !== undefined) {
-                        const compactedJson = JSON.stringify(compacted)
-                        const compactedBytes = Buffer.byteLength(compactedJson, 'utf8')
-                        if (compactedBytes <= egressLimit) {
-                            result.result = JSON.parse(compactedJson) as unknown
-                            result.success = true
-                            delete result.error
-                            compactedSuccessfully = true
-                        }
-                    }
-                } catch {
-                    compactedSuccessfully = false
-                }
-            }
+            const compactedSuccessfully = tryCompactIntoResult(result, egressLimit)
 
             if (!compactedSuccessfully) {
                 result.success = false

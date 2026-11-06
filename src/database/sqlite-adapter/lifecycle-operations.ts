@@ -38,53 +38,47 @@ interface CandidateQueries {
 
 const toNumberId = (id: number | bigint): number => (typeof id === 'bigint' ? Number(id) : id)
 
-/** Build the hard-delete, prune and archive candidate SELECT statements with their params. */
-function buildCandidateQueries(options: LifecycleOptions): CandidateQueries {
-    const importanceExpr = buildImportanceSqlExpression()
+/** Shared inputs for building the candidate queries. */
+interface CandidateScope {
+    excludeTags: string[]
+    /** Undefined means database-wide (omitted workspaceId or '*'). */
+    scopedWorkspace: string | undefined
+}
 
-    let excludeTagsSql = ''
-    const excludeTags = options.excludeTags ?? []
-
-    if (excludeTags.length > 0) {
-        const placeholders = excludeTags.map(() => '?').join(',')
-        excludeTagsSql = `AND e.id NOT IN (
+const tagExclusionSql = (idColumn: string, tags: string[]): string =>
+    tags.length > 0
+        ? `AND ${idColumn} NOT IN (
                 SELECT entry_id FROM entry_tags
                 JOIN tags ON tags.id = entry_tags.tag_id
-                WHERE tags.name IN (${placeholders})
+                WHERE tags.name IN (${tags.map(() => '?').join(',')})
             )`
-    }
+        : ''
 
-    const hardDeleteExcludeSql =
-        excludeTags.length > 0
-            ? `AND id NOT IN (
-                SELECT entry_id FROM entry_tags
-                JOIN tags ON tags.id = entry_tags.tag_id
-                WHERE tags.name IN (${excludeTags.map(() => '?').join(',')})
-            )`
-            : ''
-    // Intentional: an omitted workspaceId (or '*') leaves lifecycle operations database-wide;
-    // only an explicit workspace id scopes the candidates to that workspace.
-    const scopedWorkspace =
-        options.workspaceId !== undefined && options.workspaceId !== '*'
-            ? options.workspaceId
-            : undefined
-    const workspaceParams: unknown[] = scopedWorkspace !== undefined ? [scopedWorkspace] : []
-    const hardDeleteWorkspaceSql = scopedWorkspace !== undefined ? 'AND workspace_id = ?' : ''
-    const hardDeleteSelect = `
+function buildHardDeleteQuery(options: LifecycleOptions, scope: CandidateScope): CandidateQuery {
+    const { excludeTags, scopedWorkspace } = scope
+    const sql = `
             SELECT id, CAST((julianday('now') - julianday(deleted_at)) AS INTEGER) as age_days
             FROM memory_journal
             WHERE deleted_at IS NOT NULL
               AND julianday('now') - julianday(deleted_at) > ?
-              ${hardDeleteExcludeSql}
-              ${hardDeleteWorkspaceSql}
+              ${tagExclusionSql('id', excludeTags)}
+              ${scopedWorkspace !== undefined ? 'AND workspace_id = ?' : ''}
         `
-    const hardDeleteParams: unknown[] = [
+    const params: unknown[] = [
         options.hardDeleteOlderThanDays,
         ...excludeTags,
-        ...workspaceParams,
+        ...(scopedWorkspace !== undefined ? [scopedWorkspace] : []),
     ]
+    return { sql, params }
+}
 
-    const pruneSelect = `
+function buildPruneQuery(
+    options: LifecycleOptions,
+    scope: CandidateScope,
+    importanceExpr: string
+): CandidateQuery {
+    const { excludeTags, scopedWorkspace } = scope
+    const sql = `
             SELECT e.id, ${importanceExpr} as importance_score
             FROM memory_journal e
             LEFT JOIN rel_stats rs ON e.id = rs.entry_id
@@ -95,17 +89,25 @@ function buildCandidateQueries(options: LifecycleOptions): CandidateQueries {
               AND e.significance_type IS NULL
               AND COALESCE(e.impact_score, 0.0) < 0.5
               AND COALESCE(rs.rel_count, 0) = 0
-              ${excludeTagsSql}
+              ${tagExclusionSql('e.id', excludeTags)}
               ${scopedWorkspace !== undefined ? 'AND e.workspace_id = ?' : ''}
         `
-    const pruneParams: unknown[] = [
+    const params: unknown[] = [
         options.pruneOlderThanDays,
         options.importanceThreshold,
         ...excludeTags,
-        ...workspaceParams,
+        ...(scopedWorkspace !== undefined ? [scopedWorkspace] : []),
     ]
+    return { sql, params }
+}
 
-    const archiveSelect = `
+function buildArchiveQuery(
+    options: LifecycleOptions,
+    scope: CandidateScope,
+    importanceExpr: string
+): CandidateQuery {
+    const { excludeTags, scopedWorkspace } = scope
+    const sql = `
             SELECT e.id, ${importanceExpr} as importance_score
             FROM memory_journal e
             LEFT JOIN rel_stats rs ON e.id = rs.entry_id
@@ -113,20 +115,35 @@ function buildCandidateQueries(options: LifecycleOptions): CandidateQueries {
             WHERE e.deleted_at IS NULL AND e.is_archived = 0
             AND julianday('now') - julianday(e.timestamp) > ?
             AND ${importanceExpr} < ?
-            ${excludeTagsSql}
+            ${tagExclusionSql('e.id', excludeTags)}
             ${scopedWorkspace !== undefined ? 'AND e.workspace_id = ?' : ''}
         `
-    const archiveParams: unknown[] = [
+    const params: unknown[] = [
         options.archiveOlderThanDays,
         options.importanceThreshold,
         ...excludeTags,
-        ...workspaceParams,
+        ...(scopedWorkspace !== undefined ? [scopedWorkspace] : []),
     ]
+    return { sql, params }
+}
+
+/** Build the hard-delete, prune and archive candidate SELECT statements with their params. */
+function buildCandidateQueries(options: LifecycleOptions): CandidateQueries {
+    const importanceExpr = buildImportanceSqlExpression()
+    // Intentional: an omitted workspaceId (or '*') leaves lifecycle operations database-wide;
+    // only an explicit workspace id scopes the candidates to that workspace.
+    const scope: CandidateScope = {
+        excludeTags: options.excludeTags ?? [],
+        scopedWorkspace:
+            options.workspaceId !== undefined && options.workspaceId !== '*'
+                ? options.workspaceId
+                : undefined,
+    }
 
     return {
-        hardDelete: { sql: hardDeleteSelect, params: hardDeleteParams },
-        prune: { sql: pruneSelect, params: pruneParams },
-        archive: { sql: archiveSelect, params: archiveParams },
+        hardDelete: buildHardDeleteQuery(options, scope),
+        prune: buildPruneQuery(options, scope, importanceExpr),
+        archive: buildArchiveQuery(options, scope, importanceExpr),
     }
 }
 

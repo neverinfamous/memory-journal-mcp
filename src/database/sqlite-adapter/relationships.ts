@@ -19,17 +19,22 @@ export class RelationshipsManager {
         fromEntryId: number,
         toEntryId: number,
         relationshipType: RelationshipType,
-        description?: string
+        description?: string,
+        workspaceId?: string
     ): Relationship {
         const db = this.db
 
+        // Workspace enforcement is opt-in: only applied when a workspaceId is provided ('*' = any).
+        const scoped = workspaceId !== undefined && workspaceId !== '*'
         const existsStmt = db.prepare(
-            'SELECT 1 FROM memory_journal WHERE id = ? AND deleted_at IS NULL'
+            `SELECT 1 FROM memory_journal WHERE id = ? AND deleted_at IS NULL${scoped ? ' AND workspace_id = ?' : ''}`
         )
-        if (existsStmt.get(fromEntryId) === undefined) {
+        const exists = (entryId: number): boolean =>
+            (scoped ? existsStmt.get(entryId, workspaceId) : existsStmt.get(entryId)) !== undefined
+        if (!exists(fromEntryId)) {
             throw new ResourceNotFoundError('Entry', String(fromEntryId))
         }
-        if (existsStmt.get(toEntryId) === undefined) {
+        if (!exists(toEntryId)) {
             throw new ResourceNotFoundError('Entry', String(toEntryId))
         }
 
@@ -54,15 +59,25 @@ export class RelationshipsManager {
         }
     }
 
-    getRelationships(entryId: number): Relationship[] {
+    /**
+     * Relationships touching an entry. When `workspaceId` is provided (and not '*'), only
+     * relationships whose both endpoints are in that workspace are returned.
+     */
+    getRelationships(entryId: number, workspaceId?: string): Relationship[] {
+        const scoped = workspaceId !== undefined && workspaceId !== '*'
         const rows = this.db
             .prepare(
                 `SELECT id, from_entry_id as fromEntryId, to_entry_id as toEntryId,
                         relationship_type as relationshipType, description, created_at as createdAt
                  FROM relationships
-                 WHERE from_entry_id = ? OR to_entry_id = ?`
+                 WHERE (from_entry_id = ? OR to_entry_id = ?)${
+                     scoped
+                         ? ` AND from_entry_id IN (SELECT id FROM memory_journal WHERE workspace_id = ?)
+                             AND to_entry_id IN (SELECT id FROM memory_journal WHERE workspace_id = ?)`
+                         : ''
+                 }`
             )
-            .all(entryId, entryId) as {
+            .all(...(scoped ? [entryId, entryId, workspaceId, workspaceId] : [entryId, entryId])) as {
             id: number
             fromEntryId: number
             toEntryId: number
@@ -74,9 +89,18 @@ export class RelationshipsManager {
         return rows
     }
 
-    getRelationshipsForEntries(entryIds: number[]): Map<number, Relationship[]> {
+    getRelationshipsForEntries(
+        entryIds: number[],
+        workspaceId?: string
+    ): Map<number, Relationship[]> {
         const result = new Map<number, Relationship[]>()
         if (entryIds.length === 0) return result
+        const scoped = workspaceId !== undefined && workspaceId !== '*'
+        const wsClause = scoped
+            ? ` AND from_entry_id IN (SELECT id FROM memory_journal WHERE workspace_id = ?)
+                AND to_entry_id IN (SELECT id FROM memory_journal WHERE workspace_id = ?)`
+            : ''
+        const wsParams: unknown[] = scoped ? [workspaceId, workspaceId] : []
 
         for (const id of entryIds) {
             result.set(id, [])
@@ -92,9 +116,9 @@ export class RelationshipsManager {
                     `SELECT id, from_entry_id as fromEntryId, to_entry_id as toEntryId,
                             relationship_type as relationshipType, description, created_at as createdAt
                      FROM relationships
-                     WHERE from_entry_id IN (${marks}) OR to_entry_id IN (${marks})`
+                     WHERE (from_entry_id IN (${marks}) OR to_entry_id IN (${marks}))${wsClause}`
                 )
-                .all(...chunk, ...chunk) as {
+                .all(...chunk, ...chunk, ...wsParams) as {
                 id: number
                 fromEntryId: number
                 toEntryId: number

@@ -328,7 +328,14 @@ export async function initializeDependencies(options: ServerOptions): Promise<Se
     const configManager = new ConfigManager({
         rawToolFilter,
         toolFilterConfig: filterConfig,
-        briefingConfig: options.briefingConfig ?? DEFAULT_BRIEFING_CONFIG,
+        briefingConfig: {
+            ...(options.briefingConfig ?? DEFAULT_BRIEFING_CONFIG),
+            // --default-workspace-id must reach briefing resources/prompts
+            ...(options.defaultWorkspaceId !== undefined &&
+            options.briefingConfig?.defaultWorkspaceId === undefined
+                ? { defaultWorkspaceId: options.defaultWorkspaceId }
+                : {}),
+        },
         codemodeInternalFullAccess: options.codemodeInternalFullAccess
     }, options.configFilePath)
 

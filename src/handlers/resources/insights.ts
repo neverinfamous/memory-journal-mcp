@@ -60,7 +60,7 @@ export const digestInsightsResource: InternalResourceDef = {
             // Non-critical — fall through to "no digest available" message or persisted snapshot
         }
 
-        const dbSnapshot = context.db?.getLatestAnalyticsSnapshot?.('digest')
+        const dbSnapshot = context.db?.getLatestAnalyticsSnapshot?.('digest', resourceWorkspace(context))
         if (dbSnapshot) {
             const data = {
                 success: true,
@@ -140,7 +140,7 @@ export const reportHistoryResource: InternalResourceDef = {
         const lastModified = new Date().toISOString()
 
         try {
-            const snapshots = context.db.getAnalyticsSnapshots?.('report', 5) ?? []
+            const snapshots = context.db.getAnalyticsSnapshots?.('report', 5, resourceWorkspace(context)) ?? []
             
             const reports = snapshots.map(snapshot => {
                 const data = snapshot.data

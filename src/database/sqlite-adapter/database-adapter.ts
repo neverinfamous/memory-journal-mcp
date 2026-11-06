@@ -23,8 +23,8 @@ export class DatabaseAdapter extends AdapterDelegates implements IDatabaseAdapte
         return this.entriesMgr.getEntryById(id, workspaceId)
     }
 
-    getEntryHistory(id: number): EntryRevision[] {
-        return this.entriesMgr.getEntryHistory(id)
+    getEntryHistory(id: number, workspaceId?: string): EntryRevision[] {
+        return this.entriesMgr.getEntryHistory(id, workspaceId)
     }
 
     getEntryByIdIncludeDeleted(id: number, workspaceId?: string): JournalEntry | null {
@@ -42,8 +42,8 @@ export class DatabaseAdapter extends AdapterDelegates implements IDatabaseAdapte
         return this.entriesMgr.getEntriesByIdsWithImportance(ids, workspaceId)
     }
 
-    calculateImportance(entryId: number): ImportanceResult {
-        return this.entriesMgr.calculateImportance(entryId)
+    calculateImportance(entryId: number, workspaceId?: string): ImportanceResult {
+        return this.entriesMgr.calculateImportance(entryId, workspaceId)
     }
 
     getRecentEntries(

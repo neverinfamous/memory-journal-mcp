@@ -34,53 +34,91 @@ export function convertKeysToSnakeCase(obj: Record<string, unknown>, methodName?
     const isGithubTool =
         methodName !== undefined && methodTokens(methodName).some((token) => githubTokens.has(token))
 
-    const result: Record<string, unknown> = {}
+    const ctx: KeyContext = { obj, result: {}, methodName, methodLower, isLinkMethod, isGithubTool }
+    const result = ctx.result
     for (const [key, value] of Object.entries(obj)) {
-        let snakeKey = key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
+        let snakeKey = resolveBaseSnakeKey(key, ctx)
 
-        if (snakeKey === 'id' && !('entry_id' in obj) && !('entryId' in obj)) {
-            snakeKey = 'entry_id'
-        } else if (isLinkMethod) {
-            if (
-                (snakeKey === 'source' || snakeKey === 'source_id' || snakeKey === 'from_id') &&
-                !('from_entry_id' in obj) &&
-                !('from_entry_id' in result)
-            ) {
-                snakeKey = 'from_entry_id'
-            } else if (
-                (snakeKey === 'target' ||
-                    snakeKey === 'target_id' ||
-                    snakeKey === 'to_id' ||
-                    snakeKey === 'dest') &&
-                !('to_entry_id' in obj) &&
-                !('to_entry_id' in result)
-            ) {
-                snakeKey = 'to_entry_id'
-            } else if (
-                (snakeKey === 'type' || snakeKey === 'rel') &&
-                !('relationship_type' in obj) &&
-                !('relationship_type' in result)
-            ) {
-                snakeKey = 'relationship_type'
-            } else if (
-                (snakeKey === 'notes' || snakeKey === 'message' || snakeKey === 'text') &&
-                !('description' in obj) &&
-                !('description' in result)
-            ) {
-                snakeKey = 'description'
-            }
-        } else if (snakeKey === 'type') {
-            if (methodLower?.includes('export')) {
-                snakeKey = 'format'
-            } else if (!('entry_type' in obj) && !('flag_type' in obj) && !('entry_type' in result) && !('flag_type' in result)) {
-                snakeKey = 'entry_type'
-            }
-        } else if (snakeKey === 'filename' && !('source_dir' in obj) && !('source_dir' in result)) {
-            if ('project_number' in obj || 'tags' in obj || 'dry_run' in obj) snakeKey = 'source_dir'
-        } else if (snakeKey === 'target_user' && !('author' in obj) && !('author' in result)) {
-            if ('role' in obj || 'role' in result) snakeKey = 'author'
+        snakeKey = resolveAliasedKey(snakeKey, value, ctx)
+        snakeKey = resolveContentLikeKey(snakeKey, ctx)
+
+        const coerced = coerceNumericValue(snakeKey, value)
+        if (coerced !== undefined) {
+            result[snakeKey] = coerced.value
+            continue
         }
 
+        result[snakeKey] = value
+    }
+
+    postProcessNormalizedKeys(result)
+    return result
+}
+
+interface KeyContext {
+    obj: Record<string, unknown>
+    result: Record<string, unknown>
+    methodName: string | undefined
+    methodLower: string | undefined
+    isLinkMethod: boolean
+    isGithubTool: boolean
+}
+
+/** camelCase → snake_case plus context-aware renames (id, link params, type, filename, target_user). */
+function resolveBaseSnakeKey(key: string, ctx: KeyContext): string {
+    const { obj, result, methodLower, isLinkMethod } = ctx
+    let snakeKey = key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
+
+    if (snakeKey === 'id' && !('entry_id' in obj) && !('entryId' in obj)) {
+        snakeKey = 'entry_id'
+    } else if (isLinkMethod) {
+        if (
+            (snakeKey === 'source' || snakeKey === 'source_id' || snakeKey === 'from_id') &&
+            !('from_entry_id' in obj) &&
+            !('from_entry_id' in result)
+        ) {
+            snakeKey = 'from_entry_id'
+        } else if (
+            (snakeKey === 'target' ||
+                snakeKey === 'target_id' ||
+                snakeKey === 'to_id' ||
+                snakeKey === 'dest') &&
+            !('to_entry_id' in obj) &&
+            !('to_entry_id' in result)
+        ) {
+            snakeKey = 'to_entry_id'
+        } else if (
+            (snakeKey === 'type' || snakeKey === 'rel') &&
+            !('relationship_type' in obj) &&
+            !('relationship_type' in result)
+        ) {
+            snakeKey = 'relationship_type'
+        } else if (
+            (snakeKey === 'notes' || snakeKey === 'message' || snakeKey === 'text') &&
+            !('description' in obj) &&
+            !('description' in result)
+        ) {
+            snakeKey = 'description'
+        }
+    } else if (snakeKey === 'type') {
+        if (methodLower?.includes('export')) {
+            snakeKey = 'format'
+        } else if (!('entry_type' in obj) && !('flag_type' in obj) && !('entry_type' in result) && !('flag_type' in result)) {
+            snakeKey = 'entry_type'
+        }
+    } else if (snakeKey === 'filename' && !('source_dir' in obj) && !('source_dir' in result)) {
+        if ('project_number' in obj || 'tags' in obj || 'dry_run' in obj) snakeKey = 'source_dir'
+    } else if (snakeKey === 'target_user' && !('author' in obj) && !('author' in result)) {
+        if ('role' in obj || 'role' in result) snakeKey = 'author'
+    }
+    return snakeKey
+}
+
+/** Applies PARAM_ALIASES unless a method/context-specific rule suppresses or redirects the alias. */
+function resolveAliasedKey(startKey: string, value: unknown, ctx: KeyContext): string {
+    const { obj, result, methodName, methodLower, isGithubTool } = ctx
+    let snakeKey = startKey
+    {
         const alias = PARAM_ALIASES[snakeKey]
         let useAlias = alias !== undefined && !(alias in obj) && !(alias in result)
 
@@ -122,61 +160,66 @@ export function convertKeysToSnakeCase(obj: Record<string, unknown>, methodName?
         }
 
         if (useAlias && typeof alias === 'string') snakeKey = alias
+    }
+    return snakeKey
+}
 
-        if (CONTENT_LIKE_KEYS.has(snakeKey)) {
-            if (isGithubTool) {
-                if (snakeKey === 'name') {
-                    if (!('title' in obj) && !('title' in result)) snakeKey = 'title'
-                } else if (snakeKey === 'description' && methodLower?.includes('milestone')) {
-                    snakeKey = 'description'
-                } else if (methodLower?.includes('close') && (snakeKey === 'message' || snakeKey === 'msg' || snakeKey === 'content')) {
-                    if (!('comment' in obj) && !('comment' in result)) snakeKey = 'comment'
-                } else if (!('body' in obj) && !('body' in result) && snakeKey !== 'comment') {
-                    snakeKey = 'body'
-                }
-            } else if (
-                methodName !== undefined &&
-                (hasMethodToken(methodName, 'create') || hasMethodToken(methodName, 'update')) &&
-                !hasMethodToken(methodName, 'link')
-            ) {
-                if (!('content' in obj) && !('content' in result)) {
-                    snakeKey = 'content'
-                } else if (snakeKey === 'name' || snakeKey === 'heading' || snakeKey === 'subject') {
-                    snakeKey = 'title'
-                }
+/** Redirects content-like keys (message/name/description/...) to the right field per tool family. */
+function resolveContentLikeKey(startKey: string, ctx: KeyContext): string {
+    const { obj, result, methodName, methodLower, isGithubTool } = ctx
+    let snakeKey = startKey
+    if (CONTENT_LIKE_KEYS.has(snakeKey)) {
+        if (isGithubTool) {
+            if (snakeKey === 'name') {
+                if (!('title' in obj) && !('title' in result)) snakeKey = 'title'
+            } else if (snakeKey === 'description' && methodLower?.includes('milestone')) {
+                snakeKey = 'description'
+            } else if (methodLower?.includes('close') && (snakeKey === 'message' || snakeKey === 'msg' || snakeKey === 'content')) {
+                if (!('comment' in obj) && !('comment' in result)) snakeKey = 'comment'
+            } else if (!('body' in obj) && !('body' in result) && snakeKey !== 'comment') {
+                snakeKey = 'body'
+            }
+        } else if (
+            methodName !== undefined &&
+            (hasMethodToken(methodName, 'create') || hasMethodToken(methodName, 'update')) &&
+            !hasMethodToken(methodName, 'link')
+        ) {
+            if (!('content' in obj) && !('content' in result)) {
+                snakeKey = 'content'
+            } else if (snakeKey === 'name' || snakeKey === 'heading' || snakeKey === 'subject') {
+                snakeKey = 'title'
             }
         }
+    }
+    return snakeKey
+}
 
-        if ((snakeKey.endsWith('_id') || snakeKey === 'id' || snakeKey === 'project_number') && typeof value === 'string') {
-            const num = Number(value)
-            if (!Number.isNaN(num) && value.trim() !== '') {
-                result[snakeKey] = num
-                continue
-            }
+/** Coerces numeric-looking id strings and entry-type aliases; undefined means "no coercion applied". */
+function coerceNumericValue(snakeKey: string, value: unknown): { value: unknown } | undefined {
+    if ((snakeKey.endsWith('_id') || snakeKey === 'id' || snakeKey === 'project_number') && typeof value === 'string') {
+        const num = Number(value)
+        if (!Number.isNaN(num) && value.trim() !== '') {
+            return { value: num }
         }
-        if ((snakeKey.endsWith('_ids') || snakeKey === 'ids') && Array.isArray(value)) {
-            result[snakeKey] = value.map((v: unknown) => {
+    }
+    if ((snakeKey.endsWith('_ids') || snakeKey === 'ids') && Array.isArray(value)) {
+        return {
+            value: value.map((v: unknown) => {
                 if (typeof v === 'string') {
                     const num = Number(v)
                     if (!Number.isNaN(num) && v.trim() !== '') return num
                 }
                 return v
-            })
-            continue
+            }),
         }
-        if (snakeKey === 'entry_type' && typeof value === 'string') {
-            const mapped = ENTRY_TYPE_ALIASES[value.toLowerCase()]
-            if (mapped !== undefined) {
-                result[snakeKey] = mapped
-                continue
-            }
-        }
-
-        result[snakeKey] = value
     }
-
-    postProcessNormalizedKeys(result)
-    return result
+    if (snakeKey === 'entry_type' && typeof value === 'string') {
+        const mapped = ENTRY_TYPE_ALIASES[value.toLowerCase()]
+        if (mapped !== undefined) {
+            return { value: mapped }
+        }
+    }
+    return undefined
 }
 
 function postProcessNormalizedKeys(result: Record<string, unknown>): void {

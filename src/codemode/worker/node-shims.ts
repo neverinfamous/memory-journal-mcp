@@ -179,6 +179,119 @@ function invokeGroupMethod(
     return undefined
 }
 
+interface ParsedSql {
+    action: string
+    params: Record<string, unknown>
+}
+
+const WHERE_ID_PATTERN = /\bWHERE\s+[`"']?(?:id|entry_id)[`"']?\s*=\s*(?:\?|(\d+))/i
+
+/** Parses a JSON-array-looking string into tags; returns undefined when it is not a JSON array. */
+function tryParseTagsString(arg: string): string[] | undefined {
+    if (!(arg.trim().startsWith('[') && arg.trim().endsWith(']'))) return undefined
+    try {
+        const parsed: unknown = JSON.parse(arg)
+        if (Array.isArray(parsed)) return parsed.map(String)
+    } catch {
+        // Not valid JSON: intentionally treated as plain text by callers
+        // (the worker has no logger and this is an expected heuristic miss).
+    }
+    return undefined
+}
+
+/** Entry id from `WHERE id = N` plus any numeric bind argument (later args win). */
+function resolveEntryIdFromSql(cleanSql: string, args: unknown[]): number | undefined {
+    let entryId: number | undefined
+    const idMatch = WHERE_ID_PATTERN.exec(cleanSql)
+    if (idMatch?.[1] !== undefined) entryId = parseInt(idMatch[1], 10)
+    for (const arg of args) {
+        if (typeof arg === 'number') entryId = arg
+    }
+    return entryId
+}
+
+function parseUpdateStatement(cleanSql: string, args: unknown[]): ParsedSql {
+    const idMatch = WHERE_ID_PATTERN.exec(cleanSql)
+    let entryId: number | undefined
+    if (idMatch?.[1] !== undefined) {
+        entryId = parseInt(idMatch[1], 10)
+    }
+
+    let content: string | undefined
+    let tags: string[] | undefined
+    let title: string | undefined
+
+    for (const arg of args) {
+        if (typeof arg === 'number' && entryId === undefined) {
+            entryId = arg
+        } else if (typeof arg === 'string') {
+            const parsedTags = tryParseTagsString(arg)
+            if (parsedTags !== undefined) {
+                tags = parsedTags
+                continue
+            }
+            if (content === undefined) {
+                content = arg
+            } else {
+                title ??= arg
+            }
+        } else if (Array.isArray(arg)) {
+            tags = arg.map(String)
+        } else if (isPlainRecord(arg)) {
+            if (typeof arg['entry_id'] === 'number') entryId = arg['entry_id']
+            if (typeof arg['id'] === 'number') entryId = arg['id']
+            if (typeof arg['content'] === 'string') content = arg['content']
+            if (Array.isArray(arg['tags'])) tags = arg['tags'].map(String)
+        }
+    }
+
+    if (content === undefined) {
+        const setContentMatch = /\bSET\s+[\s\S]*?\bcontent\s*=\s*['"]([\s\S]*?)['"]/i.exec(cleanSql)
+        if (setContentMatch?.[1] !== undefined) {
+            content = setContentMatch[1]
+        }
+    }
+
+    const updatePayload: Record<string, unknown> = {}
+    if (entryId !== undefined) updatePayload['entry_id'] = entryId
+    if (content !== undefined) updatePayload['content'] = content
+    if (tags !== undefined) updatePayload['tags'] = tags
+    if (title !== undefined) updatePayload['title'] = title
+
+    return { action: 'update', params: updatePayload }
+}
+
+function parseInsertStatement(args: unknown[]): ParsedSql {
+    let content = ''
+    let title = 'Journal Entry'
+    let tags: string[] = []
+    let entryType = 'technical_decision'
+
+    for (const arg of args) {
+        if (typeof arg === 'string') {
+            const parsedTags = tryParseTagsString(arg)
+            if (parsedTags !== undefined) {
+                tags = parsedTags
+                continue
+            }
+            if (content === '') {
+                content = arg
+            } else if (title === 'Journal Entry') {
+                title = arg
+            }
+        } else if (Array.isArray(arg)) {
+            tags = arg.map(String)
+        } else if (isPlainRecord(arg)) {
+            if (typeof arg['content'] === 'string') content = arg['content']
+            if (typeof arg['title'] === 'string') title = arg['title']
+            if (Array.isArray(arg['tags'])) tags = arg['tags'].map(String)
+            if (typeof arg['entry_type'] === 'string') entryType = arg['entry_type']
+        }
+    }
+
+    return { action: 'create', params: { content, title, tags, entry_type: entryType } }
+}
+
 /**
  * Translates raw `db.prepare(sql).run(...)` / `.get(...)` / `.all(...)` hallucinations
  * into high-level `mj.core` / `mj.admin` calls.
@@ -197,124 +310,21 @@ export function createPreparedStatementShim(
         const isSelect = /^SELECT\b/i.test(cleanSql)
 
         if (isUpdate) {
-            const idMatch = /\bWHERE\s+[`"']?(?:id|entry_id)[`"']?\s*=\s*(?:\?|(\d+))/i.exec(
-                cleanSql
-            )
-            let entryId: number | undefined
-            if (idMatch?.[1] !== undefined) {
-                entryId = parseInt(idMatch[1], 10)
-            }
-
-            let content: string | undefined
-            let tags: string[] | undefined
-            let title: string | undefined
-
-            for (const arg of args) {
-                if (typeof arg === 'number' && entryId === undefined) {
-                    entryId = arg
-                } else if (typeof arg === 'string') {
-                    if (arg.trim().startsWith('[') && arg.trim().endsWith(']')) {
-                        try {
-                            const parsed: unknown = JSON.parse(arg)
-                            if (Array.isArray(parsed)) {
-                                tags = parsed.map(String)
-                                continue
-                            }
-                        } catch {
-                            // ignore
-                        }
-                    }
-                    if (content === undefined) {
-                        content = arg
-                    } else {
-                        title ??= arg
-                    }
-                } else if (Array.isArray(arg)) {
-                    tags = arg.map(String)
-                } else if (isPlainRecord(arg)) {
-                    if (typeof arg['entry_id'] === 'number') entryId = arg['entry_id']
-                    if (typeof arg['id'] === 'number') entryId = arg['id']
-                    if (typeof arg['content'] === 'string') content = arg['content']
-                    if (Array.isArray(arg['tags'])) tags = arg['tags'].map(String)
-                }
-            }
-
-            if (content === undefined) {
-                const setContentMatch =
-                    /\bSET\s+[\s\S]*?\bcontent\s*=\s*['"]([\s\S]*?)['"]/i.exec(cleanSql)
-                if (setContentMatch?.[1] !== undefined) {
-                    content = setContentMatch[1]
-                }
-            }
-
-            const updatePayload: Record<string, unknown> = {}
-            if (entryId !== undefined) updatePayload['entry_id'] = entryId
-            if (content !== undefined) updatePayload['content'] = content
-            if (tags !== undefined) updatePayload['tags'] = tags
-            if (title !== undefined) updatePayload['title'] = title
-
-            return { action: 'update', params: updatePayload }
+            return parseUpdateStatement(cleanSql, args)
         }
 
         if (isInsert) {
-            let content = ''
-            let title = 'Journal Entry'
-            let tags: string[] = []
-            let entryType = 'technical_decision'
-
-            for (const arg of args) {
-                if (typeof arg === 'string') {
-                    if (arg.trim().startsWith('[') && arg.trim().endsWith(']')) {
-                        try {
-                            const parsed: unknown = JSON.parse(arg)
-                            if (Array.isArray(parsed)) {
-                                tags = parsed.map(String)
-                                continue
-                            }
-                        } catch {
-                            // ignore
-                        }
-                    }
-                    if (content === '') {
-                        content = arg
-                    } else if (title === 'Journal Entry') {
-                        title = arg
-                    }
-                } else if (Array.isArray(arg)) {
-                    tags = arg.map(String)
-                } else if (isPlainRecord(arg)) {
-                    if (typeof arg['content'] === 'string') content = arg['content']
-                    if (typeof arg['title'] === 'string') title = arg['title']
-                    if (Array.isArray(arg['tags'])) tags = arg['tags'].map(String)
-                    if (typeof arg['entry_type'] === 'string') entryType = arg['entry_type']
-                }
-            }
-
-            return { action: 'create', params: { content, title, tags, entry_type: entryType } }
+            return parseInsertStatement(args)
         }
 
         if (isDelete) {
-            let entryId: number | undefined
-            const idMatch = /\bWHERE\s+[`"']?(?:id|entry_id)[`"']?\s*=\s*(?:\?|(\d+))/i.exec(
-                cleanSql
-            )
-            if (idMatch?.[1] !== undefined) entryId = parseInt(idMatch[1], 10)
-            for (const arg of args) {
-                if (typeof arg === 'number') entryId = arg
-            }
+            const entryId = resolveEntryIdFromSql(cleanSql, args)
             if (entryId === undefined) return { action: 'unmapped', params: {} }
             return { action: 'delete', params: { entry_id: entryId } }
         }
 
         if (isSelect) {
-            let entryId: number | undefined
-            const idMatch = /\bWHERE\s+[`"']?(?:id|entry_id)[`"']?\s*=\s*(?:\?|(\d+))/i.exec(
-                cleanSql
-            )
-            if (idMatch?.[1] !== undefined) entryId = parseInt(idMatch[1], 10)
-            for (const arg of args) {
-                if (typeof arg === 'number') entryId = arg
-            }
+            const entryId = resolveEntryIdFromSql(cleanSql, args)
             if (entryId !== undefined) {
                 return { action: 'get_by_id', params: { entry_id: entryId } }
             }

@@ -16,6 +16,8 @@
  *   injectTokenEstimate(payload)        → payload with _meta.tokenEstimate added
  */
 
+import { logger } from '../utils/logger.js'
+
 export type ContentType = 'prose' | 'json' | 'code'
 
 const BYTES_PER_TOKEN_PROSE = 4.0
@@ -102,7 +104,11 @@ export function estimatePayloadTokens(payload: unknown): number {
             payloadTokenCache.set(payload, est)
         }
         return est
-    } catch {
+    } catch (error) {
+        logger.debug('Token estimation failed; defaulting to 0', {
+            module: 'token-estimator',
+            error: error instanceof Error ? error.message : String(error),
+        })
         return 0
     }
 }

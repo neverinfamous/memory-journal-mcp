@@ -147,23 +147,49 @@ export async function createEntryAction(...args: unknown[]): Promise<void> {
 
         const newEntry = db.createEntry(entryInput)
 
-        for (const targetId of payload.relatedIds) {
-            db.linkEntries(newEntry.id, targetId, 'references')
-        }
-
-        for (const rel of payload.relationships) {
-            db.linkEntries(newEntry.id, rel.target_id, rel.relation_type as RelationshipType)
+        // The entry is persisted once createEntry returns; link failures are reported
+        // as partial success so the caller knows the entry exists.
+        const linkFailures: { target_id: number; error: string }[] = []
+        const linkRequests: { targetId: number; type: RelationshipType }[] = [
+            ...payload.relatedIds.map((targetId) => ({ targetId, type: 'references' as const })),
+            ...payload.relationships.map((rel) => ({
+                targetId: rel.target_id,
+                type: rel.relation_type as RelationshipType,
+            })),
+        ]
+        for (const request of linkRequests) {
+            try {
+                db.linkEntries(newEntry.id, request.targetId, request.type)
+            } catch (linkError) {
+                linkFailures.push({
+                    target_id: request.targetId,
+                    error: linkError instanceof Error ? linkError.message : String(linkError),
+                })
+            }
         }
 
         db.flushSave()
 
+        if (linkFailures.length > 0) {
+            process.exitCode = 1
+        }
+
         if (options.json === true) {
             process.stdout.write(
-                JSON.stringify({ status: 'success', id: newEntry.id, version: newEntry.version }) +
-                    '\n'
+                JSON.stringify({
+                    status: linkFailures.length > 0 ? 'partial' : 'success',
+                    id: newEntry.id,
+                    version: newEntry.version,
+                    ...(linkFailures.length > 0 ? { entryPersisted: true, linkFailures } : {}),
+                }) + '\n'
             )
         } else {
             process.stderr.write(`Successfully created entry #${newEntry.id}\n`)
+            for (const failure of linkFailures) {
+                process.stderr.write(
+                    `Warning: entry #${newEntry.id} was created, but linking to #${failure.target_id} failed: ${failure.error}\n`
+                )
+            }
         }
     } catch (e) {
         handleCliEntryError(e, 'create')

@@ -188,7 +188,9 @@ export class MilestonesManager {
                 milestone_number: milestoneNumber,
                 title: updates.title,
                 description: updates.description,
-                due_on: updates.dueOn === null ? undefined : updates.dueOn,
+                // GitHub accepts `due_on: null` to clear the due date; the Octokit types only
+                // declare `string`, so the null crosses the SDK boundary via a cast.
+                due_on: (updates.dueOn === null ? null : updates.dueOn) as string | undefined,
                 state: updates.state,
             })
 

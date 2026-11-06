@@ -1,6 +1,6 @@
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
-import { autoIndexEntry } from '../../../utils/vector-index-helpers.js'
+import { indexBatchEntries } from '../batch-indexing.js'
 import { createBatchProgressReporter, sendProgress } from '../../../utils/progress-utils.js'
 import { linkRequestedRelationships } from '../relationship-linking.js'
 import { resolveWriteWorkspaceId } from '../write-workspace.js'
@@ -64,7 +64,8 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
                                 ...linkRequestedRelationships(
                                     db,
                                     createdEntry.id,
-                                    sourceEntry?.relationships
+                                    sourceEntry?.relationships,
+                                    prepared[i]?.input.workspaceId
                                 )
                             )
                         }
@@ -72,25 +73,15 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
                     
                     await sendProgress(progress, 1, 2, `Created ${String(results.length)} entries...`)
 
-                    const indexStatuses: string[] = []
-                    const indexErrors: Error[] = []
-                    if (input.auto_index && vectorManager) {
-                        const reporter = createBatchProgressReporter(progress, results.length, 10)
-                        for (let i = 0; i < results.length; i++) {
-                            const entry = results[i]
-                            if (entry) {
-                                try {
-                                    const status = await autoIndexEntry(vectorManager, db, entry.id)
-                                    if (status) indexStatuses.push(status)
-                                } catch (err) {
-                                    indexErrors.push(new Error(`Entry ${entry.id} vector indexing failed: ${err instanceof Error ? err.message : String(err)}`))
-                                }
-                            }
-                            await reporter(i + 1, `Indexing ${String(i + 1)}/${String(results.length)}...`)
-                        }
-                    } else {
-                        await sendProgress(progress, 2, 2, 'Batch create complete')
-                    }
+                    const { indexStatuses, indexErrors } = await indexBatchEntries({
+                        progress,
+                        vectorManager,
+                        db,
+                        autoIndex: input.auto_index,
+                        entryIds: results.map((r) => r.id),
+                        errorPrefix: 'Entry',
+                        doneMessage: 'Batch create complete',
+                    })
 
                     const allErrors = [
                         ...errors.map(e => new Error(`Item at index ${e.index} failed: ${e.error.message}`)),
@@ -162,29 +153,20 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
 
                     await sendProgress(progress, 1, 2, `Updated ${String(updated.length)} entries...`)
 
-                    const indexStatuses: string[] = []
-                    const indexErrors: Error[] = []
-                    if (input.auto_index && vectorManager) {
-                        const reporter = createBatchProgressReporter(progress, updated.length, 10)
-                        for (let i = 0; i < updated.length; i++) {
-                            const entry = updated[i]
-                            if (entry) {
-                                // Re-index only if content was part of the update
-                                const originalUpdate = input.updates.find(u => u.entry_id === entry.id)
-                                if (originalUpdate?.content) {
-                                    try {
-                                        const status = await autoIndexEntry(vectorManager, db, entry.id)
-                                        if (status) indexStatuses.push(status)
-                                    } catch (err) {
-                                        indexErrors.push(new Error(`Entry ${entry.id} vector indexing failed: ${err instanceof Error ? err.message : String(err)}`))
-                                    }
-                                }
-                            }
-                            await reporter(i + 1, `Indexing ${String(i + 1)}/${String(updated.length)}...`)
-                        }
-                    } else {
-                        await sendProgress(progress, 2, 2, 'Batch update complete')
-                    }
+                    // Re-index only if content was part of the update
+                    const contentUpdatedIds = new Set(
+                        input.updates.filter((u) => u.content).map((u) => u.entry_id)
+                    )
+                    const { indexStatuses, indexErrors } = await indexBatchEntries({
+                        progress,
+                        vectorManager,
+                        db,
+                        autoIndex: input.auto_index,
+                        entryIds: updated.map((r) => r.id),
+                        errorPrefix: 'Entry',
+                        doneMessage: 'Batch update complete',
+                        shouldIndex: (id) => contentUpdatedIds.has(id),
+                    })
 
                     const allErrors = [
                         ...notFound.map(id => new Error(`Entry ${id} not found`)),

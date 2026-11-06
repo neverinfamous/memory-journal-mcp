@@ -154,17 +154,24 @@ async function fetchCommits(input: FetchCommitsInput, cwd: string): Promise<Comm
     return processedCommits
 }
 
-async function getUnreleasedChangelog(cwd: string): Promise<{ latestTag: string | null; commits: CommitEntry[] }> {
+/** Upper bound on commits returned by get_unreleased_commits. */
+const UNRELEASED_MAX_COMMITS = 5000
+/** Cap for the no-tag fallback, where "unreleased" is the whole history. */
+const NO_TAG_FALLBACK_MAX_COMMITS = 100
+
+async function getUnreleasedChangelog(
+    cwd: string
+): Promise<{ latestTag: string | null; commits: CommitEntry[]; truncated: boolean }> {
     const { execFileSync } = await import('node:child_process')
     // A simplified version to get latest tag, then get commits since then
     try {
         const latestTag = execFileSync('git', ['describe', '--tags', '--abbrev=0'], { cwd, encoding: 'utf-8', windowsHide: true }).trim()
-        const commits = await fetchCommits({ ref: `${latestTag}..HEAD` }, cwd)
-        return { latestTag, commits }
+        const commits = await fetchCommits({ ref: `${latestTag}..HEAD`, maxCount: UNRELEASED_MAX_COMMITS }, cwd)
+        return { latestTag, commits, truncated: commits.length >= UNRELEASED_MAX_COMMITS }
     } catch {
         // Fallback if no tags
-        const commits = await fetchCommits({ maxCount: 100 }, cwd)
-        return { latestTag: null, commits }
+        const commits = await fetchCommits({ maxCount: NO_TAG_FALLBACK_MAX_COMMITS }, cwd)
+        return { latestTag: null, commits, truncated: commits.length >= NO_TAG_FALLBACK_MAX_COMMITS }
     }
 }
 

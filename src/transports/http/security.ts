@@ -36,7 +36,9 @@ export function getClientIp(req: Request): string {
 /**
  * Rate-limit key. The limiter runs before authentication, so this hashes the
  * raw Bearer token when one is present and otherwise hashes the client IP.
- * It does not read JWT claims.
+ * It does not read JWT claims. NOTE: `checkRateLimit` deliberately passes no
+ * authorization header, so buckets are keyed on client IP only (an unauthenticated
+ * caller could otherwise mint unlimited buckets by rotating fake tokens).
  */
 export function rateLimitIdentity(authorization: string | undefined, clientIp: string): string {
     if (authorization !== undefined) {

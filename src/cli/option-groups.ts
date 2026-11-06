@@ -53,6 +53,17 @@ export function addWorkspaceOptions(command: Command): Command {
     })
 }
 
+/**
+ * Workspace options for read-only data commands: the shared workspace group plus
+ * `--workspace` to scope a single invocation (falls back to --default-workspace-id).
+ */
+export function addWorkspaceScopeOptions(command: Command): Command {
+    withGroup(command, 'Command Options', (cmd) => {
+        cmd.option('--workspace <id>', 'Scope to a workspace ID (default: --default-workspace-id)')
+    })
+    return addWorkspaceOptions(command)
+}
+
 export function addVectorOptions(command: Command): Command {
     return withGroup(command, 'Vector Options', (cmd) => {
         cmd

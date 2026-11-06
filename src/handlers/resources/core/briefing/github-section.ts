@@ -162,4 +162,3 @@ export async function buildGitHubSection(
     }
 }
 
-export const fetchGitHubSection = buildGitHubSection

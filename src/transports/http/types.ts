@@ -30,14 +30,8 @@ export const DEFAULT_HSTS_MAX_AGE = 31_536_000 // 1 year
 export const CORS_PREFLIGHT_MAX_AGE_SECONDS = 86_400
 
 // =============================================================================
-// JSON-RPC Error Codes
+// Session Timing
 // =============================================================================
-
-/** JSON-RPC server error (protocol-level, not application errors) */
-export const JSONRPC_SERVER_ERROR = -32000
-
-/** JSON-RPC internal error */
-export const JSONRPC_INTERNAL_ERROR = -32603
 
 /** Session timeout for stateful HTTP mode (30 minutes) */
 export const SESSION_TIMEOUT_MS = 30 * 60 * 1000

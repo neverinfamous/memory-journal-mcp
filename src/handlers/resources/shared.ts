@@ -27,6 +27,85 @@ export interface GitHubRepoResolved {
     github: GitHubIntegration
 }
 
+/** Resolve the GitHub integration for an explicit `targetRepo`, or a ResourceResult error. */
+function resolveTargetRepoGithub(
+    config: BriefingConfig | undefined,
+    targetRepo: string,
+    runtime: ServerRuntime | undefined,
+    lastModified: string
+): GitHubIntegration | ResourceResult {
+    if (!/^[a-zA-Z0-9_.-]+(\/[a-zA-Z0-9_.-]+)?$/.test(targetRepo)) {
+        return {
+            data: { error: 'Invalid repository name format' },
+            annotations: { lastModified },
+        }
+    }
+    const registry = config?.projectRegistry
+
+    // Attempt to find exact match, then fallback to just the repo name if owner/repo format was used
+    let registryKey: string = targetRepo
+    if (registry && !Object.prototype.hasOwnProperty.call(registry, targetRepo)) {
+        const parts = targetRepo.split('/')
+        const repoPart = parts[1]
+        if (parts.length === 2 && repoPart && Object.prototype.hasOwnProperty.call(registry, repoPart)) {
+            registryKey = repoPart
+        }
+    }
+
+    if (registry && Object.prototype.hasOwnProperty.call(registry, registryKey)) {
+        const entry = registry[registryKey]
+        if (entry) {
+            return getGitHubIntegration(entry.path, runtime)
+        }
+        return {
+            data: { error: 'GitHub integration not available' },
+            annotations: { lastModified },
+        }
+    }
+    return {
+        data: { error: `Repository not found in registry: ${targetRepo}` },
+        annotations: { lastModified },
+    }
+}
+
+/** Fall back to the first registered project that is a valid git repo (default project first). */
+async function resolveFallbackRegistryRepo(
+    config: BriefingConfig | undefined,
+    runtime: ServerRuntime | undefined,
+    lastModified: string
+): Promise<GitHubRepoResolved | undefined> {
+    const registry = config?.projectRegistry
+    if (!registry) return undefined
+    let fallbackKeys = Object.keys(registry)
+
+    if (config?.defaultProjectNumber !== undefined) {
+        const defaultKey = fallbackKeys.find(
+            (key) => registry[key]?.project_number === config.defaultProjectNumber
+        )
+        if (defaultKey) {
+            fallbackKeys = [defaultKey, ...fallbackKeys.filter((k) => k !== defaultKey)]
+        }
+    }
+
+    for (const key of fallbackKeys) {
+        const project = registry[key]
+        if (project) {
+            const fallbackGithub = getGitHubIntegration(project.path, runtime)
+            const fallbackRepoInfo = await fallbackGithub.getRepoInfo()
+            if (fallbackRepoInfo.owner && fallbackRepoInfo.repo) {
+                return {
+                    owner: fallbackRepoInfo.owner,
+                    repo: fallbackRepoInfo.repo,
+                    branch: fallbackRepoInfo.branch ?? null,
+                    lastModified,
+                    github: fallbackGithub,
+                }
+            }
+        }
+    }
+    return undefined
+}
+
 /**
  * Resolve GitHub owner/repo or return a ResourceResult error.
  *
@@ -48,39 +127,9 @@ export async function resolveGitHubRepo(
 
     let activeGithub = github
     if (targetRepo) {
-        if (!/^[a-zA-Z0-9_.-]+(\/[a-zA-Z0-9_.-]+)?$/.test(targetRepo)) {
-            return {
-                data: { error: 'Invalid repository name format' },
-                annotations: { lastModified },
-            }
-        }
-        const registry = config?.projectRegistry
-
-        // Attempt to find exact match, then fallback to just the repo name if owner/repo format was used
-        let registryKey: string = targetRepo
-        if (registry && !Object.prototype.hasOwnProperty.call(registry, targetRepo)) {
-            const parts = targetRepo.split('/')
-            const repoPart = parts[1]
-            if (
-                parts.length === 2 &&
-                repoPart &&
-                Object.prototype.hasOwnProperty.call(registry, repoPart)
-            ) {
-                registryKey = repoPart
-            }
-        }
-
-        if (registry && Object.prototype.hasOwnProperty.call(registry, registryKey)) {
-            const entry = registry[registryKey]
-            if (entry) {
-                activeGithub = getGitHubIntegration(entry.path, runtime)
-            }
-        } else {
-            return {
-                data: { error: `Repository not found in registry: ${targetRepo}` },
-                annotations: { lastModified },
-            }
-        }
+        const target = resolveTargetRepoGithub(config, targetRepo, runtime, lastModified)
+        if ('data' in target) return target
+        activeGithub = target
     }
 
     if (!activeGithub) {
@@ -108,31 +157,8 @@ export async function resolveGitHubRepo(
 
         // Fallback to the first VALID registered project if no targetRepo was specified
         if (!targetRepo && hasRegistry) {
-            let fallbackKeys = Object.keys(registry)
-            
-            if (config?.defaultProjectNumber !== undefined) {
-                const defaultKey = fallbackKeys.find(key => registry[key]?.project_number === config?.defaultProjectNumber)
-                if (defaultKey) {
-                    fallbackKeys = [defaultKey, ...fallbackKeys.filter(k => k !== defaultKey)]
-                }
-            }
-
-            for (const key of fallbackKeys) {
-                const project = registry[key]
-                if (project) {
-                    const fallbackGithub = getGitHubIntegration(project.path, runtime)
-                    const fallbackRepoInfo = await fallbackGithub.getRepoInfo()
-                    if (fallbackRepoInfo.owner && fallbackRepoInfo.repo) {
-                        return {
-                            owner: fallbackRepoInfo.owner,
-                            repo: fallbackRepoInfo.repo,
-                            branch: fallbackRepoInfo.branch ?? null,
-                            lastModified,
-                            github: fallbackGithub,
-                        }
-                    }
-                }
-            }
+            const fallback = await resolveFallbackRegistryRepo(config, runtime, lastModified)
+            if (fallback) return fallback
         }
 
         return {

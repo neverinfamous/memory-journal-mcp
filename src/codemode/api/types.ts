@@ -5,7 +5,6 @@
 import { isRecord } from '../normalizers/shared-utils.js'
 
 export type ProjectInfo = Record<string, unknown> & { project_number?: number | null }
-export type ProjectMap = Record<string, ProjectInfo>
 export type ProjectArrayItem = ProjectInfo & { name: string; projectNumber?: number | null }
 
 /**

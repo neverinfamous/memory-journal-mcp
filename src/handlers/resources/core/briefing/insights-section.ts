@@ -28,7 +28,7 @@ export interface BriefingInsights {
 // ============================================================================
 
 /** Cached live digest with expiry timestamp */
-let liveDigestCache: { snapshot: DigestSnapshot; expiresAt: number } | null = null
+let liveDigestCache: { snapshot: DigestSnapshot; workspaceId: string; expiresAt: number } | null = null
 
 /** Cache TTL in milliseconds (60 seconds) */
 const LIVE_DIGEST_TTL_MS = 60_000
@@ -43,8 +43,11 @@ const LIVE_DIGEST_TTL_MS = 60_000
  *
  * Returns null only if compute itself fails or database has no entries.
  */
-export function buildInsightsSection(context: ResourceContext): BriefingInsights | null {
-    const snapshot = resolveDigestSnapshot(context)
+export function buildInsightsSection(
+    context: ResourceContext,
+    workspaceId?: string
+): BriefingInsights | null {
+    const snapshot = resolveDigestSnapshot(context, workspaceId)
     if (!snapshot) return null
 
     return formatDigest(snapshot)
@@ -52,24 +55,39 @@ export function buildInsightsSection(context: ResourceContext): BriefingInsights
 
 /**
  * Resolve the latest digest snapshot from scheduler, database, or live compute.
+ * When `workspaceId` is given (a briefing for a specific target repo), the scheduler's
+ * and the persisted snapshot are not workspace-scoped, so only the live compute is used.
  */
-function resolveDigestSnapshot(context: ResourceContext): DigestSnapshot | null {
+function resolveDigestSnapshot(
+    context: ResourceContext,
+    workspaceId?: string
+): DigestSnapshot | null {
     // Primary: scheduler's accessor (includes just-computed data)
-    const schedulerDigest = context.scheduler?.getLatestDigest?.()
+    const schedulerDigest =
+        workspaceId === undefined ? context.scheduler?.getLatestDigest?.() : undefined
     if (schedulerDigest) return schedulerDigest
+
+    const effectiveWorkspace = workspaceId ?? resourceWorkspace(context)
 
     // Live compute: real-time digest when no cached snapshot exists.
     // Covers stdio transport (no scheduler) and fresh databases.
     // TTL cache prevents redundant recomputation across rapid reads.
-    if (liveDigestCache && Date.now() < liveDigestCache.expiresAt) {
+    if (
+        liveDigestCache?.workspaceId === effectiveWorkspace &&
+        Date.now() < liveDigestCache.expiresAt
+    ) {
         return liveDigestCache.snapshot
     }
 
     try {
-        const liveDigest = context.db?.computeDigest?.(resourceWorkspace(context))
+        const liveDigest = context.db?.computeDigest?.(effectiveWorkspace)
         if (liveDigest !== undefined) {
             const snapshot: DigestSnapshot = liveDigest
-            liveDigestCache = { snapshot, expiresAt: Date.now() + LIVE_DIGEST_TTL_MS }
+            liveDigestCache = {
+                snapshot,
+                workspaceId: effectiveWorkspace,
+                expiresAt: Date.now() + LIVE_DIGEST_TTL_MS,
+            }
             logger.debug('Live digest computed for briefing (no scheduler/persisted snapshot)', {
                 module: 'BRIEFING',
                 operation: 'insights-live-compute',
@@ -86,7 +104,7 @@ function resolveDigestSnapshot(context: ResourceContext): DigestSnapshot | null 
 
     // Fallback: persisted snapshot in database (survives server restarts)
     // Guards against undefined db (test mocks) and missing method (older adapters)
-    const dbSnapshot = context.db?.getLatestAnalyticsSnapshot?.('digest')
+    const dbSnapshot = context.db?.getLatestAnalyticsSnapshot?.('digest', effectiveWorkspace)
     if (dbSnapshot) return parseDigestSnapshot(dbSnapshot.data)
 
     return null

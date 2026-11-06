@@ -2,28 +2,12 @@ import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { ValidationError } from '../../../types/errors.js'
-import { passMetadataFilters, collectTeamSearchEntries, mergeAndDedup, type EntryWithSource } from './helpers.js'
 import { resolveSearchMode } from './auto.js'
 import { ftsSearch } from './fts.js'
 import { hybridSearch } from './hybrid.js'
-import { decodeCursor, encodeCursor } from '../../../database/sqlite-adapter/entries/search/cursor.js'
 import { SearchEntriesSchema, SearchEntriesSchemaMcp } from './schemas.js'
 import { EntriesListOutputSchema } from '../schemas.js'
-
-function cursorOffset(cursor: string | undefined): number {
-    if (cursor === undefined || cursor.length === 0) return 0
-    const decoded = decodeCursor(cursor)
-    if (decoded !== null && 'offset' in decoded) return decoded.offset
-    return 0
-}
-
-function pageRows<T>(rows: T[], cursor: string | undefined, limit: number): { page: T[]; nextCursor?: string } {
-    const offset = cursorOffset(cursor)
-    const page = rows.slice(offset, offset + limit)
-    const next = offset + page.length
-    if (next < rows.length) return { page, nextCursor: encodeCursor({ offset: next }) }
-    return { page }
-}
+import { cursorOffset, pageRows, runSemanticSearch } from './semantic-branch.js'
 
 export function getSearchEntriesTool(context: ToolContext): ToolDefinition[] {
     const { db, teamDb, vectorManager, teamVectorManager } = context;
@@ -146,74 +130,14 @@ export function getSearchEntriesTool(context: ToolContext): ToolDefinition[] {
                                 const result = ftsSearch(input.query, db, teamDb, searchOptions)
                                 return { ...result, searchMode: 'fts (fallback)' }
                             }
-                            // Use semantic search with overfetching for filtering reliability
-                            const internalLimit = hasFilters
-                                ? Math.min(Math.max(input.limit * 10, 100), 1000)
-                                : input.limit * 2
-                            const semanticResults = await vectorManager.search(
+                            const semanticPage = await runSemanticSearch({
+                                context,
+                                input,
                                 query,
-                                internalLimit,
-                                0.25,
-                                wsId
-                            )
-                            const entryIds = semanticResults.map((r) => r.entryId)
-                            const entriesMap = db.getEntriesByIds(entryIds, wsId)
-
-                            // Pre-hydrate tags to avoid N+1 queries during metadata filtering
-                            if (input.tags && input.tags.length > 0) {
-                                const tagsMap = db.getTagsForEntries(entryIds)
-                                for (const entry of entriesMap.values()) {
-                                    entry.tags = tagsMap.get(entry.id) ?? []
-                                }
-                            }
-
-                            const entries: EntryWithSource[] = []
-                            for (const result of semanticResults) {
-                                const entry = entriesMap.get(result.entryId)
-                                if (entry === undefined) continue
-                                if (!passMetadataFilters(entry, searchOptions, db)) continue
-                                entries.push({
-                                    ...entry,
-                                    content: entry.content,
-                                    timestamp: entry.timestamp,
-                                    source: 'personal',
-                                })
-                            }
-                            let ranked = entries
-
-                            if (searchOptions.includeTeam && input.is_personal !== true && teamDb !== undefined) {
-                                const teamEntries = await collectTeamSearchEntries(query, teamDb, teamVectorManager, {
-                                    ...searchOptions,
-                                    limit: input.limit,
-                                })
-                                ranked = mergeAndDedup(ranked, teamEntries, input.limit)
-                            }
-
-                            // Post-fetch importance re-sort for vector results
-                            if (input.sort_by === 'importance') {
-                                const ids: number[] = []
-                                for (const entry of ranked) {
-                                    const id = entry['id']
-                                    if (typeof id === 'number') ids.push(id)
-                                }
-                                const importanceMap = db.getEntriesByIdsWithImportance(ids, wsId)
-                                const scored = ranked.map((entry) => {
-                                    const id = entry['id']
-                                    const score =
-                                        typeof id === 'number'
-                                            ? (importanceMap.get(id)?.importance.score ?? 0)
-                                            : 0
-                                    return { ...entry, importanceScore: Math.round(score * 100) / 100 }
-                                })
-                                scored.sort((a, b) => {
-                                    const left = typeof a.importanceScore === 'number' ? a.importanceScore : 0
-                                    const right = typeof b.importanceScore === 'number' ? b.importanceScore : 0
-                                    return right - left
-                                })
-                                ranked = scored
-                            }
-
-                            const semanticPage = pageRows(ranked, input.cursor, input.limit)
+                                wsId,
+                                hasFilters,
+                                searchOptions,
+                            })
 
                             return {
                                 success: true,

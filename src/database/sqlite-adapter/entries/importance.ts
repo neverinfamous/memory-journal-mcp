@@ -71,9 +71,12 @@ export function buildImportanceSqlExpression(): string {
 
 export function calculateImportance(
     context: EntriesSharedContext,
-    entryId: number
+    entryId: number,
+    workspaceId?: string
 ): ImportanceResult {
     const { db } = context
+    // Workspace filtering is opt-in: only applied when a workspaceId is given ('*' = any).
+    const scoped = workspaceId !== undefined && workspaceId !== '*'
     const round2 = (n: number): number => Math.round(n * 100) / 100
 
     const stmt = db.prepare(`SELECT
@@ -95,9 +98,10 @@ export function calculateImportance(
             END
          ) FROM entry_anchors WHERE entry_id = ?) AS worst_status_rank
     FROM memory_journal m
-    WHERE m.id = ? AND m.deleted_at IS NULL`)
+    WHERE m.id = ? AND m.deleted_at IS NULL${scoped ? ' AND m.workspace_id = ?' : ''}`)
 
-    const row = rowToObject(stmt.get(entryId, entryId, entryId, entryId, entryId, entryId))
+    const baseParams = [entryId, entryId, entryId, entryId, entryId, entryId]
+    const row = rowToObject(stmt.get(...(scoped ? [...baseParams, workspaceId] : baseParams)))
 
     if (!row) {
         return {
@@ -149,19 +153,21 @@ export function calculateImportance(
     return { score, breakdown }
 }
 
-/**
- * Batch-attaches rounded importanceScore values directly onto an array of hydrated JournalEntry objects.
- * Uses only 2 batched SQL queries (relationships + entry_anchors) for all entries.
- */
-export function attachImportanceScoresToEntries(
-    context: EntriesSharedContext,
-    entries: JournalEntry[]
-): void {
-    if (entries.length === 0) return
+/** Per-entry relationship/anchor statistics feeding the importance score. */
+interface ImportanceStats {
+    relCount: number
+    causalCount: number
+    worstStatusRank: number
+}
 
-    const { db } = context
-    const round2 = (n: number): number => Math.round(n * 100) / 100
-    const validIds = entries.map((e) => e.id)
+/**
+ * Load relationship counts and worst anchor status for a set of entries using 2 batched queries.
+ * Every id gets an entry (zero counts, rank 3 when no data).
+ */
+function loadImportanceStats(
+    db: EntriesSharedContext['db'],
+    validIds: number[]
+): Map<number, ImportanceStats> {
     const marks = validIds.map(() => '?').join(', ')
 
     const sql = `
@@ -192,14 +198,10 @@ export function attachImportanceScoresToEntries(
         worst_status_rank: number
     }[]
 
-    const relData = new Map<
-        number,
-        { relCount: number; causalCount: number; worstStatusRank: number }
-    >()
+    const relData = new Map<number, ImportanceStats>()
     for (const id of validIds) {
         relData.set(id, { relCount: 0, causalCount: 0, worstStatusRank: 3 })
     }
-
     for (const row of rows) {
         const d = relData.get(row.entry_id)
         if (d) {
@@ -207,13 +209,29 @@ export function attachImportanceScoresToEntries(
             d.causalCount = row.causal_count
         }
     }
-
     for (const row of anchorRows) {
         const d = relData.get(row.entry_id)
         if (d) {
             d.worstStatusRank = row.worst_status_rank
         }
     }
+    return relData
+}
+
+/**
+ * Batch-attaches rounded importanceScore values directly onto an array of hydrated JournalEntry objects.
+ * Uses only 2 batched SQL queries (relationships + entry_anchors) for all entries.
+ */
+export function attachImportanceScoresToEntries(
+    context: EntriesSharedContext,
+    entries: JournalEntry[]
+): void {
+    if (entries.length === 0) return
+
+    const { db } = context
+    const round2 = (n: number): number => Math.round(n * 100) / 100
+    const validIds = entries.map((e) => e.id)
+    const relData = loadImportanceStats(db, validIds)
 
     const nowMs = Date.now()
     const w = IMPORTANCE_WEIGHTS
@@ -265,56 +283,7 @@ export function getEntriesByIdsWithImportance(
     const round2 = (n: number): number => Math.round(n * 100) / 100
 
     const validIds = Array.from(entriesMap.keys())
-    const marks = validIds.map(() => '?').join(', ')
-
-    // Single query to get rel_count and causal_count for all matched entry_ids
-    const sql = `
-        SELECT entry_id,
-               COUNT(*) AS rel_count,
-               SUM(CASE WHEN relationship_type IN ('blocked_by', 'resolved', 'caused') THEN 1 ELSE 0 END) AS causal_count
-        FROM (
-            SELECT from_entry_id AS entry_id, relationship_type FROM relationships WHERE from_entry_id IN (${marks})
-            UNION ALL
-            SELECT to_entry_id AS entry_id, relationship_type FROM relationships WHERE to_entry_id IN (${marks})
-        )
-        GROUP BY entry_id
-    `
-    const rows = db.prepare(sql).all(...validIds, ...validIds) as {
-        entry_id: number
-        rel_count: number
-        causal_count: number
-    }[]
-
-    const anchorSql = `
-        SELECT entry_id,
-               MIN(CASE status WHEN 'invalidated' THEN 1 WHEN 'stale' THEN 2 ELSE 3 END) AS worst_status_rank
-        FROM entry_anchors WHERE entry_id IN (${marks})
-        GROUP BY entry_id
-    `
-    const anchorRows = db.prepare(anchorSql).all(...validIds) as {
-        entry_id: number
-        worst_status_rank: number
-    }[]
-
-    const relData = new Map<number, { relCount: number; causalCount: number; worstStatusRank: number }>()
-    for (const id of validIds) {
-        relData.set(id, { relCount: 0, causalCount: 0, worstStatusRank: 3 })
-    }
-
-    for (const row of rows) {
-        const d = relData.get(row.entry_id)
-        if (d) {
-            d.relCount = row.rel_count
-            d.causalCount = row.causal_count
-        }
-    }
-    
-    for (const row of anchorRows) {
-        const d = relData.get(row.entry_id)
-        if (d) {
-            d.worstStatusRank = row.worst_status_rank
-        }
-    }
+    const relData = loadImportanceStats(db, validIds)
 
     const now = new Date()
     const w = IMPORTANCE_WEIGHTS

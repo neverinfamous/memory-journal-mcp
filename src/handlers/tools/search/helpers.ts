@@ -14,6 +14,7 @@ import type { JournalEntry } from '../../../types/index.js'
 import type { IDatabaseAdapter } from '../../../database/core/interfaces.js'
 import type { VectorSearchManager } from '../../../vector/vector-search-manager/index.js'
 import * as crypto from 'node:crypto'
+import { logger } from '../../../utils/logger.js'
 
 // ============================================================================
 // Types
@@ -192,8 +193,12 @@ export async function collectTeamSearchEntries(
                 const entry = hydrated.get(hit.entryId)
                 if (entry !== undefined) pushEntry(entry, Math.round(hit.score * 100) / 100)
             }
-        } catch {
+        } catch (err) {
             // Team vector search is best-effort. Full-text results still apply.
+            logger.debug('Team vector search failed; falling back to full-text results', {
+                module: 'Search',
+                error: err instanceof Error ? err.message : String(err),
+            })
         }
     }
 

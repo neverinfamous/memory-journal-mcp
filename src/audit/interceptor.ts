@@ -21,6 +21,7 @@ import { getAuthContext } from '../auth/auth-context.js'
 import { getRequestContext } from '../utils/request-context.js'
 import { sanitizeErrorForLogging } from '../utils/security-utils.js'
 import { estimateTokens, estimatePayloadTokens } from '../observability/token-estimator.js'
+import { logger } from '../utils/logger.js'
 
 // ============================================================================
 // Types
@@ -233,8 +234,16 @@ export async function auditOperation<T>(
             try {
                 const json = JSON.stringify(result)
                 tokenEstimate = estimateTokens(json, 'json')
-            } catch {
+            } catch (serializeError) {
                 // Serialization failure must not block execution
+                logger.debug('Token estimate skipped: result is not serializable', {
+                    module: 'Audit',
+                    tool: name,
+                    error:
+                        serializeError instanceof Error
+                            ? serializeError.message
+                            : String(serializeError),
+                })
             }
         } else if (typeof result === 'string') {
             tokenEstimate = estimateTokens(result, 'prose')

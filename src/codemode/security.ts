@@ -16,6 +16,71 @@ import * as v8 from 'node:v8'
 const SENSITIVE_STRING_CONTENT = /^(?:constructor|__proto__|prototype)$/i
 
 /**
+ * Skips a regex literal body starting just after the opening `/`.
+ * Returns the index after the closing `/` and its flags (or at the line end if unterminated).
+ */
+function skipRegexLiteralBody(code: string, start: number): number {
+    const len = code.length
+    let i = start
+    let inCharClass = false
+    while (i < len) {
+        const c = code[i] ?? ''
+        if (c === '\\') {
+            i += i + 1 < len ? 2 : 1
+            continue
+        }
+        if (c === '[') {
+            inCharClass = true
+        } else if (c === ']') {
+            inCharClass = false
+        } else if (c === '/' && !inCharClass) {
+            i++
+            while (i < len && /[dgimsuvy]/.test(code[i] ?? '')) {
+                i++
+            }
+            break
+        } else if (c === '\n') {
+            break
+        }
+        i++
+    }
+    return i
+}
+
+/**
+ * Scans a quoted string literal starting just after the opening quote.
+ * Returns the unescaped content and the index after the closing quote.
+ */
+function scanQuotedLiteral(
+    code: string,
+    start: number,
+    quote: string
+): { content: string; next: number } {
+    const len = code.length
+    let i = start
+    let content = ''
+    while (i < len) {
+        const c = code[i] ?? ''
+        if (c === '\\') {
+            if (i + 1 < len) {
+                content += code[i + 1] ?? ''
+                i += 2
+            } else {
+                i++
+            }
+            continue
+        }
+        if (c === quote) {
+            i++
+            break
+        }
+        content += c
+        i++
+    }
+    return { content, next: i }
+}
+
+/**
  * Single-pass lexical scanner that strips JS comments and string literal contents
  * in a single left-to-right pass while preserving:
  * 1. `${...}` template literal interpolation expressions (so blocked patterns inside
@@ -74,29 +139,7 @@ export function stripCommentsAndStrings(rawCode: string): string {
         // 2b. Regex literal: / ... /flags (prevents `/*` or `//` inside regex from desynchronizing comment stripping)
         if (ch === '/' && next !== '/' && next !== '*' && canStartRegex(lastNonWsToken)) {
             out += '/ /'
-            i++
-            let inCharClass = false
-            while (i < len) {
-                const c = code[i] ?? ''
-                if (c === '\\') {
-                    i += i + 1 < len ? 2 : 1
-                    continue
-                }
-                if (c === '[') {
-                    inCharClass = true
-                } else if (c === ']') {
-                    inCharClass = false
-                } else if (c === '/' && !inCharClass) {
-                    i++
-                    while (i < len && /[dgimsuvy]/.test(code[i] ?? '')) {
-                        i++
-                    }
-                    break
-                } else if (c === '\n') {
-                    break
-                }
-                i++
-            }
+            i = skipRegexLiteralBody(code, i + 1)
             lastNonWsToken = '/'
             continue
         }
@@ -104,26 +147,9 @@ export function stripCommentsAndStrings(rawCode: string): string {
         // 3. Single or double quoted string literal
         if (ch === '"' || ch === "'") {
             const quote = ch
-            i++
-            let content = ''
-            while (i < len) {
-                const c = code[i] ?? ''
-                if (c === '\\') {
-                    if (i + 1 < len) {
-                        content += code[i + 1] ?? ''
-                        i += 2
-                    } else {
-                        i++
-                    }
-                    continue
-                }
-                if (c === quote) {
-                    i++
-                    break
-                }
-                content += c
-                i++
-            }
+            const scanned = scanQuotedLiteral(code, i + 1, quote)
+            const content = scanned.content
+            i = scanned.next
             if (SENSITIVE_STRING_CONTENT.test(content.trim())) {
                 out += `${quote}${content.trim()}${quote}`
             } else {

@@ -10,6 +10,7 @@ import type { InternalPromptDef } from './index.js'
 import { markUntrustedContent } from '../../utils/security-utils.js'
 import { z } from 'zod'
 import { coerceNumber } from '../../utils/query-helpers.js'
+import { logger } from '../../utils/logger.js'
 import { getCmsSupervisorPromptDefinitions } from './cms-supervisor.js'
 
 export function getOptimizerPromptDefinitions(): InternalPromptDef[] {
@@ -190,8 +191,11 @@ export function getOptimizerPromptDefinitions(): InternalPromptDef[] {
 - Total Unique Tags: ${String(totalTags)}
 - Active Relationship Links: ${String(totalRelationships)} (Avg: ${String(avgPerEntry)}/entry | Density: ${graphDensity})${causalMetricsText}${entryTypesText}
 - Orphans: ${String(orphanCount)} (${orphanDensity} density)${projectBreakdownText}`
-                } catch {
-                    // ignore
+                } catch (err) {
+                    logger.debug('Could not compute optimizer database health stats', {
+                        module: 'Optimizer',
+                        error: err instanceof Error ? err.message : String(err),
+                    })
                 }
 
                 let unverifiedSnippet = '_No unverified entries found._'

@@ -47,7 +47,6 @@ export interface ServerOptions {
     // Admin override for Code Mode
     codemodeInternalFullAccess?: boolean
     // Auto-prune
-    autoPruneIntervalMinutes?: number
     archiveOlderThanDays?: number
     pruneOlderThanDays?: number
     hardDeleteOlderThanDays?: number

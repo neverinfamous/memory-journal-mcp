@@ -149,7 +149,7 @@ const GetStatisticsSchemaMcp = z.object({
     end_date: z.string().optional(),
     project_breakdown: z.boolean().optional().default(false).describe('Set to true to return multi-project entry breakdown across all registered projects (workspace_id: "*").'),
     workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
-    project_number: z.unknown().optional().describe('Anti-Hallucination Hint: get_statistics cannot be filtered by project_number. It always returns global stats. Use project_breakdown: true instead.'),
+    project_number: z.unknown().optional().describe('get_statistics does not filter by project_number itself; a numeric project_number is only used to resolve the workspace whose stats are returned. Use project_breakdown: true for a per-project breakdown.'),
     timeframe: z.unknown().optional().describe('Anti-Hallucination Hint: Use group_by instead of timeframe or period.'),
     period: z.unknown().optional().describe('Anti-Hallucination Hint: Use group_by instead of timeframe or period.'),
     time: z.unknown().optional().describe('Anti-Hallucination Hint: Use group_by instead of timeframe or time.'),
@@ -181,7 +181,7 @@ const CrossProjectInsightsInputSchemaMcp = z.object({
         .default(3)
         .describe('Minimum entries to include project'),
     workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
-    project_number: z.unknown().optional().describe('Anti-Hallucination Hint: get_cross_project_insights analyzes ALL projects. Do not pass a project_number.'),
+    project_number: z.unknown().optional().describe('Anti-Hallucination Hint: get_cross_project_insights analyzes ALL projects in the workspace and does not filter by project_number.'),
     query: z.unknown().optional().describe('Anti-Hallucination Hint: get_cross_project_insights does not take a query. It analyzes all entries.'),
     limit: z.unknown().optional().describe('Anti-Hallucination Hint: get_cross_project_insights does not take a limit.'),
 })

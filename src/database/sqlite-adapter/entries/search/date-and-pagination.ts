@@ -66,6 +66,49 @@ export function getFilteredEntryCount(
     return typeof row?.['count'] === 'number' ? row['count'] : 0
 }
 
+/** Importance-ranked page of recent entries (offset-paginated). */
+function getRecentEntriesByImportance(
+    context: EntriesSharedContext,
+    limit: number,
+    cursor: string | undefined,
+    includeArchived: boolean,
+    workspaceId: string,
+    projectNumber: number | undefined,
+    offset: number
+): { entries: JournalEntry[]; nextCursor?: string } {
+    const { db, tagsMgr } = context
+
+    let actualOffset = offset
+    if (cursor !== undefined) {
+        const decoded = decodeCursor(cursor)
+        if (decoded !== null && 'offset' in decoded) actualOffset = decoded.offset
+    }
+    const importanceExpr = buildImportanceSqlExpression()
+    const cte = buildImportanceCte()
+
+    const params: unknown[] = []
+    if (workspaceId !== '*') params.push(workspaceId)
+    if (projectNumber !== undefined) params.push(projectNumber)
+    params.push(limit, actualOffset)
+
+    const stmt = db.prepare(`
+            WITH ${cte}
+            SELECT ${ALIASED_ENTRY_COLUMNS}, ${importanceExpr} AS importanceScore
+            FROM memory_journal e
+            LEFT JOIN rel_stats rs ON e.id = rs.entry_id
+            LEFT JOIN anchor_stats ans ON e.id = ans.entry_id
+            WHERE e.deleted_at IS NULL ${!includeArchived ? 'AND e.is_archived = 0' : ''} ${workspaceId !== '*' ? 'AND e.workspace_id = ?' : ''} ${projectNumber !== undefined ? 'AND e.project_number = ?' : ''}
+            ORDER BY importanceScore DESC, e.timestamp DESC, e.id DESC LIMIT ? OFFSET ?
+        `)
+    const rows = stmt.all(params)
+    const entries = rowsToEntries(tagsMgr, rows)
+
+    if (entries.length === limit && limit > 0) {
+        return { entries, nextCursor: encodeCursor({ offset: actualOffset + limit }) }
+    }
+    return { entries }
+}
+
 export function getRecentEntries(
     context: EntriesSharedContext,
     limit: number,
@@ -79,35 +122,15 @@ export function getRecentEntries(
     const { db, tagsMgr } = context
 
     if (sortBy === 'importance') {
-        let actualOffset = offset
-        if (cursor !== undefined) {
-            const decoded = decodeCursor(cursor)
-            if (decoded !== null && 'offset' in decoded) actualOffset = decoded.offset
-        }
-        const importanceExpr = buildImportanceSqlExpression()
-        const cte = buildImportanceCte()
-
-        const params: unknown[] = []
-        if (workspaceId !== '*') params.push(workspaceId)
-        if (projectNumber !== undefined) params.push(projectNumber)
-        params.push(limit, actualOffset)
-
-        const stmt = db.prepare(`
-            WITH ${cte}
-            SELECT ${ALIASED_ENTRY_COLUMNS}, ${importanceExpr} AS importanceScore
-            FROM memory_journal e
-            LEFT JOIN rel_stats rs ON e.id = rs.entry_id
-            LEFT JOIN anchor_stats ans ON e.id = ans.entry_id
-            WHERE e.deleted_at IS NULL ${!includeArchived ? 'AND e.is_archived = 0' : ''} ${workspaceId !== '*' ? 'AND e.workspace_id = ?' : ''} ${projectNumber !== undefined ? 'AND e.project_number = ?' : ''}
-            ORDER BY importanceScore DESC, e.timestamp DESC, e.id DESC LIMIT ? OFFSET ?
-        `)
-        const rows = stmt.all(params)
-        const entries = rowsToEntries(tagsMgr, rows)
-
-        if (entries.length === limit && limit > 0) {
-            return { entries, nextCursor: encodeCursor({ offset: actualOffset + limit }) }
-        }
-        return { entries }
+        return getRecentEntriesByImportance(
+            context,
+            limit,
+            cursor,
+            includeArchived,
+            workspaceId,
+            projectNumber,
+            offset
+        )
     }
 
     let cursorCondition = ''

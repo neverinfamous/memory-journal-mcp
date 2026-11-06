@@ -146,11 +146,37 @@ describe('Git Tools Handler', () => {
         const tool = tools.find((t) => t.name === 'get_unreleased_commits')!
         const res = (await tool.handler({})) as {
             success: boolean
-            changelog: { latestTag: string | null; commits: unknown[] }
+            changelog: { latestTag: string | null; commits: unknown[]; truncated: boolean }
         }
 
         expect(res.success).toBe(true)
         expect(res.changelog.commits).toHaveLength(2)
+        expect(res.changelog.truncated).toBe(false)
+    })
+
+    it('get_unreleased_commits should flag truncation when the commit cap is reached', async () => {
+        mockProcessBatch.mockResolvedValue(
+            Array.from({ length: 5000 }, (_, i) => ({
+                hash: String(i).padStart(12, '0'),
+                shortHash: String(i).padStart(7, '0'),
+                author: 'Alice',
+                date: '2026-03-01T10:00:00Z',
+                subject: `chore: commit ${String(i)}`,
+                type: 'chore',
+                isBreaking: false,
+                totalInsertions: 0,
+                totalDeletions: 0,
+            }))
+        )
+        const tools = getGitTools(context)
+        const tool = tools.find((t) => t.name === 'get_unreleased_commits')!
+        const res = (await tool.handler({})) as {
+            success: boolean
+            changelog: { commits: unknown[]; truncated: boolean }
+        }
+
+        expect(res.success).toBe(true)
+        expect(res.changelog.truncated).toBe(true)
     })
 
     it('analyze_commit_patterns should aggregate commit types, authors, breaking changes, and categories', async () => {

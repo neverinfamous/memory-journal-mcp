@@ -8,6 +8,12 @@ import type { ConfigResolver } from '../utils/config-resolver.js'
 import { defaultDbPath, defaultTeamDbPath } from './option-groups.js'
 import type { ServerOptions } from '../server/mcp-server/types.js'
 
+const transportSchema = z.enum(['stdio', 'http'])
+const teamDefaultRoleSchema = z.enum(['admin', 'member', 'viewer', 'denied'])
+const reportContentTypeSchema = z.enum(['slack', 'discord', 'json'])
+type TeamDefaultRole = z.infer<typeof teamDefaultRoleSchema>
+type ReportContentType = z.infer<typeof reportContentTypeSchema>
+
 function isNodeErrorCode(err: unknown, code: string): boolean {
     if (typeof err !== 'object' || err === null || !('code' in err)) return false
     return err.code === code
@@ -50,11 +56,16 @@ export function buildServerOptions(
     };
 
     const host = catchConfig(() => resolver.resolve<string>('serverHost', 'MCP_HOST') ?? process.env['HOST'] ?? undefined, undefined);
-    const transport = catchConfig(() => {
-        if (resolver.resolveBool('http')) return 'http';
-        if (resolver.resolveBool('stdio')) return 'stdio';
-        return resolver.resolve<string>('transport', 'TRANSPORT') ?? 'stdio';
-    }, 'stdio');
+    const transport = catchConfig((): 'stdio' | 'http' => {
+        if (resolver.resolveBool('http')) return 'http'
+        if (resolver.resolveBool('stdio')) return 'stdio'
+        const raw = resolver.resolve<string>('transport', 'TRANSPORT') ?? 'stdio'
+        const parsed = transportSchema.safeParse(raw)
+        if (!parsed.success) {
+            throw new Error(`Invalid transport '${raw}'. Use 'stdio' or 'http'.`)
+        }
+        return parsed.data
+    }, 'stdio')
     const stateless = catchConfig(() => resolver.resolveBool('stateless', 'STATELESS') ?? false, false);
     // Allow 'dbPath' or 'database' as fallback for 'db'
     const configDbPath = catchConfig(() => resolver.resolve<string>('dbPath'), undefined);
@@ -119,7 +130,7 @@ export function buildServerOptions(
     }, undefined)
 
     const serverOptions = {
-        transport: transport as 'stdio' | 'http',
+        transport,
         port: catchConfig(() => resolver.resolveInt('port', 'PORT', 1, 65535) ?? 3000, 3000),
         host,
         statelessHttp: stateless,
@@ -127,7 +138,14 @@ export function buildServerOptions(
         testDbPath: testDb,
         teamDbPath: teamDb,
         testTeamDbPath: testTeamDb,
-        teamDefaultRole: catchConfig(() => (resolver.resolve<string>('teamDefaultRole', 'TEAM_DEFAULT_ROLE') ?? 'denied') as 'admin' | 'member' | 'viewer' | 'denied', 'denied'),
+        teamDefaultRole: catchConfig((): TeamDefaultRole => {
+            const raw = resolver.resolve<string>('teamDefaultRole', 'TEAM_DEFAULT_ROLE') ?? 'denied'
+            const parsed = teamDefaultRoleSchema.safeParse(raw)
+            if (!parsed.success) {
+                throw new Error(`Invalid team default role '${raw}'. Use admin, member, viewer, or denied.`)
+            }
+            return parsed.data
+        }, 'denied'),
         teamAdmin: catchConfig(() => resolver.resolve<string>('teamAdmin', 'TEAM_ADMIN'), undefined),
         toolFilter: catchConfig(() => resolver.resolve<string>('toolFilter', 'MEMORY_JOURNAL_MCP_TOOL_FILTER'), undefined),
         defaultProjectNumber: catchConfig(() => {
@@ -151,7 +169,14 @@ export function buildServerOptions(
             reportDeliveryOptions: {
                 webhookUrl: catchConfig(() => resolver.resolve<string>('reportWebhookUrl', 'REPORT_WEBHOOK_URL') ?? '', ''),
                 webhookAuth: catchConfig(() => resolver.resolve<string>('reportWebhookAuth', 'REPORT_WEBHOOK_AUTH'), undefined),
-                contentType: catchConfig(() => (resolver.resolve<string>('reportContentType', 'REPORT_CONTENT_TYPE') ?? 'slack') as 'slack' | 'discord' | 'json', 'slack'),
+                contentType: catchConfig((): ReportContentType => {
+                    const raw = resolver.resolve<string>('reportContentType', 'REPORT_CONTENT_TYPE') ?? 'slack'
+                    const parsed = reportContentTypeSchema.safeParse(raw)
+                    if (!parsed.success) {
+                        throw new Error(`Invalid report content type '${raw}'. Use slack, discord, or json.`)
+                    }
+                    return parsed.data
+                }, 'slack'),
             }
         },
         oauthEnabled: catchConfig(() => resolver.resolveBool('oauthEnabled', 'OAUTH_ENABLED') ?? false, false),
@@ -273,7 +298,6 @@ export function buildServerOptions(
         },
         auditConfig,
 
-        autoPruneIntervalMinutes: catchConfig(() => resolver.resolveInt('autoPruneInterval', 'AUTO_PRUNE_INTERVAL_MINUTES', 0) ?? 0, 0),
         archiveOlderThanDays: catchConfig(() => resolver.resolveNumber('archiveOlderThanDays', 'ARCHIVE_OLDER_THAN_DAYS', 0) ?? 0, 0),
         pruneOlderThanDays: catchConfig(() => resolver.resolveNumber('pruneOlderThanDays', 'PRUNE_OLDER_THAN_DAYS', 0) ?? 0, 0),
         hardDeleteOlderThanDays: catchConfig(() => resolver.resolveNumber('hardDeleteOlderThanDays', 'HARD_DELETE_OLDER_THAN_DAYS', 0) ?? 0, 0),

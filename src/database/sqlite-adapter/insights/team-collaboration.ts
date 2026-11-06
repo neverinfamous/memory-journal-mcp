@@ -76,21 +76,14 @@ export function getAuthorsForEntries(
     return authorMap
 }
 
-export function getTeamCollaborationMetrics(
+/** Author activity heatmap bucketed by week, quarter or month. */
+function queryAuthorActivity(
     connection: NativeConnectionManager,
-    options: { period: string; limit: number; workspaceId?: string }
-): {
-    totalAuthors: number
-    totalEntries: number
-    authorActivity: { author: string; period: string; entryCount: number }[]
-    crossAuthorLinks: { fromAuthor: string; toAuthor: string; linkCount: number }[]
-    impactFactor: { author: string; inboundLinks: number }[]
-} {
-    const limit = options.limit
-    const period = options.period
-    const scopeId = effectiveWorkspace(options.workspaceId)
-    const scoped = scopeId !== '*'
-    const workspaceId = scoped ? scopeId : undefined
+    workspaceId: string | undefined,
+    limit: number,
+    period: string
+): { author: string; period: string; entryCount: number }[] {
+    const scoped = workspaceId !== undefined
 
     const dateExpression =
         period === 'week'
@@ -99,7 +92,6 @@ export function getTeamCollaborationMetrics(
               ? `strftime('%Y-Q', timestamp) || CAST(((CAST(strftime('%m', timestamp) AS INTEGER) + 2) / 3) AS INTEGER)`
               : `strftime('%Y-%m', timestamp)`
 
-    // Author activity heatmap
     const activityResult = connection.exec(
         `SELECT
             COALESCE(aa.canonical_author, mj.author, 'unknown') AS author,
@@ -120,7 +112,16 @@ export function getTeamCollaborationMetrics(
             entryCount: row[2] as number,
         })) ?? []
 
-    // Cross-author linking
+    return authorActivity
+}
+
+/** Links between entries written by different (alias-resolved) authors. */
+function queryCrossAuthorLinks(
+    connection: NativeConnectionManager,
+    workspaceId: string | undefined,
+    limit: number
+): { fromAuthor: string; toAuthor: string; linkCount: number }[] {
+    const scoped = workspaceId !== undefined
     const crossLinkResult = connection.exec(
         `SELECT
             COALESCE(aa1.canonical_author, m1.author, 'unknown') AS from_author,
@@ -145,7 +146,16 @@ export function getTeamCollaborationMetrics(
             linkCount: row[2] as number,
         })) ?? []
 
-    // Impact factor
+    return crossAuthorLinks
+}
+
+/** Authors ranked by inbound links. */
+function queryImpactFactor(
+    connection: NativeConnectionManager,
+    workspaceId: string | undefined,
+    limit: number
+): { author: string; inboundLinks: number }[] {
+    const scoped = workspaceId !== undefined
     const impactResult = connection.exec(
         `SELECT
             COALESCE(aa2.canonical_author, m2.author, 'unknown') AS author,
@@ -165,7 +175,15 @@ export function getTeamCollaborationMetrics(
             inboundLinks: row[1] as number,
         })) ?? []
 
-    // Totals
+    return impactFactor
+}
+
+/** Distinct author and entry totals. */
+function queryCollaborationTotals(
+    connection: NativeConnectionManager,
+    workspaceId: string | undefined
+): { totalAuthors: number; totalEntries: number } {
+    const scoped = workspaceId !== undefined
     const totalsResult = connection.exec(
         `SELECT
             COUNT(DISTINCT COALESCE(aa.canonical_author, mj.author, 'unknown')) AS total_authors,
@@ -177,6 +195,26 @@ export function getTeamCollaborationMetrics(
     )
     const totalAuthors = (totalsResult[0]?.values[0]?.[0] as number | undefined) ?? 0
     const totalEntries = (totalsResult[0]?.values[0]?.[1] as number | undefined) ?? 0
+    return { totalAuthors, totalEntries }
+}
+
+export function getTeamCollaborationMetrics(
+    connection: NativeConnectionManager,
+    options: { period: string; limit: number; workspaceId?: string }
+): {
+    totalAuthors: number
+    totalEntries: number
+    authorActivity: { author: string; period: string; entryCount: number }[]
+    crossAuthorLinks: { fromAuthor: string; toAuthor: string; linkCount: number }[]
+    impactFactor: { author: string; inboundLinks: number }[]
+} {
+    const scopeId = effectiveWorkspace(options.workspaceId)
+    const workspaceId = scopeId !== '*' ? scopeId : undefined
+
+    const authorActivity = queryAuthorActivity(connection, workspaceId, options.limit, options.period)
+    const crossAuthorLinks = queryCrossAuthorLinks(connection, workspaceId, options.limit)
+    const impactFactor = queryImpactFactor(connection, workspaceId, options.limit)
+    const { totalAuthors, totalEntries } = queryCollaborationTotals(connection, workspaceId)
 
     return {
         totalAuthors,

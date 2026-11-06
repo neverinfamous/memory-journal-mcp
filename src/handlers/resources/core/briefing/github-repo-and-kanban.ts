@@ -30,6 +30,68 @@ export async function resolveBriefingRepo(
     }
 }
 
+interface WorkflowRunLike {
+    name: string
+    status: string
+    conclusion?: string | null | undefined
+    url?: string | undefined
+}
+
+/** Map a completed run's conclusion onto the CI status vocabulary. */
+function classifyRunConclusion(conclusion: string | null | undefined): CiResult['status'] {
+    switch (conclusion) {
+        case 'success':
+            return 'passing'
+        case 'failure':
+            return 'failing'
+        case 'cancelled':
+            return 'cancelled'
+        default:
+            return 'unknown'
+    }
+}
+
+/** Choose the run that best represents CI (a ci/test run, else the latest decisive run). */
+function pickPrimaryRun<T extends WorkflowRunLike>(runs: T[]): T | undefined {
+    const named = runs.find((r) => /\b(?:ci|test|tests|gatekeeper)\b/i.test(r.name))
+    if (named) return named
+    return (
+        runs.find(
+            (r) =>
+                r.status !== 'completed' ||
+                ['success', 'failure', 'cancelled'].includes(r.conclusion ?? '')
+        ) ?? runs[0]
+    )
+}
+
+function buildWorkflowSummary(
+    runs: WorkflowRunLike[],
+    config: BriefingConfig
+): BriefingGitHub['workflowSummary'] {
+    const counts = { passing: 0, failing: 0, pending: 0, cancelled: 0 }
+    for (const run of runs) {
+        if (run.status !== 'completed') {
+            counts.pending++
+            continue
+        }
+        const classified = classifyRunConclusion(run.conclusion)
+        if (classified !== 'unknown') counts[classified]++
+    }
+    return {
+        ...counts,
+        ...(config.workflowCount > 0
+            ? {
+                  runs: runs.slice(0, config.workflowCount).map((r) => ({
+                      name: markUntrustedContentInline(r.name),
+                      conclusion:
+                          r.status !== 'completed' ? 'pending' : (r.conclusion ?? 'unknown'),
+                      ...(r.url !== undefined ? { url: r.url } : {}),
+                  })),
+              }
+            : {}),
+    }
+}
+
 export async function fetchCiStatus(
     github: GitHubIntegration,
     owner: string,
@@ -41,75 +103,20 @@ export async function fetchCiStatus(
         const runs = await github.getWorkflowRuns(owner, repo, runLimit)
         if (runs.length === 0) return { status: 'unknown' }
 
-        let primaryRun = runs.find((r) => /\b(?:ci|test|tests|gatekeeper)\b/i.test(r.name))
-
-        primaryRun ??=
-            runs.find(
-                (r) =>
-                    r.status !== 'completed' ||
-                    ['success', 'failure', 'cancelled'].includes(r.conclusion ?? '')
-            ) ?? runs[0]
-
-        const latestRun = primaryRun
+        const latestRun = pickPrimaryRun(runs)
         let status: CiResult['status']
         if (!latestRun) {
             status = 'unknown'
         } else if (latestRun.status !== 'completed') {
             status = 'pending'
         } else {
-            switch (latestRun.conclusion) {
-                case 'success':
-                    status = 'passing'
-                    break
-                case 'failure':
-                    status = 'failing'
-                    break
-                case 'cancelled':
-                    status = 'cancelled'
-                    break
-                default:
-                    status = 'unknown'
-            }
+            status = classifyRunConclusion(latestRun.conclusion)
         }
 
-        let workflowSummary: BriefingGitHub['workflowSummary'] | undefined = undefined
-        if (config.workflowStatusBreakdown || config.workflowCount > 0) {
-            const counts = { passing: 0, failing: 0, pending: 0, cancelled: 0 }
-            for (const run of runs) {
-                if (run.status !== 'completed') {
-                    counts.pending++
-                } else {
-                    switch (run.conclusion) {
-                        case 'success':
-                            counts.passing++
-                            break
-                        case 'failure':
-                            counts.failing++
-                            break
-                        case 'cancelled':
-                            counts.cancelled++
-                            break
-                        default:
-                            break
-                    }
-                }
-            }
-            workflowSummary = {
-                ...counts,
-                ...(config.workflowCount > 0
-                    ? {
-                          runs: runs.slice(0, config.workflowCount).map((r) => ({
-                              name: markUntrustedContentInline(r.name),
-                              conclusion:
-                                  r.status !== 'completed'
-                                      ? 'pending'
-                                      : (r.conclusion ?? 'unknown'),
-                              ...(r.url !== undefined ? { url: r.url } : {}),
-                          })),
-                      }
-                    : {}),
-            }
-        }
+        const workflowSummary =
+            config.workflowStatusBreakdown || config.workflowCount > 0
+                ? buildWorkflowSummary(runs, config)
+                : undefined
 
         return {
             status,

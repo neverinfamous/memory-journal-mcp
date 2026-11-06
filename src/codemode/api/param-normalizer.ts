@@ -12,6 +12,64 @@ import { convertKeysToSnakeCase } from './key-normalizer.js'
 
 export { convertKeysToSnakeCase }
 
+const ENTRY_CREATE_METHODS = new Set(['createEntry', 'createEntryMinimal', 'teamCreateEntry'])
+
+const VALID_ENTRY_FIELDS = new Set([
+    'type',
+    'tags',
+    'entry_type',
+    'is_personal',
+    'share_with_team',
+    'significance_type',
+    'auto_context',
+    'project_number',
+    'project_owner',
+    'issue_number',
+    'issue_url',
+    'pr_number',
+    'pr_url',
+    'pr_status',
+    'workflow_run_id',
+    'workflow_name',
+    'workflow_status',
+])
+
+/**
+ * Handle common agent hallucination where they omit 'content' and pass arbitrary fields:
+ * the extra fields are folded into a markdown `content` string (mutates `obj`).
+ */
+function synthesizeMissingEntryContent(methodName: string, obj: Record<string, unknown>): void {
+    if (!ENTRY_CREATE_METHODS.has(methodName) || 'content' in obj) return
+
+    let content = ''
+    for (const [key, value] of Object.entries(obj)) {
+        if (VALID_ENTRY_FIELDS.has(key)) continue
+        const strValue =
+            typeof value === 'object' && value !== null ? JSON.stringify(value, null, 2) : String(value)
+        content += `**${key}**\n${strValue}\n\n`
+    }
+    const trimmed = content.trim()
+    if (trimmed !== '') {
+        obj['content'] = trimmed
+    }
+}
+
+/** Map a single primitive argument onto its positional parameter name. */
+function mapPrimitiveArg(methodName: string, arg: string | number | boolean): unknown {
+    const paramMapping = POSITIONAL_PARAM_MAP[methodName]
+    if (typeof paramMapping === 'string') {
+        return { [paramMapping]: arg }
+    }
+    if (Array.isArray(paramMapping) && paramMapping[0] !== undefined) {
+        return { [paramMapping[0]]: arg }
+    }
+    // Fallback: try common names (only for strings)
+    if (typeof arg === 'string') {
+        return { content: arg, query: arg }
+    }
+    return arg
+}
+
 /**
  * Normalize parameters to support positional arguments.
  * Handles both single positional args and multiple positional args.
@@ -25,65 +83,13 @@ export function normalizeParams(methodName: string, args: unknown[]): unknown {
         // Object arg — pass through and convert camelCase to snake_case
         if (isRecord(arg)) {
             const obj = convertKeysToSnakeCase(arg, methodName)
-
-            // Handle common agent hallucination where they omit 'content' and pass arbitrary fields
-            if (
-                (methodName === 'createEntry' ||
-                    methodName === 'createEntryMinimal' ||
-                    methodName === 'teamCreateEntry') &&
-                !('content' in obj)
-            ) {
-                let content = ''
-                const validFields = new Set([
-                    'type',
-                    'tags',
-                    'entry_type',
-                    'is_personal',
-                    'share_with_team',
-                    'significance_type',
-                    'auto_context',
-                    'project_number',
-                    'project_owner',
-                    'issue_number',
-                    'issue_url',
-                    'pr_number',
-                    'pr_url',
-                    'pr_status',
-                    'workflow_run_id',
-                    'workflow_name',
-                    'workflow_status',
-                ])
-                for (const [key, value] of Object.entries(obj)) {
-                    if (validFields.has(key)) continue
-                    const strValue =
-                        typeof value === 'object' && value !== null
-                            ? JSON.stringify(value, null, 2)
-                            : String(value)
-                    content += `**${key}**\n${strValue}\n\n`
-                }
-                const trimmed = content.trim()
-                if (trimmed !== '') {
-                    obj['content'] = trimmed
-                }
-            }
-
+            synthesizeMissingEntryContent(methodName, obj)
             return obj
         }
 
         // Primitive arg (string, number, boolean) — use positional mapping
         if (typeof arg === 'string' || typeof arg === 'number' || typeof arg === 'boolean') {
-            const paramMapping = POSITIONAL_PARAM_MAP[methodName]
-            if (typeof paramMapping === 'string') {
-                return { [paramMapping]: arg }
-            }
-            if (Array.isArray(paramMapping) && paramMapping[0] !== undefined) {
-                return { [paramMapping[0]]: arg }
-            }
-            // Fallback: try common names (only for strings)
-            if (typeof arg === 'string') {
-                return { content: arg, query: arg }
-            }
-            return arg
+            return mapPrimitiveArg(methodName, arg)
         }
 
         return arg

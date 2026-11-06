@@ -90,7 +90,10 @@ function buildRelationshipGraph(
             }
         }
     }
-    return { nodes, edges }
+    // Only keep edges whose endpoints both resolved to nodes in this workspace;
+    // links that cross into another workspace must not leak through.
+    const scopedEdges = edges.filter((e) => nodes.has(e.from) && nodes.has(e.to))
+    return { nodes, edges: scopedEdges }
 }
 
 // ============================================================================
@@ -210,7 +213,8 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                         from_entry_id,
                         to_entry_id,
                         relationship_type,
-                        description
+                        description,
+                        wsId
                     )
 
                     triggerTeamNotifications(context)

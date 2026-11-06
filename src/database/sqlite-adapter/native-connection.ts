@@ -51,21 +51,7 @@ export class NativeConnectionManager implements IDatabaseConnection {
             const db = this.db
 
             // Decrypt if key is provided (must be done before any other PRAGMAs or queries)
-            const rawKey = process.env['MJ_DB_ENCRYPTION_KEY'] || process.env['DB_ENCRYPTION_KEY']
-            if (rawKey) {
-                const key = rawKey
-                if (key.startsWith("x'") && key.endsWith("'")) {
-                    if (!HEX_CIPHER_KEY_RE.test(key)) {
-                        throw new Error('Invalid hex encryption key format')
-                    }
-                    // Raw hex keys must not be wrapped in additional single quotes
-                    db.pragma(`key = "${key}"`)
-                } else {
-                    const escapedKey = key.replace(/'/g, "''")
-                    db.pragma(`key = '${escapedKey}'`)
-                }
-                logger.info('Database encryption key applied', { module: 'NativeConnectionManager' })
-            }
+            this.applyEncryptionKey(db)
 
             // Native-only PRAGMAs for performance and safety
             db.pragma('journal_mode = WAL')
@@ -77,44 +63,8 @@ export class NativeConnectionManager implements IDatabaseConnection {
             this.installStatementCache(db)
 
             // Load sqlite-vec extension for vector search
-            // Use local `db` ref to avoid race with concurrent close() during await
-            try {
-                // Try the npm package first (for local development on macOS/Windows/glibc)
-                const sqliteVec = await import('sqlite-vec')
-
-                // Guard: if close() was called during the await, abort initialization
-                if (this.db === null) {
-                    logger.info('Database closed during initialization, aborting', {
-                        module: 'NativeConnectionManager',
-                    })
-                    return
-                }
-
-                sqliteVec.load(db)
-                logger.info('sqlite-vec extension loaded via npm package', {
-                    module: 'NativeConnectionManager',
-                })
-            } catch (npmLoadError) {
-                logger.warning('sqlite-vec npm package failed to load; trying compiled fallback', {
-                    module: 'NativeConnectionManager',
-                    error: String(npmLoadError),
-                })
-                // Fallback: try loading the compiled .so directly (for Alpine Docker)
-                // In production, the .so is placed in /app/vec0.so, so we resolve relative to the process root or a known path.
-                const fallbackPath = path.resolve(process.cwd(), 'vec0')
-                try {
-                    db.loadExtension(fallbackPath)
-                } catch (fallbackError) {
-                    throw new Error(
-                        `sqlite-vec failed to load via npm (${String(npmLoadError)}) and via fallback ${fallbackPath} (${String(fallbackError)})`,
-                        { cause: fallbackError }
-                    )
-                }
-                logger.info('sqlite-vec extension loaded via compiled fallback', {
-                    module: 'NativeConnectionManager',
-                    path: fallbackPath,
-                })
-            }
+            const loaded = await this.loadVecExtension(db)
+            if (!loaded) return
 
             // Run schema migrations (creates memory_journal and other core tables versioned)
             this.migrateSchema()
@@ -139,6 +89,70 @@ export class NativeConnectionManager implements IDatabaseConnection {
             })
             throw new ConnectionError(`Native DB Initialization failed: ${String(error)}`)
         }
+    }
+
+    /** Apply the SQLCipher key from the environment, if configured. Must run before any other PRAGMA/query. */
+    private applyEncryptionKey(db: Database): void {
+        const rawKey = process.env['MJ_DB_ENCRYPTION_KEY'] || process.env['DB_ENCRYPTION_KEY']
+        if (!rawKey) return
+        const key = rawKey
+        if (key.startsWith("x'") && key.endsWith("'")) {
+            if (!HEX_CIPHER_KEY_RE.test(key)) {
+                throw new Error('Invalid hex encryption key format')
+            }
+            // Raw hex keys must not be wrapped in additional single quotes
+            db.pragma(`key = "${key}"`)
+        } else {
+            const escapedKey = key.replace(/'/g, "''")
+            db.pragma(`key = '${escapedKey}'`)
+        }
+        logger.info('Database encryption key applied', { module: 'NativeConnectionManager' })
+    }
+
+    /**
+     * Load the sqlite-vec extension (npm package first, compiled fallback second).
+     * Returns false when close() was called during the async load, so initialization must abort.
+     * Uses the local `db` ref to avoid a race with a concurrent close().
+     */
+    private async loadVecExtension(db: Database): Promise<boolean> {
+        try {
+            // Try the npm package first (for local development on macOS/Windows/glibc)
+            const sqliteVec = await import('sqlite-vec')
+
+            // Guard: if close() was called during the await, abort initialization
+            if (this.db === null) {
+                logger.info('Database closed during initialization, aborting', {
+                    module: 'NativeConnectionManager',
+                })
+                return false
+            }
+
+            sqliteVec.load(db)
+            logger.info('sqlite-vec extension loaded via npm package', {
+                module: 'NativeConnectionManager',
+            })
+        } catch (npmLoadError) {
+            logger.warning('sqlite-vec npm package failed to load; trying compiled fallback', {
+                module: 'NativeConnectionManager',
+                error: String(npmLoadError),
+            })
+            // Fallback: try loading the compiled .so directly (for Alpine Docker)
+            // In production, the .so is placed in /app/vec0.so, so we resolve relative to the process root or a known path.
+            const fallbackPath = path.resolve(process.cwd(), 'vec0')
+            try {
+                db.loadExtension(fallbackPath)
+            } catch (fallbackError) {
+                throw new Error(
+                    `sqlite-vec failed to load via npm (${String(npmLoadError)}) and via fallback ${fallbackPath} (${String(fallbackError)})`,
+                    { cause: fallbackError }
+                )
+            }
+            logger.info('sqlite-vec extension loaded via compiled fallback', {
+                module: 'NativeConnectionManager',
+                path: fallbackPath,
+            })
+        }
+        return true
     }
 
     private migrateSchema(): void {

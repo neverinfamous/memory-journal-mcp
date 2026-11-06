@@ -123,7 +123,12 @@ export async function pruneAction(options: z.infer<typeof pruneSchema>, command:
             hardDeleteOlderThanDays: options.hardDeleteOlderThanDays ?? 0,
             importanceThreshold: options.importanceThreshold ?? options.pruneImportanceThreshold ?? 0.15,
             dryRun: options.dryRun === true || options.pruneDryRun === true,
-            excludeTags: rawExcludeTags ? rawExcludeTags.split(',') : []
+            excludeTags: rawExcludeTags
+                ? rawExcludeTags
+                      .split(',')
+                      .map((tag) => tag.trim())
+                      .filter((tag) => tag !== '')
+                : []
         })
         if (options.json === true) {
             process.stdout.write(JSON.stringify(result) + '\n')

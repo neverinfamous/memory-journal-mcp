@@ -59,6 +59,7 @@ export async function execAction(scriptPath: string, options: z.infer<typeof exe
         oauthEnabled: serverOptions.oauthEnabled,
         codemodeEnabled: true, // Force enabled for the exec command
         codemodeInternalFullAccess: serverOptions.codemodeInternalFullAccess,
+        agentHealing: serverOptions.agentHealing,
         teamDefaultRole: serverOptions.teamDefaultRole,
         teamAdmin: serverOptions.teamAdmin,
         runtime,

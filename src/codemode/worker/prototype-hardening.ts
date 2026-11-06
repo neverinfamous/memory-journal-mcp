@@ -9,8 +9,12 @@ import * as vm from 'node:vm'
  * Neuters `.constructor` on all outer function prototypes so untrusted scripts
  * inside `vm` cannot traverse `fn['con'+'structor']` to reach the outer realm's
  * Function/AsyncFunction/GeneratorFunction constructors.
+ *
+ * Returns the labels of hardening steps that failed (empty when all succeeded).
+ * A single warning is written to stderr because the worker has no logger.
  */
-export function hardenOuterFunctionPrototypes(): void {
+export function hardenOuterFunctionPrototypes(): string[] {
+    const failures: string[] = []
     const noopConstructor = Object.freeze(function ForbiddenConstructor(): never {
         throw new Error('Dynamic code generation is disabled in sandbox')
     })
@@ -24,7 +28,8 @@ export function hardenOuterFunctionPrototypes(): void {
         /* noop */
     }) as object | null
 
-    for (const proto of [Object.prototype, Function.prototype, AsyncFnProto, GenFnProto, AsyncGenFnProto]) {
+    const protos = [Object.prototype, Function.prototype, AsyncFnProto, GenFnProto, AsyncGenFnProto]
+    for (const [index, proto] of protos.entries()) {
         if (proto !== null && proto !== undefined) {
             try {
                 Object.defineProperty(proto, 'constructor', {
@@ -33,7 +38,7 @@ export function hardenOuterFunctionPrototypes(): void {
                     configurable: false,
                 })
             } catch {
-                // ignore if already non-configurable
+                failures.push(`neuter-constructor[${String(index)}]`)
             }
         }
     }
@@ -65,28 +70,36 @@ export function hardenOuterFunctionPrototypes(): void {
         Math,
     ]
     for (const B of outerBuiltins) {
+        const label = typeof B === 'function' && B.name !== '' ? B.name : 'builtin'
         if (typeof B === 'function' && B.prototype !== undefined && B.prototype !== null) {
             try {
                 Object.freeze(B.prototype)
             } catch {
-                // ignore
+                failures.push(`freeze-prototype:${label}`)
             }
         }
         try {
             Object.freeze(B)
         } catch {
-            // ignore
+            failures.push(`freeze:${label}`)
         }
     }
-    for (const proto of [Object.prototype, Function.prototype, AsyncFnProto, GenFnProto, AsyncGenFnProto]) {
+    for (const [index, proto] of protos.entries()) {
         if (proto !== null && proto !== undefined) {
             try {
                 Object.freeze(proto)
             } catch {
-                // ignore
+                failures.push(`freeze-proto[${String(index)}]`)
             }
         }
     }
+
+    if (failures.length > 0) {
+        process.stderr.write(
+            `[codemode] Prototype hardening steps failed: ${failures.join(', ')}\n`
+        )
+    }
+    return failures
 }
 
 const FREEZE_INNER_CONTEXT_SCRIPT = new vm.Script(`(function() {

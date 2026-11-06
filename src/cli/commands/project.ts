@@ -84,7 +84,8 @@ export async function projectCreateAction(name: string, options: Record<string, 
         return
     }
 
-    const projNum = options['number'] != null ? parseInt(options['number'] as string, 10) : 0
+    // Reuse the already-validated project number (NaN was rejected above)
+    const projNum = registry[name].project_number
     
     // Perform database initialization natively
     let resolver: ConfigResolver
@@ -113,7 +114,8 @@ export async function projectCreateAction(name: string, options: Record<string, 
             significanceType: 'architecture',
             content: `Initialized project ${name}`,
             tags: ['project-initialization', 'setup'],
-            projectNumber: projNum,
+            workspaceId: name,
+            ...(projNum !== undefined ? { projectNumber: projNum } : {}),
             trustScore: 1.0,
             impactScore: 0.5,
             validationStatus: 'passed'

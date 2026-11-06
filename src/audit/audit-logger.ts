@@ -44,6 +44,27 @@ function nodeErrorCode(err: unknown): string | undefined {
     return typeof code === 'string' ? code : undefined
 }
 
+/** Parse one JSONL audit line; returns null for empty or unparseable lines. */
+function parseAuditLine(line: string | undefined): AuditEntry | null {
+    if (line === undefined || line === '') return null
+    try {
+        return JSON.parse(line) as AuditEntry
+    } catch {
+        return null
+    }
+}
+
+/** Whether an audit entry satisfies every provided search filter. */
+function matchesAuditFilters(entry: AuditEntry, filters: AuditSearchFilters): boolean {
+    if (filters.tool_name && entry.tool !== filters.tool_name) return false
+    if (filters.user && entry.user !== filters.user) return false
+    if (filters.status !== undefined && entry.success !== filters.status) return false
+    if (filters.category && entry.category !== filters.category) return false
+    if (filters.date_range?.start && entry.timestamp < filters.date_range.start) return false
+    if (filters.date_range?.end && entry.timestamp > filters.date_range.end) return false
+    return true
+}
+
 /**
  * Maximum bytes to read from the end of the audit log for `recent()`.
  * 64 KB is enough for ~100+ typical JSONL audit entries (~500 bytes each).
@@ -180,10 +201,14 @@ export class AuditLogger {
                         // One appendFile call with all buffered lines — each terminated by \n
                         await appendFile(this.config.logPath, lines.join('\n') + '\n', 'utf-8')
                     }
+                    // A successful write supersedes any earlier (retried) failure
+                    this.flushError = null
                 } catch (err) {
-                    // Never throw — telemetry must not break tool execution
+                    // Never throw from flush() — telemetry must not break tool execution.
+                    // The failure is recorded so close() can surface it.
                     const message = err instanceof Error ? err.message : String(err)
                     logger.error(`Write failed: ${message}`, { module: 'Audit' })
+                    this.flushError = err instanceof Error ? err : new Error(String(err))
                     // Re-queue the failed lines so they aren't lost
                     this.buffer.unshift(...lines)
                     // Prevent infinite memory leak under permanent IO failure
@@ -280,14 +305,23 @@ export class AuditLogger {
                 const lines = startOffset > 0 ? rawLines.slice(1) : rawLines
                 const tail = lines.slice(-count)
 
-                return tail.reduce<AuditEntry[]>((acc, line) => {
+                let skippedLines = 0
+                const parsed = tail.reduce<AuditEntry[]>((acc, line) => {
                     try {
                         acc.push(JSON.parse(line) as AuditEntry)
                     } catch {
-                        // Gracefully ignore corrupted or partial log entries
+                        // Corrupted or partial log entries are skipped (counted below)
+                        skippedLines++
                     }
                     return acc
                 }, [])
+                if (skippedLines > 0) {
+                    logger.debug(`Skipped ${String(skippedLines)} unparseable audit log line(s)`, {
+                        module: 'Audit',
+                        logPath: this.config.logPath,
+                    })
+                }
+                return parsed
             } finally {
                 await fh.close()
             }
@@ -310,6 +344,7 @@ export class AuditLogger {
 
         const results: AuditEntry[] = []
         const limit = filters.limit ?? 100
+        let skippedLines = 0
 
         // Search current log first, then older rotated logs .1 through .5
         const files = [this.config.logPath]
@@ -323,26 +358,17 @@ export class AuditLogger {
                 const lines = content.split('\n').filter(Boolean)
                 // Read backwards to get newest first
                 for (let i = lines.length - 1; i >= 0; i--) {
-                    try {
-                        const line = lines[i]
-                        if (!line) continue
-                        const entry = JSON.parse(line) as AuditEntry
+                    const entry = parseAuditLine(lines[i])
+                    if (entry === null) {
+                        skippedLines++
+                        continue
+                    }
+                    if (!matchesAuditFilters(entry, filters)) continue
 
-                        // Apply filters
-                        if (filters.tool_name && entry.tool !== filters.tool_name) continue
-                        if (filters.user && entry.user !== filters.user) continue
-                        if (filters.status !== undefined && entry.success !== filters.status) continue
-                        if (filters.category && entry.category !== filters.category) continue
-                        if (filters.date_range?.start && entry.timestamp < filters.date_range.start) continue
-                        if (filters.date_range?.end && entry.timestamp > filters.date_range.end) continue
+                    results.push(entry)
 
-                        results.push(entry)
-
-                        if (results.length >= limit) {
-                            return results
-                        }
-                    } catch {
-                        // ignore parse errors for individual lines
+                    if (results.length >= limit) {
+                        return results
                     }
                 }
             } catch (err) {
@@ -351,6 +377,12 @@ export class AuditLogger {
                     throw err
                 }
             }
+        }
+
+        if (skippedLines > 0) {
+            logger.debug(`Skipped ${String(skippedLines)} unparseable audit log line(s) during search`, {
+                module: 'Audit',
+            })
         }
 
         return results

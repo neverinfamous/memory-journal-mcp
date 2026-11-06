@@ -184,22 +184,27 @@ export class AdapterDelegates {
         fromEntryId: number,
         toEntryId: number,
         relationshipType: RelationshipType,
-        description?: string
+        description?: string,
+        workspaceId?: string
     ): Relationship {
         return this.relationshipsMgr.linkEntries(
             fromEntryId,
             toEntryId,
             relationshipType,
-            description
+            description,
+            workspaceId
         )
     }
 
-    getRelationships(entryId: number): Relationship[] {
-        return this.relationshipsMgr.getRelationships(entryId)
+    getRelationships(entryId: number, workspaceId?: string): Relationship[] {
+        return this.relationshipsMgr.getRelationships(entryId, workspaceId)
     }
 
-    getRelationshipsForEntries(entryIds: number[]): Map<number, Relationship[]> {
-        return this.relationshipsMgr.getRelationshipsForEntries(entryIds)
+    getRelationshipsForEntries(
+        entryIds: number[],
+        workspaceId?: string
+    ): Map<number, Relationship[]> {
+        return this.relationshipsMgr.getRelationshipsForEntries(entryIds, workspaceId)
     }
 
     getRelationshipHubs(
@@ -229,7 +234,7 @@ export class AdapterDelegates {
         return this.backupMgr.listBackups()
     }
 
-    deleteOldBackups(keepCount: number): { deleted: string[]; kept: number } {
+    deleteOldBackups(keepCount: number): { deleted: string[]; failed?: string[]; kept: number } {
         return this.backupMgr.deleteOldBackups(keepCount)
     }
 
@@ -349,21 +354,27 @@ export class AdapterDelegates {
         return this.insightsOps.getAuthorsForEntries(entryIds)
     }
 
-    saveAnalyticsSnapshot(type: string, data: DigestSnapshot | Record<string, unknown>): number {
-        return this.insightsOps.saveAnalyticsSnapshot(type, data)
+    saveAnalyticsSnapshot(
+        type: string,
+        data: DigestSnapshot | Record<string, unknown>,
+        workspaceId?: string
+    ): number {
+        return this.insightsOps.saveAnalyticsSnapshot(type, data, workspaceId)
     }
 
     getLatestAnalyticsSnapshot(
-        type: string
+        type: string,
+        workspaceId?: string
     ): { id: number; createdAt: string; data: Record<string, unknown> } | null {
-        return this.insightsOps.getLatestAnalyticsSnapshot(type)
+        return this.insightsOps.getLatestAnalyticsSnapshot(type, workspaceId)
     }
 
     getAnalyticsSnapshots(
         type: string,
-        limit?: number
+        limit?: number,
+        workspaceId?: string
     ): { id: number; createdAt: string; data: Record<string, unknown> }[] {
-        return this.insightsOps.getAnalyticsSnapshots(type, limit)
+        return this.insightsOps.getAnalyticsSnapshots(type, limit, workspaceId)
     }
 
     computeDigest(workspaceId?: string): DigestSnapshot {

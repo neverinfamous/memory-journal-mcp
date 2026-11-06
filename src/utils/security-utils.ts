@@ -54,8 +54,6 @@ const ALLOWED_DATE_FORMATS: Record<string, string> = {
     year: '%Y',
 } as const
 
-export type DateGroupBy = 'day' | 'week' | 'month' | 'year'
-
 /**
  * Validates and returns a safe strftime format pattern.
  *
@@ -122,16 +120,10 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 /**
- * Validates that a directory path is strictly bounded within the active memory journal context.
- *
- * This enforces strict file-system isolation. The target path MUST reside within:
- * 1. The current working directory (where the server was started)
- * 2. OR any explicitly configured path inside the PROJECT_REGISTRY map.
- *
- * @param dirPath - The directory path to validate
- * @throws PathTraversalError if the path escapes the sandboxed boundaries
+ * Reject encoded separators/dots/nulls and `..` segments, returning the decoded directory path.
+ * @throws PathTraversalError on any traversal indicator
  */
-export function assertSafeDirectoryPath(dirPath: string, providedRoots: string[]): void {
+function decodeSafeDirPath(dirPath: string): string {
     // 1. Reject encoded path separators/dots/nulls and raw null bytes before decoding
     if (/%2f|%5c|%2e|%00/i.test(dirPath) || dirPath.includes('\0')) {
         throw new PathTraversalError(dirPath)
@@ -150,7 +142,14 @@ export function assertSafeDirectoryPath(dirPath: string, providedRoots: string[]
     if (segments.some((s) => s === '..')) {
         throw new PathTraversalError(decodedDir)
     }
+    return decodedDir
+}
 
+/**
+ * Resolve the real path of the target, stepping up to the nearest existing ancestor so symlinked
+ * parents cannot be used to escape when the final node does not exist yet.
+ */
+function resolveRealTargetPath(decodedDir: string): string {
     const resolved = path.resolve(decodedDir)
 
     // 2. Resolve realpath iteratively by stepping up the tree until an existing directory is found.
@@ -176,10 +175,12 @@ export function assertSafeDirectoryPath(dirPath: string, providedRoots: string[]
 
     // The target path is the successfully evaluated real path plus any non-existent trailing segments
     const remainder = path.relative(currentDir, resolved)
-    const targetPath = remainder ? path.join(existingRealPath, remainder) : existingRealPath
+    return remainder ? path.join(existingRealPath, remainder) : existingRealPath
+}
 
+/** Resolve configured IO roots to real paths (falling back to the resolved path when missing). */
+function resolveAllowedRoots(rawRoots: string[]): string[] {
     // 3. Define safe boundaries
-    const rawRoots: string[] = providedRoots
     if (rawRoots.length === 0) {
         throw new PathTraversalError(
             'No allowed input/output roots configured for sandbox boundary. Please configure ALLOWED_IO_ROOTS env variable or pass --allowed-io-roots with absolute paths (e.g. C:\\my\\path) to enable filesystem operations.'
@@ -194,6 +195,23 @@ export function assertSafeDirectoryPath(dirPath: string, providedRoots: string[]
             allowedRoots.push(path.resolve(root))
         }
     }
+    return allowedRoots
+}
+
+/**
+ * Validates that a directory path is strictly bounded within the active memory journal context.
+ *
+ * This enforces strict file-system isolation. The target path MUST reside within:
+ * 1. The current working directory (where the server was started)
+ * 2. OR any explicitly configured path inside the PROJECT_REGISTRY map.
+ *
+ * @param dirPath - The directory path to validate
+ * @throws PathTraversalError if the path escapes the sandboxed boundaries
+ */
+export function assertSafeDirectoryPath(dirPath: string, providedRoots: string[]): void {
+    const decodedDir = decodeSafeDirPath(dirPath)
+    const targetPath = resolveRealTargetPath(decodedDir)
+    const allowedRoots = resolveAllowedRoots(providedRoots)
 
     // 4. Verify the targetPath is structurally inside at least one allowed root
     const isWin32 = process.platform === 'win32'

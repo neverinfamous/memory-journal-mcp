@@ -7,6 +7,3 @@ export function effectiveWorkspace(workspaceId: string | undefined): string {
     return workspaceId
 }
 
-export function workspaceIsGlobal(workspaceId: string | undefined): boolean {
-    return effectiveWorkspace(workspaceId) === '*'
-}

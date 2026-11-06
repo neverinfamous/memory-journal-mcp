@@ -34,7 +34,7 @@ export function getAgentContextResource(): InternalResourceDef {
 
             const content = [
                 `Project: ${projectName}`,
-                `Project Number: ${projectNumber}`,
+                `Project Number: ${projectNumber === -1 ? 'unresolved' : String(projectNumber)}`,
                 `Workspace ID: ${workspaceId}`,
                 `Instructions: Use your Conversation ID as the session_id for all tool calls.`,
             ].join('\n')

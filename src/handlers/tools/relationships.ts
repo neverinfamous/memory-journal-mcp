@@ -271,7 +271,8 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                         input.from_entry_id,
                         input.to_entry_id,
                         input.relationship_type,
-                        input.description
+                        input.description,
+                        wsId
                     )
                     return { success: true, relationship }
                 } catch (error) {

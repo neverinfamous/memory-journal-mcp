@@ -16,6 +16,9 @@ export interface ResolvedContext {
     projectNumber: number | undefined
 }
 
+/** Placeholder registry keys that must never be matched as real projects by keyword. */
+const SENTINEL_PROJECT_KEYS: readonly string[] = ['default', 'test']
+
 function getConfigPath(): string {
     if (process.env['MEMORY_JOURNAL_CONFIG']) {
         return path.resolve(process.env['MEMORY_JOURNAL_CONFIG'])
@@ -33,7 +36,11 @@ export function loadProjectRegistryFromConfig(): Record<string, RegistryEntry> |
         const content = fs.readFileSync(configPath, 'utf-8')
         const config = JSON.parse(content) as ParsedConfig
         return config.projectRegistry
-    } catch {
+    } catch (error) {
+        logger.debug('Failed to load project registry from config', {
+            module: 'workspace-resolver',
+            error: error instanceof Error ? error.message : String(error),
+        })
         return undefined
     }
 }
@@ -167,7 +174,7 @@ export function resolveProjectContext(
 
         // Sort registry entries by key length descending to prioritize more specific/composite projects
         const sortedEntries = Object.entries(registry)
-            .filter(([k]) => !['default', 'test'].includes(k.toLowerCase()))
+            .filter(([k]) => !SENTINEL_PROJECT_KEYS.includes(k.toLowerCase()))
             .sort(([a], [b]) => b.length - a.length)
 
         for (const [key, entry] of sortedEntries) {

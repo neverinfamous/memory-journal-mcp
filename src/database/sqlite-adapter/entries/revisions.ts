@@ -14,11 +14,20 @@ export interface VersionDiff {
     removedLines: string[]
 }
 
+/**
+ * List revisions for an entry. When `workspaceId` is provided, the entry must exist in that
+ * workspace ('*' = any); otherwise an empty list is returned. Omitted = unscoped (legacy).
+ */
 export function getEntryRevisions(
     context: EntriesSharedContext,
-    id: number
+    id: number,
+    workspaceId?: string
 ): EntryRevision[] {
     const { db } = context
+
+    if (workspaceId !== undefined && getEntryById(context, id, workspaceId) === null) {
+        return []
+    }
 
     const stmt = db.prepare(`
         SELECT id, entry_id as entryId, revision_number as revisionNumber,

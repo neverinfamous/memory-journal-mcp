@@ -92,8 +92,11 @@ export function getCmsSupervisorPromptDefinitions(): InternalPromptDef[] {
                 try {
                     totalEntries = db.getActiveEntryCount('*')
                     orphanCount = db.getOrphanCount('*')
-                } catch {
-                    // ignore
+                } catch (err) {
+                    logger.debug('Could not read entry/orphan counts for CMS supervisor prompt', {
+                        module: 'CmsSupervisor',
+                        error: err instanceof Error ? err.message : String(err),
+                    })
                 }
 
                 return {

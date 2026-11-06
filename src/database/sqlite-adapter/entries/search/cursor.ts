@@ -1,4 +1,5 @@
 import { Buffer } from 'buffer'
+import { logger } from '../../../../utils/logger.js'
 
 /** Allowed sort dimensions for search results */
 export type SortBy = 'timestamp' | 'importance'
@@ -23,7 +24,11 @@ export function decodeCursor(cursor: string): { t: string; id: number } | { offs
             return { t: parsed.t, id: parsed.id }
         }
         return null
-    } catch {
+    } catch (error) {
+        logger.debug('Invalid pagination cursor', {
+            module: 'cursor',
+            error: error instanceof Error ? error.message : String(error),
+        })
         return null
     }
 }

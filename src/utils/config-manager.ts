@@ -38,6 +38,8 @@ export class ConfigManager extends EventEmitter {
     private watcher?: fs.FSWatcher
     private debounceTimer?: ReturnType<typeof setTimeout>
     private isWriting = false
+    /** True when the current rawToolFilter originated from the config file (not CLI/env). */
+    private toolFilterFromFile = false
 
     constructor(initialConfig: DynamicConfig, configFilePath?: string) {
         super()
@@ -91,6 +93,7 @@ export class ConfigManager extends EventEmitter {
 
             if (this.config.rawToolFilter !== undefined) {
                 parsed['toolFilter'] = this.config.rawToolFilter
+                this.toolFilterFromFile = true
             }
             if (this.config.codemodeInternalFullAccess !== undefined) {
                 parsed['codemodeInternalFullAccess'] = this.config.codemodeInternalFullAccess
@@ -168,7 +171,14 @@ export class ConfigManager extends EventEmitter {
 
             const updates: Partial<DynamicConfig> = {}
             if ('toolFilter' in parsed) {
-                updates.rawToolFilter = typeof parsed['toolFilter'] === 'string' ? parsed['toolFilter'] : undefined
+                const fileFilter = typeof parsed['toolFilter'] === 'string' ? parsed['toolFilter'] : undefined
+                updates.rawToolFilter = fileFilter
+                this.toolFilterFromFile = fileFilter !== undefined
+            } else if (this.toolFilterFromFile) {
+                // Key was removed from the file: reset only a filter that originated from the file,
+                // never a CLI/env-provided one.
+                updates.rawToolFilter = undefined
+                this.toolFilterFromFile = false
             }
             if ('codemodeInternalFullAccess' in parsed) {
                 const requested = typeof parsed['codemodeInternalFullAccess'] === 'boolean' ? parsed['codemodeInternalFullAccess'] : undefined

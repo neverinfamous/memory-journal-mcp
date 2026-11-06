@@ -118,28 +118,7 @@ export class TagsManager {
         const db = this.db
 
         const mergeOp = db.transaction(() => {
-            const sourceRow = db.prepare('SELECT id FROM tags WHERE name = ?').get(sourceTag) as
-                | { id: number }
-                | undefined
-            if (!sourceRow) throw new ResourceNotFoundError('Tag', sourceTag)
-            const sourceTagId = sourceRow.id
-
-            db.prepare('INSERT OR IGNORE INTO tags (name, usage_count) VALUES (?, 0)').run(
-                targetTag
-            )
-            const targetRow = db.prepare('SELECT id FROM tags WHERE name = ?').get(targetTag) as
-                | { id: number }
-                | undefined
-            if (!targetRow) throw new QueryError(`Failed to get or create target tag: ${targetTag}`)
-            const targetTagId = targetRow.id
-
-            // Clean orphaned entry_tags (entries permanently deleted but links remain)
-            db.prepare(
-                `DELETE FROM entry_tags WHERE tag_id = ? AND entry_id NOT IN (SELECT id FROM memory_journal)`
-            ).run(sourceTagId)
-            db.prepare(
-                `DELETE FROM entry_tags WHERE tag_id = ? AND entry_id NOT IN (SELECT id FROM memory_journal)`
-            ).run(targetTagId)
+            const { sourceTagId, targetTagId } = this.prepareMergeTags(sourceTag, targetTag)
 
             // Select only valid entries (join ensures no orphans)
             const scopeId = effectiveWorkspace(workspaceId)
@@ -183,25 +162,7 @@ export class TagsManager {
                 )
             }
 
-            if (scopedWorkspace !== undefined && entryIds.length > 0) {
-                const idPlaceholders = entryIds.map(() => '?').join(', ')
-                db.prepare(
-                    `DELETE FROM entry_tags WHERE tag_id = ? AND entry_id IN (${idPlaceholders})`
-                ).run(sourceTagId, ...entryIds)
-                db.prepare(
-                    'UPDATE tags SET usage_count = MAX(0, usage_count - ?) WHERE id = ?'
-                ).run(entryIds.length, sourceTagId)
-            } else if (scopedWorkspace === undefined) {
-                db.prepare('DELETE FROM entry_tags WHERE tag_id = ?').run(sourceTagId)
-            }
-
-            const remaining = db
-                .prepare('SELECT COUNT(*) as count FROM entry_tags WHERE tag_id = ?')
-                .get(sourceTagId) as { count: number }
-            const sourceDeleted = remaining.count === 0
-            if (sourceDeleted) {
-                db.prepare('DELETE FROM tags WHERE id = ?').run(sourceTagId)
-            }
+            const sourceDeleted = this.detachSourceTag(sourceTagId, entryIds, scopedWorkspace)
 
             return { entriesUpdated: newEntryIds.length, sourceDeleted }
         })
@@ -216,5 +177,66 @@ export class TagsManager {
         })
 
         return result
+    }
+
+    /** Resolve (creating the target if needed) tag ids and purge orphaned entry_tags links. */
+    private prepareMergeTags(
+        sourceTag: string,
+        targetTag: string
+    ): { sourceTagId: number; targetTagId: number } {
+        const db = this.db
+        const sourceRow = db.prepare('SELECT id FROM tags WHERE name = ?').get(sourceTag) as
+            | { id: number }
+            | undefined
+        if (!sourceRow) throw new ResourceNotFoundError('Tag', sourceTag)
+        const sourceTagId = sourceRow.id
+
+        db.prepare('INSERT OR IGNORE INTO tags (name, usage_count) VALUES (?, 0)').run(targetTag)
+        const targetRow = db.prepare('SELECT id FROM tags WHERE name = ?').get(targetTag) as
+            | { id: number }
+            | undefined
+        if (!targetRow) throw new QueryError(`Failed to get or create target tag: ${targetTag}`)
+        const targetTagId = targetRow.id
+
+        // Clean orphaned entry_tags (entries permanently deleted but links remain)
+        for (const tagId of [sourceTagId, targetTagId]) {
+            db.prepare(
+                `DELETE FROM entry_tags WHERE tag_id = ? AND entry_id NOT IN (SELECT id FROM memory_journal)`
+            ).run(tagId)
+        }
+        return { sourceTagId, targetTagId }
+    }
+
+    /**
+     * Remove the source tag from the merged entries (all entries when unscoped), then delete
+     * the source tag if no links remain. Returns whether the source tag was deleted.
+     */
+    private detachSourceTag(
+        sourceTagId: number,
+        entryIds: number[],
+        scopedWorkspace: string | undefined
+    ): boolean {
+        const db = this.db
+        if (scopedWorkspace !== undefined && entryIds.length > 0) {
+            const idPlaceholders = entryIds.map(() => '?').join(', ')
+            db.prepare(
+                `DELETE FROM entry_tags WHERE tag_id = ? AND entry_id IN (${idPlaceholders})`
+            ).run(sourceTagId, ...entryIds)
+            db.prepare('UPDATE tags SET usage_count = MAX(0, usage_count - ?) WHERE id = ?').run(
+                entryIds.length,
+                sourceTagId
+            )
+        } else if (scopedWorkspace === undefined) {
+            db.prepare('DELETE FROM entry_tags WHERE tag_id = ?').run(sourceTagId)
+        }
+
+        const remaining = db
+            .prepare('SELECT COUNT(*) as count FROM entry_tags WHERE tag_id = ?')
+            .get(sourceTagId) as { count: number }
+        const sourceDeleted = remaining.count === 0
+        if (sourceDeleted) {
+            db.prepare('DELETE FROM tags WHERE id = ?').run(sourceTagId)
+        }
+        return sourceDeleted
     }
 }

@@ -6,6 +6,7 @@ import { ConfigResolver } from '../../utils/config-resolver.js'
 import { buildServerOptions } from '../server-options-builder.js'
 import type { ServerOptionsSchema } from '../schemas.js'
 import type { ServerOptions } from '../../server/mcp-server/types.js'
+import type { JournalEntry } from '../../types/index.js'
 import { 
     ioExportJsonOptionsSchema,
     ioExportMarkdownOptionsSchema,
@@ -57,11 +58,14 @@ export async function exportJsonAction(options: z.infer<typeof exportJsonSchema>
     const { db } = await getDb(options, command)
     try {
         const dest = options.dest
+        // NOTE: exportToFile copies the SQLite database file (a database backup), not a JSON document.
         const result = await db.exportToFile(dest)
         
-        process.stdout.write(JSON.stringify(result, null, 2) + '\n')
+        process.stdout.write(
+            JSON.stringify({ note: 'Database backup created (SQLite file copy, not JSON)', ...result }, null, 2) + '\n'
+        )
     } catch (e) {
-        process.stderr.write("Export failed: " + (e instanceof Error ? e.message : String(e)) + '\n')
+        process.stderr.write("Database backup export failed: " + (e instanceof Error ? e.message : String(e)) + '\n')
         process.exit(1)
     } finally {
         db.close()
@@ -69,12 +73,20 @@ export async function exportJsonAction(options: z.infer<typeof exportJsonSchema>
 }
 
 export async function exportMarkdownAction(options: z.infer<typeof exportMarkdownSchema>, command: Command): Promise<void> {
-    const { db } = await getDb(options, command)
+    const { db, serverOptions } = await getDb(options, command)
     try {
         if (!options.dir) {
             throw new Error('--dir is required for markdown export')
         }
-        const entries = db.getRecentEntries(100000).entries // Large limit to get all
+        const workspaceId = options.workspace ?? serverOptions.defaultWorkspaceId
+        // Page through all entries rather than truncating at an arbitrary limit
+        const PAGE_SIZE = 1000
+        const entries: JournalEntry[] = []
+        for (let offset = 0; ; offset += PAGE_SIZE) {
+            const page = db.getEntriesPage(offset, PAGE_SIZE, workspaceId).entries
+            entries.push(...page)
+            if (page.length < PAGE_SIZE) break
+        }
         
         const exportable = entries.map(e => ({
             id: e.id,

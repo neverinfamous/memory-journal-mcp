@@ -50,21 +50,27 @@ export class InsightsOperations {
         return getAuthorsForEntries(this.connection, entryIds)
     }
 
-    saveAnalyticsSnapshot(type: string, data: DigestSnapshot | Record<string, unknown>): number {
-        return saveAnalyticsDigest(this.connection, type, data)
+    saveAnalyticsSnapshot(
+        type: string,
+        data: DigestSnapshot | Record<string, unknown>,
+        workspaceId?: string
+    ): number {
+        return saveAnalyticsDigest(this.connection, type, data, workspaceId)
     }
 
     getLatestAnalyticsSnapshot(
-        type: string
+        type: string,
+        workspaceId?: string
     ): { id: number; createdAt: string; data: Record<string, unknown> } | null {
-        return getLatestAnalyticsDigest(this.connection, type)
+        return getLatestAnalyticsDigest(this.connection, type, workspaceId)
     }
 
     getAnalyticsSnapshots(
         type: string,
-        limit?: number
+        limit?: number,
+        workspaceId?: string
     ): { id: number; createdAt: string; data: Record<string, unknown> }[] {
-        return getAnalyticsSnapshots(this.connection, type, limit)
+        return getAnalyticsSnapshots(this.connection, type, limit, workspaceId)
     }
 
     computeDigest(workspaceId?: string): DigestSnapshot {

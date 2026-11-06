@@ -3,6 +3,22 @@ import type { GitHubClient } from './client.js'
 import type { RepoInfo, LocalGitStatus } from './types.js'
 import type { GitHubWorkflowRun } from '../../types/index.js'
 
+const RESOLVES_ISSUE_PATTERN = /(?:fix|fixes|resolve|resolves|close|closes)\s+#(\d+)/gi
+
+/** Extract unique issue numbers referenced by "fixes #N"-style keywords in commit messages. */
+function extractResolvedIssueNumbers(messages: string[]): number[] {
+    const resolved: number[] = []
+    for (const message of messages) {
+        for (const match of message.matchAll(RESOLVES_ISSUE_PATTERN)) {
+            const num = parseInt(match[1] ?? '', 10)
+            if (!isNaN(num) && !resolved.includes(num)) {
+                resolved.push(num)
+            }
+        }
+    }
+    return resolved
+}
+
 export class RepositoryManager {
     constructor(private client: GitHubClient) {}
 
@@ -63,8 +79,12 @@ export class RepositoryManager {
                     return { owner: parts[0] ?? null, repo: parts[1] ?? null }
                 }
             }
-        } catch {
+        } catch (parseError) {
             // Not a valid URL
+            logger.debug('Remote URL is not a parseable URL', {
+                module: 'GitHub',
+                error: parseError instanceof Error ? parseError.message : String(parseError),
+            })
         }
 
         return { owner: null, repo: null }
@@ -129,23 +149,12 @@ export class RepositoryManager {
             try {
                 // Parse recent local commits for issue resolution references
                 const log = await this.client.git.log({ maxCount: 50 })
-                for (const commit of log.all) {
-                    const matches = commit.message.match(/(?:fix|fixes|resolve|resolves|close|closes)\s+#(\d+)/ig)
-                    if (matches) {
-                        for (const m of matches) {
-                            const execMatch = /#(\d+)/.exec(m)
-                            const numStr = execMatch?.[1]
-                            if (numStr) {
-                                const num = parseInt(numStr, 10)
-                                if (!isNaN(num) && !resolvedIssues.includes(num)) {
-                                    resolvedIssues.push(num)
-                                }
-                            }
-                        }
-                    }
-                }
-            } catch {
-                // Ignore git log parsing errors
+                resolvedIssues.push(...extractResolvedIssueNumbers(log.all.map((c) => c.message)))
+            } catch (logError) {
+                logger.debug('Failed to parse git log for resolved issues', {
+                    module: 'GitHub',
+                    error: logError instanceof Error ? logError.message : String(logError),
+                })
             }
 
             return {

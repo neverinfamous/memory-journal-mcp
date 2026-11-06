@@ -9,6 +9,7 @@ import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { relaxedNumber } from '../schemas.js'
 import { CreateGitHubIssueWithEntryOutputSchema } from './schemas.js'
 import { resolveOwnerRepo, resolveProjectNumber } from './helpers.js'
+import { addIssueToProject, type IssueProjectResult } from './create-issue-project.js'
 
 export function getCreateGitHubIssueTool(context: ToolContext): ToolDefinition {
     const { db } = context
@@ -131,88 +132,16 @@ export function getCreateGitHubIssueTool(context: ToolContext): ToolDefinition {
                 }
 
                 // 3. Optional Kanban mutation
-                let projectResult = undefined
+                let projectResult: IssueProjectResult | undefined = undefined
                 if (projectNumber !== undefined && issue.nodeId) {
-                    try {
-                        const board = await resolved.github.getProjectKanban(
-                            resolved.owner,
-                            projectNumber,
-                            resolved.repo
-                        )
-                        if (board) {
-                            const added = await resolved.github.addProjectItem(
-                                board.projectId,
-                                issue.nodeId
-                            )
-                            if (added.success) {
-                                let statusResult:
-                                    | { status: string; set: boolean; error?: string }
-                                    | undefined = undefined
-                                const initialStatus = input.initial_status ?? 'Backlog'
-                                if (initialStatus && added.itemId) {
-                                    const statusOption = board.statusOptions.find(
-                                        (opt) =>
-                                            opt.name.toLowerCase() ===
-                                            initialStatus.toLowerCase()
-                                    )
-                                    if (statusOption) {
-                                        const moveResult =
-                                            await resolved.github.moveProjectItem(
-                                                board.projectId,
-                                                added.itemId,
-                                                board.statusFieldId,
-                                                statusOption.id
-                                            )
-                                        if (moveResult.success) {
-                                            statusResult = {
-                                                status: statusOption.name,
-                                                set: true,
-                                            }
-                                        } else {
-                                            statusResult = {
-                                                status: initialStatus,
-                                                set: false,
-                                                error: moveResult.error,
-                                            }
-                                        }
-                                    } else {
-                                        statusResult = {
-                                            status: initialStatus,
-                                            set: false,
-                                            error: `Status "${initialStatus}" not found. Available: ${board.statusOptions.map((o) => o.name).join(', ')}`,
-                                        }
-                                    }
-                                }
-
-                                projectResult = {
-                                    projectNumber: projectNumber,
-                                    added: true,
-                                    message:
-                                        `Added to project #${projectNumber}` +
-                                        (statusResult?.set ? ` (${statusResult.status})` : ''),
-                                    initialStatus: statusResult,
-                                }
-                            } else {
-                                projectResult = {
-                                    projectNumber: projectNumber,
-                                    added: false,
-                                    error: added.error,
-                                }
-                            }
-                        } else {
-                            projectResult = {
-                                projectNumber: projectNumber,
-                                added: false,
-                                error: `Project #${projectNumber} not found`,
-                            }
-                        }
-                    } catch (error) {
-                        projectResult = {
-                            projectNumber: projectNumber,
-                            added: false,
-                            error: error instanceof Error ? error.message : String(error),
-                        }
-                    }
+                    projectResult = await addIssueToProject(
+                        resolved.github,
+                        resolved.owner,
+                        resolved.repo,
+                        issue.nodeId,
+                        projectNumber,
+                        input.initial_status
+                    )
                 }
 
                 // 4. Update journal entry with finalized state

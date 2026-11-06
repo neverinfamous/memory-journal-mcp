@@ -119,18 +119,6 @@ export const EntryRevisionOutputSchema = z
     .extend(ErrorFieldsMixin.shape)
 
 /**
- * Schema for a list of entry revisions.
- */
-export const EntryHistoryListOutputSchema = z
-    .object({
-        revisions: z.array(EntryRevisionOutputSchema).optional(),
-        count: z.number().optional(),
-        success: z.boolean().optional(),
-        error: z.string().optional(),
-    })
-    .extend(ErrorFieldsMixin.shape)
-
-/**
  * Schema for a relationship between entries.
  */
 export const RelationshipOutputSchema = z

@@ -45,7 +45,7 @@ export const TeamUpdateEntrySchema = z.preprocess(
                 ),
             entry_type: z.enum(ENTRY_TYPES).optional(),
             tags: z.array(z.string()).optional(),
-            project_number: StrictProjectNumberSchema,
+            project_number: StrictProjectNumberSchema.optional(),
             workspace_id: z.string().optional(),
             significance_type: z.enum(SIGNIFICANCE_TYPES).nullable().optional(),
             project_owner: z.string().nullable().optional(),
@@ -213,7 +213,7 @@ export const TeamMergeTagsSchemaMcp = z.object({
 export const TeamBatchCreateEntriesSchema = z.object({
     entries: z.array(TeamCreateEntrySchema).min(1).max(MAX_BATCH_SIZE),
     auto_index: z.boolean().optional().default(true),
-    project_number: StrictProjectNumberSchema,
+    project_number: StrictProjectNumberSchema.optional(),
     workspace_id: z.string().optional(),
 })
 
@@ -267,7 +267,7 @@ export const TeamBatchUpdateEntriesSchema = z.preprocess(
         .object({
             updates: z.array(TeamUpdateEntrySchema).min(1).max(MAX_BATCH_SIZE),
             auto_index: z.boolean().optional().default(true),
-            project_number: StrictProjectNumberSchema,
+            project_number: StrictProjectNumberSchema.optional(),
             workspace_id: z.string().optional(),
         })
         .strict()

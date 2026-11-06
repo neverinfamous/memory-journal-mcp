@@ -54,6 +54,8 @@ export async function searchAction(query: string | undefined, options: z.infer<t
     try {
         const mode = options.mode || 'auto'
         const limit = options.limit ?? 100
+        const workspaceId = options.workspace ?? serverOptions.defaultWorkspaceId
+        const workspaceFilter = workspaceId !== undefined ? { workspaceId } : {}
         let result: unknown
 
         if (mode === 'semantic') {
@@ -61,12 +63,13 @@ export async function searchAction(query: string | undefined, options: z.infer<t
             result = await vectorManager.search(finalQuery, limit)
         } else if (mode === 'hybrid') {
             const vectorManager = new VectorSearchManager(db, { modelName: serverOptions.embeddingModel })
-            result = await hybridSearch(finalQuery, db, vectorManager, { limit })
+            result = await hybridSearch(finalQuery, db, vectorManager, { limit, ...workspaceFilter })
         } else {
             result = db.searchEntries(finalQuery, {
                 limit,
                 fuzzy_match: mode === 'auto',
                 auto_correct: mode === 'auto',
+                ...workspaceFilter,
             })
         }
 

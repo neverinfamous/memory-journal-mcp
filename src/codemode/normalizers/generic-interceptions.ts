@@ -193,6 +193,13 @@ function coerceNumericStringIds(obj: Record<string, unknown>): void {
 }
 
 function normalizeGenericFieldAliases(obj: Record<string, unknown>): void {
+    renameSimpleFieldAliases(obj)
+    renameScoreAliases(obj)
+    normalizeValidationStatusAlias(obj)
+    normalizeProjectAliases(obj)
+}
+
+function renameSimpleFieldAliases(obj: Record<string, unknown>): void {
     // High H-2 fixed: delete obj['msg'] (not obj['message'])
     for (const [src, dst] of [
         ['user', 'target_user'],
@@ -210,7 +217,9 @@ function normalizeGenericFieldAliases(obj: Record<string, unknown>): void {
             Reflect.deleteProperty(obj, src)
         }
     }
+}
 
+function renameScoreAliases(obj: Record<string, unknown>): void {
     for (const [aliasKey, targetKey] of [
         ['confidence', 'trust_score'],
         ['trust', 'trust_score'],
@@ -225,7 +234,9 @@ function normalizeGenericFieldAliases(obj: Record<string, unknown>): void {
             Reflect.deleteProperty(obj, aliasKey)
         }
     }
+}
 
+function normalizeValidationStatusAlias(obj: Record<string, unknown>): void {
     if (obj['validation_status'] !== undefined && obj['validation_status'] !== null) {
         const vs = typeof obj['validation_status'] === 'string' ? obj['validation_status'].trim().toLowerCase() : obj['validation_status']
         if (vs === true || (typeof vs === 'string' && ['pass', 'success', 'ok', 'passed', 'validated', 'valid', 'verified', 'true', '1'].includes(vs))) {
@@ -236,7 +247,9 @@ function normalizeGenericFieldAliases(obj: Record<string, unknown>): void {
             obj['validation_status'] = 'none'
         }
     }
+}
 
+function normalizeProjectAliases(obj: Record<string, unknown>): void {
     for (const projAlias of ['project_name', 'projectName'] as const) {
         if (obj[projAlias] === undefined) continue
         if (obj['project_number'] === undefined) {
@@ -420,6 +433,7 @@ function synthesizeEntryMutationFields(obj: Record<string, unknown>): void {
     }
 
     if (typeof obj['content'] === 'string') {
+        // Agents frequently double-escape quotes (\" / \') in entry content; heal them.
         obj['content'] = obj['content'].replace(/\\+'/g, "'").replace(/\\+"/g, '"')
     }
 }

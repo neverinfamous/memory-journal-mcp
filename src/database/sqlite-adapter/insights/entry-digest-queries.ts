@@ -150,24 +150,27 @@ export function getSignificantEntries(
 export function saveAnalyticsDigest(
     connection: NativeConnectionManager,
     type: string,
-    data: object
+    data: object,
+    workspaceId?: string
 ): number {
-    return saveSnapshot(connection.getNativeDb(), type, data)
+    return saveSnapshot(connection.getNativeDb(), type, data, workspaceId)
 }
 
 export function getLatestAnalyticsDigest(
     connection: NativeConnectionManager,
-    type: string
+    type: string,
+    workspaceId?: string
 ): { id: number; createdAt: string; data: Record<string, unknown> } | null {
-    return getLatestSnapshot(connection.getNativeDb(), type)
+    return getLatestSnapshot(connection.getNativeDb(), type, workspaceId)
 }
 
 export function getAnalyticsSnapshots(
     connection: NativeConnectionManager,
     type: string,
-    limit?: number
+    limit?: number,
+    workspaceId?: string
 ): { id: number; createdAt: string; data: Record<string, unknown> }[] {
-    return getSnapshots(connection.getNativeDb(), type, limit)
+    return getSnapshots(connection.getNativeDb(), type, limit, workspaceId)
 }
 
 export function computeDigest(

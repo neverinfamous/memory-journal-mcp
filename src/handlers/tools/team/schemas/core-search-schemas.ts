@@ -237,7 +237,7 @@ export const TeamGetRecentSchema = z.object({
 export const TeamGetRecentSchemaMcp = z.object({
     limit: relaxedNumber().optional().default(10),
     cursor: z.string().optional().describe('Cursor for pagination'),
-    project_number: relaxedNumber().optional(),
+    project_number: relaxedNumber().optional().describe('REQUIRED: project number to scope the query to.'),
     workspace_id: z.string().optional().describe(WORKSPACE_DESC),
     sort_by: z.string().optional().default('timestamp').describe(SORT_BY_DESC),
     include_archived: z.boolean().optional().default(false),
@@ -307,7 +307,7 @@ export const TeamListDeletedEntriesSchema = z.object({
 export const TeamListDeletedEntriesSchemaMcp = z.object({
     limit: relaxedNumber().optional().default(50),
     offset: relaxedNumber().optional().default(0),
-    project_number: relaxedNumber().optional(),
+    project_number: relaxedNumber().optional().describe('REQUIRED: project number to scope the query to.'),
     workspace_id: z.string().optional().describe(WORKSPACE_DESC),
 })
 

@@ -10,6 +10,7 @@ import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { relaxedNumber } from '../schemas.js'
 import { CloseGitHubIssueWithEntryOutputSchema } from './schemas.js'
 import { resolveOwnerRepo, resolveProjectNumber } from './helpers.js'
+import { moveIssueToDone, type KanbanMoveResult } from './close-issue-kanban.js'
 
 export function getCloseGitHubIssueTool(context: ToolContext): ToolDefinition {
     const { db } = context
@@ -149,9 +150,7 @@ export function getCloseGitHubIssueTool(context: ToolContext): ToolDefinition {
                 }
 
                 // 3. Optional Kanban mutation
-                let kanbanResult:
-                    | { moved: boolean; error?: string; projectNumber?: number }
-                    | undefined
+                let kanbanResult: KanbanMoveResult | undefined
                 if (input.move_to_done) {
                     const projectNum = resolveProjectNumber(
                         context,
@@ -164,68 +163,13 @@ export function getCloseGitHubIssueTool(context: ToolContext): ToolDefinition {
                             error: 'project_number required when move_to_done is true',
                         }
                     } else {
-                        try {
-                            const board = await resolved.github.getProjectKanban(
-                                resolved.owner,
-                                projectNum,
-                                resolved.repo
-                            )
-                            if (!board) {
-                                kanbanResult = {
-                                    moved: false,
-                                    error: `Project #${projectNum} not found`,
-                                    projectNumber: projectNum,
-                                }
-                            } else {
-                                const doneOption = board.statusOptions.find(
-                                    (opt) => opt.name.toLowerCase() === 'done'
-                                )
-                                if (!doneOption) {
-                                    kanbanResult = {
-                                        moved: false,
-                                        error: '"Done" status column not found on board',
-                                        projectNumber: projectNum,
-                                    }
-                                } else {
-                                    const addResult = await resolved.github.addProjectItem(
-                                        board.projectId,
-                                        issueDetails.nodeId
-                                    )
-                                    if (!addResult.success || !addResult.itemId) {
-                                        kanbanResult = {
-                                            moved: false,
-                                            error:
-                                                addResult.error ??
-                                                'Failed to resolve project item ID',
-                                            projectNumber: projectNum,
-                                        }
-                                    } else {
-                                        const moveResult =
-                                            await resolved.github.moveProjectItem(
-                                                board.projectId,
-                                                addResult.itemId,
-                                                board.statusFieldId,
-                                                doneOption.id
-                                            )
-                                        kanbanResult = {
-                                            moved: moveResult.success,
-                                            error: moveResult.error,
-                                            projectNumber: projectNum,
-                                        }
-                                    }
-                                }
-                            }
-                        } catch (err) {
-                            kanbanResult = {
-                                moved: false,
-                                error: err instanceof Error ? err.message : String(err),
-                                projectNumber: resolveProjectNumber(
-                                    context,
-                                    resolved.repo,
-                                    input.project_number
-                                ),
-                            }
-                        }
+                        kanbanResult = await moveIssueToDone(
+                            resolved.github,
+                            resolved.owner,
+                            resolved.repo,
+                            issueDetails.nodeId,
+                            projectNum
+                        )
                     }
                 }
 

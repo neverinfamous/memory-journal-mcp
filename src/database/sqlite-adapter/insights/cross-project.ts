@@ -63,6 +63,25 @@ export function getCrossProjectInsights(
         }
     }
 
+    attachTopTags(connection, projects, scopeId, wsParams)
+
+    const inactiveProjects = queryInactiveProjects(
+        connection,
+        options.inactiveThresholdDays,
+        wsFilter,
+        wsParams
+    )
+
+    return { projects, inactiveProjects }
+}
+
+/** Attach each project's top 5 tags as `top_tags`. */
+function attachTopTags(
+    connection: NativeConnectionManager,
+    projects: Record<string, unknown>[],
+    scopeId: string,
+    wsParams: unknown[]
+): void {
     if (projects.length > 0) {
         const projectNumbers = projects.map((p) => p['project_number'] as number)
         const placeholders = projectNumbers.map(() => '?').join(',')
@@ -91,14 +110,18 @@ export function getCrossProjectInsights(
         for (const p of projects) {
             p['top_tags'] = (tagMap.get(p['project_number'] as number) ?? []).slice(0, 5)
         }
-    } else {
-        for (const p of projects) {
-            p['top_tags'] = []
-        }
     }
+}
 
+/** Projects whose last entry is older than the inactivity threshold. */
+function queryInactiveProjects(
+    connection: NativeConnectionManager,
+    inactiveThresholdDays: number,
+    wsFilter: string,
+    wsParams: unknown[]
+): { project_number: number; last_entry_date: string }[] {
     const msPerDay = 86_400_000
-    const cutoffDate = new Date(Date.now() - options.inactiveThresholdDays * msPerDay)
+    const cutoffDate = new Date(Date.now() - inactiveThresholdDays * msPerDay)
         .toISOString()
         .split('T')[0]
 
@@ -122,36 +145,20 @@ export function getCrossProjectInsights(
             })
         }
     }
-
-    return { projects, inactiveProjects }
+    return inactiveProjects
 }
 
-export function visualizeRelationships(
+/** Select the entries to render in the relationship graph (by connected entry, tags, or all linked). */
+function queryGraphEntries(
     connection: NativeConnectionManager,
-    options: {
-        entryId?: number
-        tags?: string[]
-        relationshipType?: string
-        depth: number
-        limit: number
-        workspaceId?: string
-    }
-): {
-    nodes: {
-        id: string | number
-        label: string
-        group: string
-        metadata?: Record<string, unknown>
-    }[]
-    edges: { from: string | number; to: string | number; label: string; type: string }[]
-} {
-    let entriesResult: QueryResult[]
-    const scopeId = effectiveWorkspace(options.workspaceId)
+    options: { entryId?: number; tags?: string[]; depth: number; limit: number },
+    scopeId: string
+): QueryResult[] {
     const wsFilter = scopeId !== '*' ? ' AND mj.workspace_id = ?' : ''
     const wsParam = scopeId !== '*' ? [scopeId] : []
 
     if (options.entryId !== undefined) {
-        entriesResult = connection.exec(
+        return connection.exec(
             `
             WITH RECURSIVE connected_entries(id, distance) AS (
                 SELECT id, 0 FROM memory_journal mj WHERE mj.id = ? AND mj.deleted_at IS NULL${wsFilter}
@@ -174,9 +181,10 @@ export function visualizeRelationships(
         `,
             [options.entryId, ...wsParam, options.depth, ...wsParam, options.limit]
         )
-    } else if (options.tags !== undefined && options.tags.length > 0) {
+    }
+    if (options.tags !== undefined && options.tags.length > 0) {
         const placeholders = options.tags.map(() => '?').join(',')
-        entriesResult = connection.exec(
+        return connection.exec(
             `
             SELECT DISTINCT mj.id, mj.entry_type, mj.content, mj.is_personal
             FROM memory_journal mj
@@ -190,9 +198,9 @@ export function visualizeRelationships(
         `,
             [...wsParam, ...options.tags, options.limit]
         )
-    } else {
-        entriesResult = connection.exec(
-            `
+    }
+    return connection.exec(
+        `
             SELECT DISTINCT mj.id, mj.entry_type, mj.content, mj.is_personal
             FROM memory_journal mj
             WHERE mj.deleted_at IS NULL${wsFilter}
@@ -204,9 +212,31 @@ export function visualizeRelationships(
             ORDER BY mj.id DESC
             LIMIT ?
         `,
-            [...wsParam, options.limit]
-        )
+        [...wsParam, options.limit]
+    )
+}
+
+export function visualizeRelationships(
+    connection: NativeConnectionManager,
+    options: {
+        entryId?: number
+        tags?: string[]
+        relationshipType?: string
+        depth: number
+        limit: number
+        workspaceId?: string
     }
+): {
+    nodes: {
+        id: string | number
+        label: string
+        group: string
+        metadata?: Record<string, unknown>
+    }[]
+    edges: { from: string | number; to: string | number; label: string; type: string }[]
+} {
+    const scopeId = effectiveWorkspace(options.workspaceId)
+    const entriesResult = queryGraphEntries(connection, options, scopeId)
 
     const nodes: {
         id: string | number
@@ -229,38 +259,46 @@ export function visualizeRelationships(
         }
     }
 
-    const edges: { from: string | number; to: string | number; label: string; type: string }[] = []
-    if (nodes.length > 0) {
-        const entryIds = nodes.map((n) => n.id as number)
-        const placeholders = entryIds.map(() => '?').join(',')
+    const edges = nodes.length > 0 ? queryGraphEdges(connection, nodes, options.relationshipType) : []
 
-        let relsQuery = `
+    return { nodes, edges }
+}
+
+/** Fetch relationship edges among the given nodes, optionally filtered by type. */
+function queryGraphEdges(
+    connection: NativeConnectionManager,
+    nodes: { id: string | number }[],
+    relationshipType: string | undefined
+): { from: string | number; to: string | number; label: string; type: string }[] {
+    const edges: { from: string | number; to: string | number; label: string; type: string }[] = []
+    const entryIds = nodes.map((n) => n.id as number)
+    const placeholders = entryIds.map(() => '?').join(',')
+
+    let relsQuery = `
             SELECT from_entry_id, to_entry_id, relationship_type
             FROM relationships
             WHERE from_entry_id IN (${placeholders})
               AND to_entry_id IN (${placeholders})
         `
-        const relsParams: unknown[] = [...entryIds, ...entryIds]
+    const relsParams: unknown[] = [...entryIds, ...entryIds]
 
-        if (options.relationshipType !== undefined && options.relationshipType.length > 0) {
-            relsQuery += ' AND relationship_type = ?'
-            relsParams.push(options.relationshipType)
-        }
-
-        const relsResult = connection.exec(relsQuery, relsParams)
-        if (relsResult[0]) {
-            for (const row of relsResult[0].values) {
-                edges.push({
-                    from: row[0] as number,
-                    to: row[1] as number,
-                    label: row[2] as string,
-                    type: row[2] as string,
-                })
-            }
-        }
+    if (relationshipType !== undefined && relationshipType.length > 0) {
+        relsQuery += ' AND relationship_type = ?'
+        relsParams.push(relationshipType)
     }
 
-    return { nodes, edges }
+    const relsResult = connection.exec(relsQuery, relsParams)
+    if (relsResult[0]) {
+        for (const row of relsResult[0].values) {
+            edges.push({
+                from: row[0] as number,
+                to: row[1] as number,
+                label: row[2] as string,
+                type: row[2] as string,
+            })
+        }
+    }
+    return edges
 }
 
 export function getRecentGraphRelationships(

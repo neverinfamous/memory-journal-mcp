@@ -96,7 +96,7 @@ export function buildJournalContext(
             const score =
                 e.importanceScore ??
                 importanceScoreCache.get(e.id) ??
-                context.db.calculateImportance(e.id).score
+                context.db.calculateImportance(e.id, activeWorkspaceId).score
             return score >= threshold
         })
     }

@@ -224,8 +224,8 @@ export class EntriesManager {
         return searchByDateRange(this.sharedContext, startDate, endDate, options)
     }
 
-    calculateImportance(entryId: number): ImportanceResult {
-        return calculateImportance(this.sharedContext, entryId)
+    calculateImportance(entryId: number, workspaceId?: string): ImportanceResult {
+        return calculateImportance(this.sharedContext, entryId, workspaceId)
     }
 
     getStatistics(
@@ -238,8 +238,8 @@ export class EntriesManager {
         return getStatistics(this.sharedContext, timeframe, startDate, endDate, projectBreakdown, workspaceId)
     }
 
-    getEntryHistory(id: number): EntryRevision[] {
-        return getEntryHistory(this.sharedContext, id)
+    getEntryHistory(id: number, workspaceId?: string): EntryRevision[] {
+        return getEntryHistory(this.sharedContext, id, workspaceId)
     }
 
     restoreEntry(id: number, workspaceId?: string): boolean {

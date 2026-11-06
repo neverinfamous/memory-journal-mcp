@@ -251,7 +251,7 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                         result['relationships'] = relationships
                     }
 
-                    const importance = teamDb.calculateImportance(entry_id)
+                    const importance = teamDb.calculateImportance(entry_id, wsId)
                     result['importance'] = importance
 
                     return result

@@ -41,9 +41,15 @@ async function getDb(options: ServerOptionsSchema & { team?: boolean }, command:
 }
 
 export async function analyticsStatsAction(options: z.infer<typeof analyticsSchema>, command: Command): Promise<void> {
-    const { db } = await getDb(options, command)
+    const { db, serverOptions } = await getDb(options, command)
     try {
-        const result = db.getStatistics()
+        const result = db.getStatistics(
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            options.workspace ?? serverOptions.defaultWorkspaceId
+        )
         process.stdout.write(JSON.stringify(result, null, 2) + '\n')
     } catch (e) {
         process.stderr.write("Analytics stats failed: " + (e instanceof Error ? e.message : String(e)) + '\n')
@@ -54,9 +60,14 @@ export async function analyticsStatsAction(options: z.infer<typeof analyticsSche
 }
 
 export async function analyticsInsightsAction(options: z.infer<typeof analyticsSchema>, command: Command): Promise<void> {
-    const { db } = await getDb(options, command)
+    const { db, serverOptions } = await getDb(options, command)
     try {
-        const result = db.getCrossProjectInsights({ minEntries: 1, inactiveThresholdDays: 30 })
+        const workspaceId = options.workspace ?? serverOptions.defaultWorkspaceId
+        const result = db.getCrossProjectInsights({
+            minEntries: 1,
+            inactiveThresholdDays: 30,
+            ...(workspaceId !== undefined ? { workspaceId } : {}),
+        })
         process.stdout.write(JSON.stringify(result, null, 2) + '\n')
     } catch (e) {
         process.stderr.write("Analytics insights failed: " + (e instanceof Error ? e.message : String(e)) + '\n')

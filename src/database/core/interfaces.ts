@@ -113,13 +113,13 @@ export interface IDatabaseAdapter {
     createEntry(input: CreateEntryInput): JournalEntry
     getEntryById(id: number, workspaceId?: string): JournalEntry | null
     getEntryByIdIncludeDeleted(id: number, workspaceId?: string): JournalEntry | null
-    getEntryHistory(id: number): EntryRevision[]
+    getEntryHistory(id: number, workspaceId?: string): EntryRevision[]
     getEntriesByIds(ids: number[], workspaceId?: string): Map<number, JournalEntry>
     getEntriesByIdsWithImportance(
         ids: number[],
         workspaceId?: string
     ): Map<number, { entry: JournalEntry; importance: ImportanceResult }>
-    calculateImportance(entryId: number): ImportanceResult
+    calculateImportance(entryId: number, workspaceId?: string): ImportanceResult
     getRecentEntries(
         limit?: number,
         isPersonal?: boolean,
@@ -306,10 +306,14 @@ export interface IDatabaseAdapter {
         fromEntryId: number,
         toEntryId: number,
         relationshipType: RelationshipType,
-        description?: string
+        description?: string,
+        workspaceId?: string
     ): Relationship
-    getRelationships(entryId: number): Relationship[]
-    getRelationshipsForEntries(entryIds: number[]): Map<number, Relationship[]>
+    getRelationships(entryId: number, workspaceId?: string): Relationship[]
+    getRelationshipsForEntries(
+        entryIds: number[],
+        workspaceId?: string
+    ): Map<number, Relationship[]>
 
     // Backup Manager
     getBackupsDir(): string
@@ -317,7 +321,7 @@ export interface IDatabaseAdapter {
         backupName?: string
     ): Promise<{ filename: string; path: string; sizeBytes: number }>
     listBackups(): { filename: string; path: string; sizeBytes: number; createdAt: string }[]
-    deleteOldBackups(keepCount: number): { deleted: string[]; kept: number }
+    deleteOldBackups(keepCount: number): { deleted: string[]; failed?: string[]; kept: number }
     restoreFromFile(
         filename: string,
         runtime?: unknown
@@ -343,13 +347,19 @@ export interface IDatabaseAdapter {
     }
 
     // Analytics Snapshots
-    saveAnalyticsSnapshot(type: string, data: DigestSnapshot | Record<string, unknown>): number
+    saveAnalyticsSnapshot(
+        type: string,
+        data: DigestSnapshot | Record<string, unknown>,
+        workspaceId?: string
+    ): number
     getLatestAnalyticsSnapshot(
-        type: string
+        type: string,
+        workspaceId?: string
     ): { id: number; createdAt: string; data: Record<string, unknown> } | null
     getAnalyticsSnapshots(
         type: string,
-        limit?: number
+        limit?: number,
+        workspaceId?: string
     ): { id: number; createdAt: string; data: Record<string, unknown> }[]
     computeDigest(workspaceId?: string): DigestSnapshot
 

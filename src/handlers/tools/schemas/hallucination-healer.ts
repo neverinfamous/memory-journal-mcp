@@ -3,11 +3,11 @@
  */
 
 import { resolveProjectContext } from '../../../utils/workspace-resolver.js'
+import { healTitleAndAutoContext } from './hallucination-healer-fields.js'
 import {
     ENTRY_TYPES,
     SIGNIFICANCE_TYPES,
     coerceSignificanceAlias,
-    safeString,
     KEY_ALIAS_MAP,
     CONTENT_ALIASES,
     PASSED_VALIDATION_ALIASES,
@@ -175,6 +175,21 @@ function healTagsAndEntryType(obj: Record<string, unknown>): boolean {
 }
 
 function healWorkspaceAndProjectContext(obj: Record<string, unknown>): boolean {
+    const normalized = normalizeProjectFields(obj)
+
+    // Only infer workspace/project from environment/cwd for entry creation/mutation payloads
+    const isEntryMutation =
+        'content' in obj || 'entry_type' in obj || 'title' in obj || 'entry' in obj
+    if (!isEntryMutation) {
+        return normalized
+    }
+
+    const inferred = inferWorkspaceAndProject(obj)
+    return normalized || inferred
+}
+
+/** Normalise `project_name` / string `project_number` aliases into numeric or workspace fields. */
+function normalizeProjectFields(obj: Record<string, unknown>): boolean {
     let modified = false
 
     const rawProjName = obj['project_name'] ?? obj['projectName']
@@ -214,6 +229,12 @@ function healWorkspaceAndProjectContext(obj: Record<string, unknown>): boolean {
         }
     }
 
+    return modified
+}
+
+/** Fill in `workspace_id` / `project_number` from the registry, cwd or environment when missing. */
+function inferWorkspaceAndProject(obj: Record<string, unknown>): boolean {
+    let modified = false
     const wsId = typeof obj['workspace_id'] === 'string' ? obj['workspace_id'] : undefined
     const projNum =
         typeof obj['project_number'] === 'number' && !Number.isNaN(obj['project_number'])
@@ -223,13 +244,6 @@ function healWorkspaceAndProjectContext(obj: Record<string, unknown>): boolean {
     const tagsArr = Array.isArray(obj['tags'])
         ? obj['tags'].filter((t): t is string => typeof t === 'string')
         : undefined
-
-    // Only infer workspace/project from environment/cwd for entry creation/mutation payloads
-    const isEntryMutation =
-        'content' in obj || 'entry_type' in obj || 'title' in obj || 'entry' in obj
-    if (!isEntryMutation) {
-        return modified
-    }
 
     if (wsId === undefined || wsId === '' || wsId === 'default' || projNum === undefined) {
         const resolved = resolveProjectContext({
@@ -259,69 +273,6 @@ function healWorkspaceAndProjectContext(obj: Record<string, unknown>): boolean {
         if (obj['project_number'] === undefined && resolved.projectNumber !== undefined) {
             obj['project_number'] = resolved.projectNumber
             modified = true
-        }
-    }
-
-    return modified
-}
-
-function healTitleAndAutoContext(obj: Record<string, unknown>): boolean {
-    let modified = false
-
-    if ('title' in obj || 'heading' in obj || 'subject' in obj || 'name' in obj) {
-        const rawTitle = obj['title'] ?? obj['heading'] ?? obj['subject'] ?? obj['name']
-        if (rawTitle !== undefined && rawTitle !== null) {
-            const titleStr = safeString(rawTitle).trim()
-            if (titleStr !== '') {
-                const cleanTitle = titleStr.replace(/^#+\s*/, '')
-                const currentContent = safeString(obj['content']).trim()
-                if (
-                    !('content' in obj) ||
-                    obj['content'] === undefined ||
-                    obj['content'] === null ||
-                    currentContent === ''
-                ) {
-                    if (!('query' in obj)) obj['content'] = `# ${cleanTitle}`
-                } else if (!currentContent.startsWith(`# ${cleanTitle}`)) {
-                    obj['content'] = `# ${cleanTitle}\n\n${currentContent}`
-                }
-            }
-        }
-        delete obj['title']
-        delete obj['heading']
-        delete obj['subject']
-        delete obj['name']
-        modified = true
-    }
-
-    if ('auto_context' in obj) {
-        if (typeof obj['auto_context'] === 'object' && obj['auto_context'] !== null) {
-            try {
-                obj['auto_context'] = JSON.stringify(obj['auto_context'])
-                modified = true
-            } catch {
-                // Ignore stringify errors
-            }
-        }
-        if (typeof obj['auto_context'] === 'string') {
-            const ac = obj['auto_context'].trim().toLowerCase()
-            if (ac === 'none' || ac === '{}' || ac === '{"commits":[]}') {
-                delete obj['auto_context']
-                modified = true
-            } else if (ac.startsWith('{') && ac.includes("'")) {
-                try {
-                    JSON.parse(obj['auto_context'])
-                } catch {
-                    try {
-                        const fixed = obj['auto_context'].replace(/'/g, '"')
-                        const parsed = JSON.parse(fixed) as Record<string, unknown>
-                        obj['auto_context'] = JSON.stringify(parsed)
-                        modified = true
-                    } catch {
-                        // Ignore
-                    }
-                }
-            }
         }
     }
 

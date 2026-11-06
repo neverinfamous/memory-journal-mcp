@@ -237,8 +237,11 @@ export function buildSandboxGlobals(
             if (typeof cb === 'function') {
                 try {
                     ;(cb as (...args: unknown[]) => unknown)(null, '', '')
-                } catch {
-                    // Ignore callback error
+                } catch (callbackError) {
+                    // Callback errors must not escape the shim; the worker has no logger, so use stderr.
+                    process.stderr.write(
+                        `[codemode] exec shim callback threw: ${callbackError instanceof Error ? callbackError.message : String(callbackError)}\n`
+                    )
                 }
             }
         },

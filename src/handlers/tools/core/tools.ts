@@ -2,9 +2,8 @@ import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { sendProgress } from '../../../utils/progress-utils.js'
-import { resolveAuthenticatedAuthor } from '../../../utils/security-utils.js'
-import { enforceAccessBoundary } from '../../../auth/validation.js'
 import { resolveIssueUrl } from '../../../utils/github-helpers.js'
+import { buildCreateEntryInput, shareCreatedEntryWithTeam } from './create-entry-helpers.js'
 import { resolveWorkspaceId, resolveProjectContext } from '../../../utils/workspace-resolver.js'
 import { MemoryJournalMcpError } from '../../../types/errors.js'
 
@@ -107,36 +106,20 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         context
                     )
 
-                    const createdEntry = db.createEntry({
-                        content: input.content,
-                        entryType: input.entry_type,
-                        tags: input.tags,
-                        isPersonal: input.is_personal,
-                        significanceType: input.significance_type,
-                        projectNumber: projectNumber,
-                        projectOwner: input.project_owner,
-                        issueNumber: input.issue_number,
-                        issueUrl: resolvedIssueUrl,
-                        prNumber: input.pr_number,
-                        prUrl: input.pr_url,
-                        prStatus: input.pr_status,
-                        workflowRunId: input.workflow_run_id,
-                        workflowName: input.workflow_name,
-                        workflowStatus: input.workflow_status as 'queued' | 'in_progress' | 'completed' | undefined,
-                        autoContext: input.auto_context,
+                    const entryInput = buildCreateEntryInput(input, {
+                        projectNumber,
                         workspaceId: wsId,
-                        impactScore: input.impact_score,
-                        trustScore: input.trust_score,
-                        validationStatus: input.validation_status,
-                        sessionId: input.session_id,
-                        ...(resolvedAnchors !== undefined ? { anchors: resolvedAnchors } : {}),
+                        issueUrl: resolvedIssueUrl,
+                        anchors: resolvedAnchors,
                     })
+                    const createdEntry = db.createEntry(entryInput)
                     const id = createdEntry.id
 
                     const relationshipWarnings = linkRequestedRelationships(
                         db,
                         id,
-                        input.relationships
+                        input.relationships,
+                        wsId
                     )
 
                     // Vectorize entry
@@ -172,43 +155,8 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                     let author: string | undefined
 
                     if (input.share_with_team && context.teamDb) {
-                        enforceAccessBoundary(
-                            'team_create_entry',
-                            'tool',
-                            { requiresTeamScope: true },
-                            context.config?.runtime?.auditLogger
-                        )
-                        author = resolveAuthenticatedAuthor()
-
-                        if (author && author !== 'unknown') {
-                            context.teamDb.createEntry({
-                                content: input.content,
-                                entryType: input.entry_type,
-                                tags: input.tags,
-                                isPersonal: false,
-                                significanceType: input.significance_type,
-                                projectNumber: projectNumber,
-                                projectOwner: input.project_owner,
-                                issueNumber: input.issue_number,
-                                issueUrl: resolvedIssueUrl,
-                                prNumber: input.pr_number,
-                                prUrl: input.pr_url,
-                                prStatus: input.pr_status,
-                                workflowRunId: input.workflow_run_id,
-                                workflowName: input.workflow_name,
-                                workflowStatus: input.workflow_status as 'queued' | 'in_progress' | 'completed' | undefined,
-                                autoContext: input.auto_context,
-                                author: author,
-                                workspaceId: wsId,
-                                impactScore: input.impact_score,
-                                trustScore: input.trust_score,
-                                validationStatus: input.validation_status,
-                                sessionId: input.session_id,
-                                ...(resolvedAnchors !== undefined ? { anchors: resolvedAnchors } : {}),
-                            })
-                            context.teamDb.flushSave()
-                            sharedWithTeam = true
-                        }
+                        author = shareCreatedEntryWithTeam(context, entryInput)
+                        sharedWithTeam = author !== undefined
                     }
 
                     return {
@@ -260,7 +208,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         result['relationships'] = relationships
                     }
 
-                    const importance = db.calculateImportance(input.entry_id)
+                    const importance = db.calculateImportance(input.entry_id, wsId)
                     result['importance'] = importance.score
                     result['importanceBreakdown'] = importance.breakdown
 
@@ -328,7 +276,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    const rawHistory = db.getEntryHistory(input.entry_id)
+                    const rawHistory = db.getEntryHistory(input.entry_id, wsId)
                     const history = rawHistory.map(rev => ({
                         revisionId: rev.revisionNumber,
                         entryId: rev.entryId,

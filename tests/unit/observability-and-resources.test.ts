@@ -403,7 +403,7 @@ describe('Observability, SSE Transport, Utils & Catalog Resource', () => {
             db.createEntry({
                 content: 'Recent entry for staleness check',
                 projectNumber: 5,
-                workspaceId: 'default',
+                workspaceId: 'memory-journal-mcp',
             })
 
             const stalenessDefs = getStalenessResourceDefinitions()

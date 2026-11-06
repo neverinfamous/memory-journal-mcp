@@ -1,4 +1,5 @@
 import * as fs from 'node:fs'
+import { logger } from '../../utils/logger.js'
 import type { NativeConnectionManager } from './native-connection.js'
 import type { IDatabaseAdapter } from '../core/interfaces.js'
 import type { BackupManager } from './backup.js'
@@ -17,8 +18,12 @@ export class HealthOperations {
         try {
             const stats = fs.statSync(dbPath)
             sizeBytes = stats.size
-        } catch {
+        } catch (error) {
             // File may not exist on disk yet
+            logger.debug('Database file size unavailable', {
+                module: 'HealthOperations',
+                error: error instanceof Error ? error.message : String(error),
+            })
         }
 
         // Combined health counts in a single query (batch instead of 4 serial queries)

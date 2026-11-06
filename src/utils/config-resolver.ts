@@ -6,11 +6,6 @@ import type { Command } from 'commander'
 import { logger } from './logger.js'
 import { ConfigurationError } from '../types/errors.js'
 
-export interface ResolvedConfigValue<T> {
-    value: T
-    source: 'cli' | 'env' | 'config' | 'default'
-}
-
 export class ConfigResolver {
     private configFileOptions: Record<string, unknown> = {}
     public loadedConfigPath?: string

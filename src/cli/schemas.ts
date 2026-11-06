@@ -49,7 +49,8 @@ export const databaseOptionsSchema = z.object({
 
 export const workspaceOptionsSchema = z.object({
     defaultProject: safeCoerceNumber,
-    defaultWorkspaceId: z.string().optional()
+    defaultWorkspaceId: z.string().optional(),
+    workspace: z.string().optional()
 })
 
 export const vectorOptionsSchema = z.object({
@@ -250,7 +251,7 @@ export const searchOptionsSchema = z.object({
     mode: z.enum(['auto', 'fts', 'semantic', 'hybrid']).optional(),
     team: z.boolean().optional(),
     limit: z.coerce.number().optional()
-}).extend(coreOptionsSchema.shape).extend(databaseOptionsSchema.shape).extend(outputOptionsSchema.shape)
+}).extend(coreOptionsSchema.shape).extend(databaseOptionsSchema.shape).extend(workspaceOptionsSchema.shape).extend(outputOptionsSchema.shape)
 
 export const ioExportJsonOptionsSchema = z.object({
     dest: z.string().optional()
@@ -258,7 +259,7 @@ export const ioExportJsonOptionsSchema = z.object({
 
 export const ioExportMarkdownOptionsSchema = z.object({
     dir: z.string().optional()
-}).extend(coreOptionsSchema.shape).extend(databaseOptionsSchema.shape).extend(outputOptionsSchema.shape)
+}).extend(coreOptionsSchema.shape).extend(databaseOptionsSchema.shape).extend(workspaceOptionsSchema.shape).extend(outputOptionsSchema.shape)
 
 export const ioImportMarkdownOptionsSchema = z.object({
     dir: z.string().optional()
@@ -272,11 +273,11 @@ export const ioImportExternalOptionsSchema = z.object({
 export const visualizeOptionsSchema = z.object({
     out: z.string().optional(),
     team: z.boolean().optional()
-}).extend(coreOptionsSchema.shape).extend(databaseOptionsSchema.shape)
+}).extend(coreOptionsSchema.shape).extend(databaseOptionsSchema.shape).extend(workspaceOptionsSchema.shape)
 
 export const analyticsOptionsSchema = z.object({
     team: z.boolean().optional()
-}).extend(coreOptionsSchema.shape).extend(databaseOptionsSchema.shape).extend(outputOptionsSchema.shape)
+}).extend(coreOptionsSchema.shape).extend(databaseOptionsSchema.shape).extend(workspaceOptionsSchema.shape).extend(outputOptionsSchema.shape)
 
 export const adminAuditSearchOptionsSchema = z.object({
     limit: z.coerce.number().optional(),

@@ -19,6 +19,57 @@ function ensureMigrationsTable(db: Database): void {
     `)
 }
 
+/** True when a table with the given name exists in the database. */
+function tableExists(db: Database, name: string): boolean {
+    const row = db
+        .prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name=?`)
+        .get(name) as { name: string } | undefined
+    return row !== undefined
+}
+
+/**
+ * Infer which versioned migrations a pre-framework database has already applied,
+ * from its memory_journal columns and the presence of later tables.
+ */
+function detectAppliedVersions(
+    db: Database,
+    columns: Set<string>
+): { version: number; name: string }[] {
+    // Version 1 is applied if memory_journal exists
+    const versions: { version: number; name: string }[] = [{ version: 1, name: '001-init' }]
+
+    // Version 2: significance_type and auto_context
+    if (columns.has('significance_type') && columns.has('auto_context')) {
+        versions.push({ version: 2, name: '002-add-significance-and-context' })
+    }
+
+    // Version 3: deleted_at and is_archived
+    if (columns.has('deleted_at') && columns.has('is_archived')) {
+        versions.push({ version: 3, name: '003-add-deleted-and-archived' })
+    }
+
+    // Version 4: github fields
+    if (columns.has('project_number') && columns.has('project_owner')) {
+        versions.push({ version: 4, name: '004-add-github-and-workflow-integration' })
+    }
+
+    // Version 5: entry_revisions table
+    if (tableExists(db, 'entry_revisions')) {
+        versions.push({ version: 5, name: '005-add-entry-revisions' })
+    }
+
+    // Version 6: analytics_snapshots table
+    if (tableExists(db, 'analytics_snapshots')) {
+        versions.push({ version: 6, name: '006-add-analytics-snapshots' })
+    }
+
+    // Version 7: author (for team columns)
+    if (columns.has('author')) {
+        versions.push({ version: 7, name: '007-add-team-author' })
+    }
+    return versions
+}
+
 /**
  * Detects pre-migration-framework databases, analyzes their schema,
  * and seeds the schema_migrations table so they are retrofitted safely.
@@ -57,46 +108,7 @@ function retrofitPreMigrationDb(db: Database): void {
     }[]
     const columns = new Set(tableInfo.map((row) => row.name))
 
-    const retrofittedVersions: { version: number; name: string }[] = []
-
-    // Version 1 is applied if memory_journal exists
-    retrofittedVersions.push({ version: 1, name: '001-init' })
-
-    // Version 2: significance_type and auto_context
-    if (columns.has('significance_type') && columns.has('auto_context')) {
-        retrofittedVersions.push({ version: 2, name: '002-add-significance-and-context' })
-    }
-
-    // Version 3: deleted_at and is_archived
-    if (columns.has('deleted_at') && columns.has('is_archived')) {
-        retrofittedVersions.push({ version: 3, name: '003-add-deleted-and-archived' })
-    }
-
-    // Version 4: github fields
-    if (columns.has('project_number') && columns.has('project_owner')) {
-        retrofittedVersions.push({ version: 4, name: '004-add-github-and-workflow-integration' })
-    }
-
-    // Version 5: entry_revisions table
-    const revTableCheck = db
-        .prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='entry_revisions'`)
-        .get() as { name: string } | undefined
-    if (revTableCheck) {
-        retrofittedVersions.push({ version: 5, name: '005-add-entry-revisions' })
-    }
-
-    // Version 6: analytics_snapshots table
-    const snapTableCheck = db
-        .prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='analytics_snapshots'`)
-        .get() as { name: string } | undefined
-    if (snapTableCheck) {
-        retrofittedVersions.push({ version: 6, name: '006-add-analytics-snapshots' })
-    }
-
-    // Version 7: author (for team columns)
-    if (columns.has('author')) {
-        retrofittedVersions.push({ version: 7, name: '007-add-team-author' })
-    }
+    const retrofittedVersions = detectAppliedVersions(db, columns)
 
     // Insert into schema_migrations
     const insertStmt = db.prepare(

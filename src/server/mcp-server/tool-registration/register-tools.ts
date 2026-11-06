@@ -24,6 +24,7 @@ import {
 import { VERSION } from '../../../version.js'
 import { globalSubscriptionManager } from '../../subscription-manager.js'
 import { logAgentIssue } from '../../../utils/issue-logger.js'
+import { logger } from '../../../utils/logger.js'
 import type { ServerContext, ServerOptions } from '../types.js'
 import { attachListToolsInterceptor, type RequestHandlerMap } from './list-interceptor.js'
 import { attachCallToolInterceptor } from './call-interceptor.js'
@@ -100,7 +101,12 @@ function buildToolRegistrationOptions(tool: ToolRegistration): ModernToolConfig 
                     typeof relaxed.passthrough === 'function'
                         ? relaxed.passthrough()
                         : fallbackInputSchema
-            } catch {
+            } catch (error) {
+                logger.warning('Failed to relax input schema; using fallback schema', {
+                    module: 'McpServer',
+                    tool: tool.name,
+                    error: error instanceof Error ? error.message : String(error),
+                })
                 toolOptions.inputSchema = fallbackInputSchema
             }
         } else {
@@ -121,7 +127,12 @@ function buildToolRegistrationOptions(tool: ToolRegistration): ModernToolConfig 
                 toolOptions.outputSchema = (
                     outSchema as { passthrough: () => StandardSchemaWithJSON }
                 ).passthrough()
-            } catch {
+            } catch (error) {
+                logger.warning('Failed to relax output schema; using fallback schema', {
+                    module: 'McpServer',
+                    tool: tool.name,
+                    error: error instanceof Error ? error.message : String(error),
+                })
                 toolOptions.outputSchema = fallbackOutputSchema
             }
         } else {
@@ -368,6 +379,10 @@ export function createServerInstance(
                 : {}),
             ...(options.projectRegistry !== undefined
                 ? { projectRegistry: options.projectRegistry }
+                : {}),
+            ...(options.defaultWorkspaceId !== undefined &&
+            currentConfig.briefingConfig.defaultWorkspaceId === undefined
+                ? { defaultWorkspaceId: options.defaultWorkspaceId }
                 : {}),
             allowedIoRoots,
         }

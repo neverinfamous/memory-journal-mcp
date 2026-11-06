@@ -6,6 +6,7 @@ import type { GitHubIntegration } from '../../../../github/github-integration/in
 import type { LocalGitStatus } from '../../../../github/github-integration/types.js'
 import type { BriefingConfig } from '../../shared.js'
 import { markUntrustedContentInline } from '../../../../utils/security-utils.js'
+import { logger } from '../../../../utils/logger.js'
 import type { CiResult } from './github-repo-and-kanban.js'
 import type { BriefingGitHub } from './github-section.js'
 
@@ -194,8 +195,12 @@ async function readReviewSummary(
         if (reviewSummary.state !== 'none') {
             return { reviewStatus: reviewSummary.state, commentCount: reviewSummary.commentCount }
         }
-    } catch {
-        // ignore
+    } catch (err) {
+        logger.debug('Copilot review summary unavailable', {
+            module: 'Briefing',
+            prNumber,
+            error: err instanceof Error ? err.message : String(err),
+        })
     }
     return { reviewStatus: undefined, commentCount: 0 }
 }
@@ -214,8 +219,12 @@ async function readPullRequestCi(
         if (prRun.conclusion === 'success') return 'passing'
         if (prRun.conclusion === 'failure') return 'failing'
         if (prRun.conclusion === 'cancelled') return 'cancelled'
-    } catch {
-        // ignore
+    } catch (err) {
+        logger.debug('Pull request CI status unavailable', {
+            module: 'Briefing',
+            headRef,
+            error: err instanceof Error ? err.message : String(err),
+        })
     }
     return undefined
 }

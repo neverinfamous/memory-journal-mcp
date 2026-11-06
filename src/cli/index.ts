@@ -6,7 +6,7 @@ import { createProgram, addAgentInstructions, withGroup, withValidation } from '
 import { 
     addServerOptions, addCoreOptions, addDatabaseOptions, 
     addCodeModeOptions, addAuditOptions, addPruningOptions,
-    addWorkspaceOptions, addVectorOptions,
+    addWorkspaceOptions, addWorkspaceScopeOptions, addVectorOptions,
     addOutputOptions
 } from './option-groups.js'
 import { serveAction, serveSchema } from './commands/serve.js'
@@ -358,6 +358,7 @@ withGroup(searchCmd, 'Command Options', (cmd: Command) => {
 addOutputOptions(searchCmd)
 addCoreOptions(searchCmd)
 addDatabaseOptions(searchCmd)
+addWorkspaceScopeOptions(searchCmd)
 addAgentInstructions(searchCmd,
     `
 🤖 AI AGENT INSTRUCTIONS:
@@ -385,6 +386,7 @@ withGroup(exportMarkdownCmd, 'Command Options', (cmd: Command) => {
 })
 addCoreOptions(exportMarkdownCmd)
 addDatabaseOptions(exportMarkdownCmd)
+addWorkspaceScopeOptions(exportMarkdownCmd)
 addOutputOptions(exportMarkdownCmd)
 exportMarkdownCmd.action(withValidation(exportMarkdownSchema, exportMarkdownAction))
 
@@ -419,6 +421,7 @@ withGroup(visualizeCmd, 'Command Options', (cmd: Command) => {
 })
 addCoreOptions(visualizeCmd)
 addDatabaseOptions(visualizeCmd)
+addWorkspaceScopeOptions(visualizeCmd)
 addAgentInstructions(visualizeCmd,
     `
 🤖 AI AGENT INSTRUCTIONS:
@@ -443,6 +446,7 @@ withGroup(analyticsStatsCmd, 'Command Options', (cmd: Command) => {
 addOutputOptions(analyticsStatsCmd)
 addCoreOptions(analyticsStatsCmd)
 addDatabaseOptions(analyticsStatsCmd)
+addWorkspaceScopeOptions(analyticsStatsCmd)
 analyticsStatsCmd.action(withValidation(analyticsSchema, analyticsStatsAction))
 
 const analyticsInsightsCmd = analyticsCmd.command('insights').description('Get cross-project insights')
@@ -452,6 +456,7 @@ withGroup(analyticsInsightsCmd, 'Command Options', (cmd: Command) => {
 addOutputOptions(analyticsInsightsCmd)
 addCoreOptions(analyticsInsightsCmd)
 addDatabaseOptions(analyticsInsightsCmd)
+addWorkspaceScopeOptions(analyticsInsightsCmd)
 analyticsInsightsCmd.action(withValidation(analyticsSchema, analyticsInsightsAction))
 
 // Setup alias for 'session' to 'search'

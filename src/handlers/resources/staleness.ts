@@ -81,20 +81,12 @@ export function getStalenessResourceDefinitions(): InternalResourceDef[] {
                             continue
                         }
 
-                        let searchResult = context.db.searchEntries('', {
+                        const searchResult = context.db.searchEntries('', {
                             projectNumber: entry.project_number,
                             workspaceId: name,
                             limit: 1,
                             sortBy: 'timestamp'
                         })
-                        if (searchResult.entries.length === 0 && name !== 'default') {
-                            searchResult = context.db.searchEntries('', {
-                                projectNumber: entry.project_number,
-                                workspaceId: 'default',
-                                limit: 1,
-                                sortBy: 'timestamp'
-                            })
-                        }
 
                         const latestEntry = searchResult.entries[0]
                         const status = calculateStaleness(latestEntry?.timestamp, thresholds, now)
@@ -162,21 +154,12 @@ export function getStalenessResourceDefinitions(): InternalResourceDef[] {
                         }
                     }
 
-                    let searchResult = context.db.searchEntries('', {
+                    const searchResult = context.db.searchEntries('', {
                         projectNumber,
                         workspaceId: resolvedWorkspace,
                         limit: 5,
                         sortBy: 'timestamp'
                     })
-                    if (searchResult.entries.length === 0 && resolvedWorkspace !== 'default') {
-                        resolvedWorkspace = 'default'
-                        searchResult = context.db.searchEntries('', {
-                            projectNumber,
-                            workspaceId: resolvedWorkspace,
-                            limit: 5,
-                            sortBy: 'timestamp'
-                        })
-                    }
 
                     const tagsBreakdown: Record<string, number> = {}
                     const typeBreakdown: Record<string, number> = {}

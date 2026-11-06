@@ -86,7 +86,7 @@ export async function buildBriefingData(
     const journal = buildJournalContext(context, config, activeProjectNumber, activeWorkspaceId)
     const github = await buildGitHubSection(activeGithub, config)
     const team = buildTeamContext(context, config, activeProjectNumber, activeWorkspaceId)
-    const insights = buildInsightsSection(context)
+    const insights = buildInsightsSection(context, activeWorkspaceId)
     const graphStats = buildGraphContext(context, journal.workspaceId)
 
     const latestPreviews = journal.latestEntries.map((e) => `#${e.id} (${e.type}): ${e.preview}`)
@@ -123,7 +123,7 @@ export async function buildBriefingData(
         hasCodeMap: system.hasCodeMap,
         lastReleaseDaysAgo: system.lastReleaseDaysAgo ?? undefined,
         localCheck: system.localCheck ?? undefined,
-        workspaceId: system.workspaceId ?? journal.workspaceId,
+        workspaceId: journal.workspaceId ?? system.workspaceId,
         deprecationWarnings: context.runtime?.metrics?.getDeprecationWarnings() ?? [],
     })
 

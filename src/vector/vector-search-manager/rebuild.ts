@@ -1,4 +1,5 @@
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
+import type { JournalEntry } from '../../types/index.js'
 import type { ProgressContext } from '../../utils/progress-utils.js'
 import { sendProgress } from '../../utils/progress-utils.js'
 import { logger } from '../../utils/logger.js'
@@ -7,6 +8,99 @@ import type { VectorSearchManager } from './manager.js'
 
 // Allow mocking in tests
 export const setTimeoutFn = globalThis.setTimeout
+
+interface RebuildStats {
+    indexed: number
+    skipped: number
+    errorsCount: number
+    firstError: string | null
+}
+
+/** Returns true when the entry should be skipped (filtered out or already indexed). */
+function shouldSkipEntry(
+    dbAdapter: IDatabaseAdapter,
+    entry: JournalEntry,
+    force: boolean,
+    projectNumber: number | undefined
+): boolean {
+    if (projectNumber !== undefined && entry.projectNumber !== projectNumber) {
+        return true
+    }
+    if (force) return false
+
+    // Check if already indexed unless forced
+    try {
+        return Boolean(dbAdapter.getVector(entry.id))
+    } catch (err) {
+        // Ignore check error and try to index anyway
+        logger.debug('Vector existence check failed; indexing entry anyway', {
+            entryId: entry.id,
+            error: err instanceof Error ? err.message : String(err),
+        })
+        return false
+    }
+}
+
+/** Embed one entry; returns null (and records the error) on failure. */
+async function embedEntry(
+    manager: VectorSearchManager,
+    entry: JournalEntry,
+    stats: RebuildStats
+): Promise<{ entryId: number; embedding: Float32Array } | null> {
+    try {
+        const tagsText =
+            entry.tags !== undefined && entry.tags !== null && entry.tags.length > 0
+                ? ` [Tags: ${entry.tags.join(', ')}]`
+                : ''
+        const text = `[${entry.entryType}]${tagsText} ${entry.content}`
+        const embedding = await manager.generateEmbedding(text)
+        return { entryId: entry.id, embedding }
+    } catch (err) {
+        stats.errorsCount++
+        const errorMessage = err instanceof Error ? err.message : String(err)
+        stats.firstError ??= errorMessage
+        logger.error(`Failed to generate embedding for entry ${entry.id}`, {
+            error: errorMessage,
+        })
+        return null
+    }
+}
+
+/** Embed and upsert one batch of entries, updating `stats`. */
+async function processBatch(
+    manager: VectorSearchManager,
+    dbAdapter: IDatabaseAdapter,
+    batch: JournalEntry[],
+    force: boolean,
+    projectNumber: number | undefined,
+    stats: RebuildStats
+): Promise<void> {
+    const vectorsToUpsert: { entryId: number; embedding: Float32Array }[] = []
+
+    for (const entry of batch) {
+        if (shouldSkipEntry(dbAdapter, entry, force, projectNumber)) {
+            stats.skipped++
+            continue
+        }
+        const vector = await embedEntry(manager, entry, stats)
+        if (vector !== null) vectorsToUpsert.push(vector)
+    }
+
+    // Upsert the batch into the database
+    if (vectorsToUpsert.length === 0) return
+    try {
+        dbAdapter.upsertVectors(vectorsToUpsert)
+        stats.indexed += vectorsToUpsert.length
+    } catch (err) {
+        stats.errorsCount += vectorsToUpsert.length
+        const errorMessage = err instanceof Error ? err.message : String(err)
+        stats.firstError ??= errorMessage
+        logger.error('Failed to upsert vector batch', {
+            error: errorMessage,
+            batchSize: vectorsToUpsert.length,
+        })
+    }
+}
 
 /**
  * Rebuild the vector index incrementally to avoid blocking the event loop or database.
@@ -28,10 +122,7 @@ export async function rebuildIndex(
     const batchSize = options?.batchSize ?? REBUILD_BATCH_SIZE
     const pageSize = options?.pageSize ?? REBUILD_PAGE_SIZE
 
-    let indexed = 0
-    let skipped = 0
-    let errorsCount = 0
-    let firstError: string | null = null
+    const stats: RebuildStats = { indexed: 0, skipped: 0, errorsCount: 0, firstError: null }
 
     let totalEntries: number
     try {
@@ -57,65 +148,7 @@ export async function rebuildIndex(
         // Process a page in smaller batches
         for (let i = 0; i < entries.length; i += batchSize) {
             const batch = entries.slice(i, i + batchSize)
-            const vectorsToUpsert: { entryId: number; embedding: Float32Array }[] = []
-
-            for (const entry of batch) {
-                if (options?.projectNumber !== undefined && entry.projectNumber !== options.projectNumber) {
-                    skipped++
-                    continue
-                }
-                // Check if already indexed unless forced
-                if (!force) {
-                    try {
-                        const exists = dbAdapter.getVector(entry.id)
-                        if (exists) {
-                            skipped++
-                            continue
-                        }
-                    } catch (err) {
-                        // Ignore check error and try to index anyway
-                        logger.debug('Vector existence check failed; indexing entry anyway', {
-                            entryId: entry.id,
-                            error: err instanceof Error ? err.message : String(err),
-                        })
-                    }
-                }
-
-                try {
-                    const tagsText =
-                        entry.tags !== undefined &&
-                        entry.tags !== null &&
-                        entry.tags.length > 0
-                            ? ` [Tags: ${entry.tags.join(', ')}]`
-                            : ''
-                    const text = `[${entry.entryType}]${tagsText} ${entry.content}`
-                    const embedding = await manager.generateEmbedding(text)
-                    vectorsToUpsert.push({ entryId: entry.id, embedding })
-                } catch (err) {
-                    errorsCount++
-                    const errorMessage = err instanceof Error ? err.message : String(err)
-                    firstError ??= errorMessage
-                    logger.error(`Failed to generate embedding for entry ${entry.id}`, {
-                        error: errorMessage,
-                    })
-                }
-            }
-
-            // Upsert the batch into the database
-            if (vectorsToUpsert.length > 0) {
-                try {
-                    dbAdapter.upsertVectors(vectorsToUpsert)
-                    indexed += vectorsToUpsert.length
-                } catch (err) {
-                    errorsCount += vectorsToUpsert.length
-                    const errorMessage = err instanceof Error ? err.message : String(err)
-                    firstError ??= errorMessage
-                    logger.error('Failed to upsert vector batch', {
-                        error: errorMessage,
-                        batchSize: vectorsToUpsert.length
-                    })
-                }
-            }
+            await processBatch(manager, dbAdapter, batch, force, options?.projectNumber, stats)
 
             // Yield to event loop
             await new Promise((resolve) => setTimeoutFn(resolve, 0))
@@ -123,14 +156,14 @@ export async function rebuildIndex(
                 progress,
                 offset + i + batch.length,
                 totalEntries,
-                `Indexing... (${indexed} indexed, ${skipped} skipped)`
+                `Indexing... (${stats.indexed} indexed, ${stats.skipped} skipped)`
             )
         }
 
         offset += pageSize
     }
 
-    if (errorsCount === 0) {
+    if (stats.errorsCount === 0) {
         try {
             dbAdapter.cleanupStaleVectors()
         } catch (err) {
@@ -139,9 +172,9 @@ export async function rebuildIndex(
     }
 
     return {
-        success: errorsCount === 0,
-        indexed,
-        failed: errorsCount,
-        firstError,
+        success: stats.errorsCount === 0,
+        indexed: stats.indexed,
+        failed: stats.errorsCount,
+        firstError: stats.firstError,
     }
 }

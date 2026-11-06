@@ -21,7 +21,15 @@ import {
     handleViewFile,
     handleListDir,
 } from '../../../handlers/tools/core/dummy-healing.js'
-import { TOOL_GROUPS } from '../../../filtering/tool-constants.js'
+import {
+    ALL_KNOWN_GROUP_TOOLS,
+    deepCamelToSnake,
+    formatSuccessPayload,
+    formatTokenEstimatedError,
+    isSuccessObject,
+    matchesExactName,
+    parseZodErrorsFromMessage,
+} from './call-interceptor-helpers.js'
 import { isToolVisibleForFilter } from '../../../filtering/tool-filter.js'
 import type { PromptDefinition } from '../../registration.js'
 import { logAgentIssue } from '../../../utils/issue-logger.js'
@@ -53,84 +61,6 @@ const ALIASED_VIEW_FILE_NAMES = new Set(
 const ALIASED_LIST_DIR_NAMES = new Set(
     DUMMY_DIR_LIST_TOOL_NAMES.filter((name) => name !== 'ls' && name !== 'dir')
 )
-
-const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
-const ALL_KNOWN_GROUP_TOOLS = new Set(Object.values(TOOL_GROUPS).flat())
-const UPPERCASE_RE = /[A-Z]/
-
-function deepCamelToSnake(obj: unknown, depth = 0): unknown {
-    if (depth > 12) return obj
-    if (Array.isArray(obj)) return obj.map((item) => deepCamelToSnake(item, depth + 1))
-    if (obj !== null && typeof obj === 'object') {
-        const newObj: Record<string, unknown> = {}
-        for (const [k, v] of Object.entries(obj)) {
-            if (FORBIDDEN_KEYS.has(k)) continue
-            const snakeKey = UPPERCASE_RE.test(k)
-                ? k
-                      .replace(/^[A-Z]/, (letter) => letter.toLowerCase())
-                      .replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
-                : k
-            if (FORBIDDEN_KEYS.has(snakeKey)) continue
-            newObj[snakeKey] = deepCamelToSnake(v, depth + 1)
-        }
-        return newObj
-    }
-    return obj
-}
-
-function formatSuccessPayload(payload: unknown): {
-    content: { type: 'text'; text: string }[]
-    structuredContent: Record<string, unknown>
-} {
-    const enriched = JSON.stringify(payload, null, 2)
-    return {
-        content: [{ type: 'text', text: enriched }],
-        structuredContent: payload as Record<string, unknown>,
-    }
-}
-
-function formatTokenEstimatedError(
-    errorResult: Record<string, unknown>,
-    isError: boolean
-): {
-    content: { type: 'text'; text: string }[]
-    structuredContent: Record<string, unknown>
-    isError?: boolean
-} {
-    const enriched = JSON.stringify({ ...errorResult, _meta: { tokenEstimate: 0 } })
-    const tokenEstimate = Math.ceil(Buffer.byteLength(enriched, 'utf8') / 4)
-    const finalText = enriched.replace('"tokenEstimate":0', `"tokenEstimate":${tokenEstimate}`)
-    return {
-        content: [{ type: 'text', text: finalText }],
-        structuredContent: errorResult,
-        ...(isError ? { isError: true } : {}),
-    }
-}
-
-function parseZodErrorsFromMessage(rawText: string, prefixToRemove?: string): string {
-    let errorMessage =
-        prefixToRemove !== undefined ? rawText.replace(prefixToRemove, '') : rawText
-    try {
-        const parts = rawText.split(': [')
-        if (parts.length > 1) {
-            const zodErrors = JSON.parse('[' + parts[1]) as { path?: string[]; message?: string }[]
-            errorMessage = zodErrors
-                .map((e) => `${e.path && e.path.length > 0 ? e.path.join('.') : 'unknown'}: ${e.message ?? 'invalid'}`)
-                .join('; ')
-        }
-    } catch {
-        // Fallback to raw message if parsing fails
-    }
-    return errorMessage
-}
-
-function isSuccessObject(res: unknown): boolean {
-    return typeof res === 'object' && res !== null && (res as Record<string, unknown>)['success'] === true
-}
-
-function matchesExactName(name: string, list: string[]): boolean {
-    return list.includes(name)
-}
 
 async function tryAutonomousUnknownToolFallback(
     requestedTool: string,

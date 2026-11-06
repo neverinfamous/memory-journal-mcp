@@ -135,6 +135,12 @@ export function getMiscTools(context: ToolContext): ToolDefinition[] {
                         success: true,
                         count: results.length,
                         results,
+                        ...(input.project_number !== undefined
+                            ? {
+                                  warning:
+                                      'project_number was ignored: audit log entries are not project-scoped, so results are not filtered by project.',
+                              }
+                            : {}),
                     }
                 } catch (err) {
                     return formatHandlerError(err)

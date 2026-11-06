@@ -30,8 +30,8 @@ import {
     TeamBatchDeleteEntriesSchemaMcp,
     TeamBatchDeleteEntriesOutputSchema,
 } from '../schemas.js'
-import { createBatchProgressReporter, sendProgress } from '../../../../utils/progress-utils.js'
-import { autoIndexEntry } from '../../../../utils/vector-index-helpers.js'
+import { sendProgress } from '../../../../utils/progress-utils.js'
+import { indexBatchEntries } from '../../batch-indexing.js'
 
 // ============================================================================
 // Tool Definitions
@@ -130,7 +130,8 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                                 ...linkRequestedRelationships(
                                     teamDb,
                                     createdEntry.id,
-                                    sourceEntry?.relationships
+                                    sourceEntry?.relationships,
+                                    inputs[i]?.workspaceId
                                 )
                             )
                         }
@@ -143,25 +144,15 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
 
                     await sendProgress(context.progress, 1, 2, `Created ${String(entries.length)} team entries...`)
 
-                    const indexStatuses: string[] = []
-                    const indexErrors: Error[] = []
-                    if (input.auto_index && context.teamVectorManager) {
-                        const reporter = createBatchProgressReporter(context.progress, entries.length, 10)
-                        for (let i = 0; i < entries.length; i++) {
-                            const entry = entries[i]
-                            if (entry) {
-                                try {
-                                    const status = await autoIndexEntry(context.teamVectorManager, teamDb, entry.id)
-                                    if (status) indexStatuses.push(status)
-                                } catch (err) {
-                                    indexErrors.push(new Error(`Team entry ${entry.id} vector indexing failed: ${err instanceof Error ? err.message : String(err)}`))
-                                }
-                            }
-                            await reporter(i + 1, `Indexing ${String(i + 1)}/${String(entries.length)}...`)
-                        }
-                    } else {
-                        await sendProgress(context.progress, 2, 2, 'Team batch create complete')
-                    }
+                    const { indexStatuses, indexErrors } = await indexBatchEntries({
+                        progress: context.progress,
+                        vectorManager: context.teamVectorManager,
+                        db: teamDb,
+                        autoIndex: input.auto_index,
+                        entryIds: entries.map((e) => e.id),
+                        errorPrefix: 'Team entry',
+                        doneMessage: 'Team batch create complete',
+                    })
 
                     const allErrors = [
                         ...errors.map(e => new Error(`Item at index ${e.index} failed: ${e.error.message}`)),
@@ -296,28 +287,19 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
 
                     await sendProgress(context.progress, 1, 2, `Updated ${String(entries.length)} team entries...`)
 
-                    const indexStatuses: string[] = []
-                    const indexErrors: Error[] = []
-                    if (input.auto_index && context.teamVectorManager) {
-                        const reporter = createBatchProgressReporter(context.progress, entries.length, 10)
-                        for (let i = 0; i < entries.length; i++) {
-                            const entry = entries[i]
-                            if (entry) {
-                                const originalUpdate = input.updates.find(u => u.entry_id === entry.id)
-                                if (originalUpdate?.content) {
-                                    try {
-                                        const status = await autoIndexEntry(context.teamVectorManager, teamDb, entry.id)
-                                        if (status) indexStatuses.push(status)
-                                    } catch (err) {
-                                        indexErrors.push(new Error(`Team entry ${entry.id} vector indexing failed: ${err instanceof Error ? err.message : String(err)}`))
-                                    }
-                                }
-                            }
-                            await reporter(i + 1, `Indexing ${String(i + 1)}/${String(entries.length)}...`)
-                        }
-                    } else {
-                        await sendProgress(context.progress, 2, 2, 'Team batch update complete')
-                    }
+                    const contentUpdatedIds = new Set(
+                        input.updates.filter((u) => u.content).map((u) => u.entry_id)
+                    )
+                    const { indexStatuses, indexErrors } = await indexBatchEntries({
+                        progress: context.progress,
+                        vectorManager: context.teamVectorManager,
+                        db: teamDb,
+                        autoIndex: input.auto_index,
+                        entryIds: entries.map((e) => e.id),
+                        errorPrefix: 'Team entry',
+                        doneMessage: 'Team batch update complete',
+                        shouldIndex: (id) => contentUpdatedIds.has(id),
+                    })
 
                     const finalNotFound = [...notFound, ...updateNotFound]
 

@@ -12,6 +12,7 @@ import { enforceAccessBoundary } from '../../../auth/validation.js'
 import { globalSubscriptionManager } from '../../../server/subscription-manager.js'
 import { getGitHubIntegration } from '../../../github/github-integration/index.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
+import { logger } from '../../../utils/logger.js'
 import type { ExecuteCodeInput } from './payload-synthesizer.js'
 
 interface ZodLike {
@@ -199,8 +200,11 @@ async function autoPopulateGithubUrls(
                 paramsObj['pr_url'] = `https://github.com/${repoInfo.owner}/${repoInfo.repo}/pull/${String(Number(paramsObj['pr_number']))}`
             }
         }
-    } catch {
-        // Ignore errors and proceed without auto-populated github URLs
+    } catch (err) {
+        logger.debug('Could not auto-populate GitHub URLs; proceeding without them', {
+            module: 'CodeMode',
+            error: err instanceof Error ? err.message : String(err),
+        })
     }
 }
 
@@ -214,6 +218,10 @@ async function normalizeDispatchParams(
     if (!isRecord(finalParams)) return { params: finalParams }
 
     const paramsObj = { ...finalParams }
+    // When the caller named a project but no workspace, let resolveProjectContext derive the
+    // workspace from that project instead of overriding it with the session workspace.
+    const callerPassedProjectOnly =
+        paramsObj['project_number'] !== undefined && paramsObj['workspace_id'] === undefined && paramsObj['workspace'] === undefined
     if (paramsObj['project_number'] === undefined && projectId !== undefined && checkSchemaAcceptsKey(tool.inputSchema, 'project_number')) {
         paramsObj['project_number'] = projectId
     }
@@ -223,7 +231,7 @@ async function normalizeDispatchParams(
     if (typeof paramsObj['workspace_id'] === 'number') {
         paramsObj['workspace_id'] = String(paramsObj['workspace_id'])
     }
-    if (paramsObj['workspace_id'] === undefined && workspaceId !== undefined && checkSchemaAcceptsKey(tool.inputSchema, 'workspace_id')) {
+    if (!callerPassedProjectOnly && paramsObj['workspace_id'] === undefined && workspaceId !== undefined && checkSchemaAcceptsKey(tool.inputSchema, 'workspace_id')) {
         paramsObj['workspace_id'] = workspaceId
     }
 

@@ -66,6 +66,8 @@ export function getTeamExportTools(context: ToolContext): ToolDefinition[] {
                     const hasTagFilter = tags && tags.length > 0
                     const fetchLimit = hasTypeFilter || hasTagFilter ? 500 : limit
 
+                    const projectFilter = project_number !== undefined ? { projectNumber: project_number } : {}
+
                     // Fetch entries with optional filters
                     let entries
                     if (start_date !== undefined || end_date !== undefined) {
@@ -77,6 +79,7 @@ export function getTeamExportTools(context: ToolContext): ToolDefinition[] {
                                 tags,
                                 limit: fetchLimit,
                                 workspaceId: wsId,
+                                ...projectFilter,
                             }
                         ).entries
                     } else if (hasTypeFilter || hasTagFilter) {
@@ -86,6 +89,7 @@ export function getTeamExportTools(context: ToolContext): ToolDefinition[] {
                             tags,
                             limit: fetchLimit,
                             workspaceId: wsId,
+                            ...projectFilter,
                         }).entries
                     } else {
                         entries = teamDb.getRecentEntries(
@@ -94,7 +98,8 @@ export function getTeamExportTools(context: ToolContext): ToolDefinition[] {
                             undefined,
                             undefined,
                             undefined,
-                            wsId
+                            wsId,
+                            project_number
                         ).entries
                     }
 

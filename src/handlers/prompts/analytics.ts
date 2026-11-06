@@ -7,8 +7,8 @@ import { markUntrustedContentInline } from '../../utils/security-utils.js'
  * Build a concise analytics signal string for injection into standup/retro prompts.
  * Returns empty string when no digest is available (graceful degradation).
  */
-export function buildDigestSignalForPrompt(db: IDatabaseAdapter): string {
-    const snapshot = db.getLatestAnalyticsSnapshot?.('digest')
+export function buildDigestSignalForPrompt(db: IDatabaseAdapter, workspaceId?: string): string {
+    const snapshot = db.getLatestAnalyticsSnapshot?.('digest', workspaceId)
     if (!snapshot) return ''
 
     const data = snapshot.data

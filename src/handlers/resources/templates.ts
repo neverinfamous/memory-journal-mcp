@@ -13,6 +13,7 @@ import { resolveGitHubRepo, isResourceError, resourceWorkspace } from './shared.
 import { parseSessionCommitContext } from '../../types/auto-context.js'
 import { enrichCommits } from '../../github/commit-references/index.js'
 import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server'
+import { resolveProjectScope, collectUniqueCommits } from './template-helpers.js'
 
 /**
  * Get template resource definitions
@@ -34,7 +35,11 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                     throw new ProtocolError(ProtocolErrorCode.InvalidParams,  'Invalid project number')
                 }
 
-                const { entries } = context.db.searchEntries('', { workspaceId: resourceWorkspace(context),  projectNumber, limit: 50 })
+                const scope = resolveProjectScope(context, projectNumber)
+                if (scope.hint !== undefined) {
+                    return { projectNumber, entries: [], count: 0, hint: scope.hint }
+                }
+                const { entries } = context.db.searchEntries('', { workspaceId: scope.workspaceId,  projectNumber, limit: 50 })
                 const data = { projectNumber, entries, count: entries.length }
                 const tokenEstimate = Math.ceil(JSON.stringify(data).length / 4)
                 return { ...data, _meta: { tokenEstimate } }
@@ -192,7 +197,11 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                     throw new ProtocolError(ProtocolErrorCode.InvalidParams,  'Invalid project number')
                 }
 
-                const { entries } = context.db.searchEntries('', { workspaceId: resourceWorkspace(context),  projectNumber, limit: 200 })
+                const scope = resolveProjectScope(context, projectNumber)
+                if (scope.hint !== undefined) {
+                    return { projectNumber, commits: [], metadata: [], enrichedCommits: [], count: 0, hint: scope.hint }
+                }
+                const { entries } = context.db.searchEntries('', { workspaceId: scope.workspaceId,  projectNumber, limit: 200 })
 
                 const commits: string[] = []
                 const metadata: Record<string, unknown>[] = []
@@ -217,7 +226,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                 const uniqueCommits = Array.from(new Set(commits))
 
                 let enrichedCommits: Awaited<ReturnType<typeof enrichCommits>> = []
-                const cwd = process.cwd()
+                const cwd = scope.cwd
                 if (uniqueCommits.length > 0) {
                     enrichedCommits = await enrichCommits(
                         cwd,
@@ -252,19 +261,12 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                     throw new ProtocolError(ProtocolErrorCode.InvalidParams,  'Invalid project number')
                 }
 
-                const { entries } = context.db.searchEntries('', { workspaceId: resourceWorkspace(context),  projectNumber, limit: 200 })
-                const commits: string[] = []
-
-                for (const entry of entries) {
-                    if (entry.tags.includes('session-summary') || entry.tags.includes('commit-narrative')) {
-                        const ctx = parseSessionCommitContext(entry.autoContext)
-                        if (ctx && ctx.commits.length > 0) {
-                            commits.push(...ctx.commits)
-                        }
-                    }
+                const scope = resolveProjectScope(context, projectNumber)
+                if (scope.hint !== undefined) {
+                    return { projectNumber, issues: [], hint: scope.hint }
                 }
-
-                const uniqueCommits = Array.from(new Set(commits))
+                const { entries } = context.db.searchEntries('', { workspaceId: scope.workspaceId,  projectNumber, limit: 200 })
+                const uniqueCommits = collectUniqueCommits(entries)
                 interface IssueGroup {
                     number: number;
                     title?: string;
@@ -273,7 +275,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                     commits: { hash: string; subject: string; authorName: string; date: string; }[];
                 }
                 const issues: Record<number, IssueGroup> = {}
-                const cwd = process.cwd()
+                const cwd = scope.cwd
 
                 if (uniqueCommits.length > 0) {
                     const enrichedCommits = await enrichCommits(
@@ -329,19 +331,12 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                     throw new ProtocolError(ProtocolErrorCode.InvalidParams,  'Invalid project number')
                 }
 
-                const { entries } = context.db.searchEntries('', { workspaceId: resourceWorkspace(context),  projectNumber, limit: 200 })
-                const commits: string[] = []
-
-                for (const entry of entries) {
-                    if (entry.tags.includes('session-summary') || entry.tags.includes('commit-narrative')) {
-                        const ctx = parseSessionCommitContext(entry.autoContext)
-                        if (ctx && ctx.commits.length > 0) {
-                            commits.push(...ctx.commits)
-                        }
-                    }
+                const scope = resolveProjectScope(context, projectNumber)
+                if (scope.hint !== undefined) {
+                    return { projectNumber, pullRequests: [], hint: scope.hint }
                 }
-
-                const uniqueCommits = Array.from(new Set(commits))
+                const { entries } = context.db.searchEntries('', { workspaceId: scope.workspaceId,  projectNumber, limit: 200 })
+                const uniqueCommits = collectUniqueCommits(entries)
                 interface PRGroup {
                     number: number;
                     title?: string;
@@ -349,7 +344,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                     commits: { hash: string; subject: string; authorName: string; date: string; }[];
                 }
                 const prs: Record<number, PRGroup> = {}
-                const cwd = process.cwd()
+                const cwd = scope.cwd
 
                 if (uniqueCommits.length > 0) {
                     const enrichedCommits = await enrichCommits(

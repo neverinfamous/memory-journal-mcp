@@ -95,8 +95,13 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    // Apply final limit after filtering
+                    // Apply final limit after filtering. The adapter's cursor points past the whole
+                    // over-fetched page, so it is only valid when no filtered rows were dropped here;
+                    // otherwise following it would silently skip the dropped matches.
+                    const hasTagFilter = tags !== undefined && tags.length > 0
+                    const droppedByLimit = entries.length > limit
                     entries = entries.slice(0, limit)
+                    const nextCursor = hasTagFilter && droppedByLimit ? undefined : result.nextCursor
 
                     // Batch-fetch authors
                     const authorMap = batchFetchAuthors(
@@ -112,7 +117,7 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         entries: enriched,
                         count: enriched.length,
                         degraded: false,
-                        next_cursor: result.nextCursor,
+                        next_cursor: nextCursor,
                         suggestions: (result as { suggestions?: string[] }).suggestions,
                         correctedQuery: (result as { correctedQuery?: string }).correctedQuery,
                     }

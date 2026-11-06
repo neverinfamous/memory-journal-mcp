@@ -13,7 +13,13 @@ interface RequestedRelationship {
 
 /** Minimal adapter surface needed to create a relationship. */
 interface RelationshipLinker {
-    linkEntries(fromId: number, toId: number, type: RelationshipType): unknown
+    linkEntries(
+        fromId: number,
+        toId: number,
+        type: RelationshipType,
+        description?: string,
+        workspaceId?: string
+    ): unknown
 }
 
 /** Map accepted relationship aliases onto the canonical stored relationship type. */
@@ -37,12 +43,18 @@ function toCanonicalRelationType(relationType: RequestedRelationship['relationTy
 export function linkRequestedRelationships(
     db: RelationshipLinker,
     entryId: number,
-    relationships: readonly RequestedRelationship[] | undefined
+    relationships: readonly RequestedRelationship[] | undefined,
+    workspaceId?: string
 ): string[] {
     const warnings: string[] = []
     for (const rel of relationships ?? []) {
         try {
-            db.linkEntries(entryId, rel.targetId, toCanonicalRelationType(rel.relationType))
+            const type = toCanonicalRelationType(rel.relationType)
+            if (workspaceId !== undefined) {
+                db.linkEntries(entryId, rel.targetId, type, undefined, workspaceId)
+            } else {
+                db.linkEntries(entryId, rel.targetId, type)
+            }
         } catch (err) {
             const reason = err instanceof Error ? err.message : String(err)
             logger.warning(`Relationship link failed: ${reason}`, {
