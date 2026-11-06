@@ -145,7 +145,8 @@ Review prior entries for recurring findings and reusable patterns before draftin
                     db,
                     'code-quality-audit',
                     'Prior code-quality audits',
-                    briefingConfig
+                    briefingConfig,
+                    parsed.workspace_id
                 )
                 return {
                     messages: [{
@@ -153,24 +154,24 @@ Review prior entries for recurring findings and reusable patterns before draftin
                         content: {
                             type: 'text',
                             text: `# Adversarial Code Quality Audit
-Prompt revision: 2026-11-06-audit-pass6.
+Prompt revision: 2026-11-06-audit-pass7.
 Target: ${target}
 
 If the target is '{target}', determine it from the user's request. If the user hasn't specified a target file or module, ask them for it now.
 
 This prompt is shared by every project. Audit the repository the user named. Do not assume that repository is memory-journal-mcp, and do not copy this server's directory layout, commit script, or parameter-normalizer filenames onto a different codebase. Discover those in the target.
 
-1. Scan the target for dead code, duplication, type safety, magic values, complexity, boundary validation, monkey-patching, unused variables/exports, unhandled promises, and global scope pollution. File dead code, duplication, magic values, unused exports, and floating promises only when you quote them, and count those as Low. For a large or full-repository audit, spawn parallel read-only subagents by subsystem and assign each directory to one subagent. The parent dedupes a handler that drops a field and the callee branch it reaches into one finding with both lines. In Cursor use the Task tool with subagent type \`explore\` or \`generalPurpose\`. On any other host use that host's read-only subagent tool, and do not call a tool name that is not available in the session. Each subagent returns a path, a line number, a one-line quote, a severity, and a one-sentence fix. Severity defaults: a cross-workspace mutation is Critical; wrong-tool dispatch, false success, and a dropped isolation field are High; function length alone is Moderate; a file over 500 lines is High. A database-wide maintenance function that has no scope parameter is a product question, not an automatic Critical. A primary-key update that already rejects a workspace mismatch is Moderate. The parent re-reads every Critical and High citation, and every cross-workspace, authz, and false-success citation even when a subagent marked it Moderate. Quotes are the raw source line. Strip one wrapping backtick pair, then drop the citation if the quote is not on that line. Cap Moderate at 8 and Low at 5 per subsystem. The parent table keeps at most 12 Moderate and 8 Low. Do not cap Critical or High. Record which directories were opened and which detectors found nothing. Put the parent conversation id in every subagent prompt so replies reach the parent. Each subagent returns one coverage line per detector (run, not run, or nothing found); the parent runs any detector a subagent skipped, including function length, nesting, unused exports, schema drift, and accepted-but-ignored parameters, before it reports that detector as clean. An explicit \`'*'\` that drives a mutation against a single repository root (for example \`process.cwd()\`) is High, not an admin override. An optional workspace on a maintenance function that recent commits kept database-wide on purpose is a product note.
+1. Scan the target for dead code, duplication, type safety, magic values, complexity, boundary validation, monkey-patching, unused variables/exports, unhandled promises, and global scope pollution. File dead code, duplication, magic values, unused exports, and floating promises only when you quote them, and count those as Low. For a large or full-repository audit, spawn parallel read-only subagents by subsystem and assign each directory to one subagent. The parent dedupes a handler that drops a field and the callee branch it reaches into one finding with both lines. In Cursor use the Task tool with subagent type \`explore\` or \`generalPurpose\`. On any other host use that host's read-only subagent tool, and do not call a tool name that is not available in the session. Read-only subagents may lack network access and may not run every shell script. Tell every subagent to read function bodies in full and not only grep hits, to treat a grep-only detector as \`not run\`, and not to repeat the step 2 file-size scans. The parent runs step 2 first and passes the \`SCAN_OK\` result to each subagent. Each subagent returns a path, a line number, a one-line quote, a severity, and a one-sentence fix. Severity defaults: a cross-workspace mutation is Critical; wrong-tool dispatch, false success, and a dropped isolation field are High; function length alone is Moderate; a file over 500 lines is High. A database-wide maintenance function that has no scope parameter is a product question, not an automatic Critical. A primary-key update that already rejects a workspace mismatch is Moderate. The parent re-reads every Critical and High citation, and every cross-workspace, authz, and false-success citation even when a subagent marked it Moderate. Quotes are the raw source line. Strip one wrapping backtick pair, then drop the citation if the quote is not on that line. Cap Moderate at 8 and Low at 5 per subsystem. The parent table keeps at most 12 Moderate and 8 Low. Do not cap Critical or High. Record which directories were opened and which detectors found nothing. Put the parent conversation id in every subagent prompt so replies reach the parent. Each subagent returns one coverage line per detector (run, not run, or nothing found); the parent runs any detector a subagent skipped, including function length, nesting, unused exports, schema drift, and accepted-but-ignored parameters, before it reports that detector as clean. An explicit \`'*'\` that drives a mutation against a single repository root (for example \`process.cwd()\`) is High, not an admin override. An optional workspace on a maintenance function that recent commits kept database-wide on purpose is a product note.
    - **Mandatory Deep-Quality Detectors (Always Run)**:
      1. **Silent Catch Block Detector**: Find every \`catch\` in production source, including \`catch (e)\` and multiline catches. A catch is silent when its body does not log, rethrow, or return a structured error. Quote the body. Keep intentional best-effort fallbacks out of the table. Do not flag a catch that returns the project's structured handler error.
      2. **Cross-Platform Path Separator Assumption Detector**: Flag filesystem prefix checks (\`startsWith\` / \`endsWith\` on a resolved path without a separator boundary) and hardcoded \`'\\\\'\` or \`'/'\` used to test real filesystem paths. Prefer \`path.relative()\` and \`path.sep\`. Ignore URL, route, glob, and SQL slashes. Case-fold only on Windows.
-     3. **Cognitive Complexity & Nesting Hotspot Scan**: Flag functions over 80 lines or control-flow nesting deeper than 4. Do not file a split for a declarative registration factory whose body is a table of tool, prompt, resource, route, or schema definitions. Measure the inner handlers and real helpers. A file over 500 lines is still High when it is mostly declarations.
+     3. **Cognitive Complexity & Nesting Hotspot Scan**: Flag functions over 80 lines or control-flow nesting deeper than 4. Measure function length and nesting with a script (for example the TypeScript compiler API), not by eye, and report the measured line count. Do not file a split for a declarative registration factory whose body is a table of tool, prompt, resource, route, or schema definitions. Measure the inner handlers and real helpers. A file over 500 lines is still High when it is mostly declarations.
      4. **Schema-to-Handler Parameter Drift Check**: Every input-schema property is consumed by the handler or rewritten by that project's own parameter-normalization layer. Do not assume a file named \`param-normalizer.ts\` exists. Quote the schema field and the handler or normalizer read. Ignore fields that are forwarded as a whole parsed object.
      5. **Uncleaned Timer / EventListener Detector**: Flag \`setInterval\`, retained \`setTimeout\` handles, \`fs.watch\`, and \`process\` / server / filesystem / worker \`.on(\` registrations that lack \`unref()\`, \`clear*\`, or \`close()\` / \`finally\` cleanup. An awaited one-shot delay is not a leak.
      6. **Type-safety Detector**: Flag \`any\`, \`as any\`, TypeScript postfix non-null assertions (\`value!\`), definite assignment (\`!:\`), and a double assertion (\`as unknown as\`) that reads a property the source type does not declare. Ignore GraphQL \`Type!\`, \`!=\`, and \`!condition\`. Leave SDK boundary casts, such as simple-git options, alone. Do not file every \`as\` on a database row.
      7. **Fuzzy method dispatch**: Flag \`includes\`, \`startsWith\`, or \`endsWith\` on a method or tool name used to choose a handler. Quote the token and the name that would take the wrong branch, such as \`listDeletedEntries\` matching \`delete\`. Exact \`Map\` lookup is not fuzzy.
      8. **Accepted-but-ignored parameters**: A schema field is ignored when the handler passes a literal \`undefined\` in its place, or copies the field into a bag that no callee reads. Quote both sites. A whole parsed object that is forwarded counts as consumed.
-     9. **False success**: Flag a \`success: true\` result, or a resolved promise of one, on a path that did not perform the requested operation. Leave out a documented discovery response, including a \`_healing_note\` that says the operation did not run. A success with no such note, a failed result whose array methods return an empty collection, and a filesystem shim that returns true from a substring stay in scope.
+     9. **False success**: Flag a \`success: true\` result, or a resolved promise of one, on a path that did not perform the requested operation. Leave out a documented discovery response, including a \`_healing_note\` that says the operation did not run. A success that silently drops a requested side effect (for example a relationship link or a vector write that failed inside an empty \`catch\`) without a warning field is a false success. A success with no such note, a failed result whose array methods return an empty collection, and a filesystem shim that returns true from a substring stay in scope.
     10. **Sentinel scope**: Flag an omitted workspace that selects every row, and a supplied workspace that is replaced or dropped. An omission that becomes the server's configured default is a product note. Explicit \`'*'\` is an admin override. Flag \`'*'\` when a fallback manufactures it after a miss.
     11. **Safety gate**: Flag a \`catch\` that logs and then continues a destructive operation, such as a failed backup followed by a prune.
 2. **Scan for files exceeding 500 lines using two redundant methods.** Run both from the target repository root. Scope them to \`src\` and \`scripts\` when those directories exist. Skip test files and vendored or synced third-party trees in every detector, not only this count. Common vendored or build names are \`vendor\`, \`src/vendor\`, \`third_party\`, \`node_modules\`, \`dist\`, \`coverage\`, \`build\`, \`.next\`, and \`out\`. If \`scripts\` is absent, scan \`src\` only. Skip those directories by name before descending. Both methods must print \`SCAN_OK scanned=<n> over500=<n>\`. A scan that does not print that line failed. Do not treat that as zero files over 500 lines.
@@ -235,7 +236,8 @@ ${priorAuditSection}`
                     db,
                     'security-audit',
                     'Prior security audits',
-                    briefingConfig
+                    briefingConfig,
+                    parsed.workspace_id
                 )
                 return {
                     messages: [{
@@ -286,7 +288,8 @@ ${priorAuditSection}`
                     db,
                     'performance-audit',
                     'Prior performance audits',
-                    briefingConfig
+                    briefingConfig,
+                    parsed.workspace_id
                 )
                 return {
                     messages: [{
@@ -336,7 +339,8 @@ ${priorAuditSection}`
                     db,
                     'seo-audit',
                     'Prior SEO audits',
-                    briefingConfig
+                    briefingConfig,
+                    parsed.workspace_id
                 )
                 return {
                     messages: [{
@@ -382,7 +386,8 @@ ${priorAuditSection}`
                     db,
                     'skill-audit',
                     'Prior skill audits',
-                    briefingConfig
+                    briefingConfig,
+                    parsed.workspace_id
                 )
                 return {
                     messages: [{
@@ -426,7 +431,8 @@ ${priorAuditSection}`
                     db,
                     'workflow-audit',
                     'Prior workflow audits',
-                    briefingConfig
+                    briefingConfig,
+                    parsed.workspace_id
                 )
                 return {
                     messages: [{
