@@ -80,16 +80,48 @@ test.describe('E2E Tool Execution (via MCP SDK Client)', () => {
         expect(parsed.entry).toHaveProperty('validationStatus', 'passed')
     })
 
-    test('should execute mark_anchors_stale tool', async () => {
+    test('should execute mark_anchors_stale tool and report only rows actually updated', async () => {
+        const created = await client.callTool({
+            name: 'create_entry',
+            arguments: {
+                workspace_id: 'default',
+                project_number: 1,
+                content: 'Playwright e2e anchor entry',
+                trust_score: 0.8,
+                impact_score: 0.5,
+                validation_status: 'passed',
+                anchors: [{ anchor_path: 'package.json', anchor_type: 'file' }],
+            },
+        })
+        const createdParsed = getOutput(created) as any
+        expect(createdParsed).toHaveProperty('success', true)
+
+        const staleness = await client.callTool({
+            name: 'check_entry_staleness',
+            arguments: { entry_id: createdParsed.entry.id, workspace_id: 'default' },
+        })
+        const stalenessParsed = getOutput(staleness) as any
+        expect(stalenessParsed).toHaveProperty('success', true)
+        const anchorId = stalenessParsed.results[0].anchorId as number
+        expect(anchorId).toBeGreaterThan(0)
+
         const response = await client.callTool({
             name: 'mark_anchors_stale',
-            arguments: { updates: [{ id: 999999, status: 'stale' }] }, // It will execute but just update 0 rows in DB realistically, or maybe error depending on DB schema, but we just verify it executes without schema errors
+            arguments: {
+                workspace_id: 'default',
+                updates: [
+                    { id: anchorId, status: 'stale' },
+                    { id: 999999, status: 'stale' },
+                ],
+            },
         })
 
         expect(response.isError).toBeUndefined()
         const parsed = getOutput(response) as any
         expect(parsed).toHaveProperty('success', true)
+        // Only the real anchor is counted; the unknown id is reported instead of inflating the count.
         expect(parsed).toHaveProperty('updated_count', 1)
+        expect(parsed.not_found_ids).toEqual([999999])
     })
 
     test('should execute get_recent_entries and return entries array', async () => {
