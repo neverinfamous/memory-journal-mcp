@@ -27,6 +27,8 @@ const KEY_ALIAS_MAP: Record<string, string> = {
     shareWithTeam: 'share_with_team', share_team: 'share_with_team', team: 'share_with_team',
     anchorPath: 'anchor_path', anchorType: 'anchor_type',
     sourceTag: 'source_tag', targetTag: 'target_tag',
+    old_tag: 'source_tag', oldTag: 'source_tag', from_tag: 'source_tag', fromTag: 'source_tag',
+    new_tag: 'target_tag', newTag: 'target_tag', to_tag: 'target_tag', toTag: 'target_tag',
     fromEntryId: 'from_entry_id', fromId: 'from_entry_id',
     toEntryId: 'to_entry_id', toId: 'to_entry_id',
     relationshipType: 'relationship_type',

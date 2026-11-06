@@ -68,7 +68,10 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                     }
 
                     // Verify both entries exist and belong to the project
-                    const fromEntry = teamDb.getEntryById(from_entry_id, wsId)
+                    let fromEntry = teamDb.getEntryById(from_entry_id, wsId)
+                    if (!fromEntry && workspace_id === undefined) {
+                        fromEntry = teamDb.getEntryById(from_entry_id, '*')
+                    }
                     if (!fromEntry) {
                         return {
                             success: false,
@@ -89,7 +92,10 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                             recoverable: true,
                         }
                     }
-                    const toEntry = teamDb.getEntryById(to_entry_id, wsId)
+                    let toEntry = teamDb.getEntryById(to_entry_id, wsId)
+                    if (!toEntry && workspace_id === undefined) {
+                        toEntry = teamDb.getEntryById(to_entry_id, '*')
+                    }
                     if (!toEntry) {
                         return {
                             success: false,
@@ -176,7 +182,10 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                     let entryIds: number[] = []
 
                     if (entry_id !== undefined) {
-                        const fromEntry = teamDb.getEntryById(entry_id, wsId)
+                        let fromEntry = teamDb.getEntryById(entry_id, wsId)
+                        if (!fromEntry && workspace_id === undefined) {
+                            fromEntry = teamDb.getEntryById(entry_id, '*')
+                        }
                         if (!fromEntry) {
                             return {
                                 success: false,

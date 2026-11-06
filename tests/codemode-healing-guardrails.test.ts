@@ -2454,5 +2454,68 @@ return { success: true, projectId };
             expect(intercepted.args[0]?.['owner']).toBe('neverinfamous')
             expect(intercepted.args[0]?.['repo']).toBe('memory-journal-mcp')
         })
+
+        it('should heal tag aliases in healAgentHallucinations', async () => {
+            const { healAgentHallucinations } = await import('../src/handlers/tools/schemas/hallucination-healer.js')
+            const payload = {
+                old_tag: 'legacy-tag',
+                new_tag: 'modern-tag'
+            }
+            const healed = healAgentHallucinations(payload) as Record<string, unknown>
+            expect(healed['source_tag']).toBe('legacy-tag')
+            expect(healed['target_tag']).toBe('modern-tag')
+
+            const camelPayload = {
+                oldTag: 'old-name',
+                newTag: 'new-name'
+            }
+            const healedCamel = healAgentHallucinations(camelPayload) as Record<string, unknown>
+            expect(healedCamel['source_tag']).toBe('old-name')
+            expect(healedCamel['target_tag']).toBe('new-name')
+        })
+
+        it('should allow search_entries with workspace_id without query string', async () => {
+            const { callTool } = await import('../src/handlers/tools/index.js')
+            const mockDb = {
+                getRecentEntries: vi.fn().mockReturnValue({ entries: [{ id: 1, content: 'test' }], count: 1 }),
+                searchEntries: vi.fn().mockReturnValue({
+                    entries: [{ id: 1, content: 'test' }],
+                    total: 1,
+                    searchMode: 'fts',
+                    degraded: false
+                }),
+                getSearchFacets: vi.fn().mockReturnValue({ tags: [], entryTypes: [] })
+            } as any
+
+            const resDefault = (await callTool('search_entries', { workspace_id: 'default', limit: 10 }, mockDb, undefined, undefined, mockConfig)) as Record<string, unknown>
+            expect(resDefault['error']).toBeUndefined()
+            expect(resDefault['entries']).toBeDefined()
+
+            const resWildcard = (await callTool('search_entries', { workspace_id: '*', limit: 10 }, mockDb, undefined, undefined, mockConfig)) as Record<string, unknown>
+            expect(resWildcard['error']).toBeUndefined()
+            expect(resWildcard['entries']).toBeDefined()
+        })
+
+        it('should allow visualize_relationships to fallback to wildcard when workspace_id is omitted', async () => {
+            const { callTool } = await import('../src/handlers/tools/index.js')
+            const mockDb = {
+                getEntryById: vi.fn().mockImplementation((id: number, wsId: string) => {
+                    // Fail if searching specifically in local workspace, succeed if wildcard
+                    if (wsId === '*') {
+                        return { id, workspaceId: 'adamic', deletedAt: null, content: 'Test entry' }
+                    }
+                    return null
+                }),
+                visualizeRelationships: vi.fn().mockReturnValue({
+                    nodes: [{ id: 14361, group: 'maintenance', metadata: { content: 'Test' } }],
+                    edges: []
+                })
+            } as any
+
+            const res = (await callTool('visualize_relationships', { entry_id: 14361, depth: 1 }, mockDb, undefined, undefined, mockConfig)) as Record<string, unknown>
+            expect(res['error']).toBeUndefined()
+            expect(res['mermaid']).toBeDefined()
+            expect(res['entry_count']).toBe(1)
+        })
     })
 })

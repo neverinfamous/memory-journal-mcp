@@ -372,7 +372,7 @@ ${optionCHeading}
      - 🧠 **Episodic-to-Semantic Compaction**: When \`>10\` granular \`test_entry\` or incremental \`development_note\` entries older than \`14 days\` exist for the same feature/session, synthesize a single semantic \`retrospective\` or \`project_decision\` entry linked via \`evolves_from\` and archive the raw fragments (\`is_archived: true\`).
      - 🛡️ **Trust Calibration**: Normalize trust scores (\`trust_score\` between \`0.90\`–\`1.00\` for verified code/tests).
      - 💥 **Impact Calibration**: Calibrate impact scores (\`impact_score\` between \`0.30\`–\`0.80\` based on blast radius).
-     - 🏷️ **Tag Consolidation & Significance**: Assign explicit \`significance_type\`, enrich empty/generic tag lists, and merge synonymous tags via \`mj.admin.mergeTags\`.
+     - 🏷️ **Tag Consolidation & Significance**: Assign explicit \`significance_type\`, enrich empty/generic tag lists, and merge synonymous tags globally via \`mj.admin.mergeTags({ source_tag, target_tag, workspace_id: '*' })\` (never iterate per-workspace to avoid "Tag not found" on subsequent scopes).
      - 🧹 **Noise Pruning, Auto-Prune & Vector Parity**: Soft-delete zero-value transient noise (\`significanceType === null\`) via \`mj.admin.deleteEntry\`, run \`mj.admin.runAutoPrune({})\`, and verify \`mj.search.getVectorIndexStats({})\` (rebuilding via \`mj.admin.rebuildVectorIndex({})\` if drifted).
 3. **Subagent Batch Parallelization & Strict Isolation**:
    - Delegate domain project workloads to parallel subagents using \`Model: 'inherit'\`.

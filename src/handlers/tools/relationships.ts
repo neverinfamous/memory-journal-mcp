@@ -227,7 +227,10 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                     // Guard: both entries must exist and not be soft-deleted.
                     // db.linkEntries only enforces FK against physical rows, so soft-deleted
                     // entries (deletedAt set) would pass the FK check silently.
-                    const fromEntry = db.getEntryById(input.from_entry_id, wsId)
+                    let fromEntry = db.getEntryById(input.from_entry_id, wsId)
+                    if (!fromEntry && input.workspace_id === undefined) {
+                        fromEntry = db.getEntryById(input.from_entry_id, '*')
+                    }
                     if (!fromEntry || fromEntry.deletedAt) {
                         return {
                             ...formatHandlerError(
@@ -236,7 +239,10 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                             success: false,
                         }
                     }
-                    const toEntry = db.getEntryById(input.to_entry_id, wsId)
+                    let toEntry = db.getEntryById(input.to_entry_id, wsId)
+                    if (!toEntry && input.workspace_id === undefined) {
+                        toEntry = db.getEntryById(input.to_entry_id, '*')
+                    }
                     if (!toEntry || toEntry.deletedAt) {
                         return {
                             ...formatHandlerError(
@@ -322,7 +328,10 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                     const input = VisualizeInputSchema.parse(VisualizeInputSchemaMcp.parse(params))
                     const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
                     if (input.entry_id !== undefined) {
-                        const entry = db.getEntryById(input.entry_id, wsId)
+                        let entry = db.getEntryById(input.entry_id, wsId)
+                        if (!entry && input.workspace_id === undefined) {
+                            entry = db.getEntryById(input.entry_id, '*')
+                        }
                         if (!entry || entry.deletedAt) {
                             return {
                                 ...formatHandlerError(
@@ -367,7 +376,7 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                             .replace(/"/g, "'")
                             .replace(/\[/g, '(')
                             .replace(/\]/g, ')')
-                        const entryTypeShort = node.group.slice(0, 20)
+                        const entryTypeShort = (node.group || '').slice(0, 20)
                         mermaidLines.push(
                             `    E${node.id}["#${node.id}: ${contentPreview}<br/>${entryTypeShort}"]`
                         )
