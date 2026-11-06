@@ -57,8 +57,14 @@ export function extractUriFromArgs(args: Record<string, unknown>): string | unde
         }
     }
     if (uri !== undefined && uri !== '' && !uri.includes('://')) {
-        const isRootResource = MEMORY_ROOT_PREFIXES.some((prefix) => uri?.startsWith(prefix))
-        uri = isRootResource ? `memory://${uri}` : `memory://briefing/${uri}`
+        const candidateUri = uri
+        const isRootResource = MEMORY_ROOT_PREFIXES.some(
+            (prefix) =>
+                candidateUri === prefix ||
+                candidateUri.startsWith(`${prefix}/`) ||
+                candidateUri.startsWith(`${prefix}?`)
+        )
+        uri = isRootResource ? `memory://${candidateUri}` : `memory://briefing/${candidateUri}`
     }
     return uri
 }

@@ -33,6 +33,7 @@ export class TokenValidator {
     private readonly audience: string
     private readonly clockTolerance: number
     private readonly jwksCacheTtl: number
+    private readonly algorithms: string[]
 
     private jwks: jose.JWTVerifyGetKey | null = null
     private jwksExpiry = 0
@@ -43,6 +44,10 @@ export class TokenValidator {
         this.audience = config.audience
         this.clockTolerance = config.clockTolerance ?? 60
         this.jwksCacheTtl = config.jwksCacheTtl ?? 3600
+        this.algorithms =
+            config.algorithms !== undefined && config.algorithms.length > 0
+                ? config.algorithms
+                : ['RS256', 'RS384', 'RS512', 'ES256', 'ES384', 'ES512', 'EdDSA']
 
         const issuerUrl = new URL(this.issuer)
         const jwksUrl = new URL(this.jwksUri)
@@ -91,7 +96,7 @@ export class TokenValidator {
                 issuer: this.issuer,
                 audience: this.audience,
                 clockTolerance: this.clockTolerance,
-                algorithms: ['RS256', 'RS384', 'RS512', 'ES256', 'ES384', 'ES512', 'EdDSA'],
+                algorithms: this.algorithms,
                 // jose only checks `exp` when it is present. Require it so a validly signed token
                 // without an expiry cannot become a permanent credential.
                 requiredClaims: ['exp'],

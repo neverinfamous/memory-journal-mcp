@@ -157,10 +157,9 @@ export async function deliverReport(report: string, snapshot: DigestSnapshot, op
     const TIMEOUT_MS = 10000
 
     for (let attempt = 1; attempt <= MAX_RETRIES + 1; attempt++) {
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => { controller.abort() }, TIMEOUT_MS)
         try {
-            const controller = new AbortController()
-            const timeoutId = setTimeout(() => { controller.abort() }, TIMEOUT_MS)
-
             const response = await fetch(webhookUrl, {
                 method: 'POST',
                 headers,
@@ -168,8 +167,6 @@ export async function deliverReport(report: string, snapshot: DigestSnapshot, op
                 signal: controller.signal,
                 redirect: 'error',
             })
-            
-            clearTimeout(timeoutId)
 
             if (response.ok) {
                 logger.info('Digest report delivered successfully', { 
@@ -211,6 +208,8 @@ export async function deliverReport(report: string, snapshot: DigestSnapshot, op
                 })
                 return false
             }
+        } finally {
+            clearTimeout(timeoutId)
         }
     }
 

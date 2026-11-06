@@ -42,16 +42,16 @@ try {
     
     // Perform the encryption in-place on the copy
     if (key.startsWith("x'") && key.endsWith("'")) {
-        db.pragma(`rekey = "${key}"`)
+        db.pragma(`rekey = "${key.replace(/"/g, '""')}"`)
     } else {
-        db.pragma(`rekey = '${key}'`)
+        db.pragma(`rekey = '${key.replace(/'/g, "''")}'`)
     }
     
     // Close to save
     db.close()
     
     console.log('✅ Database encrypted successfully.')
-    console.log(`To use it, start the server with DB_ENCRYPTION_KEY=${key}`)
+    console.log('To use it, start the server with DB_ENCRYPTION_KEY=<your-key>')
     console.log(`and point the database configuration to ${outPath}.`)
 } catch (error) {
     console.error('❌ Failed to encrypt database:', error)
@@ -60,7 +60,7 @@ try {
             fs.unlinkSync(outPath)
             console.log(`Cleaned up partial output file: ${outPath}`)
         } catch (e) {
-            // ignore
+            console.warn(`Warning: Failed to clean up partial output file ${outPath}:`, e)
         }
     }
     process.exit(1)

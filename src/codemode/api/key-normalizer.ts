@@ -29,6 +29,7 @@ export function convertKeysToSnakeCase(obj: Record<string, unknown>, methodName?
     }
 
     const methodLower = methodName?.toLowerCase()
+    const isLinkMethod = methodName !== undefined && hasMethodToken(methodName, 'link')
     const githubTokens = new Set(['github', 'issue', 'issues', 'pr', 'prs', 'milestone', 'milestones'])
     const isGithubTool =
         methodName !== undefined && methodTokens(methodName).some((token) => githubTokens.has(token))
@@ -39,7 +40,7 @@ export function convertKeysToSnakeCase(obj: Record<string, unknown>, methodName?
 
         if (snakeKey === 'id' && !('entry_id' in obj) && !('entryId' in obj)) {
             snakeKey = 'entry_id'
-        } else if (methodLower?.includes('link')) {
+        } else if (isLinkMethod) {
             if (
                 (snakeKey === 'source' || snakeKey === 'source_id' || snakeKey === 'from_id') &&
                 !('from_entry_id' in obj) &&

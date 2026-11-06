@@ -8,7 +8,7 @@ import { ICON_GITHUB } from '../../constants/icons.js'
 // removed ENTRY_COLUMNS
 import { ASSISTANT_FOCUSED } from '../../utils/resource-annotations.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from './shared.js'
-import { resolveGitHubRepo, isResourceError } from './shared.js'
+import { resolveGitHubRepo, isResourceError, resourceWorkspace } from './shared.js'
 import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server'
 
 /**
@@ -66,7 +66,7 @@ export function getGraphResourceDefinitions(): InternalResourceDef[] {
                     // Fallback to DB if GitHub fails for default case
                 }
 
-                const entries = context.db.getWorkflowActionEntries(10)
+                const entries = context.db.getWorkflowActionEntries(10, resourceWorkspace(context))
                 const data = { entries, count: entries.length, source: 'database' }
                 const tokenEstimate = Math.ceil(JSON.stringify(data).length / 4)
                 return { data: { ...data, _meta: { tokenEstimate } } }

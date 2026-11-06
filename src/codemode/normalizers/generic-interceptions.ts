@@ -119,17 +119,32 @@ function cleanSdkMetadataKeys(obj: Record<string, unknown>): void {
     }
 }
 
+const FILE_GREP_SEARCH_METHODS = new Set([
+    'grep_search',
+    'grepSearch',
+    'grep',
+    'file_search',
+    'fileSearch',
+    'find_in_files',
+    'findInFiles',
+    'search_files',
+    'searchFiles',
+])
+
 function normalizeSearchGrepAliases(methodName: string, obj: Record<string, unknown>): void {
     const lower = methodName.toLowerCase()
     if (!lower.includes('search') && !lower.includes('grep') && !lower.includes('find')) return
 
-    if (obj['search_path'] === undefined) {
-        const p = obj['searchPath'] ?? obj['SearchPath'] ?? obj['path'] ?? obj['Path'] ?? obj['dir'] ?? obj['directory'] ?? obj['cwd']
-        if (typeof p === 'string') obj['search_path'] = p
-    }
     if (obj['query'] === undefined) {
         const q = obj['Query'] ?? obj['pattern'] ?? obj['text'] ?? obj['search'] ?? obj['q']
         if (typeof q === 'string') obj['query'] = q
+    }
+
+    if (!FILE_GREP_SEARCH_METHODS.has(methodName)) return
+
+    if (obj['search_path'] === undefined) {
+        const p = obj['searchPath'] ?? obj['SearchPath'] ?? obj['path'] ?? obj['Path'] ?? obj['dir'] ?? obj['directory'] ?? obj['cwd']
+        if (typeof p === 'string') obj['search_path'] = p
     }
     if (obj['file_pattern'] === undefined) {
         const fp = obj['filePattern'] ?? obj['FilePattern'] ?? obj['include']

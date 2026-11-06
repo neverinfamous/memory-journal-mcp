@@ -41,10 +41,7 @@ export async function fetchCiStatus(
         const runs = await github.getWorkflowRuns(owner, repo, runLimit)
         if (runs.length === 0) return { status: 'unknown' }
 
-        let primaryRun = runs.find((r) => {
-            const name = r.name.toLowerCase()
-            return name.includes('ci') || name.includes('test') || name.includes('gatekeeper')
-        })
+        let primaryRun = runs.find((r) => /\b(?:ci|test|tests|gatekeeper)\b/i.test(r.name))
 
         primaryRun ??=
             runs.find(

@@ -110,22 +110,25 @@ export function resolveProjectContext(
     const sanitizedWorkspaceId =
         input.workspace_id === '*' ? undefined : input.workspace_id
 
-    // 1. Truly explicit non-default workspace_id provided
+    // 1. Truly explicit workspace_id provided
     if (
         sanitizedWorkspaceId !== undefined &&
-        sanitizedWorkspaceId !== null &&
-        sanitizedWorkspaceId !== 'default'
+        sanitizedWorkspaceId !== null
     ) {
-        let wsId = sanitizedWorkspaceId
-        const canonicalKey = findCanonicalRegistryKey(wsId, registry)
-        if (canonicalKey) {
-            wsId = canonicalKey
-        }
-        let projNum = input.project_number ?? (canonicalKey ? registry?.[canonicalKey]?.project_number : registry?.[wsId]?.project_number)
-        projNum ??= resolveProjectNumberFromPath(process.cwd()) ?? config?.defaultProjectNumber
-        return {
-            workspaceId: wsId,
-            projectNumber: projNum
+        if (sanitizedWorkspaceId === 'default' && input.project_number !== undefined && input.project_number !== null) {
+            // Fall through to step 2 if caller passed default placeholder alongside an explicit project_number
+        } else {
+            let wsId = sanitizedWorkspaceId
+            const canonicalKey = findCanonicalRegistryKey(wsId, registry)
+            if (canonicalKey) {
+                wsId = canonicalKey
+            }
+            let projNum = input.project_number ?? (canonicalKey ? registry?.[canonicalKey]?.project_number : registry?.[wsId]?.project_number)
+            projNum ??= resolveProjectNumberFromPath(process.cwd()) ?? config?.defaultProjectNumber
+            return {
+                workspaceId: wsId,
+                projectNumber: projNum
+            }
         }
     }
 

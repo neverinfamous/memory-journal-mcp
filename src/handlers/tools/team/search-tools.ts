@@ -50,8 +50,13 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                     const { query, tags, limit, cursor, sort_by, project_number, include_archived, fuzzy_match, auto_correct, workspace_id } =
                         TeamSearchSchema.parse(params)
 
-                    const projectNumber = project_number
-                    const wsId = resolveWorkspaceId(workspace_id, projectNumber, context.config)
+                    const wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
+                    const projectNumber =
+                        project_number ??
+                        (wsId !== 'default' && wsId !== '*'
+                            ? context.config?.projectRegistry?.[wsId]?.project_number
+                            : undefined) ??
+                        context.config?.defaultProjectNumber
 
                     if (projectNumber == null) {
                         return {
@@ -155,8 +160,13 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                     } = TeamSearchByDateRangeSchema.parse(params)
 
 
-                    const projectNumber = project_number
-                    const wsId = resolveWorkspaceId(workspace_id, projectNumber, context.config)
+                    const wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
+                    const projectNumber =
+                        project_number ??
+                        (wsId !== 'default' && wsId !== '*'
+                            ? context.config?.projectRegistry?.[wsId]?.project_number
+                            : undefined) ??
+                        context.config?.defaultProjectNumber
 
                     if (projectNumber == null) {
                         return {

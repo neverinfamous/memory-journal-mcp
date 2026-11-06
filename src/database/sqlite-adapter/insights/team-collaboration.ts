@@ -24,8 +24,13 @@ export function getAuthorStatistics(
                 count: row[1] as number,
             }))
         }
-    } catch {
-        // Author column may not exist yet
+    } catch (error: unknown) {
+        if (
+            !(error instanceof Error) ||
+            (!error.message.includes('no such column') && !error.message.includes('no such table'))
+        ) {
+            throw error
+        }
     }
     return authors
 }
@@ -51,8 +56,13 @@ export function getAuthorsForEntries(
                 authorMap.set(row[0] as number, row[1] as string | null)
             })
         }
-    } catch {
-        // Author column may not exist yet
+    } catch (error: unknown) {
+        if (
+            !(error instanceof Error) ||
+            (!error.message.includes('no such column') && !error.message.includes('no such table'))
+        ) {
+            throw error
+        }
     }
     return authorMap
 }

@@ -80,7 +80,15 @@ export class VectorOperations {
                 .prepare('SELECT embedding FROM vec_embeddings WHERE entry_id = ?')
                 .get(BigInt(entryId)) as { embedding: Buffer } | undefined
             if (!row) return null
-            return new Float32Array(row.embedding.buffer, row.embedding.byteOffset)
+            const count = Math.floor(row.embedding.byteLength / Float32Array.BYTES_PER_ELEMENT)
+            if (row.embedding.byteOffset % Float32Array.BYTES_PER_ELEMENT === 0) {
+                return new Float32Array(row.embedding.buffer, row.embedding.byteOffset, count)
+            }
+            const aligned = row.embedding.buffer.slice(
+                row.embedding.byteOffset,
+                row.embedding.byteOffset + count * Float32Array.BYTES_PER_ELEMENT
+            )
+            return new Float32Array(aligned)
         } catch (error: unknown) {
             if (error instanceof Error && error.message.includes('no such table')) {
                 return null

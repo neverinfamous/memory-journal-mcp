@@ -133,6 +133,7 @@ export function visualizeRelationships(
         relationshipType?: string
         depth: number
         limit: number
+        workspaceId?: string
     }
 ): {
     nodes: {
@@ -144,12 +145,15 @@ export function visualizeRelationships(
     edges: { from: string | number; to: string | number; label: string; type: string }[]
 } {
     let entriesResult: QueryResult[]
+    const scopeId = options.workspaceId ?? 'default'
+    const wsFilter = scopeId !== '*' ? ' AND mj.workspace_id = ?' : ''
+    const wsParam = scopeId !== '*' ? [scopeId] : []
 
     if (options.entryId !== undefined) {
         entriesResult = connection.exec(
             `
             WITH RECURSIVE connected_entries(id, distance) AS (
-                SELECT id, 0 FROM memory_journal WHERE id = ? AND deleted_at IS NULL
+                SELECT id, 0 FROM memory_journal mj WHERE mj.id = ? AND mj.deleted_at IS NULL${wsFilter}
                 UNION
                 SELECT DISTINCT
                     CASE
@@ -164,10 +168,10 @@ export function visualizeRelationships(
             SELECT DISTINCT mj.id, mj.entry_type, mj.content, mj.is_personal
             FROM memory_journal mj
             JOIN connected_entries ce ON mj.id = ce.id
-            WHERE mj.deleted_at IS NULL
+            WHERE mj.deleted_at IS NULL${wsFilter}
             LIMIT ?
         `,
-            [options.entryId, options.depth, options.limit]
+            [options.entryId, ...wsParam, options.depth, ...wsParam, options.limit]
         )
     } else if (options.tags !== undefined && options.tags.length > 0) {
         const placeholders = options.tags.map(() => '?').join(',')
@@ -175,7 +179,7 @@ export function visualizeRelationships(
             `
             SELECT DISTINCT mj.id, mj.entry_type, mj.content, mj.is_personal
             FROM memory_journal mj
-            WHERE mj.deleted_at IS NULL
+            WHERE mj.deleted_at IS NULL${wsFilter}
               AND mj.id IN (
                   SELECT et.entry_id FROM entry_tags et
                   JOIN tags t ON et.tag_id = t.id
@@ -183,14 +187,14 @@ export function visualizeRelationships(
               )
             LIMIT ?
         `,
-            [...options.tags, options.limit]
+            [...wsParam, ...options.tags, options.limit]
         )
     } else {
         entriesResult = connection.exec(
             `
             SELECT DISTINCT mj.id, mj.entry_type, mj.content, mj.is_personal
             FROM memory_journal mj
-            WHERE mj.deleted_at IS NULL
+            WHERE mj.deleted_at IS NULL${wsFilter}
               AND mj.id IN (
                   SELECT DISTINCT from_entry_id FROM relationships
                   UNION
@@ -199,7 +203,7 @@ export function visualizeRelationships(
             ORDER BY mj.id DESC
             LIMIT ?
         `,
-            [options.limit]
+            [...wsParam, options.limit]
         )
     }
 
@@ -260,7 +264,8 @@ export function visualizeRelationships(
 
 export function getRecentGraphRelationships(
     connection: NativeConnectionManager,
-    limit: number
+    limit: number,
+    workspaceId?: string
 ): {
     from_entry_id: number
     to_entry_id: number
@@ -268,6 +273,9 @@ export function getRecentGraphRelationships(
     from_content: string
     to_content: string
 }[] {
+    const scopeId = workspaceId ?? 'default'
+    const wsFilter = scopeId !== '*' ? ' AND e1.workspace_id = ? AND e2.workspace_id = ?' : ''
+    const params: unknown[] = scopeId !== '*' ? [scopeId, scopeId, limit] : [limit]
     const rows = connection.exec(
         `
         SELECT
@@ -277,11 +285,11 @@ export function getRecentGraphRelationships(
         FROM relationships r
         JOIN memory_journal e1 ON r.from_entry_id = e1.id
         JOIN memory_journal e2 ON r.to_entry_id = e2.id
-        WHERE e1.deleted_at IS NULL AND e2.deleted_at IS NULL
+        WHERE e1.deleted_at IS NULL AND e2.deleted_at IS NULL${wsFilter}
         ORDER BY r.created_at DESC
         LIMIT ?
     `,
-        [limit]
+        params
     )
 
     if (!rows[0] || rows[0].values.length === 0) return []

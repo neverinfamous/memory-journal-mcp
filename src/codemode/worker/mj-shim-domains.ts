@@ -5,6 +5,7 @@
  */
 
 import { VERSION } from '../../version.js'
+import { methodTokens as splitMethodTokens } from '../method-tokens.js'
 import { createPreparedStatementShim } from './node-shims.js'
 import { createCallableShim, createSchemaShim } from './namespace-shims.js'
 
@@ -132,11 +133,7 @@ export function createEntriesDomainProxy(target: Record<string, unknown>): unkno
 
 /** Whole method-name tokens. `listDeletedEntries` contains `deleted`, not `delete`. */
 function methodTokens(name: string): Set<string> {
-    const spaced = name
-        .replace(/[_-]+/g, ' ')
-        .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-        .toLowerCase()
-    return new Set(spaced.split(/[^a-z0-9]+/).filter((token) => token.length > 0))
+    return new Set(splitMethodTokens(name))
 }
 
 export function createGetReadFindInterceptor(
@@ -181,21 +178,18 @@ export function createShimProjectsDomain(
             return (baseProjectsProxy as (...a: unknown[]) => unknown).apply(this, args)
         }
         return Promise.resolve({
-            success: false,
-            code: 'CONFIGURATION_ERROR',
-            error: 'list_projects is not available',
+            success: true,
             projects: {},
             items: [],
             data: [],
+            _healing_note:
+                "🛠️ AUTONOMOUS HEALING: 'mj.projects()' was called without 'list_projects' bound in the current tool filter; returned empty project collection.",
         })
     }
 
     return new Proxy(projectsFn, {
         apply(_t, thisArg, args: unknown[]): unknown {
-            if (typeof baseProjectsProxy === 'function') {
-                return (baseProjectsProxy as (...a: unknown[]) => unknown).apply(thisArg, args)
-            }
-            return Promise.resolve({ success: true, projects: [] })
+            return projectsFn.apply(thisArg, args)
         },
         get(_t, p): unknown {
             if (typeof p === 'symbol' || p === 'then') return undefined

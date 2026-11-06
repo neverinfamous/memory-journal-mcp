@@ -208,8 +208,14 @@ export class VectorSearchManager {
                 needsRecreation = true
             }
         } catch (err) {
-            needsRecreation = true
-            logger.warning('Failed to verify vector table dimensions, recreating', { error: err })
+            const msg = err instanceof Error ? err.message : String(err)
+            if (msg.includes('no such table')) {
+                needsRecreation = true
+                logger.warning('Vector metadata table not found, recreating vector index', { error: err })
+            } else {
+                logger.error('Failed to verify vector table dimensions due to database error', { error: err })
+                throw err
+            }
         }
 
         if (needsRecreation) {

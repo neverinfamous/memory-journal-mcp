@@ -2,12 +2,11 @@ import type { Database } from 'better-sqlite3'
 import type { Relationship, RelationshipType } from '../../types/index.js'
 import { ResourceNotFoundError } from '../../types/errors.js'
 import type { NativeConnectionManager } from './native-connection.js'
-import type { EntriesManager } from './entries/index.js'
 
 export class RelationshipsManager {
     private ctx: NativeConnectionManager
 
-    constructor(ctx: NativeConnectionManager, _entries?: EntriesManager) {
+    constructor(ctx: NativeConnectionManager) {
         this.ctx = ctx
     }
 
@@ -135,7 +134,13 @@ export class RelationshipsManager {
      * Get the top relationship hubs — entries with the most connections.
      * Used by the briefing resource to surface knowledge graph highlights.
      */
-    getRelationshipHubs(limit: number): { entryId: number; content: string; totalLinks: number }[] {
+    getRelationshipHubs(
+        limit: number,
+        workspaceId?: string
+    ): { entryId: number; content: string; totalLinks: number }[] {
+        const scopeId = workspaceId ?? 'default'
+        const wsFilter = scopeId !== '*' ? ' AND m.workspace_id = ?' : ''
+        const params: unknown[] = scopeId !== '*' ? [scopeId, limit] : [limit]
         const rows = this.db
             .prepare(
                 `SELECT counts.entry_id, SUM(counts.link_count) as total_links, m.content
@@ -145,12 +150,12 @@ export class RelationshipsManager {
                      SELECT to_entry_id as entry_id, COUNT(*) as link_count FROM relationships GROUP BY to_entry_id
                  ) counts
                  JOIN memory_journal m ON counts.entry_id = m.id
-                 WHERE m.deleted_at IS NULL
+                 WHERE m.deleted_at IS NULL${wsFilter}
                  GROUP BY counts.entry_id
                  ORDER BY total_links DESC
                  LIMIT ?`
             )
-            .all(limit) as { entry_id: number; total_links: number; content: string }[]
+            .all(...params) as { entry_id: number; total_links: number; content: string }[]
 
         return rows.map((row) => ({
             entryId: row.entry_id,

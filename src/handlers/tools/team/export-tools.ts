@@ -7,6 +7,7 @@
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { sendProgress } from '../../../utils/progress-utils.js'
+import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { DATE_MIN_SENTINEL, DATE_MAX_SENTINEL } from '../schemas.js'
 import { TEAM_DB_ERROR_RESPONSE, batchFetchAuthors } from './helpers.js'
 import {
@@ -43,11 +44,21 @@ export function getTeamExportTools(context: ToolContext): ToolDefinition[] {
                         return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
-                    const { format, start_date, end_date, entry_type, tags, limit } =
-                        TeamExportEntriesSchema.parse(params)
+                    const {
+                        format,
+                        start_date,
+                        end_date,
+                        entry_type,
+                        tags,
+                        limit,
+                        project_number,
+                        workspace_id,
+                    } = TeamExportEntriesSchema.parse(params)
 
                     await sendProgress(progress, 0, 3, 'Preparing team export...')
                     await sendProgress(progress, 1, 3, 'Fetching team entries...')
+
+                    const wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
 
                     // When entry_type or tags filters are active, fetch a larger
                     // batch so post-filtering doesn't silently return too few results.
@@ -65,6 +76,7 @@ export function getTeamExportTools(context: ToolContext): ToolDefinition[] {
                                 entryType: entry_type,
                                 tags,
                                 limit: fetchLimit,
+                                workspaceId: wsId,
                             }
                         ).entries
                     } else if (hasTypeFilter || hasTagFilter) {
@@ -73,17 +85,25 @@ export function getTeamExportTools(context: ToolContext): ToolDefinition[] {
                             entryType: entry_type,
                             tags,
                             limit: fetchLimit,
+                            workspaceId: wsId,
                         }).entries
                     } else {
-                        entries = teamDb.getRecentEntries(fetchLimit).entries
+                        entries = teamDb.getRecentEntries(
+                            fetchLimit,
+                            undefined,
+                            undefined,
+                            undefined,
+                            undefined,
+                            wsId
+                        ).entries
                     }
 
                     // Post-filter by entry_type if searchByDateRange
                     // doesn't natively support it, then cap to requested limit
-                    if (hasTypeFilter && entries.length > limit) {
-                        entries = entries.slice(0, limit)
+                    if (hasTypeFilter && entry_type !== undefined) {
+                        entries = entries.filter((e) => e.entryType === entry_type)
                     }
-                    if (hasTagFilter && entries.length > limit) {
+                    if (entries.length > limit) {
                         entries = entries.slice(0, limit)
                     }
 

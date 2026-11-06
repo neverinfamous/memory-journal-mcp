@@ -70,7 +70,7 @@ export function getStatistics(
         }
     }
 
-    const dateFormat = validateDateFormatPattern(groupBy === 'year' ? 'month' : groupBy)
+    const dateFormat = validateDateFormatPattern(groupBy)
     const periodRows = db
         .prepare(
             `SELECT

@@ -38,8 +38,10 @@ export const coreOptionsSchema = z.object({
 export const databaseOptionsSchema = z.object({
     db: z.string().optional(),
     database: z.string().optional(),
+    testDb: z.string().optional(),
     teamDb: z.string().optional(),
     teamDatabase: z.string().optional(),
+    testTeamDb: z.string().optional(),
     additionalTeamDbs: z.string().optional(),
     teamDefaultRole: z.string().optional(),
     teamAdmin: z.string().optional()

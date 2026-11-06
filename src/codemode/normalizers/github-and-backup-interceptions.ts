@@ -79,6 +79,11 @@ function applyGithubInterceptions(
 ): { obj: Record<string, unknown> } | { error: Record<string, unknown> } {
     const obj = { ...rawObj }
 
+    if (obj['repo'] === undefined && obj['repo_name'] !== undefined) {
+        obj['repo'] = obj['repo_name']
+        delete obj['repo_name']
+    }
+
     if (typeof obj['repo'] === 'string' && obj['repo'].includes('/')) {
         const parts = obj['repo'].split('/')
         if (parts.length >= 2 && parts[0] && parts[1]) {

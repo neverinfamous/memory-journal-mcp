@@ -145,33 +145,31 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     // Vectorize entry
+                    let vectorWarning: string | undefined
                     if (context.vectorManager) {
                         try {
                             await sendProgress(progress, 1, 2, 'Generating embeddings...')
                             await context.vectorManager.addEntry(createdEntry)
                         } catch (e) {
-                            // Soft fail: return success but warn vector indexing failed
-                            // Usually implies disabled or unavailable embedding model
+                            // Soft fail: continue notifications & team share, attach vector indexing warning
+                            vectorWarning = `Vector indexing failed: ${e instanceof Error ? e.message : String(e)}`
                             await sendProgress(
                                 progress,
                                 2,
                                 2,
                                 'Entry created (Vector indexing disabled)'
                             )
-                            return {
-                                success: true,
-                                id,
-                                error: `Vector indexing failed: ${e instanceof Error ? e.message : String(e)}`,
-                            }
                         }
                     }
 
-                    await sendProgress(progress, 2, 2, 'Entry created successfully')
+                    if (!vectorWarning) {
+                        await sendProgress(progress, 2, 2, 'Entry created successfully')
+                    }
 
                     if (context.config?.subscriptionManager) {
-                        void context.config.subscriptionManager.notifyResourceUpdated(
-                            'memory://recent'
-                        )
+                        void context.config.subscriptionManager
+                            .notifyResourceUpdated('memory://recent')
+                            .catch(() => undefined)
                     }
                     const finalEntry = createdEntry
 
@@ -218,7 +216,13 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    return { success: true, id, entry: finalEntry, ...(sharedWithTeam ? { sharedWithTeam, author } : {}) }
+                    return {
+                        success: true,
+                        id,
+                        entry: finalEntry,
+                        ...(vectorWarning ? { error: vectorWarning } : {}),
+                        ...(sharedWithTeam ? { sharedWithTeam, author } : {}),
+                    }
                 } catch (err) {
                     return formatHandlerError(err)
                 }
@@ -241,8 +245,11 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                 try {
                     const input = GetEntryByIdSchema.parse(params)
                     const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
-                    const hasExplicitWs = input.workspace_id !== undefined && input.workspace_id !== 'default'
-                    const entry = db.getEntryById(input.entry_id, wsId) ?? (!hasExplicitWs && wsId !== '*' ? db.getEntryById(input.entry_id, '*') : null)
+                    const allowGlobalFallback =
+                        input.workspace_id === undefined || input.workspace_id === 'default'
+                    const entry =
+                        db.getEntryById(input.entry_id, wsId) ??
+                        (allowGlobalFallback ? db.getEntryById(input.entry_id, '*') : null)
                     if (!entry) {
                         return {
                             success: false,

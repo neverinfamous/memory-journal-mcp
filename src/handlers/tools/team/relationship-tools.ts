@@ -68,10 +68,7 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                     }
 
                     // Verify both entries exist and belong to the project
-                    let fromEntry = teamDb.getEntryById(from_entry_id, wsId)
-                    if (!fromEntry && workspace_id === undefined) {
-                        fromEntry = teamDb.getEntryById(from_entry_id, '*')
-                    }
+                    const fromEntry = teamDb.getEntryById(from_entry_id, wsId)
                     if (!fromEntry) {
                         return {
                             success: false,
@@ -92,10 +89,7 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                             recoverable: true,
                         }
                     }
-                    let toEntry = teamDb.getEntryById(to_entry_id, wsId)
-                    if (!toEntry && workspace_id === undefined) {
-                        toEntry = teamDb.getEntryById(to_entry_id, '*')
-                    }
+                    const toEntry = teamDb.getEntryById(to_entry_id, wsId)
                     if (!toEntry) {
                         return {
                             success: false,
@@ -182,10 +176,11 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                     let entryIds: number[] = []
 
                     if (entry_id !== undefined) {
-                        let fromEntry = teamDb.getEntryById(entry_id, wsId)
-                        if (!fromEntry && workspace_id === undefined) {
-                            fromEntry = teamDb.getEntryById(entry_id, '*')
-                        }
+                        const fromEntry =
+                            teamDb.getEntryById(entry_id, wsId) ??
+                            (workspace_id === undefined
+                                ? teamDb.getEntryById(entry_id, '*')
+                                : null)
                         if (!fromEntry) {
                             return {
                                 success: false,

@@ -209,9 +209,21 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
             },
             handler: (params: unknown) => {
                 try {
-                    const { group_by, start_date, end_date, project_breakdown, workspace_id } =
-                        GetStatisticsSchema.parse(params)
-                    const wsId = resolveWorkspaceId(workspace_id, undefined, context.config)
+                    const {
+                        group_by,
+                        start_date,
+                        end_date,
+                        project_breakdown,
+                        workspace_id,
+                        project_number,
+                    } = GetStatisticsSchema.parse(params)
+                    const resolvedProjectNumber =
+                        typeof project_number === 'number' ? project_number : undefined
+                    const wsId = resolveWorkspaceId(
+                        workspace_id,
+                        resolvedProjectNumber,
+                        context.config
+                    )
                     const stats = db.getStatistics(
                         group_by,
                         start_date,
@@ -242,7 +254,13 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     const input = CrossProjectInsightsInputSchema.parse(params)
-                    const wsId = resolveWorkspaceId(input.workspace_id, undefined, context.config)
+                    const resolvedProjectNumber =
+                        typeof input.project_number === 'number' ? input.project_number : undefined
+                    const wsId = resolveWorkspaceId(
+                        input.workspace_id,
+                        resolvedProjectNumber,
+                        context.config
+                    )
 
                     const results = db.getCrossProjectInsights({
                         startDate: input.start_date,

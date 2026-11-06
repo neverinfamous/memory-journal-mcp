@@ -95,7 +95,11 @@ export class ConfigResolver {
                 if (configPathOverride) {
                     throw new ConfigurationError(`Failed to load config file ${filePath}: ${error instanceof Error ? error.message : String(error)}`, { cause: error instanceof Error ? error : undefined })
                 }
-                // Otherwise silently continue to next default path
+                logger.warning('Failed to parse default configuration file; continuing to next candidate', {
+                    module: 'ConfigResolver',
+                    path: filePath,
+                    error: error instanceof Error ? error.message : String(error),
+                })
             }
         }
     }

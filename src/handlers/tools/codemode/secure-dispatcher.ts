@@ -261,14 +261,22 @@ export async function resolveCodeModeSessionContext(
       }
     | { errorResponse: Record<string, unknown> }
 > {
+    const normalizeComparablePath = (p: string): string => {
+        const resolved = path.resolve(p)
+        return process.platform === 'win32' ? resolved.toLowerCase() : resolved
+    }
     let projectId: number | string | undefined = input.project_number
     if (projectId === undefined || projectId === null) {
         if (context.config?.defaultProjectNumber !== undefined) {
             projectId = context.config.defaultProjectNumber
         } else if (context.config?.projectRegistry !== undefined) {
-            const cwd = path.resolve(process.cwd()).toLowerCase()
+            const cwd = normalizeComparablePath(process.cwd())
             for (const entry of Object.values(context.config.projectRegistry)) {
-                if (entry.path && path.resolve(entry.path).toLowerCase() === cwd && entry.project_number !== undefined) {
+                if (
+                    entry.path &&
+                    normalizeComparablePath(entry.path) === cwd &&
+                    entry.project_number !== undefined
+                ) {
                     projectId = entry.project_number
                     break
                 }
@@ -323,7 +331,8 @@ export async function resolveCodeModeSessionContext(
     if (projectId !== undefined && sessionContext.config?.projectRegistry !== undefined) {
         const registryEntry = Object.values(sessionContext.config.projectRegistry).find((r) => r.project_number === projectId)
         if (registryEntry?.path !== undefined && registryEntry.path !== '') {
-            const isSameAsCwd = path.resolve(registryEntry.path).toLowerCase() === path.resolve(process.cwd()).toLowerCase()
+            const isSameAsCwd =
+                normalizeComparablePath(registryEntry.path) === normalizeComparablePath(process.cwd())
             if (context.config?.codemodeInternalFullAccess === true || isSameAsCwd) {
                 try {
                     const injectedGithub = getGitHubIntegration(registryEntry.path, undefined, process.env['GITHUB_TOKEN'])

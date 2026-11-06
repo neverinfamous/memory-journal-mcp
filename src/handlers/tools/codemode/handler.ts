@@ -108,8 +108,10 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                     }
                     let isGlobalReadonly = false
                     if (context.config?.filterConfig?.raw !== undefined && context.config.filterConfig.raw !== '') {
-                        const rawFilter = context.config.filterConfig.raw
-                        if (rawFilter.includes('readonly') && !rawFilter.includes('-readonly')) {
+                        const rawTokens = context.config.filterConfig.raw
+                            .split(',')
+                            .map((s) => s.trim().toLowerCase())
+                        if (rawTokens.includes('readonly') && !rawTokens.includes('-readonly')) {
                             isGlobalReadonly = true
                         }
                     }

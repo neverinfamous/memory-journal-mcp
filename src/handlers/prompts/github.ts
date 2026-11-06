@@ -151,8 +151,17 @@ If doing deps/changelog: Audit updates and backfill SHA provenance.`,
             description: 'CI/CD failure analysis with root cause identification',
             icons: [ICON_PROMPT],
             arguments: [],
-            handler: (_args: Record<string, string> | undefined, db: IDatabaseAdapter) => {
-                const entries = db.getWorkflowActionEntries(20)
+            handler: (
+                _args: Record<string, string> | undefined,
+                db: IDatabaseAdapter,
+                _teamDb?: IDatabaseAdapter,
+                _github?: unknown,
+                briefingConfig?: { defaultWorkspaceId?: string }
+            ) => {
+                const entries = db.getWorkflowActionEntries(
+                    20,
+                    briefingConfig?.defaultWorkspaceId ?? 'default'
+                )
 
                 return {
                     messages: [

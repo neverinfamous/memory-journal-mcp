@@ -244,8 +244,18 @@ export class AuditLogger {
             let fh: Awaited<ReturnType<typeof open>>
             try {
                 fh = await open(this.config.logPath, 'r')
-            } catch {
-                // File does not exist yet
+            } catch (openErr) {
+                const code =
+                    typeof openErr === 'object' && openErr !== null && 'code' in openErr
+                        ? (openErr as { code?: unknown }).code
+                        : undefined
+                if (code !== 'ENOENT' && code !== 'EISDIR') {
+                    logger.warning('Failed to open audit log file for reading', {
+                        module: 'AuditLogger',
+                        logPath: this.config.logPath,
+                        error: openErr instanceof Error ? openErr.message : String(openErr),
+                    })
+                }
                 return []
             }
 

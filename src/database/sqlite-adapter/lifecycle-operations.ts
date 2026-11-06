@@ -49,10 +49,8 @@ export class LifecycleOperations {
                 WHERE tags.name IN (${excludeTags.map(() => '?').join(',')})
             )`
                 : ''
-        const scopedWorkspace =
-            options.workspaceId !== undefined && options.workspaceId !== '*'
-                ? options.workspaceId
-                : undefined
+        const scopeId = options.workspaceId ?? 'default'
+        const scopedWorkspace = scopeId !== '*' ? scopeId : undefined
         const hardDeleteWorkspaceSql =
             scopedWorkspace !== undefined ? 'AND workspace_id = ?' : ''
         const hardDeleteSelect = `

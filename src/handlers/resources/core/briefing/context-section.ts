@@ -195,11 +195,10 @@ export function buildJournalContext(
         }
     })
 
-    const targetWsForCount = config.defaultWorkspaceId ?? 'default'
-    const totalEntries = context.db.getActiveEntryCount(targetWsForCount)
+    const totalEntries = context.db.getActiveEntryCount(targetWs)
     const lastModified = recentEntries[0]?.timestamp ?? new Date().toISOString()
 
-    return { totalEntries, latestEntries, latestSessionSummary, sessionSummaries, lastModified, workspaceId: config.defaultWorkspaceId }
+    return { totalEntries, latestEntries, latestSessionSummary, sessionSummaries, lastModified, workspaceId: activeWorkspaceId ?? config.defaultWorkspaceId }
 }
 
 // ============================================================================
@@ -217,12 +216,13 @@ export interface TeamContext {
 export function buildTeamContext(
     context: ResourceContext,
     config: BriefingConfig,
-    projectNumber?: number | null
+    projectNumber?: number | null,
+    activeWorkspaceId?: string
 ): TeamContext | undefined {
     if (!context.teamDb) return undefined
 
     try {
-        const teamWorkspace = config.defaultWorkspaceId ?? 'default'
+        const teamWorkspace = activeWorkspaceId ?? config.defaultWorkspaceId ?? 'default'
         const teamTotalEntries = context.teamDb.getActiveEntryCount(teamWorkspace)
         const teamRecent =
             typeof projectNumber === 'number'
@@ -310,7 +310,7 @@ export function buildGraphContext(context: ResourceContext, workspaceId?: string
         let orphanRatio: number | undefined
 
         try {
-            const hubs = context.db.getRelationshipHubs(3)
+            const hubs = context.db.getRelationshipHubs(3, workspaceId)
             topHubs = hubs.map(hub => ({
                 id: hub.entryId,
                 count: hub.totalLinks,

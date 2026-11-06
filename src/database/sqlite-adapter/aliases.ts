@@ -165,7 +165,7 @@ export class AliasManager {
         }
     }
 
-    resolveAuthors(rawAuthors: string[]): Map<string, string> {
+    resolveAuthors(rawAuthors: string[], workspaceId?: string): Map<string, string> {
         const resultMap = new Map<string, string>()
         if (rawAuthors.length === 0) return resultMap
 
@@ -176,10 +176,13 @@ export class AliasManager {
 
         try {
             const placeholders = rawAuthors.map(() => '?').join(',')
-            const results = this.db.exec(
-                `SELECT alias, canonical_author FROM author_aliases WHERE alias IN (${placeholders}) COLLATE NOCASE`,
-                rawAuthors
-            )
+            const scopeId = workspaceId ?? 'default'
+            const scoped = scopeId !== '*'
+            const sql = scoped
+                ? `SELECT alias, canonical_author FROM author_aliases WHERE alias IN (${placeholders}) COLLATE NOCASE AND (workspace_id IS NULL OR workspace_id = ?)`
+                : `SELECT alias, canonical_author FROM author_aliases WHERE alias IN (${placeholders}) COLLATE NOCASE`
+            const params = scoped ? [...rawAuthors, scopeId] : rawAuthors
+            const results = this.db.exec(sql, params)
 
             if (results[0]) {
                 const aliasIdx = results[0].columns.indexOf('alias')

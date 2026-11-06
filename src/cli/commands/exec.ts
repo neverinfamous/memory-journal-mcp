@@ -31,9 +31,13 @@ export async function execAction(scriptPath: string, options: z.infer<typeof exe
         process.exit(1)
     }
 
-    // Override test databases for exec so it doesn't try to eagerly initialize them without encryption keys
-    serverOptions.testDbPath = undefined
-    serverOptions.testTeamDbPath = undefined
+    // Override config-sourced test databases for exec unless explicitly passed on the CLI
+    if (options.testDb === undefined) {
+        serverOptions.testDbPath = undefined
+    }
+    if (options.testTeamDb === undefined) {
+        serverOptions.testTeamDbPath = undefined
+    }
 
     const scriptContent = readFileSync(scriptPath, 'utf8')
 

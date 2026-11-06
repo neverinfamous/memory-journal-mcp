@@ -180,7 +180,7 @@ export interface IDatabaseAdapter {
     removeAuthorAlias(alias: string, workspaceId?: string): boolean
     listAuthorAliases(canonicalAuthor?: string, workspaceId?: string): AuthorAlias[]
     resolveAuthor(rawAuthor: string, workspaceId?: string): string
-    resolveAuthors(rawAuthors: string[]): Map<string, string>
+    resolveAuthors(rawAuthors: string[], workspaceId?: string): Map<string, string>
     consolidateAuthors(canonicalAuthor: string, workspaceId?: string): number
 
     // Soft-Delete Recovery
@@ -373,6 +373,7 @@ export interface IDatabaseAdapter {
         relationshipType?: string
         depth: number
         limit: number
+        workspaceId?: string
     }): {
         nodes: {
             id: string | number
@@ -393,7 +394,7 @@ export interface IDatabaseAdapter {
 
     getWorkflowActionEntries(limit: number, workspaceId?: string): JournalEntry[]
     getSignificantEntries(limit: number, projectNumber?: number, workspaceId?: string): JournalEntry[]
-    getRecentGraphRelationships(limit: number): {
+    getRecentGraphRelationships(limit: number, workspaceId?: string): {
         from_entry_id: number
         to_entry_id: number
         relationship_type: string
@@ -445,6 +446,6 @@ export interface IDatabaseAdapter {
 
     executeInTransaction<T>(cb: () => T): T
 
-    getRelationshipHubs(limit: number): { entryId: number; content: string; totalLinks: number }[]
+    getRelationshipHubs(limit: number, workspaceId?: string): { entryId: number; content: string; totalLinks: number }[]
     getOrphanCount(workspaceId?: string): number
 }

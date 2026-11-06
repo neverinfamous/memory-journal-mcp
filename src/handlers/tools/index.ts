@@ -204,9 +204,7 @@ function safeIsAvailable(gh: GitHubIntegration | undefined | null): boolean | un
 
 function safeIsInitialized(vm: VectorSearchManager | undefined | null): boolean | undefined {
     if (!vm) return undefined
-    const vmObj = vm as unknown as Record<string, unknown>
-    const isInit = vmObj['isInitialized']
-    return typeof isInit === 'function' ? Boolean(isInit.call(vm)) : undefined
+    return typeof vm.isInitialized === 'function' ? vm.isInitialized() : undefined
 }
 
 function isCacheHit(

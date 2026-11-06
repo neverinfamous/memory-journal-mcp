@@ -39,15 +39,15 @@ function checkUnassignedEntries(): void {
                     rawKey = mcpConfig.mcpServers?.['memory-journal-mcp']?.env?.DB_ENCRYPTION_KEY
                 }
             } catch (err) {
-                // Ignore
+                console.warn('Warning: Failed to read mcp_config.json fallback:', err instanceof Error ? err.message : String(err))
             }
         }
 
         if (rawKey) {
             if (rawKey.startsWith("x'") && rawKey.endsWith("'")) {
-                db.pragma(`key = "${rawKey}"`)
+                db.pragma(`key = "${rawKey.replace(/"/g, '""')}"`)
             } else {
-                db.pragma(`key = '${rawKey}'`)
+                db.pragma(`key = '${rawKey.replace(/'/g, "''")}'`)
             }
         }
     } catch (err) {

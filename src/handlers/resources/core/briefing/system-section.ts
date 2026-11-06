@@ -13,6 +13,7 @@
 import * as fs from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import * as path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 import { VERSION } from '../../../../version.js'
 import { getAllToolNames } from '../../../../filtering/tool-filter.js'
@@ -93,17 +94,11 @@ export interface BuildSystemContextOptions {
 /**
  * Resolve project root via package.json location.
  *
- * Uses createRequire (same pattern as version.ts) to find the closest
- * package.json. This works in both source (ts-node/vitest) and bundled
- * (tsup → dist/) contexts, unlike import.meta.url traversal which
- * breaks when tsup flattens the directory structure.
+ * Uses fileURLToPath(import.meta.url) to decode percent-encoded paths and
+ * find the closest package.json.
  */
 function resolveProjectRoot(): string {
-    let current = new URL(import.meta.url).pathname
-    if (process.platform === 'win32' && current.startsWith('/')) {
-        current = current.slice(1)
-    }
-    current = path.dirname(current)
+    let current = path.dirname(fileURLToPath(import.meta.url))
     while (current !== path.dirname(current)) {
         if (fs.existsSync(path.join(current, 'package.json'))) {
             return current

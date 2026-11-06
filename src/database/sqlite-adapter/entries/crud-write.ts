@@ -36,8 +36,7 @@ function insertEntryRow(context: EntriesSharedContext, input: CreateEntryInput):
     const { db, tagsMgr } = context
     const { normalizedTimestamp: timestamp } = validateEntryInput(input)
 
-    let insertId!: number
-    const txn = db.transaction(() => {
+    const txn = db.transaction((): number => {
         const columns = [
             'entry_type', 'content', 'timestamp', 'is_personal', 'significance_type',
             'auto_context', 'project_number', 'project_owner', 'issue_number', 'issue_url',
@@ -82,7 +81,7 @@ function insertEntryRow(context: EntriesSharedContext, input: CreateEntryInput):
             `INSERT INTO memory_journal (${columns.join(', ')}) VALUES (${placeholders})`
         )
         const result = stmt.run(...values)
-        insertId = Number(result.lastInsertRowid)
+        const insertId = Number(result.lastInsertRowid)
 
         if (input.tags !== undefined && input.tags.length > 0) {
             const formattedTags = input.tags.map((t) =>
@@ -97,10 +96,10 @@ function insertEntryRow(context: EntriesSharedContext, input: CreateEntryInput):
         if (input.anchors !== undefined && input.anchors.length > 0) {
             insertAnchors(context, insertId, input.anchors)
         }
+        return insertId
     })
 
-    txn()
-    return insertId
+    return txn()
 }
 
 export function createEntry(context: EntriesSharedContext, input: CreateEntryInput): JournalEntry {

@@ -85,7 +85,7 @@ export async function buildBriefingData(
     // Build all sections
     const journal = buildJournalContext(context, config, activeProjectNumber, activeWorkspaceId)
     const github = await buildGitHubSection(activeGithub, config)
-    const team = buildTeamContext(context, config, activeProjectNumber)
+    const team = buildTeamContext(context, config, activeProjectNumber, activeWorkspaceId)
     const insights = buildInsightsSection(context)
     const graphStats = buildGraphContext(context, journal.workspaceId)
 

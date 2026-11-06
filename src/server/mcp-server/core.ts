@@ -131,6 +131,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
             stdioShutdownStarted = true
             void (async () => {
                 logger.info('Shutting down...', { module: 'McpServer' })
+                configManager.close()
                 runtime.stopBackgroundTasks?.()
                 if (runtime.auditLogger) {
                     await runtime.auditLogger.close()
@@ -186,6 +187,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
         const handleHttpShutdown = (): void => {
             void (async () => {
                 runtime.stopBackgroundTasks?.()
+                configManager.close()
                 if (shutdownMetrics) {
                     await shutdownMetrics().catch((err: unknown) => {
                     logger.debug('Error shutting down metrics server', { module: 'McpServer', error: String(err) })

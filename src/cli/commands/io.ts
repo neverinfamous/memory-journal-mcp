@@ -43,7 +43,11 @@ async function getDb(options: ServerOptionsSchema & { team?: boolean }, command:
         process.exit(1)
     }
 
-    const dbPath = options.team ? (teamDb ?? serverOptions.dbPath) : serverOptions.dbPath
+    if (options.team && !teamDb) {
+        process.stderr.write('Error: --team requires a configured team database (--team-db or TEAM_DB_PATH).\n')
+        process.exit(1)
+    }
+    const dbPath = options.team && teamDb ? teamDb : serverOptions.dbPath
     const db = await DatabaseAdapterFactory.create(dbPath, serverOptions)
     await db.initialize()
     return { db, serverOptions }

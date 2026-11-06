@@ -127,8 +127,18 @@ export function getAnalyticsPromptDefinitions(): InternalPromptDef[] {
             name: 'goal-tracker',
             description: 'Milestone and achievement tracking',
             icons: [ICON_PROMPT],
-            handler: (_args: Record<string, string> | undefined, db: IDatabaseAdapter) => {
-                const entries = db.getSignificantEntries(20)
+            handler: (
+                _args: Record<string, string> | undefined,
+                db: IDatabaseAdapter,
+                _teamDb?: IDatabaseAdapter,
+                _github?: unknown,
+                briefingConfig?: { defaultWorkspaceId?: string }
+            ) => {
+                const entries = db.getSignificantEntries(
+                    20,
+                    undefined,
+                    briefingConfig?.defaultWorkspaceId ?? 'default'
+                )
 
                 const mappedEntries = entries.map((e) => ({
                     id: e.id,

@@ -97,8 +97,8 @@ async function routeNamedTargetTool(
 export function projectAliasTarget(name: string): 'get_project' | 'list_projects' {
     const tokens = methodTokens(name)
     const has = (token: string): boolean => tokens.includes(token)
-    if (has('projects') || has('list') || name.startsWith('mj.projects')) return 'list_projects'
     if (has('project') && (has('get') || has('find'))) return 'get_project'
+    if (has('projects') || has('list') || name.startsWith('mj.projects')) return 'list_projects'
     return 'list_projects'
 }
 
@@ -112,6 +112,10 @@ function isProjectAlias(name: string): boolean {
 function resolveTargetFromAlias(
     name: string
 ): { target: string; group: 'core' | 'search' | 'admin' } | undefined {
+    const tokens = methodTokens(name)
+    const has = (t: string): boolean => tokens.includes(t)
+    if (has('team') || has('batch')) return undefined
+
     if (name.includes('createEntry') || name.includes('create_entry')) {
         return { target: 'create_entry', group: 'core' }
     }
@@ -125,10 +129,10 @@ function resolveTargetFromAlias(
         return { target: 'get_entry_by_id', group: 'core' }
     }
     if (name.includes('updateEntry') || name.includes('update_entry')) {
-        return { target: 'update_entry', group: 'core' }
+        return { target: 'update_entry', group: 'admin' }
     }
     if (name.includes('deleteEntry') || name.includes('delete_entry')) {
-        return { target: 'delete_entry', group: 'core' }
+        return { target: 'delete_entry', group: 'admin' }
     }
     if (isProjectAlias(name)) {
         return { target: projectAliasTarget(name), group: 'admin' }
@@ -212,7 +216,11 @@ export function getEntryAndCodemodeFallbackToolDefinitions(
                             ? (params as Record<string, unknown>)
                             : {}
                     if (context !== undefined) {
-                        const tool = getCoreTools(context).find(
+                        const sourceTools =
+                            name === 'update_entry' || name === 'delete_entry'
+                                ? getAdminTools(context)
+                                : getCoreTools(context)
+                        const tool = sourceTools.find(
                             (t: ToolDefinition) => t.name === name
                         )
                         if (tool !== undefined) {

@@ -205,21 +205,18 @@ export function createListProjectsFn(analyticsApi: GroupApiRecord): () => Promis
         }
 
         try {
-            const configPath = getConfigPath()
-            if (fs.existsSync(configPath)) {
-                const parsed: unknown = JSON.parse(fs.readFileSync(configPath, 'utf-8'))
-                if (isRecord(parsed) && isRecord(parsed['projectRegistry'])) {
-                    const reg = parsed['projectRegistry']
-                    return Object.entries(reg).map(([name, val]) => {
-                        const info = isRecord(val) ? val : {}
-                        return {
-                            name,
-                            projectNumber: info['project_number'] ?? info['id'],
-                            project_number: info['project_number'] ?? info['id'],
-                            ...info,
-                        }
-                    })
-                }
+            const { registry: reg } = readRegistryConfig()
+            const entries = Object.entries(reg)
+            if (entries.length > 0) {
+                return entries.map(([name, val]) => {
+                    const info = isRecord(val) ? val : {}
+                    return {
+                        name,
+                        projectNumber: info['project_number'] ?? info['id'],
+                        project_number: info['project_number'] ?? info['id'],
+                        ...info,
+                    }
+                })
             }
         } catch {
             // Fallback to analytics

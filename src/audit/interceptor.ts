@@ -118,6 +118,19 @@ export function createAuditInterceptor(auditLogger: AuditLogger): AuditIntercept
             try {
                 const result = await fn()
 
+                if (
+                    typeof result === 'object' &&
+                    result !== null &&
+                    'success' in result &&
+                    (result as Record<string, unknown>)['success'] === false
+                ) {
+                    success = false
+                    const errField = (result as Record<string, unknown>)['error']
+                    if (typeof errField === 'string') {
+                        error = sanitizeErrorForLogging(errField)
+                    }
+                }
+
                 // Compute token estimate from result (uses WeakMap cache when metrics interceptor already computed it)
                 if (typeof result === 'object' && result !== null) {
                     tokenEstimate = estimatePayloadTokens(result)

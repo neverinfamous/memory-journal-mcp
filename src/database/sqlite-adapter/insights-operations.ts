@@ -35,8 +35,11 @@ export class InsightsOperations {
         return getSignificantEntries(this.connection, limit, projectNumber, workspaceId)
     }
 
-    getRecentGraphRelationships(limit: number): ReturnType<typeof getRecentGraphRelationships> {
-        return getRecentGraphRelationships(this.connection, limit)
+    getRecentGraphRelationships(
+        limit: number,
+        workspaceId?: string
+    ): ReturnType<typeof getRecentGraphRelationships> {
+        return getRecentGraphRelationships(this.connection, limit, workspaceId)
     }
 
     getAuthorStatistics(workspaceId?: string): { author: string; count: number }[] {
@@ -84,6 +87,7 @@ export class InsightsOperations {
         relationshipType?: string
         depth: number
         limit: number
+        workspaceId?: string
     }): ReturnType<typeof visualizeRelationships> {
         return visualizeRelationships(this.connection, options)
     }

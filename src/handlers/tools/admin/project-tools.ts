@@ -24,8 +24,9 @@ function isValidProjectPath(p: string, allowedRoots?: string[]): boolean {
     if (!p || p.includes('\0') || p.startsWith('\\\\') || p.startsWith('//')) {
         return false
     }
-    const normalized = p.replace(/\\/g, '/')
-    if (normalized.split('/').includes('..')) {
+    const slashSplit = p.replace(/\\/g, '/').split('/')
+    const normalizedSplit = path.normalize(p).split(path.sep)
+    if (slashSplit.includes('..') || normalizedSplit.includes('..')) {
         return false
     }
     if (!path.isAbsolute(p)) {

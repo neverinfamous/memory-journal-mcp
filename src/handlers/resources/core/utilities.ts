@@ -57,7 +57,7 @@ export const significantResource: InternalResourceDef = {
     annotations: withPriority(0.7, ASSISTANT_FOCUSED),
     handler: (_uri: string, context: ResourceContext) => {
         // Importance weights mirror importance.ts constants (significance 0.3, relationships 0.35, causal 0.2, recency 0.15)
-        const entries = context.db.getSignificantEntries(100)
+        const entries = context.db.getSignificantEntries(100, undefined, resourceWorkspace(context))
 
         const now = Date.now()
         const MS_PER_DAY = 86_400_000

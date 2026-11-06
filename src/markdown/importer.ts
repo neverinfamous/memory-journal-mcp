@@ -95,7 +95,9 @@ export interface ParsedFile {
     metadata: {
         mj_id?: number
         entry_type?: string
+        author?: string
         tags?: string[]
+        timestamp?: string
         significance?: string
         relationships?: { type: string; target_id: number }[]
     }
@@ -288,15 +290,17 @@ export async function processImportBatch(
                     result.updated++
                 } else {
                     // CREATE new entry (mj_id pointed to nonexistent entry)
+                    const resolvedAuthor = author ?? metadata.author
                     const newEntry = db.createEntry({
                         content: body,
                         entryType,
                         tags: metadata.tags,
+                        ...(metadata.timestamp !== undefined && { timestamp: metadata.timestamp }),
                         ...(metadata.significance !== undefined && {
                             significanceType: metadata.significance as SignificanceType,
                         }),
-                        // SEC-2.4: Preserve author attribution from team import options
-                        ...(author !== undefined && { author }),
+                        // SEC-2.4: Preserve author attribution from team import options or markdown frontmatter
+                        ...(resolvedAuthor !== undefined && { author: resolvedAuthor }),
                         ...(project_number !== undefined && { projectNumber: project_number }),
                         workspaceId,
                     })
@@ -305,15 +309,17 @@ export async function processImportBatch(
                 }
             } else {
                 // CREATE new entry (no mj_id)
+                const resolvedAuthor = author ?? metadata.author
                 const newEntry = db.createEntry({
                     content: body,
                     entryType,
                     tags: metadata.tags,
+                    ...(metadata.timestamp !== undefined && { timestamp: metadata.timestamp }),
                     ...(metadata.significance !== undefined && {
                         significanceType: metadata.significance as SignificanceType,
                     }),
-                    // SEC-2.4: Preserve author attribution from team import options
-                    ...(author !== undefined && { author }),
+                    // SEC-2.4: Preserve author attribution from team import options or markdown frontmatter
+                    ...(resolvedAuthor !== undefined && { author: resolvedAuthor }),
                     ...(project_number !== undefined && { projectNumber: project_number }),
                     workspaceId,
                 })

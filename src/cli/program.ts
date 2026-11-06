@@ -80,9 +80,9 @@ export function createProgram(): Command {
                 });
 
                 if (str.includes('unknown option')) {
-                    write(`\\x1b[31mError:\\x1b[0m 🛠️ AUTONOMOUS HEALING: CLI parsing failed. Read the error below and fix your flags immediately.\\n${str}`)
+                    write(`\x1b[31mError:\x1b[0m 🛠️ AUTONOMOUS HEALING: CLI parsing failed. Read the error below and fix your flags immediately.\n${str}`)
                 } else {
-                    write(`\\x1b[31mError:\\x1b[0m 🛠️ AUTONOMOUS HEALING: ${str}`)
+                    write(`\x1b[31mError:\x1b[0m 🛠️ AUTONOMOUS HEALING: ${str}`)
                 }
             }
         })

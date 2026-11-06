@@ -2,6 +2,7 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import type { IDatabaseAdapter } from '../src/database/core/interfaces.js'
 import { getTools } from '../src/handlers/tools/index.js'
 import { getResources } from '../src/handlers/resources/index.js'
 import { getPrompts } from '../src/handlers/prompts/index.js'
@@ -28,22 +29,25 @@ function updateCodeMap() {
     // Generate Tools Markdown
     // getTools requires a DB context, but the definitions are built inside closures
     // so we can safely pass dummy objects to get the metadata arrays.
-    const rawTools = getTools({} as any, null)
+    const rawTools = getTools({} as unknown as IDatabaseAdapter, null)
     
     // Group tools by their icon title to provide a clean, human-readable grouping
     const toolsByGroup = new Map<string, Set<string>>()
     for (const t of rawTools) {
         const groupTitle = t.icons?.title || 'Other'
-        if (!toolsByGroup.has(groupTitle)) {
-            toolsByGroup.set(groupTitle, new Set())
+        let groupSet = toolsByGroup.get(groupTitle)
+        if (groupSet === undefined) {
+            groupSet = new Set()
+            toolsByGroup.set(groupTitle, groupSet)
         }
-        toolsByGroup.get(groupTitle)!.add(t.name)
+        groupSet.add(t.name)
     }
 
     let toolsMd = '| Group | Tools |\n| ----- | ----- |\n'
     const sortedGroups = Array.from(toolsByGroup.keys()).sort()
     for (const group of sortedGroups) {
-        const toolList = Array.from(toolsByGroup.get(group)!).map(t => `\`${t}\``).join(', ')
+        const groupTools = toolsByGroup.get(group) ?? new Set<string>()
+        const toolList = Array.from(groupTools).map(t => `\`${t}\``).join(', ')
         toolsMd += `| **${group}** | ${toolList} |\n`
     }
 

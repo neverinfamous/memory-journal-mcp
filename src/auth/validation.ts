@@ -1,6 +1,7 @@
 import { getAuthContext } from './auth-context.js'
 import { hasScope, SCOPES } from './scopes.js'
 import { getRequiredScope } from './scope-map.js'
+import { getToolGroup } from '../filtering/tool-filter.js'
 import { PermissionError } from '../types/errors.js'
 import { logger } from '../utils/logger.js'
 import type { AuditLogger } from '../audit/index.js'
@@ -30,10 +31,9 @@ export function enforceAccessBoundary(
         capabilities?.requiresTeamScope ??
         (targetType === 'resource'
             ? targetName.startsWith('memory://team/')
-            : targetName.startsWith('team_') ||
-              targetName.startsWith('team-') ||
-              targetName.includes('-team-') ||
-              targetName.includes('_team_'))
+            : getToolGroup(targetName) === 'team' ||
+              targetName.startsWith('team_') ||
+              targetName.startsWith('team-'))
 
     const isAudit =
         capabilities?.requiresAuditScope ??

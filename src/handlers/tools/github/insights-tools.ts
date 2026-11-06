@@ -60,14 +60,7 @@ export function getGitHubInsightsTools(context: ToolContext): ToolDefinition[] {
                                     ),
                                 ])
                                 .optional()
-                                .default('stars')
-                                .transform((val) => {
-                                    if (Array.isArray(val)) {
-                                        if (val.length > 1) return 'all'
-                                        return val[0] || 'stars'
-                                    }
-                                    return val
-                                }),
+                                .default('stars'),
                             owner: z.string().optional(),
                             repo: z.string().optional(),
                         })
@@ -83,7 +76,23 @@ export function getGitHubInsightsTools(context: ToolContext): ToolDefinition[] {
                     const owner = resolved.owner
                     const repo = resolved.repo
 
-                    const section = input.sections
+                    const sectionSet = new Set(
+                        Array.isArray(input.sections)
+                            ? input.sections.length > 0
+                                ? input.sections
+                                : ['stars' as const]
+                            : [input.sections]
+                    )
+                    const hasSection = (
+                        s: 'stars' | 'traffic' | 'referrers' | 'paths'
+                    ): boolean => sectionSet.has('all') || sectionSet.has(s)
+                    const section =
+                        sectionSet.has('all')
+                            ? 'all'
+                            : sectionSet.size === 1
+                              ? Array.from(sectionSet)[0] ?? 'stars'
+                              : Array.from(sectionSet).join(',')
+
                     const result: z.infer<typeof RepoInsightsOutputSchema> = {
                         success: true,
                         owner,
@@ -91,33 +100,49 @@ export function getGitHubInsightsTools(context: ToolContext): ToolDefinition[] {
                         section,
                     }
 
-                    if (section === 'stars' || section === 'all') {
+                    if (hasSection('stars')) {
                         const stats = await resolved.github.getRepoStats(owner, repo)
                         if (stats) {
                             result.stars = stats.stars
                             result.forks = stats.forks
                             result.watchers = stats.watchers
                             result.openIssues = stats.openIssues
-                            if (section === 'all') {
+                            if (sectionSet.has('all')) {
                                 result.size = stats.size
                                 result.defaultBranch = stats.defaultBranch
+                            }
+                        } else if (!sectionSet.has('all') && sectionSet.size === 1) {
+                            return {
+                                success: false,
+                                error: `Failed to fetch repository stats for ${owner}/${repo}`,
+                                code: 'GITHUB_API_ERROR',
+                                category: 'connection',
+                                recoverable: true,
                             }
                         }
                     }
 
-                    if (section === 'traffic' || section === 'all') {
+                    if (hasSection('traffic')) {
                         const traffic = await resolved.github.getTrafficData(owner, repo)
                         if (traffic) {
                             result.traffic = traffic
+                        } else if (!sectionSet.has('all') && sectionSet.size === 1) {
+                            return {
+                                success: false,
+                                error: `Failed to fetch repository traffic for ${owner}/${repo}`,
+                                code: 'GITHUB_API_ERROR',
+                                category: 'connection',
+                                recoverable: true,
+                            }
                         }
                     }
 
-                    if (section === 'referrers' || section === 'all') {
+                    if (hasSection('referrers')) {
                         const referrers = await resolved.github.getTopReferrers(owner, repo, 5)
                         result.referrers = referrers
                     }
 
-                    if (section === 'paths' || section === 'all') {
+                    if (hasSection('paths')) {
                         const paths = await resolved.github.getPopularPaths(owner, repo, 5)
                         result.paths = paths
                     }

@@ -47,7 +47,7 @@ export class AdapterDelegates {
         this.connection = new NativeConnectionManager(dbPath)
         this.tagsMgr = new TagsManager(this.connection)
         this.entriesMgr = new EntriesManager(this.connection, this.tagsMgr, config)
-        this.relationshipsMgr = new RelationshipsManager(this.connection, this.entriesMgr)
+        this.relationshipsMgr = new RelationshipsManager(this.connection)
         this.backupMgr = new BackupManager(this.connection)
         this.membersMgr = new MembersManager(this.connection)
         this.aliasMgr = new AliasManager(this.connection)
@@ -148,8 +148,8 @@ export class AdapterDelegates {
             : this.aliasMgr.resolveAuthor(rawAuthor, workspaceId)
     }
 
-    resolveAuthors(rawAuthors: string[]): Map<string, string> {
-        return this.aliasMgr.resolveAuthors(rawAuthors)
+    resolveAuthors(rawAuthors: string[], workspaceId?: string): Map<string, string> {
+        return this.aliasMgr.resolveAuthors(rawAuthors, workspaceId)
     }
 
     consolidateAuthors(canonicalAuthor: string, workspaceId?: string): number {
@@ -202,8 +202,11 @@ export class AdapterDelegates {
         return this.relationshipsMgr.getRelationshipsForEntries(entryIds)
     }
 
-    getRelationshipHubs(limit: number): { entryId: number; content: string; totalLinks: number }[] {
-        return this.relationshipsMgr.getRelationshipHubs(limit)
+    getRelationshipHubs(
+        limit: number,
+        workspaceId?: string
+    ): { entryId: number; content: string; totalLinks: number }[] {
+        return this.relationshipsMgr.getRelationshipHubs(limit, workspaceId)
     }
 
     getOrphanCount(workspaceId?: string): number {
@@ -325,14 +328,17 @@ export class AdapterDelegates {
         return this.insightsOps.getSignificantEntries(limit, projectNumber, workspaceId)
     }
 
-    getRecentGraphRelationships(limit: number): {
+    getRecentGraphRelationships(
+        limit: number,
+        workspaceId?: string
+    ): {
         from_entry_id: number
         to_entry_id: number
         relationship_type: string
         from_content: string
         to_content: string
     }[] {
-        return this.insightsOps.getRecentGraphRelationships(limit)
+        return this.insightsOps.getRecentGraphRelationships(limit, workspaceId)
     }
 
     getAuthorStatistics(workspaceId?: string): { author: string; count: number }[] {
@@ -380,6 +386,7 @@ export class AdapterDelegates {
         relationshipType?: string
         depth: number
         limit: number
+        workspaceId?: string
     }): ReturnType<IDatabaseAdapter['visualizeRelationships']> {
         return this.insightsOps.visualizeRelationships(options)
     }
@@ -387,6 +394,7 @@ export class AdapterDelegates {
     getTeamCollaborationMatrix(options: {
         period: string
         limit: number
+        workspaceId?: string
     }): ReturnType<IDatabaseAdapter['getTeamCollaborationMatrix']> {
         return this.insightsOps.getTeamCollaborationMatrix(options)
     }

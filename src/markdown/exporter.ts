@@ -7,7 +7,7 @@
 
 import { mkdir, open } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join, resolve, sep } from 'node:path'
+import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { constants, realpathSync } from 'node:fs'
 import type { IDatabaseAdapter } from '../database/core/interfaces.js'
 import { serializeFrontmatter } from './frontmatter.js'
@@ -100,8 +100,15 @@ export async function exportEntriesToMarkdown(
     // Guard: refuse to export into the OS temporary directory (CodeQL js/insecure-temporary-file)
     const resolvedOutputDir = resolve(outputDir)
     const resolvedTmpDir = resolve(tmpdir())
-    const tmpPrefix = resolvedTmpDir.endsWith(sep) ? resolvedTmpDir : resolvedTmpDir + sep
-    if (resolvedOutputDir === resolvedTmpDir || resolvedOutputDir.startsWith(tmpPrefix)) {
+    const isWin32 = process.platform === 'win32'
+    const relToTmp = relative(
+        isWin32 ? resolvedTmpDir.toLowerCase() : resolvedTmpDir,
+        isWin32 ? resolvedOutputDir.toLowerCase() : resolvedOutputDir
+    )
+    if (
+        relToTmp === '' ||
+        (relToTmp !== '..' && !relToTmp.startsWith('..' + sep) && !isAbsolute(relToTmp))
+    ) {
         throw new Error('Refusing to export markdown files into the OS temporary directory')
     }
 

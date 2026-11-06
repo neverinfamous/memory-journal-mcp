@@ -51,9 +51,10 @@ const ALLOWED_DATE_FORMATS: Record<string, string> = {
     day: '%Y-%m-%d',
     week: '%Y-W%W',
     month: '%Y-%m',
+    year: '%Y',
 } as const
 
-export type DateGroupBy = 'day' | 'week' | 'month'
+export type DateGroupBy = 'day' | 'week' | 'month' | 'year'
 
 /**
  * Validates and returns a safe strftime format pattern.
@@ -195,8 +196,11 @@ export function assertSafeDirectoryPath(dirPath: string, providedRoots: string[]
     }
 
     // 4. Verify the targetPath is structurally inside at least one allowed root
+    const isWin32 = process.platform === 'win32'
+    const normalizedTarget = isWin32 ? targetPath.toLowerCase() : targetPath
     const isAllowed = allowedRoots.some((root) => {
-        const rel = path.relative(root, targetPath)
+        const normalizedRoot = isWin32 ? root.toLowerCase() : root
+        const rel = path.relative(normalizedRoot, normalizedTarget)
         // If relative path is '..' or starts with '../' (or '..\'), it escapes the root
         return rel !== '..' && !rel.startsWith('..' + path.sep) && !path.isAbsolute(rel)
     })

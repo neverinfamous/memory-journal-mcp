@@ -5,6 +5,7 @@ import type {
     ResourceContext,
     ResourceResult,
 } from './shared.js'
+import { resourceWorkspace } from './shared.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
 
 const emptyStringToUndefined = (val: unknown): unknown =>
@@ -82,6 +83,7 @@ export function getStalenessResourceDefinitions(): InternalResourceDef[] {
 
                         const searchResult = context.db.searchEntries('', {
                             projectNumber: entry.project_number,
+                            workspaceId: name,
                             limit: 1,
                             sortBy: 'timestamp'
                         })
@@ -143,8 +145,18 @@ export function getStalenessResourceDefinitions(): InternalResourceDef[] {
                         return { data: { error: 'Project number must be a valid integer', code: -32002 } }
                     }
                     
+                    const registry = context.briefingConfig?.projectRegistry ?? {}
+                    let resolvedWorkspace = resourceWorkspace(context)
+                    for (const [key, entry] of Object.entries(registry)) {
+                        if (entry.project_number === projectNumber) {
+                            resolvedWorkspace = key
+                            break
+                        }
+                    }
+
                     const searchResult = context.db.searchEntries('', {
                         projectNumber,
+                        workspaceId: resolvedWorkspace,
                         limit: 5,
                         sortBy: 'timestamp'
                     })
@@ -153,7 +165,8 @@ export function getStalenessResourceDefinitions(): InternalResourceDef[] {
                     const typeBreakdown: Record<string, number> = {}
                     
                     const facets = context.db.getSearchFacets('', {
-                        projectNumber
+                        projectNumber,
+                        workspaceId: resolvedWorkspace
                     })
                     
                     for (const tag of facets.tags) {
@@ -169,7 +182,7 @@ export function getStalenessResourceDefinitions(): InternalResourceDef[] {
                     const recentSearch = context.db.searchByDateRange(
                         oneWeekAgo.toISOString(),
                         now.toISOString(),
-                        { projectNumber }
+                        { projectNumber, workspaceId: resolvedWorkspace }
                     )
 
                     const latestEntry = searchResult.entries[0]
