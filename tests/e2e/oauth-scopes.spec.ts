@@ -65,6 +65,7 @@ test.describe('OAuth 2.1 Scope Enforcement E2E', () => {
             return await new jose.SignJWT({ scope })
                 .setProtectedHeader({ alg: 'RS256', kid: 'test-kid-1' })
                 .setIssuedAt()
+                .setSubject('e2e-test-user')
                 .setIssuer(issuer)
                 .setAudience(audience)
                 .setExpirationTime('1h')
