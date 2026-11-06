@@ -51,7 +51,7 @@ function collectNeighborhood(teamDb: IDatabaseAdapter, startId: number, depth: n
 }
 
 /** Build graph nodes and edges for `entryIds` using batch lookups when available. */
-function buildRelationshipGraph(
+export function buildRelationshipGraph(
     teamDb: IDatabaseAdapter,
     entryIds: number[],
     wsId: string

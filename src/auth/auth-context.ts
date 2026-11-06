@@ -40,30 +40,3 @@ export function getAuthContext(): AuthenticatedContext | undefined {
     return authContextStorage.getStore()
 }
 
-/**
- * Run a callback within a specific auth context.
- * Alias for runWithAuthContext with synchronous return type.
- */
-export function withAuthContext<T>(context: AuthenticatedContext, fn: () => T): T {
-    return authContextStorage.run(context, fn)
-}
-
-/**
- * Check if the current request has an authenticated context.
- */
-export function isAuthenticated(): boolean {
-    const ctx = authContextStorage.getStore()
-    return ctx?.authenticated === true
-}
-
-/**
- * Get the scopes from the current authenticated context.
- * Returns empty array if not authenticated.
- */
-export function getAuthenticatedScopes(): string[] {
-    const ctx = authContextStorage.getStore()
-    if (ctx?.authenticated && ctx.claims?.scopes) {
-        return ctx.claims.scopes
-    }
-    return []
-}

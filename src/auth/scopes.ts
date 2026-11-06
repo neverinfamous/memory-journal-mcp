@@ -10,7 +10,6 @@
  */
 
 import type { ToolGroup } from '../types/index.js'
-import { TOOL_GROUPS } from '../filtering/tool-constants.js'
 
 // =============================================================================
 // Scope Constants
@@ -131,13 +130,6 @@ export const TOOL_SCOPE_OVERRIDES: Record<string, StandardScope> = {
     getProject: SCOPES.READ,
 }
 
-/**
- * Get the required scope for a tool group.
- */
-export function getScopeForToolGroup(group: ToolGroup): StandardScope {
-    return TOOL_GROUP_SCOPES[group] ?? SCOPES.READ
-}
-
 // Derived arrays for backward compatibility
 const groupsForScope = (maxScope: StandardScope): ToolGroup[] => {
     const hierarchy: Record<StandardScope, number> = {
@@ -239,13 +231,6 @@ export function hasAnyScope(grantedScopes: string[], requiredScopes: string[]): 
 }
 
 /**
- * Check if granted scopes include all of the required scopes
- */
-export function hasAllScopes(grantedScopes: string[], requiredScopes: string[]): boolean {
-    return requiredScopes.every((scope) => hasScope(grantedScopes, scope))
-}
-
-/**
  * Check if scopes include admin access
  */
 export function hasAdminScope(scopes: string[]): boolean {
@@ -271,13 +256,6 @@ export function hasReadScope(scopes: string[]): boolean {
 // =============================================================================
 
 /**
- * Get the required minimum scope for a tool group
- */
-export function getRequiredScopeForGroup(group: ToolGroup): string {
-    return TOOL_GROUP_SCOPES[group] ?? SCOPES.READ
-}
-
-/**
  * Get tool groups accessible with given scopes
  */
 export function getAccessibleToolGroups(scopes: string[]): ToolGroup[] {
@@ -291,45 +269,4 @@ export function getAccessibleToolGroups(scopes: string[]): ToolGroup[] {
         return [...READ_SCOPE_GROUPS]
     }
     return []
-}
-
-/**
- * Get all tools accessible with given scopes
- */
-export function getAccessibleTools(scopes: string[]): string[] {
-    const groups = getAccessibleToolGroups(scopes)
-    const allTools: string[] = []
-
-    for (const group of groups) {
-        const groupTools = TOOL_GROUPS[group] ?? []
-        allTools.push(...groupTools)
-    }
-
-    return [...new Set(allTools)]
-}
-
-// =============================================================================
-// Display Utilities
-// =============================================================================
-
-/**
- * Get human-readable display name for a scope
- */
-export function getScopeDisplayName(scope: string): string {
-    switch (scope) {
-        case SCOPES.READ:
-            return 'Read Only'
-        case SCOPES.WRITE:
-            return 'Read/Write'
-        case SCOPES.ADMIN:
-            return 'Administrative'
-        case SCOPES.FULL:
-            return 'Full Access'
-        case SCOPES.TEAM:
-            return 'Team Access'
-        case SCOPES.AUDIT:
-            return 'Audit Log Access'
-        default:
-            return scope
-    }
 }

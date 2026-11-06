@@ -11,10 +11,7 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
 import { z } from 'zod'
-import {
-    getZodTypeString,
-    generateTypescriptDeclarations,
-} from '../../src/codemode/type-generator.js'
+import { getZodTypeString } from '../../src/codemode/type-generator.js'
 import { applyGitInterceptions } from '../../src/codemode/api/git-api.js'
 import { wrapResult } from '../../src/codemode/worker-result-proxy.js'
 import { createJournalApi } from '../../src/codemode/api/journal-api.js'
@@ -27,7 +24,6 @@ import {
     BatchUpdateEntriesSchemaMcp,
     BatchDeleteEntriesSchemaMcp,
 } from '../../src/handlers/tools/admin/schemas.js'
-import type { ToolDefinition } from '../../src/types/index.js'
 
 describe('Code Mode Extended Coverage', () => {
     describe('TypeScript Declaration Generator (src/codemode/type-generator.ts)', () => {
@@ -92,31 +88,6 @@ describe('Code Mode Extended Coverage', () => {
                     project_number: 5,
                 }).success
             ).toBe(true)
-
-            const sampleTools: ToolDefinition[] = [
-                {
-                    name: 'create_entry',
-                    title: 'Create Entry',
-                    description: 'Create a journal entry',
-                    group: 'core',
-                    inputSchema: z.object({ content: z.string() }),
-                    handler: () => ({}),
-                },
-                {
-                    name: 'mj_execute_code',
-                    title: 'Execute Code',
-                    description: 'Skip codemode tools',
-                    group: 'codemode',
-                    inputSchema: z.object({ code: z.string() }),
-                    handler: () => ({}),
-                },
-            ]
-
-            const dts = generateTypescriptDeclarations(sampleTools)
-            expect(dts).toContain('declare namespace mj {')
-            expect(dts).toContain('namespace core {')
-            expect(dts).toContain('function createEntry(args?: { content: string }): Promise<unknown>;')
-            expect(dts).not.toContain('mj_execute_code')
         })
     })
 

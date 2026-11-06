@@ -1,6 +1,4 @@
 import { z } from 'zod'
-import type { ToolDefinition } from '../types/index.js'
-import { toolNameToMethodName } from './api/index.js'
 
 /**
  * Converts a single Zod schema type into a TypeScript string representation.
@@ -58,53 +56,4 @@ export function getZodTypeString(schema: unknown): string {
     }
 
     return 'unknown'
-}
-
-/**
- * Generates a complete .d.ts namespace string for the given tools.
- * Organizes tools into their respective `mj.<group>.<method>` structures.
- */
-export function generateTypescriptDeclarations(tools: ToolDefinition[]): string {
-    const groups = new Map<string, ToolDefinition[]>()
-
-    for (const tool of tools) {
-        if (tool.group === 'codemode') continue
-
-        const existing = groups.get(tool.group) ?? []
-        existing.push(tool)
-        groups.set(tool.group, existing)
-    }
-
-    let dts = 'declare namespace mj {\n'
-
-    for (const [groupName, groupTools] of groups.entries()) {
-        dts += `  namespace ${groupName} {\n`
-
-        for (const tool of groupTools) {
-            const methodName = toolNameToMethodName(tool.name, groupName)
-            const paramType = getZodTypeString(tool.inputSchema)
-
-            // Add a brief comment if description exists
-            if (tool.description) {
-                const comment = tool.description.split('\n')[0]
-                dts += `    /** ${comment} */\n`
-            }
-            dts += `    function ${methodName}(args?: ${paramType}): Promise<unknown>;\n`
-        }
-
-        // Add group-level help
-        dts += `    /** Get method list and examples for ${groupName} */\n`
-        dts += `    function help(): Promise<unknown>;\n`
-        
-
-        
-        dts += `  }\n`
-    }
-
-    // Top-level help
-    dts += `  /** Get top-level method list and usage */\n`
-    dts += `  function help(): Promise<unknown>;\n`
-    dts += `}\n`
-
-    return dts
 }

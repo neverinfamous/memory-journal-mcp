@@ -4,13 +4,13 @@ import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { ValidationError } from '../../../types/errors.js'
 import { resolveSearchMode } from './auto.js'
 import { ftsSearch } from './fts.js'
-import { hybridSearch } from './hybrid.js'
+import { runHybridSearch, runFtsSearch } from './hybrid-branch.js'
 import { SearchEntriesSchema, SearchEntriesSchemaMcp } from './schemas.js'
 import { EntriesListOutputSchema } from '../schemas.js'
-import { cursorOffset, pageRows, runSemanticSearch } from './semantic-branch.js'
+import { runSemanticSearch } from './semantic-branch.js'
 
 export function getSearchEntriesTool(context: ToolContext): ToolDefinition[] {
-    const { db, teamDb, vectorManager, teamVectorManager } = context;
+    const { db, teamDb, vectorManager } = context;
     return [
         {
             name: 'search_entries',
@@ -150,76 +150,19 @@ export function getSearchEntriesTool(context: ToolContext): ToolDefinition[] {
                             }
                         }
                         case 'hybrid': {
-                            if (!vectorManager) {
-                                // Fallback to FTS when vector search is unavailable
-                                const result = ftsSearch(input.query, db, teamDb, searchOptions)
-                                return { ...result, searchMode: 'fts (fallback)' }
-                            }
-                            const hybridOffset = cursorOffset(input.cursor)
-                            const { entries: hybridEntries, degraded } = await hybridSearch(
+                            return await runHybridSearch({
+                                context,
+                                input,
                                 query,
-                                db,
-                                vectorManager,
-                                {
-                                    ...searchOptions,
-                                    limit: input.limit + hybridOffset,
-                                    ftsWeight: input.fts_weight,
-                                    semanticWeight: input.semantic_weight,
-                                    ...(teamDb !== undefined ? { teamDb } : {}),
-                                    ...(teamVectorManager !== undefined ? { teamVectorManager } : {}),
-                                }
-                            )
-                            const hybridPage = pageRows(hybridEntries, input.cursor, input.limit)
-
-                            // Post-fetch importance re-sort for vector results
-                            if (input.sort_by === 'importance') {
-                                const ids = hybridEntries.map((e) => e['id'] as number)
-                                const importanceMap = db.getEntriesByIdsWithImportance(ids, wsId)
-                                const scored = hybridEntries.map((e) => {
-                                    const entryId = e['id'] as number
-                                    const imp = importanceMap.get(entryId)?.importance.score ?? 0
-                                    return { ...e, importanceScore: Math.round(imp * 100) / 100 }
-                                })
-                                scored.sort(
-                                    (a, b) => (b.importanceScore ?? 0) - (a.importanceScore ?? 0)
-                                )
-                                const scoredPage = pageRows(scored, input.cursor, input.limit)
-                                return {
-                                    success: true,
-                                    entries: scoredPage.page,
-                                    count: scoredPage.page.length,
-                                    searchMode: isAuto ? 'hybrid (auto)' : 'hybrid',
-                                    degraded: degraded === true,
-                                    facets,
-                                    ...(scoredPage.nextCursor !== undefined ? { next_cursor: scoredPage.nextCursor } : {}),
-                                }
-                            }
-
-                            return {
-                                success: true,
-                                entries: hybridPage.page,
-                                count: hybridPage.page.length,
-                                searchMode: isAuto ? 'hybrid (auto)' : 'hybrid',
-                                degraded: degraded === true,
+                                wsId,
+                                isAuto,
+                                searchOptions,
                                 facets,
-                                ...(hybridPage.nextCursor !== undefined ? { next_cursor: hybridPage.nextCursor } : {}),
-                            }
+                            })
                         }
                         case 'fts':
-                        default: {
-                            const result = ftsSearch(input.query, db, teamDb, searchOptions)
-                            return {
-                                ...result,
-                                success: true,
-                                searchMode: isAuto ? 'fts (auto)' : 'fts',
-                                degraded: result.degraded ?? false,
-                                next_cursor: result.nextCursor,
-                                highlights: result.highlights,
-                                suggestions: result.suggestions,
-                                correctedQuery: result.correctedQuery,
-                                facets,
-                            }
-                        }
+                        default:
+                            return runFtsSearch(context, input, isAuto, searchOptions, facets)
                     }
                 } catch (err) {
                     return formatHandlerError(err)

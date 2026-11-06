@@ -81,6 +81,60 @@ function scanQuotedLiteral(
 }
 
 /**
+ * Scans a template literal segment starting just after the opening backtick (or the
+ * closing `}` of a `${...}` interpolation when `resumed` is true).
+ * On `${` it pushes a new brace-depth frame onto `braceDepthStack` and emits
+ * `` `+( `` so the interpolated expression stays visible to pattern scanning.
+ * Returns the emitted output, the index after the consumed text, and the new
+ * last non-whitespace token (undefined when the literal is unterminated).
+ */
+function scanTemplateLiteral(
+    code: string,
+    start: number,
+    resumed: boolean,
+    braceDepthStack: number[]
+): { out: string; next: number; lastToken: string | undefined } {
+    const len = code.length
+    let out = resumed ? ')`' : '`'
+    let i = start
+    let lastToken: string | undefined
+    let content = ''
+    while (i < len) {
+        const c = code[i] ?? ''
+        if (c === '\\') {
+            if (i + 1 < len) {
+                content += code[i + 1] ?? ''
+                i += 2
+            } else {
+                i++
+            }
+            continue
+        }
+        if (c === '$' && code[i + 1] === '{') {
+            // Enter interpolation expression: preserve code inside `${ ... }`
+            out += '`' + '+('
+            braceDepthStack.push(0)
+            lastToken = '('
+            i += 2
+            break
+        }
+        if (c === '`') {
+            if (SENSITIVE_STRING_CONTENT.test(content.trim())) {
+                out += `${content.trim()}\``
+            } else {
+                out += '`'
+            }
+            lastToken = '`'
+            i++
+            break
+        }
+        content += c
+        i++
+    }
+    return { out, next: i, lastToken }
+}
+
+/**
  * Single-pass lexical scanner that strips JS comments and string literal contents
  * in a single left-to-right pass while preserving:
  * 1. `${...}` template literal interpolation expressions (so blocked patterns inside
@@ -163,43 +217,17 @@ export function stripCommentsAndStrings(rawCode: string): string {
         if (ch === '`' || (ch === '}' && templateBraceDepthStack.length > 0 && templateBraceDepthStack[templateBraceDepthStack.length - 1] === 0)) {
             if (ch === '}') {
                 templateBraceDepthStack.pop()
-                out += ')`'
-            } else {
-                out += '`'
             }
-            i++
-            let content = ''
-            while (i < len) {
-                const c = code[i] ?? ''
-                if (c === '\\') {
-                    if (i + 1 < len) {
-                        content += code[i + 1] ?? ''
-                        i += 2
-                    } else {
-                        i++
-                    }
-                    continue
-                }
-                if (c === '$' && code[i + 1] === '{') {
-                    // Enter interpolation expression: preserve code inside `${ ... }`
-                    out += '`' + '+('
-                    templateBraceDepthStack.push(0)
-                    lastNonWsToken = '('
-                    i += 2
-                    break
-                }
-                if (c === '`') {
-                    if (SENSITIVE_STRING_CONTENT.test(content.trim())) {
-                        out += `${content.trim()}\``
-                    } else {
-                        out += '`'
-                    }
-                    lastNonWsToken = '`'
-                    i++
-                    break
-                }
-                content += c
-                i++
+            const scanned = scanTemplateLiteral(
+                code,
+                i + 1,
+                ch === '}',
+                templateBraceDepthStack
+            )
+            out += scanned.out
+            i = scanned.next
+            if (scanned.lastToken !== undefined) {
+                lastNonWsToken = scanned.lastToken
             }
             continue
         }
