@@ -61,8 +61,8 @@ function isValidProjectPath(dirPath: string): boolean {
 
 export function createRegisterProjectFn(
     coreApi: GroupApiRecord
-): (...args: unknown[]) => Promise<{ success: boolean; message?: string; error?: string }> {
-    return async (...args: unknown[]): Promise<{ success: boolean; message?: string; error?: string }> => {
+): (...args: unknown[]) => Promise<{ success: boolean; message?: string; warning?: string; error?: string }> {
+    return async (...args: unknown[]): Promise<{ success: boolean; message?: string; warning?: string; error?: string }> => {
         const name = safeString(args[0] ?? '')
         const absolutePath = safeString(args[1] ?? '')
         const projectNumber = typeof args[2] === 'number' ? args[2] : undefined
@@ -106,7 +106,8 @@ export function createRegisterProjectFn(
                 significanceType: 'architecture',
                 content: `Initialized project ${name}`,
                 tags: ['project-initialization', 'setup'],
-                projectNumber: projectNumber ?? 0,
+                workspaceId: name,
+                ...(projectNumber !== undefined ? { projectNumber } : {}),
                 trustScore: 1.0,
                 impactScore: 0.8,
                 autoContext: JSON.stringify({ action: 'register_project', target: name }),
@@ -121,6 +122,7 @@ export function createRegisterProjectFn(
         if (dbInitError !== undefined) {
             return {
                 success: true,
+                warning: dbInitError,
                 message: `Project '${name}' registered, but the initialization journal entry failed: ${dbInitError}`,
             }
         }

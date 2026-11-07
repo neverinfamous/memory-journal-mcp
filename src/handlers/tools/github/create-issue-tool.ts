@@ -93,6 +93,14 @@ export function getCreateGitHubIssueTool(context: ToolContext): ToolDefinition {
                             ? `\nDescription: ${input.body.slice(0, 200)}${input.body.length > 200 ? '...' : ''}`
                             : '')
 
+                const workspaceId = resolveWorkspaceId(
+                    resolved.repo,
+                    projectNumber,
+                    context.config,
+                    entryContent,
+                    input.tags
+                )
+
                 const entry = db.createEntry({
                     content: entryContent,
                     entryType: 'planning',
@@ -101,7 +109,7 @@ export function getCreateGitHubIssueTool(context: ToolContext): ToolDefinition {
                     significanceType: null,
                     projectNumber: projectNumber,
                     projectOwner: resolved.owner,
-                    workspaceId: resolveWorkspaceId(undefined, projectNumber, context.config),
+                    workspaceId,
                 })
 
                 // 2. Perform external mutation
@@ -120,6 +128,7 @@ export function getCreateGitHubIssueTool(context: ToolContext): ToolDefinition {
                         content:
                             entryContent +
                             '\n\n[FAILED] GitHub mutation failed: Could not create issue. Check GITHUB_TOKEN permissions.',
+                        workspaceId,
                     })
                     return {
                         success: false,
@@ -159,6 +168,7 @@ export function getCreateGitHubIssueTool(context: ToolContext): ToolDefinition {
                     issueNumber: issue.number,
                     issueUrl: issue.url,
                     tags: input.tags ?? ['github', 'issue-created'],
+                    workspaceId,
                 })
 
                 return {

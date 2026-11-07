@@ -118,7 +118,7 @@ const FREEZE_INNER_CONTEXT_SCRIPT = new vm.Script(`(function() {
                     writable: false,
                     configurable: false,
                 });
-            } catch(e) { /* ignore */ }
+            } catch(e) { /* non-configurable in some V8 versions; safe to ignore */ }
         }
     }
     const builtins = [
@@ -133,13 +133,13 @@ const FREEZE_INNER_CONTEXT_SCRIPT = new vm.Script(`(function() {
     ];
     for (const B of builtins) {
         if (B && typeof B === "function" && B.prototype) {
-            try { Object.freeze(B.prototype); } catch(e) { /* ignore */ }
+            try { Object.freeze(B.prototype); } catch(e) { /* already frozen or non-extensible */ }
         }
-        try { Object.freeze(B); } catch(e) { /* ignore */ }
+        try { Object.freeze(B); } catch(e) { /* already frozen or non-extensible */ }
     }
     for (const proto of [Object.prototype, Function.prototype, AsyncFnProto, GenFnProto, AsyncGenFnProto]) {
         if (proto) {
-            try { Object.freeze(proto); } catch(e) { /* ignore */ }
+            try { Object.freeze(proto); } catch(e) { /* already frozen or non-extensible */ }
         }
     }
 })()`)

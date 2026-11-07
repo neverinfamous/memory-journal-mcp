@@ -229,14 +229,12 @@ function assertImportAuthorOwnership(
     }
 }
 
-function upsertParsedFile(
+function resolveImportedFileContext(
     file: ParsedFile,
-    db: IDatabaseAdapter,
-    options: ImportOptions,
-    result: ImportResult
-): { entryId: number; workspaceId: string | undefined } {
+    options: ImportOptions
+): { effectiveWsId: string | undefined; effectiveProjNum: number | undefined } {
     const { body, metadata } = file
-    const { author, project_number, workspaceId } = options
+    const { project_number, workspaceId } = options
     const resolved = resolveProjectContext({
         workspace_id: workspaceId,
         project_number,
@@ -250,6 +248,18 @@ function upsertParsedFile(
               ? resolved.workspaceId
               : workspaceId
     const effectiveProjNum = project_number ?? resolved.projectNumber
+    return { effectiveWsId, effectiveProjNum }
+}
+
+function upsertParsedFile(
+    file: ParsedFile,
+    db: IDatabaseAdapter,
+    options: ImportOptions,
+    result: ImportResult
+): { entryId: number; workspaceId: string | undefined } {
+    const { body, metadata } = file
+    const { author } = options
+    const { effectiveWsId, effectiveProjNum } = resolveImportedFileContext(file, options)
     const entryType: EntryType = toEntryType(metadata.entry_type) ?? 'personal_reflection'
 
     if (metadata.mj_id !== undefined) {
@@ -352,7 +362,11 @@ export async function processImportBatch(
             const { filename, metadata } = file
 
             if (dry_run) {
-                if (metadata.mj_id !== undefined && db.getEntryById(metadata.mj_id, workspaceId)) {
+                const { effectiveWsId } = resolveImportedFileContext(file, options)
+                if (
+                    metadata.mj_id !== undefined &&
+                    db.getEntryById(metadata.mj_id, effectiveWsId ?? workspaceId)
+                ) {
                     result.updated++
                 } else {
                     result.created++

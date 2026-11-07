@@ -266,7 +266,7 @@ function inferWorkspaceAndProject(obj: Record<string, unknown>): boolean {
         ) {
             obj['workspace_id'] = process.env['MCP_WORKSPACE_ID'].trim()
             modified = true
-        } else if (wsId === undefined) {
+        } else if (wsId === undefined && !('entry_id' in obj)) {
             obj['workspace_id'] = resolved.workspaceId ?? 'default'
             modified = true
         }

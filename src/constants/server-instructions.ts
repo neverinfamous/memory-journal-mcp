@@ -182,12 +182,6 @@ export function generateCodeModeInstructions(
 }
 
 /**
- * Static instructions for backward compatibility.
- * @deprecated Use generateStandardInstructions() instead for dynamic content
- */
-export const SERVER_INSTRUCTIONS = CORE_INSTRUCTIONS
-
-/**
  * Help content keyed by group name.
  * 'gotchas' is the always-available help (memory://help/gotchas).
  * Other keys are feature-specific help (memory://help/{key}).

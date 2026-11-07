@@ -9,12 +9,14 @@ import { resolveWorkspaceId } from '../../utils/workspace-resolver.js'
 export function resolveWriteWorkspaceId(
     explicitWorkspaceId: string | undefined,
     projectNumber: number | undefined,
-    config?: ToolHandlerConfig
+    config?: ToolHandlerConfig,
+    content?: string,
+    tags?: string[]
 ): string {
     if (explicitWorkspaceId === '*') {
         throw new ValidationError(
             "workspace_id '*' is a read-only wildcard and cannot be used for write operations. Specify a concrete workspace_id or project_number."
         )
     }
-    return resolveWorkspaceId(explicitWorkspaceId, projectNumber, config)
+    return resolveWorkspaceId(explicitWorkspaceId, projectNumber, config, content, tags)
 }

@@ -7,6 +7,7 @@ import {
 } from '@modelcontextprotocol/server'
 import { callTool } from '../../../handlers/tools/index.js'
 import { readResource, validateResourceSubscription } from '../../../handlers/resources/index.js'
+import type { BriefingConfig } from '../../../handlers/resources/shared.js'
 import type { ToolRegistration, ToolHandlerConfig } from '../../../types/index.js'
 import {
     registerResources,
@@ -132,13 +133,29 @@ function buildToolRegistrationOptions(tool: ToolRegistration): ModernToolConfig 
     return toolOptions
 }
 
+function getRequestHandlers(rawServer: object): RequestHandlerMap | undefined {
+    if ('_requestHandlers' in rawServer && rawServer._requestHandlers instanceof Map) {
+        return rawServer._requestHandlers as RequestHandlerMap
+    }
+    return undefined
+}
+
 function registerAllToolsOnServer(
     server: McpServer,
     context: ServerContext,
+    options: ServerOptions,
     allTools: ToolRegistration[],
     customToolHandlerConfig: ToolHandlerConfig
 ): void {
-    const { configManager, db, teamDb, vectorManager, teamVectorManager, github } = context
+    const {
+        configManager,
+        db,
+        teamDb,
+        vectorManager,
+        teamVectorManager,
+        github,
+        allowedIoRoots,
+    } = context
     for (const tool of allTools) {
         const toolOptions = buildToolRegistrationOptions(tool)
         const hasOutputSchema = Boolean(tool.outputSchema)
@@ -159,7 +176,11 @@ function registerAllToolsOnServer(
 
                     const currentConfig = configManager.getConfig()
                     customToolHandlerConfig.filterConfig = currentConfig.toolFilterConfig
-                    customToolHandlerConfig.briefingConfig = currentConfig.briefingConfig
+                    customToolHandlerConfig.briefingConfig = resolveActiveBriefingConfig(
+                        currentConfig.briefingConfig,
+                        options,
+                        allowedIoRoots
+                    )
 
                     const toolArgs =
                         typeof args === 'object' && args !== null
@@ -342,14 +363,15 @@ export function createServerInstance(
         context.skillCatalog.attach(server)
     }
 
-    registerAllToolsOnServer(server, context, allTools, customToolHandlerConfig)
+    registerAllToolsOnServer(server, context, options, allTools, customToolHandlerConfig)
     attachResourceAndSubscriptionHandlers(server, context, options, resources)
 
-    const briefingConfig = resolveActiveBriefingConfig(
-        configManager.getConfig().briefingConfig,
-        options,
-        allowedIoRoots
-    )
+    const resolveLiveBriefingConfig = (): BriefingConfig =>
+        resolveActiveBriefingConfig(
+            configManager.getConfig().briefingConfig,
+            options,
+            allowedIoRoots
+        )
     registerPrompts(
         server,
         prompts,
@@ -357,13 +379,10 @@ export function createServerInstance(
         teamDb ?? undefined,
         runtime,
         context.github,
-        briefingConfig
+        resolveLiveBriefingConfig
     )
 
-    const serverObj = server.server as unknown as {
-        _requestHandlers?: RequestHandlerMap
-    }
-    const requestHandlers = serverObj._requestHandlers
+    const requestHandlers = getRequestHandlers(server.server)
 
     const readOnlyHints = new Map<string, boolean | undefined>()
     for (const tool of allTools) {

@@ -204,11 +204,3 @@ export class ClientRegistrationError extends OAuthError {
 export function isOAuthError(error: unknown): error is OAuthError {
     return error instanceof OAuthError
 }
-
-/**
- * Get WWW-Authenticate header for an OAuth error.
- * @deprecated Use error.wwwAuthenticate property directly instead
- */
-export function getWWWAuthenticateHeader(error: OAuthError, realm = 'memory-journal-mcp'): string {
-    return error.wwwAuthenticate ?? `Bearer realm="${realm}"`
-}

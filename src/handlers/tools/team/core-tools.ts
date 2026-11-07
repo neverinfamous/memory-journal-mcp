@@ -177,9 +177,13 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                     await autoIndexEntry(context.teamVectorManager, teamDb, entry.id, wsId)
 
                     if (context.config?.subscriptionManager) {
-                        void context.config.subscriptionManager.notifyResourceUpdated('memory://team/recent')
+                        void context.config.subscriptionManager
+                            .notifyResourceUpdated('memory://team/recent')
+                            .catch(() => undefined)
                         // Broad stroke briefing update trigger
-                        void context.config.subscriptionManager.notifyResourceUpdated('memory://briefing')
+                        void context.config.subscriptionManager
+                            .notifyResourceUpdated('memory://briefing')
+                            .catch(() => undefined)
                     }
 
                     return {
@@ -315,7 +319,10 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
             description:
                 'List all tags used in the team database with usage counts. Requires TEAM_DB_PATH.',
             group: 'team',
-            inputSchema: z.object({}).strict(),
+            inputSchema: z.object({
+                project_number: z.coerce.number().int().optional(),
+                workspace_id: z.string().optional(),
+            }),
             outputSchema: TeamTagsListOutputSchema,
             annotations: {
                 readOnlyHint: true,
@@ -323,13 +330,27 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                 idempotentHint: true,
                 openWorldHint: false,
             },
-            handler: (_params: unknown) => {
+            handler: (params: unknown) => {
                 try {
                     if (!teamDb) {
                         return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
-                    const rawTags = teamDb.listTags()
+                    const input = z
+                        .object({
+                            project_number: z.coerce.number().int().optional(),
+                            workspace_id: z.string().optional(),
+                        })
+                        .parse(params ?? {})
+                    const wsId =
+                        input.workspace_id !== undefined || input.project_number !== undefined
+                            ? resolveWorkspaceId(
+                                  input.workspace_id,
+                                  input.project_number,
+                                  context.config
+                              )
+                            : undefined
+                    const rawTags = teamDb.listTags(wsId)
                     const tags = rawTags.map((t) => ({ name: t.name, count: t.usageCount }))
                     return { success: true, tags, count: tags.length }
                 } catch (err) {

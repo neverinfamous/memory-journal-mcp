@@ -110,9 +110,12 @@ function buildBriefingConfigOptions(
         copilotReviews: catchConfig(() => resolver.resolveBool('briefingCopilot', 'BRIEFING_COPILOT_REVIEWS') ?? false, false),
         workflowSummary: catchConfig(() => resolver.resolve<string>('workflowSummary', 'MEMORY_JOURNAL_WORKFLOW_SUMMARY'), undefined),
         defaultProjectNumber: catchConfig(() => {
-            const val = resolver.resolve<string>('defaultProject', 'DEFAULT_PROJECT_NUMBER')
-            return val ? parseInt(val, 10) : undefined
+            const configVal = resolver.resolve<string | number>('defaultProjectNumber')
+            const val = resolver.resolve<string>('defaultProject', 'DEFAULT_PROJECT_NUMBER') ?? configVal
+            return val !== undefined && val !== null ? parseInt(String(val), 10) : undefined
         }, undefined),
+        defaultWorkspaceId: catchConfig(() => resolver.resolve<string>('defaultWorkspaceId', 'DEFAULT_WORKSPACE_ID'), undefined),
+        projectRegistry: catchConfig(() => parseProjectRegistryOption(resolver.resolve<unknown>('projectRegistry', 'PROJECT_REGISTRY')), undefined),
         briefingImportanceThreshold: catchConfig(() => {
             const val = resolver.resolve<unknown>('briefingImportanceThreshold', 'BRIEFING_IMPORTANCE_THRESHOLD')
             if (typeof val === 'number') return val

@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import type { Command } from 'commander'
 import { initializeDependencies } from '../../server/mcp-server/initialization.js'
+import { resolveActiveBriefingConfig } from '../../server/mcp-server/tool-registration/register-tools-helpers.js'
 import { callTool } from '../../handlers/tools/index.js'
 import { globalSubscriptionManager } from '../../server/subscription-manager.js'
 import type { ToolHandlerConfig } from '../../types/index.js'
@@ -47,7 +48,13 @@ export async function execAction(scriptPath: string, options: z.infer<typeof exe
         github, configManager, allowedIoRoots 
     } = context
 
-    const filterConfig = configManager.getConfig().toolFilterConfig
+    const currentConfig = configManager.getConfig()
+    const filterConfig = currentConfig.toolFilterConfig
+    const briefingConfig = resolveActiveBriefingConfig(
+        currentConfig.briefingConfig,
+        serverOptions,
+        allowedIoRoots
+    )
     const baseConfig: ToolHandlerConfig = {
         defaultProjectNumber: serverOptions.defaultProjectNumber,
         defaultWorkspaceId: serverOptions.defaultWorkspaceId,
@@ -62,14 +69,15 @@ export async function execAction(scriptPath: string, options: z.infer<typeof exe
         agentHealing: serverOptions.agentHealing,
         teamDefaultRole: serverOptions.teamDefaultRole,
         teamAdmin: serverOptions.teamAdmin,
+        briefingConfig,
         runtime,
         subscriptionManager: globalSubscriptionManager,
     }
 
+    const customToolHandlerConfig: ToolHandlerConfig = { ...baseConfig }
     const dispatch = (name: string, args: Record<string, unknown>): Promise<unknown> =>
-        callTool(name, args, db, vectorManager, github, baseConfig, undefined, teamDb ?? undefined, teamVectorManager ?? undefined)
-
-    const customToolHandlerConfig: ToolHandlerConfig = { ...baseConfig, dispatch }
+        callTool(name, args, db, vectorManager, github, customToolHandlerConfig, undefined, teamDb ?? undefined, teamVectorManager ?? undefined)
+    customToolHandlerConfig.dispatch = dispatch
 
     try {
         const result = await callTool(
@@ -89,6 +97,7 @@ export async function execAction(scriptPath: string, options: z.infer<typeof exe
         process.stderr.write("Execution failed: " + (error instanceof Error ? error.message : String(error)) + '\n')
         process.exit(1)
     } finally {
+        runtime.stopBackgroundTasks?.()
         configManager.close()
         if (runtime.auditLogger) await runtime.auditLogger.close()
         if (context.activeMetricsPath) await runtime.metrics.saveToFile(context.activeMetricsPath)

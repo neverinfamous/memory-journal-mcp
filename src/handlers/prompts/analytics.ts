@@ -2,6 +2,7 @@ import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import { ICON_PROMPT } from '../../constants/icons.js'
 import type { InternalPromptDef } from './index.js'
 import { markUntrustedContentInline } from '../../utils/security-utils.js'
+import { resourceWorkspace, type BriefingConfig } from '../resources/shared.js'
 
 /**
  * Build a concise analytics signal string for injection into standup/retro prompts.
@@ -60,9 +61,15 @@ export function getAnalyticsPromptDefinitions(): InternalPromptDef[] {
             icons: [ICON_PROMPT],
             handler: (
                 _args: Record<string, string> | undefined,
-                db: IDatabaseAdapter
+                db: IDatabaseAdapter,
+                _teamDb?: IDatabaseAdapter,
+                _github?: unknown,
+                briefingConfig?: Partial<BriefingConfig>
             ) => {
-                const digestSignal = buildDigestSignalForPrompt(db)
+                const digestSignal = buildDigestSignalForPrompt(
+                    db,
+                    resourceWorkspace({ briefingConfig })
+                )
 
                 return {
                     messages: [
@@ -83,9 +90,15 @@ export function getAnalyticsPromptDefinitions(): InternalPromptDef[] {
             icons: [ICON_PROMPT],
             handler: (
                 _args: Record<string, string> | undefined,
-                db: IDatabaseAdapter
+                db: IDatabaseAdapter,
+                _teamDb?: IDatabaseAdapter,
+                _github?: unknown,
+                briefingConfig?: Partial<BriefingConfig>
             ) => {
-                const digestSignal = buildDigestSignalForPrompt(db)
+                const digestSignal = buildDigestSignalForPrompt(
+                    db,
+                    resourceWorkspace({ briefingConfig })
+                )
 
                 return {
                     messages: [
@@ -106,9 +119,15 @@ export function getAnalyticsPromptDefinitions(): InternalPromptDef[] {
             icons: [ICON_PROMPT],
             handler: (
                 _args: Record<string, string> | undefined,
-                db: IDatabaseAdapter
+                db: IDatabaseAdapter,
+                _teamDb?: IDatabaseAdapter,
+                _github?: unknown,
+                briefingConfig?: Partial<BriefingConfig>
             ) => {
-                const digestSignal = buildDigestSignalForPrompt(db)
+                const digestSignal = buildDigestSignalForPrompt(
+                    db,
+                    resourceWorkspace({ briefingConfig })
+                )
 
                 return {
                     messages: [
@@ -132,12 +151,12 @@ export function getAnalyticsPromptDefinitions(): InternalPromptDef[] {
                 db: IDatabaseAdapter,
                 _teamDb?: IDatabaseAdapter,
                 _github?: unknown,
-                briefingConfig?: { defaultWorkspaceId?: string }
+                briefingConfig?: Partial<BriefingConfig>
             ) => {
                 const entries = db.getSignificantEntries(
                     20,
                     undefined,
-                    briefingConfig?.defaultWorkspaceId ?? 'default'
+                    resourceWorkspace({ briefingConfig })
                 )
 
                 const mappedEntries = entries.map((e) => ({

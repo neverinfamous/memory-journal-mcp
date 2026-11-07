@@ -62,7 +62,13 @@ export function createShimReadResourceHandler(): (uri?: string) => Promise<unkno
     return (uri?: string) => {
         let hint = ''
         if (typeof uri === 'string') {
-            const match = Object.entries(RESOURCE_SUGGESTIONS).find(([k]) => uri.startsWith(k))
+            const match = Object.entries(RESOURCE_SUGGESTIONS).find(
+                ([k]) =>
+                    uri === k ||
+                    uri.startsWith(k + '/') ||
+                    uri.startsWith(k + '?') ||
+                    uri.startsWith(k + '#')
+            )
             if (match !== undefined) hint = ` Try: ${match[1]}`
         }
         return Promise.resolve({
@@ -168,6 +174,11 @@ export function createShimProjectsDomain(
     shimMj: Record<string, unknown>
 ): object {
     const baseProjectsProxy = target['projects']
+    const listProjectsFn =
+        getGroupProp(target, 'admin', 'listProjects') ??
+        getGroupProp(target, 'admin', 'list_projects') ??
+        getGroupProp(target, 'core', 'listProjects') ??
+        getGroupProp(target, 'core', 'list_projects')
     const createFn = getGroupProp(target, 'core', 'create_entry') ?? getGroupProp(target, 'core', 'createEntry')
     const insightsFn =
         getGroupProp(target, 'analytics', 'get_cross_project_insights') ??
@@ -176,6 +187,9 @@ export function createShimProjectsDomain(
     const projectsFn = function (this: unknown, ...args: unknown[]): unknown {
         if (typeof baseProjectsProxy === 'function') {
             return (baseProjectsProxy as (...a: unknown[]) => unknown).apply(this, args)
+        }
+        if (typeof listProjectsFn === 'function') {
+            return (listProjectsFn as (...a: unknown[]) => unknown).apply(this, args)
         }
         return Promise.resolve({
             success: true,
@@ -194,6 +208,9 @@ export function createShimProjectsDomain(
         get(_t, p): unknown {
             if (typeof p === 'symbol' || p === 'then') return undefined
             if (p === 'entries') return { create: createFn, add: createFn }
+            if ((p === 'list' || p === 'listProjects' || p === 'list_projects' || p === 'getAll') && typeof listProjectsFn === 'function') {
+                return listProjectsFn
+            }
             if (p === 'insights' && typeof insightsFn === 'function') {
                 return (...args: unknown[]): unknown => (insightsFn as (...a: unknown[]) => unknown)(...args)
             }

@@ -41,7 +41,27 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                     coerceSignificanceAlias(params)
 
                     const input = UpdateEntrySchema.parse(params)
-                    const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
+                    let wsId = resolveWorkspaceId(
+                        input.workspace_id,
+                        input.project_number,
+                        context.config,
+                        input.content,
+                        input.tags ?? undefined
+                    )
+                    const rawHasExplicitWorkspace =
+                        typeof params === 'object' &&
+                        params !== null &&
+                        ('workspace_id' in params || 'workspaceId' in params || 'workspace' in params)
+                    if (
+                        !rawHasExplicitWorkspace &&
+                        input.project_number === undefined &&
+                        wsId === 'default'
+                    ) {
+                        const existingByPk = db.getEntryById(input.entry_id, '*')
+                        if (existingByPk?.workspaceId !== undefined) {
+                            wsId = existingByPk.workspaceId
+                        }
+                    }
                     const entry = db.updateEntry(input.entry_id, {
                         content: input.content,
                         entryType: input.entry_type,
@@ -108,7 +128,17 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     const { entry_id, permanent, expected_version, workspace_id, project_number } = DeleteEntrySchema.parse(params)
-                    const wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
+                    let wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
+                    if (
+                        workspace_id === undefined &&
+                        project_number === undefined &&
+                        wsId === 'default'
+                    ) {
+                        const existingByPk = db.getEntryByIdIncludeDeleted(entry_id, '*')
+                        if (existingByPk?.workspaceId !== undefined) {
+                            wsId = existingByPk.workspaceId
+                        }
+                    }
 
                     if (expected_version !== undefined) {
                         const existing = db.getEntryByIdIncludeDeleted(entry_id, wsId);
@@ -207,7 +237,17 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                             workspace_id: z.string().optional(),
                         })
                     ).parse(params)
-                    const wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
+                    let wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
+                    if (
+                        workspace_id === undefined &&
+                        project_number === undefined &&
+                        wsId === 'default'
+                    ) {
+                        const existingByPk = db.getEntryByIdIncludeDeleted(entry_id, '*')
+                        if (existingByPk?.workspaceId !== undefined) {
+                            wsId = existingByPk.workspaceId
+                        }
+                    }
                     const success = db.restoreEntry(entry_id, wsId)
                     if (!success) {
                         return {

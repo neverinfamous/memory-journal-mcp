@@ -149,7 +149,7 @@ export function registerPrompts(
     teamDb?: IDatabaseAdapter,
     runtime?: ServerRuntime,
     github?: GitHubIntegration,
-    briefingConfig?: BriefingConfig
+    briefingConfig?: BriefingConfig | (() => BriefingConfig)
 ): void {
     for (const promptDef of prompts) {
         let argsSchema: Record<string, z.ZodType> | undefined
@@ -184,7 +184,16 @@ export function registerPrompts(
                         }[]
                     }> => {
                         const args = providedArgs as Record<string, string>
-                        const promptResult = await getPrompt(promptDef.name, args, db, teamDb, github, briefingConfig)
+                        const resolvedBriefingConfig =
+                            typeof briefingConfig === 'function' ? briefingConfig() : briefingConfig
+                        const promptResult = await getPrompt(
+                            promptDef.name,
+                            args,
+                            db,
+                            teamDb,
+                            github,
+                            resolvedBriefingConfig
+                        )
                         return {
                             messages: promptResult.messages.map((m) => ({
                                 role: m.role as 'user' | 'assistant',

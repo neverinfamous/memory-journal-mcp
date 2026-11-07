@@ -3,7 +3,10 @@ import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { AggregateMcpError } from '../../../types/errors.js'
 import { sendProgress } from '../../../utils/progress-utils.js'
 import { logger } from '../../../utils/logger.js'
-import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
+import {
+    resolveWorkspaceFromFilePath,
+    resolveWorkspaceId,
+} from '../../../utils/workspace-resolver.js'
 import { resolveWriteWorkspaceId } from '../write-workspace.js'
 
 import { exportEntriesToMarkdown } from '../../../markdown/index.js'
@@ -266,7 +269,16 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
             handler: async (params: unknown) => {
                 try {
                     const input = ImportMarkdownSchema.parse(params)
-                    const wsId = resolveWriteWorkspaceId(input.workspace_id, input.project_number, context.config)
+                    const dirMatch =
+                        input.workspace_id === undefined && input.project_number === undefined
+                            ? resolveWorkspaceFromFilePath(input.source_dir, context.config)
+                            : undefined
+                    const effectiveProjectNum = input.project_number ?? dirMatch?.projectNumber
+                    const wsId = resolveWriteWorkspaceId(
+                        input.workspace_id ?? dirMatch?.workspaceId,
+                        effectiveProjectNum,
+                        context.config
+                    )
 
                     // Determine allowed roots
                     // Security fix: Use explicitly configured roots, without CWD fallback
@@ -283,7 +295,7 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
                             dry_run: input.dry_run,
                             limit: input.limit,
                             workspaceId: wsId,
-                            ...(input.project_number !== undefined ? { project_number: input.project_number } : {}),
+                            ...(effectiveProjectNum !== undefined ? { project_number: effectiveProjectNum } : {}),
                         },
                         context.vectorManager,
                         allowedRoots
@@ -331,7 +343,16 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
             handler: async (params: unknown) => {
                 try {
                     const input = ImportExternalSchema.parse(params)
-                    const wsId = resolveWriteWorkspaceId(input.workspace_id, input.project_number, context.config)
+                    const dirMatch =
+                        input.workspace_id === undefined && input.project_number === undefined
+                            ? resolveWorkspaceFromFilePath(input.source_dir, context.config)
+                            : undefined
+                    const effectiveProjectNum = input.project_number ?? dirMatch?.projectNumber
+                    const wsId = resolveWriteWorkspaceId(
+                        input.workspace_id ?? dirMatch?.workspaceId,
+                        effectiveProjectNum,
+                        context.config
+                    )
 
                     // Determine allowed roots
                     const allowedRoots = context.config?.allowedIoRoots ?? []
@@ -400,7 +421,7 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
                     const result = await processImportBatch(parsedFiles, db, {
                         dry_run: input.dry_run,
                         workspaceId: wsId,
-                        ...(input.project_number !== undefined ? { project_number: input.project_number } : {}),
+                        ...(effectiveProjectNum !== undefined ? { project_number: effectiveProjectNum } : {}),
                     }, context.vectorManager)
 
                     // Merge conversion phase errors

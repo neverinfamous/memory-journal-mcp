@@ -88,6 +88,107 @@ export interface CreateShimMjOptions {
     getUpdateMemoryFn: () => (arg: unknown) => unknown
 }
 
+function resolveNodeAndSqlShims(
+    prop: string | symbol,
+    target: Record<string, unknown>,
+    shimMj: Record<string, unknown>,
+    safeFsShim: SafeFsShim
+): { matched: true; value: unknown } | { matched: false } {
+    if (prop === 'db') {
+        return {
+            matched: true,
+            value:
+                'core' in target
+                    ? createDbDomainProxy(target, shimMj)
+                    : createSystemDatabaseDomainProxy(target, shimMj),
+        }
+    }
+    if (prop === 'prepare' || prop === 'stmt' || prop === 'statement') {
+        return {
+            matched: true,
+            value: (sql?: string) => createPreparedStatementShim(typeof sql === 'string' ? sql : '', shimMj),
+        }
+    }
+    if (prop === 'query' || prop === 'raw') {
+        return {
+            matched: true,
+            value: (sql?: string) => {
+                const stmt = createPreparedStatementShim(typeof sql === 'string' ? sql : '', shimMj)
+                const allFn = stmt['all']
+                return typeof allFn === 'function' ? (allFn as () => unknown)() : undefined
+            },
+        }
+    }
+    if (prop === 'exec') {
+        return {
+            matched: true,
+            value: (sql?: string) => {
+                const stmt = createPreparedStatementShim(typeof sql === 'string' ? sql : '', shimMj)
+                const runFn = stmt['run']
+                return typeof runFn === 'function' ? (runFn as () => unknown)() : undefined
+            },
+        }
+    }
+    if (typeof prop === 'string' && LIFECYCLE_PROPS.has(prop)) {
+        return {
+            matched: true,
+            value: () => ({ success: false, code: 'VALIDATION_ERROR', error: `${prop} is not executed in the sandbox` }),
+        }
+    }
+    if (prop === 'execSync' || prop === 'spawnSync' || prop === 'execFileSync') {
+        return { matched: true, value: () => '' }
+    }
+    if (prop === 'spawn' || prop === 'fork' || prop === 'execFile') {
+        return {
+            matched: true,
+            value: (_cmd?: unknown, cbOrOptions?: unknown, maybeCb?: unknown) => {
+                const cb =
+                    typeof cbOrOptions === 'function'
+                        ? (cbOrOptions as (...args: unknown[]) => unknown)
+                        : typeof maybeCb === 'function'
+                          ? (maybeCb as (...args: unknown[]) => unknown)
+                          : undefined
+                if (cb !== undefined) {
+                    try {
+                        cb(null, '', '')
+                    } catch {
+                        // Ignore user callback errors on no-op child_process shim
+                    }
+                }
+                const noop = (): void => { /* noop */ }
+                return { on: noop, stdout: { on: noop }, stderr: { on: noop }, kill: () => true, status: 0, output: ['', '', ''] }
+            },
+        }
+    }
+
+    if (prop === 'fs' || prop === '__safeFs' || prop === 'safeFs') return { matched: true, value: safeFsShim }
+    if (prop === 'path' || prop === '__path') return { matched: true, value: pathShim }
+    if (prop === 'existsSync') return { matched: true, value: safeFsShim.existsSync }
+    if (prop === 'readFileSync' || prop === 'readFile') return { matched: true, value: safeFsShim.readFileSync }
+    if (
+        prop === 'writeFileSync' || prop === 'writeFile' || prop === 'mkdirSync' ||
+        prop === 'appendFileSync' || prop === 'unlinkSync'
+    ) {
+        return { matched: true, value: () => undefined }
+    }
+    if (prop === 'statSync') return { matched: true, value: safeFsShim.statSync }
+    if (prop === 'stat') return { matched: true, value: safeFsShim.stat }
+    if (prop === 'readdirSync') return { matched: true, value: () => [] }
+    if (prop === 'join') return { matched: true, value: pathShim.join }
+    if (prop === 'resolve') return { matched: true, value: pathShim.resolve }
+    if (prop === 'basename') return { matched: true, value: pathShim.basename }
+    if (prop === 'dirname') return { matched: true, value: pathShim.dirname }
+    if (prop === 'extname') return { matched: true, value: pathShim.extname }
+    if (prop === 'promisify') return { matched: true, value: (fn: unknown) => fn }
+    if (prop === 'format' || prop === 'inspect') {
+        return { matched: true, value: (...args: unknown[]) => args.map(String).join(' ') }
+    }
+    if (typeof prop === 'string' && DB_CONSTRUCTOR_PROPS.has(prop)) {
+        return { matched: true, value: createCallableShim(shimMj) }
+    }
+    return { matched: false }
+}
+
 /**
  * Builds the `shimMj` permissive proxy wrapping `mjApi`.
  */
@@ -165,79 +266,21 @@ export function createShimMjProxy(options: CreateShimMjOptions): Record<string, 
 
             if (prop === 'projects' || prop === 'project') return createShimProjectsDomain(target, shimMj)
 
-            if (prop === 'db') {
-                return 'core' in target
-                    ? createDbDomainProxy(target, shimMj)
-                    : createSystemDatabaseDomainProxy(target, shimMj)
-            }
+            const nodeOrSql = resolveNodeAndSqlShims(prop, target, shimMj, safeFsShim)
+            if (nodeOrSql.matched) return nodeOrSql.value
 
-            if (prop === 'prepare' || prop === 'stmt' || prop === 'statement') {
-                return (sql?: string) => createPreparedStatementShim(typeof sql === 'string' ? sql : '', shimMj)
-            }
-            if (prop === 'query' || prop === 'raw') {
-                return (sql?: string) => {
-                    const stmt = createPreparedStatementShim(typeof sql === 'string' ? sql : '', shimMj)
-                    const allFn = stmt['all']
-                    return typeof allFn === 'function' ? (allFn as () => unknown)() : undefined
-                }
-            }
-            if (prop === 'exec') {
-                return (sql?: string) => {
-                    const stmt = createPreparedStatementShim(typeof sql === 'string' ? sql : '', shimMj)
-                    const runFn = stmt['run']
-                    return typeof runFn === 'function' ? (runFn as () => unknown)() : undefined
-                }
-            }
-
-            if (typeof prop === 'string' && LIFECYCLE_PROPS.has(prop)) {
-                return () => ({ success: false, code: 'VALIDATION_ERROR', error: `${prop} is not executed in the sandbox` })
-            }
-            if (prop === 'execSync' || prop === 'spawnSync' || prop === 'execFileSync') return () => ''
-            if (prop === 'spawn' || prop === 'fork' || prop === 'execFile') {
-                return (_cmd?: unknown, cbOrOptions?: unknown, maybeCb?: unknown) => {
-                    const cb =
-                        typeof cbOrOptions === 'function'
-                            ? (cbOrOptions as (...args: unknown[]) => unknown)
-                            : typeof maybeCb === 'function'
-                              ? (maybeCb as (...args: unknown[]) => unknown)
-                              : undefined
-                    if (cb !== undefined) {
-                        try { cb(null, '', '') } catch { /* ignore */ }
-                    }
-                    const noop = (): void => { /* noop */ }
-                    return { on: noop, stdout: { on: noop }, stderr: { on: noop }, kill: () => true, status: 0, output: ['', '', ''] }
-                }
-            }
-
-            if (prop === 'fs' || prop === '__safeFs' || prop === 'safeFs') return safeFsShim
-            if (prop === 'path' || prop === '__path') return pathShim
-            if (prop === 'existsSync') return safeFsShim.existsSync
-            if (prop === 'readFileSync' || prop === 'readFile') return safeFsShim.readFileSync
-            if (
-                prop === 'writeFileSync' || prop === 'writeFile' || prop === 'mkdirSync' ||
-                prop === 'appendFileSync' || prop === 'unlinkSync'
-            ) {
-                return () => undefined
-            }
-            if (prop === 'statSync') return safeFsShim.statSync
-            if (prop === 'stat') return safeFsShim.stat
-            if (prop === 'readdirSync') return () => []
-            if (prop === 'join') return pathShim.join
-            if (prop === 'resolve') return pathShim.resolve
-            if (prop === 'basename') return pathShim.basename
-            if (prop === 'dirname') return pathShim.dirname
-            if (prop === 'extname') return pathShim.extname
-            if (prop === 'promisify') return (fn: unknown) => fn
-            if (prop === 'format' || prop === 'inspect') return (...args: unknown[]) => args.map(String).join(' ')
-            if (typeof prop === 'string' && DB_CONSTRUCTOR_PROPS.has(prop)) return createCallableShim(shimMj)
             if (prop === 'database' || prop === 'system') return createSystemDatabaseDomainProxy(target, shimMj)
             if (prop === 'tags' || prop === 'tag') return target['tags']
 
-            if ((prop === 'getProjects' || prop === 'listProjects' || prop === 'searchProjects') && 'analytics' in target) {
-                return (
+            if (prop === 'getProjects' || prop === 'listProjects' || prop === 'searchProjects') {
+                const listProjects =
+                    getGroupProp(target, 'admin', 'listProjects') ??
+                    getGroupProp(target, 'admin', 'list_projects') ??
+                    getGroupProp(target, 'core', 'listProjects') ??
+                    getGroupProp(target, 'core', 'list_projects') ??
                     getGroupProp(target, 'analytics', 'get_cross_project_insights') ??
                     getGroupProp(target, 'analytics', 'getCrossProjectInsights')
-                )
+                if (listProjects !== undefined) return listProjects
             }
 
             if (prop === 'search' && 'search' in target) {

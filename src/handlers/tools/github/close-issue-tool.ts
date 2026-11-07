@@ -113,6 +113,13 @@ export function getCloseGitHubIssueTool(context: ToolContext): ToolDefinition {
                     resolved.repo,
                     input.project_number
                 )
+                const workspaceId = resolveWorkspaceId(
+                    resolved.repo,
+                    entryProjectNumber,
+                    context.config,
+                    entryContent,
+                    input.tags
+                )
                 const entry = db.createEntry({
                     content: entryContent,
                     entryType: 'bug_fix',
@@ -122,7 +129,7 @@ export function getCloseGitHubIssueTool(context: ToolContext): ToolDefinition {
                     issueNumber: input.issue_number,
                     projectNumber: entryProjectNumber,
                     projectOwner: resolved.owner,
-                    workspaceId: resolveWorkspaceId(undefined, entryProjectNumber, context.config),
+                    workspaceId,
                 })
 
                 // 2. Perform external mutation
@@ -138,6 +145,7 @@ export function getCloseGitHubIssueTool(context: ToolContext): ToolDefinition {
                         content:
                             entryContent +
                             '\n\n[FAILED] GitHub mutation failed: Could not close issue. Check GITHUB_TOKEN permissions.',
+                        workspaceId,
                     })
                     return {
                         success: false,
@@ -183,6 +191,7 @@ export function getCloseGitHubIssueTool(context: ToolContext): ToolDefinition {
                     content: finalContent,
                     issueUrl: issueDetails.url,
                     tags: input.tags ?? ['github', 'issue-closed', 'resolution'],
+                    workspaceId,
                 })
 
                 return {

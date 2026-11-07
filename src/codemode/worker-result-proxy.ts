@@ -85,6 +85,147 @@ function bindArrayMethod(arr: unknown[], prop: string): ((...args: unknown[]) =>
     return undefined
 }
 
+function createFailedResultProxy(result: object): unknown {
+    return new Proxy(result, {
+        ownKeys: (target) => Reflect.ownKeys(target),
+        getOwnPropertyDescriptor: (target, prop) => Reflect.getOwnPropertyDescriptor(target, prop),
+        get(target, prop): unknown {
+            const errVal: unknown = Reflect.get(target, 'error')
+            const codeVal: unknown = Reflect.get(target, 'code')
+            if (prop === 'error' && typeof errVal === 'string' && typeof codeVal === 'string') {
+                return `[${codeVal}] ${errVal}`
+            }
+            if (prop in target) return Reflect.get(target, prop) as unknown
+            if (prop === 'length') return 0
+            if (typeof prop === 'string' && /^\d+$/.test(prop)) return undefined
+            if (prop === Symbol.iterator) return function* () { yield* [] }
+            if (typeof prop === 'string' && RESULT_COLLECTION_KEYS.includes(prop)) return []
+            if (typeof prop === 'string' && FAILED_ARRAY_METHODS.includes(prop)) {
+                const message = typeof errVal === 'string' ? errVal : 'Operation failed'
+                return () => {
+                    throw new Error(message)
+                }
+            }
+            return undefined
+        },
+    })
+}
+
+function createArrayResultProxy(arr: unknown[]): unknown {
+    return new Proxy(arr, {
+        ownKeys: (target) => Reflect.ownKeys(target),
+        getOwnPropertyDescriptor: (target, prop) => Reflect.getOwnPropertyDescriptor(target, prop),
+        get(target, prop, receiver): unknown {
+            if (prop in target) {
+                const val: unknown = Reflect.get(target, prop, receiver)
+                return typeof val === 'function' ? (val as (...args: unknown[]) => unknown).bind(target) : val
+            }
+            if (prop === 'success') return true
+            if (typeof prop === 'string' && ARRAY_SELF_ALIASES.includes(prop)) return receiver as unknown
+            return undefined
+        },
+    })
+}
+
+function resolveArrayForwarding(
+    targetRecord: Record<string, unknown>,
+    prop: string | symbol
+): { matched: true; value: unknown } | { matched: false } {
+    if (prop === Symbol.iterator) {
+        const targetKey = findPrimaryArrayKey(targetRecord, ITERATOR_COLLECTION_KEYS)
+        if (targetKey !== undefined && Array.isArray(targetRecord[targetKey])) {
+            const arrToYield: unknown[] = targetRecord[targetKey]
+            return { matched: true, value: function* () { yield* arrToYield } }
+        }
+        if ('project' in targetRecord && isObject(targetRecord['project'])) {
+            const proj = targetRecord['project']
+            return { matched: true, value: function* () { yield proj } }
+        }
+        if ('projects' in targetRecord && isObject(targetRecord['projects'])) {
+            const items = dictToItems(targetRecord['projects'])
+            return { matched: true, value: function* () { yield* items } }
+        }
+        if (isDictLike(targetRecord)) {
+            const items = dictToItems(targetRecord)
+            return { matched: true, value: function* () { yield* items } }
+        }
+    }
+
+    if (typeof prop === 'string' && RESULT_LIST_ALIASES.includes(prop)) {
+        const targetKey = findPrimaryArrayKey(targetRecord)
+        if (targetKey !== undefined) return { matched: true, value: targetRecord[targetKey] }
+        if ('projects' in targetRecord && isObject(targetRecord['projects'])) {
+            return { matched: true, value: wrapResult(dictToItems(targetRecord['projects'])) }
+        }
+        if (isDictLike(targetRecord)) return { matched: true, value: wrapResult(dictToItems(targetRecord)) }
+        if ('project' in targetRecord && isObject(targetRecord['project'])) {
+            return { matched: true, value: wrapResult([targetRecord['project']]) }
+        }
+        if ('entry' in targetRecord && isObject(targetRecord['entry'])) {
+            return { matched: true, value: wrapResult([targetRecord['entry']]) }
+        }
+    }
+
+    if (prop === 'length') {
+        const targetKey = findPrimaryArrayKey(targetRecord)
+        if (targetKey !== undefined && Array.isArray(targetRecord[targetKey])) {
+            return { matched: true, value: targetRecord[targetKey].length }
+        }
+        if ('project' in targetRecord && isObject(targetRecord['project'])) return { matched: true, value: 1 }
+        if ('projects' in targetRecord && isObject(targetRecord['projects'])) {
+            return { matched: true, value: Object.keys(targetRecord['projects']).length }
+        }
+        if (isDictLike(targetRecord)) return { matched: true, value: Object.keys(targetRecord).length }
+    }
+
+    if (typeof prop === 'string' && /^\d+$/.test(prop)) {
+        const idx = parseInt(prop, 10)
+        if ('project' in targetRecord && isObject(targetRecord['project']) && idx === 0) {
+            return { matched: true, value: targetRecord['project'] }
+        }
+        const targetKey = findPrimaryArrayKey(targetRecord)
+        if (targetKey !== undefined && Array.isArray(targetRecord[targetKey])) {
+            return { matched: true, value: targetRecord[targetKey][idx] }
+        }
+        if ('projects' in targetRecord && isObject(targetRecord['projects'])) {
+            return { matched: true, value: dictToItems(targetRecord['projects'])[idx] }
+        }
+        if (isDictLike(targetRecord)) return { matched: true, value: dictToItems(targetRecord)[idx] }
+    }
+
+    if (typeof prop === 'string' && SUCCESS_ARRAY_METHODS.includes(prop)) {
+        const targetKey = findPrimaryArrayKey(targetRecord)
+        if (targetKey !== undefined && Array.isArray(targetRecord[targetKey])) {
+            const bound = bindArrayMethod(targetRecord[targetKey], prop)
+            if (bound !== undefined) return { matched: true, value: bound }
+        }
+        if ('project' in targetRecord && isObject(targetRecord['project'])) {
+            const bound = bindArrayMethod([targetRecord['project']], prop)
+            if (bound !== undefined) return { matched: true, value: bound }
+        }
+        if ('projects' in targetRecord && isObject(targetRecord['projects'])) {
+            const bound = bindArrayMethod(dictToItems(targetRecord['projects']), prop)
+            if (bound !== undefined) return { matched: true, value: bound }
+        }
+        if (isDictLike(targetRecord)) {
+            const bound = bindArrayMethod(dictToItems(targetRecord), prop)
+            if (bound !== undefined) return { matched: true, value: bound }
+        }
+        const keys = Object.keys(targetRecord).join(', ') || 'none'
+        throw new TypeError(
+            `🛠️ AUTONOMOUS HEALING: CodeMode Non-Array Proxy Error: Attempted to call Array method '${prop}' on an Object. The returned result is not an Array, and no array properties could be automatically resolved. Check the available keys and access the correct array property. Keys available: ${keys}`
+        )
+    }
+
+    if (typeof prop === 'string' && MUTATOR_ARRAY_METHODS.includes(prop)) {
+        throw new Error(
+            `🛠️ AUTONOMOUS HEALING: [VALIDATION_ERROR] CodeMode Proxy Error: Array mutator method '${prop}' is not allowed on API results. Modifying local arrays does not update the server state. You MUST use the appropriate API tool (e.g., mj.core.updateEntry, mj.admin.batchUpdateEntries) to persist changes.`
+        )
+    }
+
+    return { matched: false }
+}
+
 /**
  * Wrap an API result with smart proxy behavior for improved DX.
  */
@@ -94,46 +235,11 @@ export function wrapResult(result: unknown): unknown {
     }
 
     if ('success' in result && Reflect.get(result, 'success') === false) {
-        return new Proxy(result, {
-            ownKeys: (target) => Reflect.ownKeys(target),
-            getOwnPropertyDescriptor: (target, prop) => Reflect.getOwnPropertyDescriptor(target, prop),
-            get(target, prop): unknown {
-                const errVal: unknown = Reflect.get(target, 'error')
-                const codeVal: unknown = Reflect.get(target, 'code')
-                if (prop === 'error' && typeof errVal === 'string' && typeof codeVal === 'string') {
-                    return `[${codeVal}] ${errVal}`
-                }
-                if (prop in target) return Reflect.get(target, prop) as unknown
-                if (prop === 'length') return 0
-                if (typeof prop === 'string' && /^\d+$/.test(prop)) return undefined
-                if (prop === Symbol.iterator) return function* () { yield* [] }
-                if (typeof prop === 'string' && RESULT_COLLECTION_KEYS.includes(prop)) return []
-                if (typeof prop === 'string' && FAILED_ARRAY_METHODS.includes(prop)) {
-                    const message = typeof errVal === 'string' ? errVal : 'Operation failed'
-                    return () => {
-                        throw new Error(message)
-                    }
-                }
-                return undefined
-            },
-        })
+        return createFailedResultProxy(result)
     }
 
     if (Array.isArray(result)) {
-        const arr: unknown[] = result
-        return new Proxy(arr, {
-            ownKeys: (target) => Reflect.ownKeys(target),
-            getOwnPropertyDescriptor: (target, prop) => Reflect.getOwnPropertyDescriptor(target, prop),
-            get(target, prop, receiver): unknown {
-                if (prop in target) {
-                    const val: unknown = Reflect.get(target, prop, receiver)
-                    return typeof val === 'function' ? (val as (...args: unknown[]) => unknown).bind(target) : val
-                }
-                if (prop === 'success') return true
-                if (typeof prop === 'string' && ARRAY_SELF_ALIASES.includes(prop)) return receiver as unknown
-                return undefined
-            },
-        })
+        return createArrayResultProxy(result)
     }
 
     return new Proxy(result, {
@@ -234,99 +340,11 @@ export function wrapResult(result: unknown): unknown {
                 )
             }
 
-            if (prop === Symbol.iterator) {
-                const targetKey = findPrimaryArrayKey(targetRecord, ITERATOR_COLLECTION_KEYS)
-                if (targetKey !== undefined && Array.isArray(targetRecord[targetKey])) {
-                    const arrToYield: unknown[] = targetRecord[targetKey]
-                    return function* () { yield* arrToYield }
-                }
-                if ('project' in targetRecord && isObject(targetRecord['project'])) {
-                    const proj = targetRecord['project']
-                    return function* () { yield proj }
-                }
-                if ('projects' in targetRecord && isObject(targetRecord['projects'])) {
-                    const items = dictToItems(targetRecord['projects'])
-                    return function* () { yield* items }
-                }
-                if (isDictLike(targetRecord)) {
-                    const items = dictToItems(targetRecord)
-                    return function* () { yield* items }
-                }
-            }
-
-            if (typeof prop === 'string' && RESULT_LIST_ALIASES.includes(prop)) {
-                const targetKey = findPrimaryArrayKey(targetRecord)
-                if (targetKey !== undefined) return targetRecord[targetKey]
-                if ('projects' in targetRecord && isObject(targetRecord['projects'])) {
-                    return wrapResult(dictToItems(targetRecord['projects']))
-                }
-                if (isDictLike(targetRecord)) return wrapResult(dictToItems(targetRecord))
-                if ('project' in targetRecord && isObject(targetRecord['project'])) {
-                    return wrapResult([targetRecord['project']])
-                }
-                if ('entry' in targetRecord && isObject(targetRecord['entry'])) {
-                    return wrapResult([targetRecord['entry']])
-                }
-            }
-
             if (prop === 'result') return receiver as unknown
 
-            if (prop === 'length') {
-                const targetKey = findPrimaryArrayKey(targetRecord)
-                if (targetKey !== undefined && Array.isArray(targetRecord[targetKey])) {
-                    return targetRecord[targetKey].length
-                }
-                if ('project' in targetRecord && isObject(targetRecord['project'])) return 1
-                if ('projects' in targetRecord && isObject(targetRecord['projects'])) {
-                    return Object.keys(targetRecord['projects']).length
-                }
-                if (isDictLike(targetRecord)) return Object.keys(targetRecord).length
-            }
+            const arrayForwarded = resolveArrayForwarding(targetRecord, prop)
+            if (arrayForwarded.matched) return arrayForwarded.value
 
-            if (typeof prop === 'string' && /^\d+$/.test(prop)) {
-                const idx = parseInt(prop, 10)
-                if ('project' in targetRecord && isObject(targetRecord['project']) && idx === 0) {
-                    return targetRecord['project']
-                }
-                const targetKey = findPrimaryArrayKey(targetRecord)
-                if (targetKey !== undefined && Array.isArray(targetRecord[targetKey])) {
-                    return targetRecord[targetKey][idx]
-                }
-                if ('projects' in targetRecord && isObject(targetRecord['projects'])) {
-                    return dictToItems(targetRecord['projects'])[idx]
-                }
-                if (isDictLike(targetRecord)) return dictToItems(targetRecord)[idx]
-            }
-
-            if (typeof prop === 'string' && SUCCESS_ARRAY_METHODS.includes(prop)) {
-                const targetKey = findPrimaryArrayKey(targetRecord)
-                if (targetKey !== undefined && Array.isArray(targetRecord[targetKey])) {
-                    const bound = bindArrayMethod(targetRecord[targetKey], prop)
-                    if (bound !== undefined) return bound
-                }
-                if ('project' in targetRecord && isObject(targetRecord['project'])) {
-                    const bound = bindArrayMethod([targetRecord['project']], prop)
-                    if (bound !== undefined) return bound
-                }
-                if ('projects' in targetRecord && isObject(targetRecord['projects'])) {
-                    const bound = bindArrayMethod(dictToItems(targetRecord['projects']), prop)
-                    if (bound !== undefined) return bound
-                }
-                if (isDictLike(targetRecord)) {
-                    const bound = bindArrayMethod(dictToItems(targetRecord), prop)
-                    if (bound !== undefined) return bound
-                }
-                const keys = Object.keys(target).join(', ') || 'none'
-                throw new TypeError(
-                    `🛠️ AUTONOMOUS HEALING: CodeMode Non-Array Proxy Error: Attempted to call Array method '${prop}' on an Object. The returned result is not an Array, and no array properties could be automatically resolved. Check the available keys and access the correct array property. Keys available: ${keys}`
-                )
-            }
-
-            if (typeof prop === 'string' && MUTATOR_ARRAY_METHODS.includes(prop)) {
-                throw new Error(
-                    `🛠️ AUTONOMOUS HEALING: [VALIDATION_ERROR] CodeMode Proxy Error: Array mutator method '${prop}' is not allowed on API results. Modifying local arrays does not update the server state. You MUST use the appropriate API tool (e.g., mj.core.updateEntry, mj.admin.batchUpdateEntries) to persist changes.`
-                )
-            }
             return undefined
         },
     })

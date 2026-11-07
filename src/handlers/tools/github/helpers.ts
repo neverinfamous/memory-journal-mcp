@@ -5,7 +5,10 @@
 import type { ToolContext } from '../../../types/index.js'
 import { getGitHubIntegration } from '../../../github/github-integration/index.js'
 import type { GitHubIntegration } from '../../../github/github-integration/index.js'
-import { findCanonicalRegistryKey } from '../../../utils/workspace-resolver.js'
+import {
+    findCanonicalRegistryKey,
+    loadProjectRegistryFromConfig,
+} from '../../../utils/workspace-resolver.js'
 
 function parseRepoSlug(repo?: string): { owner?: string; repo?: string } {
     if (!repo) return {}
@@ -27,7 +30,7 @@ export function resolveProjectNumber(
     explicitProjectNumber?: number | null
 ): number | undefined {
     if (explicitProjectNumber != null) return explicitProjectNumber
-    const registry = context.config?.projectRegistry
+    const registry = context.config?.projectRegistry ?? loadProjectRegistryFromConfig()
     if (!registry || !repo) return undefined
     const slug = parseRepoSlug(repo)
     const repoName = slug.repo ?? repo
@@ -63,7 +66,7 @@ export async function resolveOwner(
     const parsedOwner = inputOwner ?? slug.owner
 
     let toolGithub: GitHubIntegration | undefined
-    const registry = context.config?.projectRegistry
+    const registry = context.config?.projectRegistry ?? loadProjectRegistryFromConfig()
     const registryKey = effectiveRepo
         ? (findCanonicalRegistryKey(effectiveRepo, registry) ??
           (registry && Object.prototype.hasOwnProperty.call(registry, effectiveRepo)
@@ -141,7 +144,7 @@ export async function resolveOwnerRepo(
     const parsedOwner = input.owner ?? slug.owner
 
     let toolGithub: GitHubIntegration | undefined
-    const registry = context.config?.projectRegistry
+    const registry = context.config?.projectRegistry ?? loadProjectRegistryFromConfig()
     const registryKey = effectiveRepo
         ? (findCanonicalRegistryKey(effectiveRepo, registry) ??
           (registry && Object.prototype.hasOwnProperty.call(registry, effectiveRepo)

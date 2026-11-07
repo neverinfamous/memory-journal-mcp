@@ -276,7 +276,9 @@ export function getEntryAndCodemodeFallbackToolDefinitions(
                         )
                         if (routed !== undefined) return routed
                     }
-                    const canonical = name.replace(/^mj_/, '').replace('_', '.')
+                    const canonical = name
+                        .replace(/^mj_([a-z]+)_/, 'mj.$1.')
+                        .replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase())
                     return {
                         success: false,
                         error: `🛠️ AUTONOMOUS HEALING: '${name}' is a Code Mode function, not a top-level MCP tool. Use 'mj_execute_code' with JavaScript (e.g. return await ${canonical}({ ... })).`,

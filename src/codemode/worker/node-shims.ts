@@ -202,6 +202,8 @@ function parseUpdateStatement(cleanSql: string, args: unknown[]): ParsedSql {
     let content: string | undefined
     let tags: string[] | undefined
     let title: string | undefined
+    let workspaceId: string | undefined
+    let projectNumber: number | undefined
 
     for (const arg of args) {
         if (typeof arg === 'number' && entryId === undefined) {
@@ -224,6 +226,10 @@ function parseUpdateStatement(cleanSql: string, args: unknown[]): ParsedSql {
             if (typeof arg['id'] === 'number') entryId = arg['id']
             if (typeof arg['content'] === 'string') content = arg['content']
             if (Array.isArray(arg['tags'])) tags = arg['tags'].map(String)
+            if (typeof arg['workspace_id'] === 'string') workspaceId = arg['workspace_id']
+            if (typeof arg['workspaceId'] === 'string') workspaceId ??= arg['workspaceId']
+            if (typeof arg['project_number'] === 'number') projectNumber = arg['project_number']
+            if (typeof arg['projectNumber'] === 'number') projectNumber ??= arg['projectNumber']
         }
     }
 
@@ -239,6 +245,8 @@ function parseUpdateStatement(cleanSql: string, args: unknown[]): ParsedSql {
     if (content !== undefined) updatePayload['content'] = content
     if (tags !== undefined) updatePayload['tags'] = tags
     if (title !== undefined) updatePayload['title'] = title
+    if (workspaceId !== undefined) updatePayload['workspace_id'] = workspaceId
+    if (projectNumber !== undefined) updatePayload['project_number'] = projectNumber
 
     return { action: 'update', params: updatePayload }
 }
@@ -248,6 +256,8 @@ function parseInsertStatement(args: unknown[]): ParsedSql {
     let title = 'Journal Entry'
     let tags: string[] = []
     let entryType = 'technical_decision'
+    let workspaceId: string | undefined
+    let projectNumber: number | undefined
 
     for (const arg of args) {
         if (typeof arg === 'string') {
@@ -268,10 +278,24 @@ function parseInsertStatement(args: unknown[]): ParsedSql {
             if (typeof arg['title'] === 'string') title = arg['title']
             if (Array.isArray(arg['tags'])) tags = arg['tags'].map(String)
             if (typeof arg['entry_type'] === 'string') entryType = arg['entry_type']
+            if (typeof arg['workspace_id'] === 'string') workspaceId = arg['workspace_id']
+            if (typeof arg['workspaceId'] === 'string') workspaceId ??= arg['workspaceId']
+            if (typeof arg['project_number'] === 'number') projectNumber = arg['project_number']
+            if (typeof arg['projectNumber'] === 'number') projectNumber ??= arg['projectNumber']
         }
     }
 
-    return { action: 'create', params: { content, title, tags, entry_type: entryType } }
+    return {
+        action: 'create',
+        params: {
+            content,
+            title,
+            tags,
+            entry_type: entryType,
+            ...(workspaceId !== undefined ? { workspace_id: workspaceId } : {}),
+            ...(projectNumber !== undefined ? { project_number: projectNumber } : {}),
+        },
+    }
 }
 
 /**

@@ -16,6 +16,58 @@ function getBadgeColor(percentage: number): string {
   return "red";
 }
 
+function applyCoverageBadge(
+  content: string,
+  file: string,
+  covRegex: RegExp,
+  newCovBadge: string,
+  linesPct: number,
+): { content: string; changed: boolean } {
+  covRegex.lastIndex = 0;
+  if (covRegex.test(content)) {
+    covRegex.lastIndex = 0;
+    console.log(`Updated coverage badge in ${file} to ${linesPct}%`);
+    return { content: content.replace(covRegex, newCovBadge), changed: true };
+  }
+  const licenseRegex = /(\[!\[License: MIT\].*?\))/;
+  if (licenseRegex.test(content)) {
+    console.log(`Inserted coverage badge in ${file} to ${linesPct}%`);
+    return { content: content.replace(licenseRegex, `$1 ${newCovBadge}`), changed: true };
+  }
+  console.warn(`Could not find anchor to insert coverage badge in ${file}`);
+  if (process.env.GITHUB_ACTIONS || process.argv.includes("--strict")) {
+    process.exit(1);
+  }
+  return { content, changed: false };
+}
+
+function applyE2eBadge(
+  content: string,
+  file: string,
+  e2eRegex: RegExp,
+  newE2eBadge: string,
+  newCovBadge: string,
+  e2ePassing: number,
+  e2eSkipped: number,
+): { content: string; changed: boolean } {
+  e2eRegex.lastIndex = 0;
+  if (e2eRegex.test(content)) {
+    e2eRegex.lastIndex = 0;
+    console.log(`Updated E2E badge in ${file} to ${e2ePassing} passing, ${e2eSkipped} skipped`);
+    return { content: content.replace(e2eRegex, newE2eBadge), changed: true };
+  }
+  if (content.includes(newCovBadge)) {
+    console.log(`Inserted E2E badge in ${file}`);
+    return { content: content.replace(newCovBadge, `${newCovBadge} ${newE2eBadge}`), changed: true };
+  }
+  const licenseRegex = /(\[!\[License: MIT\].*?\))/;
+  if (licenseRegex.test(content)) {
+    console.log(`Inserted E2E badge in ${file}`);
+    return { content: content.replace(licenseRegex, `$1 ${newE2eBadge}`), changed: true };
+  }
+  return { content, changed: false };
+}
+
 function updateBadges() {
   const summaryPath = path.join(ROOT_DIR, ".test-output/coverage/coverage-summary.json");
   const playwrightPath = path.join(ROOT_DIR, ".test-output/playwright-results.json");
@@ -55,11 +107,9 @@ function updateBadges() {
     process.exit(1);
   }
 
-  // ![Coverage](https://img.shields.io/badge/Coverage-96.7%25-brightgreen.svg)
   const covRegex = /!\[Coverage\]\(https:\/\/img\.shields\.io\/badge\/Coverage-[0-9.]+.*?\.svg\)/g;
   const newCovBadge = `![Coverage](https://img.shields.io/badge/Coverage-${linesPct}%25-${coverageColor}.svg)`;
 
-  // ![E2E](https://img.shields.io/badge/E2E-179%20tests%20%C2%B7%20224%20tools-blue.svg)
   const e2eRegex = /!\[E2E\]\(https:\/\/img\.shields\.io\/badge\/E2E-[^)]+\)/g;
   const newE2eBadge = `![E2E](https://img.shields.io/badge/E2E-${e2ePassing}%20passing%20%C2%B7%20${e2eSkipped}%20skipped-blue.svg)`;
 
@@ -75,62 +125,38 @@ function updateBadges() {
       let changed = false;
 
       if (hasCoverage) {
-        covRegex.lastIndex = 0;
-        if (covRegex.test(content)) {
-          covRegex.lastIndex = 0;
-          content = content.replace(covRegex, newCovBadge);
-          changed = true;
-          console.log(`Updated coverage badge in ${file} to ${linesPct}%`);
-        } else {
-          const licenseRegex = /(\[!\[License: MIT\].*?\))/;
-          if (licenseRegex.test(content)) {
-            content = content.replace(licenseRegex, `$1 ${newCovBadge}`);
-            changed = true;
-            console.log(`Inserted coverage badge in ${file} to ${linesPct}%`);
-          } else {
-            console.warn(`Could not find anchor to insert coverage badge in ${file}`);
-            if (process.env.GITHUB_ACTIONS || process.argv.includes("--strict")) {
-                process.exit(1);
-            }
-          }
-        }
+        const covRes = applyCoverageBadge(content, file, covRegex, newCovBadge, linesPct);
+        content = covRes.content;
+        changed = changed || covRes.changed;
       }
 
       if (hasE2e) {
-        e2eRegex.lastIndex = 0;
-        if (e2eRegex.test(content)) {
-          e2eRegex.lastIndex = 0;
-          content = content.replace(e2eRegex, newE2eBadge);
-          changed = true;
-          console.log(`Updated E2E badge in ${file} to ${e2ePassing} passing, ${e2eSkipped} skipped`);
-        } else {
-          if (content.includes(newCovBadge)) {
-            content = content.replace(newCovBadge, `${newCovBadge} ${newE2eBadge}`);
-            changed = true;
-            console.log(`Inserted E2E badge in ${file}`);
-          } else {
-            const licenseRegex = /(\[!\[License: MIT\].*?\))/;
-            if (licenseRegex.test(content)) {
-              content = content.replace(licenseRegex, `$1 ${newE2eBadge}`);
-              changed = true;
-              console.log(`Inserted E2E badge in ${file}`);
-            }
-          }
-        }
+        const e2eRes = applyE2eBadge(
+          content,
+          file,
+          e2eRegex,
+          newE2eBadge,
+          newCovBadge,
+          e2ePassing,
+          e2eSkipped,
+        );
+        content = e2eRes.content;
+        changed = changed || e2eRes.changed;
       }
 
-      if (changed) {
-        const finalContent = content.replace(/\r\n/g, "\n");
-        if (finalContent !== originalNormalized) {
-          fs.writeFileSync(filePath, finalContent, "utf-8");
-          updatedFiles.push(file);
-        } else {
-          console.log(`Badges in ${file} are already up-to-date.`);
-        }
-      } else {
+      if (!changed) {
         console.log(`No badges found to update in ${file}.`);
+        continue;
       }
-    } catch (err) {
+
+      const finalContent = content.replace(/\r\n/g, "\n");
+      if (finalContent !== originalNormalized) {
+        fs.writeFileSync(filePath, finalContent, "utf-8");
+        updatedFiles.push(file);
+      } else {
+        console.log(`Badges in ${file} are already up-to-date.`);
+      }
+    } catch {
       console.warn(`Skipped updating ${file}: File not found or unreadable.`);
     }
   }

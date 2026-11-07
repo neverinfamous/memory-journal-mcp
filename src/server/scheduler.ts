@@ -13,6 +13,7 @@ import { parseDigestSnapshot, type DigestSnapshot } from '../database/sqlite-ada
 import type { ServerRuntime } from '../utils/maintenance-lock.js'
 import { deliverReport, formatDigestReport, type ReportDeliveryOptions } from './digest-reporter.js'
 import { runAutoPrune } from './auto-prune.js'
+import { resolveWorkspaceId } from '../utils/workspace-resolver.js'
 import { VERSION } from '../version.js'
 
 // ============================================================================
@@ -423,7 +424,7 @@ export class Scheduler {
      * Digest job: compute analytics snapshot and persist to database.
      */
     private runDigest(): void {
-        const wsId = this.options.defaultWorkspaceId ?? 'default'
+        const wsId = resolveWorkspaceId(this.options.defaultWorkspaceId, undefined)
         const snapshot = this.db.computeDigest(wsId)
         this.db.saveAnalyticsSnapshot('digest', snapshot, wsId)
         logger.info('Scheduled analytics digest computed', {
@@ -445,7 +446,7 @@ export class Scheduler {
      * Report job: compute analytics snapshot, persist, and deliver via webhook.
      */
     private async runReport(): Promise<void> {
-        const wsId = this.options.defaultWorkspaceId ?? 'default'
+        const wsId = resolveWorkspaceId(this.options.defaultWorkspaceId, undefined)
         const snapshot = this.db.computeDigest(wsId)
         this.db.saveAnalyticsSnapshot('report', snapshot, wsId)
         logger.info('Scheduled analytics report computed', {

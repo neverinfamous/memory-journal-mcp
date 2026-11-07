@@ -12,7 +12,10 @@ import type { GitHubIntegration } from '../../github/github-integration/index.js
 import { getGitHubIntegration } from '../../github/github-integration/index.js'
 import type { Scheduler } from '../../server/scheduler.js'
 import type { ServerRuntime } from '../../utils/maintenance-lock.js'
-import { resolveProjectNumberFromPath } from '../../utils/workspace-resolver.js'
+import {
+    loadProjectRegistryFromConfig,
+    resolveProjectNumberFromPath,
+} from '../../utils/workspace-resolver.js'
 
 // ============================================================================
 // GitHub Resource Guard
@@ -251,13 +254,13 @@ export const DEFAULT_BRIEFING_CONFIG: BriefingConfig = {
 /**
  * Resource context for handlers that need extended access
  */
-export function resourceWorkspace(context: { briefingConfig?: BriefingConfig }): string {
+export function resourceWorkspace(context: { briefingConfig?: Partial<BriefingConfig> }): string {
     const cfg = context.briefingConfig
     const id = cfg?.defaultWorkspaceId
     if (id !== undefined && id.length > 0 && id !== 'default') {
         return id
     }
-    const registry = cfg?.projectRegistry
+    const registry = cfg?.projectRegistry ?? loadProjectRegistryFromConfig()
     if (registry !== undefined) {
         const projNum =
             cfg?.defaultProjectNumber ??

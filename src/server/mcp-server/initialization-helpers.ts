@@ -9,6 +9,7 @@ import {
 } from '../../filtering/tool-filter.js'
 import { Scheduler } from '../scheduler.js'
 import { runAutoPrune } from '../auto-prune.js'
+import { resolveWorkspaceId } from '../../utils/workspace-resolver.js'
 import type { ServerRuntime } from '../../utils/maintenance-lock.js'
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import type { ToolFilterConfig } from '../../filtering/tool-filter.js'
@@ -227,9 +228,12 @@ export function createSchedulerIfConfigured(
     options.scheduler.pruneImportanceThreshold = options.pruneImportanceThreshold
     options.scheduler.pruneDryRun = options.pruneDryRun
     options.scheduler.pruneExcludeTags = options.pruneExcludeTags
-    if (options.defaultWorkspaceId !== undefined) {
-        options.scheduler.defaultWorkspaceId = options.defaultWorkspaceId
-    }
+    const resolvedDefaultWs = resolveWorkspaceId(
+        options.defaultWorkspaceId,
+        options.defaultProjectNumber,
+        options
+    )
+    options.scheduler.defaultWorkspaceId = resolvedDefaultWs
 
     return new Scheduler(options.scheduler, db, vectorManager, runtime)
 }
@@ -240,7 +244,11 @@ export function createSchedulerIfConfigured(
  */
 export function seedInitialDigest(db: IDatabaseAdapter, options: ServerOptions): void {
     try {
-        const wsId = options.defaultWorkspaceId ?? 'default'
+        const wsId = resolveWorkspaceId(
+            options.defaultWorkspaceId,
+            options.defaultProjectNumber,
+            options
+        )
         const existingSnapshot = db.getLatestAnalyticsSnapshot('digest', wsId)
         if (!existingSnapshot) {
             const digest = db.computeDigest(wsId)

@@ -49,6 +49,142 @@ function getPropOrSnake(obj: unknown, snake: string, camel: string): unknown {
     return undefined
 }
 
+interface GroupProxyContext {
+    group: string
+    methodNames: string[]
+    methods: Record<string, string[]>
+    api: Record<string, unknown>
+    readonlyMode: boolean | undefined
+    createMethodProxyFn: (
+        groupName: string,
+        methodName: string,
+        schemaFallbackKey?: string
+    ) => (...args: unknown[]) => Promise<unknown>
+}
+
+function createGroupNamespaceProxy(ctx: GroupProxyContext): object {
+    const { group, methodNames, methods, api, readonlyMode, createMethodProxyFn } = ctx
+    const groupProxy: Record<string, (...args: unknown[]) => Promise<unknown>> = {}
+    for (const methodName of methodNames) {
+        groupProxy[methodName] = createMethodProxyFn(group, methodName)
+    }
+
+    groupProxy['help'] = () => Promise.resolve({ group, methods: methodNames })
+    groupProxy['describe'] = groupProxy['help']
+
+    const groupCallable = function (): void {
+        /* callable namespace target */
+    }
+    Object.assign(groupCallable, groupProxy)
+
+    return new Proxy(groupCallable, {
+        apply(_target, _thisArg, args: unknown[]): Promise<unknown> {
+            const primaryMethod = methodNames.find((m) => !m.endsWith('_help') && m !== 'help')
+            const fn = primaryMethod !== undefined ? groupProxy[primaryMethod] : undefined
+            if (fn !== undefined) return fn(...args)
+            return wrapPromise(
+                Promise.resolve(
+                    wrapResult({
+                        success: false,
+                        error: `Group '${group}' is a tool namespace, not a function. Available methods in '${group}': ${methodNames.join(', ')}.`,
+                        code: 'VALIDATION_ERROR',
+                        category: 'validation',
+                        recoverable: true,
+                    })
+                ),
+                group
+            )
+        },
+        get(target: object, prop: string | symbol): unknown {
+            if (typeof prop === 'symbol') return undefined
+            const key = prop
+            if (key in target) return Reflect.get(target, key) as unknown
+
+            if (/[A-Z]/.test(key)) {
+                const snakeKey = key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
+                if (snakeKey in target) return Reflect.get(target, snakeKey) as unknown
+            }
+
+            const aliases = METHOD_ALIASES[group]
+            let resolvedKey = key
+            if (aliases?.[key] !== undefined) {
+                const canonicalCamel = aliases[key]
+                const canonicalSnake = canonicalCamel.replace(/[A-Z]/g, (l) => `_${l.toLowerCase()}`)
+                if (canonicalSnake in target) return Reflect.get(target, canonicalSnake) as unknown
+                if (canonicalCamel in target) return Reflect.get(target, canonicalCamel) as unknown
+                resolvedKey = canonicalCamel
+            }
+
+            if (group === 'core') {
+                if (resolvedKey === 'projects' || resolvedKey === 'project' || key === 'projects' || key === 'project') {
+                    return api['projects']
+                }
+                if (resolvedKey === 'semanticSearch' || key === 'semantic_search') {
+                    return getPropOrSnake(api['semantic'], 'semantic_search', 'semanticSearch')
+                }
+                if (resolvedKey === 'vectorStats' || key === 'vector_stats') {
+                    return getPropOrSnake(api['semantic'], 'vector_stats', 'vectorStats')
+                }
+                if (resolvedKey === 'searchAuditLog' || key === 'search_audit_log') {
+                    return getPropOrSnake(api['admin'], 'search_audit_log', 'searchAuditLog')
+                }
+                if (resolvedKey === 'listDeletedEntries' || key === 'list_deleted_entries') {
+                    return getPropOrSnake(api['admin'], 'list_deleted_entries', 'listDeletedEntries')
+                }
+            }
+
+            if (resolvedKey === 'getConfig') return createGetConfigInterceptor()
+            if (resolvedKey === 'getBriefing') return createGetBriefingInterceptor()
+            if (resolvedKey === 'readResource') return createReadResourceInterceptor()
+            if (resolvedKey === 'then') return undefined
+
+            if (typeof resolvedKey === 'string') {
+                const snakeKey = /[A-Z]/.test(resolvedKey)
+                    ? resolvedKey.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
+                    : resolvedKey
+
+                const teamSnakeKey = `team_${snakeKey}`
+                const teamGroup = Object.keys(methods).find((g) => methods[g]?.includes(teamSnakeKey))
+                if (teamGroup !== undefined && !Object.keys(methods).some((g) => methods[g]?.includes(snakeKey))) {
+                    return createMethodProxyFn(teamGroup, teamSnakeKey)
+                }
+
+                const foundGroup = Object.keys(methods).find((g) => methods[g]?.includes(snakeKey))
+                if (foundGroup !== undefined) {
+                    return createMethodProxyFn(foundGroup, snakeKey, resolvedKey)
+                }
+            }
+
+            const available = methodNames.join(', ') || 'none'
+            const reason =
+                readonlyMode === true
+                    ? `🛠️ AUTONOMOUS HEALING: Operation '${key}' is blocked in readonly mode. Read operations only.`
+                    : methodNames.length === 0
+                      ? `🛠️ AUTONOMOUS HEALING: Operation '${key}' is not available — this group has no methods (read-only mode?). Available: ${available}.`
+                      : `🛠️ AUTONOMOUS HEALING: Operation '${key}' is not found in group '${group}'. Available: ${available}.`
+            const fallbackFn = (..._args: unknown[]): Promise<unknown> =>
+                wrapPromise(
+                    Promise.resolve(
+                        wrapResult({
+                            success: false,
+                            error: reason,
+                            code: 'VALIDATION_ERROR',
+                            category: 'validation',
+                            recoverable: true,
+                        })
+                    ),
+                    key
+                )
+            attachMethodIntrospection(fallbackFn, group, key, () => 'unknown', reason)
+            return fallbackFn
+        },
+        set: () => false,
+        defineProperty: () => false,
+        deleteProperty: () => false,
+        setPrototypeOf: () => false,
+    })
+}
+
 /**
  * Build the mj.* API proxy from method and schema lists.
  */
@@ -105,122 +241,13 @@ export function buildApiProxy(
             continue
         }
 
-        const groupProxy: Record<string, (...args: unknown[]) => Promise<unknown>> = {}
-        for (const methodName of methodNames) {
-            groupProxy[methodName] = createMethodProxyFn(group, methodName)
-        }
-
-        groupProxy['help'] = () => Promise.resolve({ group, methods: methodNames })
-        groupProxy['describe'] = groupProxy['help']
-
-        const groupCallable = function (): void { /* callable namespace target */ }
-        Object.assign(groupCallable, groupProxy)
-
-        api[group] = new Proxy(groupCallable, {
-            apply(_target, _thisArg, args: unknown[]): Promise<unknown> {
-                const primaryMethod = methodNames.find((m) => !m.endsWith('_help') && m !== 'help')
-                const fn = primaryMethod !== undefined ? groupProxy[primaryMethod] : undefined
-                if (fn !== undefined) return fn(...args)
-                return wrapPromise(
-                    Promise.resolve(
-                        wrapResult({
-                            success: false,
-                            error: `Group '${group}' is a tool namespace, not a function. Available methods in '${group}': ${methodNames.join(', ')}.`,
-                            code: 'VALIDATION_ERROR',
-                            category: 'validation',
-                            recoverable: true,
-                        })
-                    ),
-                    group
-                )
-            },
-            get(target: object, prop: string | symbol): unknown {
-                if (typeof prop === 'symbol') return undefined
-                const key = prop
-                if (key in target) return Reflect.get(target, key) as unknown
-
-                if (/[A-Z]/.test(key)) {
-                    const snakeKey = key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
-                    if (snakeKey in target) return Reflect.get(target, snakeKey) as unknown
-                }
-
-                const aliases = METHOD_ALIASES[group]
-                let resolvedKey = key
-                if (aliases?.[key] !== undefined) {
-                    const canonicalCamel = aliases[key]
-                    const canonicalSnake = canonicalCamel.replace(/[A-Z]/g, (l) => `_${l.toLowerCase()}`)
-                    if (canonicalSnake in target) return Reflect.get(target, canonicalSnake) as unknown
-                    if (canonicalCamel in target) return Reflect.get(target, canonicalCamel) as unknown
-                    resolvedKey = canonicalCamel
-                }
-
-                if (group === 'core') {
-                    if (resolvedKey === 'projects' || resolvedKey === 'project' || key === 'projects' || key === 'project') {
-                        return api['projects']
-                    }
-                    if (resolvedKey === 'semanticSearch' || key === 'semantic_search') {
-                        return getPropOrSnake(api['semantic'], 'semantic_search', 'semanticSearch')
-                    }
-                    if (resolvedKey === 'vectorStats' || key === 'vector_stats') {
-                        return getPropOrSnake(api['semantic'], 'vector_stats', 'vectorStats')
-                    }
-                    if (resolvedKey === 'searchAuditLog' || key === 'search_audit_log') {
-                        return getPropOrSnake(api['admin'], 'search_audit_log', 'searchAuditLog')
-                    }
-                    if (resolvedKey === 'listDeletedEntries' || key === 'list_deleted_entries') {
-                        return getPropOrSnake(api['admin'], 'list_deleted_entries', 'listDeletedEntries')
-                    }
-                }
-
-                if (resolvedKey === 'getConfig') return createGetConfigInterceptor()
-                if (resolvedKey === 'getBriefing') return createGetBriefingInterceptor()
-                if (resolvedKey === 'readResource') return createReadResourceInterceptor()
-                if (resolvedKey === 'then') return undefined
-
-                if (typeof resolvedKey === 'string') {
-                    const snakeKey = /[A-Z]/.test(resolvedKey)
-                        ? resolvedKey.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
-                        : resolvedKey
-
-                    const teamSnakeKey = `team_${snakeKey}`
-                    const teamGroup = Object.keys(methods).find((g) => methods[g]?.includes(teamSnakeKey))
-                    if (teamGroup !== undefined && !Object.keys(methods).some((g) => methods[g]?.includes(snakeKey))) {
-                        return createMethodProxyFn(teamGroup, teamSnakeKey)
-                    }
-
-                    const foundGroup = Object.keys(methods).find((g) => methods[g]?.includes(snakeKey))
-                    if (foundGroup !== undefined) {
-                        return createMethodProxyFn(foundGroup, snakeKey, resolvedKey)
-                    }
-                }
-
-                const available = methodNames.join(', ') || 'none'
-                const reason =
-                    readonlyMode === true
-                        ? `🛠️ AUTONOMOUS HEALING: Operation '${key}' is blocked in readonly mode. Read operations only.`
-                        : methodNames.length === 0
-                          ? `🛠️ AUTONOMOUS HEALING: Operation '${key}' is not available — this group has no methods (read-only mode?). Available: ${available}.`
-                          : `🛠️ AUTONOMOUS HEALING: Operation '${key}' is not found in group '${group}'. Available: ${available}.`
-                const fallbackFn = (..._args: unknown[]): Promise<unknown> =>
-                    wrapPromise(
-                        Promise.resolve(
-                            wrapResult({
-                                success: false,
-                                error: reason,
-                                code: 'VALIDATION_ERROR',
-                                category: 'validation',
-                                recoverable: true,
-                            })
-                        ),
-                        key
-                    )
-                attachMethodIntrospection(fallbackFn, group, key, () => 'unknown', reason)
-                return fallbackFn
-            },
-            set: () => false,
-            defineProperty: () => false,
-            deleteProperty: () => false,
-            setPrototypeOf: () => false,
+        api[group] = createGroupNamespaceProxy({
+            group,
+            methodNames,
+            methods,
+            api,
+            readonlyMode,
+            createMethodProxyFn,
         })
     }
 

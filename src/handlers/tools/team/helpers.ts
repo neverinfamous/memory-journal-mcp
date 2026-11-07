@@ -56,8 +56,12 @@ export function fetchAuthor(
  */
 export function triggerTeamNotifications(context: ToolContext): void {
     if (context.config?.subscriptionManager) {
-        void context.config.subscriptionManager.notifyResourceUpdated('memory://team/recent')
-        void context.config.subscriptionManager.notifyResourceUpdated('memory://briefing')
+        void context.config.subscriptionManager
+            .notifyResourceUpdated('memory://team/recent')
+            .catch(() => undefined)
+        void context.config.subscriptionManager
+            .notifyResourceUpdated('memory://briefing')
+            .catch(() => undefined)
     }
 }
 

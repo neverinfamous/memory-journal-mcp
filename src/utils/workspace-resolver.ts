@@ -1,4 +1,4 @@
-import type { ToolHandlerConfig } from '../types/index.js'
+import type { ProjectRegistryEntry, ToolHandlerConfig } from '../types/index.js'
 import * as os from 'node:os'
 import * as path from 'node:path'
 import * as fs from 'node:fs'
@@ -26,7 +26,7 @@ function getConfigPath(): string {
     return path.resolve(os.homedir(), '.gemini', 'config', 'memory-journal.config.json')
 }
 
-export function loadProjectRegistryFromConfig(): Record<string, RegistryEntry> | undefined {
+export function loadProjectRegistryFromConfig(): Record<string, ProjectRegistryEntry> | undefined {
     if (process.env['NODE_ENV'] === 'test' || process.env['VITEST'] === 'true') {
         return undefined
     }
@@ -61,39 +61,47 @@ export const PROJECT_KEYWORD_ALIASES: Record<string, string[]> = {
     'do-test-worker': ['do-test-worker', 'do_test_worker']
 }
 
-export function findCanonicalRegistryKey(aliasOrKey: string, registry?: Record<string, RegistryEntry>): string | undefined {
+function matchKeyCaseInsensitive(
+    candidate: string,
+    registry: Record<string, RegistryEntry>
+): string | undefined {
+    const candidateLower = candidate.toLowerCase()
+    for (const key of Object.keys(registry)) {
+        if (key.toLowerCase() === candidateLower) return key
+    }
+    return undefined
+}
+
+function matchAliasInTable(
+    tokenLower: string,
+    registry: Record<string, RegistryEntry>
+): string | undefined {
+    for (const [canonicalKey, aliases] of Object.entries(PROJECT_KEYWORD_ALIASES)) {
+        if (aliases.some((a) => a.toLowerCase() === tokenLower)) {
+            const matched = matchKeyCaseInsensitive(canonicalKey, registry)
+            if (matched !== undefined) return matched
+        }
+    }
+    return undefined
+}
+
+export function findCanonicalRegistryKey(
+    aliasOrKey: string,
+    registry?: Record<string, RegistryEntry>
+): string | undefined {
     const lower = aliasOrKey.toLowerCase().trim()
     if (!registry) return undefined
-    
-    // Direct match (case-insensitive)
-    for (const key of Object.keys(registry)) {
-        if (key.toLowerCase() === lower) return key
-    }
-    
-    // Alias lookup
-    for (const [canonicalKey, aliases] of Object.entries(PROJECT_KEYWORD_ALIASES)) {
-        if (aliases.map((a) => a.toLowerCase()).includes(lower)) {
-            for (const key of Object.keys(registry)) {
-                if (key.toLowerCase() === canonicalKey.toLowerCase()) {
-                    return key
-                }
-            }
-        }
-    }
-    
-    // Prefix / token alias lookup
+
+    const direct = matchKeyCaseInsensitive(lower, registry)
+    if (direct !== undefined) return direct
+
+    const byAlias = matchAliasInTable(lower, registry)
+    if (byAlias !== undefined) return byAlias
+
     for (const token of lower.split(/[-_:.]+/)) {
-        if (token.length >= 3) {
-            for (const [canonicalKey, aliases] of Object.entries(PROJECT_KEYWORD_ALIASES)) {
-                if (aliases.map((a) => a.toLowerCase()).includes(token)) {
-                    for (const key of Object.keys(registry)) {
-                        if (key.toLowerCase() === canonicalKey.toLowerCase()) {
-                            return key
-                        }
-                    }
-                }
-            }
-        }
+        if (token.length < 3) continue
+        const byToken = matchAliasInTable(token, registry)
+        if (byToken !== undefined) return byToken
     }
     return undefined
 }
@@ -279,7 +287,7 @@ interface RegistryEntry {
 }
 
 interface ParsedConfig {
-    projectRegistry?: Record<string, RegistryEntry>;
+    projectRegistry?: Record<string, ProjectRegistryEntry>;
 }
 
 /**
@@ -355,4 +363,35 @@ export function resolveProjectNumberFromPath(
         )
         return undefined
     }
+}
+
+/**
+ * Resolve workspaceId and projectNumber from a file or directory path by matching
+ * against the most specific (longest) registered project path.
+ */
+export function resolveWorkspaceFromFilePath(
+    targetPath: string,
+    config?: ToolHandlerConfig
+): ResolvedContext | undefined {
+    const registry = config?.projectRegistry ?? loadProjectRegistryFromConfig()
+    if (!registry) return undefined
+
+    let bestMatchLength = -1
+    let bestMatch: ResolvedContext | undefined = undefined
+
+    for (const [key, entry] of Object.entries(registry)) {
+        const entryPath = entry.path
+        if (entryPath === undefined || entryPath === null) continue
+        if (!cwdMatchesRegistryPath(entryPath, targetPath)) continue
+
+        const resolvedLength = path.resolve(entryPath).length
+        if (resolvedLength > bestMatchLength) {
+            bestMatchLength = resolvedLength
+            bestMatch = {
+                workspaceId: key,
+                projectNumber: entry.project_number,
+            }
+        }
+    }
+    return bestMatch
 }

@@ -14,6 +14,7 @@ import type { InternalPromptDef, PromptMessage } from './index.js'
 import { ConfigurationError } from '../../types/errors.js'
 import { markUntrustedContent } from '../../utils/security-utils.js'
 import { logger } from '../../utils/logger.js'
+import { resourceWorkspace, type BriefingConfig } from '../resources/shared.js'
 
 import { readFileSync, existsSync } from 'node:fs'
 import * as path from 'node:path'
@@ -253,10 +254,10 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
                 db: IDatabaseAdapter,
                 teamDb?: IDatabaseAdapter,
                 _github?: unknown,
-                briefingConfig?: { defaultWorkspaceId?: string }
+                briefingConfig?: Partial<BriefingConfig>
             ) => {
                 await Promise.resolve()
-                return generateSummaryPrompt(db, teamDb, 'personal', briefingConfig?.defaultWorkspaceId ?? 'default')
+                return generateSummaryPrompt(db, teamDb, 'personal', resourceWorkspace({ briefingConfig }))
             },
         },
         {
@@ -268,10 +269,10 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
                 db: IDatabaseAdapter,
                 teamDb?: IDatabaseAdapter,
                 _github?: unknown,
-                briefingConfig?: { defaultWorkspaceId?: string }
+                briefingConfig?: Partial<BriefingConfig>
             ) => {
                 await Promise.resolve()
-                return generateSummaryPrompt(db, teamDb, 'team', briefingConfig?.defaultWorkspaceId ?? 'default')
+                return generateSummaryPrompt(db, teamDb, 'team', resourceWorkspace({ briefingConfig }))
             },
         },
         {
@@ -309,10 +310,10 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
                 db: IDatabaseAdapter,
                 teamDb?: IDatabaseAdapter,
                 _github?: unknown,
-                briefingConfig?: { defaultWorkspaceId?: string }
+                briefingConfig?: Partial<BriefingConfig>
             ) => {
                 await Promise.resolve()
-                return generateUpdateEntryPrompt(db, teamDb, 'personal', briefingConfig?.defaultWorkspaceId ?? 'default')
+                return generateUpdateEntryPrompt(db, teamDb, 'personal', resourceWorkspace({ briefingConfig }))
             },
         },
         {
@@ -324,10 +325,10 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
                 db: IDatabaseAdapter,
                 teamDb?: IDatabaseAdapter,
                 _github?: unknown,
-                briefingConfig?: { defaultWorkspaceId?: string }
+                briefingConfig?: Partial<BriefingConfig>
             ) => {
                 await Promise.resolve()
-                return generateUpdateEntryPrompt(db, teamDb, 'team', briefingConfig?.defaultWorkspaceId ?? 'default')
+                return generateUpdateEntryPrompt(db, teamDb, 'team', resourceWorkspace({ briefingConfig }))
             },
         },
         {

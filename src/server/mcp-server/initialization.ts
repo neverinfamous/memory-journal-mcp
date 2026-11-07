@@ -88,8 +88,87 @@ async function configureMetricsPersistence(
     return configuredPath
 }
 
+async function initializeTeamDatabase(options: ServerOptions): Promise<{
+    primaryTeamDb: IDatabaseAdapter | undefined
+    testTeamDb: IDatabaseAdapter | undefined
+    teamDb: IDatabaseAdapter | undefined
+}> {
+    const { teamDbPath, testTeamDbPath } = options
+    if (!teamDbPath) {
+        return { primaryTeamDb: undefined, testTeamDb: undefined, teamDb: undefined }
+    }
+
+    const primaryTeamDb = await DatabaseAdapterFactory.create(teamDbPath, options)
+    await primaryTeamDb.initialize()
+    primaryTeamDb.applyTeamSchema()
+    logger.info('Team database initialized', { module: 'McpServer', teamDbPath })
+
+    let testTeamDb: IDatabaseAdapter | undefined
+    if (testTeamDbPath) {
+        testTeamDb = await DatabaseAdapterFactory.create(testTeamDbPath, options)
+        await testTeamDb.initialize()
+        testTeamDb.applyTeamSchema()
+        logger.info('Test team database initialized', { module: 'McpServer', testTeamDbPath })
+    }
+
+    const teamDb = DatabaseAdapterProxy.create(primaryTeamDb, testTeamDb)
+
+    // Bootstrap team admin if configured and RBAC is not yet active (empty table)
+    if (
+        options.teamAdmin &&
+        teamDb.getTeamMemberCount !== undefined &&
+        teamDb.addTeamMember !== undefined
+    ) {
+        if (!teamDb.isTeamRbacActive?.()) {
+            teamDb.addTeamMember(options.teamAdmin, 'admin', 'system', 'Bootstrap Admin')
+            logger.info('Bootstrapped initial team admin', {
+                module: 'McpServer',
+                admin: options.teamAdmin,
+            })
+        }
+    }
+
+    return { primaryTeamDb, testTeamDb, teamDb }
+}
+
+async function initializeGitHubIntegration(
+    options: ServerOptions,
+    runtime: ServerRuntime
+): Promise<ReturnType<typeof getGitHubIntegration>> {
+    let githubPath = '.'
+    if (options.projectRegistry && Object.keys(options.projectRegistry).length > 0) {
+        if (options.defaultProjectNumber !== undefined) {
+            const defaultEntry = Object.values(options.projectRegistry).find(
+                (r) => r.project_number === options.defaultProjectNumber
+            )
+            if (defaultEntry?.path) {
+                githubPath = defaultEntry.path
+            }
+        }
+    }
+    const github = getGitHubIntegration(githubPath, runtime)
+
+    try {
+        // Pre-populate repository cache so synchronous tools (e.g. create_entry) can resolve GitHub URLs
+        await github.getRepoInfo()
+    } catch (error: unknown) {
+        logger.warning('Failed to pre-populate GitHub repository cache', {
+            module: 'McpServer',
+            path: githubPath,
+            error: error instanceof Error ? error.message : 'Unknown error',
+        })
+    }
+
+    logger.info('GitHub integration initialized', {
+        module: 'McpServer',
+        hasToken: github.isApiAvailable(),
+    })
+
+    return github
+}
+
 export async function initializeDependencies(options: ServerOptions): Promise<ServerContext> {
-    const { dbPath, teamDbPath, testDbPath, testTeamDbPath } = options
+    const { dbPath, testDbPath } = options
 
     // Initialize database
     const primaryDb = await DatabaseAdapterFactory.create(dbPath, options)
@@ -129,34 +208,7 @@ export async function initializeDependencies(options: ServerOptions): Promise<Se
         activeMetricsPath = await configureMetricsPersistence(runtime, options, dbPath)
     }
 
-    // Initialize team database if configured
-    let primaryTeamDb: IDatabaseAdapter | undefined
-    let testTeamDb: IDatabaseAdapter | undefined
-    let teamDb: IDatabaseAdapter | undefined
-    if (teamDbPath) {
-        primaryTeamDb = await DatabaseAdapterFactory.create(teamDbPath, options)
-        await primaryTeamDb.initialize()
-        primaryTeamDb.applyTeamSchema()
-        logger.info('Team database initialized', { module: 'McpServer', teamDbPath })
-
-        if (testTeamDbPath) {
-            testTeamDb = await DatabaseAdapterFactory.create(testTeamDbPath, options)
-
-            await testTeamDb.initialize()
-            testTeamDb.applyTeamSchema()
-            logger.info('Test team database initialized', { module: 'McpServer', testTeamDbPath })
-        }
-
-        teamDb = DatabaseAdapterProxy.create(primaryTeamDb, testTeamDb)
-
-        // Bootstrap team admin if configured and RBAC is not yet active (empty table)
-        if (options.teamAdmin && teamDb.getTeamMemberCount !== undefined && teamDb.addTeamMember !== undefined) {
-            if (!teamDb.isTeamRbacActive?.()) {
-                teamDb.addTeamMember(options.teamAdmin, 'admin', 'system', 'Bootstrap Admin')
-                logger.info('Bootstrapped initial team admin', { module: 'McpServer', admin: options.teamAdmin })
-            }
-        }
-    }
+    const { primaryTeamDb, testTeamDb, teamDb } = await initializeTeamDatabase(options)
 
     // Initialize vector search managers (lazy loading) and start background initialization
     const { vectorManager, teamVectorManager } = createVectorManagers({
@@ -167,39 +219,7 @@ export async function initializeDependencies(options: ServerOptions): Promise<Se
         testTeamDb,
     })
 
-    // Initialize GitHub integration
-    let githubPath = '.'
-    if (options.projectRegistry && Object.keys(options.projectRegistry).length > 0) {
-        if (options.defaultProjectNumber !== undefined) {
-            const defaultEntry = Object.values(options.projectRegistry).find(
-                (r) => r.project_number === options.defaultProjectNumber
-            )
-            if (defaultEntry?.path) {
-                githubPath = defaultEntry.path
-            }
-        }
-
-        // Removed implicit fallback to the first registry entry.
-        // Mutating operations without an explicit owner/repo will throw or request clarification
-        // rather than guessing the wrong project boundary.
-    }
-    const github = getGitHubIntegration(githubPath, runtime)
-
-    try {
-        // Pre-populate repository cache so synchronous tools (e.g. create_entry) can resolve GitHub URLs
-        await github.getRepoInfo()
-    } catch (error: unknown) {
-        logger.warning('Failed to pre-populate GitHub repository cache', {
-            module: 'McpServer',
-            path: githubPath,
-            error: error instanceof Error ? error.message : 'Unknown error',
-        })
-    }
-
-    logger.info('GitHub integration initialized', {
-        module: 'McpServer',
-        hasToken: github.isApiAvailable(),
-    })
+    const github = await initializeGitHubIntegration(options, runtime)
 
     // Parse tool filter
     const filterConfig = resolveToolFilterConfig(options)

@@ -13,7 +13,12 @@ const EXECUTE_METHODS = new Set([
 ])
 
 const CREATE_ENTRY_METHODS = new Set([
-    'create_entry', 'createEntry', 'team_create_entry', 'teamCreateEntry',
+    'create_entry',
+    'createEntry',
+    'create_entry_minimal',
+    'createEntryMinimal',
+    'team_create_entry',
+    'teamCreateEntry',
 ])
 
 export function applyGenericInterceptions(
@@ -200,6 +205,15 @@ function coerceNumericStringIds(obj: Record<string, unknown>): void {
                 if (!isNaN(parsed)) obj[key] = parsed
             } else if (key === 'project_number' || key === 'projectNumber') {
                 Reflect.deleteProperty(obj, key)
+                if (!applyProjectNameAlias(strVal, obj)) {
+                    if (
+                        obj['workspace_id'] === undefined &&
+                        obj['workspaceId'] === undefined &&
+                        strVal !== ''
+                    ) {
+                        obj['workspace_id'] = strVal
+                    }
+                }
             }
         }
     }
@@ -298,8 +312,10 @@ function normalizeProjectAliases(obj: Record<string, unknown>): void {
             if (!Number.isNaN(num) && strVal.trim() !== '') {
                 obj['project_number'] = num
             } else if (typeof obj['project'] === 'string' && obj['project'].trim() !== '') {
-                const existingTags = Array.isArray(obj['tags']) ? obj['tags'].filter((t): t is string => typeof t === 'string') : []
-                obj['tags'] = [...existingTags, obj['project'].trim()]
+                if (!applyProjectNameAlias(obj['project'], obj)) {
+                    const existingTags = Array.isArray(obj['tags']) ? obj['tags'].filter((t): t is string => typeof t === 'string') : []
+                    obj['tags'] = [...existingTags, obj['project'].trim()]
+                }
             }
         }
         delete obj['project']
@@ -335,7 +351,9 @@ function resolveCreateEntryProjectContext(obj: Record<string, unknown>): void {
     if (
         resolved.workspaceId !== undefined &&
         resolved.workspaceId !== '' &&
-        obj['workspace_id'] === undefined
+        (obj['workspace_id'] === undefined ||
+            obj['workspace_id'] === '' ||
+            obj['workspace_id'] === 'default')
     ) {
         if (resolved.workspaceId !== 'default') {
             obj['workspace_id'] = resolved.workspaceId

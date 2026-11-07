@@ -264,12 +264,12 @@ export const ioExportMarkdownOptionsSchema = z.object({
 
 export const ioImportMarkdownOptionsSchema = z.object({
     dir: z.string().optional()
-}).extend(coreOptionsSchema.shape).extend(databaseOptionsSchema.shape).extend(outputOptionsSchema.shape)
+}).extend(coreOptionsSchema.shape).extend(databaseOptionsSchema.shape).extend(workspaceOptionsSchema.shape).extend(outputOptionsSchema.shape)
 
 export const ioImportExternalOptionsSchema = z.object({
     dir: z.string().optional(),
     format: z.enum(['notion', 'obsidian', 'logseq']).optional()
-}).extend(coreOptionsSchema.shape).extend(databaseOptionsSchema.shape).extend(outputOptionsSchema.shape)
+}).extend(coreOptionsSchema.shape).extend(databaseOptionsSchema.shape).extend(workspaceOptionsSchema.shape).extend(outputOptionsSchema.shape)
 
 export const visualizeOptionsSchema = z.object({
     out: z.string().optional(),

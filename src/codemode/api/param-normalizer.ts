@@ -39,6 +39,8 @@ const VALID_ENTRY_FIELDS = new Set([
     'validation_status',
     'relationships',
     'anchors',
+    'auto_link',
+    'author',
 ])
 
 /**

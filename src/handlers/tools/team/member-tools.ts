@@ -159,7 +159,7 @@ export function getTeamMemberTools(context: ToolContext): ToolDefinition[] {
                     if (teamDb.addTeamMember === undefined) return { success: false, error: 'Database adapter does not support team membership', code: 'UNSUPPORTED' }
 
                     const input = TeamAddMemberSchema.parse(params)
-                    const caller = getCallerIdentity(params as Record<string, unknown> | undefined)
+                    const caller = getCallerIdentity()
 
                     // Notice: wrapWithRbac will ensure caller is 'admin' BEFORE we get here,
                     // UNLESS the table is empty, in which case RBAC is inactive and allows everyone.
@@ -200,7 +200,7 @@ export function getTeamMemberTools(context: ToolContext): ToolDefinition[] {
 
                     const { author } = TeamRemoveMemberSchema.parse(params)
 
-                    const caller = getCallerIdentity(params as Record<string, unknown> | undefined)
+                    const caller = getCallerIdentity()
                     if (author.toLowerCase() === caller.toLowerCase()) {
                         return { success: false, error: 'Cannot remove yourself. Have another admin do it.', code: 'VALIDATION_ERROR' }
                     }

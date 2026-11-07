@@ -157,7 +157,7 @@ function handleAddAuthorAlias(context: ToolContext) {
                 )
             }
 
-            const caller = getCallerIdentity(params as Record<string, unknown>)
+            const caller = getCallerIdentity()
             if (workspaceId === '*') {
                 throw new ValidationError(
                     "workspace_id '*' cannot be used when adding an alias; pass a specific workspace_id or omit it"

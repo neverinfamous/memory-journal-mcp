@@ -108,7 +108,7 @@ export async function createEntryAction(...args: unknown[]): Promise<void> {
         const payload = buildEntryPayload(options, metadata, config, content)
 
         let resolvedWs = payload.workspaceId
-        if (resolvedWs === 'default' && config.defaultWorkspaceId !== 'default') {
+        if (resolvedWs === 'default') {
             const optsRec = z.record(z.string(), z.unknown()).parse(options)
             const explicitWs =
                 optsRec['workspaceId'] ??
@@ -241,14 +241,40 @@ export async function updateEntryAction(...args: unknown[]): Promise<void> {
         const metadata = { ...frontmatter, ...parseMetadata(options.metadata) }
         const payload = buildEntryPayload(options, metadata, config, content)
 
-        const updates: Partial<CreateEntryInput> & { expectedVersion: number } = {
+        const existingEntry = db.getEntryById(entryId, '*')
+        const updates: Partial<CreateEntryInput> & {
+            expectedVersion: number
+            targetWorkspaceId?: string
+        } = {
             content,
             expectedVersion: version,
         }
         if (payload.entryType !== undefined) updates.entryType = payload.entryType
         if (payload.tags !== undefined) updates.tags = payload.tags
-        if (payload.projectNumber !== undefined) updates.projectNumber = payload.projectNumber
-        if (payload.workspaceId !== undefined) updates.workspaceId = payload.workspaceId
+        if (
+            payload.projectNumber !== undefined &&
+            (payload.hasExplicitProject === true || existingEntry?.projectNumber == null)
+        ) {
+            updates.projectNumber = payload.projectNumber
+        }
+        if (payload.hasExplicitWorkspace === true || payload.hasExplicitProject === true) {
+            if (
+                existingEntry !== null &&
+                existingEntry.workspaceId === 'default' &&
+                payload.workspaceId !== undefined &&
+                payload.workspaceId !== 'default' &&
+                payload.workspaceId !== '*'
+            ) {
+                updates.workspaceId = '*'
+                updates.targetWorkspaceId = payload.workspaceId
+            } else if (payload.workspaceId !== undefined) {
+                updates.workspaceId = payload.workspaceId
+            }
+        } else if (existingEntry?.workspaceId !== undefined) {
+            updates.workspaceId = existingEntry.workspaceId
+        } else if (payload.workspaceId !== undefined) {
+            updates.workspaceId = payload.workspaceId
+        }
         if (payload.trustScore !== undefined) updates.trustScore = payload.trustScore
         if (payload.impactScore !== undefined) updates.impactScore = payload.impactScore
         if (payload.validationStatus !== undefined) {

@@ -311,7 +311,10 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             title: 'List Tags',
             description: 'List all unique tags used across all entries',
             group: 'core',
-            inputSchema: z.object({}).strict(), // No arguments required
+            inputSchema: z.object({
+                project_number: z.coerce.number().int().optional(),
+                workspace_id: z.string().optional(),
+            }),
             outputSchema: TagsListOutputSchema,
             annotations: {
                 readOnlyHint: true,
@@ -319,9 +322,25 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                 idempotentHint: true,
                 openWorldHint: false,
             },
-            handler: () => {
+            handler: (params: unknown) => {
                 try {
-                    const tags = db.listTags().map((t) => ({ name: t.name, count: t.usageCount ?? 0 }))
+                    const input = z
+                        .object({
+                            project_number: z.coerce.number().int().optional(),
+                            workspace_id: z.string().optional(),
+                        })
+                        .parse(params ?? {})
+                    const wsId =
+                        input.workspace_id !== undefined || input.project_number !== undefined
+                            ? resolveWorkspaceId(
+                                  input.workspace_id,
+                                  input.project_number,
+                                  context.config
+                              )
+                            : undefined
+                    const tags = db
+                        .listTags(wsId)
+                        .map((t) => ({ name: t.name, count: t.usageCount ?? 0 }))
                     return { success: true, tags, count: tags.length }
                 } catch (err) {
                     return formatHandlerError(err)

@@ -23,6 +23,48 @@ export {
     extractAndRecoverPreparedStatementCode,
 }
 
+function filterToolsForSandbox(
+    sessionContext: ToolContext,
+    context: ToolContext,
+    readonlyRequested: boolean | undefined
+): { tools: ToolDefinition[]; isSandboxReadonly: boolean } {
+    let tools = collectNonCodeModeTools(sessionContext)
+    if (
+        context.config?.codemodeInternalFullAccess !== true &&
+        context.config?.filterConfig?.enabledTools !== undefined
+    ) {
+        const enabledSet = context.config.filterConfig.enabledTools
+        tools = tools.filter((t) => enabledSet.has(t.name))
+    }
+    let isGlobalReadonly = false
+    if (context.config?.filterConfig?.raw !== undefined && context.config.filterConfig.raw !== '') {
+        const rawTokens = context.config.filterConfig.raw
+            .split(',')
+            .map((s) => s.trim().toLowerCase())
+        if (rawTokens.includes('readonly') && !rawTokens.includes('-readonly')) {
+            isGlobalReadonly = true
+        }
+    }
+    const isSandboxReadonly = Boolean(readonlyRequested) || isGlobalReadonly
+    if (isSandboxReadonly) {
+        tools = tools.filter((t) => t.annotations?.readOnlyHint === true)
+    }
+    return { tools, isSandboxReadonly }
+}
+
+function isRecoverableSyntaxError(errorMessage: string): boolean {
+    const errLower = errorMessage.toLowerCase()
+    return (
+        errLower.includes('syntax error') ||
+        errLower.includes('is not a function') ||
+        errLower.includes('unexpected token') ||
+        errLower.includes('unexpected identifier') ||
+        errLower.includes('missing ) after argument list') ||
+        errLower.includes('is not valid json') ||
+        errLower.includes('[object object]')
+    )
+}
+
 export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
     const securityManager = getSecurityManager()
     return [
@@ -44,12 +86,10 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                 const start = performance.now()
 
                 try {
-                    // 1. Configuration Validation (must precede any payload synthesis or regex healing)
                     if (context.config?.codemodeEnabled !== true) {
                         throw new ConfigurationError('Code Mode is disabled in the server configuration.')
                     }
 
-                    // 1b. Rate Limiting (must precede expensive payload synthesis)
                     const clientId = context.auth?.sub ?? context.auth?.subject ?? 'default'
                     if (!securityManager.checkRateLimit(clientId)) {
                         return {
@@ -79,7 +119,6 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                     }
                     const executionCode = payloadRes.executionCode
 
-                    // 1c. Security Validation
                     const validation = securityManager.validateCode(executionCode)
                     if (!validation.valid) {
                         return {
@@ -90,37 +129,18 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    // 2. Project & Session Context Resolution
                     const sessionRes = await resolveCodeModeSessionContext(context, input)
                     if ('errorResponse' in sessionRes) {
                         return sessionRes.errorResponse
                     }
                     const { sessionContext, projectId, numericProjectId, workspaceId } = sessionRes
 
-                    // 2b. Fetch all tools and enforce Tool Filter & Readonly Mode
-                    let tools = collectNonCodeModeTools(sessionContext)
-                    if (
-                        context.config?.codemodeInternalFullAccess !== true &&
-                        context.config?.filterConfig?.enabledTools !== undefined
-                    ) {
-                        const enabledSet = context.config.filterConfig.enabledTools
-                        tools = tools.filter((t) => enabledSet.has(t.name))
-                    }
-                    let isGlobalReadonly = false
-                    if (context.config?.filterConfig?.raw !== undefined && context.config.filterConfig.raw !== '') {
-                        const rawTokens = context.config.filterConfig.raw
-                            .split(',')
-                            .map((s) => s.trim().toLowerCase())
-                        if (rawTokens.includes('readonly') && !rawTokens.includes('-readonly')) {
-                            isGlobalReadonly = true
-                        }
-                    }
-                    const isSandboxReadonly = Boolean(input.readonly) || isGlobalReadonly
-                    if (isSandboxReadonly) {
-                        tools = tools.filter((t) => t.annotations?.readOnlyHint === true)
-                    }
+                    const { tools, isSandboxReadonly } = filterToolsForSandbox(
+                        sessionContext,
+                        context,
+                        input.readonly
+                    )
 
-                    // 3. Create the secure dispatcher wrapper around tool handlers
                     const secureDispatcher = createSecureDispatcher({
                         tools,
                         sessionContext,
@@ -130,12 +150,10 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                         dryRun: input.dry_run,
                     })
 
-                    // Prepare API bindings using the unified JournalApi factory
                     const journalApi = createJournalApi(tools, secureDispatcher)
                     const apiBindings = journalApi.createSandboxBindings(sessionContext.progress)
                     const schemas = journalApi.createSandboxSchemas()
 
-                    // 4. Execute Code in Sandbox Worker
                     const pool = getSandboxPool()
                     const { userContext, requestedMaxResultSize } = buildSandboxUserContext(
                         input,
@@ -150,19 +168,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                     const reqCtx = getRequestContext()
 
                     const runSandbox = async (codeToRun: string): Promise<void> => {
-                        if (authCtx !== undefined) {
-                            await runWithAuthContext(authCtx, async () => {
-                                execResult = await pool.execute(
-                                    codeToRun,
-                                    apiBindings,
-                                    schemas,
-                                    input.timeout ?? input.timeout_ms,
-                                    userContext,
-                                    isSandboxReadonly,
-                                    requestedMaxResultSize
-                                )
-                            })
-                        } else {
+                        const executePool = async (): Promise<void> => {
                             execResult = await pool.execute(
                                 codeToRun,
                                 apiBindings,
@@ -173,6 +179,11 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                                 requestedMaxResultSize
                             )
                         }
+                        if (authCtx !== undefined) {
+                            await runWithAuthContext(authCtx, executePool)
+                        } else {
+                            await executePool()
+                        }
                     }
 
                     await requestContextStorage.run(reqCtx ?? {}, async () => {
@@ -182,37 +193,26 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                             healingEnabled &&
                             execResult !== undefined &&
                             !execResult.success &&
-                            typeof execResult.error === 'string'
+                            typeof execResult.error === 'string' &&
+                            isRecoverableSyntaxError(execResult.error)
                         ) {
-                            const errLower = execResult.error.toLowerCase()
-                            if (
-                                errLower.includes('syntax error') ||
-                                errLower.includes('is not a function') ||
-                                errLower.includes('unexpected token') ||
-                                errLower.includes('unexpected identifier') ||
-                                errLower.includes('missing ) after argument list') ||
-                                errLower.includes('is not valid json') ||
-                                errLower.includes('[object object]')
-                            ) {
-                                const originalInput = typeof input.code === 'string' ? input.code : executionCode
-                                const recoveredCode =
-                                    extractAndRecoverSqlCode(originalInput) ??
-                                    extractAndRecoverEntryCode(originalInput) ??
-                                    extractAndRecoverJsonCode(originalInput)
-                                if (recoveredCode !== null && recoveredCode !== executionCode) {
-                                    logger.info('CODEMODE_AUTONOMOUS_RECOVERY', {
-                                        originalError: execResult.error,
-                                        recoveredCode,
-                                    })
-                                    await runSandbox(recoveredCode)
-                                }
+                            const originalInput = typeof input.code === 'string' ? input.code : executionCode
+                            const recoveredCode =
+                                extractAndRecoverSqlCode(originalInput) ??
+                                extractAndRecoverEntryCode(originalInput) ??
+                                extractAndRecoverJsonCode(originalInput)
+                            if (recoveredCode !== null && recoveredCode !== executionCode) {
+                                logger.info('CODEMODE_AUTONOMOUS_RECOVERY', {
+                                    originalError: execResult.error,
+                                    recoveredCode,
+                                })
+                                await runSandbox(recoveredCode)
                             }
                         }
                     })
 
                     const executionTime = performance.now() - start
 
-                    // 5. Format and return results
                     return {
                         success: Boolean(execResult?.success),
                         executionTimeMs: Math.round(executionTime * 100) / 100,

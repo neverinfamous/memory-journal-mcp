@@ -13,7 +13,7 @@ import {
     ASSISTANT_FOCUSED,
 } from '../../../../utils/resource-annotations.js'
 import { getGitHubIntegration } from '../../../../github/github-integration/index.js'
-import { DEFAULT_BRIEFING_CONFIG } from '../../shared.js'
+import { DEFAULT_BRIEFING_CONFIG, resourceWorkspace } from '../../shared.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from '../../shared.js'
 import { buildGitHubSection } from './github-section.js'
 import {
@@ -64,7 +64,7 @@ export async function buildBriefingData(
     let activeGithub = context.github
     let activeProjectNumber = config.defaultProjectNumber
     let activeRepoPath: string | undefined
-    let activeWorkspaceId: string | undefined
+    let activeWorkspaceId: string | undefined = resourceWorkspace({ briefingConfig: config })
 
     if (targetRepo) {
         let resolvedRepo = targetRepo

@@ -10,6 +10,13 @@ import { ICON_PROMPT } from '../../constants/icons.js'
 import type { InternalPromptDef } from './index.js'
 import type { JournalEntry } from '../../types/index.js'
 import { markUntrustedContentInline } from '../../utils/security-utils.js'
+import { resourceWorkspace, type BriefingConfig } from '../resources/shared.js'
+
+export function formatPositiveIntOrPlaceholder(raw: string | undefined, placeholder: string): string {
+    if (!raw) return placeholder
+    const trimmed = raw.trim()
+    return /^[1-9]\d*$/.test(trimmed) ? trimmed : placeholder
+}
 
 function formatPromptEntries(
     entries: JournalEntry[],
@@ -55,7 +62,7 @@ export function getGitHubPromptDefinitions(): InternalPromptDef[] {
             handler: (args: Record<string, string> | undefined, _db: IDatabaseAdapter) => {
                 const projectNumber = args?.['project_number']
                 const type = args?.['workflow_type'] ?? 'triage'
-                const projectStr = projectNumber ? String(parseInt(projectNumber, 10)) : '{project_number}'
+                const projectStr = formatPositiveIntOrPlaceholder(projectNumber, '{project_number}')
 
                 return {
                     messages: [
@@ -111,7 +118,7 @@ If doing a milestone: Provide progress summary, upcoming milestones, timeline.`,
             ) => {
                 const prNumber = args?.['pr_number']
                 const type = args?.['workflow_type'] ?? 'summary'
-                const prStr = prNumber ? String(parseInt(prNumber, 10)) : '{pr_number}'
+                const prStr = formatPositiveIntOrPlaceholder(prNumber, '{pr_number}')
 
                 return {
                     messages: [
@@ -156,11 +163,11 @@ If doing deps/changelog: Audit updates and backfill SHA provenance.`,
                 db: IDatabaseAdapter,
                 _teamDb?: IDatabaseAdapter,
                 _github?: unknown,
-                briefingConfig?: { defaultWorkspaceId?: string }
+                briefingConfig?: Partial<BriefingConfig>
             ) => {
                 const entries = db.getWorkflowActionEntries(
                     20,
-                    briefingConfig?.defaultWorkspaceId ?? 'default'
+                    resourceWorkspace({ briefingConfig })
                 )
 
                 return {

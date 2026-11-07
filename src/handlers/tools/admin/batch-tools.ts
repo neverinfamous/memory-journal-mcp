@@ -121,33 +121,54 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
                 try {
                     const input = BatchUpdateEntriesSchema.parse(params)
                     await sendProgress(progress, 0, 2, 'Updating entries...')
-                    const updates = input.updates.map((u) => ({
-                        id: u.entry_id,
-                        content: u.content,
-                        entryType: u.entry_type,
-                        isPersonal: u.is_personal,
-                        tags: u.tags,
-                        significanceType: u.significance_type,
-                        projectNumber: u.project_number,
-                        projectOwner: u.project_owner,
-                        issueNumber: u.issue_number,
-                        issueUrl: u.issue_url,
-                        prNumber: u.pr_number,
-                        prUrl: u.pr_url,
-                        prStatus: u.pr_status,
-                        workflowRunId: u.workflow_run_id,
-                        workflowName: u.workflow_name,
-                        workflowStatus: u.workflow_status,
-                        isArchived: u.is_archived,
-                        expectedVersion: u.expected_version,
-                        autoContext: u.auto_context,
-                        impactScore: u.impact_score,
-                        trustScore: u.trust_score,
-                        validationStatus: u.validation_status,
-                        targetWorkspaceId: u.target_workspace_id,
-                        sessionId: u.session_id,
-                        workspaceId: resolveWriteWorkspaceId(u.workspace_id || input.workspace_id, u.project_number ?? input.project_number, context.config),
-                    }))
+                    const updates = input.updates.map((u) => {
+                        const explicitWs = u.workspace_id || input.workspace_id
+                        const explicitPn = u.project_number ?? input.project_number
+                        let resolvedWs = resolveWriteWorkspaceId(
+                            explicitWs,
+                            explicitPn,
+                            context.config,
+                            u.content,
+                            u.tags ?? undefined
+                        )
+                        if (
+                            explicitWs === undefined &&
+                            explicitPn === undefined &&
+                            resolvedWs === 'default'
+                        ) {
+                            const existingByPk = db.getEntryById(u.entry_id, '*')
+                            if (existingByPk?.workspaceId !== undefined) {
+                                resolvedWs = existingByPk.workspaceId
+                            }
+                        }
+                        return {
+                            id: u.entry_id,
+                            content: u.content,
+                            entryType: u.entry_type,
+                            isPersonal: u.is_personal,
+                            tags: u.tags,
+                            significanceType: u.significance_type,
+                            projectNumber: u.project_number,
+                            projectOwner: u.project_owner,
+                            issueNumber: u.issue_number,
+                            issueUrl: u.issue_url,
+                            prNumber: u.pr_number,
+                            prUrl: u.pr_url,
+                            prStatus: u.pr_status,
+                            workflowRunId: u.workflow_run_id,
+                            workflowName: u.workflow_name,
+                            workflowStatus: u.workflow_status,
+                            isArchived: u.is_archived,
+                            expectedVersion: u.expected_version,
+                            autoContext: u.auto_context,
+                            impactScore: u.impact_score,
+                            trustScore: u.trust_score,
+                            validationStatus: u.validation_status,
+                            targetWorkspaceId: u.target_workspace_id,
+                            sessionId: u.session_id,
+                            workspaceId: resolvedWs,
+                        }
+                    })
 
                     const { updated, notFound, errors } = db.updateEntries(updates)
 
@@ -200,7 +221,14 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
             handler: async (params: unknown) => {
                 try {
                     const input = BatchDeleteEntriesSchema.parse(params)
-                    const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
+                    let wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
+                    if (
+                        input.workspace_id === undefined &&
+                        input.project_number === undefined &&
+                        wsId === 'default'
+                    ) {
+                        wsId = '*'
+                    }
                     await sendProgress(progress, 0, 2, 'Deleting entries...')
                     const { deleted, notFound, errors } = db.deleteEntries(input.entry_ids, input.permanent, wsId)
                     

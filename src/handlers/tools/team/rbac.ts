@@ -8,10 +8,9 @@ import { formatHandlerError } from '../../../utils/error-helpers.js'
 
 /**
  * Resolves the identity of the user calling the tool.
- * Prefers OAuth claims, falls back to an explicit 'author' parameter, 
- * and ultimately to the TEAM_AUTHOR environment variable.
+ * Prefers OAuth claims and falls back to the TEAM_AUTHOR environment variable.
  */
-export function getCallerIdentity(_params?: Record<string, unknown>): string {
+export function getCallerIdentity(): string {
     const authCtx = getAuthContext()
     if (authCtx?.authenticated) {
         const claims = authCtx.claims
@@ -111,7 +110,7 @@ export function wrapWithRbac(context: ToolContext, tools: ToolDefinition[], defa
         tool.handler = async (params: unknown) => {
             try {
                 // Determine caller identity
-                const author = getCallerIdentity(params as Record<string, unknown> | undefined)
+                const author = getCallerIdentity()
                 
                 // Enforce role requirement
                 enforceTeamRbac(context, author, requiredRole)

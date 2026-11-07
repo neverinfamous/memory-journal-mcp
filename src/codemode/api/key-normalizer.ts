@@ -101,7 +101,14 @@ function resolveBaseSnakeKey(key: string, ctx: KeyContext): string {
             snakeKey = 'description'
         }
     } else if (snakeKey === 'type') {
-        if (methodLower?.includes('export')) {
+        if (
+            methodLower !== undefined &&
+            (methodLower === 'export' ||
+                methodLower === 'export_entries' ||
+                methodLower === 'exportentries' ||
+                methodLower === 'team_export_entries' ||
+                methodLower === 'teamexportentries')
+        ) {
             snakeKey = 'format'
         } else if (!('entry_type' in obj) && !('flag_type' in obj) && !('entry_type' in result) && !('flag_type' in result)) {
             snakeKey = 'entry_type'
@@ -125,7 +132,15 @@ function resolveAliasedKey(startKey: string, value: unknown, ctx: KeyContext): s
         if (useAlias && snakeKey === 'entry') {
             if (isRecord(value)) {
                 useAlias = false
-            } else if (typeof value === 'string' && (!/^\d+$/.test(value.trim()) || (methodName !== undefined && /create|add|log|insert/i.test(methodName)))) {
+            } else if (
+                typeof value === 'string' &&
+                (!/^\d+$/.test(value.trim()) ||
+                    (methodName !== undefined &&
+                        (hasMethodToken(methodName, 'create') ||
+                            hasMethodToken(methodName, 'add') ||
+                            hasMethodToken(methodName, 'insert') ||
+                            (hasMethodToken(methodName, 'log') && !hasMethodToken(methodName, 'audit')))))
+            ) {
                 useAlias = false
                 snakeKey = 'content'
             }
@@ -229,13 +244,16 @@ function coerceNumericValue(snakeKey: string, value: unknown): { value: unknown 
 }
 
 function propagateBatchProjectNumber(result: Record<string, unknown>): void {
-    if (typeof result['project_number'] !== 'number') return
-    const pn = result['project_number']
+    const pn = typeof result['project_number'] === 'number' ? result['project_number'] : undefined
+    const ws = typeof result['workspace_id'] === 'string' ? result['workspace_id'] : undefined
+    if (pn === undefined && ws === undefined) return
     for (const key of ['entries', 'updates', 'entry_ids']) {
         const list = result[key]
         if (!Array.isArray(list)) continue
         for (const item of list) {
-            if (isRecord(item) && item['project_number'] === undefined) item['project_number'] = pn
+            if (!isRecord(item)) continue
+            if (pn !== undefined && item['project_number'] === undefined) item['project_number'] = pn
+            if (ws !== undefined && item['workspace_id'] === undefined) item['workspace_id'] = ws
         }
     }
 }

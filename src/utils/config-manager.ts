@@ -205,6 +205,25 @@ export class ConfigManager extends EventEmitter {
                 bcChanged = true
             }
 
+            if (typeof parsed['defaultProjectNumber'] === 'number') {
+                bc.defaultProjectNumber = parsed['defaultProjectNumber']
+                bcChanged = true
+            }
+            if (typeof parsed['defaultWorkspaceId'] === 'string') {
+                bc.defaultWorkspaceId = parsed['defaultWorkspaceId']
+                bcChanged = true
+            }
+            if (
+                typeof parsed['projectRegistry'] === 'object' &&
+                parsed['projectRegistry'] !== null &&
+                !Array.isArray(parsed['projectRegistry'])
+            ) {
+                bc.projectRegistry = parsed['projectRegistry'] as NonNullable<
+                    BriefingConfig['projectRegistry']
+                >
+                bcChanged = true
+            }
+
             if (bcChanged) {
                 updates.briefingConfig = bc
             }

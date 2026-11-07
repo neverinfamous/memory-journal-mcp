@@ -13,8 +13,170 @@ interface OrgProjectResponse {
     organization: { projectV2: ProjectV2Data | null } | null
 }
 
+const PROJECT_DATA_FRAGMENT = `
+    fragment ProjectData on ProjectV2 {
+        id
+        title
+        fields(first: 20) {
+            nodes {
+                ... on ProjectV2SingleSelectField {
+                    id
+                    name
+                    options {
+                        id
+                        name
+                        color
+                    }
+                }
+            }
+        }
+        items(first: $itemLimit) {
+            pageInfo {
+                hasNextPage
+            }
+            nodes {
+                id
+                type
+                createdAt
+                updatedAt
+                fieldValues(first: 10) {
+                    nodes {
+                        ... on ProjectV2ItemFieldSingleSelectValue {
+                            name
+                            field {
+                                ... on ProjectV2SingleSelectField {
+                                    name
+                                }
+                            }
+                        }
+                    }
+                }
+                content {
+                    ... on Issue {
+                        number
+                        title
+                        url
+                        labels(first: 5) {
+                            nodes { name }
+                        }
+                        assignees(first: 5) {
+                            nodes { login }
+                        }
+                    }
+                    ... on PullRequest {
+                        number
+                        title
+                        url
+                        labels(first: 5) {
+                            nodes { name }
+                        }
+                        assignees(first: 5) {
+                            nodes { login }
+                        }
+                    }
+                    ... on DraftIssue {
+                        title
+                    }
+                }
+            }
+        }
+    }
+`
+
+const USER_PROJECT_QUERY = `
+    ${PROJECT_DATA_FRAGMENT}
+    query($owner: String!, $number: Int!, $itemLimit: Int!) {
+        user(login: $owner) {
+            projectV2(number: $number) {
+                ...ProjectData
+            }
+        }
+    }
+`
+
+const REPO_PROJECT_QUERY = `
+    ${PROJECT_DATA_FRAGMENT}
+    query($owner: String!, $repo: String!, $number: Int!, $itemLimit: Int!) {
+        repository(owner: $owner, name: $repo) {
+            projectV2(number: $number) {
+                ...ProjectData
+            }
+        }
+    }
+`
+
+const ORG_PROJECT_QUERY = `
+    ${PROJECT_DATA_FRAGMENT}
+    query($owner: String!, $number: Int!, $itemLimit: Int!) {
+        organization(login: $owner) {
+            projectV2(number: $number) {
+                ...ProjectData
+            }
+        }
+    }
+`
+
 export class ProjectsManager {
     constructor(private client: GitHubClient) {}
+
+    private async fetchProjectV2FromSources(
+        owner: string,
+        projectNumber: number,
+        repo?: string,
+        abortSignal?: AbortSignal
+    ): Promise<{ project: ProjectV2Data | null; source: string }> {
+        const graphql = this.client.graphqlWithAuth
+        if (!graphql) return { project: null, source: '' }
+
+        try {
+            const response = await graphql<UserProjectResponse>(USER_PROJECT_QUERY, {
+                owner,
+                number: projectNumber,
+                itemLimit: 100,
+                request: { signal: abortSignal },
+            })
+            if (response.user?.projectV2) {
+                return { project: response.user.projectV2, source: 'user' }
+            }
+        } catch {
+            logger.debug('User project not found, trying repository...', { module: 'GitHub' })
+        }
+
+        if (repo) {
+            try {
+                const response = await graphql<RepoProjectResponse>(REPO_PROJECT_QUERY, {
+                    owner,
+                    repo,
+                    number: projectNumber,
+                    itemLimit: 100,
+                    request: { signal: abortSignal },
+                })
+                if (response.repository?.projectV2) {
+                    return { project: response.repository.projectV2, source: 'repository' }
+                }
+            } catch {
+                logger.debug('Repository project not found, trying organization...', {
+                    module: 'GitHub',
+                })
+            }
+        }
+
+        try {
+            const response = await graphql<OrgProjectResponse>(ORG_PROJECT_QUERY, {
+                owner,
+                number: projectNumber,
+                itemLimit: 100,
+                request: { signal: abortSignal },
+            })
+            if (response.organization?.projectV2) {
+                return { project: response.organization.projectV2, source: 'organization' }
+            }
+        } catch {
+            logger.debug('Organization project not found', { module: 'GitHub' })
+        }
+
+        return { project: null, source: '' }
+    }
 
     async getProjectKanban(
         owner: string,
@@ -33,163 +195,12 @@ export class ProjectsManager {
             if (cached !== undefined) return cached
         }
 
-        const projectFragment = `
-            fragment ProjectData on ProjectV2 {
-                id
-                title
-                fields(first: 20) {
-                    nodes {
-                        ... on ProjectV2SingleSelectField {
-                            id
-                            name
-                            options {
-                                id
-                                name
-                                color
-                            }
-                        }
-                    }
-                }
-                items(first: $itemLimit) {
-                    pageInfo {
-                        hasNextPage
-                    }
-                    nodes {
-                        id
-                        type
-                        createdAt
-                        updatedAt
-                        fieldValues(first: 10) {
-                            nodes {
-                                ... on ProjectV2ItemFieldSingleSelectValue {
-                                    name
-                                    field {
-                                        ... on ProjectV2SingleSelectField {
-                                            name
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        content {
-                            ... on Issue {
-                                number
-                                title
-                                url
-                                labels(first: 5) {
-                                    nodes { name }
-                                }
-                                assignees(first: 5) {
-                                    nodes { login }
-                                }
-                            }
-                            ... on PullRequest {
-                                number
-                                title
-                                url
-                                labels(first: 5) {
-                                    nodes { name }
-                                }
-                                assignees(first: 5) {
-                                    nodes { login }
-                                }
-                            }
-                            ... on DraftIssue {
-                                title
-                            }
-                        }
-                    }
-                }
-            }
-        `
-
-        const userQuery = `
-            ${projectFragment}
-            query($owner: String!, $number: Int!, $itemLimit: Int!) {
-                user(login: $owner) {
-                    projectV2(number: $number) {
-                        ...ProjectData
-                    }
-                }
-            }
-        `
-
-        const repoQuery = `
-            ${projectFragment}
-            query($owner: String!, $repo: String!, $number: Int!, $itemLimit: Int!) {
-                repository(owner: $owner, name: $repo) {
-                    projectV2(number: $number) {
-                        ...ProjectData
-                    }
-                }
-            }
-        `
-
-        const orgQuery = `
-            ${projectFragment}
-            query($owner: String!, $number: Int!, $itemLimit: Int!) {
-                organization(login: $owner) {
-                    projectV2(number: $number) {
-                        ...ProjectData
-                    }
-                }
-            }
-        `
-
-        let project: ProjectV2Data | null = null
-        let source = ''
-
-        try {
-            const response = await this.client.graphqlWithAuth<UserProjectResponse>(userQuery, {
-                owner,
-                number: projectNumber,
-                itemLimit: 100,
-                request: { signal: abortSignal },
-            })
-            if (response.user?.projectV2) {
-                project = response.user.projectV2
-                source = 'user'
-            }
-        } catch {
-            logger.debug('User project not found, trying repository...', { module: 'GitHub' })
-        }
-
-        if (!project && repo) {
-            try {
-                const response = await this.client.graphqlWithAuth<RepoProjectResponse>(repoQuery, {
-                    owner,
-                    repo,
-                    number: projectNumber,
-                    itemLimit: 100,
-                    request: { signal: abortSignal },
-                })
-                if (response.repository?.projectV2) {
-                    project = response.repository.projectV2
-                    source = 'repository'
-                }
-            } catch {
-                logger.debug('Repository project not found, trying organization...', {
-                    module: 'GitHub',
-                })
-            }
-        }
-
-        if (!project) {
-            try {
-                const response = await this.client.graphqlWithAuth<OrgProjectResponse>(orgQuery, {
-                    owner,
-                    number: projectNumber,
-                    itemLimit: 100,
-                    request: { signal: abortSignal },
-                })
-                if (response.organization?.projectV2) {
-                    project = response.organization.projectV2
-                    source = 'organization'
-                }
-            } catch {
-                logger.debug('Organization project not found', { module: 'GitHub' })
-            }
-        }
+        const { project, source } = await this.fetchProjectV2FromSources(
+            owner,
+            projectNumber,
+            repo,
+            abortSignal
+        )
 
         if (!project) {
             logger.warning('Project not found', { module: 'GitHub', entityId: projectNumber })

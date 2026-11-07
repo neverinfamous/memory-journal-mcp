@@ -13,108 +13,42 @@ import { coerceNumber } from '../../utils/query-helpers.js'
 import { getCmsSupervisorPromptDefinitions } from './cms-supervisor.js'
 import { buildStatsSnippet, buildUnverifiedSnippet } from './optimizer-snippets.js'
 
-export function getOptimizerPromptDefinitions(): InternalPromptDef[] {
-    return [
-        {
-            name: 'optimize-journal',
-            description:
-                "Guided database pruning, graph verification, episodic-to-semantic compaction, and multi-agent audit workflow. Optional arguments: `lookback` (Number of recent entries, default: 10), `limit` (Entry processing cap; pass `0` for unlimited across all history, default: 500 or 0 in full/autoRun mode), `project` (Target project name or number, optional), `autoRun` (boolean, default: false), `mode` ('quick' | 'targeted' | 'full', default: 'quick'), `targetDimension` ('unassigned' | 'relationships' | 'scores' | 'tags' | 'all', default: 'all').",
-            icons: [ICON_PROMPT],
-            arguments: [
-                {
-                    name: 'lookback',
-                    description: 'Number of recent entries to inspect for unverified status (default: 10)',
-                    required: false,
-                },
-                {
-                    name: 'limit',
-                    description: 'Entry processing cap (0 = unlimited across all time, default: 500 or 0 in full/autoRun mode)',
-                    required: false,
-                },
-                {
-                    name: 'project',
-                    description: 'Target project name or number (omit to optimize all projects globally)',
-                    required: false,
-                },
-                {
-                    name: 'autoRun',
-                    description: 'Set to "true" to execute all phases including Multi-Agent Domain Audit without interactive stopping',
-                    required: false,
-                },
-                {
-                    name: 'mode',
-                    description: "Execution depth: 'quick' | 'targeted' | 'full' (default: 'quick')",
-                    required: false,
-                },
-                {
-                    name: 'targetDimension',
-                    description: "Quality dimension filter: 'unassigned' | 'relationships' | 'scores' | 'tags' | 'all' (default: 'all')",
-                    required: false,
-                },
-            ],
-            handler: (args: Record<string, string> | undefined, db: IDatabaseAdapter) => {
-                const schema = z.object({
-                    lookback: z.preprocess(
-                        coerceNumber,
-                        z.number().int().min(1).max(2000).optional().default(10)
-                    ),
-                    limit: z.preprocess(
-                        coerceNumber,
-                        z.number().int().min(0).max(50000).optional()
-                    ),
-                    project: z.preprocess(
-                        (val) => (typeof val === 'string' ? val.trim() : val),
-                        z.string().optional()
-                    ),
-                    autoRun: z.preprocess(
-                        (val) => val === 'true' || val === true,
-                        z.boolean().optional().default(false)
-                    ),
-                    mode: z.preprocess(
-                        (val) => (typeof val === 'string' ? val.toLowerCase() : val),
-                        z.enum(['quick', 'targeted', 'full']).optional().default('quick')
-                    ),
-                    targetDimension: z.preprocess(
-                        (val) => (typeof val === 'string' ? val.toLowerCase() : val),
-                        z
-                            .enum(['unassigned', 'relationships', 'scores', 'tags', 'all'])
-                            .optional()
-                            .default('all')
-                    ),
-                })
+const optimizeJournalArgsSchema = z.object({
+    lookback: z.preprocess(
+        coerceNumber,
+        z.number().int().min(1).max(2000).optional().default(10)
+    ),
+    limit: z.preprocess(coerceNumber, z.number().int().min(0).max(50000).optional()),
+    project: z.preprocess(
+        (val) => (typeof val === 'string' ? val.trim() : val),
+        z.string().optional()
+    ),
+    autoRun: z.preprocess(
+        (val) => val === 'true' || val === true,
+        z.boolean().optional().default(false)
+    ),
+    mode: z.preprocess(
+        (val) => (typeof val === 'string' ? val.toLowerCase() : val),
+        z.enum(['quick', 'targeted', 'full']).optional().default('quick')
+    ),
+    targetDimension: z.preprocess(
+        (val) => (typeof val === 'string' ? val.toLowerCase() : val),
+        z
+            .enum(['unassigned', 'relationships', 'scores', 'tags', 'all'])
+            .optional()
+            .default('all')
+    ),
+})
 
-                const parsed = schema.safeParse(args ?? {})
-                const lookback = parsed.success ? parsed.data.lookback : 10
-                const targetProject = parsed.success ? parsed.data.project : undefined
-                const autoRun = parsed.success ? parsed.data.autoRun : false
-                const mode = parsed.success ? parsed.data.mode : 'quick'
-                const targetDimension = parsed.success ? parsed.data.targetDimension : 'all'
-                const isAutonomousFull = autoRun || mode === 'full'
-                const entryLimit =
-                    parsed.success && parsed.data.limit !== undefined
-                        ? parsed.data.limit
-                        : isAutonomousFull
-                          ? 0
-                          : 500
-
-                const statsSnippet = buildStatsSnippet(db)
-                const unverifiedSnippet = buildUnverifiedSnippet(db, lookback)
-
-                const targetProjectText =
-                    targetProject !== undefined && targetProject !== ''
-                        ? ` | **Target Project**: \`${targetProject}\``
-                        : ''
-                const limitDisplay = entryLimit === 0 ? '0 (Unlimited / All Time)' : String(entryLimit)
-                const limitText = ` | **Entry Limit**: \`${limitDisplay}\``
-                const autoRunText = autoRun ? ` | **Auto-Run**: \`true\`` : ''
-
-                const executionBanner = isAutonomousFull
-                    ? `> [!IMPORTANT]
+function buildExecutionBanner(isAutonomousFull: boolean): string {
+    if (isAutonomousFull) {
+        return `> [!IMPORTANT]
 > **UNATTENDED FULL-DEPTH EXECUTION PROTOCOL (\`CMS-02\` NREM CONSOLIDATION — MANDATORY)**:
 > \`mode: 'full'\` or \`autoRun: true\` is active. You MUST **execute all phases (Option A, Option B, AND Option C / Comprehensive Multi-Agent Domain Audit, Episodic-to-Semantic Compaction, Tag Consolidation & Graph Defrag)** continuously across ALL projects (\`workspace_id: '*'\`) and ALL historical entries without stopping.
 > - **DO NOT** pause to ask the user for confirmation, approval, or thoroughness preferences.
 > - **Data-Plane / Zero-Build Guardrail**: This workflow operates strictly on SQLite and Vector Index data via MCP tools. **NEVER** run \`pnpm run lint\`, \`pnpm run typecheck\`, \`pnpm run build\`, \`npx vitest\`, or \`npx playwright\` during database optimization.`
-                    : `> [!IMPORTANT]
+    }
+    return `> [!IMPORTANT]
 > **AUTOMATED INITIAL EXECUTION PROTOCOL (MANDATORY)**:
 > When this prompt starts, you MUST **automatically execute Option A and Option B** first without waiting for additional user instructions:
 > 1. **Option A (Safety Backup & Priority Unassigned Scan)**: Immediately create a database safety backup via \`backup_journal\` and run the unassigned workspace scan across all projects (\`workspace_id: '*'\`). If any default/unassigned entries are found, auto-repair/migrate them immediately and formulate a root-cause analysis.
@@ -129,38 +63,13 @@ export function getOptimizerPromptDefinitions(): InternalPromptDef[] {
 > - *"Do it across all entries (limit: 0)"*
 > - *"Run Multi-Agent Audit on project mysql-mcp"*
 > - *"Run Multi-Agent Audit focusing on missing relationships and noise pruning"*`
+}
 
-                const optionCHeading = isAutonomousFull
-                    ? '### Option C: Comprehensive Multi-Agent Domain Audit, Episodic Compaction & Noise Pruning (Executed Automatically in Full/AutoRun Mode)'
-                    : '### Comprehensive Multi-Agent Domain Audit & Noise Pruning (Presented to User for Choice)'
-
-                const scanLoopCondition =
-                    entryLimit === 0
-                        ? 'for (let _page = 0; _page < 200; _page++)'
-                        : `while (processed < ${String(entryLimit)})`
-
-                return {
-                    messages: [
-                        {
-                            role: 'user',
-                            content: {
-                                type: 'text',
-                                text: `# Journal Optimizer & Verification Workflow
-
-You are executing the guided workflow for intelligently pruning, verifying, consolidating, and auditing the global memory journal database. Every operation uses soft-deletion or archival as a safe first pass.
-
-**Requested Mode**: \`${mode}\` | **Quality Dimension**: \`${targetDimension}\`${targetProjectText}${limitText}${autoRunText}
-
-${statsSnippet}
-
-## Unverified Recent Entries
-${markUntrustedContent(unverifiedSnippet)}
-
-${executionBanner}
-
----
-
-## Standard of a Complete Entry (7 Core Quality Dimensions)
+function buildOptimizeStandardsAndScripts(
+    targetProject: string | undefined,
+    scanLoopCondition: string
+): string {
+    return `## Standard of a Complete Entry (7 Core Quality Dimensions)
 An entry is considered incomplete and worthy of auditing/enrichment if it lacks any of the following:
 1. **Workspace & Project Binding (TOP PRIORITY #1)**: Explicit \`workspace_id\` and \`project_number\` matching a registered workspace (MUST NOT be \`default\` or \`0\`).
 2. **Significance Classification**: \`significance_type\` (e.g., \`architecture\`, \`decision\`, \`milestone\`, \`breakthrough\`, \`lesson_learned\`, \`blocker_resolved\`, \`release\`, \`security\`) and non-zero \`importance\` score (0.0 to 1.0).
@@ -225,11 +134,16 @@ for (const entry of (entries.entries || [])) {
   }
 }
 return graph;
-\`\`\`
+\`\`\``
+}
 
----
-
-## Workflow Execution Options
+function buildOptimizeWorkflowOptionsSection(
+    targetDimension: string,
+    optionCHeading: string,
+    targetProject: string | undefined,
+    limitDisplay: string
+): string {
+    return `## Workflow Execution Options
 
 ### Option A: Quick Health & Priority Workspace Unassigned Audit (Executed Automatically)
 1. **Safety Backup & Retention**: Call \`backup_journal\` and \`cleanup_backups({ keep_count: 15 })\` before any mutations. Abort if backup creation fails.
@@ -295,7 +209,119 @@ Include the reference table of configurable prompt parameters (\`mode\`, \`targe
 | \`project\` | Project name or number (e.g., \`'mysql-mcp'\` or \`9\`) | \`undefined\` (all) | Restricts analysis/pruning to a single project domain. |
 | \`limit\` | Number (\`0\` = unlimited, or \`1 – 50000\`) | \`500\` (\`0\` in \`full\`/\`autoRun\`) | Processing cap for entry auditing (\`0\` scans all history). |
 | \`lookback\` | Number (\`1 – 2000\`) | \`10\` | Recent unverified entry lookback window. |
-| \`autoRun\` | Boolean (\`true\` \\| \`false\`) | \`false\` | Enables unattended maximum-depth execution without stopping. |
+| \`autoRun\` | Boolean (\`true\` \\| \`false\`) | \`false\` | Enables unattended maximum-depth execution without stopping. |`
+}
+
+export function getOptimizerPromptDefinitions(): InternalPromptDef[] {
+    return [
+        {
+            name: 'optimize-journal',
+            description:
+                "Guided database pruning, graph verification, episodic-to-semantic compaction, and multi-agent audit workflow. Optional arguments: `lookback` (Number of recent entries, default: 10), `limit` (Entry processing cap; pass `0` for unlimited across all history, default: 500 or 0 in full/autoRun mode), `project` (Target project name or number, optional), `autoRun` (boolean, default: false), `mode` ('quick' | 'targeted' | 'full', default: 'quick'), `targetDimension` ('unassigned' | 'relationships' | 'scores' | 'tags' | 'all', default: 'all').",
+            icons: [ICON_PROMPT],
+            arguments: [
+                {
+                    name: 'lookback',
+                    description: 'Number of recent entries to inspect for unverified status (default: 10)',
+                    required: false,
+                },
+                {
+                    name: 'limit',
+                    description: 'Entry processing cap (0 = unlimited across all time, default: 500 or 0 in full/autoRun mode)',
+                    required: false,
+                },
+                {
+                    name: 'project',
+                    description: 'Target project name or number (omit to optimize all projects globally)',
+                    required: false,
+                },
+                {
+                    name: 'autoRun',
+                    description: 'Set to "true" to execute all phases including Multi-Agent Domain Audit without interactive stopping',
+                    required: false,
+                },
+                {
+                    name: 'mode',
+                    description: "Execution depth: 'quick' | 'targeted' | 'full' (default: 'quick')",
+                    required: false,
+                },
+                {
+                    name: 'targetDimension',
+                    description: "Quality dimension filter: 'unassigned' | 'relationships' | 'scores' | 'tags' | 'all' (default: 'all')",
+                    required: false,
+                },
+            ],
+            handler: (args: Record<string, string> | undefined, db: IDatabaseAdapter) => {
+                const parsed = optimizeJournalArgsSchema.safeParse(args ?? {})
+                const lookback = parsed.success ? parsed.data.lookback : 10
+                const targetProject = parsed.success ? parsed.data.project : undefined
+                const autoRun = parsed.success ? parsed.data.autoRun : false
+                const mode = parsed.success ? parsed.data.mode : 'quick'
+                const targetDimension = parsed.success ? parsed.data.targetDimension : 'all'
+                const isAutonomousFull = autoRun || mode === 'full'
+                const entryLimit =
+                    parsed.success && parsed.data.limit !== undefined
+                        ? parsed.data.limit
+                        : isAutonomousFull
+                          ? 0
+                          : 500
+
+                const statsSnippet = buildStatsSnippet(db)
+                const unverifiedSnippet = buildUnverifiedSnippet(db, lookback)
+
+                const targetProjectText =
+                    targetProject !== undefined && targetProject !== ''
+                        ? ` | **Target Project**: \`${targetProject}\``
+                        : ''
+                const limitDisplay = entryLimit === 0 ? '0 (Unlimited / All Time)' : String(entryLimit)
+                const limitText = ` | **Entry Limit**: \`${limitDisplay}\``
+                const autoRunText = autoRun ? ` | **Auto-Run**: \`true\`` : ''
+                const executionBanner = buildExecutionBanner(isAutonomousFull)
+                const optionCHeading = isAutonomousFull
+                    ? '### Option C: Comprehensive Multi-Agent Domain Audit, Episodic Compaction & Noise Pruning (Executed Automatically in Full/AutoRun Mode)'
+                    : '### Comprehensive Multi-Agent Domain Audit & Noise Pruning (Presented to User for Choice)'
+                const scanLoopCondition =
+                    entryLimit === 0
+                        ? 'for (let _page = 0; _page < 200; _page++)'
+                        : `while (processed < ${String(entryLimit)})`
+
+                const standardsAndScripts = buildOptimizeStandardsAndScripts(
+                    targetProject,
+                    scanLoopCondition
+                )
+                const workflowOptions = buildOptimizeWorkflowOptionsSection(
+                    targetDimension,
+                    optionCHeading,
+                    targetProject,
+                    limitDisplay
+                )
+
+                return {
+                    messages: [
+                        {
+                            role: 'user',
+                            content: {
+                                type: 'text',
+                                text: `# Journal Optimizer & Verification Workflow
+
+You are executing the guided workflow for intelligently pruning, verifying, consolidating, and auditing the global memory journal database. Every operation uses soft-deletion or archival as a safe first pass.
+
+**Requested Mode**: \`${mode}\` | **Quality Dimension**: \`${targetDimension}\`${targetProjectText}${limitText}${autoRunText}
+
+${statsSnippet}
+
+## Unverified Recent Entries
+${markUntrustedContent(unverifiedSnippet)}
+
+${executionBanner}
+
+---
+
+${standardsAndScripts}
+
+---
+
+${workflowOptions}
 `,
                             },
                         },

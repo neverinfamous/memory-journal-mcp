@@ -11,7 +11,12 @@ import { wrapWithMetrics } from '../../../observability/index.js'
 import { enforceAccessBoundary } from '../../../auth/validation.js'
 import { globalSubscriptionManager } from '../../../server/subscription-manager.js'
 import { getGitHubIntegration } from '../../../github/github-integration/index.js'
-import { cwdMatchesRegistryPath, findCanonicalRegistryKey, resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
+import {
+    cwdMatchesRegistryPath,
+    findCanonicalRegistryKey,
+    loadProjectRegistryFromConfig,
+    resolveProjectContext,
+} from '../../../utils/workspace-resolver.js'
 import { logger } from '../../../utils/logger.js'
 import type { ExecuteCodeInput } from './payload-synthesizer.js'
 
@@ -356,21 +361,23 @@ export async function resolveCodeModeSessionContext(
         const resolved = path.resolve(p)
         return process.platform === 'win32' ? resolved.toLowerCase() : resolved
     }
+    const effectiveRegistry =
+        context.config?.projectRegistry ?? loadProjectRegistryFromConfig()
     let projectId: number | string | undefined = input.project_number
     if ((projectId === undefined || projectId === null) && input.workspace_id !== undefined && input.workspace_id !== 'default') {
-        const wsEntry = lookupRegistryEntry(context.config?.projectRegistry, input.workspace_id)
+        const wsEntry = lookupRegistryEntry(effectiveRegistry, input.workspace_id)
         if (wsEntry?.project_number !== undefined) projectId = wsEntry.project_number
     }
     if ((projectId === undefined || projectId === null) && input.repo !== undefined && input.repo !== '') {
-        const repoEntry = lookupRegistryEntry(context.config?.projectRegistry, input.repo)
+        const repoEntry = lookupRegistryEntry(effectiveRegistry, input.repo)
         if (repoEntry?.project_number !== undefined) projectId = repoEntry.project_number
     }
     if (projectId === undefined || projectId === null) {
         if (context.config?.defaultProjectNumber !== undefined) {
             projectId = context.config.defaultProjectNumber
-        } else if (context.config?.projectRegistry !== undefined) {
+        } else if (effectiveRegistry !== undefined) {
             const cwd = process.cwd()
-            for (const entry of Object.values(context.config.projectRegistry)) {
+            for (const entry of Object.values(effectiveRegistry)) {
                 if (
                     entry.path !== undefined &&
                     entry.path !== '' &&
@@ -385,7 +392,7 @@ export async function resolveCodeModeSessionContext(
     }
 
     if (typeof projectId === 'string') {
-        const entry = lookupRegistryEntry(context.config?.projectRegistry, projectId)
+        const entry = lookupRegistryEntry(effectiveRegistry, projectId)
         if (entry?.project_number !== undefined) projectId = entry.project_number
     }
     if (typeof projectId === 'string') {
@@ -393,8 +400,20 @@ export async function resolveCodeModeSessionContext(
         if (!Number.isNaN(parsed) && Number.isFinite(parsed)) projectId = parsed
     }
 
-    const numericProjectId = typeof projectId === 'number' ? projectId : undefined
-    const workspaceId = resolveWorkspaceId(input.workspace_id, numericProjectId, context.config)
+    let numericProjectId = typeof projectId === 'number' ? projectId : undefined
+    const resolvedContext = resolveProjectContext(
+        {
+            workspace_id: input.workspace_id,
+            project_number: numericProjectId,
+            content: input.code,
+        },
+        context.config
+    )
+    const workspaceId = resolvedContext.workspaceId
+    if (numericProjectId === undefined && resolvedContext.projectNumber !== undefined) {
+        numericProjectId = resolvedContext.projectNumber
+        projectId = resolvedContext.projectNumber
+    }
 
     let sessionContext = context
     const repo = input.repo
@@ -409,7 +428,7 @@ export async function resolveCodeModeSessionContext(
                 },
             }
         }
-        const registryEntry = lookupRegistryEntry(context.config?.projectRegistry, repo)
+        const registryEntry = lookupRegistryEntry(effectiveRegistry, repo)
         if (registryEntry?.path !== undefined && registryEntry.path !== '') {
             try {
                 const injectedGithub = getGitHubIntegration(registryEntry.path, undefined, process.env['GITHUB_TOKEN'])
@@ -428,8 +447,8 @@ export async function resolveCodeModeSessionContext(
         }
     }
 
-    if (projectId !== undefined && sessionContext.config?.projectRegistry !== undefined) {
-        const registryEntry = Object.values(sessionContext.config.projectRegistry).find((r) => r.project_number === projectId)
+    if (projectId !== undefined && effectiveRegistry !== undefined) {
+        const registryEntry = Object.values(effectiveRegistry).find((r) => r.project_number === projectId)
         if (registryEntry?.path !== undefined && registryEntry.path !== '') {
             const isSameAsCwd =
                 normalizeComparablePath(registryEntry.path) === normalizeComparablePath(process.cwd())

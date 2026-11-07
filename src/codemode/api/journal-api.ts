@@ -92,9 +92,10 @@ export class JournalApi {
             }
         }
 
-        const origCreateEntryFn = this.core['createEntry']
-        if (origCreateEntryFn) {
-            const wrappedCreateEntryFn = async (...args: unknown[]): Promise<unknown> => {
+        const wrapEntryCreator = (
+            origFn: (...args: unknown[]) => Promise<unknown>
+        ): ((...args: unknown[]) => Promise<unknown>) => {
+            return async (...args: unknown[]): Promise<unknown> => {
                 const params = args[0]
                 if (isRecord(params)) {
                     if (typeof params['project_number'] === 'string') {
@@ -103,15 +104,21 @@ export class JournalApi {
                         if (!Number.isNaN(num) && cleaned !== '') {
                             params['project_number'] = num
                         } else {
-                            if (params['workspace_id'] === undefined) {
+                            if (
+                                params['workspace_id'] === undefined ||
+                                params['workspace_id'] === '' ||
+                                params['workspace_id'] === 'default'
+                            ) {
                                 params['workspace_id'] = cleaned
                             }
                             delete params['project_number']
                         }
                     }
+                    const currentWs = params['workspace_id'] ?? params['workspaceId']
                     if (
-                        params['workspace_id'] === undefined &&
-                        params['workspaceId'] === undefined
+                        currentWs === undefined ||
+                        currentWs === '' ||
+                        currentWs === 'default'
                     ) {
                         const projNum =
                             typeof params['project_number'] === 'number'
@@ -125,7 +132,11 @@ export class JournalApi {
                             : undefined
 
                         const resolved = resolveProjectContext({
-                            ...(typeof params['workspace_id'] === 'string' ? { workspace_id: params['workspace_id'] } : {}),
+                            ...(typeof params['workspace_id'] === 'string' &&
+                            params['workspace_id'] !== 'default' &&
+                            params['workspace_id'] !== ''
+                                ? { workspace_id: params['workspace_id'] }
+                                : {}),
                             ...(projNum !== undefined ? { project_number: projNum } : {}),
                             ...(contentStr !== undefined ? { content: contentStr } : {}),
                             ...(tagsArr !== undefined ? { tags: tagsArr } : {}),
@@ -139,13 +150,27 @@ export class JournalApi {
                         }
                     }
                 }
-                return await origCreateEntryFn(...args)
+                return await origFn(...args)
             }
+        }
 
+        const origCreateEntryFn = this.core['createEntry']
+        if (origCreateEntryFn) {
+            const wrappedCreateEntryFn = wrapEntryCreator(origCreateEntryFn)
             for (const key of Object.keys(this.core)) {
                 if (this.core[key] === origCreateEntryFn) this.core[key] = wrappedCreateEntryFn
             }
             this.core['upsert'] = wrappedCreateEntryFn
+        }
+
+        const origTeamCreateEntryFn = this.team['teamCreateEntry']
+        if (origTeamCreateEntryFn) {
+            const wrappedTeamCreateEntryFn = wrapEntryCreator(origTeamCreateEntryFn)
+            for (const key of Object.keys(this.team)) {
+                if (this.team[key] === origTeamCreateEntryFn) {
+                    this.team[key] = wrappedTeamCreateEntryFn
+                }
+            }
         }
 
         for (const adminKey of ['deleteEntry', 'updateEntry', 'mergeTags', 'restoreEntry', 'searchAuditLog'] as const) {

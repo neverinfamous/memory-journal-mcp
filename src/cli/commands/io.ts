@@ -1,11 +1,5 @@
 import type { Command } from 'commander'
 import { type z } from 'zod'
-import { DatabaseAdapterFactory } from '../../database/adapter-factory.js'
-import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
-import { ConfigResolver } from '../../utils/config-resolver.js'
-import { buildServerOptions } from '../server-options-builder.js'
-import type { ServerOptionsSchema } from '../schemas.js'
-import type { ServerOptions } from '../../server/mcp-server/types.js'
 import type { JournalEntry } from '../../types/index.js'
 import { 
     ioExportJsonOptionsSchema,
@@ -13,8 +7,10 @@ import {
     ioImportMarkdownOptionsSchema,
     ioImportExternalOptionsSchema 
 } from '../schemas.js'
+import { getCliCommandDb as getDb } from './db-helper.js'
 import { exportEntriesToMarkdown, importMarkdownEntries, processImportBatch, convertFile, type ParsedFile } from '../../markdown/index.js'
 import { VectorSearchManager } from '../../vector/vector-search-manager/index.js'
+import { resolveWorkspaceFromFilePath, resolveWorkspaceId } from '../../utils/workspace-resolver.js'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import { constants } from 'node:fs'
@@ -23,36 +19,6 @@ export const exportJsonSchema = ioExportJsonOptionsSchema
 export const exportMarkdownSchema = ioExportMarkdownOptionsSchema
 export const importMarkdownSchema = ioImportMarkdownOptionsSchema
 export const importExternalSchema = ioImportExternalOptionsSchema
-
-async function getDb(options: ServerOptionsSchema & { team?: boolean }, command: Command): Promise<{ db: IDatabaseAdapter, serverOptions: ServerOptions }> {
-    let resolver: ConfigResolver
-    const configPath = (options.config) ?? process.env['MEMORY_JOURNAL_CONFIG']
-    const configErrors: string[] = []
-
-    try {
-        resolver = new ConfigResolver(command, options, configPath)
-    } catch (err) {
-        configErrors.push(err instanceof Error ? err.message : String(err))
-        resolver = new ConfigResolver(command, {}, undefined)
-    }
-
-    const { serverOptions, teamDb } = buildServerOptions(resolver, options, command, configErrors)
-    
-    if (configErrors.length > 0) {
-        process.stderr.write('Startup Configuration Errors:\n')
-        configErrors.forEach((err) => process.stderr.write(` - ${err}\n`))
-        process.exit(1)
-    }
-
-    if (options.team && !teamDb) {
-        process.stderr.write('Error: --team requires a configured team database (--team-db or TEAM_DB_PATH).\n')
-        process.exit(1)
-    }
-    const dbPath = options.team && teamDb ? teamDb : serverOptions.dbPath
-    const db = await DatabaseAdapterFactory.create(dbPath, serverOptions)
-    await db.initialize()
-    return { db, serverOptions }
-}
 
 export async function exportJsonAction(options: z.infer<typeof exportJsonSchema>, command: Command): Promise<void> {
     const { db, serverOptions } = await getDb(options, command)
@@ -131,9 +97,28 @@ export async function importMarkdownAction(options: z.infer<typeof importMarkdow
             throw new Error('--dir is required for markdown import')
         }
 
+        const dirMatch = resolveWorkspaceFromFilePath(options.dir, serverOptions)
+        const projectNumber =
+            options.defaultProject ?? dirMatch?.projectNumber ?? serverOptions.defaultProjectNumber
+        const workspaceId = resolveWorkspaceId(
+            options.workspace ?? dirMatch?.workspaceId,
+            projectNumber,
+            serverOptions
+        )
+
         const vectorManager = new VectorSearchManager(db, { modelName: serverOptions.embeddingModel })
 
-        const result = await importMarkdownEntries(options.dir, db, { limit: 100000 }, vectorManager, [path.resolve(options.dir)])
+        const result = await importMarkdownEntries(
+            options.dir,
+            db,
+            {
+                limit: 100000,
+                workspaceId,
+                ...(projectNumber !== undefined ? { project_number: projectNumber } : {}),
+            },
+            vectorManager,
+            [path.resolve(options.dir)]
+        )
         
         process.stdout.write(JSON.stringify(result, null, 2) + '\n')
     } catch (e) {
@@ -153,6 +138,15 @@ export async function importExternalAction(options: z.infer<typeof importExterna
         if (!options.format) {
             throw new Error('--format is required for external import')
         }
+
+        const dirMatch = resolveWorkspaceFromFilePath(options.dir, serverOptions)
+        const projectNumber =
+            options.defaultProject ?? dirMatch?.projectNumber ?? serverOptions.defaultProjectNumber
+        const workspaceId = resolveWorkspaceId(
+            options.workspace ?? dirMatch?.workspaceId,
+            projectNumber,
+            serverOptions
+        )
 
         const vectorManager = new VectorSearchManager(db, { modelName: serverOptions.embeddingModel })
 
@@ -196,7 +190,15 @@ export async function importExternalAction(options: z.infer<typeof importExterna
             }
         }
 
-        const result = await processImportBatch(parsedFiles, db, {}, vectorManager)
+        const result = await processImportBatch(
+            parsedFiles,
+            db,
+            {
+                workspaceId,
+                ...(projectNumber !== undefined ? { project_number: projectNumber } : {}),
+            },
+            vectorManager
+        )
         
         if (errors.length > 0) {
             result.success = false

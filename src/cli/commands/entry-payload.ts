@@ -25,6 +25,8 @@ export interface EntryPayload {
     tags: string[] | undefined
     projectNumber: number | undefined
     workspaceId: string | undefined
+    hasExplicitProject?: boolean
+    hasExplicitWorkspace?: boolean
     trustScore: number | undefined
     impactScore: number | undefined
     validationStatus: 'passed' | 'failed' | 'none' | undefined
@@ -368,6 +370,9 @@ export function buildEntryPayload(
         tags,
         projectNumber,
         workspaceId,
+        hasExplicitProject: explicitProjectNum !== undefined,
+        hasExplicitWorkspace:
+            typeof explicitWorkspaceId === 'string' && explicitWorkspaceId.trim().length > 0,
         trustScore,
         impactScore,
         validationStatus,

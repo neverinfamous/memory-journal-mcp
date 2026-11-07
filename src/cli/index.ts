@@ -396,6 +396,7 @@ withGroup(importMarkdownCmd, 'Command Options', (cmd: Command) => {
 })
 addCoreOptions(importMarkdownCmd)
 addDatabaseOptions(importMarkdownCmd)
+addWorkspaceScopeOptions(importMarkdownCmd)
 addOutputOptions(importMarkdownCmd)
 importMarkdownCmd.action(withValidation(importMarkdownSchema, importMarkdownAction))
 
@@ -407,6 +408,7 @@ withGroup(importExternalCmd, 'Command Options', (cmd: Command) => {
 })
 addCoreOptions(importExternalCmd)
 addDatabaseOptions(importExternalCmd)
+addWorkspaceScopeOptions(importExternalCmd)
 addOutputOptions(importExternalCmd)
 importExternalCmd.action(withValidation(importExternalSchema, importExternalAction))
 
