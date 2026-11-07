@@ -19,6 +19,74 @@ export interface ResolvedContext {
 /** Placeholder registry keys that must never be matched as real projects by keyword. */
 const SENTINEL_PROJECT_KEYS: readonly string[] = ['default', 'test']
 
+let activeSessionWorkspaceId: string | undefined = undefined
+let activeSessionProjectNumber: number | undefined = undefined
+const runtimeSessionProjects = new WeakMap<
+    object,
+    { workspaceId?: string; projectNumber?: number }
+>()
+
+/**
+ * Record the active session workspace and project number (e.g. when a project briefing
+ * or agent context resource is read).
+ */
+export function setActiveSessionProject(
+    workspaceId: string | undefined,
+    projectNumber?: number | null,
+    runtime?: object | null
+): void {
+    const validWs =
+        workspaceId !== undefined &&
+        workspaceId !== '' &&
+        workspaceId !== 'default' &&
+        workspaceId !== '*'
+            ? workspaceId
+            : undefined
+    const validProj =
+        typeof projectNumber === 'number' && !Number.isNaN(projectNumber) && projectNumber > 0
+            ? projectNumber
+            : undefined
+
+    if (runtime !== undefined && runtime !== null) {
+        const prev = runtimeSessionProjects.get(runtime)
+        runtimeSessionProjects.set(runtime, {
+            ...(validWs !== undefined
+                ? { workspaceId: validWs }
+                : prev?.workspaceId !== undefined
+                  ? { workspaceId: prev.workspaceId }
+                  : {}),
+            ...(validProj !== undefined
+                ? { projectNumber: validProj }
+                : prev?.projectNumber !== undefined
+                  ? { projectNumber: prev.projectNumber }
+                  : {}),
+        })
+    }
+    if (validWs !== undefined) activeSessionWorkspaceId = validWs
+    if (validProj !== undefined) activeSessionProjectNumber = validProj
+}
+
+export function getActiveSessionProject(
+    runtime?: object | null
+): { workspaceId?: string; projectNumber?: number } {
+    const isTest =
+        (process.env['NODE_ENV'] === 'test' || process.env['VITEST'] === 'true') &&
+        process.env['VITEST_SESSION_PROJECT'] !== 'true'
+    const runtimeEntry =
+        runtime !== undefined && runtime !== null ? runtimeSessionProjects.get(runtime) : undefined
+    const ws = runtimeEntry?.workspaceId ?? (isTest ? undefined : activeSessionWorkspaceId)
+    const proj = runtimeEntry?.projectNumber ?? (isTest ? undefined : activeSessionProjectNumber)
+    return {
+        ...(ws !== undefined ? { workspaceId: ws } : {}),
+        ...(proj !== undefined ? { projectNumber: proj } : {}),
+    }
+}
+
+export function clearActiveSessionProject(): void {
+    activeSessionWorkspaceId = undefined
+    activeSessionProjectNumber = undefined
+}
+
 function getConfigPath(): string {
     if (process.env['MEMORY_JOURNAL_CONFIG']) {
         return path.resolve(process.env['MEMORY_JOURNAL_CONFIG'])
@@ -208,7 +276,10 @@ export function resolveProjectContext(
         let projNum =
             input.project_number ??
             (canonicalKey ? registry?.[canonicalKey]?.project_number : registry?.[wsId]?.project_number)
-        projNum ??= resolveProjectNumberFromPath(process.cwd(), registry) ?? config?.defaultProjectNumber
+        projNum ??=
+            resolveProjectNumberFromPath(process.cwd(), registry) ??
+            config?.defaultProjectNumber ??
+            getActiveSessionProject(config?.runtime).projectNumber
         return {
             workspaceId: wsId,
             projectNumber: projNum,
@@ -241,16 +312,22 @@ export function resolveProjectContext(
         }
     }
 
-    // 5. CWD / Config Fallback
+    // 5. CWD / Config / Active Session Fallback
+    const sessionCtx = getActiveSessionProject(config?.runtime)
     const cwdProjNum =
-        resolveProjectNumberFromPath(process.cwd(), registry) ?? config?.defaultProjectNumber
+        resolveProjectNumberFromPath(process.cwd(), registry) ??
+        config?.defaultProjectNumber ??
+        sessionCtx.projectNumber
     let resolvedWsId = sanitizedWorkspaceId
     if ((resolvedWsId === undefined || resolvedWsId === 'default') && cwdProjNum !== undefined) {
         resolvedWsId = findWorkspaceByProjectNumber(cwdProjNum, registry) ?? resolvedWsId
     }
+    if (resolvedWsId === undefined || resolvedWsId === 'default') {
+        resolvedWsId = config?.defaultWorkspaceId ?? sessionCtx.workspaceId ?? resolvedWsId
+    }
 
     return {
-        workspaceId: resolvedWsId ?? config?.defaultWorkspaceId ?? 'default',
+        workspaceId: resolvedWsId ?? 'default',
         projectNumber: cwdProjNum,
     }
 }

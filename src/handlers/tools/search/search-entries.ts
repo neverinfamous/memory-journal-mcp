@@ -128,7 +128,18 @@ export function getSearchEntriesTool(context: ToolContext): ToolDefinition[] {
                             if (!vectorManager) {
                                 // Fallback to FTS when vector search is unavailable
                                 const result = ftsSearch(input.query, db, teamDb, searchOptions)
-                                return { ...result, searchMode: 'fts (fallback)' }
+                                return {
+                                    ...result,
+                                    success: true,
+                                    entries: result.entries,
+                                    count: result.entries.length,
+                                    searchMode: 'fts (fallback)',
+                                    degraded: true,
+                                    facets,
+                                    ...(result.nextCursor !== undefined
+                                        ? { next_cursor: result.nextCursor }
+                                        : {}),
+                                }
                             }
                             const semanticPage = await runSemanticSearch({
                                 context,

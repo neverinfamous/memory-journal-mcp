@@ -13,7 +13,13 @@ import { getAuthContext } from '../../../auth/auth-context.js'
 import { resolveIssueUrl } from '../../../utils/github-helpers.js'
 import { autoIndexEntry } from '../../../utils/vector-index-helpers.js'
 import { resolveWorkspaceId, resolveProjectContext } from '../../../utils/workspace-resolver.js'
-import { TEAM_DB_ERROR_RESPONSE, batchFetchAuthors, fetchAuthor } from './helpers.js'
+import {
+    TEAM_DB_ERROR_RESPONSE,
+    batchFetchAuthors,
+    fetchAuthor,
+    triggerTeamNotifications,
+    resolveTeamProjectNumber,
+} from './helpers.js'
 import {
     TeamCreateEntrySchema,
     TeamCreateEntrySchemaMcp,
@@ -176,15 +182,7 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
 
                     await autoIndexEntry(context.teamVectorManager, teamDb, entry.id, wsId)
 
-                    if (context.config?.subscriptionManager) {
-                        void context.config.subscriptionManager
-                            .notifyResourceUpdated('memory://team/recent')
-                            .catch(() => undefined)
-                        // Broad stroke briefing update trigger
-                        void context.config.subscriptionManager
-                            .notifyResourceUpdated('memory://briefing')
-                            .catch(() => undefined)
-                    }
+                    triggerTeamNotifications(context)
 
                     return {
                         success: true,
@@ -219,9 +217,20 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
 
                     const { entry_id, include_relationships, project_number, workspace_id } =
                         TeamGetEntryByIdSchema.parse(params)
-                    const wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
+                    let wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
                     const projectNumber = project_number
-                    const entry = teamDb.getEntryById(entry_id, wsId)
+                    let entry = teamDb.getEntryById(entry_id, wsId)
+                    if (
+                        !entry &&
+                        workspace_id === undefined &&
+                        project_number === undefined &&
+                        wsId === 'default'
+                    ) {
+                        entry = teamDb.getEntryById(entry_id, '*')
+                        if (entry?.workspaceId !== undefined) {
+                            wsId = entry.workspaceId
+                        }
+                    }
 
                     if (!entry) {
                         return {
@@ -287,7 +296,17 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                     const { limit, cursor, sort_by, project_number, workspace_id, include_archived } =
                         TeamGetRecentSchema.parse(params)
                     const wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
-                    const projectNumber = project_number
+                    const projectNumber = resolveTeamProjectNumber(context, wsId, project_number)
+                    if (projectNumber == null) {
+                        return {
+                            success: false,
+                            error: 'Missing project_number. Cross-tenant queries without project_number are not allowed.',
+                            code: 'VALIDATION_ERROR',
+                            category: 'validation',
+                            suggestion: 'Specify a project_number or workspace_id.',
+                            recoverable: true,
+                        }
+                    }
                     const result = teamDb.searchEntries('', {
                         limit,
                         cursor,
@@ -342,14 +361,11 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                             workspace_id: z.string().optional(),
                         })
                         .parse(params ?? {})
-                    const wsId =
-                        input.workspace_id !== undefined || input.project_number !== undefined
-                            ? resolveWorkspaceId(
-                                  input.workspace_id,
-                                  input.project_number,
-                                  context.config
-                              )
-                            : undefined
+                    const wsId = resolveWorkspaceId(
+                        input.workspace_id,
+                        input.project_number,
+                        context.config
+                    )
                     const rawTags = teamDb.listTags(wsId)
                     const tags = rawTags.map((t) => ({ name: t.name, count: t.usageCount }))
                     return { success: true, tags, count: tags.length }

@@ -5,11 +5,26 @@
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
-import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
+import { resolveProjectContext } from '../../../utils/workspace-resolver.js'
 import { relaxedNumber } from '../schemas.js'
 import { CreateGitHubIssueWithEntryOutputSchema } from './schemas.js'
 import { resolveOwnerRepo, resolveProjectNumber } from './helpers.js'
 import { addIssueToProject, type IssueProjectResult } from './create-issue-project.js'
+
+const CreateIssueHandlerInputSchema = z.object({
+    title: z.string().min(1),
+    body: z.string().optional(),
+    labels: z.array(z.string()).optional(),
+    assignees: z.array(z.string()).optional(),
+    milestone_number: z.number().optional(),
+    project_number: z.number().optional(),
+    workspace_id: z.string().optional(),
+    initial_status: z.string().optional(),
+    owner: z.string().optional(),
+    repo: z.string().optional(),
+    entry_content: z.string().optional(),
+    tags: z.array(z.string()).optional(),
+})
 
 export function getCreateGitHubIssueTool(context: ToolContext): ToolDefinition {
     const { db } = context
@@ -30,6 +45,10 @@ export function getCreateGitHubIssueTool(context: ToolContext): ToolDefinition {
             project_number: relaxedNumber()
                 .optional()
                 .describe('GitHub Project number to add this issue to'),
+            workspace_id: z
+                .string()
+                .optional()
+                .describe('Workspace identifier (defaults to current project)'),
             initial_status: z
                 .string()
                 .optional()
@@ -59,26 +78,12 @@ export function getCreateGitHubIssueTool(context: ToolContext): ToolDefinition {
         },
         handler: async (params: unknown) => {
             try {
-                const input = z
-                    .object({
-                        title: z.string().min(1),
-                        body: z.string().optional(),
-                        labels: z.array(z.string()).optional(),
-                        assignees: z.array(z.string()).optional(),
-                        milestone_number: z.number().optional(),
-                        project_number: z.number().optional(),
-                        initial_status: z.string().optional(),
-                        owner: z.string().optional(),
-                        repo: z.string().optional(),
-                        entry_content: z.string().optional(),
-                        tags: z.array(z.string()).optional(),
-                    })
-                    .parse(params)
+                const input = CreateIssueHandlerInputSchema.parse(params)
 
                 const resolved = await resolveOwnerRepo(context, input)
                 if ('error' in resolved) return resolved.response
 
-                const projectNumber = resolveProjectNumber(
+                const entryProjectNumber = resolveProjectNumber(
                     context,
                     resolved.repo,
                     input.project_number
@@ -88,18 +93,27 @@ export function getCreateGitHubIssueTool(context: ToolContext): ToolDefinition {
                 const entryContent =
                     input.entry_content ??
                     `[PENDING] Creating GitHub issue: ${input.title}\n` +
-                        (projectNumber !== undefined ? `Project: #${projectNumber}\n` : '') +
+                        (entryProjectNumber !== undefined ? `Project: #${entryProjectNumber}\n` : '') +
                         (input.body
                             ? `\nDescription: ${input.body.slice(0, 200)}${input.body.length > 200 ? '...' : ''}`
                             : '')
 
-                const workspaceId = resolveWorkspaceId(
-                    resolved.repo,
-                    projectNumber,
-                    context.config,
-                    entryContent,
-                    input.tags
+                const resolvedCtx = resolveProjectContext(
+                    {
+                        workspace_id:
+                            input.workspace_id ??
+                            (input.repo !== undefined ? resolved.repo : undefined),
+                        project_number: entryProjectNumber,
+                        content: entryContent,
+                        tags: input.tags,
+                    },
+                    context.config
                 )
+                const workspaceId =
+                    resolvedCtx.workspaceId === 'default' && resolved.repo
+                        ? resolved.repo
+                        : resolvedCtx.workspaceId
+                const projectNumber = resolvedCtx.projectNumber ?? entryProjectNumber
 
                 const entry = db.createEntry({
                     content: entryContent,

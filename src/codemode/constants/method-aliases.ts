@@ -46,7 +46,7 @@ export const METHOD_ALIASES: Record<string, Record<string, string>> = {
         ...mapToTarget(
             [
                 'create', 'add', 'newEntry', 'addEntry', 'insert', 'write', 'log', 'record', 'note',
-                'save', 'execute', 'executeCode', 'execute_code', 'quick', 'createEntryMinimal',
+                'save', 'quick', 'createEntryMinimal',
                 'appendInsight', 'writeQuery', 'updateMemory', 'update_memory', 'createMemory',
                 'create_memory', 'addMemory', 'add_memory', 'saveMemory', 'save_memory',
                 'recordMemory', 'record_memory', 'setMemory', 'set_memory', 'updateJournal',
@@ -59,14 +59,14 @@ export const METHOD_ALIASES: Record<string, Record<string, string>> = {
             'createEntry'
         ),
         ...mapToTarget(
-            ['get', 'getEntry', 'fetch', 'read', 'get_entry_by_id', 'viewFile', 'view_file', 'readFile', 'read_file'],
+            ['get', 'getEntry', 'fetch', 'read', 'get_entry_by_id', 'view_file', 'viewFile'],
             'getEntryById'
         ),
         ...mapToTarget(
             [
                 'recent', 'getRecent', 'list', 'entries', 'all', 'latest', 'get_recent_entries',
                 'select', 'sql', 'executeSql', 'execSql', 'execute_sql', 'exec_sql',
-                'fetchEntries', 'getAll', 'listDir', 'list_dir',
+                'fetchEntries', 'getAll', 'list_dir', 'listDir',
             ],
             'getRecentEntries'
         ),

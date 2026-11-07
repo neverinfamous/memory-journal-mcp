@@ -9,6 +9,7 @@ import type { ServerOptionsSchema } from '../schemas.js'
 import type { ServerOptions } from '../../server/mcp-server/types.js'
 import { VectorSearchManager } from '../../vector/vector-search-manager/index.js'
 import { hybridSearch } from '../../handlers/tools/search/hybrid.js'
+import { resolveWorkspaceId } from '../../utils/workspace-resolver.js'
 
 export const searchSchema = searchOptionsSchema
 
@@ -54,7 +55,11 @@ export async function searchAction(query: string | undefined, options: z.infer<t
     try {
         const mode = options.mode || 'auto'
         const limit = options.limit ?? 100
-        const workspaceId = options.workspace ?? serverOptions.defaultWorkspaceId
+        const workspaceId = resolveWorkspaceId(
+            options.workspace,
+            options.defaultProject ?? serverOptions.defaultProjectNumber,
+            serverOptions
+        )
         const workspaceFilter = workspaceId !== undefined ? { workspaceId } : {}
         let result: unknown
 

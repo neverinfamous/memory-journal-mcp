@@ -103,13 +103,16 @@ function notifySubscriptionsIfMutated(tool: ToolDefinition, result: unknown, ses
     if (!isMutation) return
 
     const subMgr = sessionContext.config?.subscriptionManager ?? globalSubscriptionManager
-    void subMgr.notifyResourceUpdated('memory://briefing')
-    void subMgr.notifyResourceUpdated('memory://recent')
-    void subMgr.notifyResourceUpdated('memory://statistics')
+    const logSubErr = (err: unknown): void => {
+        logger.debug('Subscription notification failed', { error: err })
+    }
+    void subMgr.notifyResourceUpdated('memory://briefing').catch(logSubErr)
+    void subMgr.notifyResourceUpdated('memory://recent').catch(logSubErr)
+    void subMgr.notifyResourceUpdated('memory://statistics').catch(logSubErr)
 
     if (tool.group === 'team') {
-        void subMgr.notifyResourceUpdated('memory://team/recent')
-        void subMgr.notifyResourceUpdated('memory://team/statistics')
+        void subMgr.notifyResourceUpdated('memory://team/recent').catch(logSubErr)
+        void subMgr.notifyResourceUpdated('memory://team/statistics').catch(logSubErr)
     }
 }
 

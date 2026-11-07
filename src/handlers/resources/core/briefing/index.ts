@@ -13,6 +13,11 @@ import {
     ASSISTANT_FOCUSED,
 } from '../../../../utils/resource-annotations.js'
 import { getGitHubIntegration } from '../../../../github/github-integration/index.js'
+import {
+    findCanonicalRegistryKey,
+    loadProjectRegistryFromConfig,
+    setActiveSessionProject,
+} from '../../../../utils/workspace-resolver.js'
 import { DEFAULT_BRIEFING_CONFIG, resourceWorkspace } from '../../shared.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from '../../shared.js'
 import { buildGitHubSection } from './github-section.js'
@@ -64,22 +69,31 @@ export async function buildBriefingData(
     let activeGithub = context.github
     let activeProjectNumber = config.defaultProjectNumber
     let activeRepoPath: string | undefined
-    let activeWorkspaceId: string | undefined = resourceWorkspace({ briefingConfig: config })
+    let activeWorkspaceId: string | undefined = resourceWorkspace({
+        briefingConfig: config,
+        ...(context.runtime !== undefined ? { runtime: context.runtime } : {}),
+    })
 
     if (targetRepo) {
+        const registry = config.projectRegistry ?? loadProjectRegistryFromConfig()
         let resolvedRepo = targetRepo
-        if (!config.projectRegistry?.[resolvedRepo]) {
-            resolvedRepo = targetRepo.split('/').pop() || targetRepo
+        if (!registry?.[resolvedRepo]) {
+            resolvedRepo = targetRepo.split(/[\\/]/).pop() ?? targetRepo
+        }
+        const canonicalKey = findCanonicalRegistryKey(resolvedRepo, registry)
+        if (canonicalKey !== undefined) {
+            resolvedRepo = canonicalKey
         }
         activeWorkspaceId = resolvedRepo
 
-        const registryEntry = config.projectRegistry?.[resolvedRepo]
+        const registryEntry = registry?.[resolvedRepo]
         if (registryEntry) {
             const repoPath = registryEntry.path
             activeRepoPath = repoPath
             activeGithub = getGitHubIntegration(repoPath, context.runtime)
             activeProjectNumber = registryEntry.project_number ?? undefined
         }
+        setActiveSessionProject(activeWorkspaceId, activeProjectNumber, context.runtime)
     }
 
     // Build all sections

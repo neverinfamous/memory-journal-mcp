@@ -129,12 +129,13 @@ export function createAuthMiddleware(
         const identityHash = createHash('sha256').update(hashInput).digest('hex').substring(0, 12)
         const identity = `bearer-${identityHash}`
 
-        ;(req as unknown as { auth?: { sub?: string; subject?: string; scopes?: string[] } }).auth =
-            {
+        Object.assign(req, {
+            auth: {
                 sub: identity,
                 subject: identity,
                 scopes: defaultScopes,
-            }
+            },
+        })
         next()
     }
 }

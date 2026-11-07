@@ -50,11 +50,28 @@ function loadConfig(): Record<string, unknown> {
     return readProjectRegistryFile(getRegistryConfigPath()).config
 }
 
-function saveConfig(config: Record<string, unknown>): void {
+function saveConfig(config: Record<string, unknown>, context?: ToolContext): void {
     const configPath = getRegistryConfigPath()
     fs.mkdirSync(path.dirname(configPath), { recursive: true })
     fs.writeFileSync(configPath, JSON.stringify(config, null, 4), 'utf-8')
     process.env['PROJECT_REGISTRY'] = JSON.stringify(config['projectRegistry'])
+    if (context?.config !== undefined && typeof config['projectRegistry'] === 'object' && config['projectRegistry'] !== null) {
+        const reg = config['projectRegistry'] as Record<string, { path: string; project_number?: number }>
+        context.config.projectRegistry = reg
+        if (context.config.briefingConfig !== undefined) {
+            context.config.briefingConfig.projectRegistry = reg
+        }
+    }
+}
+
+function coerceRegistryProjectNumber(raw: number | string | undefined): number | undefined {
+    const num =
+        typeof raw === 'number'
+            ? raw
+            : typeof raw === 'string' && raw.trim() !== ''
+              ? Number(raw)
+              : undefined
+    return num !== undefined && !Number.isNaN(num) ? num : undefined
 }
 
 export function getProjectTools(context: ToolContext): ToolDefinition[] {
@@ -90,19 +107,13 @@ export function getProjectTools(context: ToolContext): ToolDefinition[] {
                         ? (registry[parsed.name] ?? { path: parsed.absolute_path })
                         : { path: parsed.absolute_path }
                     projectRef.path = parsed.absolute_path
-                    const coercedNum =
-                        typeof parsed.project_number === 'number'
-                            ? parsed.project_number
-                            : typeof parsed.project_number === 'string' &&
-                                parsed.project_number.trim() !== ''
-                              ? Number(parsed.project_number)
-                              : undefined
-                    if (coercedNum !== undefined && !Number.isNaN(coercedNum)) {
+                    const coercedNum = coerceRegistryProjectNumber(parsed.project_number)
+                    if (coercedNum !== undefined) {
                         projectRef.project_number = coercedNum
                     }
                     registry[parsed.name] = projectRef
                     
-                    saveConfig(config)
+                    saveConfig(config, context)
                     
                     const message = `Project '${parsed.name}' registered successfully.`
                     return Promise.resolve({ success: true, message, project: { name: parsed.name, ...registry[parsed.name] } })
@@ -142,30 +153,20 @@ export function getProjectTools(context: ToolContext): ToolDefinition[] {
                     }
                     
                     const project = registry[parsed.name] ?? { path: '' }
-                    
-                    if (parsed.absolute_path) {
-                        project.path = parsed.absolute_path
-                    }
-                    const coercedUpdateNum =
-                        typeof parsed.project_number === 'number'
-                            ? parsed.project_number
-                            : typeof parsed.project_number === 'string' &&
-                                parsed.project_number.trim() !== ''
-                              ? Number(parsed.project_number)
-                              : undefined
-                    if (coercedUpdateNum !== undefined && !Number.isNaN(coercedUpdateNum)) {
-                        project.project_number = coercedUpdateNum
-                    }
+                    if (parsed.absolute_path) project.path = parsed.absolute_path
+                    const coercedUpdateNum = coerceRegistryProjectNumber(parsed.project_number)
+                    if (coercedUpdateNum !== undefined) project.project_number = coercedUpdateNum
                     
                     const targetName = parsed.new_name ?? parsed.name
                     if (parsed.new_name && parsed.new_name !== parsed.name) {
-                        const rest = Object.fromEntries(Object.entries(registry).filter(([key]) => key !== parsed.name))
-                        config['projectRegistry'] = rest
+                        config['projectRegistry'] = Object.fromEntries(
+                            Object.entries(registry).filter(([key]) => key !== parsed.name)
+                        )
                     }
                     
                     const updatedRegistry = config['projectRegistry'] as Record<string, { path: string, project_number?: number }>
                     updatedRegistry[targetName] = project
-                    saveConfig(config)
+                    saveConfig(config, context)
                     
                     return Promise.resolve({ success: true, message: `Project '${targetName}' updated.`, project: { name: targetName, ...updatedRegistry[targetName] } })
                 } catch (err) {
@@ -202,7 +203,7 @@ export function getProjectTools(context: ToolContext): ToolDefinition[] {
                     
                     const rest = Object.fromEntries(Object.entries(registry).filter(([key]) => key !== parsed.name))
                     config['projectRegistry'] = rest
-                    saveConfig(config)
+                    saveConfig(config, context)
                     
                     return Promise.resolve({ success: true, message: `Project '${parsed.name}' deleted.` })
                 } catch (err) {

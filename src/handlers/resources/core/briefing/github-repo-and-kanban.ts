@@ -296,6 +296,23 @@ export async function fetchInsights(
     }
 }
 
+function aggregateCopilotReviewSummaries(
+    summaries: readonly { state: string; commentCount: number }[]
+): { reviewed: number; approved: number; changesRequested: number; totalComments: number } {
+    let reviewed = 0
+    let approved = 0
+    let changesRequested = 0
+    let totalComments = 0
+    for (const summary of summaries) {
+        if (summary.state === 'none') continue
+        reviewed++
+        if (summary.state === 'approved') approved++
+        else if (summary.state === 'changes_requested') changesRequested++
+        totalComments += summary.commentCount
+    }
+    return { reviewed, approved, changesRequested, totalComments }
+}
+
 export async function fetchCopilotReviews(
     github: GitHubIntegration,
     owner: string,
@@ -305,26 +322,11 @@ export async function fetchCopilotReviews(
 > {
     try {
         const recentPrs = await github.getPullRequests(owner, repo, 'all', 10)
-        let reviewed = 0
-        let approved = 0
-        let changesRequested = 0
-        let totalComments = 0
-
         const summaries = await Promise.all(
             recentPrs.slice(0, 5).map((pr) => github.getCopilotReviewSummary(owner, repo, pr.number))
         )
-        for (const summary of summaries) {
-            if (summary.state !== 'none') {
-                reviewed++
-                if (summary.state === 'approved') approved++
-                else if (summary.state === 'changes_requested') changesRequested++
-                totalComments += summary.commentCount
-            }
-        }
-
-        return reviewed > 0
-            ? { reviews: { reviewed, approved, changesRequested, totalComments } }
-            : undefined
+        const aggregated = aggregateCopilotReviewSummaries(summaries)
+        return aggregated.reviewed > 0 ? { reviews: aggregated } : undefined
     } catch (error) {
         logger.debug('Failed to fetch Copilot reviews', {
             module: 'BRIEFING',

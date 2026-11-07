@@ -8,7 +8,8 @@ import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import type { IDatabaseAdapter } from '../../../database/core/interfaces.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
-import { TEAM_DB_ERROR_RESPONSE, triggerTeamNotifications } from './helpers.js'
+import { resolveWriteWorkspaceId } from '../write-workspace.js'
+import { TEAM_DB_ERROR_RESPONSE, triggerTeamNotifications, resolveTeamProjectNumber } from './helpers.js'
 import {
     TeamLinkEntriesSchema,
     TeamLinkEntriesSchemaMcp,
@@ -131,7 +132,7 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                         project_number,
                         workspace_id,
                     } = TeamLinkEntriesSchema.parse(params)
-                    const wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
+                    let wsId = resolveWriteWorkspaceId(workspace_id, project_number, context.config)
 
                     // Guard: self-referential links are not meaningful
                     if (from_entry_id === to_entry_id) {
@@ -147,7 +148,34 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                     }
 
                     // Verify both entries exist and belong to the project
-                    const fromEntry = teamDb.getEntryById(from_entry_id, wsId)
+                    let fromEntry = teamDb.getEntryById(from_entry_id, wsId)
+                    if (
+                        !fromEntry &&
+                        workspace_id === undefined &&
+                        project_number === undefined &&
+                        wsId === 'default'
+                    ) {
+                        fromEntry = teamDb.getEntryById(from_entry_id, '*')
+                        if (fromEntry?.workspaceId !== undefined) {
+                            wsId = fromEntry.workspaceId
+                        }
+                    }
+                    const projectNumber =
+                        project_number ??
+                        fromEntry?.projectNumber ??
+                        resolveTeamProjectNumber(context, wsId, project_number)
+                    if (projectNumber === undefined || projectNumber === null) {
+                        return {
+                            success: false,
+                            error: 'Missing project_number. You MUST provide a valid project_number (e.g., 1) or configure DEFAULT_PROJECT_NUMBER on the server.',
+                            code: 'VALIDATION_ERROR',
+                            category: 'validation',
+                            suggestion:
+                                'Specify the project_number in your tool call, or ensure DEFAULT_PROJECT_NUMBER is configured on the server.',
+                            recoverable: true,
+                        }
+                    }
+                    wsId = resolveWriteWorkspaceId(workspace_id ?? wsId, projectNumber, context.config)
                     if (!fromEntry) {
                         return {
                             success: false,
@@ -158,10 +186,10 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                             recoverable: true,
                         }
                     }
-                    if (project_number !== undefined && fromEntry.projectNumber !== undefined && fromEntry.projectNumber !== project_number) {
+                    if (fromEntry.projectNumber !== undefined && fromEntry.projectNumber !== projectNumber) {
                         return {
                             success: false,
-                            error: `Team entry ${String(from_entry_id)} does not belong to project ${project_number}`,
+                            error: `Team entry ${String(from_entry_id)} does not belong to project ${String(projectNumber)}`,
                             code: 'RESOURCE_NOT_FOUND',
                             category: 'resource',
                             suggestion: 'Verify the team entry ID and project number, and try again',
@@ -179,10 +207,10 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                             recoverable: true,
                         }
                     }
-                    if (project_number !== undefined && toEntry.projectNumber !== undefined && toEntry.projectNumber !== project_number) {
+                    if (toEntry.projectNumber !== undefined && toEntry.projectNumber !== projectNumber) {
                         return {
                             success: false,
-                            error: `Team entry ${String(to_entry_id)} does not belong to project ${project_number}`,
+                            error: `Team entry ${String(to_entry_id)} does not belong to project ${String(projectNumber)}`,
                             code: 'RESOURCE_NOT_FOUND',
                             category: 'resource',
                             suggestion: 'Verify the team entry ID and project number, and try again',
@@ -249,14 +277,26 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                         return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
-                    const { entry_id, tag, depth, workspace_id } = TeamVisualizeRelationshipsSchema.parse(params)
-                    const wsId = resolveWorkspaceId(workspace_id, undefined, context.config)
+                    const { entry_id, tag, depth, project_number, workspace_id } =
+                        TeamVisualizeRelationshipsSchema.parse(params)
+                    let wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
 
                     // Collect entry IDs to visualize
                     let entryIds: number[] = []
 
                     if (entry_id !== undefined) {
-                        const fromEntry = teamDb.getEntryById(entry_id, wsId)
+                        let fromEntry = teamDb.getEntryById(entry_id, wsId)
+                        if (
+                            !fromEntry &&
+                            workspace_id === undefined &&
+                            project_number === undefined &&
+                            wsId === 'default'
+                        ) {
+                            fromEntry = teamDb.getEntryById(entry_id, '*')
+                            if (fromEntry?.workspaceId !== undefined) {
+                                wsId = fromEntry.workspaceId
+                            }
+                        }
                         if (!fromEntry) {
                             return {
                                 success: false,

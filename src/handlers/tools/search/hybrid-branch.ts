@@ -33,7 +33,16 @@ export async function runHybridSearch(params: HybridBranchParams): Promise<Recor
     if (!vectorManager) {
         // Fallback to FTS when vector search is unavailable
         const result = ftsSearch(input.query, db, teamDb, searchOptions)
-        return { ...result, searchMode: 'fts (fallback)' }
+        return {
+            ...result,
+            success: true,
+            entries: result.entries,
+            count: result.entries.length,
+            searchMode: 'fts (fallback)',
+            degraded: true,
+            facets,
+            ...(result.nextCursor !== undefined ? { next_cursor: result.nextCursor } : {}),
+        }
     }
     const hybridOffset = cursorOffset(input.cursor)
     const { entries: hybridEntries, degraded } = await hybridSearch(query, db, vectorManager, {

@@ -3,6 +3,7 @@ import { type z } from 'zod'
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import { visualizeOptionsSchema } from '../schemas.js'
 import { getCliCommandDb as getDb } from './db-helper.js'
+import { resolveWorkspaceId } from '../../utils/workspace-resolver.js'
 import * as fs from 'node:fs/promises'
 
 export const visualizeSchema = visualizeOptionsSchema
@@ -69,7 +70,11 @@ function renderMermaid(graph: RelationshipGraph): string {
 export async function visualizeAction(options: z.infer<typeof visualizeSchema>, command: Command): Promise<void> {
     const { db, serverOptions } = await getDb(options, command)
     try {
-        const workspaceId = options.workspace ?? serverOptions.defaultWorkspaceId
+        const workspaceId = resolveWorkspaceId(
+            options.workspace,
+            options.defaultProject ?? serverOptions.defaultProjectNumber,
+            serverOptions
+        )
         const graph = db.visualizeRelationships({
             depth: 3,
             limit: 200,

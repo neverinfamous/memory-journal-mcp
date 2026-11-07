@@ -263,7 +263,14 @@ export async function handleGrepSearch(
         const searchTool = searchTools.find((t: ToolDefinition) => t.name === 'search_entries')
         if (searchTool !== undefined) {
             try {
-                const searchResult = await Promise.resolve(searchTool.handler({ query }))
+                const wsArg = pickFirstString(rawArgs, ['workspace_id', 'workspaceId'])
+                const projArg = rawArgs['project_number'] ?? rawArgs['projectNumber']
+                const searchPayload: Record<string, unknown> = {
+                    query,
+                    ...(wsArg !== undefined ? { workspace_id: wsArg } : {}),
+                    ...(projArg !== undefined ? { project_number: projArg } : {}),
+                }
+                const searchResult = await Promise.resolve(searchTool.handler(searchPayload))
                 if (
                     typeof searchResult === 'object' &&
                     searchResult !== null &&

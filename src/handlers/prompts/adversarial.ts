@@ -125,6 +125,8 @@ Present the refined plan for approval with the final score, all disposition deci
 
 ## Prior Context
 
+**Journal Attribution Rule**: ${priorWorkspace !== 'default' ? `When logging plan-review entries or session summaries for this topic, always pass \`workspace_id: "${priorWorkspace}"\` so entries route to their proper project instead of \`default\`.` : 'Never log plan-review entries or session summaries to workspace `default`. Resolve and pass the target project\'s `workspace_id` and `project_number` explicitly.'}
+
 ### Prior Finalized Plans
 ${markUntrustedContent(formatPriorEntries(priorPlans, 5))}
 
@@ -137,7 +139,7 @@ Review prior entries for recurring findings and reusable patterns before draftin
         },
         {
             name: 'adversarial-audit-code-quality',
-            description: 'Multi-pass adversarial code quality audit (dead code, type safety, silent failures, workspace isolation, complexity, file size). Optional parameters: target, copilot',
+            description: 'Multi-pass adversarial code quality audit (dead code, type safety, silent failures, workspace isolation, complexity, file size). Optional parameters: target, copilot, workspace_id',
             icons: [ICON_PROMPT],
             arguments: AUDIT_ARGUMENTS,
             handler: (args: Record<string, string> | undefined, db: IDatabaseAdapter, _teamDb?: IDatabaseAdapter, _github?: unknown, briefingConfig?: BriefingConfig) => {
@@ -162,7 +164,7 @@ Review prior entries for recurring findings and reusable patterns before draftin
                         content: {
                             type: 'text',
                             text: `# Adversarial Code Quality Audit
-Prompt revision: 2026-11-06-audit-pass9.
+Prompt revision: 2026-11-06-audit-pass10.
 Target: ${target}
 
 If the target is '{target}', determine it from the user's request. If the user hasn't specified a target file or module, ask them for it now.
@@ -177,7 +179,7 @@ This prompt is shared by every project. Audit the repository the user named. Do 
    - **Mandatory Deep-Quality Detectors (Always Run)**:
      1. **Silent Catch Block Detector**: Find every \`catch\` in production source, including \`catch (e)\` and multiline catches. A catch is silent when its body does not log, rethrow, or return a structured error. Quote the body. Keep intentional best-effort fallbacks out of the table. Do not flag a catch that returns the project's structured handler error.
      2. **Cross-Platform Path Separator Assumption Detector**: Flag filesystem prefix checks (\`startsWith\` / \`endsWith\` on a resolved path without a separator boundary) and hardcoded \`'\\\\'\` or \`'/'\` used to test real filesystem paths. Prefer \`path.relative()\` and \`path.sep\`. Ignore URL, route, glob, and SQL slashes. Case-fold only on Windows.
-     3. **Cognitive Complexity & Nesting Hotspot Scan**: Flag functions over 80 lines or control-flow nesting deeper than 4. Measure function length and nesting with a script (for example the TypeScript compiler API via \`createRequire(path.join(process.cwd(), 'package.json'))('typescript')\` and \`path.join(process.cwd(), 'src')\` so execution proxies that rewrite inline \`bun -e\` scripts to a temp directory still resolve the target repo), not by eye, and report the measured line count. Do not file a split for a declarative registration factory whose body is a table of tool, prompt, resource, route, or schema definitions. Measure the inner handlers and real helpers. A file over 500 lines is still High when it is mostly declarations.
+     3. **Cognitive Complexity & Nesting Hotspot Scan**: Flag functions over 80 lines or control-flow nesting deeper than 4. Measure function length and nesting with a script (for example the TypeScript compiler API via \`createRequire(path.join(process.cwd(), 'package.json'))('typescript')\` and \`path.join(process.cwd(), 'src')\`, skipping \`vendor\` and \`third_party\` directories, so execution proxies that rewrite inline \`bun -e\` scripts to a temp directory still resolve the target repo), not by eye, and report the measured line count. Do not file a split for a declarative registration factory whose body is a table of tool, prompt, resource, route, or schema definitions. Measure the inner handlers and real helpers. A file over 500 lines is still High when it is mostly declarations.
      4. **Schema-to-Handler Parameter Drift Check**: Every input-schema property is consumed by the handler or rewritten by that project's own parameter-normalization layer. Do not assume a file named \`param-normalizer.ts\` exists. Quote the schema field and the handler or normalizer read. Ignore fields that are forwarded as a whole parsed object.
      5. **Uncleaned Timer / EventListener Detector**: Flag \`setInterval\`, retained \`setTimeout\` handles, \`fs.watch\`, and \`process\` / server / filesystem / worker \`.on(\` registrations that lack \`unref()\`, \`clear*\`, or \`close()\` / \`finally\` cleanup. An awaited one-shot delay is not a leak.
      6. **Type-safety Detector**: Flag \`any\`, \`as any\`, TypeScript postfix non-null assertions (\`value!\`), definite assignment (\`!:\`), and a double assertion (\`as unknown as\`) that reads a property the source type does not declare. Ignore GraphQL \`Type!\`, \`!=\`, and \`!condition\`. Leave SDK boundary casts, such as simple-git options, alone. Do not file every \`as\` on a database row.
@@ -233,7 +235,7 @@ ${priorAuditSection}`
         },
         {
             name: 'adversarial-audit-security',
-            description: 'Multi-pass adversarial security audit (threat modeling, attack surfaces) Optional parameters: target, copilot',
+            description: 'Multi-pass adversarial security audit (threat modeling, attack surfaces) Optional parameters: target, copilot, workspace_id',
             icons: [ICON_PROMPT],
             arguments: AUDIT_ARGUMENTS,
             handler: (args: Record<string, string> | undefined, db: IDatabaseAdapter, _teamDb?: IDatabaseAdapter, _github?: unknown, briefingConfig?: BriefingConfig) => {
@@ -287,7 +289,7 @@ ${priorAuditSection}`
         },
         {
             name: 'adversarial-audit-performance',
-            description: 'Multi-pass adversarial performance audit (profiling, stress-testing) Optional parameters: target, copilot',
+            description: 'Multi-pass adversarial performance audit (profiling, stress-testing) Optional parameters: target, copilot, workspace_id',
             icons: [ICON_PROMPT],
             arguments: AUDIT_ARGUMENTS,
             handler: (args: Record<string, string> | undefined, db: IDatabaseAdapter, _teamDb?: IDatabaseAdapter, _github?: unknown, briefingConfig?: BriefingConfig) => {
@@ -340,7 +342,7 @@ ${priorAuditSection}`
         },
         {
             name: 'adversarial-audit-seo',
-            description: 'Adversarial SEO audit (technical, semantic HTML, ARIA, structured data, Core Web Vitals) Optional parameters: target, copilot',
+            description: 'Adversarial SEO audit (technical, semantic HTML, ARIA, structured data, Core Web Vitals) Optional parameters: target, copilot, workspace_id',
             icons: [ICON_PROMPT],
             arguments: AUDIT_ARGUMENTS,
             handler: (args: Record<string, string> | undefined, db: IDatabaseAdapter, _teamDb?: IDatabaseAdapter, _github?: unknown, briefingConfig?: BriefingConfig) => {
@@ -388,7 +390,7 @@ ${priorAuditSection}`
         },
         {
             name: 'adversarial-audit-skill',
-            description: 'Multi-pass adversarial skill audit (research, evaluate triggers, stress-test) Optional parameters: target, copilot',
+            description: 'Multi-pass adversarial skill audit (research, evaluate triggers, stress-test) Optional parameters: target, copilot, workspace_id',
             icons: [ICON_PROMPT],
             arguments: AUDIT_ARGUMENTS,
             handler: (args: Record<string, string> | undefined, db: IDatabaseAdapter, _teamDb?: IDatabaseAdapter, _github?: unknown, briefingConfig?: BriefingConfig) => {
@@ -434,7 +436,7 @@ ${priorAuditSection}`
         },
         {
             name: 'adversarial-audit-workflow',
-            description: 'Multi-pass adversarial workflow audit (clarity, safety gates, loop prevention) Optional parameters: target, copilot',
+            description: 'Multi-pass adversarial workflow audit (clarity, safety gates, loop prevention) Optional parameters: target, copilot, workspace_id',
             icons: [ICON_PROMPT],
             arguments: AUDIT_ARGUMENTS,
             handler: (args: Record<string, string> | undefined, db: IDatabaseAdapter, _teamDb?: IDatabaseAdapter, _github?: unknown, briefingConfig?: BriefingConfig) => {

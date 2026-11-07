@@ -196,6 +196,7 @@ export const TeamRestoreEntrySchemaMcp = z.preprocess(
 export const TeamMergeTagsSchema = z.object({
     source_tag: z.string().min(1),
     target_tag: z.string().min(1),
+    project_number: StrictProjectNumberSchema.optional(),
     workspace_id: z.string().optional(),
 })
 
@@ -203,6 +204,7 @@ export const TeamMergeTagsSchema = z.object({
 export const TeamMergeTagsSchemaMcp = z.object({
     source_tag: z.string().optional(),
     target_tag: z.string().optional(),
+    project_number: relaxedNumber().optional(),
     workspace_id: z
         .string()
         .optional()

@@ -80,7 +80,7 @@ To complete this task, you MUST first read the following resource to obtain the 
 1. **Validation Pipeline**: Before completing, you MUST pass these gates sequentially:
    Gate 1: Lint + Typecheck → Gate 2: Build → Gate 3: Tests → Gate 4: E2E → Gate 5: Security (npm-audit, codeql, trivy, docker-scout, gitleaks)
 2. **Auto-fix**: Attempt to auto-fix errors (lint/types) up to 2 times.
-3. **Journaling**: Create a journal entry for EVERY significant action using tags: \`["commander", "triage", "gate_pass" | "gate_fail", "security"]\`.
+3. **Journaling**: Create a journal entry for EVERY significant action using tags: \`["commander", "triage", "gate_pass" | "gate_fail", "security"]\`, explicitly passing \`project_number: ${projectStr}\` and the repository's \`workspace_id\` so entries do not route to \`default\`.
 4. **HITL Checkpoints**: Pause and request human approval:
    - Before \`git push\`
    - On critical security findings
@@ -137,7 +137,7 @@ To complete this task, you MUST first read the following resources to obtain the
 1. **Validation Pipeline**: Before approving/merging, you MUST pass these gates sequentially:
    Gate 1: Lint + Typecheck → Gate 2: Build → Gate 3: Tests → Gate 4: E2E → Gate 5: Security
 2. **Auto-fix**: Attempt to auto-fix errors up to 2 times.
-3. **Journaling**: Create a journal entry for EVERY significant action using tags: \`["commander", "review", "gate_pass" | "gate_fail"]\`.
+3. **Journaling**: Create a journal entry for EVERY significant action using tags: \`["commander", "review", "gate_pass" | "gate_fail"]\`, explicitly passing \`pr_number: ${prStr}\`, \`project_number\`, and the repository's \`workspace_id\` so entries do not route to \`default\`.
 4. **HITL Checkpoints**: Pause and request human approval:
    - Before \`git push\` or merging
    - On critical security findings

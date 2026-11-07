@@ -95,7 +95,10 @@ export class AuthorizationServerDiscovery {
             parsedUrl.hostname = address
         } catch (err) {
             if (err instanceof ConfigurationError) throw err
-            throw new ConfigurationError(`Failed to resolve authorization server hostname: ${host}`)
+            const detail = err instanceof Error ? err.message : String(err)
+            throw new ConfigurationError(
+                `Failed to resolve authorization server hostname: ${host} (${detail})`
+            )
         }
 
         const resolvedAddress = parsedUrl.hostname

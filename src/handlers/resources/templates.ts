@@ -286,24 +286,20 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
 
                     for (const commit of enrichedCommits) {
                         for (const ref of commit.references) {
-                            if (ref.type === 'issue') {
-                                issues[ref.number] ??= {
-                                    number: ref.number,
-                                    title: ref.title,
-                                    state: ref.state,
-                                    milestone: ref.milestone,
-                                    commits: [],
-                                }
-                                const group = issues[ref.number]
-                                if (group) {
-                                    group.commits.push({
-                                        hash: commit.hash,
-                                        subject: commit.subject,
-                                        authorName: commit.authorName,
-                                        date: commit.date,
-                                    })
-                                }
+                            if (ref.type !== 'issue') continue
+                            issues[ref.number] ??= {
+                                number: ref.number,
+                                title: ref.title,
+                                state: ref.state,
+                                milestone: ref.milestone,
+                                commits: [],
                             }
+                            issues[ref.number]?.commits.push({
+                                hash: commit.hash,
+                                subject: commit.subject,
+                                authorName: commit.authorName,
+                                date: commit.date,
+                            })
                         }
                     }
                 }
@@ -355,23 +351,19 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
 
                     for (const commit of enrichedCommits) {
                         for (const ref of commit.references) {
-                            if (ref.type === 'pull_request') {
-                                prs[ref.number] ??= {
-                                    number: ref.number,
-                                    title: ref.title,
-                                    state: ref.state,
-                                    commits: [],
-                                }
-                                const group = prs[ref.number]
-                                if (group) {
-                                    group.commits.push({
-                                        hash: commit.hash,
-                                        subject: commit.subject,
-                                        authorName: commit.authorName,
-                                        date: commit.date,
-                                    })
-                                }
+                            if (ref.type !== 'pull_request') continue
+                            prs[ref.number] ??= {
+                                number: ref.number,
+                                title: ref.title,
+                                state: ref.state,
+                                commits: [],
                             }
+                            prs[ref.number]?.commits.push({
+                                hash: commit.hash,
+                                subject: commit.subject,
+                                authorName: commit.authorName,
+                                date: commit.date,
+                            })
                         }
                     }
                 }

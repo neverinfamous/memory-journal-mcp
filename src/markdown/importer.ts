@@ -103,6 +103,8 @@ export interface ParsedFile {
         tags?: string[]
         timestamp?: string
         significance?: string
+        workspace_id?: string
+        project_number?: number
         relationships?: { type: string; target_id: number }[]
     }
 }
@@ -234,20 +236,21 @@ function resolveImportedFileContext(
     options: ImportOptions
 ): { effectiveWsId: string | undefined; effectiveProjNum: number | undefined } {
     const { body, metadata } = file
-    const { project_number, workspaceId } = options
+    const rawWorkspaceId = options.workspaceId ?? metadata.workspace_id
+    const rawProjectNumber = options.project_number ?? metadata.project_number
     const resolved = resolveProjectContext({
-        workspace_id: workspaceId,
-        project_number,
+        workspace_id: rawWorkspaceId,
+        project_number: rawProjectNumber,
         content: body,
         tags: metadata.tags,
     })
     const effectiveWsId =
-        workspaceId !== undefined && workspaceId !== 'default'
-            ? workspaceId
+        rawWorkspaceId !== undefined && rawWorkspaceId !== 'default'
+            ? rawWorkspaceId
             : resolved.workspaceId !== 'default'
               ? resolved.workspaceId
-              : workspaceId
-    const effectiveProjNum = project_number ?? resolved.projectNumber
+              : rawWorkspaceId
+    const effectiveProjNum = rawProjectNumber ?? resolved.projectNumber
     return { effectiveWsId, effectiveProjNum }
 }
 

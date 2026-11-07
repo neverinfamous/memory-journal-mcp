@@ -227,7 +227,7 @@ export const TeamCreateEntrySchemaMcp = z.preprocess(
 export const TeamGetRecentSchema = z.object({
     limit: z.number().min(1).max(500).optional().default(10),
     cursor: z.string().optional().describe('Cursor for pagination'),
-    project_number: StrictProjectNumberSchema,
+    project_number: StrictProjectNumberSchema.optional(),
     workspace_id: z.string().optional(),
     sort_by: z.enum(['timestamp', 'importance']).optional().default('timestamp').describe(SORT_BY_DESC),
     include_archived: z.boolean().optional().default(false),
@@ -299,7 +299,7 @@ export const TeamSearchSchemaMcp = z.preprocess(
 export const TeamListDeletedEntriesSchema = z.object({
     limit: z.number().optional().default(50),
     offset: z.number().optional().default(0),
-    project_number: StrictProjectNumberSchema,
+    project_number: StrictProjectNumberSchema.optional(),
     workspace_id: z.string().optional(),
 })
 

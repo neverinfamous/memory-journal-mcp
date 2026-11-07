@@ -1,5 +1,6 @@
 import type { GitHubIntegration } from '../github-integration/index.js'
 import type { CommitReference } from './parser.js'
+import { logger } from '../../utils/logger.js'
 
 export type ReferenceType = 'issue' | 'pull_request' | 'unknown'
 
@@ -50,7 +51,14 @@ export async function resolveReferences(
             }
 
             return { ...ref, type: 'unknown' }
-        } catch {
+        } catch (err) {
+            logger.debug('Failed to resolve GitHub commit reference', {
+                module: 'CommitResolver',
+                owner,
+                repo,
+                number: ref.number,
+                error: err instanceof Error ? err.message : String(err),
+            })
             return { ...ref, type: 'unknown' }
         }
     })

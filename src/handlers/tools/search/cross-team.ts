@@ -34,6 +34,7 @@ export const CrossTeamSearchSchema = z.object({
         .optional()
         .describe('Specific team DB labels to search. Omit to search all configured DBs.'),
     tags: z.array(z.string()).optional(),
+    project_number: z.number().int().optional(),
     workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
     entry_type: z.enum(ENTRY_TYPES).optional(),
     start_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
@@ -56,6 +57,7 @@ export const CrossTeamSearchSchemaMcp = z
             .optional()
             .describe('Specific team DB labels to search. Omit to search all configured DBs.'),
         tags: z.array(z.string()).optional(),
+        project_number: relaxedNumber().optional(),
         workspace_id: z
             .string()
             .optional()
@@ -135,7 +137,7 @@ export async function handleCrossTeamSearch(
     context: ToolContext
 ): Promise<z.infer<typeof CrossTeamSearchOutputSchema>> {
     const { config } = context
-    const wsId = resolveWorkspaceId(args.workspace_id, undefined, config)
+    const wsId = resolveWorkspaceId(args.workspace_id, args.project_number, config)
 
     // 1. Resolve configured additional team DBs
     const additionalDbs: Record<string, string> = { ...(config?.additionalTeamDbs ?? {}) }

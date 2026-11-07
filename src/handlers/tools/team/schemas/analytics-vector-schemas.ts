@@ -13,6 +13,7 @@ import { TeamEntryOutputSchema } from './core-search-schemas.js'
 /** team_get_statistics — strict */
 export const TeamGetStatisticsSchema = z.object({
     group_by: z.enum(['day', 'week', 'month']).optional().default('week'),
+    project_number: StrictProjectNumberSchema.optional(),
     workspace_id: z
         .string()
         .optional()
@@ -24,6 +25,7 @@ export const TeamGetStatisticsSchema = z.object({
 /** team_get_statistics — relaxed */
 export const TeamGetStatisticsSchemaMcp = z.object({
     group_by: z.string().optional().default('week'),
+    project_number: relaxedNumber().optional(),
     workspace_id: z
         .string()
         .optional()
@@ -62,7 +64,7 @@ export const TeamLinkEntriesSchema = z.object({
             .default('references')
     ),
     description: z.string().optional(),
-    project_number: StrictProjectNumberSchema,
+    project_number: StrictProjectNumberSchema.optional(),
     workspace_id: z.string().optional(),
 })
 
@@ -109,6 +111,7 @@ export const TeamVisualizeRelationshipsSchema = z.object({
     entry_id: z.number().optional(),
     tag: z.string().optional(),
     depth: z.number().min(1).max(5).optional().default(2),
+    project_number: StrictProjectNumberSchema.optional(),
     workspace_id: z
         .string()
         .optional()
@@ -122,6 +125,7 @@ export const TeamVisualizeRelationshipsSchemaMcp = z.object({
     entry_id: relaxedNumber().optional(),
     tag: z.string().optional(),
     depth: relaxedNumber().optional().default(2),
+    project_number: relaxedNumber().optional(),
     workspace_id: z
         .string()
         .optional()
@@ -196,7 +200,7 @@ export const TeamSemanticSearchSchema = z.preprocess(
             .optional()
             .default(true)
             .describe('Include hint when no results found (default: true)'),
-        project_number: StrictProjectNumberSchema,
+        project_number: StrictProjectNumberSchema.optional(),
         workspace_id: z.string().optional(),
         issue_number: z.number().optional().describe('Filter results by GitHub issue number'),
         pr_number: z.number().optional().describe('Filter results by GitHub PR number'),
@@ -244,7 +248,7 @@ export const TeamSemanticSearchSchemaMcp = z.preprocess(
 /** team_add_to_vector_index — strict */
 export const TeamAddToVectorIndexSchema = z.object({
     entry_id: z.number(),
-    project_number: StrictProjectNumberSchema,
+    project_number: StrictProjectNumberSchema.optional(),
     workspace_id: z.string().optional(),
 })
 
@@ -319,6 +323,7 @@ export const TeamCrossProjectInsightsSchema = z.object({
         .describe('End date (YYYY-MM-DD)'),
     min_entries: z.number().optional().default(3).describe('Minimum entries to include project'),
     limit: z.number().max(500).optional().default(100).describe('Max projects to return'),
+    project_number: StrictProjectNumberSchema.optional(),
     workspace_id: z
         .string()
         .optional()
@@ -333,6 +338,7 @@ export const TeamCrossProjectInsightsSchemaMcp = z.object({
     end_date: z.string().optional().describe('End date (YYYY-MM-DD)'),
     min_entries: relaxedNumber().optional().describe('Minimum entries to include project'),
     limit: relaxedNumber().optional().describe('Max projects to return'),
+    project_number: relaxedNumber().optional(),
     workspace_id: z
         .string()
         .optional()
@@ -388,6 +394,7 @@ export const TeamCollaborationMatrixSchema = z.object({
         .default('month')
         .describe('Time granularity for the activity heatmap'),
     limit: z.number().max(100).optional().default(20).describe('Max authors to include'),
+    project_number: StrictProjectNumberSchema.optional(),
     workspace_id: z
         .string()
         .optional()
@@ -400,6 +407,7 @@ export const TeamCollaborationMatrixSchema = z.object({
 export const TeamCollaborationMatrixSchemaMcp = z.object({
     period: z.string().optional().default('month'),
     limit: relaxedNumber().optional().default(20),
+    project_number: relaxedNumber().optional(),
     workspace_id: z
         .string()
         .optional()

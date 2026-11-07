@@ -3,7 +3,11 @@ import type { ToolDefinition, ToolContext } from '../../types/index.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
 import { sendProgress } from '../../utils/progress-utils.js'
 import { ResourceNotFoundError, ValidationError } from '../../types/errors.js'
-import { resolveWorkspaceId } from '../../utils/workspace-resolver.js'
+import {
+    findCanonicalRegistryKey,
+    loadProjectRegistryFromConfig,
+    resolveWorkspaceId,
+} from '../../utils/workspace-resolver.js'
 import { evaluateAnchorStaleness, resolveGitWorkingDir } from './git-staleness.js'
 import { coerceNumber } from '../../utils/query-helpers.js'
 import { ErrorFieldsMixin } from './error-fields-mixin.js'
@@ -399,15 +403,6 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                         )
                     }
                     const wsId = resolveWorkspaceId(rawWs, rawProj, context.config)
-                    const registryPath = context.config?.projectRegistry?.[wsId]?.path
-                    const hasRegistryPath = registryPath !== undefined && registryPath.length > 0
-                    // Anchors of another workspace must not be checked (and persisted as stale)
-                    // against the server's own working directory, so a missing registry path is
-                    // only tolerated for the default workspace.
-                    const lacksRepositoryRoot =
-                        !hasRegistryPath &&
-                        wsId !== resolveWorkspaceId(undefined, undefined, context.config)
-                    const cwd = hasRegistryPath ? registryPath : process.cwd()
 
                     const targets: { id: number; timestamp: string }[] = []
                     if (resolvedEntryId !== undefined) {
@@ -420,6 +415,18 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                             targets.push({ id: r.id, timestamp: r.timestamp })
                         }
                     }
+
+                    const registry = context.config?.projectRegistry ?? loadProjectRegistryFromConfig()
+                    const canonicalWs = findCanonicalRegistryKey(wsId, registry) ?? wsId
+                    const registryPath = registry?.[canonicalWs]?.path
+                    const hasRegistryPath = registryPath !== undefined && registryPath.length > 0
+                    // Anchors of another workspace must not be checked (and persisted as stale)
+                    // against the server's own working directory, so a missing registry path is
+                    // only tolerated for the default workspace.
+                    const lacksRepositoryRoot =
+                        !hasRegistryPath &&
+                        wsId !== resolveWorkspaceId(undefined, undefined, context.config)
+                    const cwd = hasRegistryPath ? registryPath : process.cwd()
 
                     const workspaceRoot = cwd
 

@@ -25,10 +25,11 @@ function checkUnassignedEntries(): void {
         return
     }
 
+    const isStrict = process.argv.includes('--strict') || process.env['CI'] === 'true'
+    let rawKey = process.env['MJ_DB_ENCRYPTION_KEY'] || process.env['DB_ENCRYPTION_KEY']
     let db: Database.Database
     try {
         db = new Database(dbPath, { readonly: true })
-        let rawKey = process.env['MJ_DB_ENCRYPTION_KEY'] || process.env['DB_ENCRYPTION_KEY']
         
         // Fallback to IDE MCP configuration if running directly
         if (!rawKey) {
@@ -51,7 +52,12 @@ function checkUnassignedEntries(): void {
             }
         }
     } catch (err) {
-        console.log(`ℹ️ Could not open database at '${dbPath}' (encrypted or locked): ${err instanceof Error ? err.message : String(err)}. Skipping workspace isolation check.`)
+        const msg = err instanceof Error ? err.message : String(err)
+        if (isStrict || Boolean(rawKey)) {
+            console.error(`❌ Could not open database at '${dbPath}': ${msg}`)
+            process.exit(1)
+        }
+        console.log(`ℹ️ Could not open database at '${dbPath}' (encrypted or locked): ${msg}. Skipping workspace isolation check.`)
         return
     }
 
@@ -93,7 +99,12 @@ function checkUnassignedEntries(): void {
         db.close()
     } catch (err) {
         db.close()
-        console.log(`ℹ️ Unassigned entry check skipped (database encrypted or table unreadable): ${err instanceof Error ? err.message : String(err)}`)
+        const msg = err instanceof Error ? err.message : String(err)
+        if (isStrict || Boolean(rawKey)) {
+            console.error(`❌ Unassigned entry check failed on '${dbPath}': ${msg}`)
+            process.exit(1)
+        }
+        console.log(`ℹ️ Unassigned entry check skipped (database encrypted or table unreadable): ${msg}`)
     }
 }
 

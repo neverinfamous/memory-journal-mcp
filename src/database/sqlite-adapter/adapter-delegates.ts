@@ -168,8 +168,8 @@ export class AdapterDelegates {
         return this.tagsMgr.batchGetTagsForEntries(entryIds)
     }
 
-    listTags(): Tag[] {
-        return this.tagsMgr.listTags()
+    listTags(workspaceId?: string): Tag[] {
+        return this.tagsMgr.listTags(workspaceId)
     }
 
     mergeTags(

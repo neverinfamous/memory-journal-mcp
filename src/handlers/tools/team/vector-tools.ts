@@ -9,8 +9,9 @@ import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
+import { resolveWriteWorkspaceId } from '../write-workspace.js'
 import { logger } from '../../../utils/logger.js'
-import { TEAM_DB_ERROR_RESPONSE, batchFetchAuthors } from './helpers.js'
+import { TEAM_DB_ERROR_RESPONSE, batchFetchAuthors, resolveTeamProjectNumber } from './helpers.js'
 import {
     TeamSemanticSearchSchema,
     TeamSemanticSearchSchemaMcp,
@@ -61,6 +62,8 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
 
                     const input = TeamSemanticSearchSchema.parse(params)
                     const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
+                    const projectNumber =
+                        resolveTeamProjectNumber(context, wsId, input.project_number) ?? undefined
 
                     if (!input.query && input.entry_id === undefined) {
                         return {
@@ -96,7 +99,7 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                         input.entry_type !== undefined ||
                         input.start_date !== undefined ||
                         input.end_date !== undefined ||
-                        input.project_number !== undefined ||
+                        projectNumber !== undefined ||
                         input.issue_number !== undefined ||
                         input.pr_number !== undefined ||
                         input.workflow_run_id !== undefined
@@ -144,8 +147,8 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
 
                             // Enforce tenant isolation
                             if (
-                                input.project_number !== undefined &&
-                                entry.projectNumber !== input.project_number
+                                projectNumber !== undefined &&
+                                entry.projectNumber !== projectNumber
                             ) {
                                 return null
                             }
@@ -341,15 +344,40 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    const entry = teamDb.getEntryById(
-                        entry_id,
-                        resolveWorkspaceId(workspace_id, project_number, context.config)
-                    )
-                    if (!entry || entry.projectNumber !== project_number) {
+                    let wsId = resolveWriteWorkspaceId(workspace_id, project_number, context.config)
+                    let entry = teamDb.getEntryById(entry_id, wsId)
+                    if (
+                        !entry &&
+                        workspace_id === undefined &&
+                        project_number === undefined &&
+                        wsId === 'default'
+                    ) {
+                        entry = teamDb.getEntryById(entry_id, '*')
+                        if (entry?.workspaceId !== undefined) {
+                            wsId = entry.workspaceId
+                        }
+                    }
+                    const projectNumber =
+                        project_number ??
+                        entry?.projectNumber ??
+                        resolveTeamProjectNumber(context, wsId, project_number)
+                    if (projectNumber === undefined || projectNumber === null) {
                         return {
                             success: false,
                             entryId: entry_id,
-                            error: `Team entry ${String(entry_id)} not found or lacks permission for project ${project_number}`,
+                            error: 'Missing project_number. You MUST provide a valid project_number (e.g., 1) or configure DEFAULT_PROJECT_NUMBER on the server.',
+                            code: 'VALIDATION_ERROR',
+                            category: 'validation',
+                            suggestion:
+                                'Specify the project_number in your tool call, or ensure DEFAULT_PROJECT_NUMBER is configured on the server.',
+                            recoverable: true,
+                        }
+                    }
+                    if (entry?.projectNumber !== projectNumber) {
+                        return {
+                            success: false,
+                            entryId: entry_id,
+                            error: `Team entry ${String(entry_id)} not found or lacks permission for project ${String(projectNumber)}`,
                             code: 'RESOURCE_NOT_FOUND',
                             category: 'resource',
                             suggestion:

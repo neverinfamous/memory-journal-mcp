@@ -29,12 +29,6 @@ const serveCmd = program
 
 addServerOptions(serveCmd)
 serveCmd.action(withValidation(serveSchema, async (argsArray: string[], options: z.infer<typeof serveSchema>, cmd: Command) => {
-    // The action signature in serveSchema parses it correctly, but we need to intercept
-    // if there are args passed to serve which shouldn't happen.
-    // wait, serveAction doesn't take args array natively this way if not passed right. Let's just pass it to serveAction and handle inside there?
-    // Actually, serveAction expects (options, command). Let's see how withValidation works.
-    // If we just change to `serve [args...]`, let's leave it and intercept in the action.
-    // Wait, serveAction signature in index.ts is `serveAction`. Let's intercept here:
     if (Array.isArray(argsArray) && argsArray.length > 0 && typeof argsArray[0] === 'string') {
         process.stderr.write(`🛠️ AUTONOMOUS HEALING: The 'serve' command does not take arguments. You passed: ${argsArray.join(' ')}. If you are trying to search or run prompts, use the MCP client or the 'search' CLI command.\n`);
         process.exit(1);
@@ -188,6 +182,7 @@ addOutputOptions(pruneCmd)
 
 addCoreOptions(pruneCmd)
 addDatabaseOptions(pruneCmd)
+addWorkspaceScopeOptions(pruneCmd)
 addPruningOptions(pruneCmd)
 addAgentInstructions(pruneCmd,
     `
@@ -310,6 +305,9 @@ withGroup(updateEntryCmd, 'Command Options', (cmd: Command) => {
         .option('--validation-status <status>', 'Validation status (passed|none|failed)')
         .option('--validation_status <status>', 'Validation status (passed|none|failed) (alias)')
         .option('--validation <status>', 'Validation status (passed|none|failed) (alias)')
+        .option('-w, --workspace <id>', 'Workspace ID')
+        .option('--workspace-id <id>', 'Workspace ID (alias)')
+        .option('--workspace_id <id>', 'Workspace ID (alias)')
         .option('--session, --session-id <id>', 'Session ID')
         .option('--session_id <id>', 'Session ID (alias)')
         .option('--related-to <ids>', 'Comma-separated entry IDs to relate to')
@@ -377,6 +375,7 @@ withGroup(exportJsonCmd, 'Command Options', (cmd: Command) => {
 })
 addCoreOptions(exportJsonCmd)
 addDatabaseOptions(exportJsonCmd)
+addWorkspaceScopeOptions(exportJsonCmd)
 addOutputOptions(exportJsonCmd)
 exportJsonCmd.action(withValidation(exportJsonSchema, exportJsonAction))
 

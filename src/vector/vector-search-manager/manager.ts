@@ -34,7 +34,13 @@ function isModelCachedOnDisk(cacheDir: string, modelName: string): boolean {
         const onnxPath = path.join(cacheDir, ...modelParts, 'onnx', 'model.onnx')
         const configPath = path.join(cacheDir, ...modelParts, 'config.json')
         return fs.existsSync(onnxPath) && fs.existsSync(configPath)
-    } catch {
+    } catch (err) {
+        logger.debug('Failed to check whether embedding model is cached on disk', {
+            module: 'VectorSearch',
+            cacheDir,
+            modelName,
+            error: err instanceof Error ? err.message : String(err),
+        })
         return false
     }
 }

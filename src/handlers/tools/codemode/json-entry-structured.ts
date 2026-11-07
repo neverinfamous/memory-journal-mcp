@@ -67,6 +67,21 @@ function recoverNamedToolCall(target: Record<string, unknown>): string | null {
     return `return await (mj.${cleanTool} || mj.core.${cleanTool} || mj.${toolName})(${JSON.stringify(toolParams)});`
 }
 
+function readProjectNumber(target: Record<string, unknown>): number | undefined {
+    const raw = target['project_number'] ?? target['projectNumber']
+    if (typeof raw === 'number' && !Number.isNaN(raw)) return raw
+    if (typeof raw === 'string' && raw.trim() !== '') {
+        const num = Number(raw.trim().replace(/^p-?/i, ''))
+        if (!Number.isNaN(num)) return num
+    }
+    return undefined
+}
+
+function readWorkspaceId(target: Record<string, unknown>): string | undefined {
+    const raw = target['workspace_id'] ?? target['workspaceId'] ?? target['repo']
+    return typeof raw === 'string' && raw.trim() !== '' ? raw.trim() : undefined
+}
+
 function recoverSearchCall(target: Record<string, unknown>): string | null {
     const isSearchAction =
         target['action'] === 'search' || target['operation'] === 'search' || target['op'] === 'search'
@@ -85,7 +100,10 @@ function recoverSearchCall(target: Record<string, unknown>): string | null {
               : ''
     const searchParams: Record<string, unknown> = { query: queryStr }
     if (typeof target['limit'] === 'number') searchParams['limit'] = target['limit']
-    if (typeof target['project_number'] === 'number') searchParams['project_number'] = target['project_number']
+    const projNum = readProjectNumber(target)
+    if (projNum !== undefined) searchParams['project_number'] = projNum
+    const wsId = readWorkspaceId(target)
+    if (wsId !== undefined) searchParams['workspace_id'] = wsId
     return `return await mj.search.searchEntries(${JSON.stringify(searchParams)});`
 }
 
@@ -289,9 +307,12 @@ function copyOptionalEntryFields(
     target: Record<string, unknown>,
     entryParams: Record<string, unknown>,
 ): void {
-    if (typeof target['workspace_id'] === 'string') entryParams['workspace_id'] = target['workspace_id']
-    if (typeof target['session_id'] === 'string') entryParams['session_id'] = target['session_id']
-    if (typeof target['project_number'] === 'number') entryParams['project_number'] = target['project_number']
+    const wsId = readWorkspaceId(target)
+    if (wsId !== undefined) entryParams['workspace_id'] = wsId
+    const sessId = target['session_id'] ?? target['sessionId']
+    if (typeof sessId === 'string') entryParams['session_id'] = sessId
+    const projNum = readProjectNumber(target)
+    if (projNum !== undefined) entryParams['project_number'] = projNum
     if (typeof target['impact'] === 'number') entryParams['impact'] = target['impact']
     if (typeof target['trust'] === 'number') entryParams['trust'] = target['trust']
     if (typeof target['validation_status'] === 'string') {

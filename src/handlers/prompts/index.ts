@@ -81,7 +81,9 @@ export function getPrompt(
         throw new ResourceNotFoundError('Prompt', name)
     }
 
-    return Promise.resolve(prompt.handler(args, db, teamDb, github, briefingConfig))
+    return Promise.resolve().then(() =>
+        prompt.handler(args, db, teamDb, github, briefingConfig)
+    )
 }
 
 /**

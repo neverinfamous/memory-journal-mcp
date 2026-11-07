@@ -2,18 +2,24 @@ import type { Command } from 'commander'
 import { type z } from 'zod'
 import { analyticsOptionsSchema } from '../schemas.js'
 import { getCliCommandDb as getDb } from './db-helper.js'
+import { resolveWorkspaceId } from '../../utils/workspace-resolver.js'
 
 export const analyticsSchema = analyticsOptionsSchema
 
 export async function analyticsStatsAction(options: z.infer<typeof analyticsSchema>, command: Command): Promise<void> {
     const { db, serverOptions } = await getDb(options, command)
     try {
+        const workspaceId = resolveWorkspaceId(
+            options.workspace,
+            options.defaultProject ?? serverOptions.defaultProjectNumber,
+            serverOptions
+        )
         const result = db.getStatistics(
             undefined,
             undefined,
             undefined,
             undefined,
-            options.workspace ?? serverOptions.defaultWorkspaceId
+            workspaceId
         )
         process.stdout.write(JSON.stringify(result, null, 2) + '\n')
     } catch (e) {
@@ -27,7 +33,11 @@ export async function analyticsStatsAction(options: z.infer<typeof analyticsSche
 export async function analyticsInsightsAction(options: z.infer<typeof analyticsSchema>, command: Command): Promise<void> {
     const { db, serverOptions } = await getDb(options, command)
     try {
-        const workspaceId = options.workspace ?? serverOptions.defaultWorkspaceId
+        const workspaceId = resolveWorkspaceId(
+            options.workspace,
+            options.defaultProject ?? serverOptions.defaultProjectNumber,
+            serverOptions
+        )
         const result = db.getCrossProjectInsights({
             minEntries: 1,
             inactiveThresholdDays: 30,

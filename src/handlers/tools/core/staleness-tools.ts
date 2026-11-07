@@ -5,25 +5,34 @@ import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { ErrorFieldsMixin } from '../error-fields-mixin.js'
 import { relaxedNumber } from '../schemas.js'
 import { mcpLogger } from '../../../utils/mcp-logger.js'
-import { loadProjectRegistryFromConfig, resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
+import {
+    findCanonicalRegistryKey,
+    loadProjectRegistryFromConfig,
+} from '../../../utils/workspace-resolver.js'
+import { resolveWriteWorkspaceId } from '../write-workspace.js'
 
 const MAX_AUTO_ANCHORS = 25
 const SHA_REGEX = /^[0-9a-f]{7,40}$/i
+
+type AnchorStatus = 'pending' | 'valid' | 'stale' | 'invalidated' | 'unresolvable'
 
 /**
  * Resolves explicit anchors or auto-extracts modified file paths from `auto_context.commits`
  * so `checkEntryStaleness` has populated `entry_anchors` rows automatically.
  */
 export function resolveEntryAnchors(
-    explicitAnchors: { anchor_path: string; anchor_type: string }[] | undefined,
+    explicitAnchors:
+        | { anchor_path: string; anchor_type: string; status?: AnchorStatus }[]
+        | undefined,
     autoContext: string | undefined,
     workspaceId: string,
     context: ToolContext
-): { anchorPath: string; anchorType: string }[] | undefined {
+): { anchorPath: string; anchorType: string; status?: AnchorStatus }[] | undefined {
     if (explicitAnchors !== undefined && explicitAnchors.length > 0) {
         return explicitAnchors.map((a) => ({
             anchorPath: a.anchor_path,
             anchorType: a.anchor_type,
+            ...(a.status !== undefined ? { status: a.status } : {}),
         }))
     }
     if (autoContext === undefined || autoContext === '') {
@@ -42,8 +51,9 @@ export function resolveEntryAnchors(
         if (validShas.length === 0) return undefined
 
         const registry = context.config?.projectRegistry ?? loadProjectRegistryFromConfig()
+        const canonicalKey = findCanonicalRegistryKey(workspaceId, registry) ?? workspaceId
         const repoPath =
-            (registry !== undefined ? registry[workspaceId]?.path : undefined) ?? process.cwd()
+            (registry !== undefined ? registry[canonicalKey]?.path : undefined) ?? process.cwd()
 
         const output = execFileSync(
             'git',
@@ -125,7 +135,11 @@ export function getStalenessTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     const input = MarkAnchorsStaleSchema.parse(params)
-                    const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
+                    const wsId = resolveWriteWorkspaceId(
+                        input.workspace_id,
+                        input.project_number,
+                        context.config
+                    )
 
                     let updatedCount = 0
                     const missingIds: number[] = []

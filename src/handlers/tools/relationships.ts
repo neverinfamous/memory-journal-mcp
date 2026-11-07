@@ -14,6 +14,7 @@ import {
     StrictProjectNumberSchema,
 } from './schemas.js'
 import { resolveWorkspaceId } from '../../utils/workspace-resolver.js'
+import { resolveWriteWorkspaceId } from './write-workspace.js'
 import { ErrorFieldsMixin } from './error-fields-mixin.js'
 
 // ============================================================================
@@ -212,7 +213,11 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     const input = LinkEntriesSchema.parse(LinkEntriesSchemaMcp.parse(params))
-                    const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
+                    let wsId = resolveWriteWorkspaceId(
+                        input.workspace_id,
+                        input.project_number,
+                        context.config
+                    )
 
                     // Guard: self-referential links are not meaningful
                     if (input.from_entry_id === input.to_entry_id) {
@@ -227,7 +232,18 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                     // Guard: both entries must exist and not be soft-deleted.
                     // db.linkEntries only enforces FK against physical rows, so soft-deleted
                     // entries (deletedAt set) would pass the FK check silently.
-                    const fromEntry = db.getEntryById(input.from_entry_id, wsId)
+                    let fromEntry = db.getEntryById(input.from_entry_id, wsId)
+                    if (
+                        !fromEntry &&
+                        input.workspace_id === undefined &&
+                        input.project_number === undefined &&
+                        wsId === 'default'
+                    ) {
+                        fromEntry = db.getEntryById(input.from_entry_id, '*')
+                        if (fromEntry?.workspaceId !== undefined) {
+                            wsId = fromEntry.workspaceId
+                        }
+                    }
                     if (!fromEntry || fromEntry.deletedAt) {
                         return {
                             ...formatHandlerError(

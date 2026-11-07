@@ -7,6 +7,7 @@
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
+import { logger } from '../../../utils/logger.js'
 import { TEAM_DB_ERROR_RESPONSE } from './helpers.js'
 import {
     TeamGetStatisticsSchema,
@@ -51,15 +52,16 @@ export function getTeamAnalyticsTools(context: ToolContext): ToolDefinition[] {
                         return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
-                    const { group_by, workspace_id } = TeamGetStatisticsSchema.parse(params)
-                    const wsId = resolveWorkspaceId(workspace_id, undefined, context.config)
+                    const { group_by, project_number, workspace_id } = TeamGetStatisticsSchema.parse(params)
+                    const wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
                     const stats = teamDb.getStatistics(group_by, undefined, undefined, undefined, wsId)
 
                     let authors: { author: string; count: number }[] = []
                     try {
                         authors = teamDb.getAuthorStatistics(wsId)
-                    } catch {
+                    } catch (err) {
                         // Author column may not exist yet
+                        logger.debug('Failed to fetch team author statistics', { error: err })
                     }
 
                     return {
@@ -93,7 +95,7 @@ export function getTeamAnalyticsTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     const input = TeamCrossProjectInsightsSchema.parse(params)
-                    const wsId = resolveWorkspaceId(input.workspace_id, undefined, context.config)
+                    const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
 
                     const insights = teamDb.getCrossProjectInsights({
                         startDate: input.start_date,
@@ -122,18 +124,18 @@ export function getTeamAnalyticsTools(context: ToolContext): ToolDefinition[] {
 
                     const totalEntries = limitedProjects.reduce(
                         (sum: number, p: Record<string, unknown>) =>
-                            sum + (p['entry_count'] as number),
+                            sum + (typeof p['entry_count'] === 'number' ? p['entry_count'] : 0),
                         0
                     )
                     const distribution = limitedProjects
                         .slice(0, 5)
-                        .map((p: Record<string, unknown>) => ({
-                            project_number: p['project_number'] as number,
-                            percentage: (
-                                ((p['entry_count'] as number) / totalEntries) *
-                                100
-                            ).toFixed(1),
-                        }))
+                        .map((p: Record<string, unknown>) => {
+                            const entryCount = typeof p['entry_count'] === 'number' ? p['entry_count'] : 0
+                            return {
+                                project_number: typeof p['project_number'] === 'number' ? p['project_number'] : 0,
+                                percentage: (totalEntries > 0 ? (entryCount / totalEntries) * 100 : 0).toFixed(1),
+                            }
+                        })
 
                     return {
                         success: true,
@@ -169,8 +171,8 @@ export function getTeamAnalyticsTools(context: ToolContext): ToolDefinition[] {
                         return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
-                    const { period, limit, workspace_id } = TeamCollaborationMatrixSchema.parse(params)
-                    const workspaceId = resolveWorkspaceId(workspace_id, undefined, context.config)
+                    const { period, limit, project_number, workspace_id } = TeamCollaborationMatrixSchema.parse(params)
+                    const workspaceId = resolveWorkspaceId(workspace_id, project_number, context.config)
                     const matrix = workspaceId === undefined || workspaceId === '*'
                         ? teamDb.getTeamCollaborationMatrix({ period, limit })
                         : teamDb.getTeamCollaborationMatrix({ period, limit, workspaceId })

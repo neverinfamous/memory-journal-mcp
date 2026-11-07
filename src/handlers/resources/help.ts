@@ -13,6 +13,7 @@ import { ICON_BRIEFING } from '../../constants/icons.js'
 import { HELP_CONTENT } from '../../constants/server-instructions.js'
 import { ASSISTANT_FOCUSED } from '../../utils/resource-annotations.js'
 import { logger } from '../../utils/logger.js'
+import { getToolGroup } from '../../filtering/tool-filter.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from './shared.js'
 import type { getTools } from '../../handlers/tools/index.js'
 import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server'
@@ -417,37 +418,10 @@ async function getAllToolDefinitionsAsync(context: ResourceContext): Promise<Min
 }
 
 /**
- * Infer tool group from the tool name.
- * Exhaustive map of all 99 tools — team_ and mj_ prefixes handled first,
- * then explicit lookup for the remaining 54 tools.
+ * Infer tool group from the tool name via the canonical tool-filter lookup.
  */
 function inferGroupFromName(name: string): string {
     if (name.startsWith('team_')) return 'team'
     if (name.startsWith('mj_')) return 'codemode'
-
-    const groupMap: Record<string, string> = {
-        create_entry: 'core', create_entry_minimal: 'core', get_entry_by_id: 'core',
-        get_recent_entries: 'core', get_entry_history: 'core', test_simple: 'core', list_tags: 'core',
-        search_entries: 'search', search_by_date_range: 'search', semantic_search: 'search',
-        get_vector_index_stats: 'search', list_deleted_entries: 'search', cross_team_search: 'search',
-        get_statistics: 'analytics', get_cross_project_insights: 'analytics',
-        link_entries: 'relationships', visualize_relationships: 'relationships',
-        export_entries: 'io', export_markdown: 'io', import_markdown: 'io', import_external: 'io',
-        update_configuration: 'admin', update_entry: 'admin', delete_entry: 'admin',
-        restore_entry: 'admin', merge_tags: 'admin', rebuild_vector_index: 'admin',
-        add_to_vector_index: 'admin', batch_create_entries: 'admin', batch_update_entries: 'admin',
-        batch_delete_entries: 'admin', search_audit_log: 'admin',
-        backup_journal: 'backup', list_backups: 'backup', restore_backup: 'backup', cleanup_backups: 'backup',
-        get_github_issues: 'github', get_github_prs: 'github', get_github_issue: 'github',
-        get_github_pr: 'github', get_github_context: 'github', get_github_milestones: 'github',
-        get_github_milestone: 'github', create_github_milestone: 'github',
-        update_github_milestone: 'github', delete_github_milestone: 'github',
-        get_kanban_board: 'github', move_kanban_item: 'github', add_kanban_item: 'github',
-        delete_kanban_item: 'github', create_github_issue_with_entry: 'github',
-        close_github_issue_with_entry: 'github', get_repo_insights: 'github', get_copilot_reviews: 'github',
-        get_commit_history: 'git', search_commits: 'git', get_release_info: 'git',
-        get_unreleased_commits: 'git', analyze_commit_patterns: 'git',
-    }
-
-    return groupMap[name] ?? 'core'
+    return getToolGroup(name) ?? 'core'
 }

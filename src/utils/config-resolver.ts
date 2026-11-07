@@ -36,18 +36,16 @@ export class ConfigResolver {
             const content = fs.readFileSync(filePath, 'utf-8')
             for (const line of content.split('\n')) {
                 const trimmed = line.trim()
-                if (trimmed && !trimmed.startsWith('#')) {
-                    const idx = trimmed.indexOf('=')
-                    if (idx > 0) {
-                        const key = trimmed.slice(0, idx).trim()
-                        const val = trimmed.slice(idx + 1).trim()
-                        // Only set if not already in env OR if we loaded it ourselves from this run
-                        if (!(key in process.env) || loadedKeys.has(key)) {
-                            // Strip surrounding quotes
-                            process.env[key] = val.replace(/^["'](.*)["']$/, '$1')
-                            loadedKeys.add(key)
-                        }
-                    }
+                if (!trimmed || trimmed.startsWith('#')) continue
+                const idx = trimmed.indexOf('=')
+                if (idx <= 0) continue
+                const key = trimmed.slice(0, idx).trim()
+                const val = trimmed.slice(idx + 1).trim()
+                // Only set if not already in env OR if we loaded it ourselves from this run
+                if (!(key in process.env) || loadedKeys.has(key)) {
+                    // Strip surrounding quotes
+                    process.env[key] = val.replace(/^["'](.*)["']$/, '$1')
+                    loadedKeys.add(key)
                 }
             }
         }

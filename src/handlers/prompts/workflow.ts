@@ -3,7 +3,6 @@
  *
  * Prompts: find-related, prepare-standup, prepare-retro, weekly-digest,
  * analyze-period, goal-tracker, get-context-bundle, get-recent-entries, confirm-briefing,
- * analyze-period, goal-tracker, get-context-bundle, get-recent-entries, confirm-briefing,
  * session-summary, team-session-summary, create-entry, create-team-entry,
  * update-entry, update-team-entry
  */
@@ -14,40 +13,42 @@ import type { InternalPromptDef, PromptMessage } from './index.js'
 import { ConfigurationError } from '../../types/errors.js'
 import { markUntrustedContent } from '../../utils/security-utils.js'
 import { logger } from '../../utils/logger.js'
+import { loadProjectRegistryFromConfig } from '../../utils/workspace-resolver.js'
 import { resourceWorkspace, type BriefingConfig } from '../resources/shared.js'
 
-import { readFileSync, existsSync } from 'node:fs'
-import * as path from 'node:path'
-import * as os from 'node:os'
-
-function getProjectRegistryHint(): string {
+function getProjectRegistryHint(briefingConfig?: Partial<BriefingConfig>): string {
     try {
-        const configPath = path.resolve(os.homedir(), '.gemini', 'config', 'memory-journal.config.json')
-        if (existsSync(configPath)) {
-            const config = JSON.parse(readFileSync(configPath, 'utf-8')) as Record<string, unknown>
-            if ('projectRegistry' in config && config['projectRegistry'] != null) {
-                const projects = Object.entries(config['projectRegistry'] as Record<string, unknown>)
-                    .map(([name, data]: [string, unknown]) => `${name} (${String((data as Record<string, unknown>)['project_number'])})`)
-                    .join(', ')
-                if (projects) {
-                    return `\n**Projects:** ${projects} (Use these IDs instead of memory://agent-context/{repo} if applicable)\n`
-                }
+        const registry = briefingConfig?.projectRegistry ?? loadProjectRegistryFromConfig()
+        if (registry !== undefined) {
+            const projects = Object.entries(registry)
+                .map(([name, data]) => `${name} (${String(data.project_number)})`)
+                .join(', ')
+            if (projects) {
+                return `\n**Projects:** ${projects} (Use these IDs instead of memory://agent-context/{repo} if applicable)\n`
             }
         }
     } catch (err) {
-        logger.debug('Project registry hint unavailable', {
-            module: 'workflow-prompts',
-            error: String(err),
-        })
+        logger.debug('Project registry hint unavailable', { module: 'workflow-prompts', error: String(err) })
     }
     return ''
 }
 
+function buildExplicitAttributionArgs(
+    workspaceId: string,
+    briefingConfig?: Partial<BriefingConfig>
+): string {
+    if (workspaceId === 'default' || workspaceId === '') return ''
+    const registry = briefingConfig?.projectRegistry ?? loadProjectRegistryFromConfig()
+    const projNum = registry?.[workspaceId]?.project_number ?? briefingConfig?.defaultProjectNumber
+    return `, workspace_id: "${workspaceId}"${projNum !== undefined ? `, project_number: ${String(projNum)}` : ''}`
+}
+
 function generateSummaryPrompt(
-    db: IDatabaseAdapter, 
-    teamDb: IDatabaseAdapter | undefined, 
+    db: IDatabaseAdapter,
+    teamDb: IDatabaseAdapter | undefined,
     target: 'personal' | 'team',
-    workspaceId = 'default'
+    workspaceId = 'default',
+    briefingConfig?: Partial<BriefingConfig>
 ): { messages: PromptMessage[] } {
     if (target === 'team' && !teamDb) {
         throw new ConfigurationError('Team database not configured')
@@ -59,15 +60,12 @@ function generateSummaryPrompt(
     const entrySummary =
         recent.length > 0
             ? recent
-                  .map(
-                      (e) =>
-                          `- #${String(e.id)} (${e.entryType}) ${e.content.slice(0, 80)}${e.content.length > 80 ? '...' : ''}`
-                  )
+                  .map((e) => `- #${String(e.id)} (${e.entryType}) ${e.content.slice(0, 80)}${e.content.length > 80 ? '...' : ''}`)
                   .join('\n')
             : '- No entries yet'
 
-
-    const registryHint = getProjectRegistryHint()
+    const registryHint = getProjectRegistryHint(briefingConfig)
+    const attributionArgs = buildExplicitAttributionArgs(workspaceId, briefingConfig)
 
     return {
         messages: [
@@ -126,7 +124,7 @@ ${registryHint}- If you lose track of your project number, workspace, or agent I
 ${markUntrustedContent(entrySummary)}
 
 **Execution:**
-- **Option 1 (Code Mode / MCP Tool - Recommended):** Execute directly via \`mj.core.createEntry({ content: "...", entry_type: "retrospective", tags: ["session-summary"], auto_context: { commits: ["<sha>"] }${target === 'team' ? ', share_with_team: true' : ''} })\`.
+- **Option 1 (Code Mode / MCP Tool - Recommended):** Execute directly via \`mj.core.createEntry({ content: "...", entry_type: "retrospective", tags: ["session-summary"], auto_context: { commits: ["<sha>"] }${attributionArgs}${target === 'team' ? ', share_with_team: true' : ''} })\`.
 - **Option 2 (CLI Scratch File):** Write markdown file (with YAML frontmatter) to your scratch directory (e.g. \`<appDataDir>\\brain\\<conversation-id>\\scratch\\\`) then execute: \`memory-journal-mcp entry create ${target === 'team' ? '--team ' : ''}--file <scratch_dir>/session.md\``,
                 },
             },
@@ -134,8 +132,15 @@ ${markUntrustedContent(entrySummary)}
     }
 }
 
-function generateEntryPrompt(_db: IDatabaseAdapter, _teamDb: IDatabaseAdapter | undefined, target: 'personal' | 'team'): { messages: PromptMessage[] } {
-    const registryHint = getProjectRegistryHint()
+function generateEntryPrompt(
+    _db: IDatabaseAdapter,
+    _teamDb: IDatabaseAdapter | undefined,
+    target: 'personal' | 'team',
+    workspaceId = 'default',
+    briefingConfig?: Partial<BriefingConfig>
+): { messages: PromptMessage[] } {
+    const registryHint = getProjectRegistryHint(briefingConfig)
+    const attributionArgs = buildExplicitAttributionArgs(workspaceId, briefingConfig)
 
     return {
         messages: [
@@ -169,7 +174,7 @@ Just provide a concise markdown description of the specific architectural decisi
 ${registryHint}- If you lose track of your project number, workspace, or agent ID, read the \`memory://agent-context/{repo}\` resource to retrieve it instead of reloading the full briefing (which wastes tokens)
 
 **Execution:**
-- **Option 1 (Code Mode / MCP Tool - Recommended):** Execute directly via \`mj.core.createEntry({ content: "...", entry_type: "architecture", tags: ["tag1"]${target === 'team' ? ', share_with_team: true' : ''} })\`.
+- **Option 1 (Code Mode / MCP Tool - Recommended):** Execute directly via \`mj.core.createEntry({ content: "...", entry_type: "architecture", tags: ["tag1"]${attributionArgs}${target === 'team' ? ', share_with_team: true' : ''} })\`.
 - **Option 2 (CLI Scratch File):** Write markdown file (with YAML frontmatter) to your scratch directory (e.g. \`<appDataDir>\\brain\\<conversation-id>\\scratch\\\`) then execute: \`memory-journal-mcp entry create ${target === 'team' ? '--team ' : ''}--file <scratch_dir>/entry.md\``
                 }
             }
@@ -249,70 +254,93 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
             name: 'session-summary',
             description: 'Create a formatted session summary entry',
             icons: [ICON_PROMPT],
-            handler: async (
+            handler: (
                 _args: Record<string, string> | undefined,
                 db: IDatabaseAdapter,
                 teamDb?: IDatabaseAdapter,
                 _github?: unknown,
                 briefingConfig?: Partial<BriefingConfig>
             ) => {
-                await Promise.resolve()
-                return generateSummaryPrompt(db, teamDb, 'personal', resourceWorkspace({ briefingConfig }))
+                return generateSummaryPrompt(
+                    db,
+                    teamDb,
+                    'personal',
+                    resourceWorkspace({ briefingConfig }),
+                    briefingConfig
+                )
             },
         },
         {
             name: 'team-session-summary',
             description: 'Create a formatted team session summary entry',
             icons: [ICON_PROMPT],
-            handler: async (
+            handler: (
                 _args: Record<string, string> | undefined,
                 db: IDatabaseAdapter,
                 teamDb?: IDatabaseAdapter,
                 _github?: unknown,
                 briefingConfig?: Partial<BriefingConfig>
             ) => {
-                await Promise.resolve()
-                return generateSummaryPrompt(db, teamDb, 'team', resourceWorkspace({ briefingConfig }))
+                return generateSummaryPrompt(
+                    db,
+                    teamDb,
+                    'team',
+                    resourceWorkspace({ briefingConfig }),
+                    briefingConfig
+                )
             },
         },
         {
             name: 'create-entry',
             description: 'Create a structured mid-thread journal entry',
             icons: [ICON_PROMPT],
-            handler: async (
-                _args: Record<string, string> | undefined,
-                db: IDatabaseAdapter,
-                teamDb?: IDatabaseAdapter
-            ) => {
-                await Promise.resolve()
-                return generateEntryPrompt(db, teamDb, 'personal')
-            },
-        },
-        {
-            name: 'create-team-entry',
-            description: 'Create a structured mid-thread team journal entry',
-            icons: [ICON_PROMPT],
-            handler: async (
-                _args: Record<string, string> | undefined,
-                db: IDatabaseAdapter,
-                teamDb?: IDatabaseAdapter
-            ) => {
-                await Promise.resolve()
-                return generateEntryPrompt(db, teamDb, 'team')
-            },
-        },
-        {
-            name: 'update-entry',
-            description: 'Safely update an existing mid-thread entry or session summary',
-            icons: [ICON_PROMPT],
-            handler: async (
+            handler: (
                 _args: Record<string, string> | undefined,
                 db: IDatabaseAdapter,
                 teamDb?: IDatabaseAdapter,
                 _github?: unknown,
                 briefingConfig?: Partial<BriefingConfig>
             ) => {
-                await Promise.resolve()
+                return generateEntryPrompt(
+                    db,
+                    teamDb,
+                    'personal',
+                    resourceWorkspace({ briefingConfig }),
+                    briefingConfig
+                )
+            },
+        },
+        {
+            name: 'create-team-entry',
+            description: 'Create a structured mid-thread team journal entry',
+            icons: [ICON_PROMPT],
+            handler: (
+                _args: Record<string, string> | undefined,
+                db: IDatabaseAdapter,
+                teamDb?: IDatabaseAdapter,
+                _github?: unknown,
+                briefingConfig?: Partial<BriefingConfig>
+            ) => {
+                return generateEntryPrompt(
+                    db,
+                    teamDb,
+                    'team',
+                    resourceWorkspace({ briefingConfig }),
+                    briefingConfig
+                )
+            },
+        },
+        {
+            name: 'update-entry',
+            description: 'Safely update an existing mid-thread entry or session summary',
+            icons: [ICON_PROMPT],
+            handler: (
+                _args: Record<string, string> | undefined,
+                db: IDatabaseAdapter,
+                teamDb?: IDatabaseAdapter,
+                _github?: unknown,
+                briefingConfig?: Partial<BriefingConfig>
+            ) => {
                 return generateUpdateEntryPrompt(db, teamDb, 'personal', resourceWorkspace({ briefingConfig }))
             },
         },
@@ -320,14 +348,13 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
             name: 'update-team-entry',
             description: 'Safely update an existing team entry or team session summary',
             icons: [ICON_PROMPT],
-            handler: async (
+            handler: (
                 _args: Record<string, string> | undefined,
                 db: IDatabaseAdapter,
                 teamDb?: IDatabaseAdapter,
                 _github?: unknown,
                 briefingConfig?: Partial<BriefingConfig>
             ) => {
-                await Promise.resolve()
                 return generateUpdateEntryPrompt(db, teamDb, 'team', resourceWorkspace({ briefingConfig }))
             },
         },

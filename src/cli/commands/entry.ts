@@ -1,5 +1,6 @@
 import type { Command } from 'commander'
-import type { RelationshipType, CreateEntryInput } from '../../types/index.js'
+import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
+import type { RelationshipType, CreateEntryInput, ToolHandlerConfig } from '../../types/index.js'
 import { z } from 'zod'
 import { createEntryOptionsSchema, updateEntryOptionsSchema } from '../schemas.js'
 import {
@@ -86,6 +87,86 @@ function handleCliEntryError(e: unknown, actionLabel: 'create' | 'update'): neve
     process.exit(1)
 }
 
+async function loadCliEntryContentAndPayload(
+    options: HealedEntryOptions,
+    config: ToolHandlerConfig
+): Promise<{
+    content: string
+    metadata: Record<string, unknown>
+    payload: EntryPayload
+}> {
+    const rawContent = await parseContent(options)
+    const { frontmatter, body } = parseFrontmatter(rawContent)
+    let content = body
+
+    const title = options.title
+    if (title && !content.startsWith('# ')) {
+        content = `# ${title}\n\n${content}`
+    }
+
+    const metadata = { ...frontmatter, ...parseMetadata(options.metadata) }
+    const payload = buildEntryPayload(options, metadata, config, content)
+    return { content, metadata, payload }
+}
+
+function linkCliEntryRelationships(
+    db: IDatabaseAdapter,
+    entryId: number,
+    payload: EntryPayload,
+    workspaceId: string | undefined
+): { target_id: number; error: string }[] {
+    const linkFailures: { target_id: number; error: string }[] = []
+    const linkRequests: { targetId: number; type: RelationshipType }[] = [
+        ...payload.relatedIds.map((targetId) => ({ targetId, type: 'references' as const })),
+        ...payload.relationships.map((rel) => ({
+            targetId: rel.target_id,
+            type: rel.relation_type as RelationshipType,
+        })),
+    ]
+    for (const request of linkRequests) {
+        try {
+            db.linkEntries(entryId, request.targetId, request.type, undefined, workspaceId)
+        } catch (linkError) {
+            linkFailures.push({
+                target_id: request.targetId,
+                error: linkError instanceof Error ? linkError.message : String(linkError),
+            })
+        }
+    }
+    return linkFailures
+}
+
+function writeCliEntryResult(
+    entry: { id: number; version?: number | undefined },
+    linkFailures: { target_id: number; error: string }[],
+    jsonOutput: boolean | undefined,
+    verb: 'created' | 'updated'
+): void {
+    if (linkFailures.length > 0) {
+        process.exitCode = 1
+    }
+
+    if (jsonOutput === true) {
+        process.stdout.write(
+            JSON.stringify({
+                status: linkFailures.length > 0 ? 'partial' : 'success',
+                id: entry.id,
+                version: entry.version,
+                ...(linkFailures.length > 0 ? { entryPersisted: true, linkFailures } : {}),
+            }) + '\n'
+        )
+    } else {
+        const versionSuffix =
+            verb === 'updated' && entry.version !== undefined ? ` to version ${entry.version}` : ''
+        process.stderr.write(`Successfully ${verb} entry #${entry.id}${versionSuffix}\n`)
+        for (const failure of linkFailures) {
+            process.stderr.write(
+                `Warning: entry #${entry.id} was ${verb}, but linking to #${failure.target_id} failed: ${failure.error}\n`
+            )
+        }
+    }
+}
+
 export async function createEntryAction(...args: unknown[]): Promise<void> {
     const command = args[args.length - 1] as Command
     const options = (args.length > 1 ? args[args.length - 2] : {}) as HealedEntryOptions
@@ -95,17 +176,7 @@ export async function createEntryAction(...args: unknown[]): Promise<void> {
     const { db, config } = await getDb(options, command)
 
     try {
-        const rawContent = await parseContent(options)
-        const { frontmatter, body } = parseFrontmatter(rawContent)
-        let content = body
-
-        const title = options.title
-        if (title && !content.startsWith('# ')) {
-            content = `# ${title}\n\n${content}`
-        }
-
-        const metadata = { ...frontmatter, ...parseMetadata(options.metadata) }
-        const payload = buildEntryPayload(options, metadata, config, content)
+        const { content, metadata, payload } = await loadCliEntryContentAndPayload(options, config)
 
         let resolvedWs = payload.workspaceId
         if (resolvedWs === 'default') {
@@ -146,57 +217,14 @@ export async function createEntryAction(...args: unknown[]): Promise<void> {
         }
 
         const newEntry = db.createEntry(entryInput)
-
-        // The entry is persisted once createEntry returns; link failures are reported
-        // as partial success so the caller knows the entry exists.
-        const linkFailures: { target_id: number; error: string }[] = []
-        const linkRequests: { targetId: number; type: RelationshipType }[] = [
-            ...payload.relatedIds.map((targetId) => ({ targetId, type: 'references' as const })),
-            ...payload.relationships.map((rel) => ({
-                targetId: rel.target_id,
-                type: rel.relation_type as RelationshipType,
-            })),
-        ]
-        for (const request of linkRequests) {
-            try {
-                db.linkEntries(
-                    newEntry.id,
-                    request.targetId,
-                    request.type,
-                    undefined,
-                    payload.workspaceId
-                )
-            } catch (linkError) {
-                linkFailures.push({
-                    target_id: request.targetId,
-                    error: linkError instanceof Error ? linkError.message : String(linkError),
-                })
-            }
-        }
-
+        const linkFailures = linkCliEntryRelationships(
+            db,
+            newEntry.id,
+            payload,
+            payload.workspaceId
+        )
         db.flushSave()
-
-        if (linkFailures.length > 0) {
-            process.exitCode = 1
-        }
-
-        if (options.json === true) {
-            process.stdout.write(
-                JSON.stringify({
-                    status: linkFailures.length > 0 ? 'partial' : 'success',
-                    id: newEntry.id,
-                    version: newEntry.version,
-                    ...(linkFailures.length > 0 ? { entryPersisted: true, linkFailures } : {}),
-                }) + '\n'
-            )
-        } else {
-            process.stderr.write(`Successfully created entry #${newEntry.id}\n`)
-            for (const failure of linkFailures) {
-                process.stderr.write(
-                    `Warning: entry #${newEntry.id} was created, but linking to #${failure.target_id} failed: ${failure.error}\n`
-                )
-            }
-        }
+        writeCliEntryResult(newEntry, linkFailures, options.json, 'created')
     } catch (e) {
         handleCliEntryError(e, 'create')
     } finally {
@@ -229,17 +257,7 @@ export async function updateEntryAction(...args: unknown[]): Promise<void> {
             process.exit(1)
         }
 
-        const rawContent = await parseContent(options)
-        const { frontmatter, body } = parseFrontmatter(rawContent)
-        let content = body
-
-        const title = options.title
-        if (title && !content.startsWith('# ')) {
-            content = `# ${title}\n\n${content}`
-        }
-
-        const metadata = { ...frontmatter, ...parseMetadata(options.metadata) }
-        const payload = buildEntryPayload(options, metadata, config, content)
+        const { content, payload } = await loadCliEntryContentAndPayload(options, config)
 
         const existingEntry = db.getEntryById(entryId, '*')
         const updates: Partial<CreateEntryInput> & {
@@ -290,57 +308,14 @@ export async function updateEntryAction(...args: unknown[]): Promise<void> {
             process.exit(1)
         }
 
-        const linkFailures: { target_id: number; error: string }[] = []
-        const linkRequests: { targetId: number; type: RelationshipType }[] = [
-            ...payload.relatedIds.map((targetId) => ({ targetId, type: 'references' as const })),
-            ...payload.relationships.map((rel) => ({
-                targetId: rel.target_id,
-                type: rel.relation_type as RelationshipType,
-            })),
-        ]
-        const targetWorkspaceId = result.workspaceId ?? payload.workspaceId
-        for (const request of linkRequests) {
-            try {
-                db.linkEntries(
-                    entryId,
-                    request.targetId,
-                    request.type,
-                    undefined,
-                    targetWorkspaceId
-                )
-            } catch (linkError) {
-                linkFailures.push({
-                    target_id: request.targetId,
-                    error: linkError instanceof Error ? linkError.message : String(linkError),
-                })
-            }
-        }
-
+        const linkFailures = linkCliEntryRelationships(
+            db,
+            entryId,
+            payload,
+            result.workspaceId ?? payload.workspaceId
+        )
         db.flushSave()
-
-        if (linkFailures.length > 0) {
-            process.exitCode = 1
-        }
-
-        if (options.json === true) {
-            process.stdout.write(
-                JSON.stringify({
-                    status: linkFailures.length > 0 ? 'partial' : 'success',
-                    id: result.id,
-                    version: result.version,
-                    ...(linkFailures.length > 0 ? { entryPersisted: true, linkFailures } : {}),
-                }) + '\n'
-            )
-        } else {
-            process.stderr.write(
-                `Successfully updated entry #${result.id} to version ${result.version}\n`
-            )
-            for (const failure of linkFailures) {
-                process.stderr.write(
-                    `Warning: entry #${result.id} was updated, but linking to #${failure.target_id} failed: ${failure.error}\n`
-                )
-            }
-        }
+        writeCliEntryResult(result, linkFailures, options.json, 'updated')
     } catch (e) {
         handleCliEntryError(e, 'update')
     } finally {

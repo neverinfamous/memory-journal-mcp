@@ -164,7 +164,7 @@ export function createProjectsProxy(
                 }
                 if (has('get') || has('find')) return adminGetProject
             }
-            return adminListProjects
+            return Reflect.get(t, p) as unknown
         },
     })
 }
@@ -211,8 +211,14 @@ export function createTagsProxy(
         get(t, p): unknown {
             if (typeof p === 'symbol' || p === 'then') return undefined
             if (p in t) return Reflect.get(t, p) as unknown
-            if (typeof p === 'string' && methodTokens(p).includes('merge')) return adminMergeTags
-            return coreListTags
+            if (typeof p === 'string') {
+                const tokens = methodTokens(p)
+                if (tokens.includes('merge')) return adminMergeTags
+                if (tokens.some((tok) => ['list', 'get', 'all', 'search', 'find', 'tags', 'tag'].includes(tok))) {
+                    return coreListTags
+                }
+            }
+            return Reflect.get(t, p) as unknown
         },
     })
 }
@@ -252,7 +258,13 @@ export function createSystemProxy(
         get(t, p): unknown {
             if (typeof p === 'symbol' || p === 'then') return undefined
             if (p in t) return Reflect.get(t, p) as unknown
-            return getStats
+            if (typeof p === 'string') {
+                const tokens = methodTokens(p)
+                if (tokens.some((tok) => ['stats', 'status', 'health', 'info', 'check', 'sys', 'system', 'diagnostics', 'adapters'].includes(tok))) {
+                    return getStats
+                }
+            }
+            return Reflect.get(t, p) as unknown
         },
     })
 }

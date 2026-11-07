@@ -20,7 +20,7 @@ export async function enrichCommits(
 ): Promise<EnrichedCommit[]> {
     const gitOptions = {
         baseDir: workingDir,
-        spawnOptions: { windowsHide: true }
+        spawnOptions: { windowsHide: true },
     } as unknown as SimpleGitOptions
     const git = simpleGit(gitOptions)
     const enriched: EnrichedCommit[] = []

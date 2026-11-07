@@ -12,6 +12,64 @@ import { z } from 'zod'
 import { coerceNumber } from '../../utils/query-helpers.js'
 import { logger } from '../../utils/logger.js'
 
+const cmsSupervisorArgsSchema = z.object({
+    lookbackHours: z.preprocess(
+        coerceNumber,
+        z.number().int().min(1).max(168).optional().default(24)
+    ),
+    autoRestore: z.preprocess(
+        (val) => val !== 'false' && val !== false,
+        z.boolean().optional().default(true)
+    ),
+})
+
+function fetchLatestNremSnippet(db: IDatabaseAdapter): string {
+    try {
+        const searchRes = db.searchEntries('', {
+            tags: ['database-optimizer'],
+            limit: 3,
+            workspaceId: '*',
+        })
+        const latest = searchRes.entries[0]
+        if (latest !== undefined) {
+            return `ID: #${String(latest.id)} | Timestamp: ${latest.timestamp} | Type: ${latest.entryType} | Tags: ${latest.tags.join(', ')}\n${latest.content.slice(0, 1200)}`
+        }
+        return '_No recent CMS-02 / database-optimizer entry found._'
+    } catch (error: unknown) {
+        logger.warning('CMS supervisor could not read the latest NREM entry', {
+            error: error instanceof Error ? error.message : String(error),
+        })
+        return '_Latest NREM entry query failed._'
+    }
+}
+
+function fetchDeletedEntriesSnapshot(db: IDatabaseAdapter): string {
+    try {
+        const deletedRes = db.getDeletedEntries({ limit: 25, workspaceId: '*' })
+        if (deletedRes.entries.length === 0) {
+            return '_No soft-deleted entries found._'
+        }
+        let flaggedDeletionsCount = 0
+        const rows = deletedRes.entries.map((e) => {
+            const isHighValue =
+                e.significanceType !== null ||
+                (e.impactScore !== undefined && e.impactScore >= 0.5)
+            if (isHighValue) flaggedDeletionsCount++
+            const flag = isHighValue ? '⚠️ [HIGH-VALUE CANDIDATE FOR RESTORE] ' : ''
+            return `${flag}ID: #${String(e.id)} | Type: ${e.entryType} | Significance: ${String(e.significanceType)} | Impact: ${String(e.impactScore)} | DeletedAt: ${String(e.deletedAt)}\nSnippet: ${e.content.slice(0, 140)}`
+        })
+        return (
+            `Total Soft-Deleted Count: ${String(deletedRes.count)} (Flagged High-Value in recent 25: ${String(flaggedDeletionsCount)})\n` +
+            rows.join('\n---\n')
+        )
+    } catch (error: unknown) {
+        logger.warning('CMS supervisor could not read soft-deleted entries', {
+            error: error instanceof Error ? error.message : String(error),
+        })
+        return '_Soft-deleted entry query failed._'
+    }
+}
+
 export function getCmsSupervisorPromptDefinitions(): InternalPromptDef[] {
     return [
         {
@@ -32,60 +90,11 @@ export function getCmsSupervisorPromptDefinitions(): InternalPromptDef[] {
                 },
             ],
             handler: (args: Record<string, string> | undefined, db: IDatabaseAdapter) => {
-                const schema = z.object({
-                    lookbackHours: z.preprocess(
-                        coerceNumber,
-                        z.number().int().min(1).max(168).optional().default(24)
-                    ),
-                    autoRestore: z.preprocess(
-                        (val) => val !== 'false' && val !== false,
-                        z.boolean().optional().default(true)
-                    ),
-                })
-
-                const parsed = schema.safeParse(args ?? {})
+                const parsed = cmsSupervisorArgsSchema.safeParse(args ?? {})
                 const lookbackHours = parsed.success ? parsed.data.lookbackHours : 24
                 const autoRestore = parsed.success ? parsed.data.autoRestore : true
-
-                let latestNremSnippet = '_No recent CMS-02 / database-optimizer entry found._'
-                try {
-                    const searchRes = db.searchEntries('', {
-                        tags: ['database-optimizer'],
-                        limit: 3,
-                        workspaceId: '*',
-                    })
-                    const latest = searchRes.entries[0]
-                    if (latest !== undefined) {
-                        latestNremSnippet = `ID: #${String(latest.id)} | Timestamp: ${latest.timestamp} | Type: ${latest.entryType} | Tags: ${latest.tags.join(', ')}\n${latest.content.slice(0, 1200)}`
-                    }
-                } catch (error: unknown) {
-                    logger.warning('CMS supervisor could not read the latest NREM entry', {
-                        error: error instanceof Error ? error.message : String(error),
-                    })
-                    latestNremSnippet = '_Latest NREM entry query failed._'
-                }
-
-                let deletedSnippet = '_No soft-deleted entries found._'
-                let flaggedDeletionsCount = 0
-                try {
-                    const deletedRes = db.getDeletedEntries({ limit: 25, workspaceId: '*' })
-                    if (deletedRes.entries.length > 0) {
-                        const rows = deletedRes.entries.map((e) => {
-                            const isHighValue =
-                                e.significanceType !== null ||
-                                (e.impactScore !== undefined && e.impactScore >= 0.5)
-                            if (isHighValue) flaggedDeletionsCount++
-                            const flag = isHighValue ? '⚠️ [HIGH-VALUE CANDIDATE FOR RESTORE] ' : ''
-                            return `${flag}ID: #${String(e.id)} | Type: ${e.entryType} | Significance: ${String(e.significanceType)} | Impact: ${String(e.impactScore)} | DeletedAt: ${String(e.deletedAt)}\nSnippet: ${e.content.slice(0, 140)}`
-                        })
-                        deletedSnippet = `Total Soft-Deleted Count: ${String(deletedRes.count)} (Flagged High-Value in recent 25: ${String(flaggedDeletionsCount)})\n` + rows.join('\n---\n')
-                    }
-                } catch (error: unknown) {
-                    logger.warning('CMS supervisor could not read soft-deleted entries', {
-                        error: error instanceof Error ? error.message : String(error),
-                    })
-                    deletedSnippet = '_Soft-deleted entry query failed._'
-                }
+                const latestNremSnippet = fetchLatestNremSnippet(db)
+                const deletedSnippet = fetchDeletedEntriesSnapshot(db)
 
                 let orphanCount: number | string = 'Unknown'
                 let totalEntries: number | string = 'Unknown'

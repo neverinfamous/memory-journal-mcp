@@ -7,6 +7,7 @@ import type {
 } from './shared.js'
 import { resourceWorkspace } from './shared.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
+import { loadProjectRegistryFromConfig } from '../../utils/workspace-resolver.js'
 
 const emptyStringToUndefined = (val: unknown): unknown =>
     typeof val === 'string' && val.trim() === '' ? undefined : val
@@ -55,7 +56,10 @@ export function getStalenessResourceDefinitions(): InternalResourceDef[] {
             annotations: withPriority(0.6, ASSISTANT_FOCUSED),
             handler: (_uri: string, context: ResourceContext): ResourceResult => {
                 try {
-                    const registry = context.briefingConfig?.projectRegistry ?? {}
+                    const registry =
+                        context.briefingConfig?.projectRegistry ??
+                        loadProjectRegistryFromConfig() ??
+                        {}
                     
                     interface StalenessProject {
                         name: string;
@@ -145,7 +149,10 @@ export function getStalenessResourceDefinitions(): InternalResourceDef[] {
                         return { data: { error: 'Project number must be a valid integer', code: -32002 } }
                     }
                     
-                    const registry = context.briefingConfig?.projectRegistry ?? {}
+                    const registry =
+                        context.briefingConfig?.projectRegistry ??
+                        loadProjectRegistryFromConfig() ??
+                        {}
                     let resolvedWorkspace = resourceWorkspace(context)
                     for (const [key, entry] of Object.entries(registry)) {
                         if (entry.project_number === projectNumber) {

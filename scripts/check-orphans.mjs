@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 import { resolve } from 'node:path';
 
 function checkOrphans() {
-    const defaultDbPath = resolve(process.cwd(), 'data/memory_journal.db');
+    const defaultDbPath = resolve(process.cwd(), 'data/mj-production.db');
     const dbPath = process.argv[2] || defaultDbPath;
 
     try {
@@ -13,11 +13,16 @@ function checkOrphans() {
             SELECT 
                 id, 
                 entry_type, 
+                workspace_id,
+                project_number,
                 substr(content, 1, 50) as content_preview, 
                 timestamp, 
                 is_personal 
             FROM memory_journal 
             WHERE project_number IS NULL
+               OR project_number = 0
+               OR workspace_id IS NULL
+               OR workspace_id = 'default'
         `).all();
         
         if (rows.length === 0) {

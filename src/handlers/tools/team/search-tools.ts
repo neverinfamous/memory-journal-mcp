@@ -237,13 +237,20 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                 try {
                     if (!teamDb) return { ...TEAM_DB_ERROR_RESPONSE }
                     const { limit, offset, project_number, workspace_id } = TeamListDeletedEntriesSchema.parse(params)
-                    const projectNumber = project_number
-                    const wsId = resolveWorkspaceId(workspace_id, projectNumber, context.config)
-                    const result = teamDb.getDeletedEntries({ limit, offset, workspaceId: wsId })
-                    let entries = result.entries
-                    if (projectNumber != null) {
-                        entries = entries.filter((e) => e.projectNumber === projectNumber)
+                    const wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
+                    const projectNumber = resolveTeamProjectNumber(context, wsId, project_number)
+                    if (projectNumber == null) {
+                        return {
+                            success: false,
+                            error: 'Missing project_number. Cross-tenant queries without project_number are not allowed.',
+                            code: 'VALIDATION_ERROR',
+                            category: 'validation',
+                            suggestion: 'Specify a project_number or workspace_id.',
+                            recoverable: true,
+                        }
                     }
+                    const result = teamDb.getDeletedEntries({ limit, offset, workspaceId: wsId })
+                    const entries = result.entries.filter((e) => e.projectNumber === projectNumber)
                     const authorMap = batchFetchAuthors(teamDb, entries.map((e) => e.id))
                     const enriched = entries.map((e) => ({
                         ...e,

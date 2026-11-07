@@ -160,8 +160,7 @@ function setCached<T>(map: Map<string, TtlCacheEntry<T>>, key: string, value: T)
 
 function loadCachedGitHistory(
     commitCount: number,
-    targetPath?: string,
-    _importanceThreshold?: number
+    targetPath?: string
 ): GitHistorySummary | null {
     const root = targetPath || resolveProjectRoot()
     const cached = getCached(cachedGitHistory, root)
@@ -426,7 +425,7 @@ export function buildSystemContext(
         resourceCount: resourceCount ?? 0,
         promptCount: getPrompts().length,
         localTime,
-        gitHistory: loadCachedGitHistory(config?.commitCount ?? 3, targetRepoPath, config?.briefingImportanceThreshold),
+        gitHistory: loadCachedGitHistory(config?.commitCount ?? 3, targetRepoPath),
         testHealth: loadCachedTestHealth(targetRepoPath),
         filterSummary,
         isReadonly,

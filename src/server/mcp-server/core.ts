@@ -156,6 +156,18 @@ export async function createServer(options: ServerOptions): Promise<void> {
         baseConfig.briefingConfig = nextBriefing
         customToolHandlerConfig.filterConfig = newConfig.toolFilterConfig
         customToolHandlerConfig.briefingConfig = nextBriefing
+        if (nextBriefing.defaultProjectNumber !== undefined) {
+            baseConfig.defaultProjectNumber = nextBriefing.defaultProjectNumber
+            customToolHandlerConfig.defaultProjectNumber = nextBriefing.defaultProjectNumber
+        }
+        if (nextBriefing.defaultWorkspaceId !== undefined) {
+            baseConfig.defaultWorkspaceId = nextBriefing.defaultWorkspaceId
+            customToolHandlerConfig.defaultWorkspaceId = nextBriefing.defaultWorkspaceId
+        }
+        if (nextBriefing.projectRegistry !== undefined) {
+            baseConfig.projectRegistry = nextBriefing.projectRegistry
+            customToolHandlerConfig.projectRegistry = nextBriefing.projectRegistry
+        }
         void globalSubscriptionManager.notifyResourceUpdated('memory://briefing')
         try {
             void globalSubscriptionManager.broadcastNotification('notifications/tools/list_changed')

@@ -39,7 +39,11 @@ export async function runStartupAutoPrune(
         importanceThreshold: options.pruneImportanceThreshold ?? 0.15,
         dryRun: options.pruneDryRun,
         excludeTags: options.pruneExcludeTags,
-        workspaceId: options.defaultWorkspaceId,
+        workspaceId: resolveWorkspaceId(
+            options.defaultWorkspaceId,
+            options.defaultProjectNumber,
+            options
+        ),
     })
     logger.info('Auto-prune completed', {
         module: 'McpServer',

@@ -2,6 +2,7 @@ import type { JournalEntry } from '../../../types/index.js'
 import type { CreateEntryInput } from '../../core/interfaces.js'
 import type { EntriesSharedContext } from './shared.js'
 import { effectiveWorkspace } from '../../workspace-scope.js'
+import { resolveProjectContext } from '../../../utils/workspace-resolver.js'
 import { insertAnchors } from './anchors.js'
 import { getEntryById, getEntriesByIds } from './crud-read.js'
 import { normalizeTag, performUpdateEntry } from './crud-update.js'
@@ -82,6 +83,20 @@ function insertEntryRow(context: EntriesSharedContext, input: CreateEntryInput):
         ]
         const nonEmpty = (s: string | null | undefined): string | null =>
             s !== undefined && s !== null && s !== '' ? s : null
+        const resolvedProjNum =
+            input.projectNumber ??
+            resolveProjectContext(
+                {
+                    ...(input.workspaceId !== undefined
+                        ? { workspace_id: input.workspaceId }
+                        : {}),
+                    content: input.content,
+                    ...(input.tags !== undefined ? { tags: input.tags } : {}),
+                },
+                context.config
+            ).projectNumber
+        const finalProjNum = resolvedProjNum ?? null
+        const finalWsId = effectiveWorkspace(input.workspaceId)
         const values = [
             input.entryType ?? 'personal_reflection',
             input.content,
@@ -89,7 +104,7 @@ function insertEntryRow(context: EntriesSharedContext, input: CreateEntryInput):
             (input.isPersonal ?? true) ? 1 : 0,
             nonEmpty(input.significanceType),
             input.autoContext ?? null,
-            input.projectNumber ?? null,
+            finalProjNum,
             nonEmpty(input.projectOwner),
             input.issueNumber ?? null,
             nonEmpty(input.issueUrl),
@@ -100,7 +115,7 @@ function insertEntryRow(context: EntriesSharedContext, input: CreateEntryInput):
             nonEmpty(input.workflowName),
             input.workflowStatus ?? null,
             input.isArchived === true ? 1 : 0,
-            effectiveWorkspace(input.workspaceId),
+            finalWsId,
             input.trustScore ?? 0.5,
             input.validationStatus ?? 'none',
             input.impactScore ?? 0.0,
@@ -135,7 +150,7 @@ function insertEntryRow(context: EntriesSharedContext, input: CreateEntryInput):
 export function createEntry(context: EntriesSharedContext, input: CreateEntryInput): JournalEntry {
     const insertId = insertEntryRow(context, input)
 
-    const entry = getEntryById(context, insertId, effectiveWorkspace(input.workspaceId))
+    const entry = getEntryById(context, insertId, '*')
     if (entry === null) {
         throw new Error(
             `Storage Inconsistency Anomaly: Entry with ID ${String(insertId)} successfully written but could not be read back.`

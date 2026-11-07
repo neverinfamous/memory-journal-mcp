@@ -9,6 +9,7 @@ import type { DEFAULT_BRIEFING_CONFIG } from '../../../handlers/resources/shared
 import type { PromptDefinition } from '../../registration.js'
 import { globalSubscriptionManager } from '../../subscription-manager.js'
 import { logAgentIssue } from '../../../utils/issue-logger.js'
+import { getActiveSessionProject } from '../../../utils/workspace-resolver.js'
 import type { ServerContext, ServerOptions } from '../types.js'
 
 /**
@@ -129,14 +130,21 @@ export function resolveActiveBriefingConfig(
     options: ServerOptions,
     allowedIoRoots: string[]
 ): typeof DEFAULT_BRIEFING_CONFIG {
-    const resolvedDefaultProj = briefingConfig.defaultProjectNumber ?? options.defaultProjectNumber
+    const sessionCtx = getActiveSessionProject()
+    const resolvedDefaultProj =
+        briefingConfig.defaultProjectNumber ??
+        options.defaultProjectNumber ??
+        sessionCtx.projectNumber
+    const resolvedRegistry = briefingConfig.projectRegistry ?? options.projectRegistry
+    const resolvedDefaultWs =
+        briefingConfig.defaultWorkspaceId ??
+        options.defaultWorkspaceId ??
+        sessionCtx.workspaceId
     return {
         ...briefingConfig,
         ...(resolvedDefaultProj !== undefined ? { defaultProjectNumber: resolvedDefaultProj } : {}),
-        ...(options.projectRegistry !== undefined ? { projectRegistry: options.projectRegistry } : {}),
-        ...(options.defaultWorkspaceId !== undefined && briefingConfig.defaultWorkspaceId === undefined
-            ? { defaultWorkspaceId: options.defaultWorkspaceId }
-            : {}),
+        ...(resolvedRegistry !== undefined ? { projectRegistry: resolvedRegistry } : {}),
+        ...(resolvedDefaultWs !== undefined ? { defaultWorkspaceId: resolvedDefaultWs } : {}),
         allowedIoRoots,
     }
 }

@@ -7,7 +7,41 @@ import {
 } from './schemas.js'
 import { relaxedNumber } from '../schemas.js'
 import { logger } from '../../../utils/logger.js'
-import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
+import { resolveWriteWorkspaceId } from '../write-workspace.js'
+
+const preprocessVectorEntryId = (val: unknown): unknown => {
+    if (typeof val === 'object' && val !== null) {
+        const obj = { ...(val as Record<string, unknown>) }
+        if ('id' in obj && !('entry_id' in obj)) {
+            obj['entry_id'] = obj['id']
+            delete obj['id']
+            return obj
+        }
+    }
+    return val
+}
+
+export const AddToVectorIndexSchemaMcp = z.preprocess(
+    preprocessVectorEntryId,
+    z
+        .object({
+            entry_id: relaxedNumber().optional(),
+            project_number: relaxedNumber().optional(),
+            workspace_id: z.string().optional(),
+        })
+        .strict()
+)
+
+export const AddToVectorIndexSchema = z.preprocess(
+    preprocessVectorEntryId,
+    z
+        .object({
+            entry_id: z.number(),
+            project_number: z.number().int().optional(),
+            workspace_id: z.string().optional(),
+        })
+        .strict()
+)
 
 export function getVectorTools(context: ToolContext): ToolDefinition[] {
     const { db, vectorManager, progress } = context;
@@ -68,25 +102,7 @@ export function getVectorTools(context: ToolContext): ToolDefinition[] {
             title: 'Add Entry to Vector Index',
             description: 'Add a specific entry to the semantic search vector index',
             group: 'admin',
-            inputSchema: z.preprocess(
-                (val: unknown) => {
-                    if (typeof val === 'object' && val !== null) {
-                        const obj = { ...(val as Record<string, unknown>) };
-                        if ('id' in obj && !('entry_id' in obj)) {
-                            obj['entry_id'] = obj['id'];
-                            delete obj['id'];
-                            return obj;
-                        }
-                    }
-                    return val;
-                },
-                z
-                    .object({
-                        entry_id: relaxedNumber().optional(),
-                        project_number: relaxedNumber().optional(),
-                    })
-                    .strict()
-            ),
+            inputSchema: AddToVectorIndexSchemaMcp,
             outputSchema: AddToVectorIndexOutputSchema,
             annotations: {
                 readOnlyHint: false,
@@ -96,20 +112,8 @@ export function getVectorTools(context: ToolContext): ToolDefinition[] {
             },
             handler: async (params: unknown) => {
                 try {
-                    const { entry_id, project_number } = z.preprocess(
-                        (val: unknown) => {
-                            if (typeof val === 'object' && val !== null) {
-                                const obj = { ...(val as Record<string, unknown>) };
-                                if ('id' in obj && !('entry_id' in obj)) {
-                                    obj['entry_id'] = obj['id'];
-                                    delete obj['id'];
-                                    return obj;
-                                }
-                            }
-                            return val;
-                        },
-                        z.object({ entry_id: z.number(), project_number: z.number().int().optional() }).strict()
-                    ).parse(params)
+                    const { entry_id, project_number, workspace_id } =
+                        AddToVectorIndexSchema.parse(params)
                     if (!vectorManager) {
                         return {
                             success: false,
@@ -122,8 +126,19 @@ export function getVectorTools(context: ToolContext): ToolDefinition[] {
                             recoverable: false,
                         }
                     }
-                    const wsId = resolveWorkspaceId(undefined, project_number, context.config)
-                    const entry = db.getEntryById(entry_id, wsId)
+                    let wsId = resolveWriteWorkspaceId(workspace_id, project_number, context.config)
+                    let entry = db.getEntryById(entry_id, wsId)
+                    if (
+                        !entry &&
+                        workspace_id === undefined &&
+                        project_number === undefined &&
+                        wsId === 'default'
+                    ) {
+                        entry = db.getEntryById(entry_id, '*')
+                        if (entry?.workspaceId !== undefined) {
+                            wsId = entry.workspaceId
+                        }
+                    }
                     if (!entry || (project_number !== undefined && entry.projectNumber !== project_number)) {
                         return {
                             success: false,

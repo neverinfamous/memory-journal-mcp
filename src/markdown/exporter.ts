@@ -29,6 +29,8 @@ export interface ExportableEntry {
     tags: string[]
     significance?: string
     author?: string
+    workspaceId?: string
+    projectNumber?: number
 }
 
 /** Result of an export operation */
@@ -140,6 +142,12 @@ export async function exportEntriesToMarkdown(
                     mj_id: entry.id,
                     entry_type: entry.entryType,
                     timestamp: entry.timestamp,
+                    ...(entry.workspaceId !== undefined && entry.workspaceId !== 'default'
+                        ? { workspace_id: entry.workspaceId }
+                        : {}),
+                    ...(entry.projectNumber !== undefined
+                        ? { project_number: entry.projectNumber }
+                        : {}),
                     source: 'memory-journal-mcp',
                 }
 

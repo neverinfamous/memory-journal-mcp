@@ -4,6 +4,7 @@
 
 import type { JournalEntry } from '../../types/index.js'
 import { parseSessionCommitContext } from '../../types/auto-context.js'
+import { loadProjectRegistryFromConfig } from '../../utils/workspace-resolver.js'
 import type { ResourceContext } from './shared.js'
 import { resourceWorkspace } from './shared.js'
 
@@ -16,7 +17,7 @@ export function resolveProjectScope(
     context: ResourceContext,
     projectNumber: number
 ): { workspaceId: string; cwd: string; hint?: string } {
-    const registry = context.briefingConfig?.projectRegistry
+    const registry = context.briefingConfig?.projectRegistry ?? loadProjectRegistryFromConfig()
     if (registry !== undefined && Object.keys(registry).length > 0) {
         for (const [key, entry] of Object.entries(registry)) {
             if (entry.project_number === projectNumber) {

@@ -4,7 +4,6 @@ import { indexBatchEntries } from '../batch-indexing.js'
 import { createBatchProgressReporter, sendProgress } from '../../../utils/progress-utils.js'
 import { linkRequestedRelationships } from '../relationship-linking.js'
 import { resolveWriteWorkspaceId } from '../write-workspace.js'
-import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { prepareBatchCreateInputs, shareBatchEntriesWithTeam } from './batch-create-helpers.js'
 import {
     BatchCreateEntriesSchema,
@@ -221,13 +220,23 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
             handler: async (params: unknown) => {
                 try {
                     const input = BatchDeleteEntriesSchema.parse(params)
-                    let wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
+                    let wsId = resolveWriteWorkspaceId(
+                        input.workspace_id,
+                        input.project_number,
+                        context.config
+                    )
                     if (
                         input.workspace_id === undefined &&
                         input.project_number === undefined &&
                         wsId === 'default'
                     ) {
-                        wsId = '*'
+                        for (const id of input.entry_ids) {
+                            const existing = db.getEntryByIdIncludeDeleted(id, '*')
+                            if (existing?.workspaceId !== undefined) {
+                                wsId = existing.workspaceId
+                                break
+                            }
+                        }
                     }
                     await sendProgress(progress, 0, 2, 'Deleting entries...')
                     const { deleted, notFound, errors } = db.deleteEntries(input.entry_ids, input.permanent, wsId)

@@ -227,6 +227,10 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
                         timestamp: e.timestamp,
                         tags: e.tags,
                         significance: e.significanceType ?? undefined,
+                        ...(e.workspaceId !== undefined ? { workspaceId: e.workspaceId } : {}),
+                        ...(e.projectNumber !== undefined && e.projectNumber !== null
+                            ? { projectNumber: e.projectNumber }
+                            : {}),
                     }))
 
                     await sendProgress(progress, 2, 3, 'Writing markdown files...')

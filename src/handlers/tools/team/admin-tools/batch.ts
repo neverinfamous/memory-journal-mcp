@@ -4,17 +4,16 @@
  * Tools: team_batch_create_entries, team_batch_update_entries, team_batch_delete_entries
  */
 
-import type { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../../types/index.js'
 import { linkRequestedRelationships } from '../../relationship-linking.js'
 import { formatHandlerError } from '../../../../utils/error-helpers.js'
-import { resolveAuthenticatedAuthor } from '../../../../utils/security-utils.js'
+import { resolveAuthor, resolveAuthenticatedAuthor } from '../../../../utils/security-utils.js'
 import { getAuthContext } from '../../../../auth/auth-context.js'
-import { resolveWorkspaceId, resolveProjectContext } from '../../../../utils/workspace-resolver.js'
+import { resolveProjectContext } from '../../../../utils/workspace-resolver.js'
 import { TEAM_DB_ERROR_RESPONSE, fetchAuthor, batchFetchAuthors, triggerTeamNotifications, resolveTeamProjectNumber } from '../helpers.js'
-import { enforceEntryOwnership } from '../rbac.js'
 import { resolveWriteWorkspaceId } from '../../write-workspace.js'
 import {
+    buildValidatedTeamBatchUpdates,
     missingProjectNumberResponse,
     permanentDeleteDeniedResponse,
     filterDeletableIds,
@@ -33,102 +32,6 @@ import {
 } from '../schemas.js'
 import { sendProgress } from '../../../../utils/progress-utils.js'
 import { indexBatchEntries } from '../../batch-indexing.js'
-
-type TeamBatchUpdateInput = z.infer<typeof TeamBatchUpdateEntriesSchema>['updates'][number]
-
-function buildValidatedTeamBatchUpdates(
-    teamDb: NonNullable<ToolContext['teamDb']>,
-    rawUpdates: TeamBatchUpdateInput[],
-    rootWorkspaceId: string | undefined,
-    rootProjectNumber: number | undefined,
-    context: ToolContext,
-    currentUser: string,
-    callerRole: ReturnType<NonNullable<ToolContext['teamDb']>['resolveTeamRole']> | null,
-    codemodeBypass: boolean,
-    preFetchedAuthors: Map<number, string | null> | null
-):
-    | { errorResponse: Record<string, unknown> }
-    | { updates: Parameters<NonNullable<ToolContext['teamDb']>['updateEntries']>[0]; notFound: number[] } {
-    const updates: Parameters<NonNullable<ToolContext['teamDb']>['updateEntries']>[0] = []
-    const notFound: number[] = []
-
-    for (const u of rawUpdates) {
-        const wsId = resolveWorkspaceId(
-            u.workspace_id ?? rootWorkspaceId,
-            u.project_number ?? rootProjectNumber,
-            context.config
-        )
-        const existing = teamDb.getEntryById(u.entry_id, wsId)
-        const projectNumber = u.project_number ?? rootProjectNumber ?? existing?.projectNumber
-        if (projectNumber === undefined || projectNumber === null) {
-            return {
-                errorResponse: {
-                    success: false,
-                    error: `Missing project_number for team entry ${String(u.entry_id)}. You MUST provide a valid project_number or configure DEFAULT_PROJECT_NUMBER on the server.`,
-                    code: 'VALIDATION_ERROR',
-                    category: 'validation',
-                    suggestion: 'Specify the project_number in your tool call, or ensure DEFAULT_PROJECT_NUMBER is configured on the server.',
-                    recoverable: true,
-                },
-            }
-        }
-        if (!existing) {
-            notFound.push(u.entry_id)
-            continue
-        }
-        const author = preFetchedAuthors
-            ? (preFetchedAuthors.get(u.entry_id) ?? null)
-            : fetchAuthor(teamDb, u.entry_id)
-        if (!codemodeBypass) {
-            try {
-                enforceEntryOwnership(currentUser, author, callerRole)
-            } catch {
-                return {
-                    errorResponse: {
-                        success: false,
-                        error: `Permission Denied: Only the original author ("${author ?? 'none recorded'}") or a team admin can modify team entry ${String(u.entry_id)}.`,
-                        code: 'PERMISSION_DENIED',
-                        category: 'auth',
-                        suggestion: 'You can only update entries that you authored.',
-                        recoverable: false,
-                    },
-                }
-            }
-        }
-
-        updates.push({
-            id: u.entry_id,
-            content: u.content,
-            entryType: u.entry_type,
-            tags: u.tags,
-            significanceType: u.significance_type,
-            projectNumber,
-            projectOwner: u.project_owner,
-            issueNumber: u.issue_number,
-            issueUrl: u.issue_url,
-            prNumber: u.pr_number,
-            prUrl: u.pr_url,
-            prStatus: u.pr_status,
-            workflowRunId: u.workflow_run_id,
-            workflowName: u.workflow_name,
-            workflowStatus: u.workflow_status,
-            isArchived: u.is_archived,
-            expectedVersion: u.expected_version,
-            autoContext: u.auto_context,
-            impactScore: u.impact_score,
-            trustScore: u.trust_score,
-            validationStatus: u.validation_status,
-            sessionId: u.session_id,
-            workspaceId: resolveWriteWorkspaceId(
-                u.workspace_id ?? rootWorkspaceId,
-                projectNumber,
-                context.config
-            ),
-        })
-    }
-
-    return { updates, notFound }
-}
 
 // ============================================================================
 // Tool Definitions
@@ -170,11 +73,14 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                                 content: e.content,
                                 tags: e.tags,
                             },
-                            context.config !== undefined
-                                ? { ...context.config, defaultProjectNumber: undefined }
-                                : undefined
+                            context.config
                         )
-                        const projectNumber = resolved.projectNumber
+                        const projectNumber =
+                            e.project_number ??
+                            input.project_number ??
+                            (resolved.workspaceId !== 'default'
+                                ? resolved.projectNumber
+                                : undefined)
                         if (projectNumber === undefined || projectNumber === null) {
                             return {
                                 success: false,
@@ -195,8 +101,22 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                                 recoverable: false,
                             }
                         }
+                        const resolvedAuthor = authCtx?.authenticated
+                            ? currentUser
+                            : (e.author ?? resolveAuthor())
+                        if (resolvedAuthor === 'unknown') {
+                            return {
+                                success: false,
+                                error: 'Identity cannot be resolved securely. In non-OAuth environments, you must set the TEAM_AUTHOR environment variable to claim an identity.',
+                                code: 'PERMISSION_DENIED',
+                                category: 'auth',
+                                suggestion: 'Set the TEAM_AUTHOR environment variable or enable OAuth.',
+                                recoverable: false,
+                            }
+                        }
                         resolvedEntries.push({
                             e,
+                            author: resolvedAuthor,
                             projectNumber,
                             workspaceId: resolveWriteWorkspaceId(
                                 resolved.workspaceId !== 'default'
@@ -208,7 +128,7 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                         })
                     }
 
-                    const inputs = resolvedEntries.map(({ e, projectNumber, workspaceId }) => ({
+                    const inputs = resolvedEntries.map(({ e, author, projectNumber, workspaceId }) => ({
                         content: e.content,
                         entryType: e.entry_type,
                         tags: e.tags,
@@ -225,7 +145,7 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                         workflowName: e.workflow_name,
                         workflowStatus: e.workflow_status,
                         isPersonal: false,
-                        author: e.author ?? currentUser,
+                        author,
                         impactScore: e.impact_score,
                         trustScore: e.trust_score,
                         validationStatus: e.validation_status,
@@ -375,7 +295,7 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
 
                     triggerTeamNotifications(context)
 
-                    return { success: true, count: entries.length, updated: entries, notFound: [...notFound, ...updateNotFound], indexStatuses }
+                    return { success: true, count: entries.length, updated: entries, notFound: finalNotFound, indexStatuses }
                 } catch (err) {
                     return formatHandlerError(err)
                 }
@@ -403,11 +323,31 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                     const currentUser = resolveAuthenticatedAuthor()
                     const codemodeBypass = context.config?.codemodeInternalFullAccess === true
                     
-                    const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
-                    const projectNumber = resolveTeamProjectNumber(context, wsId, input.project_number)
+                    let wsId = resolveWriteWorkspaceId(input.workspace_id, input.project_number, context.config)
+                    let inferredProjectNum: number | undefined
+                    if (
+                        input.workspace_id === undefined &&
+                        input.project_number === undefined &&
+                        wsId === 'default'
+                    ) {
+                        for (const id of input.entry_ids) {
+                            const existing = teamDb.getEntryByIdIncludeDeleted(id, '*')
+                            if (existing !== null) {
+                                if (existing.workspaceId !== undefined) wsId = existing.workspaceId
+                                if (existing.projectNumber !== null && existing.projectNumber !== undefined) {
+                                    inferredProjectNum = existing.projectNumber
+                                }
+                                break
+                            }
+                        }
+                    }
+                    const projectNumber =
+                        resolveTeamProjectNumber(context, wsId, input.project_number) ??
+                        inferredProjectNum
                     if (projectNumber === undefined || projectNumber === null) {
                         return missingProjectNumberResponse()
                     }
+                    wsId = resolveWriteWorkspaceId(input.workspace_id ?? wsId, projectNumber, context.config)
 
                     // Filter ids to those that match the project number and check permissions
                     const callerRole =

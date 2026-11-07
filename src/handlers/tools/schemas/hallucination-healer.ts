@@ -177,9 +177,19 @@ function healTagsAndEntryType(obj: Record<string, unknown>): boolean {
 function healWorkspaceAndProjectContext(obj: Record<string, unknown>): boolean {
     const normalized = normalizeProjectFields(obj)
 
-    // Only infer workspace/project from environment/cwd for entry creation/mutation payloads
+    // Only infer workspace/project from environment/cwd for entry creation payloads;
+    // exclude ID-based mutations/reads and search queries from automatic CWD/keyword injection.
+    const isSearchOrIdTarget =
+        'entry_id' in obj ||
+        'entryId' in obj ||
+        'query' in obj ||
+        'start_date' in obj ||
+        'end_date' in obj ||
+        obj['workspace_id'] === '*' ||
+        obj['workspaceId'] === '*'
     const isEntryMutation =
-        'content' in obj || 'entry_type' in obj || 'title' in obj || 'entry' in obj
+        !isSearchOrIdTarget &&
+        ('content' in obj || 'entry_type' in obj || 'title' in obj || 'entry' in obj)
     if (!isEntryMutation) {
         return normalized
     }

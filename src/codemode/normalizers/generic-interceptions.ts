@@ -13,12 +13,10 @@ const EXECUTE_METHODS = new Set([
 ])
 
 const CREATE_ENTRY_METHODS = new Set([
-    'create_entry',
-    'createEntry',
-    'create_entry_minimal',
-    'createEntryMinimal',
-    'team_create_entry',
-    'teamCreateEntry',
+    'create_entry', 'createEntry', 'create_entry_minimal', 'createEntryMinimal', 'team_create_entry', 'teamCreateEntry',
+])
+const BATCH_CREATE_ENTRY_METHODS = new Set([
+    'batch_create_entries', 'batchCreateEntries', 'team_batch_create_entries', 'teamBatchCreateEntries',
 ])
 
 export function applyGenericInterceptions(
@@ -55,6 +53,28 @@ export function applyGenericInterceptions(
 
     if (CREATE_ENTRY_METHODS.has(methodName)) {
         resolveCreateEntryProjectContext(obj)
+    } else if (BATCH_CREATE_ENTRY_METHODS.has(methodName)) {
+        resolveCreateEntryProjectContext(obj)
+        if (Array.isArray(obj['entries'])) {
+            const topWs = obj['workspace_id'] ?? obj['workspaceId']
+            const topProj = obj['project_number'] ?? obj['projectNumber']
+            obj['entries'] = obj['entries'].map((rawItem: unknown) => {
+                if (!isRecord(rawItem)) return rawItem
+                const item: Record<string, unknown> = { ...rawItem }
+                if (item['workspace_id'] === undefined && item['workspaceId'] === undefined && topWs !== undefined) {
+                    item['workspace_id'] = topWs
+                }
+                if (item['project_number'] === undefined && item['projectNumber'] === undefined && topProj !== undefined) {
+                    item['project_number'] = topProj
+                }
+                extractMetadataContextAliases(item)
+                coerceNumericStringIds(item)
+                normalizeGenericFieldAliases(item)
+                resolveCreateEntryProjectContext(item)
+                synthesizeEntryMutationFields(item)
+                return item
+            })
+        }
     }
 
     if (typeof obj['sort_by'] === 'string') {
@@ -126,24 +146,10 @@ function cleanSdkMetadataKeys(obj: Record<string, unknown>): void {
 }
 
 const FILE_GREP_SEARCH_METHODS = new Set([
-    'grep_search',
-    'grepSearch',
-    'grep',
-    'file_search',
-    'fileSearch',
-    'find_in_files',
-    'findInFiles',
-    'search_files',
-    'searchFiles',
+    'grep_search', 'grepSearch', 'grep', 'file_search', 'fileSearch', 'find_in_files', 'findInFiles', 'search_files', 'searchFiles',
 ])
-
 const NON_QUERY_SEARCH_METHODS = new Set([
-    'search_by_date_range',
-    'searchByDateRange',
-    'team_search_by_date_range',
-    'teamSearchByDateRange',
-    'search_audit_log',
-    'searchAuditLog',
+    'search_by_date_range', 'searchByDateRange', 'team_search_by_date_range', 'teamSearchByDateRange', 'search_audit_log', 'searchAuditLog',
 ])
 
 function normalizeSearchGrepAliases(methodName: string, obj: Record<string, unknown>): void {
@@ -323,6 +329,12 @@ function normalizeProjectAliases(obj: Record<string, unknown>): void {
 }
 
 function resolveCreateEntryProjectContext(obj: Record<string, unknown>): void {
+    if (obj['workspace_id'] === undefined && typeof obj['workspaceId'] === 'string') {
+        obj['workspace_id'] = obj['workspaceId']
+    }
+    if (obj['project_number'] === undefined && obj['projectNumber'] !== undefined) {
+        obj['project_number'] = obj['projectNumber']
+    }
     let projNum = typeof obj['project_number'] === 'number' ? obj['project_number'] : undefined
     if (typeof obj['project_number'] === 'string') {
         const cleaned = obj['project_number'].trim()

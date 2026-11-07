@@ -92,61 +92,85 @@ export class JournalApi {
             }
         }
 
+        const enrichEntryRecord = (
+            rec: Record<string, unknown>,
+            fallbackWs?: unknown,
+            fallbackProj?: unknown
+        ): void => {
+            if (rec['workspace_id'] === undefined && rec['workspaceId'] === undefined && fallbackWs !== undefined) {
+                rec['workspace_id'] = fallbackWs
+            }
+            if (rec['project_number'] === undefined && rec['projectNumber'] === undefined && fallbackProj !== undefined) {
+                rec['project_number'] = fallbackProj
+            }
+            if (typeof rec['project_number'] === 'string') {
+                const cleaned = rec['project_number'].trim()
+                const num = Number(cleaned)
+                if (!Number.isNaN(num) && cleaned !== '') {
+                    rec['project_number'] = num
+                } else {
+                    if (
+                        rec['workspace_id'] === undefined ||
+                        rec['workspace_id'] === '' ||
+                        rec['workspace_id'] === 'default'
+                    ) {
+                        rec['workspace_id'] = cleaned
+                    }
+                    delete rec['project_number']
+                }
+            }
+            const currentWs = rec['workspace_id'] ?? rec['workspaceId']
+            if (
+                currentWs === undefined ||
+                currentWs === '' ||
+                currentWs === 'default' ||
+                (rec['project_number'] === undefined && rec['projectNumber'] === undefined)
+            ) {
+                const projNum =
+                    typeof rec['project_number'] === 'number'
+                        ? rec['project_number']
+                        : typeof rec['projectNumber'] === 'number'
+                          ? rec['projectNumber']
+                          : undefined
+                const contentStr = typeof rec['content'] === 'string' ? rec['content'] : undefined
+                const tagsArr = Array.isArray(rec['tags'])
+                    ? rec['tags'].filter((t): t is string => typeof t === 'string')
+                    : undefined
+
+                const resolved = resolveProjectContext({
+                    ...(typeof currentWs === 'string' && currentWs !== 'default' && currentWs !== ''
+                        ? { workspace_id: currentWs }
+                        : {}),
+                    ...(projNum !== undefined ? { project_number: projNum } : {}),
+                    ...(contentStr !== undefined ? { content: contentStr } : {}),
+                    ...(tagsArr !== undefined ? { tags: tagsArr } : {}),
+                })
+                if (
+                    resolved.workspaceId !== undefined &&
+                    resolved.workspaceId !== 'default' &&
+                    (currentWs === undefined || currentWs === '' || currentWs === 'default')
+                ) {
+                    rec['workspace_id'] = resolved.workspaceId
+                    rec['workspaceId'] = resolved.workspaceId
+                }
+                if (rec['project_number'] === undefined && resolved.projectNumber !== undefined) {
+                    rec['project_number'] = resolved.projectNumber
+                }
+            }
+        }
+
         const wrapEntryCreator = (
             origFn: (...args: unknown[]) => Promise<unknown>
         ): ((...args: unknown[]) => Promise<unknown>) => {
             return async (...args: unknown[]): Promise<unknown> => {
                 const params = args[0]
                 if (isRecord(params)) {
-                    if (typeof params['project_number'] === 'string') {
-                        const cleaned = params['project_number'].trim()
-                        const num = Number(cleaned)
-                        if (!Number.isNaN(num) && cleaned !== '') {
-                            params['project_number'] = num
-                        } else {
-                            if (
-                                params['workspace_id'] === undefined ||
-                                params['workspace_id'] === '' ||
-                                params['workspace_id'] === 'default'
-                            ) {
-                                params['workspace_id'] = cleaned
-                            }
-                            delete params['project_number']
-                        }
-                    }
-                    const currentWs = params['workspace_id'] ?? params['workspaceId']
-                    if (
-                        currentWs === undefined ||
-                        currentWs === '' ||
-                        currentWs === 'default'
-                    ) {
-                        const projNum =
-                            typeof params['project_number'] === 'number'
-                                ? params['project_number']
-                                : typeof params['projectNumber'] === 'number'
-                                  ? params['projectNumber']
-                                  : undefined
-                        const contentStr = typeof params['content'] === 'string' ? params['content'] : undefined
-                        const tagsArr = Array.isArray(params['tags'])
-                            ? params['tags'].filter((t): t is string => typeof t === 'string')
-                            : undefined
-
-                        const resolved = resolveProjectContext({
-                            ...(typeof params['workspace_id'] === 'string' &&
-                            params['workspace_id'] !== 'default' &&
-                            params['workspace_id'] !== ''
-                                ? { workspace_id: params['workspace_id'] }
-                                : {}),
-                            ...(projNum !== undefined ? { project_number: projNum } : {}),
-                            ...(contentStr !== undefined ? { content: contentStr } : {}),
-                            ...(tagsArr !== undefined ? { tags: tagsArr } : {}),
-                        })
-                        if (resolved.workspaceId !== undefined && resolved.workspaceId !== 'default') {
-                            params['workspace_id'] = resolved.workspaceId
-                            params['workspaceId'] = resolved.workspaceId
-                        }
-                        if (params['project_number'] === undefined && resolved.projectNumber !== undefined) {
-                            params['project_number'] = resolved.projectNumber
+                    enrichEntryRecord(params)
+                    if (Array.isArray(params['entries'])) {
+                        const topWs = params['workspace_id'] ?? params['workspaceId']
+                        const topProj = params['project_number'] ?? params['projectNumber']
+                        for (const item of params['entries']) {
+                            if (isRecord(item)) enrichEntryRecord(item, topWs, topProj)
                         }
                     }
                 }
@@ -169,6 +193,26 @@ export class JournalApi {
             for (const key of Object.keys(this.team)) {
                 if (this.team[key] === origTeamCreateEntryFn) {
                     this.team[key] = wrappedTeamCreateEntryFn
+                }
+            }
+        }
+
+        const origBatchCreateEntriesFn = this.admin['batchCreateEntries']
+        if (origBatchCreateEntriesFn) {
+            const wrappedBatchCreateFn = wrapEntryCreator(origBatchCreateEntriesFn)
+            for (const key of Object.keys(this.admin)) {
+                if (this.admin[key] === origBatchCreateEntriesFn) {
+                    this.admin[key] = wrappedBatchCreateFn
+                }
+            }
+        }
+
+        const origTeamBatchCreateEntriesFn = this.team['teamBatchCreateEntries']
+        if (origTeamBatchCreateEntriesFn) {
+            const wrappedTeamBatchCreateFn = wrapEntryCreator(origTeamBatchCreateEntriesFn)
+            for (const key of Object.keys(this.team)) {
+                if (this.team[key] === origTeamBatchCreateEntriesFn) {
+                    this.team[key] = wrappedTeamBatchCreateFn
                 }
             }
         }
@@ -301,7 +345,7 @@ export class JournalApi {
             const groupApi = this.groupApiMap[groupName]
             if (!groupApi) continue
             for (const [aliasName, canonicalMethod] of Object.entries(aliases)) {
-                if (typeof groupApi[canonicalMethod] === 'function') {
+                if (typeof groupApi[aliasName] !== 'function' && typeof groupApi[canonicalMethod] === 'function') {
                     groupApi[aliasName] = groupApi[canonicalMethod]
                 }
             }

@@ -5,6 +5,11 @@
  */
 
 import type { ToolContext } from '../../../types/index.js'
+import { logger } from '../../../utils/logger.js'
+import {
+    findCanonicalRegistryKey,
+    loadProjectRegistryFromConfig,
+} from '../../../utils/workspace-resolver.js'
 
 // ============================================================================
 // Constants
@@ -56,15 +61,17 @@ export function fetchAuthor(
  */
 export function triggerTeamNotifications(context: ToolContext): void {
     if (context.config?.subscriptionManager) {
+        const logErr = (err: unknown): void => {
+            logger.debug('Team resource notification failed', { error: err })
+        }
         void context.config.subscriptionManager
             .notifyResourceUpdated('memory://team/recent')
-            .catch(() => undefined)
+            .catch(logErr)
         void context.config.subscriptionManager
             .notifyResourceUpdated('memory://briefing')
-            .catch(() => undefined)
+            .catch(logErr)
     }
 }
-
 
 /**
  * Derive the project number for a team tool call: explicit input first, then the project
@@ -75,11 +82,12 @@ export function resolveTeamProjectNumber(
     wsId: string,
     explicitProjectNumber: number | undefined
 ): number | null | undefined {
-    return (
-        explicitProjectNumber ??
-        (wsId !== 'default' && wsId !== '*'
-            ? context.config?.projectRegistry?.[wsId]?.project_number
-            : undefined) ??
-        context.config?.defaultProjectNumber
-    )
+    if (explicitProjectNumber !== undefined) return explicitProjectNumber
+    if (wsId !== 'default' && wsId !== '*') {
+        const registry = context.config?.projectRegistry ?? loadProjectRegistryFromConfig()
+        const canonicalKey = findCanonicalRegistryKey(wsId, registry) ?? wsId
+        const regProj = registry?.[canonicalKey]?.project_number
+        if (regProj !== undefined) return regProj
+    }
+    return context.config?.defaultProjectNumber
 }

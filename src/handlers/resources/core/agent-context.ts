@@ -1,4 +1,8 @@
-import { resolveProjectContext, resolveProjectNumberFromPath } from '../../../utils/workspace-resolver.js'
+import {
+    resolveProjectContext,
+    resolveProjectNumberFromPath,
+    setActiveSessionProject,
+} from '../../../utils/workspace-resolver.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from '../shared.js'
 import { withPriority, ASSISTANT_FOCUSED } from '../../../utils/resource-annotations.js'
 
@@ -20,14 +24,26 @@ export function getAgentContextResource(): InternalResourceDef {
 
             const resolved = resolveProjectContext(
                 repo !== undefined ? { workspace_id: repo } : {},
-                config
+                {
+                    ...config,
+                    ...(context?.runtime !== undefined ? { runtime: context.runtime } : {}),
+                }
             )
 
             let projectNumber = resolved.projectNumber ?? defaultProjectNumber ?? -1
             const workspaceId = resolved.workspaceId
 
             if (projectNumber === -1) {
-                projectNumber = resolveProjectNumberFromPath(process.cwd()) ?? -1
+                projectNumber =
+                    resolveProjectNumberFromPath(process.cwd(), config?.projectRegistry) ?? -1
+            }
+
+            if (repo !== undefined && workspaceId !== 'default') {
+                setActiveSessionProject(
+                    workspaceId,
+                    projectNumber > 0 ? projectNumber : undefined,
+                    context?.runtime
+                )
             }
 
             const projectName = repo ?? (workspaceId !== 'default' ? workspaceId : 'default')

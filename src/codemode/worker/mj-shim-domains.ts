@@ -5,7 +5,6 @@
  */
 
 import { VERSION } from '../../version.js'
-import { methodTokens as splitMethodTokens } from '../method-tokens.js'
 import { createPreparedStatementShim } from './node-shims.js'
 import { createCallableShim, createSchemaShim } from './namespace-shims.js'
 
@@ -81,6 +80,25 @@ export function createShimReadResourceHandler(): (uri?: string) => Promise<unkno
     }
 }
 
+const ENTRY_SEARCH_ALIASES = new Set([
+    'find', 'query', 'queryEntries', 'query_entries', 'findEntries', 'find_entries', 'findByQuery',
+])
+const ENTRY_CREATE_ALIASES = new Set([
+    'insert', 'append', 'newEntry', 'addEntry', 'add_entry', 'insertNew', 'write', 'save',
+])
+const ENTRY_GET_ALIASES = new Set([
+    'fetch', 'read', 'getEntry', 'get_entry', 'fetchById', 'findById', 'getById',
+])
+const ENTRY_UPDATE_ALIASES = new Set([
+    'edit', 'patch', 'modify', 'patchEntry', 'editEntry',
+])
+const ENTRY_DELETE_ALIASES = new Set([
+    'remove', 'removeEntry', 'removeItem', 'deleteItem',
+])
+const ENTRY_LIST_ALIASES = new Set([
+    'recent', 'all', 'getAll', 'listAll', 'fetchEntries', 'listDeletedEntries', 'list_deleted_entries',
+])
+
 export function createEntriesDomainProxy(target: Record<string, unknown>): unknown {
     const listFunc = getGroupProp(target, 'core', 'get_recent_entries') ?? getGroupProp(target, 'core', 'getRecentEntries')
     if (typeof listFunc !== 'function') return undefined
@@ -123,23 +141,16 @@ export function createEntriesDomainProxy(target: Record<string, unknown>): unkno
             if (typeof p === 'string') {
                 const methodOnCore = getGroupProp(target, 'core', p) ?? getGroupProp(target, 'search', p) ?? getGroupProp(target, 'admin', p)
                 if (typeof methodOnCore === 'function') return methodOnCore
-                const tokens = methodTokens(p)
-                const has = (token: string): boolean => tokens.has(token)
-                if ((has('search') || has('query') || has('find')) && typeof searchFn === 'function') return searchFn
-                if ((has('create') || has('add') || has('insert') || has('append')) && typeof createFn === 'function') return createFn
-                if ((has('get') || has('fetch') || has('read') || has('byid')) && typeof getFn === 'function') return getFn
-                if ((has('update') || has('edit') || has('patch')) && typeof updateFn === 'function') return updateFn
-                if ((has('delete') || has('remove')) && typeof deleteFn === 'function') return deleteFn
-                if (has('recent') || has('list') || has('all')) return listFunc
+                if (ENTRY_SEARCH_ALIASES.has(p) && typeof searchFn === 'function') return searchFn
+                if (ENTRY_CREATE_ALIASES.has(p) && typeof createFn === 'function') return createFn
+                if (ENTRY_GET_ALIASES.has(p) && typeof getFn === 'function') return getFn
+                if (ENTRY_UPDATE_ALIASES.has(p) && typeof updateFn === 'function') return updateFn
+                if (ENTRY_DELETE_ALIASES.has(p) && typeof deleteFn === 'function') return deleteFn
+                if (ENTRY_LIST_ALIASES.has(p)) return listFunc
             }
             return Reflect.get(targetFn, p, receiver) as unknown
         },
     })
-}
-
-/** Whole method-name tokens. `listDeletedEntries` contains `deleted`, not `delete`. */
-function methodTokens(name: string): Set<string> {
-    return new Set(splitMethodTokens(name))
 }
 
 export function createGetReadFindInterceptor(

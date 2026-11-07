@@ -5,6 +5,7 @@ import { type z } from 'zod'
 import { ConfigResolver } from '../../utils/config-resolver.js'
 import { buildServerOptions } from '../server-options-builder.js'
 import { getCliCommandDb as getDb } from './db-helper.js'
+import { resolveWorkspaceId } from '../../utils/workspace-resolver.js'
 import { 
     adminBackupOptionsSchema, 
     adminRestoreOptionsSchema, 
@@ -90,7 +91,11 @@ export async function pruneAction(options: z.infer<typeof pruneSchema>, command:
                   .map((tag) => tag.trim())
                   .filter((tag) => tag !== '')
             : (serverOptions.pruneExcludeTags ?? [])
-        const workspaceId = options.workspace ?? serverOptions.defaultWorkspaceId
+        const workspaceId = resolveWorkspaceId(
+            options.workspace,
+            options.defaultProject ?? serverOptions.defaultProjectNumber,
+            serverOptions
+        )
         const result = await runAutoPrune(db, {
             archiveOlderThanDays: options.archiveOlderThanDays ?? serverOptions.archiveOlderThanDays ?? 0,
             pruneOlderThanDays: options.pruneOlderThanDays ?? serverOptions.pruneOlderThanDays ?? 0,

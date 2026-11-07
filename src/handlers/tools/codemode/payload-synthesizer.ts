@@ -47,60 +47,153 @@ function getNonEmptyString(primary: Record<string, unknown>, secondary: Record<s
     return undefined
 }
 
-export function resolveExecutionPayload(input: ExecuteCodeInput, params: unknown, healingEnabled: boolean, start: number): { executionCode: string } | { earlyReturn: Record<string, unknown> } {
-    let executionCode: string | undefined
-    if (healingEnabled) {
-        for (const k of CODE_ALIAS_KEYS) {
-            const val = input[k]
-            if (typeof val === 'string' && val.length > 0) {
-                executionCode = val
-                break
-            }
+function parseProjectNumberField(
+    primary: Record<string, unknown>,
+    secondary: Record<string, unknown>
+): number | undefined {
+    const raw =
+        primary['project_number'] ??
+        primary['projectNumber'] ??
+        secondary['project_number'] ??
+        secondary['projectNumber'] ??
+        primary['project'] ??
+        secondary['project']
+    if (typeof raw === 'number' && !Number.isNaN(raw)) return raw
+    if (typeof raw === 'string' && raw.trim() !== '') {
+        const num = Number(raw.trim().replace(/^p-?/i, ''))
+        if (!Number.isNaN(num)) return num
+    }
+    return undefined
+}
+
+function extractInitialExecutionCode(
+    input: ExecuteCodeInput,
+    healingEnabled: boolean
+): string | undefined {
+    if (!healingEnabled) return input.code
+    for (const k of CODE_ALIAS_KEYS) {
+        const val = input[k]
+        if (typeof val === 'string' && val.length > 0) return val
+    }
+    return undefined
+}
+
+function recoverCodeFromCandidateRecord(
+    input: ExecuteCodeInput,
+    params: unknown
+): string | undefined {
+    const pObj = isRecord(params) ? params : undefined
+    const pHasAction =
+        pObj !== undefined &&
+        (pObj['action'] !== undefined ||
+            pObj['task'] !== undefined ||
+            pObj['notes'] !== undefined ||
+            pObj['changes'] !== undefined)
+    const candidateObj = isRecord(input.payload)
+        ? input.payload
+        : isRecord(input.entry)
+          ? input.entry
+          : isRecord(input.input)
+            ? input.input
+            : isRecord(pObj?.['payload'])
+              ? pObj['payload']
+              : isRecord(pObj?.['entry'])
+                ? pObj['entry']
+                : isRecord(pObj?.['input'])
+                  ? pObj['input']
+                  : pHasAction
+                    ? pObj
+                    : undefined
+    if (candidateObj === undefined) return undefined
+    return extractAndRecoverJsonCode(JSON.stringify(candidateObj)) ?? undefined
+}
+
+function recoverCodeFromParamsRecord(params: Record<string, unknown>): string | undefined {
+    const entryObj = isRecord(params['entry']) ? params['entry'] : params
+    const contentVal = getNonEmptyString(entryObj, params, ['content', 'instructions'])
+    const hasEntryMeta = ['title', 'type', 'entry_type'].some((k) => typeof entryObj[k] === 'string')
+    if (contentVal !== undefined || hasEntryMeta) {
+        const payload: Record<string, unknown> = {
+            title: typeof entryObj['title'] === 'string' ? entryObj['title'] : 'Journal Entry',
+            content: contentVal ?? '',
+            entry_type:
+                getNonEmptyString(entryObj, params, ['type', 'entry_type', 'category']) ??
+                'technical_decision',
+            tags: Array.isArray(entryObj['tags']) ? entryObj['tags'] : [],
         }
-    } else {
-        executionCode = input.code
+        const projVal = parseProjectNumberField(entryObj, params)
+        if (projVal !== undefined) payload['project_number'] = projVal
+        const wsVal = getNonEmptyString(entryObj, params, ['workspace_id', 'workspaceId', 'repo'])
+        if (wsVal !== undefined) payload['workspace_id'] = wsVal
+        const sessVal = getNonEmptyString(entryObj, params, ['session_id', 'sessionId'])
+        if (sessVal !== undefined) payload['session_id'] = sessVal
+        return `return await mj.createEntry(${JSON.stringify(payload)});`
     }
 
-    if (healingEnabled && (executionCode === undefined || executionCode === '')) {
-        const pObj = isRecord(params) ? params : undefined
-        const candidateObj = isRecord(input.payload) ? input.payload
-            : isRecord(input.entry) ? input.entry
-            : isRecord(input.input) ? input.input
-            : pObj !== undefined
-              ? (isRecord(pObj['payload']) ? pObj['payload']
-                : isRecord(pObj['entry']) ? pObj['entry']
-                : isRecord(pObj['input']) ? pObj['input']
-                : (pObj['action'] !== undefined || pObj['task'] !== undefined || pObj['notes'] !== undefined || pObj['changes'] !== undefined ? pObj : undefined))
-              : undefined
-        if (candidateObj !== undefined) {
-            executionCode = extractAndRecoverJsonCode(JSON.stringify(candidateObj)) ?? undefined
+    const skipKeys = new Set([
+        'repo',
+        'workspace_id',
+        'workspaceId',
+        'expected_version',
+        'auto_version',
+        'project_number',
+        'projectNumber',
+        'readonly',
+    ])
+    for (const [k, v] of Object.entries(params)) {
+        if (typeof v === 'string' && v.trim().length > 0 && !skipKeys.has(k)) {
+            return v
         }
+    }
+    return undefined
+}
+
+function buildActiveSandboxStatusResponse(start: number): { earlyReturn: Record<string, unknown> } {
+    return {
+        earlyReturn: {
+            success: true,
+            result: {
+                status: 'active',
+                message:
+                    'Code Mode sandbox is active. Provide JavaScript code in the `code` parameter to execute.',
+                availableNamespaces: [
+                    'mj.core',
+                    'mj.search',
+                    'mj.admin',
+                    'mj.analytics',
+                    'mj.relationships',
+                    'mj.io',
+                    'mj.git',
+                    'mj.team',
+                    'mj.backup',
+                    'mj.github',
+                ],
+                example: 'return await mj.searchEntries({ query: "example" })',
+                discovery:
+                    'Use mj.help() or return await mj.core.searchEntries.schema() to inspect parameters.',
+            },
+            _healing_note:
+                '🛠️ AUTONOMOUS HEALING: `mj_execute_code` was called without a `code` parameter or with an empty payload. Returned active sandbox status, available namespaces, and execution examples.',
+            project_id: undefined,
+            executionTimeMs: Math.round(performance.now() - start),
+        },
+    }
+}
+
+export function resolveExecutionPayload(
+    input: ExecuteCodeInput,
+    params: unknown,
+    healingEnabled: boolean,
+    start: number
+): { executionCode: string } | { earlyReturn: Record<string, unknown> } {
+    let executionCode = extractInitialExecutionCode(input, healingEnabled)
+
+    if (healingEnabled && (executionCode === undefined || executionCode === '')) {
+        executionCode = recoverCodeFromCandidateRecord(input, params)
     }
 
     if (healingEnabled && (executionCode === undefined || executionCode === '') && isRecord(params)) {
-        const entryObj = isRecord(params['entry']) ? params['entry'] : params
-        const contentVal = getNonEmptyString(entryObj, params, ['content', 'instructions'])
-        if (contentVal !== undefined || ['title', 'type', 'entry_type'].some((k) => typeof entryObj[k] === 'string')) {
-            const payload: Record<string, unknown> = {
-                title: typeof entryObj['title'] === 'string' ? entryObj['title'] : 'Journal Entry',
-                content: contentVal ?? '',
-                entry_type: getNonEmptyString(entryObj, params, ['type', 'entry_type', 'category']) ?? 'technical_decision',
-                tags: Array.isArray(entryObj['tags']) ? entryObj['tags'] : [],
-            }
-            const projVal = typeof entryObj['project_number'] === 'number' ? entryObj['project_number'] : params['project_number']
-            if (typeof projVal === 'number') payload['project_number'] = projVal
-            const sessVal = getNonEmptyString(entryObj, params, ['session_id'])
-            if (sessVal !== undefined) payload['session_id'] = sessVal
-            executionCode = `return await mj.createEntry(${JSON.stringify(payload)});`
-        } else {
-            const skipKeys = new Set(['repo', 'workspace_id', 'expected_version', 'auto_version', 'project_number', 'readonly'])
-            for (const [k, v] of Object.entries(params)) {
-                if (typeof v === 'string' && v.trim().length > 0 && !skipKeys.has(k)) {
-                    executionCode = v
-                    break
-                }
-            }
-        }
+        executionCode = recoverCodeFromParamsRecord(params)
     }
 
     if (healingEnabled && executionCode !== undefined && executionCode !== '') {
@@ -117,32 +210,21 @@ export function resolveExecutionPayload(input: ExecuteCodeInput, params: unknown
         if (!healingEnabled) {
             return {
                 earlyReturn: {
-                    success: false, error: 'Missing required parameter: code', code: 'VALIDATION_ERROR',
-                    category: 'validation', recoverable: true, project_id: undefined, executionTimeMs: 0,
+                    success: false,
+                    error: 'Missing required parameter: code',
+                    code: 'VALIDATION_ERROR',
+                    category: 'validation',
+                    recoverable: true,
+                    project_id: undefined,
+                    executionTimeMs: 0,
                 },
             }
         }
-        executionCode = recoverFromContextField(input.context ?? (isRecord(params) ? params['context'] : undefined))
+        executionCode = recoverFromContextField(
+            input.context ?? (isRecord(params) ? params['context'] : undefined)
+        )
         if (executionCode === undefined || executionCode.trim() === '') {
-            return {
-                earlyReturn: {
-                    success: true,
-                    result: {
-                        status: 'active',
-                        message: 'Code Mode sandbox is active. Provide JavaScript code in the `code` parameter to execute.',
-                        availableNamespaces: [
-                            'mj.core', 'mj.search', 'mj.admin', 'mj.analytics', 'mj.relationships',
-                            'mj.io', 'mj.git', 'mj.team', 'mj.backup', 'mj.github',
-                        ],
-                        example: 'return await mj.searchEntries({ query: "example" })',
-                        discovery: 'Use mj.help() or return await mj.core.searchEntries.schema() to inspect parameters.',
-                    },
-                    _healing_note:
-                        '🛠️ AUTONOMOUS HEALING: `mj_execute_code` was called without a `code` parameter or with an empty payload. Returned active sandbox status, available namespaces, and execution examples.',
-                    project_id: undefined,
-                    executionTimeMs: Math.round(performance.now() - start),
-                },
-            }
+            return buildActiveSandboxStatusResponse(start)
         }
     }
 
@@ -219,9 +301,9 @@ function synthesizeNaturalLanguageOrEntryPayload(executionCode: string, input: E
         tagsVal = [...tagsVal, 'learned-context']
     }
 
-    const rawProj = entryObj['project_number'] ?? rawObj['project_number'] ?? entryObj['project'] ?? rawObj['project']
-    const projVal = typeof rawProj === 'number' ? rawProj : undefined
-    const sessVal = getNonEmptyString(entryObj, rawObj, ['session_id'])
+    const projVal = parseProjectNumberField(entryObj, rawObj)
+    const wsVal = getNonEmptyString(entryObj, rawObj, ['workspace_id', 'workspaceId', 'repo'])
+    const sessVal = getNonEmptyString(entryObj, rawObj, ['session_id', 'sessionId'])
     const trustVal = normalizeUnitScore(
         entryObj['trust'] ?? rawObj['trust'] ?? entryObj['trust_score'] ?? rawObj['trust_score'] ??
         entryObj['trustScore'] ?? rawObj['trustScore'] ?? entryObj['confidence'] ?? rawObj['confidence']
@@ -257,6 +339,7 @@ function synthesizeNaturalLanguageOrEntryPayload(executionCode: string, input: E
     const payload: Record<string, unknown> = { title: titleVal, content: rawContent, entry_type: typeVal, tags: tagsVal }
     if (numericEntryId !== undefined) payload['entry_id'] = numericEntryId
     if (projVal !== undefined) payload['project_number'] = projVal
+    if (wsVal !== undefined) payload['workspace_id'] = wsVal
     if (sessVal !== undefined) payload['session_id'] = sessVal
     if (trustVal !== undefined) payload['trust'] = trustVal
     if (impactVal !== undefined) payload['impact'] = impactVal
@@ -272,15 +355,23 @@ function recoverFromContextField(ctxVal: unknown): string | undefined {
     if (isRecord(ctxVal)) {
         if (typeof ctxVal['code'] === 'string' && ctxVal['code'].trim().length > 0) return ctxVal['code']
         if (typeof ctxVal['script'] === 'string' && ctxVal['script'].trim().length > 0) return ctxVal['script']
+        const wsVal = getNonEmptyString(ctxVal, {}, ['workspace_id', 'workspaceId', 'repo'])
+        const projVal = parseProjectNumberField(ctxVal, {})
         if (typeof ctxVal['query'] === 'string' && ctxVal['query'].trim().length > 0) {
-            return `return await mj.searchEntries(${JSON.stringify({ query: ctxVal['query'] })});`
+            const searchPayload: Record<string, unknown> = { query: ctxVal['query'] }
+            if (wsVal !== undefined) searchPayload['workspace_id'] = wsVal
+            if (projVal !== undefined) searchPayload['project_number'] = projVal
+            return `return await mj.searchEntries(${JSON.stringify(searchPayload)});`
         }
         if (typeof ctxVal['content'] === 'string' || typeof ctxVal['instructions'] === 'string') {
-            return `return await mj.createEntry(${JSON.stringify({
+            const entryPayload: Record<string, unknown> = {
                 title: typeof ctxVal['title'] === 'string' ? ctxVal['title'] : 'Journal Entry',
                 content: typeof ctxVal['content'] === 'string' ? ctxVal['content'] : ctxVal['instructions'],
                 entry_type: typeof ctxVal['type'] === 'string' ? ctxVal['type'] : 'technical_decision',
-            })});`
+            }
+            if (wsVal !== undefined) entryPayload['workspace_id'] = wsVal
+            if (projVal !== undefined) entryPayload['project_number'] = projVal
+            return `return await mj.createEntry(${JSON.stringify(entryPayload)});`
         }
     }
     return undefined

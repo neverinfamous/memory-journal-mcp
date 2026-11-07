@@ -127,7 +127,7 @@ export async function resolveOwner(
  */
 export async function resolveOwnerRepo(
     context: ToolContext,
-    input: { owner?: string; repo?: string },
+    input: { owner?: string; repo?: string; project_number?: number; workspace_id?: string },
     entityLabel?: string
 ): Promise<
     | {
@@ -145,16 +145,44 @@ export async function resolveOwnerRepo(
 
     let toolGithub: GitHubIntegration | undefined
     const registry = context.config?.projectRegistry ?? loadProjectRegistryFromConfig()
+    let matchedRegistryKey: string | undefined
+    if (!effectiveRepo && registry) {
+        if (
+            input.workspace_id !== undefined &&
+            input.workspace_id !== 'default' &&
+            input.workspace_id !== '*'
+        ) {
+            matchedRegistryKey =
+                findCanonicalRegistryKey(input.workspace_id, registry) ??
+                (Object.prototype.hasOwnProperty.call(registry, input.workspace_id)
+                    ? input.workspace_id
+                    : undefined)
+        } else if (input.project_number !== undefined) {
+            const matched = Object.entries(registry).find(
+                ([, entry]) => entry.project_number === input.project_number
+            )
+            if (matched) matchedRegistryKey = matched[0]
+        }
+    }
     const registryKey = effectiveRepo
         ? (findCanonicalRegistryKey(effectiveRepo, registry) ??
           (registry && Object.prototype.hasOwnProperty.call(registry, effectiveRepo)
               ? effectiveRepo
               : undefined))
-        : undefined
+        : matchedRegistryKey
     const registryEntry = registryKey && registry ? registry[registryKey] : undefined
 
+    let usedRegistryGithub = false
     if (registryEntry?.path) {
-        toolGithub = getGitHubIntegration(registryEntry.path, context.config?.runtime)
+        const candidate = getGitHubIntegration(registryEntry.path, context.config?.runtime)
+        if (candidate.isApiAvailable()) {
+            toolGithub = candidate
+            usedRegistryGithub = true
+        } else if (context.github) {
+            toolGithub = context.github
+        } else {
+            toolGithub = candidate
+        }
     } else if (context.github) {
         toolGithub = context.github
     }
@@ -174,13 +202,30 @@ export async function resolveOwnerRepo(
         }
     }
 
-    const repoInfo = await toolGithub.getRepoInfo()
+    let repoInfo = await toolGithub.getRepoInfo()
+    if (
+        usedRegistryGithub &&
+        repoInfo.owner === null &&
+        repoInfo.repo === null &&
+        context.github &&
+        context.github !== toolGithub &&
+        context.github.isApiAvailable()
+    ) {
+        toolGithub = context.github
+        repoInfo = await toolGithub.getRepoInfo()
+        usedRegistryGithub = false
+    }
 
     const detectedOwner = repoInfo.owner
     const detectedRepo = repoInfo.repo
 
     const owner = parsedOwner ?? detectedOwner ?? undefined
-    const repo = effectiveRepo ?? detectedRepo ?? undefined
+    const repo =
+        effectiveRepo ??
+        (usedRegistryGithub
+            ? (detectedRepo ?? matchedRegistryKey)
+            : (matchedRegistryKey ?? detectedRepo)) ??
+        undefined
 
     if (!owner || !repo) {
         return {

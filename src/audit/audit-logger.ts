@@ -419,7 +419,15 @@ export class AuditLogger {
     private async rotateIfNeeded(): Promise<void> {
         if (this.stderrMode || !this.config.maxSizeBytes) return
         try {
-            const info = await stat(this.config.logPath).catch(() => null)
+            const info = await stat(this.config.logPath).catch((err: unknown) => {
+                if (nodeErrorCode(err) !== 'ENOENT') {
+                    const message = err instanceof Error ? err.message : String(err)
+                    logger.debug(`Audit log stat failed before rotation: ${message}`, {
+                        module: 'Audit',
+                    })
+                }
+                return null
+            })
             if (!info || info.size < this.config.maxSizeBytes) return
 
             // Cascade rename from .4 to .5, .3 to .4, etc. to keep 5 backups

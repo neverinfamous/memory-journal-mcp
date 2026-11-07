@@ -64,6 +64,14 @@ interface ModernToolConfig {
 
 const toolRegistrationOptionsCache = new WeakMap<ToolRegistration, ModernToolConfig>()
 
+function isStandardSchemaWithJson(value: unknown): value is StandardSchemaWithJSON {
+    return (
+        typeof value === 'object' &&
+        value !== null &&
+        ('~standard' in value || 'partial' in value || 'passthrough' in value)
+    )
+}
+
 function buildToolRegistrationOptions(tool: ToolRegistration): ModernToolConfig {
     const cached = toolRegistrationOptionsCache.get(tool)
     if (cached !== undefined) return cached
@@ -73,7 +81,7 @@ function buildToolRegistrationOptions(tool: ToolRegistration): ModernToolConfig 
 
     if (tool.inputSchema !== undefined) {
         const schema = tool.inputSchema
-        const fallbackInputSchema = schema as unknown as StandardSchemaWithJSON
+        const fallbackInputSchema = isStandardSchemaWithJson(schema) ? schema : undefined
         if (
             typeof schema === 'object' &&
             schema !== null &&
@@ -84,26 +92,27 @@ function buildToolRegistrationOptions(tool: ToolRegistration): ModernToolConfig 
                 const relaxed = (
                     schema as { partial: () => { passthrough?: () => StandardSchemaWithJSON } }
                 ).partial()
-                toolOptions.inputSchema =
+                const candidate =
                     typeof relaxed.passthrough === 'function'
                         ? relaxed.passthrough()
                         : fallbackInputSchema
+                if (candidate !== undefined) toolOptions.inputSchema = candidate
             } catch (error) {
                 logger.warning('Failed to relax input schema; using fallback schema', {
                     module: 'McpServer',
                     tool: tool.name,
                     error: error instanceof Error ? error.message : String(error),
                 })
-                toolOptions.inputSchema = fallbackInputSchema
+                if (fallbackInputSchema !== undefined) toolOptions.inputSchema = fallbackInputSchema
             }
-        } else {
+        } else if (fallbackInputSchema !== undefined) {
             toolOptions.inputSchema = fallbackInputSchema
         }
     }
 
     if (tool.outputSchema !== undefined) {
         const outSchema = tool.outputSchema
-        const fallbackOutputSchema = outSchema as unknown as StandardSchemaWithJSON
+        const fallbackOutputSchema = isStandardSchemaWithJson(outSchema) ? outSchema : undefined
         if (
             typeof outSchema === 'object' &&
             outSchema !== null &&
@@ -120,9 +129,11 @@ function buildToolRegistrationOptions(tool: ToolRegistration): ModernToolConfig 
                     tool: tool.name,
                     error: error instanceof Error ? error.message : String(error),
                 })
-                toolOptions.outputSchema = fallbackOutputSchema
+                if (fallbackOutputSchema !== undefined) {
+                    toolOptions.outputSchema = fallbackOutputSchema
+                }
             }
-        } else {
+        } else if (fallbackOutputSchema !== undefined) {
             toolOptions.outputSchema = fallbackOutputSchema
         }
     }
@@ -175,12 +186,24 @@ function registerAllToolsOnServer(
                             : undefined
 
                     const currentConfig = configManager.getConfig()
-                    customToolHandlerConfig.filterConfig = currentConfig.toolFilterConfig
-                    customToolHandlerConfig.briefingConfig = resolveActiveBriefingConfig(
+                    const nextBriefing = resolveActiveBriefingConfig(
                         currentConfig.briefingConfig,
                         options,
                         allowedIoRoots
                     )
+                    customToolHandlerConfig.filterConfig = currentConfig.toolFilterConfig
+                    customToolHandlerConfig.briefingConfig = nextBriefing
+                    if (nextBriefing.defaultProjectNumber !== undefined) {
+                        customToolHandlerConfig.defaultProjectNumber =
+                            nextBriefing.defaultProjectNumber
+                    }
+                    if (nextBriefing.defaultWorkspaceId !== undefined) {
+                        customToolHandlerConfig.defaultWorkspaceId =
+                            nextBriefing.defaultWorkspaceId
+                    }
+                    if (nextBriefing.projectRegistry !== undefined) {
+                        customToolHandlerConfig.projectRegistry = nextBriefing.projectRegistry
+                    }
 
                     const toolArgs =
                         typeof args === 'object' && args !== null

@@ -1,5 +1,6 @@
 import type { Command } from 'commander'
 import { type z } from 'zod'
+import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import type { JournalEntry } from '../../types/index.js'
 import { 
     ioExportJsonOptionsSchema,
@@ -20,17 +21,26 @@ export const exportMarkdownSchema = ioExportMarkdownOptionsSchema
 export const importMarkdownSchema = ioImportMarkdownOptionsSchema
 export const importExternalSchema = ioImportExternalOptionsSchema
 
+function fetchAllWorkspaceEntries(db: IDatabaseAdapter, workspaceId: string | undefined): JournalEntry[] {
+    const PAGE_SIZE = 1000
+    const entries: JournalEntry[] = []
+    for (let offset = 0; ; offset += PAGE_SIZE) {
+        const page = db.getEntriesPage(offset, PAGE_SIZE, workspaceId).entries
+        entries.push(...page)
+        if (page.length < PAGE_SIZE) break
+    }
+    return entries
+}
+
 export async function exportJsonAction(options: z.infer<typeof exportJsonSchema>, command: Command): Promise<void> {
     const { db, serverOptions } = await getDb(options, command)
     try {
-        const workspaceId = options.workspace ?? serverOptions.defaultWorkspaceId
-        const PAGE_SIZE = 1000
-        const entries: JournalEntry[] = []
-        for (let offset = 0; ; offset += PAGE_SIZE) {
-            const page = db.getEntriesPage(offset, PAGE_SIZE, workspaceId).entries
-            entries.push(...page)
-            if (page.length < PAGE_SIZE) break
-        }
+        const workspaceId = resolveWorkspaceId(
+            options.workspace,
+            options.defaultProject ?? serverOptions.defaultProjectNumber,
+            serverOptions
+        )
+        const entries = fetchAllWorkspaceEntries(db, workspaceId)
 
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
         const defaultName = `journal_export_${timestamp}.json`
@@ -60,15 +70,12 @@ export async function exportMarkdownAction(options: z.infer<typeof exportMarkdow
         if (!options.dir) {
             throw new Error('--dir is required for markdown export')
         }
-        const workspaceId = options.workspace ?? serverOptions.defaultWorkspaceId
-        // Page through all entries rather than truncating at an arbitrary limit
-        const PAGE_SIZE = 1000
-        const entries: JournalEntry[] = []
-        for (let offset = 0; ; offset += PAGE_SIZE) {
-            const page = db.getEntriesPage(offset, PAGE_SIZE, workspaceId).entries
-            entries.push(...page)
-            if (page.length < PAGE_SIZE) break
-        }
+        const workspaceId = resolveWorkspaceId(
+            options.workspace,
+            options.defaultProject ?? serverOptions.defaultProjectNumber,
+            serverOptions
+        )
+        const entries = fetchAllWorkspaceEntries(db, workspaceId)
         
         const exportable = entries.map(e => ({
             id: e.id,
@@ -76,7 +83,9 @@ export async function exportMarkdownAction(options: z.infer<typeof exportMarkdow
             entryType: e.entryType,
             timestamp: e.timestamp,
             tags: e.tags,
-            significance: e.significanceType ?? undefined
+            ...(e.significanceType !== null ? { significance: e.significanceType } : {}),
+            ...(e.workspaceId !== undefined ? { workspaceId: e.workspaceId } : {}),
+            ...(e.projectNumber !== undefined && e.projectNumber !== null ? { projectNumber: e.projectNumber } : {}),
         }))
 
         // We bypass allowedRoots check for CLI since it's run by a trusted human/agent directly

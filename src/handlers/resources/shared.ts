@@ -13,6 +13,7 @@ import { getGitHubIntegration } from '../../github/github-integration/index.js'
 import type { Scheduler } from '../../server/scheduler.js'
 import type { ServerRuntime } from '../../utils/maintenance-lock.js'
 import {
+    getActiveSessionProject,
     loadProjectRegistryFromConfig,
     resolveProjectNumberFromPath,
 } from '../../utils/workspace-resolver.js'
@@ -254,19 +255,24 @@ export const DEFAULT_BRIEFING_CONFIG: BriefingConfig = {
 /**
  * Resource context for handlers that need extended access
  */
-export function resourceWorkspace(context: { briefingConfig?: Partial<BriefingConfig> }): string {
+export function resourceWorkspace(context: {
+    briefingConfig?: Partial<BriefingConfig>
+    runtime?: ServerRuntime
+}): string {
     const cfg = context.briefingConfig
     const id = cfg?.defaultWorkspaceId
     if (id !== undefined && id.length > 0 && id !== 'default') {
         return id
     }
+    const sessionCtx = getActiveSessionProject(context.runtime)
     const registry = cfg?.projectRegistry ?? loadProjectRegistryFromConfig()
     if (registry !== undefined) {
         const projNum =
             cfg?.defaultProjectNumber ??
             (process.env['NODE_ENV'] === 'test' || process.env['VITEST'] === 'true'
                 ? undefined
-                : resolveProjectNumberFromPath(process.cwd(), registry))
+                : resolveProjectNumberFromPath(process.cwd(), registry)) ??
+            sessionCtx.projectNumber
         if (projNum !== undefined) {
             for (const [key, entry] of Object.entries(registry)) {
                 if (entry.project_number === projNum) {
@@ -274,6 +280,9 @@ export function resourceWorkspace(context: { briefingConfig?: Partial<BriefingCo
                 }
             }
         }
+    }
+    if (sessionCtx.workspaceId !== undefined && sessionCtx.workspaceId.length > 0) {
+        return sessionCtx.workspaceId
     }
     return id !== undefined && id.length > 0 ? id : 'default'
 }

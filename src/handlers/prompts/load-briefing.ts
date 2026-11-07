@@ -1,7 +1,10 @@
 import { ICON_PROMPT } from '../../constants/icons.js'
 import type { InternalPromptDef, PromptMessage } from './index.js'
 import type { BriefingConfig } from '../resources/shared.js'
-import { loadProjectRegistryFromConfig } from '../../utils/workspace-resolver.js'
+import {
+    loadProjectRegistryFromConfig,
+    setActiveSessionProject,
+} from '../../utils/workspace-resolver.js'
 
 /**
  * Extract the configured `project_number` from a registry entry, if present
@@ -135,15 +138,13 @@ export function getLoadBriefingPromptDefinitions(): InternalPromptDef[] {
                     required: false,
                 },
             ],
-            handler: async (
+            handler: (
                 args: Record<string, string>,
                 _db: unknown,
                 _teamDb?: unknown,
                 _github?: unknown,
                 briefingConfig?: BriefingConfig
             ) => {
-                await Promise.resolve()
-
                 const projectsArg = args['projects']
                 const requestedProjects = projectsArg
                     ? projectsArg
@@ -209,6 +210,15 @@ export function getLoadBriefingPromptDefinitions(): InternalPromptDef[] {
                                 },
                             },
                         ],
+                    }
+                }
+
+                const firstResolvedUri = resolvedUris[0]
+                if (firstResolvedUri?.startsWith('memory://briefing/')) {
+                    const primaryKey = firstResolvedUri.slice('memory://briefing/'.length)
+                    if (primaryKey.length > 0) {
+                        const primaryProjNum = getProjectNumber(registry[primaryKey])
+                        setActiveSessionProject(primaryKey, primaryProjNum)
                     }
                 }
 

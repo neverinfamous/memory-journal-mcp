@@ -6,6 +6,7 @@ import { resolveIssueUrl } from '../../../utils/github-helpers.js'
 import { buildCreateEntryInput, shareCreatedEntryWithTeam } from './create-entry-helpers.js'
 import { resolveWorkspaceId, resolveProjectContext } from '../../../utils/workspace-resolver.js'
 import { MemoryJournalMcpError } from '../../../types/errors.js'
+import { logger } from '../../../utils/logger.js'
 
 import {
     CreateEntrySchema,
@@ -147,7 +148,9 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                     if (context.config?.subscriptionManager) {
                         void context.config.subscriptionManager
                             .notifyResourceUpdated('memory://recent')
-                            .catch(() => undefined)
+                            .catch((err: unknown) => {
+                                logger.debug('Failed to notify resource updated', { error: err })
+                            })
                     }
                     const finalEntry = createdEntry
 
@@ -199,8 +202,19 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     const input = GetEntryByIdSchema.parse(params)
-                    const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
-                    const entry = db.getEntryById(input.entry_id, wsId)
+                    let wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
+                    let entry = db.getEntryById(input.entry_id, wsId)
+                    if (
+                        !entry &&
+                        input.workspace_id === undefined &&
+                        input.project_number === undefined &&
+                        wsId === 'default'
+                    ) {
+                        entry = db.getEntryById(input.entry_id, '*')
+                        if (entry?.workspaceId !== undefined) {
+                            wsId = entry.workspaceId
+                        }
+                    }
                     if (!entry) {
                         return {
                             success: false,
@@ -275,8 +289,19 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     const input = GetEntryHistorySchema.parse(params)
-                    const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
-                    const current = db.getEntryById(input.entry_id, wsId)
+                    let wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
+                    let current = db.getEntryById(input.entry_id, wsId)
+                    if (
+                        !current &&
+                        input.workspace_id === undefined &&
+                        input.project_number === undefined &&
+                        wsId === 'default'
+                    ) {
+                        current = db.getEntryById(input.entry_id, '*')
+                        if (current?.workspaceId !== undefined) {
+                            wsId = current.workspaceId
+                        }
+                    }
                     if (!current) {
                         return {
                             success: false,
@@ -330,13 +355,16 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                             workspace_id: z.string().optional(),
                         })
                         .parse(params ?? {})
+                    const resolvedWs = resolveWorkspaceId(
+                        input.workspace_id,
+                        input.project_number,
+                        context.config
+                    )
                     const wsId =
-                        input.workspace_id !== undefined || input.project_number !== undefined
-                            ? resolveWorkspaceId(
-                                  input.workspace_id,
-                                  input.project_number,
-                                  context.config
-                              )
+                        input.workspace_id !== undefined ||
+                        input.project_number !== undefined ||
+                        resolvedWs !== 'default'
+                            ? resolvedWs
                             : undefined
                     const tags = db
                         .listTags(wsId)

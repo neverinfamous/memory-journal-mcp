@@ -69,6 +69,53 @@ function extractEntries(result: JournalEntry[] | { entries: JournalEntry[] }): J
 
 
 
+function fetchBriefingSummaries(
+    context: ResourceContext,
+    config: BriefingConfig,
+    targetWs: string,
+    projectNumber: number | null | undefined,
+    filterImportant: (entries: JournalEntry[]) => JournalEntry[]
+): JournalEntry[] {
+    const summaryFetchLimit = Math.max(20, (config.summaryCount ?? 1) * 5)
+    const rawSummaryEntries = extractEntries(
+        context.db.searchEntries('', {
+            limit: summaryFetchLimit,
+            ...(typeof projectNumber === 'number' ? { projectNumber } : {}),
+            tags: ['session-summary'],
+            workspaceId: targetWs,
+            sortBy: 'timestamp',
+        })
+    )
+
+    let summaryEntries = filterImportant(rawSummaryEntries)
+    if (summaryEntries.length === 0 && rawSummaryEntries.length > 0) {
+        summaryEntries = rawSummaryEntries
+    }
+
+    const rawRetroEntries =
+        summaryEntries.length === 0
+            ? extractEntries(
+                  context.db.searchEntries('', {
+                      limit: summaryFetchLimit,
+                      ...(typeof projectNumber === 'number' ? { projectNumber } : {}),
+                      entryType: 'retrospective',
+                      workspaceId: targetWs,
+                      sortBy: 'timestamp',
+                  })
+              )
+            : []
+
+    let retroEntries = filterImportant(rawRetroEntries)
+    if (retroEntries.length === 0 && rawRetroEntries.length > 0) {
+        retroEntries = rawRetroEntries
+    }
+
+    return (summaryEntries.length > 0 ? summaryEntries : retroEntries).slice(
+        0,
+        config.summaryCount ?? 1
+    )
+}
+
 export function buildJournalContext(
     context: ResourceContext,
     config: BriefingConfig,
@@ -102,53 +149,13 @@ export function buildJournalContext(
     }
 
     const targetWs = activeWorkspaceId || config.defaultWorkspaceId || 'default'
-    const summaryFetchLimit = Math.max(20, (config.summaryCount ?? 1) * 5)
-    const rawSummaryEntries =
-        typeof projectNumber === 'number'
-            ? extractEntries(context.db.searchEntries('', {
-                  limit: summaryFetchLimit,
-                  projectNumber,
-                  tags: ['session-summary'],
-                  workspaceId: targetWs,
-                  sortBy: 'timestamp'
-              }))
-            : extractEntries(context.db.searchEntries('', {
-                  limit: summaryFetchLimit,
-                  tags: ['session-summary'],
-                  workspaceId: targetWs,
-                  sortBy: 'timestamp'
-              }))
-    
-    let summaryEntries = filterImportant(rawSummaryEntries)
-    if (summaryEntries.length === 0 && rawSummaryEntries.length > 0) {
-        summaryEntries = rawSummaryEntries
-    }
-
-    // Fallback to retrospective type if no tag matched
-    const rawRetroEntries =
-        summaryEntries.length === 0
-            ? typeof projectNumber === 'number'
-                ? extractEntries(context.db.searchEntries('', {
-                      limit: summaryFetchLimit,
-                      projectNumber,
-                      entryType: 'retrospective',
-                      workspaceId: targetWs,
-                      sortBy: 'timestamp'
-                  }))
-                : extractEntries(context.db.searchEntries('', {
-                      limit: summaryFetchLimit,
-                      entryType: 'retrospective',
-                      workspaceId: targetWs,
-                      sortBy: 'timestamp'
-                  }))
-            : []
-            
-    let retroEntries = filterImportant(rawRetroEntries)
-    if (retroEntries.length === 0 && rawRetroEntries.length > 0) {
-        retroEntries = rawRetroEntries
-    }
-
-    const finalSummaryEntries = (summaryEntries.length > 0 ? summaryEntries : retroEntries).slice(0, config.summaryCount ?? 1)
+    const finalSummaryEntries = fetchBriefingSummaries(
+        context,
+        config,
+        targetWs,
+        projectNumber,
+        filterImportant
+    )
 
     let latestSessionSummary
     let sessionSummaries

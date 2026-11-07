@@ -24,6 +24,8 @@ export interface FrontmatterData {
     tags?: string[]
     timestamp?: string
     significance?: string
+    workspace_id?: string
+    project_number?: number
     relationships?: { type: string; target_id: number }[]
     source?: string
 }
@@ -45,6 +47,8 @@ const FrontmatterSchema = z.object({
     tags: z.array(z.string().max(100)).max(50).optional(),
     timestamp: z.string().optional(),
     significance: z.string().optional(),
+    workspace_id: z.string().optional(),
+    project_number: z.number().int().positive().optional(),
     relationships: z
         .array(
             z.object({
@@ -76,6 +80,8 @@ export function serializeFrontmatter(data: FrontmatterData | null | undefined): 
     if (data.tags && data.tags.length > 0) cleanData.tags = data.tags
     if (data.timestamp !== undefined) cleanData.timestamp = data.timestamp
     if (data.significance !== undefined) cleanData.significance = data.significance
+    if (data.workspace_id !== undefined) cleanData.workspace_id = data.workspace_id
+    if (data.project_number !== undefined) cleanData.project_number = data.project_number
     if (data.relationships && data.relationships.length > 0)
         cleanData.relationships = data.relationships
     if (data.source !== undefined) cleanData.source = data.source

@@ -8,12 +8,17 @@ import type {
     EntryRevision,
     AnchorStatus,
     Anchor,
-    CreateEntryInput,
-    CreateTeamEntryInput,
+    CreateEntryInput as BaseCreateEntryInput,
+    CreateTeamEntryInput as BaseCreateTeamEntryInput,
 } from '../../types/index.js'
 import type { DigestSnapshot } from '../sqlite-adapter/entries/digest.js'
 
-export type { CreateEntryInput, CreateTeamEntryInput }
+export type CreateEntryInput = Omit<BaseCreateEntryInput, 'anchors'> & {
+    anchors?: { anchorPath: string; anchorType: string; status?: string | undefined }[] | undefined
+}
+export type CreateTeamEntryInput = Omit<BaseCreateTeamEntryInput, 'anchors'> & {
+    anchors?: { anchorPath: string; anchorType: string; status?: string | undefined }[] | undefined
+}
 
 export type TeamRole = 'admin' | 'member' | 'viewer'
 
