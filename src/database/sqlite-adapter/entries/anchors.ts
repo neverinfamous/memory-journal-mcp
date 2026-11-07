@@ -26,15 +26,14 @@ export function getAnchorsByEntryId(
     workspaceId?: string
 ): Anchor[] {
     const { db } = context
-    const scope = effectiveWorkspace(workspaceId)
-    if (scope !== '*') {
+    if (workspaceId !== undefined && workspaceId !== '*') {
         const stmt = db.prepare(`
             SELECT id, entry_id as entryId, anchor_path as anchorPath, anchor_type as anchorType, status, last_checked_at as lastCheckedAt
             FROM entry_anchors
             WHERE entry_id = ?
               AND entry_id IN (SELECT id FROM memory_journal WHERE workspace_id = ?)
         `)
-        return stmt.all(entryId, scope) as Anchor[]
+        return stmt.all(entryId, workspaceId) as Anchor[]
     }
     const stmt = db.prepare(`
         SELECT id, entry_id as entryId, anchor_path as anchorPath, anchor_type as anchorType, status, last_checked_at as lastCheckedAt

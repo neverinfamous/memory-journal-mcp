@@ -228,14 +228,34 @@ async function normalizeDispatchParams(
     // workspace from that project instead of overriding it with the session workspace.
     const callerPassedProjectOnly =
         paramsObj['project_number'] !== undefined && paramsObj['workspace_id'] === undefined && paramsObj['workspace'] === undefined
-    if (paramsObj['project_number'] === undefined && projectId !== undefined && checkSchemaAcceptsKey(tool.inputSchema, 'project_number')) {
-        paramsObj['project_number'] = projectId
-    }
     if (paramsObj['workspace'] !== undefined && paramsObj['workspace_id'] === undefined) {
         paramsObj['workspace_id'] = paramsObj['workspace']
     }
     if (typeof paramsObj['workspace_id'] === 'number') {
         paramsObj['workspace_id'] = String(paramsObj['workspace_id'])
+    }
+    if (
+        paramsObj['project_number'] === undefined &&
+        typeof paramsObj['workspace_id'] === 'string' &&
+        paramsObj['workspace_id'] !== 'default' &&
+        checkSchemaAcceptsKey(tool.inputSchema, 'project_number')
+    ) {
+        const wsReg = lookupRegistryEntry(sessionContext.config?.projectRegistry, paramsObj['workspace_id'])
+        if (wsReg?.project_number !== undefined) {
+            paramsObj['project_number'] = wsReg.project_number
+        }
+    }
+    const callerWorkspaceId =
+        typeof paramsObj['workspace_id'] === 'string' ? paramsObj['workspace_id'] : undefined
+    if (
+        paramsObj['project_number'] === undefined &&
+        projectId !== undefined &&
+        (callerWorkspaceId === undefined ||
+            callerWorkspaceId === 'default' ||
+            callerWorkspaceId === workspaceId) &&
+        checkSchemaAcceptsKey(tool.inputSchema, 'project_number')
+    ) {
+        paramsObj['project_number'] = projectId
     }
     if (
         !callerPassedProjectOnly &&

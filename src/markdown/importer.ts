@@ -342,6 +342,12 @@ export async function processImportBatch(
     const vectorQueue: { entryId: number; filename: string; workspaceId: string | undefined }[] = []
 
     db.executeInTransaction(() => {
+        const pendingLinks: {
+            entryId: number
+            relationships: { type: string; target_id: number }[] | undefined
+            workspaceId: string | undefined
+        }[] = []
+
         for (const file of parsedFiles) {
             const { filename, metadata } = file
 
@@ -355,13 +361,21 @@ export async function processImportBatch(
             }
 
             const { entryId, workspaceId: entryWsId } = upsertParsedFile(file, db, options, result)
+            pendingLinks.push({
+                entryId,
+                relationships: metadata.relationships,
+                workspaceId: entryWsId,
+            })
+            vectorQueue.push({ entryId, filename, workspaceId: entryWsId })
+        }
+
+        for (const pending of pendingLinks) {
             result.relationshipsLinked += linkImportedRelationships(
                 db,
-                entryId,
-                metadata.relationships,
-                entryWsId
+                pending.entryId,
+                pending.relationships,
+                pending.workspaceId
             )
-            vectorQueue.push({ entryId, filename, workspaceId: entryWsId })
         }
     })
 

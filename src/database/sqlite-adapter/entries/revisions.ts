@@ -1,7 +1,6 @@
 import type { EntryRevision } from '../../../types/index.js'
 import type { EntriesSharedContext } from './shared.js'
 import { getEntryById } from './crud-read.js'
-import { effectiveWorkspace } from '../../workspace-scope.js'
 
 export type { EntryRevision }
 
@@ -16,7 +15,7 @@ export interface VersionDiff {
 }
 
 /**
- * List revisions for an entry. Scoped to `workspaceId` (default 'default') unless `'*'` is passed.
+ * List revisions for an entry. Scoped to `workspaceId` when provided (unless `'*'` is passed).
  */
 export function getEntryRevisions(
     context: EntriesSharedContext,
@@ -24,9 +23,8 @@ export function getEntryRevisions(
     workspaceId?: string
 ): EntryRevision[] {
     const { db } = context
-    const scopeId = effectiveWorkspace(workspaceId)
 
-    if (scopeId !== '*' && getEntryById(context, id, scopeId) === null) {
+    if (workspaceId !== undefined && workspaceId !== '*' && getEntryById(context, id, workspaceId) === null) {
         return []
     }
 
@@ -49,7 +47,7 @@ export function compareEntryVersions(
     entryId: number,
     fromRevision: number,
     toRevision?: number,
-    workspaceId = 'default'
+    workspaceId?: string
 ): VersionDiff | null {
     const revisions = getEntryRevisions(context, entryId, workspaceId)
     const fromRev = revisions.find((r) => r.revisionNumber === fromRevision)
@@ -64,7 +62,7 @@ export function compareEntryVersions(
         toContent = toRev.contentSnapshot
         resolvedTo = toRevision
     } else {
-        const currentEntry = getEntryById(context, entryId, workspaceId)
+        const currentEntry = getEntryById(context, entryId, workspaceId ?? '*')
         if (currentEntry === null) return null
         toContent = currentEntry.content
     }
