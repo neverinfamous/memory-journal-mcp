@@ -11,13 +11,14 @@ const RESULT_COLLECTION_KEYS: readonly string[] = [
     'flags', 'groups', 'users', 'capabilities', 'metrics', 'events', 'records',
     'logs', 'aliases', 'tags', 'issues', 'pullRequests', 'milestones', 'columns',
     'comments', 'files', 'errors', 'backups', 'deleted', 'updated', 'notFound',
-    'history', 'relationships', 'members', 'data',
+    'history', 'relationships', 'members', 'data', 'nodes', 'edges',
 ]
 
 const ITERATOR_COLLECTION_KEYS: readonly string[] = [
     'entries', 'results', 'projects', 'items', 'issues', 'pullRequests',
     'milestones', 'columns', 'comments', 'files', 'errors', 'backups',
     'deleted', 'updated', 'notFound', 'history', 'relationships', 'members',
+    'nodes', 'edges',
 ]
 
 const FAILED_ARRAY_METHODS: readonly string[] = [

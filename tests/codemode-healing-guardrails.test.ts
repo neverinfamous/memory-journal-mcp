@@ -2519,5 +2519,63 @@ return { success: true, projectId };
             expect(res['mermaid']).toBeUndefined()
             expect(mockDb.getEntryById).not.toHaveBeenCalledWith(14361, '*')
         })
+
+        it('should return nodes and edges arrays in visualize_relationships and safe proxy access', async () => {
+            const { callTool } = await import('../src/handlers/tools/index.js')
+            const mockDb = {
+                getEntryById: vi.fn().mockReturnValue({ id: 14367, workspaceId: 'default', deletedAt: null, content: 'CMS supervisor' }),
+                visualizeRelationships: vi.fn().mockReturnValue({
+                    nodes: [{ id: 14367, group: 'maintenance', metadata: { content: 'CMS supervisor' } }],
+                    edges: [{ from: 14367, to: 14369, type: 'implements' }]
+                })
+            } as any
+
+            const res = (await callTool('visualize_relationships', { entry_id: 14367, depth: 1 }, mockDb, undefined, undefined, mockConfig)) as Record<string, unknown>
+            expect(res['nodes']).toBeDefined()
+            expect(Array.isArray(res['nodes'])).toBe(true)
+            expect(res['edges']).toBeDefined()
+            expect(Array.isArray(res['edges'])).toBe(true)
+
+            // Test proxy behavior on failed result
+            const failedProxy = wrapResult({
+                success: false,
+                error: 'Entry not found: 14367',
+                code: 'RESOURCE_NOT_FOUND'
+            }) as Record<string, unknown>
+            expect(failedProxy['nodes']).toEqual([])
+            expect(failedProxy['edges']).toEqual([])
+        })
+
+        it('should accept workspace_id: "*" in merge_tags for global consolidation', async () => {
+            const { callTool } = await import('../src/handlers/tools/index.js')
+            const mockDb = {
+                mergeTags: vi.fn().mockReturnValue({ entriesUpdated: 12, sourceDeleted: true })
+            } as any
+
+            const res = (await callTool('merge_tags', {
+                source_tag: 'usability-testing',
+                target_tag: 'usability-test',
+                workspace_id: '*'
+            }, mockDb, undefined, undefined, mockConfig)) as Record<string, unknown>
+
+            expect(res['success']).toBe(true)
+            expect(mockDb.mergeTags).toHaveBeenCalledWith('usability-testing', 'usability-test', '*')
+        })
+
+        it('should accept workspace_id: "*" in check_entry_staleness without validation error', async () => {
+            const { callTool } = await import('../src/handlers/tools/index.js')
+            const mockDb = {
+                getRecentEntries: vi.fn().mockReturnValue({ entries: [], count: 0 }),
+                getEntryByIdIncludeDeleted: vi.fn().mockReturnValue(null),
+                getAnchorsByEntryId: vi.fn().mockReturnValue([])
+            } as any
+
+            const res = (await callTool('check_entry_staleness', {
+                workspace_id: '*'
+            }, mockDb, undefined, undefined, mockConfig)) as Record<string, unknown>
+
+            expect(res['success']).toBe(true)
+            expect(Array.isArray(res['results'])).toBe(true)
+        })
     })
 })

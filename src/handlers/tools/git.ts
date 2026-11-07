@@ -395,40 +395,22 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                     const resolvedEntryId = parsedParams.entry_id ?? parsedParams.entryId
                     const rawWs = parsedParams.workspace_id ?? parsedParams.workspaceId
                     const rawProj = parsedParams.project_number ?? parsedParams.projectNumber
-                    if (rawWs === '*') {
-                        // Anchors are checked against a single repository root; a cross-workspace
-                        // sweep would invalidate anchors of other repos against the wrong root.
-                        throw new ValidationError(
-                            "check_stale_anchors mutates anchor status against one repository root and does not accept workspace_id '*'. Pass a specific workspace_id or project_number."
-                        )
-                    }
-                    const wsId = resolveWorkspaceId(rawWs, rawProj, context.config)
-
-                    const targets: { id: number; timestamp: string }[] = []
-                    if (resolvedEntryId !== undefined) {
-                        const entry = db.getEntryByIdIncludeDeleted(resolvedEntryId, wsId)
-                        if (!entry) throw new ResourceNotFoundError('entry', String(resolvedEntryId))
-                        targets.push({ id: entry.id, timestamp: entry.timestamp })
-                    } else {
-                        const { entries: recent } = db.getRecentEntries(20, undefined, undefined, undefined, false, wsId)
-                        for (const r of recent) {
-                            targets.push({ id: r.id, timestamp: r.timestamp })
-                        }
-                    }
-
                     const registry = context.config?.projectRegistry ?? loadProjectRegistryFromConfig()
-                    const canonicalWs = findCanonicalRegistryKey(wsId, registry) ?? wsId
-                    const registryPath = registry?.[canonicalWs]?.path
-                    const hasRegistryPath = registryPath !== undefined && registryPath.length > 0
-                    // Anchors of another workspace must not be checked (and persisted as stale)
-                    // against the server's own working directory, so a missing registry path is
-                    // only tolerated for the default workspace.
-                    const lacksRepositoryRoot =
-                        !hasRegistryPath &&
-                        wsId !== resolveWorkspaceId(undefined, undefined, context.config)
-                    const cwd = hasRegistryPath ? registryPath : process.cwd()
+                    const defaultWs = resolveWorkspaceId(undefined, undefined, context.config)
+                    const targetWorkspaces: string[] = []
 
-                    const workspaceRoot = cwd
+                    if (rawWs === '*') {
+                        if (resolvedEntryId !== undefined) {
+                            const entry = db.getEntryByIdIncludeDeleted(resolvedEntryId, '*')
+                            if (!entry) throw new ResourceNotFoundError('entry', String(resolvedEntryId))
+                            targetWorkspaces.push(entry.workspaceId ?? defaultWs)
+                        } else {
+                            const configured = Object.keys(registry ?? {}).filter((k) => registry?.[k]?.path)
+                            targetWorkspaces.push(...(configured.length > 0 ? Array.from(new Set(configured)) : [defaultWs]))
+                        }
+                    } else {
+                        targetWorkspaces.push(resolveWorkspaceId(rawWs, rawProj, context.config))
+                    }
 
                     const results: {
                         anchorId: number
@@ -439,23 +421,47 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                         isDeleted: boolean
                     }[] = []
 
-                    for (const target of targets) {
-                        for (const anchor of db.getAnchorsByEntryId(target.id)) {
-                            if (lacksRepositoryRoot) {
-                                throw new ValidationError(
-                                    `No registered repository path for workspace '${wsId}'. Register the project path before checking its anchors.`
+                    for (const wsId of targetWorkspaces) {
+                        const targets: { id: number; timestamp: string }[] = []
+                        if (resolvedEntryId !== undefined) {
+                            const entry = db.getEntryByIdIncludeDeleted(resolvedEntryId, rawWs === '*' ? '*' : wsId)
+                            if (!entry) {
+                                if (rawWs !== '*') throw new ResourceNotFoundError('entry', String(resolvedEntryId))
+                                continue
+                            }
+                            targets.push({ id: entry.id, timestamp: entry.timestamp })
+                        } else {
+                            const { entries: recent } = db.getRecentEntries(20, undefined, undefined, undefined, false, wsId)
+                            for (const r of recent) {
+                                targets.push({ id: r.id, timestamp: r.timestamp })
+                            }
+                        }
+
+                        const canonicalWs = findCanonicalRegistryKey(wsId, registry) ?? wsId
+                        const registryPath = registry?.[canonicalWs]?.path
+                        const hasRegistryPath = registryPath !== undefined && registryPath.length > 0
+                        const lacksRepositoryRoot = !hasRegistryPath && wsId !== defaultWs
+                        if (lacksRepositoryRoot && rawWs === '*') continue
+                        const cwd = hasRegistryPath ? registryPath : process.cwd()
+
+                        for (const target of targets) {
+                            for (const anchor of db.getAnchorsByEntryId(target.id)) {
+                                if (lacksRepositoryRoot) {
+                                    throw new ValidationError(
+                                        `No registered repository path for workspace '${wsId}'. Register the project path before checking its anchors.`
+                                    )
+                                }
+                                results.push(
+                                    await evaluateAnchorStaleness(
+                                        db,
+                                        anchor,
+                                        target.timestamp,
+                                        cwd,
+                                        async (anchorPath, since) =>
+                                            (await fetchCommits({ path: anchorPath, since }, cwd)).length
+                                    )
                                 )
                             }
-                            results.push(
-                                await evaluateAnchorStaleness(
-                                    db,
-                                    anchor,
-                                    target.timestamp,
-                                    workspaceRoot,
-                                    async (anchorPath, since) =>
-                                        (await fetchCommits({ path: anchorPath, since }, workspaceRoot)).length
-                                )
-                            )
                         }
                     }
 

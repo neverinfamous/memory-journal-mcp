@@ -162,6 +162,8 @@ export const TeamVisualizeOutputSchema = z
         mermaid: z.string().optional(),
         nodeCount: z.number().optional(),
         edgeCount: z.number().optional(),
+        nodes: z.array(z.any()).optional(),
+        edges: z.array(z.any()).optional(),
         error: z.string().optional(),
     })
     .extend(ErrorFieldsMixin.shape)

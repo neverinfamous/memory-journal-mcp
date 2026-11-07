@@ -178,6 +178,8 @@ const VisualizationOutputSchema = z
         depth: z.number().optional(),
         mermaid: z.string().nullable().optional(),
         message: z.string().optional(),
+        nodes: z.array(z.any()).optional(),
+        edges: z.array(z.any()).optional(),
         legend: z
             .object({
                 blue: z.string(),
@@ -236,8 +238,7 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                     if (
                         !fromEntry &&
                         input.workspace_id === undefined &&
-                        input.project_number === undefined &&
-                        wsId === 'default'
+                        input.project_number === undefined
                     ) {
                         fromEntry = db.getEntryById(input.from_entry_id, '*')
                         if (fromEntry?.workspaceId !== undefined) {
@@ -252,7 +253,14 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                             success: false,
                         }
                     }
-                    const toEntry = db.getEntryById(input.to_entry_id, wsId)
+                    let toEntry = db.getEntryById(input.to_entry_id, wsId)
+                    if (
+                        !toEntry &&
+                        input.workspace_id === undefined &&
+                        input.project_number === undefined
+                    ) {
+                        toEntry = db.getEntryById(input.to_entry_id, '*')
+                    }
                     if (!toEntry || toEntry.deletedAt) {
                         return {
                             ...formatHandlerError(
@@ -368,6 +376,8 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                             mermaid:
                                 '```mermaid\ngraph TD\n  NoData["No entries found with relationships matching your criteria"]\n```',
                             message: 'No entries found with relationships matching your criteria',
+                            nodes: [],
+                            edges: [],
                         }
                     }
 
@@ -429,6 +439,8 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                         root_entry: input.entry_id ?? null,
                         depth: input.depth,
                         mermaid,
+                        nodes: results.nodes,
+                        edges: results.edges,
                         legend: {
                             blue: 'Personal entries',
                             orange: 'Project entries',

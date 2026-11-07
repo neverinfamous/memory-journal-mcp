@@ -152,8 +152,7 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                     if (
                         !fromEntry &&
                         workspace_id === undefined &&
-                        project_number === undefined &&
-                        wsId === 'default'
+                        project_number === undefined
                     ) {
                         fromEntry = teamDb.getEntryById(from_entry_id, '*')
                         if (fromEntry?.workspaceId !== undefined) {
@@ -196,7 +195,14 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                             recoverable: true,
                         }
                     }
-                    const toEntry = teamDb.getEntryById(to_entry_id, wsId)
+                    let toEntry = teamDb.getEntryById(to_entry_id, wsId)
+                    if (
+                        !toEntry &&
+                        workspace_id === undefined &&
+                        project_number === undefined
+                    ) {
+                        toEntry = teamDb.getEntryById(to_entry_id, '*')
+                    }
                     if (!toEntry) {
                         return {
                             success: false,
@@ -289,8 +295,7 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                         if (
                             !fromEntry &&
                             workspace_id === undefined &&
-                            project_number === undefined &&
-                            wsId === 'default'
+                            project_number === undefined
                         ) {
                             fromEntry = teamDb.getEntryById(entry_id, '*')
                             if (fromEntry?.workspaceId !== undefined) {
@@ -329,6 +334,8 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                             mermaid: 'graph LR\n  empty["No entries found"]',
                             nodeCount: 0,
                             edgeCount: 0,
+                            nodes: [],
+                            edges: [],
                         }
                     }
 
@@ -348,6 +355,8 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                         mermaid,
                         nodeCount: nodes.size,
                         edgeCount: edges.length,
+                        nodes: Array.from(nodes.entries()).map(([id, label]) => ({ id, label })),
+                        edges,
                     }
                 } catch (err) {
                     return formatHandlerError(err)

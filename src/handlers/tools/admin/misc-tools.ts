@@ -88,11 +88,14 @@ export function getMiscTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    const wsId = resolveWriteWorkspaceId(
-                        input.workspace_id,
-                        input.project_number,
-                        context.config
-                    )
+                    const wsId =
+                        input.workspace_id === '*'
+                            ? '*'
+                            : resolveWriteWorkspaceId(
+                                input.workspace_id,
+                                input.project_number,
+                                context.config
+                            )
                     const result = db.mergeTags(source_tag, target_tag, wsId)
                     return {
                         success: true,
