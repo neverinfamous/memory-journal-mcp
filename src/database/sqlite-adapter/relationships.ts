@@ -24,13 +24,14 @@ export class RelationshipsManager {
     ): Relationship {
         const db = this.db
 
-        // Workspace enforcement is opt-in: only applied when a workspaceId is provided ('*' = any).
-        const scoped = workspaceId !== undefined && workspaceId !== '*'
+        // Workspace enforcement is applied unless workspaceId is explicitly '*'
+        const scopeId = effectiveWorkspace(workspaceId)
+        const scoped = scopeId !== '*'
         const existsStmt = db.prepare(
             `SELECT 1 FROM memory_journal WHERE id = ? AND deleted_at IS NULL${scoped ? ' AND workspace_id = ?' : ''}`
         )
         const exists = (entryId: number): boolean =>
-            (scoped ? existsStmt.get(entryId, workspaceId) : existsStmt.get(entryId)) !== undefined
+            (scoped ? existsStmt.get(entryId, scopeId) : existsStmt.get(entryId)) !== undefined
         if (!exists(fromEntryId)) {
             throw new ResourceNotFoundError('Entry', String(fromEntryId))
         }
@@ -64,7 +65,8 @@ export class RelationshipsManager {
      * relationships whose both endpoints are in that workspace are returned.
      */
     getRelationships(entryId: number, workspaceId?: string): Relationship[] {
-        const scoped = workspaceId !== undefined && workspaceId !== '*'
+        const scopeId = effectiveWorkspace(workspaceId)
+        const scoped = scopeId !== '*'
         const rows = this.db
             .prepare(
                 `SELECT id, from_entry_id as fromEntryId, to_entry_id as toEntryId,
@@ -77,7 +79,7 @@ export class RelationshipsManager {
                          : ''
                  }`
             )
-            .all(...(scoped ? [entryId, entryId, workspaceId, workspaceId] : [entryId, entryId])) as {
+            .all(...(scoped ? [entryId, entryId, scopeId, scopeId] : [entryId, entryId])) as {
             id: number
             fromEntryId: number
             toEntryId: number
@@ -95,12 +97,13 @@ export class RelationshipsManager {
     ): Map<number, Relationship[]> {
         const result = new Map<number, Relationship[]>()
         if (entryIds.length === 0) return result
-        const scoped = workspaceId !== undefined && workspaceId !== '*'
+        const scopeId = effectiveWorkspace(workspaceId)
+        const scoped = scopeId !== '*'
         const wsClause = scoped
             ? ` AND from_entry_id IN (SELECT id FROM memory_journal WHERE workspace_id = ?)
                 AND to_entry_id IN (SELECT id FROM memory_journal WHERE workspace_id = ?)`
             : ''
-        const wsParams: unknown[] = scoped ? [workspaceId, workspaceId] : []
+        const wsParams: unknown[] = scoped ? [scopeId, scopeId] : []
 
         for (const id of entryIds) {
             result.set(id, [])

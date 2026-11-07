@@ -143,4 +143,43 @@ describe('workspace-resolver with keyword and tag inference', () => {
         )
         expect(wsId).toBe('adamic')
     })
+
+    it('resolves proper project instead of staying on "default" when workspace_id: "default" is passed alongside project_number, tags, content, or registered cwd', () => {
+        // 1. Explicit project_number overrides soft workspace_id: 'default'
+        const byProjectNum = resolveProjectContext(
+            { workspace_id: 'default', project_number: 5, content: 'General entry' },
+            mockConfig
+        )
+        expect(byProjectNum.workspaceId).toBe('memory-journal-mcp')
+        expect(byProjectNum.projectNumber).toBe(5)
+
+        // 2. Tag inference overrides soft workspace_id: 'default'
+        const byTag = resolveProjectContext(
+            { workspace_id: 'default', content: 'General note', tags: ['memory-journal-mcp'] },
+            mockConfig
+        )
+        expect(byTag.workspaceId).toBe('memory-journal-mcp')
+        expect(byTag.projectNumber).toBe(5)
+
+        // 3. Content keyword inference overrides soft workspace_id: 'default'
+        const byContent = resolveProjectContext(
+            { workspace_id: 'default', content: 'Audit pass on memory-journal-mcp handlers' },
+            mockConfig
+        )
+        expect(byContent.workspaceId).toBe('memory-journal-mcp')
+        expect(byContent.projectNumber).toBe(5)
+
+        // 4. Registered process.cwd() overrides soft workspace_id: 'default'
+        const spy = vi.spyOn(process, 'cwd').mockReturnValue('C:\\Users\\chris\\Desktop\\memory-journal-mcp\\src')
+        try {
+            const byCwd = resolveProjectContext(
+                { workspace_id: 'default', content: 'General commit note with no explicit repo keyword' },
+                mockConfig
+            )
+            expect(byCwd.workspaceId).toBe('memory-journal-mcp')
+            expect(byCwd.projectNumber).toBe(5)
+        } finally {
+            spy.mockRestore()
+        }
+    })
 })

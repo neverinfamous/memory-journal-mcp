@@ -472,6 +472,7 @@ withGroup(sessionCmd, 'Command Options', (cmd: Command) => {
 addOutputOptions(sessionCmd)
 addCoreOptions(sessionCmd)
 addDatabaseOptions(sessionCmd)
+addWorkspaceScopeOptions(sessionCmd)
 addAgentInstructions(sessionCmd,
     `
 🤖 AI AGENT INSTRUCTIONS:

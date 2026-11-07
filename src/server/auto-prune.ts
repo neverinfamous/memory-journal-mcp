@@ -59,6 +59,8 @@ export interface AutoPruneOptions {
     dryRun?: boolean
     /** Tags to exclude from auto-prune */
     excludeTags?: string[]
+    /** Optional workspace ID to scope auto-prune when configured */
+    workspaceId?: string
 }
 
 export interface AutoPruneResult {
@@ -76,6 +78,61 @@ export interface AutoPruneResult {
 // Core
 // ============================================================================
 
+async function createPrePruneSafetyBackup(db: IDatabaseAdapter): Promise<{ backupFile: string | null; aborted: boolean }> {
+    try {
+        const backup = await db.exportToFile(prePruneBackupName(new Date()))
+        rotatePrePruneBackups(db)
+        logger.info('Pre-prune backup created', {
+            module: 'AutoPrune',
+            context: { filename: backup.filename, sizeBytes: backup.sizeBytes },
+        })
+        return { backupFile: backup.filename, aborted: false }
+    } catch (backupError) {
+        logger.error('Failed to create pre-prune backup — aborting prune', {
+            module: 'AutoPrune',
+            error: backupError instanceof Error ? backupError.message : String(backupError),
+        })
+        return { backupFile: null, aborted: true }
+    }
+}
+
+function logDryRunCandidates(
+    options: AutoPruneOptions,
+    candidates: ReturnType<IDatabaseAdapter['executeDataLifecycle']>['candidates']
+): { cArchived: number; cPruned: number; cHard: number } {
+    const { archiveOlderThanDays, pruneOlderThanDays, hardDeleteOlderThanDays, importanceThreshold } = options
+    const cArchived = candidates?.archived.length ?? 0
+    const cPruned = candidates?.pruned.length ?? 0
+    const cHard = candidates?.hardDeleted.length ?? 0
+
+    if (cArchived > 0 || cPruned > 0 || cHard > 0) {
+        logger.info(`Auto-prune dry-run: found candidates`, {
+            module: 'AutoPrune',
+            archiveOlderThanDays,
+            pruneOlderThanDays,
+            hardDeleteOlderThanDays,
+            importanceThreshold,
+            candidates: {
+                archivedCount: cArchived,
+                prunedCount: cPruned,
+                hardDeletedCount: cHard,
+                archived: candidates?.archived,
+                pruned: candidates?.pruned,
+                hardDeleted: candidates?.hardDeleted,
+            },
+        })
+    } else {
+        logger.info('Auto-prune dry-run: no candidates found', {
+            module: 'AutoPrune',
+            archiveOlderThanDays,
+            pruneOlderThanDays,
+            hardDeleteOlderThanDays,
+            importanceThreshold,
+        })
+    }
+    return { cArchived, cPruned, cHard }
+}
+
 /**
  * Run the auto-prune sweep against the database.
  *
@@ -88,24 +145,21 @@ export async function runAutoPrune(
     db: IDatabaseAdapter,
     options: AutoPruneOptions
 ): Promise<AutoPruneResult> {
-    const { archiveOlderThanDays, pruneOlderThanDays, hardDeleteOlderThanDays, importanceThreshold, dryRun, excludeTags } = options
+    const {
+        archiveOlderThanDays,
+        pruneOlderThanDays,
+        hardDeleteOlderThanDays,
+        importanceThreshold,
+        dryRun,
+        excludeTags,
+        workspaceId,
+    } = options
 
     // ── Step 1: Safety backup ───────────────────────────────────────────
     let backupFile: string | null = null
     if (!dryRun) {
-        try {
-            const backup = await db.exportToFile(prePruneBackupName(new Date()))
-        rotatePrePruneBackups(db)
-            backupFile = backup.filename
-            logger.info('Pre-prune backup created', {
-                module: 'AutoPrune',
-                context: { filename: backup.filename, sizeBytes: backup.sizeBytes },
-            })
-        } catch (backupError) {
-            logger.error('Failed to create pre-prune backup — aborting prune', {
-                module: 'AutoPrune',
-                error: backupError instanceof Error ? backupError.message : String(backupError),
-            })
+        const safety = await createPrePruneSafetyBackup(db)
+        if (safety.aborted) {
             return {
                 archivedCount: 0,
                 prunedCount: 0,
@@ -117,6 +171,7 @@ export async function runAutoPrune(
                 importanceThreshold,
             }
         }
+        backupFile = safety.backupFile
     }
 
     // ── Step 2: Prune via adapter ───────────────────────────────────────
@@ -126,46 +181,25 @@ export async function runAutoPrune(
         hardDeleteOlderThanDays,
         importanceThreshold,
         dryRun,
-        excludeTags
+        excludeTags,
+        workspaceId,
     })
 
-    const archivedCount = result.archivedCount
-    const prunedCount = result.prunedCount
-    const hardDeletedCount = result.hardDeletedCount
-
     if (dryRun) {
-        const cArchived = result.candidates?.archived.length ?? 0
-        const cPruned = result.candidates?.pruned.length ?? 0
-        const cHard = result.candidates?.hardDeleted.length ?? 0
-
-        if (cArchived > 0 || cPruned > 0 || cHard > 0) {
-            logger.info(`Auto-prune dry-run: found candidates`, {
-                module: 'AutoPrune',
-                archiveOlderThanDays,
-                pruneOlderThanDays,
-                hardDeleteOlderThanDays,
-                importanceThreshold,
-                candidates: {
-                    archivedCount: cArchived,
-                    prunedCount: cPruned,
-                    hardDeletedCount: cHard,
-                    archived: result.candidates?.archived,
-                    pruned: result.candidates?.pruned,
-                    hardDeleted: result.candidates?.hardDeleted
-                }
-            })
-        } else {
-            logger.info('Auto-prune dry-run: no candidates found', {
-                module: 'AutoPrune',
-                archiveOlderThanDays,
-                pruneOlderThanDays,
-                hardDeleteOlderThanDays,
-                importanceThreshold,
-            })
+        const { cArchived, cPruned, cHard } = logDryRunCandidates(options, result.candidates)
+        return {
+            archivedCount: cArchived,
+            prunedCount: cPruned,
+            hardDeletedCount: cHard,
+            backupFile,
+            archiveOlderThanDays,
+            pruneOlderThanDays,
+            hardDeleteOlderThanDays,
+            importanceThreshold,
         }
-        return { archivedCount: cArchived, prunedCount: cPruned, hardDeletedCount: cHard, backupFile, archiveOlderThanDays, pruneOlderThanDays, hardDeleteOlderThanDays, importanceThreshold }
     }
 
+    const { archivedCount, prunedCount, hardDeletedCount } = result
     if (archivedCount === 0 && prunedCount === 0 && hardDeletedCount === 0) {
         logger.info('Auto-prune: no candidates found', {
             module: 'AutoPrune',
@@ -175,22 +209,19 @@ export async function runAutoPrune(
             importanceThreshold,
         })
     } else {
-        logger.info(`Auto-prune: processed entries (Archived: ${archivedCount}, Soft-deleted: ${prunedCount}, Hard-deleted: ${hardDeletedCount})`, {
-            module: 'AutoPrune',
-            archiveOlderThanDays,
-            pruneOlderThanDays,
-            hardDeleteOlderThanDays,
-            importanceThreshold,
-        })
-    }
-
-    // ── Step 3: Clean up stale vector embeddings ────────────────────────
-    if (archivedCount > 0 || prunedCount > 0 || hardDeletedCount > 0) {
+        logger.info(
+            `Auto-prune: processed entries (Archived: ${String(archivedCount)}, Soft-deleted: ${String(prunedCount)}, Hard-deleted: ${String(hardDeletedCount)})`,
+            {
+                module: 'AutoPrune',
+                archiveOlderThanDays,
+                pruneOlderThanDays,
+                hardDeleteOlderThanDays,
+                importanceThreshold,
+            }
+        )
         try {
             db.cleanupStaleVectors()
-            logger.info('Auto-prune: cleaned up stale vector embeddings', {
-                module: 'AutoPrune',
-            })
+            logger.info('Auto-prune: cleaned up stale vector embeddings', { module: 'AutoPrune' })
         } catch (cleanupError) {
             logger.warning('Auto-prune: failed to clean stale vectors (non-critical)', {
                 module: 'AutoPrune',
@@ -199,5 +230,14 @@ export async function runAutoPrune(
         }
     }
 
-    return { archivedCount, prunedCount, hardDeletedCount, backupFile, archiveOlderThanDays, pruneOlderThanDays, hardDeleteOlderThanDays, importanceThreshold }
+    return {
+        archivedCount,
+        prunedCount,
+        hardDeletedCount,
+        backupFile,
+        archiveOlderThanDays,
+        pruneOlderThanDays,
+        hardDeleteOlderThanDays,
+        importanceThreshold,
+    }
 }

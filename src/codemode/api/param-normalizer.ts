@@ -32,6 +32,13 @@ const VALID_ENTRY_FIELDS = new Set([
     'workflow_run_id',
     'workflow_name',
     'workflow_status',
+    'workspace_id',
+    'session_id',
+    'impact_score',
+    'trust_score',
+    'validation_status',
+    'relationships',
+    'anchors',
 ])
 
 /**

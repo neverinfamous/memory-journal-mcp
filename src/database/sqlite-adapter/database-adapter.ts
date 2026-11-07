@@ -122,8 +122,8 @@ export class DatabaseAdapter extends AdapterDelegates implements IDatabaseAdapte
         return this.entriesMgr.updateAnchorStatus(id, status, workspaceId)
     }
 
-    getAnchorsByEntryId(entryId: number): Anchor[] {
-        return this.entriesMgr.getAnchorsByEntryId(entryId)
+    getAnchorsByEntryId(entryId: number, workspaceId?: string): Anchor[] {
+        return this.entriesMgr.getAnchorsByEntryId(entryId, workspaceId)
     }
 
     restoreEntry(id: number, workspaceId?: string): boolean {

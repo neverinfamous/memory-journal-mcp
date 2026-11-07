@@ -186,6 +186,7 @@ export const adminVacuumOptionsSchema = coreOptionsSchema
 export const adminPruneOptionsSchema = pruningOptionsSchema
     .extend(coreOptionsSchema.shape)
     .extend(databaseOptionsSchema.shape)
+    .extend(workspaceOptionsSchema.shape)
     .extend(outputOptionsSchema.shape)
     .extend({
         // Specific overrides from prune command
@@ -255,7 +256,7 @@ export const searchOptionsSchema = z.object({
 
 export const ioExportJsonOptionsSchema = z.object({
     dest: z.string().optional()
-}).extend(coreOptionsSchema.shape).extend(databaseOptionsSchema.shape).extend(outputOptionsSchema.shape)
+}).extend(coreOptionsSchema.shape).extend(databaseOptionsSchema.shape).extend(workspaceOptionsSchema.shape).extend(outputOptionsSchema.shape)
 
 export const ioExportMarkdownOptionsSchema = z.object({
     dir: z.string().optional()

@@ -12,7 +12,7 @@ import type {
 } from '../../types/index.js'
 import { ResourceNotFoundError } from '../../types/errors.js'
 import { wrapWithMetrics } from '../../observability/index.js'
-import { requestContextStorage } from '../../utils/request-context.js'
+import { requestContextStorage, getRequestContext } from '../../utils/request-context.js'
 import { applyArgInterceptions as applyCodeModeArgInterceptions } from '../../codemode/param-normalizer.js'
 
 /**
@@ -258,7 +258,10 @@ export function wrapToolHandlerWithInterceptors(
         if (args['use_test_db'] === true) {
             const cleanArgs = { ...args }
             delete cleanArgs['use_test_db']
-            return requestContextStorage.run({ useTestDb: true }, () => baseHandler(cleanArgs))
+            const existing = getRequestContext()
+            return requestContextStorage.run({ ...existing, useTestDb: true }, () =>
+                baseHandler(cleanArgs)
+            )
         }
         return baseHandler(args)
     }

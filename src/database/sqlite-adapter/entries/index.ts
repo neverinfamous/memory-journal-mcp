@@ -97,11 +97,13 @@ export class EntriesManager {
             workflowRunId?: number | null
             workflowName?: string | null
             workflowStatus?: string | null
+            isArchived?: boolean
             expectedVersion?: number
             workspaceId?: string
             trustScore?: number
             impactScore?: number
             validationStatus?: 'passed' | 'failed' | 'none'
+            sessionId?: string
             targetWorkspaceId?: string
         }
     ): JournalEntry | null {
@@ -135,11 +137,13 @@ export class EntriesManager {
             workflowRunId?: number | null
             workflowName?: string | null
             workflowStatus?: string | null
+            isArchived?: boolean
             expectedVersion?: number
             workspaceId?: string
             trustScore?: number
             impactScore?: number
             validationStatus?: 'passed' | 'failed' | 'none'
+            sessionId?: string
         }[]
     ): { updated: JournalEntry[]; notFound: number[]; errors: { id: number; error: Error }[] } {
         return updateEntries(this.sharedContext, updates)
@@ -254,8 +258,8 @@ export class EntriesManager {
         return updateAnchorStatus(this.sharedContext, id, status, workspaceId)
     }
 
-    getAnchorsByEntryId(entryId: number): Anchor[] {
-        return getAnchorsByEntryId(this.sharedContext, entryId)
+    getAnchorsByEntryId(entryId: number, workspaceId?: string): Anchor[] {
+        return getAnchorsByEntryId(this.sharedContext, entryId, workspaceId)
     }
 
     getEntriesByProject(projectNumber: number, limit = 50, workspaceId?: string): JournalEntry[] {

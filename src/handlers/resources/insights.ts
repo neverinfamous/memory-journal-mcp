@@ -29,9 +29,10 @@ export const digestInsightsResource: InternalResourceDef = {
     },
     handler: (_uri: string, context: ResourceContext): ResourceResult => {
         const lastModified = new Date().toISOString()
+        const wsId = resourceWorkspace(context)
 
         // Try scheduler first, then persisted DB snapshot
-        const schedulerDigest = context.scheduler?.getLatestDigest?.()
+        const schedulerDigest = context.scheduler?.getLatestDigest?.(wsId)
         if (schedulerDigest) {
             const data = { success: true, snapshot: schedulerDigest }
             const tokenEstimate = Math.ceil(JSON.stringify(data).length / 4)
@@ -43,7 +44,7 @@ export const digestInsightsResource: InternalResourceDef = {
 
         // Live compute fallback (stdio transport, fresh databases)
         try {
-            const liveDigest = context.db?.computeDigest?.(resourceWorkspace(context))
+            const liveDigest = context.db?.computeDigest?.(wsId)
             if (liveDigest !== undefined) {
                 const data = {
                     success: true,
@@ -60,7 +61,7 @@ export const digestInsightsResource: InternalResourceDef = {
             // Non-critical — fall through to "no digest available" message or persisted snapshot
         }
 
-        const dbSnapshot = context.db?.getLatestAnalyticsSnapshot?.('digest', resourceWorkspace(context))
+        const dbSnapshot = context.db?.getLatestAnalyticsSnapshot?.('digest', wsId)
         if (dbSnapshot) {
             const data = {
                 success: true,
@@ -108,6 +109,7 @@ export const teamCollaborationResource: InternalResourceDef = {
             const matrix = context.teamDb.getTeamCollaborationMatrix({
                 period: 'month',
                 limit: 100,
+                workspaceId: resourceWorkspace(context),
             })
             const data = { success: true, matrix }
             const tokenEstimate = Math.ceil(JSON.stringify(data).length / 4)

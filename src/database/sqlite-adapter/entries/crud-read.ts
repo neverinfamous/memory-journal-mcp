@@ -91,23 +91,6 @@ export function getEntryByIdIncludeDeleted(
     return entry
 }
 
-export function getActiveEntries(
-    context: EntriesSharedContext,
-    workspaceId?: string
-): JournalEntry[] {
-    const { db, tagsMgr } = context
-    let query = `SELECT ${ENTRY_COLUMNS} FROM memory_journal WHERE deleted_at IS NULL`
-    const params: unknown[] = []
-    const scopeId = effectiveWorkspace(workspaceId)
-    if (scopeId !== '*') {
-        query += ' AND workspace_id = ?'
-        params.push(scopeId)
-    }
-    query += ' ORDER BY timestamp DESC, id DESC'
-    const rows = db.prepare(query).all(...params)
-    return rowsToEntries(tagsMgr, rows)
-}
-
 export function getActiveEntryCount(context: EntriesSharedContext, workspaceId?: string): number {
     const { db } = context
     let query = 'SELECT COUNT(*) as count FROM memory_journal WHERE deleted_at IS NULL'

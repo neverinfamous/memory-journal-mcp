@@ -132,49 +132,13 @@ function buildToolRegistrationOptions(tool: ToolRegistration): ModernToolConfig 
     return toolOptions
 }
 
-export function createServerInstance(
+function registerAllToolsOnServer(
+    server: McpServer,
     context: ServerContext,
-    options: ServerOptions,
-    prompts: PromptDefinition[],
-    resources: ResourceDefinition[],
     allTools: ToolRegistration[],
-    allToolNames: Set<string>,
     customToolHandlerConfig: ToolHandlerConfig
-): McpServer {
-    const {
-        configManager,
-        db,
-        teamDb,
-        vectorManager,
-        teamVectorManager,
-        github,
-        scheduler,
-        allowedIoRoots,
-        runtime,
-    } = context
-
-    const getInstructions = (): string =>
-        buildServerInstructions(context, options, prompts, allToolNames)
-
-    const server = new McpServer(
-        { name: 'memory-journal-mcp', version: VERSION },
-        {
-            capabilities: {
-                logging: {},
-                prompts: { listChanged: true },
-                tools: { listChanged: true },
-                resources: { subscribe: true, listChanged: true },
-                experimental: { progress: {} },
-            },
-            instructions: getInstructions(),
-            maxToolInputElements: resolveEffectiveMaxToolInputElements(options.maxToolInputElements),
-        }
-    )
-
-    if (context.skillCatalog !== undefined && typeof server.isConnected === 'function') {
-        context.skillCatalog.attach(server)
-    }
-
+): void {
+    const { configManager, db, teamDb, vectorManager, teamVectorManager, github } = context
     for (const tool of allTools) {
         const toolOptions = buildToolRegistrationOptions(tool)
         const hasOutputSchema = Boolean(tool.outputSchema)
@@ -222,8 +186,7 @@ export function createServerInstance(
                     if (isSuccess) {
                         const isMutation =
                             MUTATING_TOOLS.has(tool.name) ||
-                            (tool.name.startsWith('team_') &&
-                                readOnlyHintOf(tool) !== true)
+                            (tool.name.startsWith('team_') && readOnlyHintOf(tool) !== true)
 
                         if (isMutation) {
                             notifyMutationSubscribers(tool.name)
@@ -258,7 +221,16 @@ export function createServerInstance(
             }
         )
     }
+}
 
+function attachResourceAndSubscriptionHandlers(
+    server: McpServer,
+    context: ServerContext,
+    options: ServerOptions,
+    resources: ResourceDefinition[]
+): void {
+    const { configManager, db, teamDb, vectorManager, github, scheduler, allowedIoRoots, runtime } =
+        context
     const handleResourceRead = async (
         uri: URL,
         mimeType: string
@@ -335,8 +307,49 @@ export function createServerInstance(
         globalSubscriptionManager.unsubscribe(request.params.uri, transportSessionId)
         return {}
     })
+}
 
-    const briefingConfig = configManager.getConfig().briefingConfig
+export function createServerInstance(
+    context: ServerContext,
+    options: ServerOptions,
+    prompts: PromptDefinition[],
+    resources: ResourceDefinition[],
+    allTools: ToolRegistration[],
+    allToolNames: Set<string>,
+    customToolHandlerConfig: ToolHandlerConfig
+): McpServer {
+    const { configManager, db, teamDb, allowedIoRoots, runtime } = context
+
+    const getInstructions = (): string =>
+        buildServerInstructions(context, options, prompts, allToolNames)
+
+    const server = new McpServer(
+        { name: 'memory-journal-mcp', version: VERSION },
+        {
+            capabilities: {
+                logging: {},
+                prompts: { listChanged: true },
+                tools: { listChanged: true },
+                resources: { subscribe: true, listChanged: true },
+                experimental: { progress: {} },
+            },
+            instructions: getInstructions(),
+            maxToolInputElements: resolveEffectiveMaxToolInputElements(options.maxToolInputElements),
+        }
+    )
+
+    if (context.skillCatalog !== undefined && typeof server.isConnected === 'function') {
+        context.skillCatalog.attach(server)
+    }
+
+    registerAllToolsOnServer(server, context, allTools, customToolHandlerConfig)
+    attachResourceAndSubscriptionHandlers(server, context, options, resources)
+
+    const briefingConfig = resolveActiveBriefingConfig(
+        configManager.getConfig().briefingConfig,
+        options,
+        allowedIoRoots
+    )
     registerPrompts(
         server,
         prompts,

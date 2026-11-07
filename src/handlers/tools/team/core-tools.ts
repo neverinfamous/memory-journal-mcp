@@ -168,7 +168,8 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                     const relationshipWarnings = linkRequestedRelationships(
                         teamDb,
                         entry.id,
-                        input.relationships
+                        input.relationships,
+                        wsId
                     )
 
                     teamDb.flushSave()
@@ -247,7 +248,7 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     if (include_relationships) {
-                        const relationships = teamDb.getRelationships(entry_id)
+                        const relationships = teamDb.getRelationships(entry_id, wsId)
                         result['relationships'] = relationships
                     }
 

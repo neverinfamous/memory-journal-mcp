@@ -9,6 +9,69 @@ import {
     type DigestSnapshot,
 } from '../entries/digest.js'
 
+function mapDigestRowToEntry(
+    cols: string[],
+    row: unknown[],
+    tagsMap: Map<number, string[]>
+): JournalEntry {
+    const getVal = (col: string): unknown => {
+        const idx = cols.indexOf(col)
+        return idx >= 0 ? row[idx] : undefined
+    }
+    const id = getVal('id') as number
+    return {
+        id,
+        entryType: getVal('entry_type') as EntryType,
+        content: getVal('content') as string,
+        timestamp: getVal('timestamp') as string,
+        tags: tagsMap.get(id) ?? [],
+        isPersonal: Boolean(getVal('is_personal')),
+        isArchived: Boolean(getVal('is_archived')),
+        significanceType: (getVal('significance_type') as JournalEntry['significanceType']) ?? null,
+        autoContext: (getVal('auto_context') as string | null | undefined) ?? null,
+        projectNumber: getVal('project_number') as number | undefined,
+        projectOwner: getVal('project_owner') as string | undefined,
+        issueNumber: getVal('issue_number') as number | undefined,
+        issueUrl: getVal('issue_url') as string | undefined,
+        prNumber: getVal('pr_number') as number | undefined,
+        prUrl: getVal('pr_url') as string | undefined,
+        prStatus: getVal('pr_status') as JournalEntry['prStatus'],
+        workflowRunId: getVal('workflow_run_id') as number | undefined,
+        workflowName: getVal('workflow_name') as string | undefined,
+        workflowStatus: getVal('workflow_status') as JournalEntry['workflowStatus'],
+        deletedAt: (getVal('deleted_at') as string | null | undefined) ?? null,
+        version: (getVal('version') as number | undefined) ?? 1,
+        workspaceId: getVal('workspace_id') as string | undefined,
+        trustScore: getVal('trust_score') as number | undefined,
+        validationStatus: getVal('validation_status') as JournalEntry['validationStatus'],
+        impactScore: getVal('impact_score') as number | undefined,
+        sessionId: getVal('session_id') as string | undefined,
+    }
+}
+
+function hydrateTagsMap(connection: NativeConnectionManager, entryIds: number[]): Map<number, string[]> {
+    const tagsMap = new Map<number, string[]>()
+    if (entryIds.length === 0) return tagsMap
+    const placeholders = entryIds.map(() => '?').join(',')
+    const tagRows = connection.exec(
+        `SELECT entry_tags.entry_id, tags.name as tag FROM entry_tags JOIN tags ON entry_tags.tag_id = tags.id WHERE entry_tags.entry_id IN (${placeholders})`,
+        entryIds
+    )
+    if (tagRows[0] && tagRows[0].values.length > 0) {
+        const tagCols = tagRows[0].columns
+        const entryIdIdx = tagCols.indexOf('entry_id')
+        const tagIdx = tagCols.indexOf('tag')
+        for (const row of tagRows[0].values) {
+            const eId = row[entryIdIdx] as number
+            const tag = row[tagIdx] as string
+            const list = tagsMap.get(eId) ?? []
+            list.push(tag)
+            tagsMap.set(eId, list)
+        }
+    }
+    return tagsMap
+}
+
 export function getWorkflowActionEntries(
     connection: NativeConnectionManager,
     limit: number,
@@ -32,50 +95,11 @@ export function getWorkflowActionEntries(
 
     const cols = rows[0].columns
     const entryIds = rows[0].values.map((row) => row[cols.indexOf('id')] as number)
-    const tagsMap = new Map<number, string[]>()
+    const tagsMap = hydrateTagsMap(connection, entryIds)
 
-    if (entryIds.length > 0) {
-        const placeholders = entryIds.map(() => '?').join(',')
-        const tagRows = connection.exec(
-            `SELECT entry_tags.entry_id, tags.name as tag FROM entry_tags JOIN tags ON entry_tags.tag_id = tags.id WHERE entry_tags.entry_id IN (${placeholders})`,
-            entryIds
-        )
-        if (tagRows[0] && tagRows[0].values.length > 0) {
-            const tagCols = tagRows[0].columns
-            const entryIdIdx = tagCols.indexOf('entry_id')
-            const tagIdx = tagCols.indexOf('tag')
-            for (const row of tagRows[0].values) {
-                const eId = row[entryIdIdx] as number
-                const tag = row[tagIdx] as string
-                const list = tagsMap.get(eId) ?? []
-                list.push(tag)
-                tagsMap.set(eId, list)
-            }
-        }
-    }
-
-    return rows[0].values.map((row: unknown[]): JournalEntry => {
-        const getVal = (idx: number): unknown => row[idx]
-        const id = getVal(cols.indexOf('id')) as number
-        return {
-            id,
-            entryType: getVal(cols.indexOf('entry_type')) as EntryType,
-            content: getVal(cols.indexOf('content')) as string,
-            timestamp: getVal(cols.indexOf('timestamp')) as string,
-            tags: tagsMap.get(id) ?? [],
-            isPersonal: Boolean(getVal(cols.indexOf('is_personal'))),
-            projectNumber: getVal(cols.indexOf('project_number')) as number | undefined,
-            issueNumber: getVal(cols.indexOf('issue_number')) as number | undefined,
-            prNumber: getVal(cols.indexOf('pr_number')) as number | undefined,
-            prStatus: getVal(cols.indexOf('pr_status')) as string | undefined,
-            workflowRunId: getVal(cols.indexOf('workflow_run_id')) as number | undefined,
-            workflowName: getVal(cols.indexOf('workflow_name')) as string | undefined,
-            workflowStatus: getVal(cols.indexOf('workflow_status')) as string | undefined,
-            significanceType: getVal(cols.indexOf('significance_type')) as string | undefined,
-            autoContext: getVal(cols.indexOf('auto_context')) as string | undefined,
-            workspaceId: getVal(cols.indexOf('workspace_id')) as string | undefined,
-        } as JournalEntry
-    })
+    return rows[0].values.map((row: unknown[]): JournalEntry =>
+        mapDigestRowToEntry(cols, row, tagsMap)
+    )
 }
 
 export function getSignificantEntries(
@@ -106,45 +130,11 @@ export function getSignificantEntries(
 
     const cols = rows[0].columns
     const entryIds = rows[0].values.map((row) => row[cols.indexOf('id')] as number)
-    const tagsMap = new Map<number, string[]>()
+    const tagsMap = hydrateTagsMap(connection, entryIds)
 
-    if (entryIds.length > 0) {
-        const placeholders = entryIds.map(() => '?').join(',')
-        const tagRows = connection.exec(
-            `SELECT entry_tags.entry_id, tags.name as tag FROM entry_tags JOIN tags ON entry_tags.tag_id = tags.id WHERE entry_tags.entry_id IN (${placeholders})`,
-            entryIds
-        )
-        if (tagRows[0] && tagRows[0].values.length > 0) {
-            const tagCols = tagRows[0].columns
-            const entryIdIdx = tagCols.indexOf('entry_id')
-            const tagIdx = tagCols.indexOf('tag')
-            for (const row of tagRows[0].values) {
-                const eId = row[entryIdIdx] as number
-                const tag = row[tagIdx] as string
-                const list = tagsMap.get(eId) ?? []
-                list.push(tag)
-                tagsMap.set(eId, list)
-            }
-        }
-    }
-
-    return rows[0].values.map((row: unknown[]): JournalEntry => {
-        const getVal = (idx: number): unknown => row[idx]
-        const id = getVal(cols.indexOf('id')) as number
-        return {
-            id,
-            entryType: getVal(cols.indexOf('entry_type')) as EntryType,
-            content: getVal(cols.indexOf('content')) as string,
-            timestamp: getVal(cols.indexOf('timestamp')) as string,
-            tags: tagsMap.get(id) ?? [],
-            isPersonal: Boolean(getVal(cols.indexOf('is_personal'))),
-            projectNumber: getVal(cols.indexOf('project_number')) as number | undefined,
-            issueNumber: getVal(cols.indexOf('issue_number')) as number | undefined,
-            prNumber: getVal(cols.indexOf('pr_number')) as number | undefined,
-            significanceType: getVal(cols.indexOf('significance_type')) as string | undefined,
-            workspaceId: getVal(cols.indexOf('workspace_id')) as string | undefined,
-        } as JournalEntry
-    })
+    return rows[0].values.map((row: unknown[]): JournalEntry =>
+        mapDigestRowToEntry(cols, row, tagsMap)
+    )
 }
 
 export function saveAnalyticsDigest(

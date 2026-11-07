@@ -404,6 +404,7 @@ export class Scheduler {
             importanceThreshold: this.options.pruneImportanceThreshold ?? 0.15,
             dryRun: this.options.pruneDryRun,
             excludeTags: this.options.pruneExcludeTags,
+            workspaceId: this.options.defaultWorkspaceId,
         })
         logger.info('Scheduled auto-prune completed', {
             module: 'Scheduler',
@@ -422,8 +423,9 @@ export class Scheduler {
      * Digest job: compute analytics snapshot and persist to database.
      */
     private runDigest(): void {
-        const snapshot = this.db.computeDigest(this.options.defaultWorkspaceId ?? 'default')
-        this.db.saveAnalyticsSnapshot('digest', snapshot)
+        const wsId = this.options.defaultWorkspaceId ?? 'default'
+        const snapshot = this.db.computeDigest(wsId)
+        this.db.saveAnalyticsSnapshot('digest', snapshot, wsId)
         logger.info('Scheduled analytics digest computed', {
             module: 'Scheduler',
             operation: 'digest',
@@ -443,8 +445,9 @@ export class Scheduler {
      * Report job: compute analytics snapshot, persist, and deliver via webhook.
      */
     private async runReport(): Promise<void> {
-        const snapshot = this.db.computeDigest(this.options.defaultWorkspaceId ?? 'default')
-        this.db.saveAnalyticsSnapshot('report', snapshot)
+        const wsId = this.options.defaultWorkspaceId ?? 'default'
+        const snapshot = this.db.computeDigest(wsId)
+        this.db.saveAnalyticsSnapshot('report', snapshot, wsId)
         logger.info('Scheduled analytics report computed', {
             module: 'Scheduler',
             operation: 'report',
@@ -474,8 +477,11 @@ export class Scheduler {
      * Get the latest digest snapshot from the database.
      * Returns null if no digest has been computed yet.
      */
-    getLatestDigest(): DigestSnapshot | null {
-        const snapshot = this.db.getLatestAnalyticsSnapshot('digest')
+    getLatestDigest(workspaceId?: string): DigestSnapshot | null {
+        const snapshot = this.db.getLatestAnalyticsSnapshot(
+            'digest',
+            workspaceId ?? this.options.defaultWorkspaceId
+        )
         if (!snapshot) return null
         return parseDigestSnapshot(snapshot.data)
     }

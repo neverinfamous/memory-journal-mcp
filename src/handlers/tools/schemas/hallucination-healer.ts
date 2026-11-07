@@ -267,7 +267,7 @@ function inferWorkspaceAndProject(obj: Record<string, unknown>): boolean {
             obj['workspace_id'] = process.env['MCP_WORKSPACE_ID'].trim()
             modified = true
         } else if (wsId === undefined) {
-            obj['workspace_id'] = 'default'
+            obj['workspace_id'] = resolved.workspaceId ?? 'default'
             modified = true
         }
         if (obj['project_number'] === undefined && resolved.projectNumber !== undefined) {
@@ -279,22 +279,8 @@ function inferWorkspaceAndProject(obj: Record<string, unknown>): boolean {
     return modified
 }
 
-/**
- * Shared preprocessor to heal common LLM hallucinations in payloads before Zod validation.
- */
-export function healAgentHallucinations(val: unknown): unknown {
-    if (typeof val !== 'object' || val === null) return val
-
-    const obj = { ...(val as Record<string, unknown>) }
+function healValidationAndScoreFields(obj: Record<string, unknown>): boolean {
     let modified = false
-
-    for (const [badKey, goodKey] of Object.entries(KEY_ALIAS_MAP)) {
-        if (badKey in obj) {
-            if (!(goodKey in obj) && obj[badKey] !== undefined) obj[goodKey] = obj[badKey]
-            Reflect.deleteProperty(obj, badKey)
-            modified = true
-        }
-    }
 
     for (const numField of ['trust_score', 'impact_score'] as const) {
         if (numField in obj && typeof obj[numField] === 'string') {
@@ -332,7 +318,11 @@ export function healAgentHallucinations(val: unknown): unknown {
         }
     }
 
-    if (healWorkspaceAndProjectContext(obj)) modified = true
+    return modified
+}
+
+function healNestedContainersAndEntryIds(obj: Record<string, unknown>): boolean {
+    let modified = false
 
     if (
         'entry' in obj &&
@@ -379,20 +369,6 @@ export function healAgentHallucinations(val: unknown): unknown {
         }
     }
 
-    for (const key of CONTENT_ALIASES) {
-        if (key in obj && !('content' in obj)) {
-            obj['content'] = obj[key]
-            Reflect.deleteProperty(obj, key)
-            modified = true
-            break
-        } else if (key in obj) {
-            Reflect.deleteProperty(obj, key)
-            modified = true
-        }
-    }
-
-    if (healTitleAndAutoContext(obj)) modified = true
-
     if ('entry_id' in obj && typeof obj['entry_id'] === 'string') {
         const cleaned = obj['entry_id'].replace(/^[^0-9]+/, '')
         const num = Number(cleaned)
@@ -416,8 +392,45 @@ export function healAgentHallucinations(val: unknown): unknown {
         }
     }
 
+    return modified
+}
+
+/**
+ * Shared preprocessor to heal common LLM hallucinations in payloads before Zod validation.
+ */
+export function healAgentHallucinations(val: unknown): unknown {
+    if (typeof val !== 'object' || val === null) return val
+
+    const obj = { ...(val as Record<string, unknown>) }
+    let modified = false
+
+    for (const [badKey, goodKey] of Object.entries(KEY_ALIAS_MAP)) {
+        if (badKey in obj) {
+            if (!(goodKey in obj) && obj[badKey] !== undefined) obj[goodKey] = obj[badKey]
+            Reflect.deleteProperty(obj, badKey)
+            modified = true
+        }
+    }
+
+    if (healValidationAndScoreFields(obj)) modified = true
+    if (healNestedContainersAndEntryIds(obj)) modified = true
+
+    for (const key of CONTENT_ALIASES) {
+        if (key in obj && !('content' in obj)) {
+            obj['content'] = obj[key]
+            Reflect.deleteProperty(obj, key)
+            modified = true
+            break
+        } else if (key in obj) {
+            Reflect.deleteProperty(obj, key)
+            modified = true
+        }
+    }
+
+    if (healTitleAndAutoContext(obj)) modified = true
     if (healMetadataAndContextFields(obj)) modified = true
     if (healTagsAndEntryType(obj)) modified = true
+    if (healWorkspaceAndProjectContext(obj)) modified = true
 
     return modified ? obj : val
 }

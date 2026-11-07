@@ -11,7 +11,7 @@ import { wrapWithMetrics } from '../../../observability/index.js'
 import { enforceAccessBoundary } from '../../../auth/validation.js'
 import { globalSubscriptionManager } from '../../../server/subscription-manager.js'
 import { getGitHubIntegration } from '../../../github/github-integration/index.js'
-import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
+import { cwdMatchesRegistryPath, findCanonicalRegistryKey, resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { logger } from '../../../utils/logger.js'
 import type { ExecuteCodeInput } from './payload-synthesizer.js'
 
@@ -115,9 +115,15 @@ function lookupRegistryEntry(
     if (!registry) return undefined
     const direct = registry[key]
     if (direct) return direct
+    const canonical = findCanonicalRegistryKey(key, registry)
+    if (canonical !== undefined && registry[canonical] !== undefined) return registry[canonical]
     if (key.includes('/')) {
         const repoName = key.split('/').pop()
-        if (repoName !== undefined && repoName !== '') return registry[repoName]
+        if (repoName !== undefined && repoName !== '') {
+            if (registry[repoName] !== undefined) return registry[repoName]
+            const repoCanonical = findCanonicalRegistryKey(repoName, registry)
+            if (repoCanonical !== undefined) return registry[repoCanonical]
+        }
     }
     return undefined
 }
@@ -231,7 +237,13 @@ async function normalizeDispatchParams(
     if (typeof paramsObj['workspace_id'] === 'number') {
         paramsObj['workspace_id'] = String(paramsObj['workspace_id'])
     }
-    if (!callerPassedProjectOnly && paramsObj['workspace_id'] === undefined && workspaceId !== undefined && checkSchemaAcceptsKey(tool.inputSchema, 'workspace_id')) {
+    if (
+        !callerPassedProjectOnly &&
+        paramsObj['workspace_id'] === undefined &&
+        workspaceId !== undefined &&
+        workspaceId !== 'default' &&
+        checkSchemaAcceptsKey(tool.inputSchema, 'workspace_id')
+    ) {
         paramsObj['workspace_id'] = workspaceId
     }
 
@@ -325,15 +337,24 @@ export async function resolveCodeModeSessionContext(
         return process.platform === 'win32' ? resolved.toLowerCase() : resolved
     }
     let projectId: number | string | undefined = input.project_number
+    if ((projectId === undefined || projectId === null) && input.workspace_id !== undefined && input.workspace_id !== 'default') {
+        const wsEntry = lookupRegistryEntry(context.config?.projectRegistry, input.workspace_id)
+        if (wsEntry?.project_number !== undefined) projectId = wsEntry.project_number
+    }
+    if ((projectId === undefined || projectId === null) && input.repo !== undefined && input.repo !== '') {
+        const repoEntry = lookupRegistryEntry(context.config?.projectRegistry, input.repo)
+        if (repoEntry?.project_number !== undefined) projectId = repoEntry.project_number
+    }
     if (projectId === undefined || projectId === null) {
         if (context.config?.defaultProjectNumber !== undefined) {
             projectId = context.config.defaultProjectNumber
         } else if (context.config?.projectRegistry !== undefined) {
-            const cwd = normalizeComparablePath(process.cwd())
+            const cwd = process.cwd()
             for (const entry of Object.values(context.config.projectRegistry)) {
                 if (
-                    entry.path &&
-                    normalizeComparablePath(entry.path) === cwd &&
+                    entry.path !== undefined &&
+                    entry.path !== '' &&
+                    cwdMatchesRegistryPath(entry.path, cwd) &&
                     entry.project_number !== undefined
                 ) {
                     projectId = entry.project_number

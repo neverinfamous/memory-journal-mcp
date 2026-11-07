@@ -4,67 +4,10 @@ import {
     ALIASED_ENTRY_COLUMNS,
     type EntriesSharedContext,
     rowsToEntries,
-    rowToObject,
 } from '../shared.js'
 import { buildImportanceSqlExpression, buildImportanceCte } from '../importance.js'
 import { encodeCursor, decodeCursor, type SortBy } from './cursor.js'
 import { effectiveWorkspace } from '../../../workspace-scope.js'
-
-export function getEntryCount(context: EntriesSharedContext, workspaceId?: string): number {
-    const { db } = context
-    let query = 'SELECT COUNT(*) as count FROM memory_journal WHERE deleted_at IS NULL'
-    const params: unknown[] = []
-    const scopeId = effectiveWorkspace(workspaceId)
-    if (scopeId !== '*') {
-        query += ' AND workspace_id = ?'
-        params.push(scopeId)
-    }
-    const row = rowToObject(db.prepare(query).get(...params))
-    return typeof row?.['count'] === 'number' ? row['count'] : 0
-}
-
-export function getFilteredEntryCount(
-    context: EntriesSharedContext,
-    options?: {
-        isPersonal?: boolean
-        projectNumber?: number
-        entryType?: EntryType
-        workspaceId?: string
-        includeArchived?: boolean
-    }
-): number {
-    const { db } = context
-    const conditions = ['deleted_at IS NULL']
-    const params: unknown[] = []
-
-    const targetWs = effectiveWorkspace(options?.workspaceId)
-    if (targetWs !== '*') {
-        conditions.push('workspace_id = ?')
-        params.push(targetWs)
-    }
-    if (options?.includeArchived !== true) {
-        conditions.push('is_archived = 0')
-    }
-    if (options?.isPersonal !== undefined) {
-        conditions.push('is_personal = ?')
-        params.push(options.isPersonal ? 1 : 0)
-    }
-    if (options?.projectNumber !== undefined) {
-        conditions.push('project_number = ?')
-        params.push(options.projectNumber)
-    }
-    if (options?.entryType !== undefined) {
-        conditions.push('entry_type = ?')
-        params.push(options.entryType)
-    }
-
-    const row = rowToObject(
-        db
-            .prepare(`SELECT COUNT(*) as count FROM memory_journal WHERE ${conditions.join(' AND ')}`)
-            .get(...params)
-    )
-    return typeof row?.['count'] === 'number' ? row['count'] : 0
-}
 
 /** Importance-ranked page of recent entries (offset-paginated). */
 function getRecentEntriesByImportance(

@@ -144,7 +144,7 @@ export function wrapDelegatingTool(
     })
 }
 
-const SHIM_TABLES = [
+export const SHIM_TABLES = [
     'memory_journal',
     'tags',
     'entry_tags',
@@ -251,7 +251,7 @@ export function createSchemaShim(shimMj: Record<string, unknown>): object {
 /**
  * Creates an empty iterable/array-like/map-like fallback for missing collection properties on `context`.
  */
-export function createEmptyFallback(_name: string): unknown {
+export function createEmptyFallback(): unknown {
     const emptyIter = function* (): Generator<never, void, unknown> {
         /* empty */
     }
@@ -387,7 +387,7 @@ export function createContextProxy(contextObj?: Record<string, unknown>): Record
                     })
             }
             if (typeof prop === 'string' && CONTEXT_COLLECTION_NAMES.includes(prop)) {
-                return createEmptyFallback(prop)
+                return createEmptyFallback()
             }
             return target[prop]
         },

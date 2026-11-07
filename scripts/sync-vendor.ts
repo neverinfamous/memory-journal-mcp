@@ -142,9 +142,11 @@ try {
       for (const specifier of extractRelativeImports(source)) {
         const target = resolve(dirname(filePath), specifier.replace(/\.js$/, '.ts'));
         if (existsSync(target)) continue;
-        const users = unresolved.get(`${lib}/${specifier}`) ?? new Set<string>();
-        users.add(`${lib}/${file}`);
-        unresolved.set(`${lib}/${specifier}`, users);
+        const normalizedSpecifier = specifier.replace(/\\/g, '/');
+        const normalizedFile = file.replace(/\\/g, '/');
+        const users = unresolved.get(`${lib}/${normalizedSpecifier}`) ?? new Set<string>();
+        users.add(`${lib}/${normalizedFile}`);
+        unresolved.set(`${lib}/${normalizedSpecifier}`, users);
       }
       for (const pkg of extractPackageImports(source)) {
         if (declared.has(pkg)) continue;

@@ -38,6 +38,7 @@ export async function runStartupAutoPrune(
         importanceThreshold: options.pruneImportanceThreshold ?? 0.15,
         dryRun: options.pruneDryRun,
         excludeTags: options.pruneExcludeTags,
+        workspaceId: options.defaultWorkspaceId,
     })
     logger.info('Auto-prune completed', {
         module: 'McpServer',
@@ -239,10 +240,11 @@ export function createSchedulerIfConfigured(
  */
 export function seedInitialDigest(db: IDatabaseAdapter, options: ServerOptions): void {
     try {
-        const existingSnapshot = db.getLatestAnalyticsSnapshot('digest')
+        const wsId = options.defaultWorkspaceId ?? 'default'
+        const existingSnapshot = db.getLatestAnalyticsSnapshot('digest', wsId)
         if (!existingSnapshot) {
-            const digest = db.computeDigest(options.defaultWorkspaceId ?? 'default')
-            db.saveAnalyticsSnapshot('digest', digest)
+            const digest = db.computeDigest(wsId)
+            db.saveAnalyticsSnapshot('digest', digest, wsId)
             logger.info('Initial analytics digest seeded', { module: 'McpServer' })
         }
     } catch (error: unknown) {

@@ -55,17 +55,33 @@ async function getDb(options: ServerOptionsSchema & { team?: boolean }, command:
 }
 
 export async function exportJsonAction(options: z.infer<typeof exportJsonSchema>, command: Command): Promise<void> {
-    const { db } = await getDb(options, command)
+    const { db, serverOptions } = await getDb(options, command)
     try {
-        const dest = options.dest
-        // NOTE: exportToFile copies the SQLite database file (a database backup), not a JSON document.
-        const result = await db.exportToFile(dest)
-        
+        const workspaceId = options.workspace ?? serverOptions.defaultWorkspaceId
+        const PAGE_SIZE = 1000
+        const entries: JournalEntry[] = []
+        for (let offset = 0; ; offset += PAGE_SIZE) {
+            const page = db.getEntriesPage(offset, PAGE_SIZE, workspaceId).entries
+            entries.push(...page)
+            if (page.length < PAGE_SIZE) break
+        }
+
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+        const defaultName = `journal_export_${timestamp}.json`
+        const destPath = options.dest
+            ? path.resolve(options.dest)
+            : path.resolve(path.dirname(serverOptions.dbPath), 'backups', defaultName)
+        await fs.mkdir(path.dirname(destPath), { recursive: true })
+        const jsonPayload = JSON.stringify({ exportedAt: new Date().toISOString(), count: entries.length, entries }, null, 2)
+        await fs.writeFile(destPath, jsonPayload, 'utf-8')
+        const filename = path.basename(destPath)
+        const sizeBytes = Buffer.byteLength(jsonPayload, 'utf-8')
+
         process.stdout.write(
-            JSON.stringify({ note: 'Database backup created (SQLite file copy, not JSON)', ...result }, null, 2) + '\n'
+            JSON.stringify({ filename, path: destPath, sizeBytes, count: entries.length, entries }, null, 2) + '\n'
         )
     } catch (e) {
-        process.stderr.write("Database backup export failed: " + (e instanceof Error ? e.message : String(e)) + '\n')
+        process.stderr.write("JSON export failed: " + (e instanceof Error ? e.message : String(e)) + '\n')
         process.exit(1)
     } finally {
         db.close()

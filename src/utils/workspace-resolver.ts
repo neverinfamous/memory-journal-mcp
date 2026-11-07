@@ -98,15 +98,85 @@ export function findCanonicalRegistryKey(aliasOrKey: string, registry?: Record<s
     return undefined
 }
 
+function collectAliasesForKey(key: string): string[] {
+    const keyLower = key.toLowerCase()
+    const directAliases = PROJECT_KEYWORD_ALIASES[key] ?? []
+    let matchedAliases = [keyLower, ...directAliases.map((a) => a.toLowerCase())]
+    for (const [canonicalKey, aliases] of Object.entries(PROJECT_KEYWORD_ALIASES)) {
+        if (canonicalKey.toLowerCase() === keyLower) {
+            matchedAliases = Array.from(new Set([...matchedAliases, ...aliases.map((a) => a.toLowerCase())]))
+        }
+    }
+    return matchedAliases.sort((a, b) => b.length - a.length)
+}
+
+function contentMatchesAnyAlias(contentLower: string, sortedAliases: readonly string[]): boolean {
+    if (contentLower.length === 0) return false
+    for (const alias of sortedAliases) {
+        if (alias.length < 2) continue
+        const escapedAlias = alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        const postBoundary = alias.includes('_') ? '(?:$|[^a-zA-Z0-9_-])' : '(?:$|[^a-zA-Z0-9-])'
+        const preBoundary = alias.includes('_') ? '(?:^|[^a-zA-Z0-9_-])' : '(?:^|[^a-zA-Z0-9-])'
+        const regex = new RegExp(`${preBoundary}${escapedAlias}${postBoundary}`, 'i')
+        if (regex.test(contentLower)) return true
+    }
+    return false
+}
+
+function matchRegistryByTagsOrContent(
+    input: ResolutionInput,
+    registry: Record<string, RegistryEntry>
+): ResolvedContext | undefined {
+    const tagSet = new Set((input.tags ?? []).map((t) => t.toLowerCase().trim()))
+    const tagTokens = new Set<string>()
+    for (const tag of tagSet) {
+        tagTokens.add(tag)
+        for (const part of tag.split(/[-_:.]+/)) {
+            if (part.length >= 2) tagTokens.add(part)
+        }
+    }
+    const contentLower = (input.content ?? '').toLowerCase()
+
+    // Sort registry entries by key length descending to prioritize more specific/composite projects
+    const sortedEntries = Object.entries(registry)
+        .filter(([k]) => !SENTINEL_PROJECT_KEYS.includes(k.toLowerCase()))
+        .sort(([a], [b]) => b.length - a.length)
+
+    for (const [key, entry] of sortedEntries) {
+        const matchedAliases = collectAliasesForKey(key)
+        const matched =
+            matchedAliases.some((a) => tagTokens.has(a)) ||
+            contentMatchesAnyAlias(contentLower, matchedAliases)
+
+        if (matched) {
+            return {
+                workspaceId: key,
+                projectNumber: entry.project_number ?? input.project_number,
+            }
+        }
+    }
+    return undefined
+}
+
+function findWorkspaceByProjectNumber(
+    projNum: number,
+    registry: Record<string, RegistryEntry> | undefined
+): string | undefined {
+    if (!registry) return undefined
+    for (const [key, entry] of Object.entries(registry)) {
+        if (entry.project_number === projNum) return key
+    }
+    return undefined
+}
+
 /**
  * Resolves full workspace and project context from available inputs.
  * Priority:
- * 1. Explicit workspace_id (if not 'default') and explicit project_number
+ * 1. Explicit non-'default' workspace_id
  * 2. Explicit project_number -> lookup workspace_id in projectRegistry
- * 3. Explicit workspace_id -> lookup project_number in projectRegistry
- * 4. Content / Tags fuzzy matching against projectRegistry keys and names
- * 5. process.cwd() path matching against projectRegistry
- * 6. Config defaults or fallback 'default'
+ * 3. Content / Tags fuzzy matching against projectRegistry keys and names
+ * 4. Explicit project_number fallback (when unregistered and no conflicting keywords matched)
+ * 5. process.cwd() path matching against projectRegistry or config defaults
  */
 export function resolveProjectContext(
     input: ResolutionInput,
@@ -118,143 +188,62 @@ export function resolveProjectContext(
     const sanitizedWorkspaceId =
         input.workspace_id === '*' ? undefined : input.workspace_id
 
-    // 1. Truly explicit workspace_id provided
+    // 1. Truly explicit non-'default' workspace_id provided
     if (
         sanitizedWorkspaceId !== undefined &&
-        sanitizedWorkspaceId !== null
+        sanitizedWorkspaceId !== null &&
+        sanitizedWorkspaceId !== 'default'
     ) {
-        if (sanitizedWorkspaceId === 'default' && input.project_number !== undefined && input.project_number !== null) {
-            // Fall through to step 2 if caller passed default placeholder alongside an explicit project_number
-        } else {
-            let wsId = sanitizedWorkspaceId
-            const canonicalKey = findCanonicalRegistryKey(wsId, registry)
-            if (canonicalKey) {
-                wsId = canonicalKey
-            }
-            let projNum = input.project_number ?? (canonicalKey ? registry?.[canonicalKey]?.project_number : registry?.[wsId]?.project_number)
-            projNum ??= resolveProjectNumberFromPath(process.cwd()) ?? config?.defaultProjectNumber
-            return {
-                workspaceId: wsId,
-                projectNumber: projNum
-            }
+        let wsId = sanitizedWorkspaceId
+        const canonicalKey = findCanonicalRegistryKey(wsId, registry)
+        if (canonicalKey) wsId = canonicalKey
+        let projNum =
+            input.project_number ??
+            (canonicalKey ? registry?.[canonicalKey]?.project_number : registry?.[wsId]?.project_number)
+        projNum ??= resolveProjectNumberFromPath(process.cwd(), registry) ?? config?.defaultProjectNumber
+        return {
+            workspaceId: wsId,
+            projectNumber: projNum,
         }
     }
 
     // 2. Explicit project_number provided -> lookup matching workspace_id in projectRegistry
     if (input.project_number !== undefined && input.project_number !== null) {
-        const projNum = input.project_number
-        let wsId: string | undefined
-        if (registry) {
-            for (const [key, entry] of Object.entries(registry)) {
-                if (entry.project_number === projNum) {
-                    wsId = key
-                    break
-                }
-            }
-        }
-        if (wsId) {
+        const wsId = findWorkspaceByProjectNumber(input.project_number, registry)
+        if (wsId !== undefined) {
             return {
                 workspaceId: wsId,
-                projectNumber: projNum
+                projectNumber: input.project_number,
             }
         }
     }
 
     // 3. Content / Tags keyword matching against projectRegistry
     if (registry) {
-        const tagSet = new Set((input.tags ?? []).map((t) => t.toLowerCase().trim()))
-        const tagTokens = new Set<string>()
-        for (const tag of tagSet) {
-            tagTokens.add(tag)
-            for (const part of tag.split(/[-_:.]+/)) {
-                if (part.length >= 2) tagTokens.add(part)
-            }
-        }
-        const contentLower = (input.content ?? '').toLowerCase()
-
-        // Sort registry entries by key length descending to prioritize more specific/composite projects
-        const sortedEntries = Object.entries(registry)
-            .filter(([k]) => !SENTINEL_PROJECT_KEYS.includes(k.toLowerCase()))
-            .sort(([a], [b]) => b.length - a.length)
-
-        for (const [key, entry] of sortedEntries) {
-            const keyLower = key.toLowerCase()
-
-            // Collect all aliases for this registry key
-            const directAliases = PROJECT_KEYWORD_ALIASES[key] ?? []
-            let matchedAliases = [keyLower, ...directAliases.map((a) => a.toLowerCase())]
-            for (const [canonicalKey, aliases] of Object.entries(PROJECT_KEYWORD_ALIASES)) {
-                if (canonicalKey.toLowerCase() === keyLower) {
-                    matchedAliases = Array.from(new Set([...matchedAliases, ...aliases.map((a) => a.toLowerCase())]))
-                }
-            }
-
-            // Sort aliases by length descending so longer/more specific aliases match first
-            matchedAliases.sort((a, b) => b.length - a.length)
-
-            // Check if any tag matches
-            let matched = matchedAliases.some((a) => tagTokens.has(a))
-
-            // Check if content matches any alias or key
-            if (!matched && contentLower.length > 0) {
-                // Sort aliases by length descending so longer, more specific phrases match first
-                const sortedAliases = [...matchedAliases].sort((a, b) => b.length - a.length)
-                for (const alias of sortedAliases) {
-                    if (alias.length >= 2) {
-                        const escapedAlias = alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-                        const postBoundary = alias.includes('_') ? '(?:$|[^a-zA-Z0-9_-])' : '(?:$|[^a-zA-Z0-9-])'
-                        const preBoundary = alias.includes('_') ? '(?:^|[^a-zA-Z0-9_-])' : '(?:^|[^a-zA-Z0-9-])'
-                        const regex = new RegExp(`${preBoundary}${escapedAlias}${postBoundary}`, 'i')
-                        if (regex.test(contentLower)) {
-                            matched = true
-                            break
-                        }
-                    }
-                }
-            }
-
-            if (matched) {
-                // Matched registered workspace entry takes precedence for projectNumber
-                return {
-                    workspaceId: key,
-                    projectNumber: entry.project_number ?? input.project_number
-                }
-            }
-        }
+        const matched = matchRegistryByTagsOrContent(input, registry)
+        if (matched !== undefined) return matched
     }
 
     // 4. Explicit input.project_number fallback (when no conflicting registry workspace matched)
     if (input.project_number !== undefined && input.project_number !== null) {
-        let wsId = sanitizedWorkspaceId
-        if ((!wsId || wsId === 'default') && registry) {
-            for (const [key, entry] of Object.entries(registry)) {
-                if (entry.project_number === input.project_number) {
-                    wsId = key
-                    break
-                }
-            }
-        }
+        const wsId = findWorkspaceByProjectNumber(input.project_number, registry) ?? sanitizedWorkspaceId
         return {
             workspaceId: wsId ?? config?.defaultWorkspaceId ?? 'default',
-            projectNumber: input.project_number
+            projectNumber: input.project_number,
         }
     }
 
     // 5. CWD / Config Fallback
-    const cwdProjNum = resolveProjectNumberFromPath(process.cwd()) ?? config?.defaultProjectNumber
+    const cwdProjNum =
+        resolveProjectNumberFromPath(process.cwd(), registry) ?? config?.defaultProjectNumber
     let resolvedWsId = sanitizedWorkspaceId
-    if ((!resolvedWsId || resolvedWsId === 'default') && cwdProjNum !== undefined && registry) {
-        for (const [key, entry] of Object.entries(registry)) {
-            if (entry.project_number === cwdProjNum) {
-                resolvedWsId = key
-                break
-            }
-        }
+    if ((resolvedWsId === undefined || resolvedWsId === 'default') && cwdProjNum !== undefined) {
+        resolvedWsId = findWorkspaceByProjectNumber(cwdProjNum, registry) ?? resolvedWsId
     }
 
     return {
         workspaceId: resolvedWsId ?? config?.defaultWorkspaceId ?? 'default',
-        projectNumber: cwdProjNum
+        projectNumber: cwdProjNum,
     }
 }
 

@@ -12,7 +12,6 @@ export {
     getEntryById,
     getEntriesByIds,
     getEntryByIdIncludeDeleted,
-    getActiveEntries,
     getActiveEntryCount,
     getDeletedEntries,
 } from './crud-read.js'

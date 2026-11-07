@@ -12,6 +12,7 @@
 
 import type { ConvertedFile } from './index.js'
 import type { FrontmatterData } from '../frontmatter.js'
+import { basename } from 'node:path'
 import { parseYamlFrontmatter } from './yaml-parser.js'
 import { extractTags, formatToISODate, getFirstString } from './utils.js'
 
@@ -21,6 +22,7 @@ export function convertObsidian(
     defaultEntryType?: string
 ): ConvertedFile {
     const { metadata: yamlMeta, body } = parseYamlFrontmatter(content)
+    const baseFilename = basename(filename)
     
     const mjMeta: FrontmatterData = {
         source: 'obsidian',
@@ -38,7 +40,7 @@ export function convertObsidian(
         mjMeta.timestamp = formatToISODate(dateStr)
     } else {
         // Check if filename looks like a daily note (YYYY-MM-DD)
-        const dateMatch = /\b(\d{4}-\d{2}-\d{2})\b/.exec(filename)
+        const dateMatch = /\b(\d{4}-\d{2}-\d{2})\b/.exec(baseFilename)
         if (dateMatch?.[1]) {
             mjMeta.timestamp = `${dateMatch[1]}T12:00:00Z`
         }
@@ -68,7 +70,7 @@ export function convertObsidian(
 
     // 3. Heuristic Entry Type Inference
     if (!defaultEntryType) {
-        if (filename.includes('daily') || (/^\d{4}-\d{2}-\d{2}/.exec(filename))) {
+        if (filename.toLowerCase().includes('daily') || (/^\d{4}-\d{2}-\d{2}/.exec(baseFilename))) {
             mjMeta.entry_type = 'standup'
         } else if (mergedTags.has('decision') || mergedTags.has('adr')) {
             mjMeta.entry_type = 'project_decision'

@@ -15,6 +15,7 @@ import {
     TeamCreateEntrySchema,
     TeamCreateEntrySchemaMcp,
 } from './core-search-schemas.js'
+import { preprocessBatchCreateEntries } from '../../admin/schemas/crud-batch-schemas.js'
 
 /** team_update_entry — strict */
 export const TeamUpdateEntrySchema = z.preprocess(
@@ -210,24 +211,30 @@ export const TeamMergeTagsSchemaMcp = z.object({
         ),
 })
 
-export const TeamBatchCreateEntriesSchema = z.object({
-    entries: z.array(TeamCreateEntrySchema).min(1).max(MAX_BATCH_SIZE),
-    auto_index: z.boolean().optional().default(true),
-    project_number: StrictProjectNumberSchema.optional(),
-    workspace_id: z.string().optional(),
-})
+export const TeamBatchCreateEntriesSchema = z.preprocess(
+    preprocessBatchCreateEntries,
+    z.object({
+        entries: z.array(TeamCreateEntrySchema).min(1).max(MAX_BATCH_SIZE),
+        auto_index: z.boolean().optional().default(true),
+        project_number: StrictProjectNumberSchema.optional(),
+        workspace_id: z.string().optional(),
+    })
+)
 
-export const TeamBatchCreateEntriesSchemaMcp = z.object({
-    entries: z.array(TeamCreateEntrySchemaMcp).optional(),
-    auto_index: z.boolean().optional().default(true),
-    project_number: relaxedNumber().optional(),
-    workspace_id: z
-        .string()
-        .optional()
-        .describe(
-            'Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'
-        ),
-})
+export const TeamBatchCreateEntriesSchemaMcp = z.preprocess(
+    preprocessBatchCreateEntries,
+    z.object({
+        entries: z.array(TeamCreateEntrySchemaMcp).optional(),
+        auto_index: z.boolean().optional().default(true),
+        project_number: relaxedNumber().optional(),
+        workspace_id: z
+            .string()
+            .optional()
+            .describe(
+                'Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'
+            ),
+    })
+)
 
 function preprocessTeamBatchUpdates(val: unknown): unknown {
     if (typeof val === 'object' && val !== null) {

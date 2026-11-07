@@ -162,7 +162,7 @@ export interface IDatabaseAdapter {
         }
     ): JournalEntry | null
     deleteEntry(id: number, permanent?: boolean, workspaceId?: string): boolean
-    getAnchorsByEntryId(entryId: number): Anchor[]
+    getAnchorsByEntryId(entryId: number, workspaceId?: string): Anchor[]
     updateAnchorStatus(id: number, status: AnchorStatus, workspaceId?: string): boolean
 
     // Team Membership (RBAC)

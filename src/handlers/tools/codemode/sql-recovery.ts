@@ -67,7 +67,7 @@ export function extractAndRecoverSqlCode(code: string): string | null {
         return `return await mj.team.teamListAuthorAliases({});`
     }
     if (tableName === 'audit_log' || tableName === 'audit' || tableName === 'audit_logs') {
-        return `return await mj.core.searchAuditLog({});`
+        return `return await mj.admin.searchAuditLog({});`
     }
 
     if (/^SELECT\b/i.test(cleanSql)) {
@@ -105,18 +105,21 @@ export function extractAndRecoverSqlCode(code: string): string | null {
 
     if (/^UPDATE\b/i.test(cleanSql)) {
         if (idVal !== undefined) {
-            const updatePayload: Record<string, unknown> = { entry_id: idVal }
             const setContentMatch = /\bSET\s+[\s\S]*?\bcontent\s*=\s*(['"])([\s\S]*?)\1/i.exec(cleanSql)
             if (setContentMatch?.[2] !== undefined) {
-                updatePayload['content'] = setContentMatch[2]
+                const updatePayload: Record<string, unknown> = {
+                    entry_id: idVal,
+                    content: setContentMatch[2],
+                }
+                return `return await mj.admin.updateEntry(${JSON.stringify(updatePayload)});`
             }
-            return `return await mj.admin.updateEntry(${JSON.stringify(updatePayload)});`
+            return null
         }
     }
 
     if (/^DELETE\s+FROM\b/i.test(cleanSql)) {
         if (idVal !== undefined) {
-            return `return await mj.core.deleteEntry({ entry_id: ${idVal} });`
+            return `return await mj.admin.deleteEntry({ entry_id: ${idVal} });`
         }
     }
 

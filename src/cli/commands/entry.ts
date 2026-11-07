@@ -105,7 +105,7 @@ export async function createEntryAction(...args: unknown[]): Promise<void> {
         }
 
         const metadata = { ...frontmatter, ...parseMetadata(options.metadata) }
-        const payload = buildEntryPayload(options, metadata, config)
+        const payload = buildEntryPayload(options, metadata, config, content)
 
         let resolvedWs = payload.workspaceId
         if (resolvedWs === 'default' && config.defaultWorkspaceId !== 'default') {
@@ -159,7 +159,13 @@ export async function createEntryAction(...args: unknown[]): Promise<void> {
         ]
         for (const request of linkRequests) {
             try {
-                db.linkEntries(newEntry.id, request.targetId, request.type)
+                db.linkEntries(
+                    newEntry.id,
+                    request.targetId,
+                    request.type,
+                    undefined,
+                    payload.workspaceId
+                )
             } catch (linkError) {
                 linkFailures.push({
                     target_id: request.targetId,
@@ -233,7 +239,7 @@ export async function updateEntryAction(...args: unknown[]): Promise<void> {
         }
 
         const metadata = { ...frontmatter, ...parseMetadata(options.metadata) }
-        const payload = buildEntryPayload(options, metadata, config)
+        const payload = buildEntryPayload(options, metadata, config, content)
 
         const updates: Partial<CreateEntryInput> & { expectedVersion: number } = {
             content,
@@ -258,24 +264,56 @@ export async function updateEntryAction(...args: unknown[]): Promise<void> {
             process.exit(1)
         }
 
-        for (const targetId of payload.relatedIds) {
-            db.linkEntries(entryId, targetId, 'references')
-        }
-
-        for (const rel of payload.relationships) {
-            db.linkEntries(entryId, rel.target_id, rel.relation_type as RelationshipType)
+        const linkFailures: { target_id: number; error: string }[] = []
+        const linkRequests: { targetId: number; type: RelationshipType }[] = [
+            ...payload.relatedIds.map((targetId) => ({ targetId, type: 'references' as const })),
+            ...payload.relationships.map((rel) => ({
+                targetId: rel.target_id,
+                type: rel.relation_type as RelationshipType,
+            })),
+        ]
+        const targetWorkspaceId = result.workspaceId ?? payload.workspaceId
+        for (const request of linkRequests) {
+            try {
+                db.linkEntries(
+                    entryId,
+                    request.targetId,
+                    request.type,
+                    undefined,
+                    targetWorkspaceId
+                )
+            } catch (linkError) {
+                linkFailures.push({
+                    target_id: request.targetId,
+                    error: linkError instanceof Error ? linkError.message : String(linkError),
+                })
+            }
         }
 
         db.flushSave()
 
+        if (linkFailures.length > 0) {
+            process.exitCode = 1
+        }
+
         if (options.json === true) {
             process.stdout.write(
-                JSON.stringify({ status: 'success', id: result.id, version: result.version }) + '\n'
+                JSON.stringify({
+                    status: linkFailures.length > 0 ? 'partial' : 'success',
+                    id: result.id,
+                    version: result.version,
+                    ...(linkFailures.length > 0 ? { entryPersisted: true, linkFailures } : {}),
+                }) + '\n'
             )
         } else {
             process.stderr.write(
                 `Successfully updated entry #${result.id} to version ${result.version}\n`
             )
+            for (const failure of linkFailures) {
+                process.stderr.write(
+                    `Warning: entry #${result.id} was updated, but linking to #${failure.target_id} failed: ${failure.error}\n`
+                )
+            }
         }
     } catch (e) {
         handleCliEntryError(e, 'update')

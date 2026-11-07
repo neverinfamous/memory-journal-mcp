@@ -39,10 +39,6 @@ export interface SearchQueryRow {
     highlight_snippet?: string
 }
 
-export function ftsRankToRelevance(rank: number): number {
-    return 1 / (1 + Math.abs(rank))
-}
-
 export function extractSnippet(row: unknown): { id: number; snippet: string } {
     if (typeof row === 'object' && row !== null && 'id' in row && 'highlight_snippet' in row) {
         return {

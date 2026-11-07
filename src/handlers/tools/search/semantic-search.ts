@@ -156,7 +156,7 @@ export function getSemanticSearchTool(context: ToolContext): ToolDefinition[] {
                             ...filterOptions,
                             limit: input.limit,
                         })
-                        entries = mergeAndDedup(personalEntries, teamEntries, input.limit)
+                        entries = mergeAndDedup(personalEntries, teamEntries, input.limit, 'similarity')
                     } else {
                         entries = personalEntries.slice(0, input.limit)
                     }

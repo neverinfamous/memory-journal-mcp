@@ -47,41 +47,36 @@ export interface SafeFsShim {
 }
 
 export function createSafeFsShim(contextObj?: Record<string, unknown>): SafeFsShim {
-    const readContent = (): string =>
+    const hasContextContent =
         contextObj !== undefined && typeof contextObj['content'] === 'string'
-            ? contextObj['content']
-            : ''
+    const readContent = (): string =>
+        hasContextContent ? (contextObj['content'] as string) : ''
+    const buildStats = (): {
+        size: number
+        isFile: () => boolean
+        isDirectory: () => boolean
+        mtime: Date
+        birthtime: Date
+    } => ({
+        size: Buffer.byteLength(readContent(), 'utf-8'),
+        isFile: () => true,
+        isDirectory: () => false,
+        mtime: new Date(),
+        birthtime: new Date(),
+    })
 
     return {
         existsSync: (_filePath?: unknown): boolean => false,
-        statSync: (_filePath?: unknown) => ({
-            size: 1048576,
-            isFile: () => true,
-            isDirectory: () => false,
-            mtime: new Date(),
-            birthtime: new Date(),
-        }),
+        statSync: (_filePath?: unknown) => buildStats(),
         stat: (
             _filePath?: unknown,
             cb?: (err: Error | null, stats?: unknown) => void
         ): Promise<unknown> => {
-            const s = {
-                size: 1048576,
-                isFile: () => true,
-                isDirectory: () => false,
-                mtime: new Date(),
-                birthtime: new Date(),
-            }
+            const s = buildStats()
             if (typeof cb === 'function') cb(null, s)
             return Promise.resolve(s)
         },
-        lstatSync: (_filePath?: unknown) => ({
-            size: 1048576,
-            isFile: () => true,
-            isDirectory: () => false,
-            mtime: new Date(),
-            birthtime: new Date(),
-        }),
+        lstatSync: (_filePath?: unknown) => buildStats(),
         readFileSync: (_filePath?: unknown) => readContent(),
         readFile: (
             _filePath?: unknown,
@@ -97,20 +92,7 @@ export function createSafeFsShim(contextObj?: Record<string, unknown>): SafeFsSh
         unlinkSync: (): void => undefined,
         readdirSync: (): string[] => [],
         promises: {
-            stat: (): Promise<{
-                size: number
-                isFile: () => boolean
-                isDirectory: () => boolean
-                mtime: Date
-                birthtime: Date
-            }> =>
-                Promise.resolve({
-                    size: 1048576,
-                    isFile: () => true,
-                    isDirectory: () => false,
-                    mtime: new Date(),
-                    birthtime: new Date(),
-                }),
+            stat: () => Promise.resolve(buildStats()),
             readFile: (): Promise<string> => Promise.resolve(readContent()),
             writeFile: (): Promise<void> => Promise.resolve(undefined),
         },

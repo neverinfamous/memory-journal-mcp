@@ -5,6 +5,13 @@
 
 import type { SandboxResult } from '../types.js'
 
+const MAX_COMPACTION_DEPTH = 6
+const COMPACTED_ARRAY_MAX_ITEMS = 20
+const COMPACTED_ARRAY_TRIGGER_LENGTH = 25
+const COMPACTED_OBJECT_MAX_KEYS = 100
+const TRUNCATED_STRING_THRESHOLD_CHARS = 400
+const TRUNCATED_STRING_PREVIEW_CHARS = 300
+
 /**
  * Automatically compacts oversized structured result payloads (objects and collections)
  * so that queries returning large datasets (e.g. 50 entries with markdown content)
@@ -22,7 +29,7 @@ export function compactOversizedResult(
     if (val === null || val === undefined || typeof val !== 'object') {
         return val
     }
-    if (depth > 6) {
+    if (depth > MAX_COMPACTION_DEPTH) {
         return '[MaxDepthExceeded]'
     }
     if (seen.has(val)) {
@@ -32,13 +39,13 @@ export function compactOversizedResult(
 
     if (Array.isArray(val)) {
         const arr: unknown[] = val
-        const maxItems = arr.length > 25 ? 20 : arr.length
+        const maxItems = arr.length > COMPACTED_ARRAY_TRIGGER_LENGTH ? COMPACTED_ARRAY_MAX_ITEMS : arr.length
         const compactedArr: unknown[] = []
         for (let i = 0; i < maxItems; i++) {
             const item: unknown = arr[i]
-            if (typeof item === 'string' && item.length > 400) {
+            if (typeof item === 'string' && item.length > TRUNCATED_STRING_THRESHOLD_CHARS) {
                 compactedArr.push(
-                    `${item.slice(0, 300)}... [truncated by Code Mode result size guardrail]`
+                    `${item.slice(0, TRUNCATED_STRING_PREVIEW_CHARS)}... [truncated by Code Mode result size guardrail]`
                 )
             } else {
                 compactedArr.push(compactOversizedResult(item, limitBytes, depth + 1, seen))
@@ -56,15 +63,15 @@ export function compactOversizedResult(
 
     const compactedObj: Record<string, unknown> = {}
     const entries = Object.entries(val as Record<string, unknown>)
-    const maxKeys = entries.length > 100 ? 100 : entries.length
+    const maxKeys = entries.length > COMPACTED_OBJECT_MAX_KEYS ? COMPACTED_OBJECT_MAX_KEYS : entries.length
     for (let i = 0; i < maxKeys; i++) {
         const entry = entries[i]
         if (!entry) continue
         const [k, v] = entry
         if (typeof v === 'string') {
-            if (v.length > 400) {
+            if (v.length > TRUNCATED_STRING_THRESHOLD_CHARS) {
                 compactedObj[k] =
-                    `${v.slice(0, 300)}... [truncated by Code Mode result size guardrail]`
+                    `${v.slice(0, TRUNCATED_STRING_PREVIEW_CHARS)}... [truncated by Code Mode result size guardrail]`
             } else {
                 compactedObj[k] = v
             }

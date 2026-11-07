@@ -61,26 +61,36 @@ export function calcPerDbLimit(limit: number, hasTeamDb: boolean): number {
 
 /**
  * Merge multiple arrays of entries, deduplicate by content/source,
- * and sort by timestamp descending.
+ * and sort by timestamp, importance, similarity, or preserve existing rank order.
  */
 export function mergeMultipleSources(
     sources: EntryWithSource[][],
     limit?: number,
-    sortBy: 'timestamp' | 'importance' = 'timestamp'
+    sortBy: 'timestamp' | 'importance' | 'similarity' | 'preserve' = 'timestamp'
 ): EntryWithSource[] {
     const seen = new Set<string>()
     const merged: EntryWithSource[] = []
 
-    const all = sources.flat().sort((a, b) => {
-        if (sortBy === 'importance') {
-            const scoreA = Number(a['importanceScore']) || 0
-            const scoreB = Number(b['importanceScore']) || 0
-            if (scoreA !== scoreB) {
-                return scoreB - scoreA
-            }
-        }
-        return b.timestamp.localeCompare(a.timestamp)
-    })
+    const flattened = sources.flat()
+    const all =
+        sortBy === 'preserve'
+            ? flattened
+            : flattened.sort((a, b) => {
+                  if (sortBy === 'importance') {
+                      const scoreA = Number(a['importanceScore']) || 0
+                      const scoreB = Number(b['importanceScore']) || 0
+                      if (scoreA !== scoreB) {
+                          return scoreB - scoreA
+                      }
+                  } else if (sortBy === 'similarity') {
+                      const simA = Number(a['similarity']) || 0
+                      const simB = Number(b['similarity']) || 0
+                      if (simA !== simB) {
+                          return simB - simA
+                      }
+                  }
+                  return b.timestamp.localeCompare(a.timestamp)
+              })
 
     for (const entry of all) {
         const entryId =
@@ -103,13 +113,13 @@ export function mergeMultipleSources(
 
 /**
  * Merge personal and team results, deduplicate by content,
- * and sort by timestamp descending.
+ * and sort by timestamp, importance, similarity, or preserve existing rank order.
  */
 export function mergeAndDedup(
     personal: EntryWithSource[],
     team: EntryWithSource[],
     limit?: number,
-    sortBy: 'timestamp' | 'importance' = 'timestamp'
+    sortBy: 'timestamp' | 'importance' | 'similarity' | 'preserve' = 'timestamp'
 ): EntryWithSource[] {
     return mergeMultipleSources([personal, team], limit, sortBy)
 }

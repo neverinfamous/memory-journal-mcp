@@ -113,22 +113,25 @@ export async function vacuumAction(options: z.infer<typeof vacuumSchema>, comman
 }
 
 export async function pruneAction(options: z.infer<typeof pruneSchema>, command: Command): Promise<void> {
-    const { db } = await getDb(options, command)
+    const { db, serverOptions } = await getDb(options, command)
     
     try {
         const rawExcludeTags = options.excludeTags ?? options.pruneExcludeTags
+        const parsedExcludeTags = rawExcludeTags
+            ? rawExcludeTags
+                  .split(',')
+                  .map((tag) => tag.trim())
+                  .filter((tag) => tag !== '')
+            : (serverOptions.pruneExcludeTags ?? [])
+        const workspaceId = options.workspace ?? serverOptions.defaultWorkspaceId
         const result = await runAutoPrune(db, {
-            archiveOlderThanDays: options.archiveOlderThanDays ?? 0,
-            pruneOlderThanDays: options.pruneOlderThanDays ?? 0,
-            hardDeleteOlderThanDays: options.hardDeleteOlderThanDays ?? 0,
-            importanceThreshold: options.importanceThreshold ?? options.pruneImportanceThreshold ?? 0.15,
-            dryRun: options.dryRun === true || options.pruneDryRun === true,
-            excludeTags: rawExcludeTags
-                ? rawExcludeTags
-                      .split(',')
-                      .map((tag) => tag.trim())
-                      .filter((tag) => tag !== '')
-                : []
+            archiveOlderThanDays: options.archiveOlderThanDays ?? serverOptions.archiveOlderThanDays ?? 0,
+            pruneOlderThanDays: options.pruneOlderThanDays ?? serverOptions.pruneOlderThanDays ?? 0,
+            hardDeleteOlderThanDays: options.hardDeleteOlderThanDays ?? serverOptions.hardDeleteOlderThanDays ?? 0,
+            importanceThreshold: options.importanceThreshold ?? options.pruneImportanceThreshold ?? serverOptions.pruneImportanceThreshold ?? 0.15,
+            dryRun: options.dryRun === true || options.pruneDryRun === true || serverOptions.pruneDryRun === true,
+            excludeTags: parsedExcludeTags,
+            ...(workspaceId !== undefined ? { workspaceId } : {}),
         })
         if (options.json === true) {
             process.stdout.write(JSON.stringify(result) + '\n')
@@ -150,9 +153,22 @@ export async function pruneAction(options: z.infer<typeof pruneSchema>, command:
 }
 
 export async function auditAction(options: z.infer<typeof auditSchema>, command: Command): Promise<void> {
-    const { db } = await getDb(options, command)
     try {
-        const auditLogPath = options.auditLog ?? process.env['AUDIT_LOG_PATH'] ?? process.env['MEMORY_JOURNAL_AUDIT_LOG']
+        let resolver: ConfigResolver
+        const configPath = options.config ?? process.env['MEMORY_JOURNAL_CONFIG']
+        try {
+            resolver = new ConfigResolver(command, options, configPath)
+        } catch {
+            resolver = new ConfigResolver(command, {}, undefined)
+        }
+        const { serverOptions } = buildServerOptions(resolver, options, command, [])
+        const auditDefaults = serverOptions.auditConfig
+
+        const auditLogPath =
+            options.auditLog ??
+            process.env['AUDIT_LOG_PATH'] ??
+            process.env['MEMORY_JOURNAL_AUDIT_LOG'] ??
+            (options.config !== undefined ? auditDefaults?.logPath : undefined)
         if (!auditLogPath) {
             throw new Error('Audit log path not configured (--audit-log or AUDIT_LOG_PATH)')
         }
@@ -160,9 +176,11 @@ export async function auditAction(options: z.infer<typeof auditSchema>, command:
         const logger = new AuditLogger({
             logPath: auditLogPath,
             enabled: true,
-            redact: options.auditRedact ?? true,
-            auditReads: options.auditReads ?? false,
-            maxSizeBytes: options.auditLogMaxSize ? parseInt(options.auditLogMaxSize) : DEFAULT_AUDIT_LOG_MAX_SIZE_BYTES
+            redact: options.auditRedact ?? auditDefaults?.redact ?? true,
+            auditReads: options.auditReads ?? auditDefaults?.auditReads ?? false,
+            maxSizeBytes: options.auditLogMaxSize
+                ? parseInt(options.auditLogMaxSize)
+                : (auditDefaults?.maxSizeBytes ?? DEFAULT_AUDIT_LOG_MAX_SIZE_BYTES),
         })
 
         const statusFilter = options.status === 'success' ? true : (options.status === 'error' ? false : undefined)
@@ -179,8 +197,6 @@ export async function auditAction(options: z.infer<typeof auditSchema>, command:
     } catch (e) {
         process.stderr.write("Audit search failed: " + (e instanceof Error ? e.message : String(e)) + '\n')
         process.exit(1)
-    } finally {
-        db.close()
     }
 }
 

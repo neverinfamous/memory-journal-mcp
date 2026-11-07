@@ -280,6 +280,45 @@ export class MetricsAccumulator {
         })
     }
 
+    private mergeToolMetrics(entries: [string, ToolMetrics][]): void {
+        for (const [key, val] of entries) {
+            const existing = this.toolData.get(key)
+            if (!existing) {
+                this.toolData.set(key, val)
+                continue
+            }
+            existing.callCount += val.callCount
+            existing.errorCount += val.errorCount
+            existing.totalDurationMs += val.totalDurationMs
+            existing.totalInputTokens += val.totalInputTokens
+            existing.totalOutputTokens += val.totalOutputTokens
+            if (
+                val.lastCalledAt &&
+                (!existing.lastCalledAt || new Date(val.lastCalledAt) > new Date(existing.lastCalledAt))
+            ) {
+                existing.lastCalledAt = val.lastCalledAt
+            }
+        }
+    }
+
+    private mergeResourceMetrics(entries: [string, ResourceMetrics][]): void {
+        for (const [key, val] of entries) {
+            const existing = this.resourceData.get(key)
+            if (!existing) {
+                this.resourceData.set(key, val)
+                continue
+            }
+            existing.readCount += val.readCount
+            existing.errorCount += val.errorCount
+            if (
+                val.lastReadAt &&
+                (!existing.lastReadAt || new Date(val.lastReadAt) > new Date(existing.lastReadAt))
+            ) {
+                existing.lastReadAt = val.lastReadAt
+            }
+        }
+    }
+
     /**
      * Import metrics state from a JSON string, merging with current state.
      */
@@ -290,42 +329,8 @@ export class MetricsAccumulator {
                 resourceData?: [string, ResourceMetrics][]
                 userCounts?: [string, number][]
             }
-            if (parsed.toolData) {
-                for (const [key, val] of parsed.toolData) {
-                    const existing = this.toolData.get(key)
-                    if (existing) {
-                        existing.callCount += val.callCount
-                        existing.errorCount += val.errorCount
-                        existing.totalDurationMs += val.totalDurationMs
-                        existing.totalInputTokens += val.totalInputTokens
-                        existing.totalOutputTokens += val.totalOutputTokens
-                        // Keep the most recent timestamp
-                        if (val.lastCalledAt) {
-                            if (!existing.lastCalledAt || new Date(val.lastCalledAt) > new Date(existing.lastCalledAt)) {
-                                existing.lastCalledAt = val.lastCalledAt
-                            }
-                        }
-                    } else {
-                        this.toolData.set(key, val)
-                    }
-                }
-            }
-            if (parsed.resourceData) {
-                for (const [key, val] of parsed.resourceData) {
-                    const existing = this.resourceData.get(key)
-                    if (existing) {
-                        existing.readCount += val.readCount
-                        existing.errorCount += val.errorCount
-                        if (val.lastReadAt) {
-                            if (!existing.lastReadAt || new Date(val.lastReadAt) > new Date(existing.lastReadAt)) {
-                                existing.lastReadAt = val.lastReadAt
-                            }
-                        }
-                    } else {
-                        this.resourceData.set(key, val)
-                    }
-                }
-            }
+            if (parsed.toolData) this.mergeToolMetrics(parsed.toolData)
+            if (parsed.resourceData) this.mergeResourceMetrics(parsed.resourceData)
             if (parsed.userCounts) {
                 for (const [key, val] of parsed.userCounts) {
                     this.userCounts.set(key, (this.userCounts.get(key) ?? 0) + val)

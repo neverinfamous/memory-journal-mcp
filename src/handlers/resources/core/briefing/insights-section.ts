@@ -62,12 +62,11 @@ function resolveDigestSnapshot(
     context: ResourceContext,
     workspaceId?: string
 ): DigestSnapshot | null {
-    // Primary: scheduler's accessor (includes just-computed data)
-    const schedulerDigest =
-        workspaceId === undefined ? context.scheduler?.getLatestDigest?.() : undefined
-    if (schedulerDigest) return schedulerDigest
-
     const effectiveWorkspace = workspaceId ?? resourceWorkspace(context)
+
+    // Primary: scheduler's accessor (includes just-computed data, workspace-scoped)
+    const schedulerDigest = context.scheduler?.getLatestDigest?.(effectiveWorkspace)
+    if (schedulerDigest) return schedulerDigest
 
     // Live compute: real-time digest when no cached snapshot exists.
     // Covers stdio transport (no scheduler) and fresh databases.

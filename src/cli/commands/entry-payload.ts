@@ -4,7 +4,8 @@ import { DatabaseAdapterFactory } from '../../database/adapter-factory.js'
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import type { EntryType, ToolHandlerConfig } from '../../types/index.js'
 import { ConfigResolver } from '../../utils/config-resolver.js'
-import { resolveProjectNumberFromPath, resolveWorkspaceId } from '../../utils/workspace-resolver.js'
+import { resolveProjectContext } from '../../utils/workspace-resolver.js'
+import { logger } from '../../utils/logger.js'
 import { buildServerOptions } from '../server-options-builder.js'
 import { z } from 'zod'
 import * as p from '@clack/prompts'
@@ -95,11 +96,15 @@ export async function parseContent(
                 process.exit(1)
             }
         }, STDIN_TIMEOUT_MS)
+        timeout.unref()
 
-        for await (const chunk of process.stdin) {
-            stdinStr += chunk
+        try {
+            for await (const chunk of process.stdin) {
+                stdinStr += chunk
+            }
+        } finally {
+            clearTimeout(timeout)
         }
-        clearTimeout(timeout)
 
         if (stdinStr.trim().length > 0) {
             return stdinStr
@@ -173,8 +178,11 @@ export function parseFrontmatter(rawContent: string): {
                 const parsed: unknown = yaml.parse(yamlStr)
                 const parsedRec = z.record(z.string(), z.unknown()).safeParse(parsed)
                 return { frontmatter: parsedRec.success ? parsedRec.data : {}, body }
-            } catch {
-                // Return as-is if parsing fails
+            } catch (err) {
+                logger.debug('Frontmatter YAML parse failed; treating as body content', {
+                    module: 'CLIEntryPayload',
+                    error: err instanceof Error ? err.message : String(err),
+                })
             }
         }
     }
@@ -250,7 +258,8 @@ export function parseMetadata(metadataFile: unknown): Record<string, unknown> {
 export function buildEntryPayload(
     options: z.infer<typeof createEntryOptionsSchema>,
     metadata: Record<string, unknown>,
-    config?: ToolHandlerConfig
+    config?: ToolHandlerConfig,
+    content?: string
 ): EntryPayload {
     const entryTypeStr =
         options.type ??
@@ -278,10 +287,9 @@ export function buildEntryPayload(
         metadata['project'] ??
         metadata['projectNumber'] ??
         metadata['project_number']
-    let projectNumber = projectRaw !== undefined ? Number(projectRaw) : undefined
-    if (projectNumber === undefined || isNaN(projectNumber)) {
-        projectNumber = resolveProjectNumberFromPath(process.cwd())
-    }
+    const parsedProjectNum = projectRaw !== undefined ? Number(projectRaw) : undefined
+    const explicitProjectNum =
+        parsedProjectNum !== undefined && !isNaN(parsedProjectNum) ? parsedProjectNum : undefined
 
     const optsRec = z.record(z.string(), z.unknown()).parse(options)
     const explicitWorkspaceId =
@@ -289,11 +297,18 @@ export function buildEntryPayload(
         optsRec['workspace_id'] ??
         metadata['workspaceId'] ??
         metadata['workspace_id']
-    const workspaceId = resolveWorkspaceId(
-        explicitWorkspaceId as string | undefined,
-        projectNumber,
+
+    const resolved = resolveProjectContext(
+        {
+            workspace_id: explicitWorkspaceId as string | undefined,
+            project_number: explicitProjectNum,
+            content: content ?? options.content,
+            tags,
+        },
         config
     )
+    const projectNumber = explicitProjectNum ?? resolved.projectNumber
+    const workspaceId = resolved.workspaceId
 
     const trustRaw =
         options.trustScore ??

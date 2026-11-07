@@ -42,20 +42,31 @@ interface SemanticSearchParams {
 }
 
 /** Re-rank entries by importance score (highest first), annotating `importanceScore`. */
-function rankByImportance(
+export function rankByImportance(
     db: ToolContext['db'],
     ranked: EntryWithSource[],
-    wsId: string
+    wsId: string,
+    teamDb?: ToolContext['teamDb']
 ): EntryWithSource[] {
-    const ids: number[] = []
+    const personalIds: number[] = []
+    const teamIds: number[] = []
     for (const entry of ranked) {
         const id = entry['id']
-        if (typeof id === 'number') ids.push(id)
+        if (typeof id === 'number') {
+            if (entry.source === 'team') teamIds.push(id)
+            else personalIds.push(id)
+        }
     }
-    const importanceMap = db.getEntriesByIdsWithImportance(ids, wsId)
+    const personalMap =
+        personalIds.length > 0 ? db.getEntriesByIdsWithImportance(personalIds, wsId) : undefined
+    const teamMap =
+        teamDb !== undefined && teamIds.length > 0
+            ? teamDb.getEntriesByIdsWithImportance(teamIds, wsId)
+            : undefined
     const scored = ranked.map((entry) => {
         const id = entry['id']
-        const score = typeof id === 'number' ? (importanceMap.get(id)?.importance.score ?? 0) : 0
+        const map = entry.source === 'team' ? teamMap : personalMap
+        const score = typeof id === 'number' ? (map?.get(id)?.importance.score ?? 0) : 0
         return { ...entry, importanceScore: Math.round(score * 100) / 100 }
     })
     scored.sort((a, b) => {
@@ -74,10 +85,11 @@ export async function runSemanticSearch(
     const { db, teamDb, vectorManager, teamVectorManager } = context
     if (!vectorManager) return { page: [] }
 
-    // Use semantic search with overfetching for filtering reliability
+    // Use semantic search with overfetching for filtering and cursor pagination reliability
+    const needed = input.limit + cursorOffset(input.cursor)
     const internalLimit = hasFilters
-        ? Math.min(Math.max(input.limit * 10, 100), 1000)
-        : input.limit * 2
+        ? Math.min(Math.max(needed * 10, 100), 1000)
+        : Math.min(needed * 2, 1000)
     const semanticResults = await vectorManager.search(query, internalLimit, 0.25, wsId)
     const entryIds = semanticResults.map((r) => r.entryId)
     const entriesMap = db.getEntriesByIds(entryIds, wsId)
@@ -107,14 +119,14 @@ export async function runSemanticSearch(
     if (searchOptions.includeTeam && input.is_personal !== true && teamDb !== undefined) {
         const teamEntries = await collectTeamSearchEntries(query, teamDb, teamVectorManager, {
             ...searchOptions,
-            limit: input.limit,
+            limit: needed,
         })
-        ranked = mergeAndDedup(ranked, teamEntries, input.limit)
+        ranked = mergeAndDedup(ranked, teamEntries, needed, 'preserve')
     }
 
     // Post-fetch importance re-sort for vector results
     if (input.sort_by === 'importance') {
-        ranked = rankByImportance(db, ranked, wsId)
+        ranked = rankByImportance(db, ranked, wsId, teamDb)
     }
 
     return pageRows(ranked, input.cursor, input.limit)

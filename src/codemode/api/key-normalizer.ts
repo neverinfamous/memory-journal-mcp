@@ -131,9 +131,11 @@ function resolveAliasedKey(startKey: string, value: unknown, ctx: KeyContext): s
             }
         } else if (useAlias && (snakeKey === 'title' || snakeKey === 'body') && isGithubTool) {
             useAlias = false
-        } else if (useAlias && snakeKey === 'keep' && methodLower !== undefined && !methodLower.includes('backup')) {
-            useAlias = false
-        } else if (useAlias && snakeKey === 'mode' && methodLower !== undefined && !methodLower.includes('config')) {
+        } else if (
+            useAlias &&
+            snakeKey === 'keep' &&
+            !(methodName !== undefined && hasMethodToken(methodName, 'cleanup') && hasMethodToken(methodName, 'backups'))
+        ) {
             useAlias = false
         } else if (useAlias && snakeKey === 'source' && methodLower?.includes('import')) {
             useAlias = false
@@ -174,7 +176,11 @@ function resolveContentLikeKey(startKey: string, ctx: KeyContext): string {
                 if (!('title' in obj) && !('title' in result)) snakeKey = 'title'
             } else if (snakeKey === 'description' && methodLower?.includes('milestone')) {
                 snakeKey = 'description'
-            } else if (methodLower?.includes('close') && (snakeKey === 'message' || snakeKey === 'msg' || snakeKey === 'content')) {
+            } else if (
+                methodName !== undefined &&
+                hasMethodToken(methodName, 'close') &&
+                (snakeKey === 'message' || snakeKey === 'msg' || snakeKey === 'content')
+            ) {
                 if (!('comment' in obj) && !('comment' in result)) snakeKey = 'comment'
             } else if (!('body' in obj) && !('body' in result) && snakeKey !== 'comment') {
                 snakeKey = 'body'
@@ -222,6 +228,18 @@ function coerceNumericValue(snakeKey: string, value: unknown): { value: unknown 
     return undefined
 }
 
+function propagateBatchProjectNumber(result: Record<string, unknown>): void {
+    if (typeof result['project_number'] !== 'number') return
+    const pn = result['project_number']
+    for (const key of ['entries', 'updates', 'entry_ids']) {
+        const list = result[key]
+        if (!Array.isArray(list)) continue
+        for (const item of list) {
+            if (isRecord(item) && item['project_number'] === undefined) item['project_number'] = pn
+        }
+    }
+}
+
 function postProcessNormalizedKeys(result: Record<string, unknown>): void {
     if ('tag' in result && !('tags' in result)) {
         const tagVal = result['tag']
@@ -258,16 +276,7 @@ function postProcessNormalizedKeys(result: Record<string, unknown>): void {
         delete result['commits']
     }
 
-    if (typeof result['project_number'] === 'number') {
-        const pn = result['project_number']
-        for (const key of ['entries', 'updates', 'entry_ids']) {
-            if (Array.isArray(result[key])) {
-                for (const item of result[key]) {
-                    if (isRecord(item) && item['project_number'] === undefined) item['project_number'] = pn
-                }
-            }
-        }
-    }
+    propagateBatchProjectNumber(result)
 
     if ('content' in result && typeof result['content'] === 'string') {
         const c = result['content']

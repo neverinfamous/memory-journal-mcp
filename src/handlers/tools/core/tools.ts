@@ -154,9 +154,20 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                     let sharedWithTeam = false
                     let author: string | undefined
 
-                    if (input.share_with_team && context.teamDb) {
-                        author = shareCreatedEntryWithTeam(context, entryInput)
-                        sharedWithTeam = author !== undefined
+                    if (input.share_with_team) {
+                        if (!context.teamDb) {
+                            relationshipWarnings.push(
+                                'Team sharing skipped: team database is not configured (set TEAM_DB_PATH).'
+                            )
+                        } else {
+                            author = shareCreatedEntryWithTeam(context, entryInput)
+                            sharedWithTeam = author !== undefined
+                            if (!sharedWithTeam) {
+                                relationshipWarnings.push(
+                                    'Team sharing skipped: author identity could not be resolved.'
+                                )
+                            }
+                        }
                     }
 
                     return {
@@ -204,7 +215,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                     const result: Record<string, unknown> = { success: true, entry }
 
                     if (input.include_relationships) {
-                        const relationships = db.getRelationships(input.entry_id)
+                        const relationships = db.getRelationships(input.entry_id, wsId)
                         result['relationships'] = relationships
                     }
 

@@ -5,11 +5,14 @@
 import { z } from 'zod'
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import { markUntrustedContent } from '../../utils/security-utils.js'
+import { resourceWorkspace, type BriefingConfig } from '../resources/shared.js'
+import { cwdMatchesRegistryPath, findCanonicalRegistryKey } from '../../utils/workspace-resolver.js'
 
 export const planReviewArgsSchema = z.object({
     topic: z.string().optional(),
     depth: z.enum(['light', 'standard', 'deep']).optional(),
     copilot: z.enum(['true', 'false']).optional(),
+    workspace_id: z.string().optional(),
 })
 
 export const auditArgsSchema = z.object({
@@ -29,6 +32,12 @@ export const PLAN_REVIEW_ARGUMENTS = [
         name: 'copilot',
         description:
             "Opt-in to external GitHub Copilot CLI validation ('true' | 'false', default: 'false')",
+        required: false,
+    },
+    {
+        name: 'workspace_id',
+        description:
+            "Journal workspace of the planned project, used to load only that project's prior plans (default: resolved from topic/cwd/server config)",
         required: false,
     },
 ]
@@ -167,18 +176,63 @@ export function sanitizePromptTarget(target: string): string {
         .slice(0, MAX_PROMPT_TARGET_LENGTH)
 }
 
+export function resolvePromptPriorWorkspace(
+    briefingConfig?: BriefingConfig,
+    workspaceId?: string,
+    targetOrTopic?: string
+): string {
+    const registry = briefingConfig?.projectRegistry
+    const requested = workspaceId?.trim()
+    if (
+        requested !== undefined &&
+        requested !== '' &&
+        requested !== '*' &&
+        requested !== 'default'
+    ) {
+        const canonical = findCanonicalRegistryKey(requested, registry) ?? requested
+        return sanitizePromptTarget(canonical).slice(0, MAX_WORKSPACE_ID_LENGTH)
+    }
+
+    const cleanTarget = targetOrTopic?.trim()
+    if (
+        cleanTarget !== undefined &&
+        cleanTarget !== '' &&
+        cleanTarget !== '{target}' &&
+        cleanTarget !== '{topic}' &&
+        registry !== undefined
+    ) {
+        const exactMatch = findCanonicalRegistryKey(cleanTarget, registry)
+        if (exactMatch !== undefined) {
+            return sanitizePromptTarget(exactMatch).slice(0, MAX_WORKSPACE_ID_LENGTH)
+        }
+        const normalizedTarget = cleanTarget.replace(/\\/g, '/').toLowerCase()
+        for (const [key, data] of Object.entries(registry)) {
+            if (cwdMatchesRegistryPath(cleanTarget, data.path)) {
+                return sanitizePromptTarget(key).slice(0, MAX_WORKSPACE_ID_LENGTH)
+            }
+            if (normalizedTarget.includes(key.toLowerCase())) {
+                return sanitizePromptTarget(key).slice(0, MAX_WORKSPACE_ID_LENGTH)
+            }
+        }
+    }
+
+    const fallback = resourceWorkspace({ briefingConfig })
+    return sanitizePromptTarget(fallback).slice(0, MAX_WORKSPACE_ID_LENGTH)
+}
+
+export function buildSubagentProtocolGuidance(): string {
+    return `- **Subagent & Verification Protocol**: Put the parent conversation ID in every subagent prompt so replies reach the parent. Instruct subagents to read full function bodies (not only grep hits), return exact 1-indexed file paths, line numbers, raw single-line quotes, severity, and a one-sentence fix. The parent MUST re-read every Critical and High citation and drop any citation whose quote does not match the source line.`
+}
+
 export function buildPriorAuditSection(
     db: IDatabaseAdapter,
     tag: string,
     heading: string,
-    briefingConfig?: { defaultWorkspaceId?: string },
-    workspaceId?: string
+    briefingConfig?: BriefingConfig,
+    workspaceId?: string,
+    target?: string
 ): string {
-    const requested = workspaceId?.trim()
-    const priorWorkspace =
-        requested !== undefined && requested !== '' && requested !== '*'
-            ? requested.slice(0, MAX_WORKSPACE_ID_LENGTH)
-            : (briefingConfig?.defaultWorkspaceId ?? 'default')
+    const priorWorkspace = resolvePromptPriorWorkspace(briefingConfig, workspaceId, target)
     // Tag-only lookup first: a text query on the tag name only matches entries that repeat it in the body.
     let priorAudits: { id: number; entryType: string; content: string; timestamp: string }[] =
         db.searchByDateRange('1970-01-01', '2999-12-31', {

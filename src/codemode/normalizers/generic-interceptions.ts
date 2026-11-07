@@ -1,4 +1,5 @@
 import { loadProjectRegistryFromConfig, resolveProjectContext } from '../../utils/workspace-resolver.js'
+import { hasMethodToken } from '../method-tokens.js'
 import { isRecord, safeString } from './shared-utils.js'
 
 const NUMERIC_ID_KEYS = [
@@ -131,11 +132,23 @@ const FILE_GREP_SEARCH_METHODS = new Set([
     'searchFiles',
 ])
 
-function normalizeSearchGrepAliases(methodName: string, obj: Record<string, unknown>): void {
-    const lower = methodName.toLowerCase()
-    if (!lower.includes('search') && !lower.includes('grep') && !lower.includes('find')) return
+const NON_QUERY_SEARCH_METHODS = new Set([
+    'search_by_date_range',
+    'searchByDateRange',
+    'team_search_by_date_range',
+    'teamSearchByDateRange',
+    'search_audit_log',
+    'searchAuditLog',
+])
 
-    if (obj['query'] === undefined) {
+function normalizeSearchGrepAliases(methodName: string, obj: Record<string, unknown>): void {
+    const isSearchOrGrepOrFind =
+        hasMethodToken(methodName, 'search') ||
+        hasMethodToken(methodName, 'grep') ||
+        hasMethodToken(methodName, 'find')
+    if (!isSearchOrGrepOrFind) return
+
+    if (obj['query'] === undefined && !NON_QUERY_SEARCH_METHODS.has(methodName)) {
         const q = obj['Query'] ?? obj['pattern'] ?? obj['text'] ?? obj['search'] ?? obj['q']
         if (typeof q === 'string') obj['query'] = q
     }
@@ -249,33 +262,34 @@ function normalizeValidationStatusAlias(obj: Record<string, unknown>): void {
     }
 }
 
+function applyProjectNameAlias(rawVal: unknown, obj: Record<string, unknown>): boolean {
+    if (obj['project_number'] !== undefined) return true
+    const num = Number(rawVal)
+    const strVal = typeof rawVal === 'string' || typeof rawVal === 'number' ? String(rawVal) : ''
+    if (!Number.isNaN(num) && strVal.trim() !== '') {
+        obj['project_number'] = num
+        return true
+    }
+    if (typeof rawVal !== 'string' || rawVal.trim() === '') return true
+    const name = rawVal.trim()
+    const registry = loadProjectRegistryFromConfig()
+    const matchedKey =
+        registry === undefined
+            ? undefined
+            : Object.keys(registry).find((key) => key.toLowerCase() === name.toLowerCase())
+    if (matchedKey === undefined || registry === undefined) return false
+    const projectNumber = registry[matchedKey]?.project_number
+    if (projectNumber !== undefined) obj['project_number'] = projectNumber
+    if (obj['workspace_id'] === undefined) obj['workspace_id'] = matchedKey
+    return true
+}
+
 function normalizeProjectAliases(obj: Record<string, unknown>): void {
     for (const projAlias of ['project_name', 'projectName'] as const) {
         if (obj[projAlias] === undefined) continue
-        if (obj['project_number'] === undefined) {
-            const num = Number(obj[projAlias])
-            const strVal = typeof obj[projAlias] === 'string' || typeof obj[projAlias] === 'number' ? String(obj[projAlias]) : ''
-            if (!Number.isNaN(num) && strVal.trim() !== '') {
-                obj['project_number'] = num
-                Reflect.deleteProperty(obj, projAlias)
-                continue
-            }
-            if (typeof obj[projAlias] === 'string' && obj[projAlias].trim() !== '') {
-                const name = obj[projAlias].trim()
-                const registry = loadProjectRegistryFromConfig()
-                const matchedKey = registry === undefined
-                    ? undefined
-                    : Object.keys(registry).find((key) => key.toLowerCase() === name.toLowerCase())
-                if (matchedKey !== undefined && registry !== undefined) {
-                    const projectNumber = registry[matchedKey]?.project_number
-                    if (projectNumber !== undefined) obj['project_number'] = projectNumber
-                    if (obj['workspace_id'] === undefined) obj['workspace_id'] = matchedKey
-                    Reflect.deleteProperty(obj, projAlias)
-                }
-                continue
-            }
+        if (applyProjectNameAlias(obj[projAlias], obj)) {
+            Reflect.deleteProperty(obj, projAlias)
         }
-        Reflect.deleteProperty(obj, projAlias)
     }
     if (obj['project'] !== undefined) {
         if (obj['project_number'] === undefined) {

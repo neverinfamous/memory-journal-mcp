@@ -108,12 +108,13 @@ export function getTeamResourceDefinitions(): InternalResourceDef[] {
                     }
                 }
 
-                const stats = context.teamDb.getStatistics('week', undefined, undefined, false, resourceWorkspace(context))
+                const wsId = resourceWorkspace(context)
+                const stats = context.teamDb.getStatistics('week', undefined, undefined, false, wsId)
 
                 // Author breakdown
                 let authors: { author: string; count: number }[] = []
                 try {
-                    authors = context.teamDb.getAuthorStatistics()
+                    authors = context.teamDb.getAuthorStatistics(wsId)
                 } catch (error: unknown) {
                     logger.warning('Failed to get team author statistics', {
                         module: 'ResourceHandler',

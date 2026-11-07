@@ -6,7 +6,7 @@ import type { z } from 'zod'
 import type { ToolContext } from '../../../types/index.js'
 import { ftsSearch } from './fts.js'
 import { hybridSearch } from './hybrid.js'
-import { cursorOffset, pageRows } from './semantic-branch.js'
+import { cursorOffset, pageRows, rankByImportance } from './semantic-branch.js'
 import type { SearchEntriesSchema } from './schemas.js'
 
 type SearchInput = z.infer<typeof SearchEntriesSchema>
@@ -48,14 +48,7 @@ export async function runHybridSearch(params: HybridBranchParams): Promise<Recor
 
     // Post-fetch importance re-sort for vector results
     if (input.sort_by === 'importance') {
-        const ids = hybridEntries.map((e) => e['id'] as number)
-        const importanceMap = db.getEntriesByIdsWithImportance(ids, wsId)
-        const scored = hybridEntries.map((e) => {
-            const entryId = e['id'] as number
-            const imp = importanceMap.get(entryId)?.importance.score ?? 0
-            return { ...e, importanceScore: Math.round(imp * 100) / 100 }
-        })
-        scored.sort((a, b) => (b.importanceScore ?? 0) - (a.importanceScore ?? 0))
+        const scored = rankByImportance(db, hybridEntries, wsId, teamDb)
         const scoredPage = pageRows(scored, input.cursor, input.limit)
         return {
             success: true,

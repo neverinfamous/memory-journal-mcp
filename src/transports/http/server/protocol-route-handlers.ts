@@ -52,8 +52,53 @@ function resolveRequestSubject(): string | undefined {
     return typeof sub === 'string' && sub.length > 0 ? sub : undefined
 }
 
-function extractSessionId(req: Request): string | undefined {
+export function extractSessionId(req: Request): string | undefined {
     return (req.query?.['sessionId'] ?? req.headers?.['mcp-session-id']) as string | undefined
+}
+
+export function assertHttpBindIsSafe(
+    host: string,
+    authToken: string | undefined,
+    corsOrigins: string[] | undefined,
+    oauthEnabled: boolean | undefined,
+    logWarning: (msg: string) => void,
+    logError: (msg: string) => void
+): void {
+    const isLocalhost = host === 'localhost' || host === '127.0.0.1' || host === '::1'
+    const hasCorsOpen = corsOrigins?.includes('*') ?? false
+    const hasAuth = Boolean(authToken) || oauthEnabled === true
+
+    if (!hasAuth && hasCorsOpen) {
+        const errorMsg = `FATAL: Refusing to bind HTTP with open wildcard CORS ('*') without explicit authentication. You MUST specify --auth-token (or OAuth) or restrict --cors-origin to specific trusted origins.`
+        logError(errorMsg)
+        throw new Error(errorMsg)
+    }
+
+    if (authToken === 'change_this_to_a_secure_token_for_production') {
+        const errorMsg = `FATAL: Default auth token detected. You MUST change MCP_AUTH_TOKEN to a secure, cryptographically random value for production.`
+        logError(errorMsg)
+        throw new Error(errorMsg)
+    }
+
+    if (!isLocalhost && !hasAuth) {
+        const errorMsg = `FATAL: Refusing to bind public HTTP on '${host}' without explicit authentication. You MUST specify --auth-token (or OAuth).`
+        logError(errorMsg)
+        throw new Error(errorMsg)
+    }
+
+    if (hasCorsOpen) {
+        logWarning(
+            'CORS origin is set to "*" (all origins). ' +
+                'Set --cors-origin or MCP_CORS_ORIGIN for production deployments.'
+        )
+    }
+
+    if (!hasAuth) {
+        logWarning(
+            'No authentication configured for HTTP transport. ' +
+                'Set --auth-token or MCP_AUTH_TOKEN for production deployments.'
+        )
+    }
 }
 
 /** Remove all bookkeeping for a session (transport, owner, activity, subscriptions). */

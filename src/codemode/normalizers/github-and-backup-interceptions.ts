@@ -73,70 +73,42 @@ export function applyGithubAndBackupInterceptions(
     return { args }
 }
 
-function applyGithubInterceptions(
-    methodName: string,
-    rawObj: Record<string, unknown>
-): { obj: Record<string, unknown> } | { error: Record<string, unknown> } {
-    const obj = { ...rawObj }
-
-    if (obj['repo'] === undefined && obj['repo_name'] !== undefined) {
-        obj['repo'] = obj['repo_name']
-        delete obj['repo_name']
-    }
-
-    if (typeof obj['repo'] === 'string' && obj['repo'].includes('/')) {
-        const parts = obj['repo'].split('/')
-        if (parts.length >= 2 && parts[0] && parts[1]) {
-            if (obj['owner'] === undefined) {
-                obj['owner'] = parts[0]
-            }
-            obj['repo'] = parts[1]
-        }
-    }
+function mapGithubTextKeys(methodName: string, obj: Record<string, unknown>): void {
+    const isCreateIssue =
+        methodName.includes('create_github_issue') || methodName.includes('createGithubIssue')
+    const isMilestoneWrite =
+        methodName.includes('create_github_milestone') ||
+        methodName.includes('createGithubMilestone') ||
+        methodName.includes('update_github_milestone') ||
+        methodName.includes('updateGithubMilestone')
+    const isCloseIssue =
+        methodName.includes('close_github_issue') || methodName.includes('closeGithubIssue')
 
     for (const key of ['text', 'message', 'description'] as const) {
-        if (obj[key] !== undefined) {
-            if (methodName.includes('create_github_issue') || methodName.includes('createGithubIssue')) {
-                if (obj['body'] === undefined) {
-                    obj['body'] = obj[key]
-                    Reflect.deleteProperty(obj, key)
-                }
-            } else if (
-                methodName.includes('create_github_milestone') ||
-                methodName.includes('createGithubMilestone') ||
-                methodName.includes('update_github_milestone') ||
-                methodName.includes('updateGithubMilestone')
-            ) {
-                if (obj['title'] === undefined) {
-                    obj['title'] = obj[key]
-                    Reflect.deleteProperty(obj, key)
-                }
-            } else if (methodName.includes('close_github_issue') || methodName.includes('closeGithubIssue')) {
-                if (obj['comment'] === undefined && key !== 'description') {
-                    obj['comment'] = obj[key]
-                    Reflect.deleteProperty(obj, key)
-                } else if (obj['resolution_notes'] === undefined && key === 'description') {
-                    obj['resolution_notes'] = obj[key]
-                    delete obj['description']
-                }
+        if (obj[key] === undefined) continue
+        if (isCreateIssue) {
+            if (obj['body'] === undefined) {
+                obj['body'] = obj[key]
+                Reflect.deleteProperty(obj, key)
+            }
+        } else if (isMilestoneWrite) {
+            if (key !== 'description' && obj['title'] === undefined) {
+                obj['title'] = obj[key]
+                Reflect.deleteProperty(obj, key)
+            }
+        } else if (isCloseIssue) {
+            if (obj['comment'] === undefined && key !== 'description') {
+                obj['comment'] = obj[key]
+                Reflect.deleteProperty(obj, key)
+            } else if (obj['resolution_notes'] === undefined && key === 'description') {
+                obj['resolution_notes'] = obj[key]
+                delete obj['description']
             }
         }
     }
+}
 
-    const hasStateParam =
-        methodName.includes('get_github_issues') ||
-        methodName.includes('getGithubIssues') ||
-        methodName.includes('get_github_prs') ||
-        methodName.includes('getGithubPrs') ||
-        methodName.includes('get_github_milestones') ||
-        methodName.includes('getGithubMilestones')
-    if (hasStateParam && obj['keep'] !== undefined && obj['state'] === undefined) {
-        if (obj['keep'] === true) obj['state'] = 'open'
-        else if (obj['keep'] === false) obj['state'] = 'closed'
-        else if (typeof obj['keep'] === 'string') obj['state'] = obj['keep']
-        delete obj['keep']
-    }
-
+function mapKanbanAndMilestoneKeepAliases(methodName: string, obj: Record<string, unknown>): void {
     if (methodName.includes('get_kanban_board') || methodName.includes('getKanbanBoard')) {
         for (const k of ['keep', 'path']) {
             if (obj[k] !== undefined && obj['project_number'] === undefined) {
@@ -175,12 +147,54 @@ function applyGithubInterceptions(
         'delete_github_milestone',
         'deleteGithubMilestone',
     ])
-    if (singularMilestoneMethods.has(methodName)) {
-        if (obj['keep'] !== undefined && obj['milestone_number'] === undefined) {
-            obj['milestone_number'] = obj['keep']
-            delete obj['keep']
+    if (
+        singularMilestoneMethods.has(methodName) &&
+        obj['keep'] !== undefined &&
+        obj['milestone_number'] === undefined
+    ) {
+        obj['milestone_number'] = obj['keep']
+        delete obj['keep']
+    }
+}
+
+function applyGithubInterceptions(
+    methodName: string,
+    rawObj: Record<string, unknown>
+): { obj: Record<string, unknown> } | { error: Record<string, unknown> } {
+    const obj = { ...rawObj }
+
+    if (obj['repo'] === undefined && obj['repo_name'] !== undefined) {
+        obj['repo'] = obj['repo_name']
+        delete obj['repo_name']
+    }
+
+    if (typeof obj['repo'] === 'string' && obj['repo'].includes('/')) {
+        const parts = obj['repo'].split('/')
+        if (parts.length >= 2 && parts[0] && parts[1]) {
+            if (obj['owner'] === undefined) {
+                obj['owner'] = parts[0]
+            }
+            obj['repo'] = parts[1]
         }
     }
+
+    mapGithubTextKeys(methodName, obj)
+
+    const hasStateParam =
+        methodName.includes('get_github_issues') ||
+        methodName.includes('getGithubIssues') ||
+        methodName.includes('get_github_prs') ||
+        methodName.includes('getGithubPrs') ||
+        methodName.includes('get_github_milestones') ||
+        methodName.includes('getGithubMilestones')
+    if (hasStateParam && obj['keep'] !== undefined && obj['state'] === undefined) {
+        if (obj['keep'] === true) obj['state'] = 'open'
+        else if (obj['keep'] === false) obj['state'] = 'closed'
+        else if (typeof obj['keep'] === 'string') obj['state'] = obj['keep']
+        delete obj['keep']
+    }
+
+    mapKanbanAndMilestoneKeepAliases(methodName, obj)
 
     if (obj['mode'] !== undefined && obj['summary_only'] === undefined) {
         obj['summary_only'] = obj['mode'] === 'summary'

@@ -126,6 +126,7 @@ export async function projectCreateAction(name: string, options: Record<string, 
     } catch (e) {
         process.stderr.write(`\nFailed to automatically initialize database entry: ${e instanceof Error ? e.message : String(e)}\n`)
         process.stderr.write(`You may need to run 'memory-journal-mcp entry create' manually.\n`)
+        process.exitCode = 1
     }
 }
 
@@ -153,10 +154,12 @@ export function projectUpdateAction(name: string, options: Record<string, unknow
 
     if (options['number'] != null) {
         const num = parseInt(options['number'] as string, 10)
-        if (!isNaN(num)) {
-            project.project_number = num
-            modified = true
+        if (isNaN(num)) {
+            process.stderr.write('Invalid project number.\n')
+            process.exit(1)
         }
+        project.project_number = num
+        modified = true
     }
 
     const targetName = (options['rename'] as string | undefined) ?? name

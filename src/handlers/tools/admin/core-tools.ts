@@ -82,7 +82,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                     // Re-index if content changed
                     let indexStatus: string | undefined
                     if (input.content) {
-                        indexStatus = await autoIndexEntry(vectorManager, db, entry.id)
+                        indexStatus = await autoIndexEntry(vectorManager, db, entry.id, entry.workspaceId ?? wsId)
                     }
 
                     return { success: true, entry, ...(indexStatus ? { indexStatus } : {}) }

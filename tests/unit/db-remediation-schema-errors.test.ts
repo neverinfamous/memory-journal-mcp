@@ -16,10 +16,10 @@ describe('db-remediation: schema-errors', () => {
 })
 
 describe('db-remediation: workspaceSnapshotType', () => {
-    it('keeps legacy key for omitted/default/* workspaces', () => {
+    it('keeps legacy key for omitted/default workspaces and namespaces wildcard/* and other workspaces', () => {
         expect(workspaceSnapshotType('digest')).toBe('digest')
         expect(workspaceSnapshotType('digest', 'default')).toBe('digest')
-        expect(workspaceSnapshotType('digest', '*')).toBe('digest')
+        expect(workspaceSnapshotType('digest', '*')).toBe('digest:*')
     })
     it('namespaces other workspaces', () => {
         expect(workspaceSnapshotType('digest', 'proj-a')).toBe('digest:proj-a')

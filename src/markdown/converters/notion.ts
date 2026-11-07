@@ -29,7 +29,7 @@ export function convertNotion(
     // 1. Tag derivation from directory structure
     // Notion nested exports look like: "Engineering a8f9.../Architecture f7e.../My Doc.md"
     const dir = dirname(filename)
-    if (dir && dir !== '.' && dir !== '/') {
+    if (dir && dir !== '.' && dir !== '/' && dir !== '\\') {
         const parts = dir.split(/[\\/]/)
         for (const part of parts) {
             // Remove the Notion 32-char hex hash suffix from folder names if present

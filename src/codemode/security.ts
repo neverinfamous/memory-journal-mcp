@@ -258,6 +258,8 @@ interface RateLimitEntry {
     resetTime: number
 }
 
+const RATE_LIMIT_WINDOW_MS = 60_000
+
 // =============================================================================
 // Security Manager
 // =============================================================================
@@ -273,7 +275,7 @@ export class CodeModeSecurityManager {
     constructor(config?: Partial<SecurityConfig>) {
         this.config = { ...DEFAULT_SECURITY_CONFIG, ...config }
         // Periodically drop expired rate limit entries to prevent memory leaks
-        this.cleanupInterval = setInterval(() => this.cleanupRateLimits(), 60_000)
+        this.cleanupInterval = setInterval(() => this.cleanupRateLimits(), RATE_LIMIT_WINDOW_MS)
         this.cleanupInterval.unref() // Don't block process exit
     }
 

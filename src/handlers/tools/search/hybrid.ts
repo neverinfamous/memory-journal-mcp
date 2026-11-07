@@ -157,7 +157,7 @@ export async function hybridSearch(
     let output = entries
     if (options.includeTeam === true && options.isPersonal !== true && options.teamDb !== undefined) {
         const teamEntries = await collectTeamSearchEntries(query, options.teamDb, options.teamVectorManager, options)
-        output = mergeAndDedup(entries, teamEntries, options.limit)
+        output = mergeAndDedup(entries, teamEntries, options.limit, 'preserve')
     }
 
     return { entries: output, fusionScores, degraded: isDegraded }

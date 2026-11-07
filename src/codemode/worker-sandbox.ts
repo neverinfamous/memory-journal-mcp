@@ -86,11 +86,13 @@ export class WorkerSandbox {
             workerData: {}, // Initialized without specific execution data
             resourceLimits,
         })
+        this.worker.unref()
 
         this.worker.on('message', (msg: { type: string; id: number; result: SandboxResult }) => {
             if (msg.type === 'RESULT' && this.currentExecution) {
                 clearTimeout(this.currentExecution.timeoutHandle)
                 this.currentExecution.hostPort.close()
+                this.worker?.unref()
 
                 const endTime = performance.now()
                 const endRss = process.memoryUsage.rss()
@@ -238,20 +240,23 @@ export class WorkerSandbox {
 
             const { port1: hostPort, port2: workerPort } = new MessageChannel()
             const timedOutId = this.executionId
+            const timeoutHandle = setTimeout(() => {
+                this.terminateTimedOutExecution(timedOutId)
+            }, effectiveTimeout)
+            timeoutHandle.unref()
 
             this.currentExecution = {
                 resolve,
                 hostPort,
                 startTime,
                 startRss,
-                timeoutHandle: setTimeout(() => {
-                    this.terminateTimedOutExecution(timedOutId)
-                }, effectiveTimeout),
+                timeoutHandle,
             }
 
             hostPort.on('message', (msg: RpcRequest) => {
                 void handleRpcRequest(msg, apiBindings, hostPort, methodList)
             })
+            this.worker?.ref()
 
             let maxResultSize = maxResultSizeOverride
             if (maxResultSize === undefined || Number.isNaN(maxResultSize) || maxResultSize <= 0) {

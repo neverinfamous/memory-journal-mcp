@@ -12,7 +12,12 @@ import {
     HTTP_KEEP_ALIVE_TIMEOUT_MS,
     HTTP_HEADERS_TIMEOUT_MS,
 } from '../types.js'
-import { setSecurityHeaders, setCorsHeaders, checkRateLimit } from '../security.js'
+import {
+    setSecurityHeaders,
+    setCorsHeaders,
+    checkRateLimit,
+    getClientIp,
+} from '../security.js'
 import {
     handleHealthCheck,
     handleRootInfo,
@@ -27,56 +32,14 @@ import {
     SUPPORTED_SCOPES,
 } from '../../../auth/index.js'
 import type { TokenClaims } from '../../../auth/index.js'
+import type { AuthRequest } from '../../../auth/middleware.js'
 import { hostHeaderValidation, localhostHostValidation } from '@modelcontextprotocol/express'
 import { runWithAuthContext as propagateCtx } from '../../../auth/auth-context.js'
+import { requestContextStorage, getRequestContext } from '../../../utils/request-context.js'
 import type { ServerRuntime } from '../../../utils/maintenance-lock.js'
 import type { LegacySSEServerTransport } from './legacy-sse.js'
 import { registerMcpProtocolRoutes } from './protocol-handlers.js'
-
-function assertHttpBindIsSafe(
-    host: string,
-    authToken: string | undefined,
-    corsOrigins: string[] | undefined,
-    oauthEnabled: boolean | undefined
-): void {
-    const isLocalhost = host === 'localhost' || host === '127.0.0.1' || host === '::1'
-    const hasCorsOpen = corsOrigins?.includes('*') ?? false
-    const hasAuth = Boolean(authToken) || oauthEnabled === true
-
-    if (!hasAuth && hasCorsOpen) {
-        const errorMsg = `FATAL: Refusing to bind HTTP with open wildcard CORS ('*') without explicit authentication. You MUST specify --auth-token (or OAuth) or restrict --cors-origin to specific trusted origins.`
-        logger.error(errorMsg, { module: 'HTTP' })
-        throw new Error(errorMsg)
-    }
-
-    if (authToken === 'change_this_to_a_secure_token_for_production') {
-        const errorMsg = `FATAL: Default auth token detected. You MUST change MCP_AUTH_TOKEN to a secure, cryptographically random value for production.`
-        logger.error(errorMsg, { module: 'HTTP' })
-        throw new Error(errorMsg)
-    }
-
-    if (!isLocalhost && !hasAuth) {
-        const errorMsg = `FATAL: Refusing to bind public HTTP on '${host}' without explicit authentication. You MUST specify --auth-token (or OAuth).`
-        logger.error(errorMsg, { module: 'HTTP' })
-        throw new Error(errorMsg)
-    }
-
-    if (hasCorsOpen) {
-        logger.warning(
-            'CORS origin is set to "*" (all origins). ' +
-                'Set --cors-origin or MCP_CORS_ORIGIN for production deployments.',
-            { module: 'HTTP' }
-        )
-    }
-
-    if (!hasAuth) {
-        logger.warning(
-            'No authentication configured for HTTP transport. ' +
-                'Set --auth-token or MCP_AUTH_TOKEN for production deployments.',
-            { module: 'HTTP' }
-        )
-    }
-}
+import { extractSessionId, assertHttpBindIsSafe } from './protocol-route-handlers.js'
 
 /**
  * HTTP Transport for Memory Journal MCP Server
@@ -118,18 +81,24 @@ export class HttpTransport {
         runtime: ServerRuntime
     ): Promise<void> {
         const { port, host, authToken, corsOrigins } = this.config
-        assertHttpBindIsSafe(host, authToken, corsOrigins, this.config.oauthEnabled)
+        assertHttpBindIsSafe(
+            host,
+            authToken,
+            corsOrigins,
+            this.config.oauthEnabled,
+            (msg) => logger.warning(msg, { module: 'HTTP' }),
+            (msg) => logger.error(msg, { module: 'HTTP' })
+        )
         const isLocalhost = host === 'localhost' || host === '127.0.0.1' || host === '::1'
 
-        const isLocalHostHeader = host === 'localhost' || host === '127.0.0.1' || host === '::1'
         this.app.use(
-            isLocalHostHeader
+            isLocalhost
                 ? localhostHostValidation()
                 : hostHeaderValidation([host, 'localhost', '127.0.0.1', '[::1]'])
         )
         logger.info('DNS rebinding protection enabled (host header validation)', {
             module: 'HTTP',
-            allowedHosts: isLocalHostHeader ? ['localhost', '127.0.0.1', '[::1]'] : [host],
+            allowedHosts: isLocalhost ? ['localhost', '127.0.0.1', '[::1]'] : [host],
         })
 
         this.app.use((req: Request, res: Response, next: () => void) => {
@@ -339,35 +308,53 @@ export class HttpTransport {
 
     /** Register context propagation, health/metrics/root endpoints, MCP protocol routes and the 404 handler. */
     private installRoutes(serverFactory: McpServerFactory, runtime: ServerRuntime): void {
-        const propagateContextMiddleware: RequestHandler = (req, _res, next) => {
-            const reqRecord = req as unknown as Record<string, unknown>
-            const tokenClaims = reqRecord['tokenClaims'] as TokenClaims | undefined
-            const authInfo = reqRecord['auth'] as
-                | (TokenClaims & { clientId?: string })
+        const propagateContextMiddleware: RequestHandler = (req: AuthRequest, _res, next) => {
+            const tokenClaims = req.tokenClaims
+            const authInfo = req.auth as
+                | (Partial<TokenClaims> & { subject?: string; clientId?: string })
                 | undefined
+            const sessionId = extractSessionId(req)
+            const ip = getClientIp(req)
+            const runWithReqCtx = (fn: () => void): void => {
+                const existing = getRequestContext()
+                requestContextStorage.run(
+                    {
+                        ...existing,
+                        ip,
+                        ...(sessionId !== undefined && sessionId !== '' ? { sessionId } : {}),
+                    },
+                    fn
+                )
+            }
 
             if (tokenClaims !== undefined && tokenClaims !== null) {
-                propagateCtx(
-                    { authenticated: true, claims: tokenClaims, scopes: tokenClaims.scopes },
-                    next
+                runWithReqCtx(() =>
+                    propagateCtx(
+                        { authenticated: true, claims: tokenClaims, scopes: tokenClaims.scopes },
+                        next
+                    )
                 )
             } else if (authInfo !== undefined && authInfo !== null) {
                 const sub =
                     authInfo.sub ??
-                    (typeof authInfo['subject'] === 'string' ? authInfo['subject'] : undefined) ??
+                    (typeof authInfo.subject === 'string' ? authInfo.subject : undefined) ??
                     authInfo.clientId ??
                     'unknown'
                 const normalizedClaims: TokenClaims = {
                     ...authInfo,
                     sub,
                     scopes: Array.isArray(authInfo.scopes) ? authInfo.scopes : [],
+                    exp: typeof authInfo.exp === 'number' ? authInfo.exp : 0,
+                    iat: typeof authInfo.iat === 'number' ? authInfo.iat : 0,
                 }
-                propagateCtx(
-                    { authenticated: true, claims: normalizedClaims, scopes: normalizedClaims.scopes },
-                    next
+                runWithReqCtx(() =>
+                    propagateCtx(
+                        { authenticated: true, claims: normalizedClaims, scopes: normalizedClaims.scopes },
+                        next
+                    )
                 )
             } else {
-                next()
+                runWithReqCtx(next)
             }
         }
 

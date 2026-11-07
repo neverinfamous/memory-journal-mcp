@@ -15,6 +15,10 @@ import type { EntryType, RelationshipType, SignificanceType } from '../types/ind
 import { ENTRY_TYPES, RELATIONSHIP_TYPES } from '../types/index.js'
 import { parseFrontmatter } from './frontmatter.js'
 import { assertSafeDirectoryPath, assertSafeFilePath } from '../utils/security-utils.js'
+import { resolveProjectContext } from '../utils/workspace-resolver.js'
+
+/** Maximum size (5 MB) permitted for a single markdown file during import. */
+const MAX_IMPORT_FILE_SIZE_BYTES = 5 * 1024 * 1024
 
 // ============================================================================
 // Types
@@ -102,6 +106,50 @@ export interface ParsedFile {
         relationships?: { type: string; target_id: number }[]
     }
 }
+async function readAndParseMarkdownFile(
+    sourceDir: string,
+    filename: string,
+    allowedRoots: string[]
+): Promise<{ parsed?: ParsedFile; skipped?: boolean }> {
+    let handle
+    try {
+        const filepath = join(sourceDir, filename)
+        assertSafeFilePath(filepath, allowedRoots)
+        try {
+            handle = await open(filepath, constants.O_RDONLY | constants.O_NOFOLLOW)
+        } catch (err: unknown) {
+            const code =
+                err instanceof Error && 'code' in err
+                    ? (err as { code?: string }).code
+                    : undefined
+            if (code === 'ELOOP') {
+                throw new Error(`Refusing to read symlink during import: ${filename}`, {
+                    cause: err,
+                })
+            }
+            throw err
+        }
+
+        const stats = await handle.stat()
+        if (stats.size > MAX_IMPORT_FILE_SIZE_BYTES) {
+            throw new Error(
+                `File exceeds maximum size limit of 5MB (${String(stats.size)} bytes)`
+            )
+        }
+
+        const content = await handle.readFile('utf-8')
+        const { metadata, body } = parseFrontmatter(content)
+        if (!body.trim()) {
+            return { skipped: true }
+        }
+        return { parsed: { filename, body, metadata } }
+    } finally {
+        if (handle) {
+            await handle.close()
+        }
+    }
+}
+
 export async function importMarkdownEntries(
     sourceDir: string,
     db: IDatabaseAdapter,
@@ -111,10 +159,8 @@ export async function importMarkdownEntries(
 ): Promise<ImportResult> {
     const { dry_run = false, limit = 100 } = options
 
-    // Dynamically enforce bounded root
     assertSafeDirectoryPath(sourceDir, allowedRoots)
 
-    // Stream directory for .md files to avoid memory exhaustion on huge directories
     const mdFiles: string[] = []
     const dir = await opendir(sourceDir)
     for await (const dirent of dir) {
@@ -136,71 +182,25 @@ export async function importMarkdownEntries(
         dry_run,
     }
 
-    // Phase 1: Read files and parse asynchronously
     const parsedFiles: ParsedFile[] = []
-
     for (const filename of mdFiles) {
-        let handle
         try {
-            const filepath = join(sourceDir, filename)
-
-            // Explicitly assert the exact filepath has no symlinked components anywhere in its chain
-            assertSafeFilePath(filepath, allowedRoots)
-
-            // Open the file with O_NOFOLLOW to atomically prevent symlink traversal
-            try {
-                handle = await open(filepath, constants.O_RDONLY | constants.O_NOFOLLOW)
-            } catch (err: unknown) {
-                const code =
-                    err instanceof Error && 'code' in err
-                        ? (err as { code?: string }).code
-                        : undefined
-                if (code === 'ELOOP') {
-                    throw new Error(`Refusing to read symlink during import: ${filename}`, {
-                        cause: err,
-                    })
-                }
-                throw err
-            }
-
-            // Provide atomic size check using the file handle
-            const stats = await handle.stat()
-            if (stats.size > 5 * 1024 * 1024) {
-                throw new Error(`File exceeds maximum size limit of 5MB (${stats.size} bytes)`)
-            }
-
-            const content = await handle.readFile('utf-8')
-
-            // Parse frontmatter
-            const { metadata, body } = parseFrontmatter(content)
-
-            // Skip files with empty body
-            if (!body.trim()) {
+            const outcome = await readAndParseMarkdownFile(sourceDir, filename, allowedRoots)
+            if (outcome.skipped) {
                 result.skipped++
-                continue
+            } else if (outcome.parsed) {
+                parsedFiles.push(outcome.parsed)
             }
-
-            parsedFiles.push({
-                filename,
-                body,
-                metadata: metadata,
-            })
         } catch (err) {
             result.errors.push({
                 file: filename,
                 error: err instanceof Error ? err.message : String(err),
             })
             result.success = false
-        } finally {
-            if (handle) {
-                await handle.close()
-            }
         }
     }
 
     const batchResult = await processImportBatch(parsedFiles, db, options, vectorManager)
-    
-    // Merge batch results into our initial result tracking
     result.success = result.success && batchResult.success
     result.created += batchResult.created
     result.updated += batchResult.updated
@@ -211,14 +211,114 @@ export async function importMarkdownEntries(
     return result
 }
 
+function assertImportAuthorOwnership(
+    db: IDatabaseAdapter,
+    entryId: number,
+    author: string | undefined
+): void {
+    if (author === undefined) return
+    const existingAuthor = db.getAuthorsForEntries([entryId]).get(entryId)
+    if (
+        existingAuthor !== undefined &&
+        existingAuthor !== null &&
+        existingAuthor.toLowerCase() !== author.toLowerCase()
+    ) {
+        throw new Error(
+            `Permission denied: cannot overwrite entry ${String(entryId)} owned by '${existingAuthor}' during import by '${author}'`
+        )
+    }
+}
+
+function upsertParsedFile(
+    file: ParsedFile,
+    db: IDatabaseAdapter,
+    options: ImportOptions,
+    result: ImportResult
+): { entryId: number; workspaceId: string | undefined } {
+    const { body, metadata } = file
+    const { author, project_number, workspaceId } = options
+    const resolved = resolveProjectContext({
+        workspace_id: workspaceId,
+        project_number,
+        content: body,
+        tags: metadata.tags,
+    })
+    const effectiveWsId =
+        workspaceId !== undefined && workspaceId !== 'default'
+            ? workspaceId
+            : resolved.workspaceId !== 'default'
+              ? resolved.workspaceId
+              : workspaceId
+    const effectiveProjNum = project_number ?? resolved.projectNumber
+    const entryType: EntryType = toEntryType(metadata.entry_type) ?? 'personal_reflection'
+
+    if (metadata.mj_id !== undefined) {
+        const existing = db.getEntryById(metadata.mj_id, effectiveWsId)
+        if (existing) {
+            assertImportAuthorOwnership(db, metadata.mj_id, author)
+            db.updateEntry(metadata.mj_id, {
+                content: body,
+                entryType: toEntryType(metadata.entry_type),
+                tags: metadata.tags,
+                ...(metadata.significance !== undefined && {
+                    significanceType: metadata.significance,
+                }),
+                ...(effectiveProjNum !== undefined && { projectNumber: effectiveProjNum }),
+                workspaceId: effectiveWsId,
+            })
+            result.updated++
+            return { entryId: metadata.mj_id, workspaceId: effectiveWsId }
+        }
+    }
+
+    const resolvedAuthor = author ?? metadata.author
+    const newEntry = db.createEntry({
+        content: body,
+        entryType,
+        tags: metadata.tags,
+        ...(metadata.timestamp !== undefined && { timestamp: metadata.timestamp }),
+        ...(metadata.significance !== undefined && {
+            significanceType: metadata.significance as SignificanceType,
+        }),
+        ...(resolvedAuthor !== undefined && { author: resolvedAuthor }),
+        ...(effectiveProjNum !== undefined && { projectNumber: effectiveProjNum }),
+        workspaceId: effectiveWsId,
+    })
+    result.created++
+    return { entryId: newEntry.id, workspaceId: effectiveWsId }
+}
+
+function linkImportedRelationships(
+    db: IDatabaseAdapter,
+    entryId: number,
+    relationships: { type: string; target_id: number }[] | undefined,
+    workspaceId: string | undefined
+): number {
+    if (relationships === undefined) return 0
+    let linked = 0
+    for (const rel of relationships) {
+        if (!VALID_RELATIONSHIP_TYPES.has(rel.type)) continue
+        const targetExists = db.getEntryById(rel.target_id, workspaceId)
+        if (targetExists) {
+            if (workspaceId !== undefined) {
+                db.linkEntries(
+                    entryId,
+                    rel.target_id,
+                    rel.type as RelationshipType,
+                    undefined,
+                    workspaceId
+                )
+            } else {
+                db.linkEntries(entryId, rel.target_id, rel.type as RelationshipType)
+            }
+            linked++
+        }
+    }
+    return linked
+}
+
 /**
  * Process a batch of parsed markdown files and upsert them into the database.
- * 
- * @param parsedFiles Files to import
- * @param db Database adapter
- * @param options Import options
- * @param vectorManager Optional vector search manager
- * @returns Import result with counts and errors
  */
 export async function processImportBatch(
     parsedFiles: ParsedFile[],
@@ -226,7 +326,7 @@ export async function processImportBatch(
     options: ImportOptions = {},
     vectorManager: VectorSearchManager | undefined
 ): Promise<ImportResult> {
-    const { dry_run = false, author, project_number, workspaceId } = options
+    const { dry_run = false, workspaceId } = options
 
     const result: ImportResult = {
         success: true,
@@ -239,118 +339,37 @@ export async function processImportBatch(
         dry_run,
     }
 
-    // Phase 2: Perform DB operations in a transaction
-    const vectorQueue: { entryId: number; body: string; filename: string }[] = []
+    const vectorQueue: { entryId: number; filename: string; workspaceId: string | undefined }[] = []
 
     db.executeInTransaction(() => {
         for (const file of parsedFiles) {
-            const { filename, body, metadata } = file
+            const { filename, metadata } = file
 
             if (dry_run) {
-                // In dry-run mode, just classify what would happen
-                if (metadata.mj_id !== undefined) {
-                    const existing = db.getEntryById(metadata.mj_id, workspaceId)
-                    if (existing) {
-                        result.updated++
-                    } else {
-                        result.created++
-                    }
+                if (metadata.mj_id !== undefined && db.getEntryById(metadata.mj_id, workspaceId)) {
+                    result.updated++
                 } else {
                     result.created++
                 }
                 continue
             }
 
-            let entryId: number
-            const entryType: EntryType = toEntryType(metadata.entry_type) ?? 'personal_reflection'
-
-            if (metadata.mj_id !== undefined) {
-                const existing = db.getEntryById(metadata.mj_id, workspaceId)
-                if (existing) {
-                    if (author !== undefined) {
-                        const existingAuthor = db.getAuthorsForEntries([metadata.mj_id]).get(metadata.mj_id)
-                        if (
-                            existingAuthor !== undefined &&
-                            existingAuthor !== null &&
-                            existingAuthor.toLowerCase() !== author.toLowerCase()
-                        ) {
-                            throw new Error(
-                                `Permission denied: cannot overwrite entry ${String(metadata.mj_id)} owned by '${existingAuthor}' during import by '${author}'`
-                            )
-                        }
-                    }
-                    // UPDATE existing entry
-                    db.updateEntry(metadata.mj_id, {
-                        content: body,
-                        entryType: toEntryType(metadata.entry_type),
-                        tags: metadata.tags,
-                        workspaceId,
-                    })
-                    entryId = metadata.mj_id
-                    result.updated++
-                } else {
-                    // CREATE new entry (mj_id pointed to nonexistent entry)
-                    const resolvedAuthor = author ?? metadata.author
-                    const newEntry = db.createEntry({
-                        content: body,
-                        entryType,
-                        tags: metadata.tags,
-                        ...(metadata.timestamp !== undefined && { timestamp: metadata.timestamp }),
-                        ...(metadata.significance !== undefined && {
-                            significanceType: metadata.significance as SignificanceType,
-                        }),
-                        // SEC-2.4: Preserve author attribution from team import options or markdown frontmatter
-                        ...(resolvedAuthor !== undefined && { author: resolvedAuthor }),
-                        ...(project_number !== undefined && { projectNumber: project_number }),
-                        workspaceId,
-                    })
-                    entryId = newEntry.id
-                    result.created++
-                }
-            } else {
-                // CREATE new entry (no mj_id)
-                const resolvedAuthor = author ?? metadata.author
-                const newEntry = db.createEntry({
-                    content: body,
-                    entryType,
-                    tags: metadata.tags,
-                    ...(metadata.timestamp !== undefined && { timestamp: metadata.timestamp }),
-                    ...(metadata.significance !== undefined && {
-                        significanceType: metadata.significance as SignificanceType,
-                    }),
-                    // SEC-2.4: Preserve author attribution from team import options or markdown frontmatter
-                    ...(resolvedAuthor !== undefined && { author: resolvedAuthor }),
-                    ...(project_number !== undefined && { projectNumber: project_number }),
-                    workspaceId,
-                })
-                entryId = newEntry.id
-                result.created++
-            }
-
-            // Relationship linking
-            if (metadata.relationships !== undefined) {
-                for (const rel of metadata.relationships) {
-                    if (!VALID_RELATIONSHIP_TYPES.has(rel.type)) continue
-
-                    // Only link if target entry exists
-                    const targetExists = db.getEntryById(rel.target_id, workspaceId)
-                    if (targetExists) {
-                        db.linkEntries(entryId, rel.target_id, rel.type as RelationshipType)
-                        result.relationshipsLinked++
-                    }
-                }
-            }
-
-            vectorQueue.push({ entryId, body, filename })
+            const { entryId, workspaceId: entryWsId } = upsertParsedFile(file, db, options, result)
+            result.relationshipsLinked += linkImportedRelationships(
+                db,
+                entryId,
+                metadata.relationships,
+                entryWsId
+            )
+            vectorQueue.push({ entryId, filename, workspaceId: entryWsId })
         }
     })
 
-    // Phase 3: Perform vector indexing asynchronously (outside transaction)
     if (!dry_run && vectorManager) {
         let hasVectorErrors = false
-        for (const { entryId, filename } of vectorQueue) {
+        for (const { entryId, filename, workspaceId: entryWsId } of vectorQueue) {
             try {
-                const entry = db.getEntryById(entryId, workspaceId)
+                const entry = db.getEntryById(entryId, entryWsId)
                 if (entry) {
                     await vectorManager.addEntry(entry)
                     result.vectorsIndexed++
@@ -363,8 +382,6 @@ export async function processImportBatch(
                 })
             }
         }
-
-        // If vector indexing fails, we mark the import as a partial success
         if (hasVectorErrors) {
             result.success = false
         }

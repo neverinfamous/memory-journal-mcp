@@ -109,7 +109,7 @@ function recoverEntryMutation(target: Record<string, unknown>): string | null {
     const entryId = readEntryId(target)
     const op = readOperation(target)
     if ((op === 'delete' || op === 'delete_entry') && entryId !== undefined) {
-        return `return await mj.core.deleteEntry({ entry_id: ${entryId} });`
+        return `return await mj.admin.deleteEntry({ entry_id: ${entryId} });`
     }
     const signals = readPayloadSignals(target, op)
     if (!hasJournalFields(signals) && entryId !== undefined) {

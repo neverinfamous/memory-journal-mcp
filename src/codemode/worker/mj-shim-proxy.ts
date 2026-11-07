@@ -222,9 +222,11 @@ export function createShimMjProxy(options: CreateShimMjOptions): Record<string, 
             if (prop === 'statSync') return safeFsShim.statSync
             if (prop === 'stat') return safeFsShim.stat
             if (prop === 'readdirSync') return () => []
-            if (prop === 'join' || prop === 'resolve' || prop === 'basename' || prop === 'dirname' || prop === 'extname') {
-                return (...parts: unknown[]) => parts.filter((p) => typeof p === 'string').join('/')
-            }
+            if (prop === 'join') return pathShim.join
+            if (prop === 'resolve') return pathShim.resolve
+            if (prop === 'basename') return pathShim.basename
+            if (prop === 'dirname') return pathShim.dirname
+            if (prop === 'extname') return pathShim.extname
             if (prop === 'promisify') return (fn: unknown) => fn
             if (prop === 'format' || prop === 'inspect') return (...args: unknown[]) => args.map(String).join(' ')
             if (typeof prop === 'string' && DB_CONSTRUCTOR_PROPS.has(prop)) return createCallableShim(shimMj)

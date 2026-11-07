@@ -234,7 +234,7 @@ export const DeleteEntrySchemaMcp = z.preprocess(
         .strict()
 )
 
-function preprocessBatchCreateEntries(val: unknown): unknown {
+export function preprocessBatchCreateEntries(val: unknown): unknown {
     if (typeof val === 'object' && val !== null) {
         const obj = { ...(val as Record<string, unknown>) }
         if (Array.isArray(obj['entries'])) {
