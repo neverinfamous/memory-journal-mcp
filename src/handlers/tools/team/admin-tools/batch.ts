@@ -82,7 +82,9 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                         const projectNumber =
                             e.project_number ??
                             input.project_number ??
-                            resolved.projectNumber
+                            (resolved.workspaceId !== 'default'
+                                ? resolved.projectNumber
+                                : undefined)
                         if (projectNumber === undefined || projectNumber === null) {
                             return {
                                 success: false,

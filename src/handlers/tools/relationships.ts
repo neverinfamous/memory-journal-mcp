@@ -359,19 +359,9 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     const input = VisualizeInputSchema.parse(VisualizeInputSchemaMcp.parse(params))
-                    let wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
+                    const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
                     if (input.entry_id !== undefined) {
-                        let entry = db.getEntryById(input.entry_id, wsId)
-                        if (
-                            !entry &&
-                            input.workspace_id === undefined &&
-                            input.project_number === undefined
-                        ) {
-                            entry = db.getEntryById(input.entry_id, '*')
-                            if (entry?.workspaceId !== undefined) {
-                                wsId = entry.workspaceId
-                            }
-                        }
+                        const entry = db.getEntryById(input.entry_id, wsId)
                         if (!entry || entry.deletedAt) {
                             return {
                                 ...formatHandlerError(

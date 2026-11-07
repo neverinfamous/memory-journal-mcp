@@ -408,17 +408,6 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                             const configured = Object.keys(registry ?? {}).filter((k) => registry?.[k]?.path)
                             targetWorkspaces.push(...(configured.length > 0 ? Array.from(new Set(configured)) : [defaultWs]))
                         }
-                    } else if (
-                        resolvedEntryId !== undefined &&
-                        rawWs === undefined &&
-                        rawProj === undefined
-                    ) {
-                        const entry = db.getEntryByIdIncludeDeleted(resolvedEntryId, '*')
-                        if (!entry) throw new ResourceNotFoundError('entry', String(resolvedEntryId))
-                        targetWorkspaces.push(
-                            entry.workspaceId ??
-                                resolveWorkspaceId(rawWs, rawProj, context.config)
-                        )
                     } else {
                         targetWorkspaces.push(resolveWorkspaceId(rawWs, rawProj, context.config))
                     }

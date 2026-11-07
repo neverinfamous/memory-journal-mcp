@@ -310,7 +310,10 @@ function linkImportedRelationships(
 ): number {
     if (relationships === undefined) return 0
     let linked = 0
-    const existingRels = db.getRelationships(entryId, workspaceId)
+    const existingRels =
+        typeof db.getRelationships === 'function'
+            ? db.getRelationships(entryId, workspaceId)
+            : []
     for (const rel of relationships) {
         if (!VALID_RELATIONSHIP_TYPES.has(rel.type)) continue
         const targetId = idRemap.get(rel.target_id) ?? rel.target_id

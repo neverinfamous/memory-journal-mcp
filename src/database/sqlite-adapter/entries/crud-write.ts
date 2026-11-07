@@ -83,35 +83,20 @@ function insertEntryRow(context: EntriesSharedContext, input: CreateEntryInput):
         ]
         const nonEmpty = (s: string | null | undefined): string | null =>
             s !== undefined && s !== null && s !== '' ? s : null
-        const needsResolution =
-            input.projectNumber === undefined ||
-            input.workspaceId === undefined ||
-            input.workspaceId === '' ||
-            input.workspaceId === 'default'
-        const resolvedCtx = needsResolution
-            ? resolveProjectContext(
-                  {
-                      ...(input.workspaceId !== undefined
-                          ? { workspace_id: input.workspaceId }
-                          : {}),
-                      ...(input.projectNumber !== undefined
-                          ? { project_number: input.projectNumber }
-                          : {}),
-                      content: input.content,
-                      ...(input.tags !== undefined ? { tags: input.tags } : {}),
-                  },
-                  context.config
-              )
-            : undefined
-        const resolvedProjNum = input.projectNumber ?? resolvedCtx?.projectNumber
+        const resolvedProjNum =
+            input.projectNumber ??
+            resolveProjectContext(
+                {
+                    ...(input.workspaceId !== undefined
+                        ? { workspace_id: input.workspaceId }
+                        : {}),
+                    content: input.content,
+                    ...(input.tags !== undefined ? { tags: input.tags } : {}),
+                },
+                context.config
+            ).projectNumber
         const finalProjNum = resolvedProjNum ?? null
-        const finalWsId = effectiveWorkspace(
-            input.workspaceId !== undefined &&
-                input.workspaceId !== '' &&
-                input.workspaceId !== 'default'
-                ? input.workspaceId
-                : resolvedCtx?.workspaceId
-        )
+        const finalWsId = effectiveWorkspace(input.workspaceId)
         const values = [
             input.entryType ?? 'personal_reflection',
             input.content,

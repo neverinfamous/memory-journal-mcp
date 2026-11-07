@@ -84,6 +84,9 @@ export function extractAndRecoverSqlCode(code: string): string | null {
             return `return await mj.analytics.getStatistics(${JSON.stringify(scopeFields)});`
         }
         if (idVal !== undefined) {
+            if (Object.keys(scopeFields).length === 0) {
+                return `return await mj.core.getEntryById({ entry_id: ${String(idVal)} });`
+            }
             return `return await mj.core.getEntryById(${JSON.stringify({ entry_id: idVal, ...scopeFields })});`
         }
         if (searchQuery !== undefined && searchQuery !== '') {

@@ -101,8 +101,8 @@ export class TagsManager {
     }
 
     listTags(workspaceId?: string): Tag[] {
-        const wsId = effectiveWorkspace(workspaceId)
-        if (wsId !== '*') {
+        if (workspaceId !== undefined && workspaceId !== '*') {
+            const wsId = effectiveWorkspace(workspaceId)
             const hasDeletedAt =
                 this.db
                     .prepare(
