@@ -1,6 +1,6 @@
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { tsImport } from 'tsx/esm/api'
 
 /**
  * Tests the --persist-metrics flag integration logic.
@@ -19,11 +19,8 @@ async function main() {
     await fs.rm(dbPath, { force: true })
     await fs.rm(metricsPath, { force: true })
     
-    // Dynamically import the typescript file natively using strip-types or fallback to TSX
-    const __dirname = path.dirname(fileURLToPath(import.meta.url))
-    const metricsModulePath = path.resolve(__dirname, '../../src/observability/metrics.ts')
-    
-    const { MetricsAccumulator } = await import(`file://${metricsModulePath}`)
+    // Dynamically import the TypeScript module via tsx ESM API so .js -> .ts specifiers resolve under plain node
+    const { MetricsAccumulator } = await tsImport('../../src/observability/metrics.ts', import.meta.url)
     
     console.log('1. Creating accumulator and recording metrics...')
     const acc1 = new MetricsAccumulator()
