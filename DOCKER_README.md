@@ -120,7 +120,7 @@ Control which tools and tool groups are exposed using `MEMORY_JOURNAL_MCP_TOOL_F
 
 ### 🎯 **Workflow Prompts**
 
-Specialized workflow prompts for session briefing, standup & retro prep, goal tracking, PR & issue command, session summaries, journal optimization, CMS REM supervision (`cms-rem-supervisor`), adversarial plan reviews, exhaustive code & security audits, secure commit workflows, and anti-hallucination healing. **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
+Specialized workflow prompts for session briefing, standup & retro prep, goal tracking, PR & issue command, session summaries, journal optimization, CMS REM supervision (`cms-rem-supervisor`), adversarial plan reviews, exhaustive code & security audits, secure commit workflows, and anti-hallucination healing. **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)** • **[Automations guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Automations)**
 
 ### 📡 **Resources**
 
@@ -306,7 +306,7 @@ docker run --rm -p 3000:3000 \
 
 #### Automated Scheduling (HTTP Only)
 
-Enable periodic maintenance jobs (`--backup-interval`, `--vacuum-interval`, `--rebuild-index-interval`, `--digest-interval`, `--report-interval`, `--auto-prune-interval`) for long-running HTTP containers. **[See the full scheduling documentation in the Wiki →](https://github.com/neverinfamous/memory-journal-mcp/wiki/HTTP-Transport#automated-scheduling)**
+Enable periodic maintenance jobs (`--backup-interval`, `--vacuum-interval`, `--rebuild-index-interval`, `--digest-interval`, `--report-interval`, `--auto-prune-interval`) for long-running HTTP containers. **[See the full scheduling documentation in the Wiki →](https://github.com/neverinfamous/memory-journal-mcp/wiki/HTTP-Transport#automated-scheduling)** • **[Agentic CMS Automations →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Automations)**
 
 ## 🔐 OAuth 2.1 Authentication
 

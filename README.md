@@ -198,7 +198,7 @@ Control which tools are exposed using any of the 3 configuration sources (preced
 
 ### 🎯 **Workflow Prompts**
 
-Specialized workflow prompts cover session briefing, standup & retro prep, goal tracking, PR & issue command, session summaries, and journal optimization. Additional prompts support CMS REM supervision, adversarial plan reviews, code & security audits, secure commit workflows, and anti-hallucination healing. **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
+Specialized workflow prompts cover session briefing, standup & retro prep, goal tracking, PR & issue command, session summaries, and journal optimization. Additional prompts support CMS REM supervision, adversarial plan reviews, code & security audits, secure commit workflows, and anti-hallucination healing. **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)** • **[Automations guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Automations)**
 
 ### 📡 **Resources**
 
@@ -469,7 +469,7 @@ memory-journal-mcp --transport http --port 3000 --stateless --allowed-io-roots /
 
 When running in HTTP/SSE mode, enable periodic maintenance jobs with CLI flags. These jobs run in-process on `setInterval` — no external cron needed.
 
-> **Note:** These flags are ignored for stdio transport because stdio sessions are short-lived (tied to your IDE session). For stdio, use OS-level scheduling (Task Scheduler, cron) or run the backup/cleanup tools manually.
+> **Note:** These flags are ignored for stdio transport because stdio sessions are short-lived (tied to your IDE session). For stdio, use client-driven **[Nightly CMS Automations →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Automations)** (`CMS-02` / `CMS-04`), OS-level scheduling (Task Scheduler, cron), or run the backup/cleanup tools manually.
 
 ```bash
 memory-journal-mcp --transport http --port 3000 \
@@ -779,7 +779,7 @@ pnpm run test:e2e  # End-to-end HTTP/SSE transport tests
 ## 📚 Documentation & Resources
 
 - **[GitHub Wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki)** - Complete documentation
-- **[Wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki)** - Cross-agent memory bridge between IDE agents and GitHub Copilot
+- **[Automations Guide](https://github.com/neverinfamous/memory-journal-mcp/wiki/Automations)** - Nightly CMS consolidation (`CMS-02`), REM self-healing supervisor (`CMS-04`), and cross-client scheduling
 - **[Deployment Guide](https://github.com/neverinfamous/memory-journal-mcp/wiki/Deployment)** - CI/CD pipeline, environments, and version bump checklist
 - **[Docker Hub](https://hub.docker.com/r/writenotenow/memory-journal-mcp)** - Container images
 - **[npm Package](https://www.npmjs.com/package/memory-journal-mcp)** - Node.js distribution
