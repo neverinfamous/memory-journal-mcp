@@ -305,25 +305,44 @@ function linkImportedRelationships(
     db: IDatabaseAdapter,
     entryId: number,
     relationships: { type: string; target_id: number }[] | undefined,
-    workspaceId: string | undefined
+    workspaceId: string | undefined,
+    idRemap: ReadonlyMap<number, number>
 ): number {
     if (relationships === undefined) return 0
     let linked = 0
+    const existingRels = db.getRelationships(entryId, workspaceId)
     for (const rel of relationships) {
         if (!VALID_RELATIONSHIP_TYPES.has(rel.type)) continue
-        const targetExists = db.getEntryById(rel.target_id, workspaceId)
+        const targetId = idRemap.get(rel.target_id) ?? rel.target_id
+        if (targetId === entryId) continue
+        const alreadyExists = existingRels.some(
+            (r) =>
+                r.fromEntryId === entryId &&
+                r.toEntryId === targetId &&
+                r.relationshipType === rel.type
+        )
+        if (alreadyExists) continue
+        const targetExists = db.getEntryById(targetId, workspaceId)
         if (targetExists) {
             if (workspaceId !== undefined) {
                 db.linkEntries(
                     entryId,
-                    rel.target_id,
+                    targetId,
                     rel.type as RelationshipType,
                     undefined,
                     workspaceId
                 )
             } else {
-                db.linkEntries(entryId, rel.target_id, rel.type as RelationshipType)
+                db.linkEntries(entryId, targetId, rel.type as RelationshipType)
             }
+            existingRels.push({
+                id: 0,
+                fromEntryId: entryId,
+                toEntryId: targetId,
+                relationshipType: rel.type as RelationshipType,
+                description: null,
+                createdAt: '',
+            })
             linked++
         }
     }
@@ -355,6 +374,7 @@ export async function processImportBatch(
     const vectorQueue: { entryId: number; filename: string; workspaceId: string | undefined }[] = []
 
     db.executeInTransaction(() => {
+        const idRemap = new Map<number, number>()
         const pendingLinks: {
             entryId: number
             relationships: { type: string; target_id: number }[] | undefined
@@ -378,6 +398,9 @@ export async function processImportBatch(
             }
 
             const { entryId, workspaceId: entryWsId } = upsertParsedFile(file, db, options, result)
+            if (metadata.mj_id !== undefined) {
+                idRemap.set(metadata.mj_id, entryId)
+            }
             pendingLinks.push({
                 entryId,
                 relationships: metadata.relationships,
@@ -391,7 +414,8 @@ export async function processImportBatch(
                 db,
                 pending.entryId,
                 pending.relationships,
-                pending.workspaceId
+                pending.workspaceId,
+                idRemap
             )
         }
     })

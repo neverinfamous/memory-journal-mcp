@@ -74,8 +74,8 @@ export async function buildBriefingData(
         ...(context.runtime !== undefined ? { runtime: context.runtime } : {}),
     })
 
+    const registry = config.projectRegistry ?? loadProjectRegistryFromConfig()
     if (targetRepo) {
-        const registry = config.projectRegistry ?? loadProjectRegistryFromConfig()
         let resolvedRepo = targetRepo
         if (!registry?.[resolvedRepo]) {
             resolvedRepo = targetRepo.split(/[\\/]/).pop() ?? targetRepo
@@ -94,6 +94,15 @@ export async function buildBriefingData(
             activeProjectNumber = registryEntry.project_number ?? undefined
         }
         setActiveSessionProject(activeWorkspaceId, activeProjectNumber, context.runtime)
+    } else if (activeWorkspaceId && activeWorkspaceId !== 'default' && activeWorkspaceId !== '*') {
+        const canonicalKey = findCanonicalRegistryKey(activeWorkspaceId, registry) ?? activeWorkspaceId
+        activeWorkspaceId = canonicalKey
+        const registryEntry = registry?.[canonicalKey]
+        if (registryEntry) {
+            activeRepoPath = registryEntry.path
+            activeGithub = getGitHubIntegration(registryEntry.path, context.runtime)
+            activeProjectNumber ??= registryEntry.project_number ?? undefined
+        }
     }
 
     // Build all sections

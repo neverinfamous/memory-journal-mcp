@@ -54,7 +54,9 @@ export function parseProjectRegistryOption(
                 if (stat.isSymbolicLink()) throw new Error(`Project registry path cannot be a symlink: ${resolvedPath}`)
                 if (!stat.isDirectory()) throw new Error(`Project registry path is not a directory: ${resolvedPath}`)
             } catch (e) {
-                throw new Error(`Project registry path error: ${resolvedPath}`, { cause: e })
+                if (!isNodeErrorCode(e, 'ENOENT')) {
+                    throw new Error(`Project registry path error: ${resolvedPath}`, { cause: e })
+                }
             }
             entry.path = resolvedPath
         }

@@ -6,7 +6,11 @@ import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { ValidationError } from '../../../types/errors.js'
-import { resolveProjectContext } from '../../../utils/workspace-resolver.js'
+import {
+    findCanonicalRegistryKey,
+    loadProjectRegistryFromConfig,
+    resolveProjectContext,
+} from '../../../utils/workspace-resolver.js'
 import { relaxedNumber } from '../schemas.js'
 import { CloseGitHubIssueWithEntryOutputSchema } from './schemas.js'
 import { resolveOwnerRepo, resolveProjectNumber } from './helpers.js'
@@ -66,11 +70,13 @@ async function executeCloseIssueMutation(
         resolved.repo,
         input.project_number
     )
+    const registry = context.config?.projectRegistry ?? loadProjectRegistryFromConfig()
+    const canonicalRepo = resolved.repo
+        ? (findCanonicalRegistryKey(resolved.repo, registry) ?? resolved.repo)
+        : undefined
     const resolvedCtx = resolveProjectContext(
         {
-            workspace_id:
-                input.workspace_id ??
-                (input.repo !== undefined ? resolved.repo : undefined),
+            workspace_id: input.workspace_id ?? canonicalRepo,
             project_number: entryProjectNumber,
             content: entryContent,
             tags: input.tags,
@@ -78,8 +84,8 @@ async function executeCloseIssueMutation(
         context.config
     )
     const workspaceId =
-        resolvedCtx.workspaceId === 'default' && resolved.repo
-            ? resolved.repo
+        resolvedCtx.workspaceId === 'default' && canonicalRepo
+            ? canonicalRepo
             : resolvedCtx.workspaceId
     const projectNumber = resolvedCtx.projectNumber ?? entryProjectNumber
     const entry = db.createEntry({

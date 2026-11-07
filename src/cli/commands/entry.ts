@@ -89,13 +89,19 @@ function handleCliEntryError(e: unknown, actionLabel: 'create' | 'update'): neve
 
 async function loadCliEntryContentAndPayload(
     options: HealedEntryOptions,
-    config: ToolHandlerConfig
+    config: ToolHandlerConfig,
+    fallbackContent?: string
 ): Promise<{
     content: string
     metadata: Record<string, unknown>
     payload: EntryPayload
 }> {
-    const rawContent = await parseContent(options)
+    const rawContent =
+        options.file === undefined &&
+        options.content === undefined &&
+        fallbackContent !== undefined
+            ? fallbackContent
+            : await parseContent(options)
     const { frontmatter, body } = parseFrontmatter(rawContent)
     let content = body
 
@@ -176,19 +182,16 @@ export async function createEntryAction(...args: unknown[]): Promise<void> {
     const { db, config } = await getDb(options, command)
 
     try {
-        const { content, metadata, payload } = await loadCliEntryContentAndPayload(options, config)
+        const { content, payload } = await loadCliEntryContentAndPayload(options, config)
 
-        let resolvedWs = payload.workspaceId
-        if (resolvedWs === 'default') {
-            const optsRec = z.record(z.string(), z.unknown()).parse(options)
-            const explicitWs =
-                optsRec['workspaceId'] ??
-                optsRec['workspace_id'] ??
-                metadata['workspaceId'] ??
-                metadata['workspace_id']
-            if (explicitWs !== 'default') {
-                resolvedWs = undefined
-            }
+        let resolvedWs = payload.workspaceId?.trim()
+        if (
+            resolvedWs === undefined ||
+            resolvedWs === '' ||
+            resolvedWs.toLowerCase() === 'default' ||
+            resolvedWs.toLowerCase() === 'test'
+        ) {
+            resolvedWs = undefined
         }
 
         z.object({
@@ -208,7 +211,7 @@ export async function createEntryAction(...args: unknown[]): Promise<void> {
             entryType: payload.entryType,
             tags: payload.tags,
             projectNumber: payload.projectNumber,
-            workspaceId: payload.workspaceId,
+            workspaceId: resolvedWs,
             trustScore: payload.trustScore,
             impactScore: payload.impactScore,
             validationStatus: payload.validationStatus,
@@ -221,7 +224,7 @@ export async function createEntryAction(...args: unknown[]): Promise<void> {
             db,
             newEntry.id,
             payload,
-            payload.workspaceId
+            resolvedWs
         )
         db.flushSave()
         writeCliEntryResult(newEntry, linkFailures, options.json, 'created')
@@ -257,9 +260,13 @@ export async function updateEntryAction(...args: unknown[]): Promise<void> {
             process.exit(1)
         }
 
-        const { content, payload } = await loadCliEntryContentAndPayload(options, config)
-
         const existingEntry = db.getEntryById(entryId, '*')
+        const { content, payload } = await loadCliEntryContentAndPayload(
+            options,
+            config,
+            existingEntry?.content
+        )
+
         const updates: Partial<CreateEntryInput> & {
             expectedVersion: number
             targetWorkspaceId?: string
@@ -271,21 +278,24 @@ export async function updateEntryAction(...args: unknown[]): Promise<void> {
         if (payload.tags !== undefined) updates.tags = payload.tags
         if (
             payload.projectNumber !== undefined &&
-            (payload.hasExplicitProject === true || existingEntry?.projectNumber == null)
+            (payload.hasExplicitProject === true ||
+                existingEntry?.projectNumber == null ||
+                existingEntry.projectNumber === 0)
         ) {
             updates.projectNumber = payload.projectNumber
         }
-        if (payload.hasExplicitWorkspace === true || payload.hasExplicitProject === true) {
-            if (
-                existingEntry !== null &&
-                existingEntry.workspaceId === 'default' &&
-                payload.workspaceId !== undefined &&
-                payload.workspaceId !== 'default' &&
-                payload.workspaceId !== '*'
-            ) {
+        const canReassignWorkspace =
+            payload.workspaceId !== undefined &&
+            payload.workspaceId !== 'default' &&
+            payload.workspaceId !== '*' &&
+            (payload.hasExplicitWorkspace === true ||
+                payload.hasExplicitProject === true ||
+                existingEntry?.workspaceId === 'default')
+        if (canReassignWorkspace && payload.workspaceId !== undefined) {
+            if (existingEntry !== null && existingEntry.workspaceId !== payload.workspaceId) {
                 updates.workspaceId = '*'
                 updates.targetWorkspaceId = payload.workspaceId
-            } else if (payload.workspaceId !== undefined) {
+            } else {
                 updates.workspaceId = payload.workspaceId
             }
         } else if (existingEntry?.workspaceId !== undefined) {

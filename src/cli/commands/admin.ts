@@ -96,12 +96,31 @@ export async function pruneAction(options: z.infer<typeof pruneSchema>, command:
             options.defaultProject ?? serverOptions.defaultProjectNumber,
             serverOptions
         )
+        const fromCli = (key: string): boolean => command.getOptionValueSource(key) === 'cli'
         const result = await runAutoPrune(db, {
-            archiveOlderThanDays: options.archiveOlderThanDays ?? serverOptions.archiveOlderThanDays ?? 0,
-            pruneOlderThanDays: options.pruneOlderThanDays ?? serverOptions.pruneOlderThanDays ?? 0,
-            hardDeleteOlderThanDays: options.hardDeleteOlderThanDays ?? serverOptions.hardDeleteOlderThanDays ?? 0,
-            importanceThreshold: options.importanceThreshold ?? options.pruneImportanceThreshold ?? serverOptions.pruneImportanceThreshold ?? 0.15,
-            dryRun: options.dryRun === true || options.pruneDryRun === true || serverOptions.pruneDryRun === true,
+            archiveOlderThanDays:
+                (fromCli('archiveOlderThanDays') ? options.archiveOlderThanDays : undefined) ??
+                serverOptions.archiveOlderThanDays ??
+                0,
+            pruneOlderThanDays:
+                (fromCli('pruneOlderThanDays') ? options.pruneOlderThanDays : undefined) ??
+                serverOptions.pruneOlderThanDays ??
+                0,
+            hardDeleteOlderThanDays:
+                (fromCli('hardDeleteOlderThanDays') ? options.hardDeleteOlderThanDays : undefined) ??
+                serverOptions.hardDeleteOlderThanDays ??
+                0,
+            importanceThreshold:
+                options.importanceThreshold ??
+                (fromCli('pruneImportanceThreshold')
+                    ? options.pruneImportanceThreshold
+                    : undefined) ??
+                serverOptions.pruneImportanceThreshold ??
+                0.15,
+            dryRun:
+                options.dryRun === true ||
+                (fromCli('pruneDryRun') && options.pruneDryRun === true) ||
+                serverOptions.pruneDryRun === true,
             excludeTags: parsedExcludeTags,
             ...(workspaceId !== undefined ? { workspaceId } : {}),
         })
@@ -158,11 +177,22 @@ export async function auditAction(options: z.infer<typeof auditSchema>, command:
         const logger = new AuditLogger({
             logPath: auditLogPath,
             enabled: true,
-            redact: options.auditRedact ?? auditDefaults?.redact ?? true,
-            auditReads: options.auditReads ?? auditDefaults?.auditReads ?? false,
-            maxSizeBytes: options.auditLogMaxSize
-                ? parseInt(options.auditLogMaxSize)
-                : (auditDefaults?.maxSizeBytes ?? DEFAULT_AUDIT_LOG_MAX_SIZE_BYTES),
+            redact:
+                (command.getOptionValueSource('auditRedact') === 'cli'
+                    ? options.auditRedact
+                    : undefined) ??
+                auditDefaults?.redact ??
+                true,
+            auditReads:
+                (command.getOptionValueSource('auditReads') === 'cli'
+                    ? options.auditReads
+                    : undefined) ??
+                auditDefaults?.auditReads ??
+                false,
+            maxSizeBytes:
+                command.getOptionValueSource('auditLogMaxSize') === 'cli' && options.auditLogMaxSize
+                    ? parseInt(options.auditLogMaxSize, 10)
+                    : (auditDefaults?.maxSizeBytes ?? DEFAULT_AUDIT_LOG_MAX_SIZE_BYTES),
         })
 
         const statusFilter = options.status === 'success' ? true : (options.status === 'error' ? false : undefined)

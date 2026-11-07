@@ -192,7 +192,8 @@ export function registerPrompts(
                             db,
                             teamDb,
                             github,
-                            resolvedBriefingConfig
+                            resolvedBriefingConfig,
+                            runtime
                         )
                         return {
                             messages: promptResult.messages.map((m) => ({

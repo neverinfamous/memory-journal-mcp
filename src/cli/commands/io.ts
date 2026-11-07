@@ -11,7 +11,7 @@ import {
 import { getCliCommandDb as getDb } from './db-helper.js'
 import { exportEntriesToMarkdown, importMarkdownEntries, processImportBatch, convertFile, type ParsedFile } from '../../markdown/index.js'
 import { VectorSearchManager } from '../../vector/vector-search-manager/index.js'
-import { resolveWorkspaceFromFilePath, resolveWorkspaceId } from '../../utils/workspace-resolver.js'
+import { resolveProjectContext, resolveWorkspaceFromFilePath, resolveWorkspaceId } from '../../utils/workspace-resolver.js'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import { constants } from 'node:fs'
@@ -107,13 +107,18 @@ export async function importMarkdownAction(options: z.infer<typeof importMarkdow
         }
 
         const dirMatch = resolveWorkspaceFromFilePath(options.dir, serverOptions)
-        const projectNumber =
-            options.defaultProject ?? dirMatch?.projectNumber ?? serverOptions.defaultProjectNumber
-        const workspaceId = resolveWorkspaceId(
-            options.workspace ?? dirMatch?.workspaceId,
-            projectNumber,
+        const resolved = resolveProjectContext(
+            {
+                workspace_id: options.workspace ?? dirMatch?.workspaceId,
+                project_number:
+                    options.defaultProject ??
+                    dirMatch?.projectNumber ??
+                    serverOptions.defaultProjectNumber,
+            },
             serverOptions
         )
+        const workspaceId = resolved.workspaceId
+        const projectNumber = resolved.projectNumber
 
         const vectorManager = new VectorSearchManager(db, { modelName: serverOptions.embeddingModel })
 
@@ -149,13 +154,18 @@ export async function importExternalAction(options: z.infer<typeof importExterna
         }
 
         const dirMatch = resolveWorkspaceFromFilePath(options.dir, serverOptions)
-        const projectNumber =
-            options.defaultProject ?? dirMatch?.projectNumber ?? serverOptions.defaultProjectNumber
-        const workspaceId = resolveWorkspaceId(
-            options.workspace ?? dirMatch?.workspaceId,
-            projectNumber,
+        const resolved = resolveProjectContext(
+            {
+                workspace_id: options.workspace ?? dirMatch?.workspaceId,
+                project_number:
+                    options.defaultProject ??
+                    dirMatch?.projectNumber ??
+                    serverOptions.defaultProjectNumber,
+            },
             serverOptions
         )
+        const workspaceId = resolved.workspaceId
+        const projectNumber = resolved.projectNumber
 
         const vectorManager = new VectorSearchManager(db, { modelName: serverOptions.embeddingModel })
 

@@ -257,7 +257,7 @@ export const DEFAULT_BRIEFING_CONFIG: BriefingConfig = {
  */
 export function resourceWorkspace(context: {
     briefingConfig?: Partial<BriefingConfig>
-    runtime?: ServerRuntime
+    runtime?: ServerRuntime | object | null
 }): string {
     const cfg = context.briefingConfig
     const id = cfg?.defaultWorkspaceId

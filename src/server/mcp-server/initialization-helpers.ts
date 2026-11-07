@@ -238,6 +238,8 @@ export function createSchedulerIfConfigured(
         options
     )
     options.scheduler.defaultWorkspaceId = resolvedDefaultWs
+    options.scheduler.defaultProjectNumber = options.defaultProjectNumber
+    options.scheduler.projectRegistry = options.projectRegistry
 
     return new Scheduler(options.scheduler, db, vectorManager, runtime)
 }

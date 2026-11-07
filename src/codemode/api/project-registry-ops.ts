@@ -268,20 +268,34 @@ export function createGetProjectFn(
             if (typeof params === 'number' || typeof params === 'string') {
                 searchVal = params
             } else if (isRecord(params)) {
-                if (typeof params['project_number'] === 'number') searchVal = params['project_number']
-                else if (typeof params['projectNumber'] === 'number') searchVal = params['projectNumber']
-                else if (typeof params['name'] === 'string') searchVal = params['name']
-                else if (typeof params['query'] === 'string') searchVal = params['query']
+                const candidate =
+                    params['project_number'] ??
+                    params['projectNumber'] ??
+                    params['id'] ??
+                    params['entry_id'] ??
+                    params['entryId'] ??
+                    params['name'] ??
+                    params['workspace_id'] ??
+                    params['workspaceId'] ??
+                    params['project'] ??
+                    params['query']
+                if (typeof candidate === 'number' || typeof candidate === 'string') {
+                    searchVal = candidate
+                }
             }
 
             if (searchVal !== undefined) {
-                const isNum = typeof searchVal === 'number' || !Number.isNaN(Number(searchVal))
+                const isNum =
+                    typeof searchVal === 'number' ||
+                    (typeof searchVal === 'string' &&
+                        searchVal.trim() !== '' &&
+                        !Number.isNaN(Number(searchVal)))
                 const numVal = isNum ? Number(searchVal) : undefined
-                const strVal = String(searchVal).toLowerCase()
+                const strVal = String(searchVal).trim().toLowerCase()
 
                 const projects = await listProjectsFn()
                 if (Array.isArray(projects)) {
-                    const found: unknown = projects.find((p: unknown) => {
+                    const exactMatch: unknown = projects.find((p: unknown) => {
                         if (!isRecord(p)) return false
                         if (
                             numVal !== undefined &&
@@ -290,12 +304,20 @@ export function createGetProjectFn(
                             return true
                         }
                         if (typeof p['name'] === 'string') {
-                            const projName = p['name'].toLowerCase()
-                            if (projName === strVal || projName.includes(strVal)) return true
+                            return p['name'].toLowerCase() === strVal
                         }
                         return false
                     })
-                    if (found !== undefined) return found
+                    if (exactMatch !== undefined) return exactMatch
+
+                    const substringMatch: unknown = projects.find((p: unknown) => {
+                        if (!isRecord(p)) return false
+                        if (typeof p['name'] === 'string' && strVal.length > 0) {
+                            return p['name'].toLowerCase().includes(strVal)
+                        }
+                        return false
+                    })
+                    if (substringMatch !== undefined) return substringMatch
                 }
             }
         } catch (err) {

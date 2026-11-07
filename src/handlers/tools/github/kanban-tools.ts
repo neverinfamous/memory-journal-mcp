@@ -16,6 +16,14 @@ import {
 } from './schemas.js'
 import { resolveOwner, resolveOwnerRepo, resolveProjectNumber } from './helpers.js'
 
+const MISSING_PROJECT_NUMBER_ERROR = {
+    success: false,
+    error: 'project_number is required and could not be resolved from registry. Please supply it explicitly.',
+    code: 'VALIDATION_ERROR',
+    category: 'validation',
+    recoverable: true,
+}
+
 export function getKanbanTools(context: ToolContext): ToolDefinition[] {
     return [
         {
@@ -66,10 +74,15 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                         })
                         .parse(params)
 
-                    const resolved = await resolveOwner(context, input.owner, input.repo)
+                    const resolved = await resolveOwner(
+                        context,
+                        input.owner,
+                        input.repo,
+                        undefined,
+                        input.project_number
+                    )
                     if ('error' in resolved) return resolved.response
 
-                    // Fallback to explicit repo param if auto-detect failed (resolveOwner uses getRepoInfo)
                     const effectiveRepo = input.repo ?? resolved.repo
                     const projectNum = resolveProjectNumber(
                         context,
@@ -79,11 +92,7 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
 
                     if (projectNum === undefined) {
                         return {
-                            success: false,
-                            error: 'project_number is required and could not be resolved from registry. Please supply it explicitly.',
-                            code: 'VALIDATION_ERROR',
-                            category: 'validation',
-                            recoverable: true,
+                            ...MISSING_PROJECT_NUMBER_ERROR,
                             requiresUserInput: true,
                             instruction:
                                 'Ask the user: "What is the GitHub Project number for this repository? (Usually found in the URL: projects/<number>)"',
@@ -111,11 +120,9 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    // Apply payload optimization: summary_only or item_limit
                     const summaryOnly = input.summary_only || input.item_limit === 0
 
                     if (summaryOnly) {
-                        // Summary mode: return column names + counts only
                         const summaryColumns = board.columns.map((col) => ({
                             status: col.status,
                             statusOptionId: col.statusOptionId,
@@ -123,7 +130,6 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                             itemCount: col.items.length,
                         }))
 
-                        // Enhanced payload: ID-to-Title subset to avoid needing the full board to find an ID
                         const itemDirectory = board.columns.flatMap((col) =>
                             col.items.map((item) => ({
                                 id: item.id,
@@ -140,7 +146,6 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    // Apply per-column item_limit truncation
                     const itemLimit = input.item_limit
                     const truncatedColumns = board.columns.map((col) => {
                         if (col.items.length <= itemLimit) {
@@ -154,10 +159,7 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                         }
                     })
 
-                    return {
-                        ...board,
-                        columns: truncatedColumns,
-                    }
+                    return { ...board, columns: truncatedColumns }
                 } catch (err) {
                     return formatHandlerError(err)
                 }
@@ -202,7 +204,13 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                         })
                         .parse(params)
 
-                    const resolved = await resolveOwner(context, input.owner, input.repo)
+                    const resolved = await resolveOwner(
+                        context,
+                        input.owner,
+                        input.repo,
+                        undefined,
+                        input.project_number
+                    )
                     if ('error' in resolved) return resolved.response
 
                     const effectiveRepo = input.repo ?? resolved.repo
@@ -211,23 +219,13 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                         effectiveRepo,
                         input.project_number
                     )
-
-                    if (projectNum === undefined) {
-                        return {
-                            success: false,
-                            error: 'project_number is required and could not be resolved from registry. Please supply it explicitly.',
-                            code: 'VALIDATION_ERROR',
-                            category: 'validation',
-                            recoverable: true,
-                        }
-                    }
+                    if (projectNum === undefined) return MISSING_PROJECT_NUMBER_ERROR
 
                     const board = await resolved.github.getProjectKanban(
                         resolved.owner,
                         projectNum,
                         effectiveRepo
                     )
-
                     if (!board) {
                         return {
                             success: false,
@@ -239,11 +237,9 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    // Find target status option
                     const statusOption = board.statusOptions.find(
                         (opt) => opt.name.toLowerCase() === input.target_status.toLowerCase()
                     )
-
                     if (!statusOption) {
                         return {
                             success: false,
@@ -326,23 +322,13 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                         resolved.repo,
                         input.project_number
                     )
-
-                    if (projectNum === undefined) {
-                        return {
-                            success: false,
-                            error: 'project_number is required and could not be resolved from registry. Please supply it explicitly.',
-                            code: 'VALIDATION_ERROR',
-                            category: 'validation',
-                            recoverable: true,
-                        }
-                    }
+                    if (projectNum === undefined) return MISSING_PROJECT_NUMBER_ERROR
 
                     const issueDetails = await resolved.github.getIssue(
                         resolved.owner,
                         resolved.repo,
                         input.issue_number
                     )
-
                     if (!issueDetails?.nodeId) {
                         return {
                             success: false,
@@ -358,7 +344,6 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                         projectNum,
                         resolved.repo
                     )
-
                     if (!board) {
                         return {
                             success: false,
@@ -425,7 +410,13 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                         })
                         .parse(params)
 
-                    const resolved = await resolveOwner(context, input.owner, input.repo)
+                    const resolved = await resolveOwner(
+                        context,
+                        input.owner,
+                        input.repo,
+                        undefined,
+                        input.project_number
+                    )
                     if ('error' in resolved) return resolved.response
 
                     const effectiveRepo = input.repo ?? resolved.repo
@@ -434,23 +425,13 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                         effectiveRepo,
                         input.project_number
                     )
-
-                    if (projectNum === undefined) {
-                        return {
-                            success: false,
-                            error: 'project_number is required and could not be resolved from registry. Please supply it explicitly.',
-                            code: 'VALIDATION_ERROR',
-                            category: 'validation',
-                            recoverable: true,
-                        }
-                    }
+                    if (projectNum === undefined) return MISSING_PROJECT_NUMBER_ERROR
 
                     const board = await resolved.github.getProjectKanban(
                         resolved.owner,
                         projectNum,
                         effectiveRepo
                     )
-
                     if (!board) {
                         return {
                             success: false,
@@ -461,7 +442,6 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    // Delete project item from board
                     const result = await resolved.github.deleteProjectItem(
                         board.projectId,
                         input.item_id

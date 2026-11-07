@@ -204,13 +204,22 @@ function normalizeProjectFields(obj: Record<string, unknown>): boolean {
 
     const rawProjName = obj['project_name'] ?? obj['projectName']
     if (rawProjName !== undefined) {
-        if (!('project_number' in obj) || obj['project_number'] === undefined) {
-            const num = Number(rawProjName)
-            const strVal =
-                typeof rawProjName === 'string' || typeof rawProjName === 'number'
-                    ? String(rawProjName)
-                    : ''
-            if (!Number.isNaN(num) && strVal.trim() !== '') obj['project_number'] = num
+        const strVal =
+            typeof rawProjName === 'string' || typeof rawProjName === 'number'
+                ? String(rawProjName).trim()
+                : ''
+        const num = Number(strVal)
+        if (!Number.isNaN(num) && strVal !== '') {
+            if (!('project_number' in obj) || obj['project_number'] === undefined) {
+                obj['project_number'] = num
+            }
+        } else if (
+            strVal !== '' &&
+            (obj['workspace_id'] === undefined ||
+                obj['workspace_id'] === null ||
+                obj['workspace_id'] === 'default')
+        ) {
+            obj['workspace_id'] = strVal
         }
         delete obj['project_name']
         delete obj['projectName']

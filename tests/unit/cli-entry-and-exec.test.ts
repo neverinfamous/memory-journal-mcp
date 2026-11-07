@@ -201,6 +201,36 @@ describe('CLI Entry & Exec Commands', () => {
             expect(fetched?.content).toContain('# Updated Header')
             expect(fetched?.content).toContain('Updated content body')
             db.close()
+
+            // 4. Metadata-only update without --content/--file and workspace reassignment (H16 & M7)
+            stdoutOutput = []
+            await updateEntryAction(
+                {
+                    db: dbPath,
+                    id: created1.id,
+                    expectedVersion: 2,
+                    tag: 'metadata-only-tag',
+                    project: 9,
+                    workspace: 'mysql-mcp',
+                    json: true,
+                },
+                dummyCmd
+            )
+            const updatedMetaOnly = JSON.parse(stdoutOutput.join('')) as {
+                status: string
+                id: number
+                version: number
+            }
+            expect(updatedMetaOnly.status).toBe('success')
+            expect(updatedMetaOnly.version).toBe(3)
+
+            const dbAfterReassign = new DatabaseAdapter(dbPath)
+            await dbAfterReassign.initialize()
+            const reassigned = dbAfterReassign.getEntryById(created1.id, 'mysql-mcp')
+            expect(reassigned?.workspaceId).toBe('mysql-mcp')
+            expect(reassigned?.content).toContain('# Updated Header')
+            expect(reassigned?.tags).toContain('metadata-only-tag')
+            dbAfterReassign.close()
         })
 
         it('should handle validation and missing parameter errors in createEntryAction and updateEntryAction', async () => {
@@ -278,6 +308,14 @@ describe('CLI Entry & Exec Commands', () => {
             }
             expect(output.success).toBe(true)
             expect(output.result).toBe(42)
+
+            // Failing Code Mode script should exit(1) (H19)
+            const failScriptFile = path.join(tmpDir, 'fail-script.js')
+            fs.writeFileSync(failScriptFile, 'throw new Error("boom");', 'utf-8')
+            stdoutOutput = []
+            await expect(
+                execAction(failScriptFile, { db: dbPath, config: cfgFile }, dummyCmd)
+            ).rejects.toThrow('PROCESS_EXIT_1')
         }, 30_000)
     })
 
@@ -303,6 +341,22 @@ describe('CLI Entry & Exec Commands', () => {
             expect(stdoutOutput.join('')).toContain(
                 'Database initialization entry successfully created.'
             )
+
+            // 2b. Create project without --number skips unassigned DB init and supports --json (C5 & M10)
+            stdoutOutput = []
+            await projectCreateAction(
+                'proj-no-num',
+                { config: cfgFile, path: './no-num', db: dbPath, json: true },
+                dummyCmd
+            )
+            const createdNoNum = JSON.parse(stdoutOutput.join('')) as {
+                status: string
+                name: string
+                initialized: boolean
+            }
+            expect(createdNoNum.status).toBe('success')
+            expect(createdNoNum.name).toBe('proj-no-num')
+            expect(createdNoNum.initialized).toBe(false)
 
             // 3. Create project with --skip-init
             stdoutOutput = []

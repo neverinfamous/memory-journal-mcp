@@ -123,14 +123,17 @@ export class McpLogger {
         // Send via MCP protocol if server connected
         if (this.server) {
             try {
-                void this.server.sendLoggingMessage({
-                    level,
-                    logger: loggerName,
-                    data,
+                void Promise.resolve(
+                    this.server.sendLoggingMessage({
+                        level,
+                        logger: loggerName,
+                        data,
+                    })
+                ).catch(() => {
+                    // stderr fallback is written below
                 })
             } catch {
-                // Fallback to stderr if MCP send fails
-                console.error(this.formatForStderr(level, loggerName, data))
+                // stderr fallback is written below
             }
         }
 

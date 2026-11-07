@@ -64,11 +64,15 @@ export function getAnalyticsPromptDefinitions(): InternalPromptDef[] {
                 db: IDatabaseAdapter,
                 _teamDb?: IDatabaseAdapter,
                 _github?: unknown,
-                briefingConfig?: Partial<BriefingConfig>
+                briefingConfig?: Partial<BriefingConfig>,
+                runtime?: object | null
             ) => {
                 const digestSignal = buildDigestSignalForPrompt(
                     db,
-                    resourceWorkspace({ briefingConfig })
+                    resourceWorkspace({
+                        briefingConfig,
+                        ...(runtime !== undefined ? { runtime } : {}),
+                    })
                 )
 
                 return {
@@ -93,11 +97,15 @@ export function getAnalyticsPromptDefinitions(): InternalPromptDef[] {
                 db: IDatabaseAdapter,
                 _teamDb?: IDatabaseAdapter,
                 _github?: unknown,
-                briefingConfig?: Partial<BriefingConfig>
+                briefingConfig?: Partial<BriefingConfig>,
+                runtime?: object | null
             ) => {
                 const digestSignal = buildDigestSignalForPrompt(
                     db,
-                    resourceWorkspace({ briefingConfig })
+                    resourceWorkspace({
+                        briefingConfig,
+                        ...(runtime !== undefined ? { runtime } : {}),
+                    })
                 )
 
                 return {
@@ -122,11 +130,15 @@ export function getAnalyticsPromptDefinitions(): InternalPromptDef[] {
                 db: IDatabaseAdapter,
                 _teamDb?: IDatabaseAdapter,
                 _github?: unknown,
-                briefingConfig?: Partial<BriefingConfig>
+                briefingConfig?: Partial<BriefingConfig>,
+                runtime?: object | null
             ) => {
                 const digestSignal = buildDigestSignalForPrompt(
                     db,
-                    resourceWorkspace({ briefingConfig })
+                    resourceWorkspace({
+                        briefingConfig,
+                        ...(runtime !== undefined ? { runtime } : {}),
+                    })
                 )
 
                 return {
@@ -151,12 +163,16 @@ export function getAnalyticsPromptDefinitions(): InternalPromptDef[] {
                 db: IDatabaseAdapter,
                 _teamDb?: IDatabaseAdapter,
                 _github?: unknown,
-                briefingConfig?: Partial<BriefingConfig>
+                briefingConfig?: Partial<BriefingConfig>,
+                runtime?: object | null
             ) => {
                 const entries = db.getSignificantEntries(
                     20,
                     undefined,
-                    resourceWorkspace({ briefingConfig })
+                    resourceWorkspace({
+                        briefingConfig,
+                        ...(runtime !== undefined ? { runtime } : {}),
+                    })
                 )
 
                 const mappedEntries = entries.map((e) => ({

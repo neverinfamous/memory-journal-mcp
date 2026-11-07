@@ -51,7 +51,9 @@ export async function resolveOwner(
     context: ToolContext,
     inputOwner?: string,
     inputRepo?: string,
-    entityLabel?: string
+    entityLabel?: string,
+    inputProjectNumber?: number,
+    inputWorkspaceId?: string
 ): Promise<
     | {
           owner: string
@@ -67,12 +69,31 @@ export async function resolveOwner(
 
     let toolGithub: GitHubIntegration | undefined
     const registry = context.config?.projectRegistry ?? loadProjectRegistryFromConfig()
+    let matchedRegistryKey: string | undefined
+    if (!effectiveRepo && registry) {
+        if (
+            inputWorkspaceId !== undefined &&
+            inputWorkspaceId !== 'default' &&
+            inputWorkspaceId !== '*'
+        ) {
+            matchedRegistryKey =
+                findCanonicalRegistryKey(inputWorkspaceId, registry) ??
+                (Object.prototype.hasOwnProperty.call(registry, inputWorkspaceId)
+                    ? inputWorkspaceId
+                    : undefined)
+        } else if (inputProjectNumber !== undefined) {
+            const matched = Object.entries(registry).find(
+                ([, entry]) => entry.project_number === inputProjectNumber
+            )
+            if (matched) matchedRegistryKey = matched[0]
+        }
+    }
     const registryKey = effectiveRepo
         ? (findCanonicalRegistryKey(effectiveRepo, registry) ??
           (registry && Object.prototype.hasOwnProperty.call(registry, effectiveRepo)
               ? effectiveRepo
               : undefined))
-        : undefined
+        : matchedRegistryKey
     const registryEntry = registryKey && registry ? registry[registryKey] : undefined
 
     if (registryEntry?.path) {

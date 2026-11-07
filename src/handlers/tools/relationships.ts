@@ -170,6 +170,20 @@ const LinkEntriesOutputSchema = z
     })
     .extend(ErrorFieldsMixin.shape)
 
+const VisualizationNodeSchema = z.object({
+    id: z.union([z.number(), z.string()]),
+    label: z.string(),
+    group: z.string().optional(),
+    metadata: z.record(z.string(), z.unknown()).optional(),
+})
+
+const VisualizationEdgeSchema = z.object({
+    from: z.union([z.number(), z.string()]),
+    to: z.union([z.number(), z.string()]),
+    type: z.string(),
+    label: z.string().optional(),
+})
+
 const VisualizationOutputSchema = z
     .object({
         entry_count: z.number().optional(),
@@ -178,8 +192,8 @@ const VisualizationOutputSchema = z
         depth: z.number().optional(),
         mermaid: z.string().nullable().optional(),
         message: z.string().optional(),
-        nodes: z.array(z.any()).optional(),
-        edges: z.array(z.any()).optional(),
+        nodes: z.array(VisualizationNodeSchema).optional(),
+        edges: z.array(VisualizationEdgeSchema).optional(),
         legend: z
             .object({
                 blue: z.string(),
@@ -273,7 +287,7 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                     // Check for existing duplicate relationship (exact direction only).
                     // Reverse direction (B→A when A→B exists) is intentionally allowed
                     // so agents can model bidirectional relationships explicitly.
-                    const existingRelationships = db.getRelationships(input.from_entry_id)
+                    const existingRelationships = db.getRelationships(input.from_entry_id, wsId)
                     const existing = existingRelationships.find(
                         (r) =>
                             r.fromEntryId === input.from_entry_id &&
@@ -345,9 +359,19 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     const input = VisualizeInputSchema.parse(VisualizeInputSchemaMcp.parse(params))
-                    const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
+                    let wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
                     if (input.entry_id !== undefined) {
-                        const entry = db.getEntryById(input.entry_id, wsId)
+                        let entry = db.getEntryById(input.entry_id, wsId)
+                        if (
+                            !entry &&
+                            input.workspace_id === undefined &&
+                            input.project_number === undefined
+                        ) {
+                            entry = db.getEntryById(input.entry_id, '*')
+                            if (entry?.workspaceId !== undefined) {
+                                wsId = entry.workspaceId
+                            }
+                        }
                         if (!entry || entry.deletedAt) {
                             return {
                                 ...formatHandlerError(

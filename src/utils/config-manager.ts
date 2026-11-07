@@ -142,6 +142,7 @@ export class ConfigManager extends EventEmitter {
                             logger.error('Failed to reload config file', { module: 'ConfigManager', error: err instanceof Error ? err.message : String(err) })
                         }
                     }, CONFIG_RELOAD_DEBOUNCE_MS)
+                    this.debounceTimer.unref()
                 }
             })
             this.watcher.on('error', (err: unknown) => {

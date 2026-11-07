@@ -156,14 +156,25 @@ export const TeamLinkEntriesOutputSchema = z
     })
     .extend(ErrorFieldsMixin.shape)
 
+const TeamVisualizeNodeSchema = z.object({
+    id: z.union([z.number(), z.string()]),
+    label: z.string(),
+})
+
+const TeamVisualizeEdgeSchema = z.object({
+    from: z.union([z.number(), z.string()]),
+    to: z.union([z.number(), z.string()]),
+    type: z.string(),
+})
+
 export const TeamVisualizeOutputSchema = z
     .object({
         success: z.boolean().optional(),
         mermaid: z.string().optional(),
         nodeCount: z.number().optional(),
         edgeCount: z.number().optional(),
-        nodes: z.array(z.any()).optional(),
-        edges: z.array(z.any()).optional(),
+        nodes: z.array(TeamVisualizeNodeSchema).optional(),
+        edges: z.array(TeamVisualizeEdgeSchema).optional(),
         error: z.string().optional(),
     })
     .extend(ErrorFieldsMixin.shape)

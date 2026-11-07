@@ -163,11 +163,15 @@ If doing deps/changelog: Audit updates and backfill SHA provenance.`,
                 db: IDatabaseAdapter,
                 _teamDb?: IDatabaseAdapter,
                 _github?: unknown,
-                briefingConfig?: Partial<BriefingConfig>
+                briefingConfig?: Partial<BriefingConfig>,
+                runtime?: object | null
             ) => {
                 const entries = db.getWorkflowActionEntries(
                     20,
-                    resourceWorkspace({ briefingConfig })
+                    resourceWorkspace({
+                        briefingConfig,
+                        ...(runtime !== undefined ? { runtime } : {}),
+                    })
                 )
 
                 return {

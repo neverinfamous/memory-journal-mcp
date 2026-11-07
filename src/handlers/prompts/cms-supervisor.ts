@@ -166,6 +166,7 @@ ${markUntrustedContent(deletedSnippet)}
 ### Phase D — Telemetry Cleanup & Supervisor Journal Entry
 1. If \`logs/agent-issues.jsonl\` contained issues that were resolved and validated in Phase C, clear \`logs/agent-issues.jsonl\`.
 2. Log the completed supervisor run in \`memory-journal-mcp\` (project #5) using \`mj.core.createEntry\` with:
+   - \`workspace_id: 'memory-journal-mcp'\`, \`project_number: 5\`
    - \`entry_type: 'maintenance'\`
    - \`significance_type: 'milestone'\`
    - \`tags: ['cms', 'cms-04-rem-supervisor', 'meta-learning', 'maintenance']\`

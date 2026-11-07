@@ -77,16 +77,26 @@ export async function projectCreateAction(name: string, options: Record<string, 
 
     saveConfig(config, options)
 
-    process.stdout.write(`Project '${name}' successfully registered at ${absPath}.\n`)
+    const isJson = options['json'] === true
+    if (!isJson) {
+        process.stdout.write(`Project '${name}' successfully registered at ${absPath}.\n`)
+    }
 
     if (options['skipInit'] === true) {
-        process.stdout.write(`\nSkipping automated database initialization (--skip-init).\n`)
+        if (isJson) {
+            process.stdout.write(
+                JSON.stringify({ status: 'success', name, path: absPath, initialized: false }) +
+                    '\n'
+            )
+        } else {
+            process.stdout.write(`\nSkipping automated database initialization (--skip-init).\n`)
+        }
         return
     }
 
     // Reuse the already-validated project number (NaN was rejected above)
     const projNum = registry[name].project_number
-    
+
     // Perform database initialization natively
     let resolver: ConfigResolver
     const cliConfigPath = (options['config'] as string | undefined) ?? process.env['MEMORY_JOURNAL_CONFIG']
@@ -104,25 +114,54 @@ export async function projectCreateAction(name: string, options: Record<string, 
     }
 
     const { serverOptions } = buildServerOptions(resolver, options, command, [])
-    
+    const effectiveProjNum = projNum ?? serverOptions.defaultProjectNumber
+
+    if (effectiveProjNum === undefined) {
+        if (isJson) {
+            process.stdout.write(
+                JSON.stringify({ status: 'success', name, path: absPath, initialized: false }) +
+                    '\n'
+            )
+        } else {
+            process.stdout.write(
+                `\nSkipping automated database initialization because no project number was specified (use --number <n> to create an initialization entry).\n`
+            )
+        }
+        return
+    }
+
     try {
         const db = await DatabaseAdapterFactory.create(serverOptions.dbPath, serverOptions)
         await db.initialize()
-        
-        db.createEntry({
+
+        const created = db.createEntry({
             entryType: 'project_decision',
             significanceType: 'architecture',
             content: `Initialized project ${name}`,
             tags: ['project-initialization', 'setup'],
             workspaceId: name,
-            ...(projNum !== undefined ? { projectNumber: projNum } : {}),
+            projectNumber: effectiveProjNum,
             trustScore: 1.0,
             impactScore: 0.5,
-            validationStatus: 'passed'
+            validationStatus: 'passed',
         })
-        
+
+        db.flushSave()
         db.close()
-        process.stdout.write(`Database initialization entry successfully created.\n`)
+        if (isJson) {
+            process.stdout.write(
+                JSON.stringify({
+                    status: 'success',
+                    name,
+                    path: absPath,
+                    project_number: effectiveProjNum,
+                    initialized: true,
+                    entry_id: created.id,
+                }) + '\n'
+            )
+        } else {
+            process.stdout.write(`Database initialization entry successfully created.\n`)
+        }
     } catch (e) {
         process.stderr.write(`\nFailed to automatically initialize database entry: ${e instanceof Error ? e.message : String(e)}\n`)
         process.stderr.write(`You may need to run 'memory-journal-mcp entry create' manually.\n`)

@@ -4,8 +4,23 @@ import * as fs from 'node:fs'
 import * as os from 'node:os'
 
 function getDatabasePath(): string {
-    if (process.env['MEMORY_JOURNAL_DB_PATH']) {
-        return path.resolve(process.env['MEMORY_JOURNAL_DB_PATH'])
+    const envDbPath = process.env['MEMORY_JOURNAL_DB_PATH'] || process.env['DB_PATH']
+    if (envDbPath) {
+        return path.resolve(envDbPath)
+    }
+    try {
+        const cfgPath =
+            process.env['MEMORY_JOURNAL_CONFIG'] ||
+            path.resolve(os.homedir(), '.gemini', 'config', 'memory-journal.config.json')
+        if (fs.existsSync(cfgPath)) {
+            const parsed = JSON.parse(fs.readFileSync(cfgPath, 'utf-8')) as { dbPath?: string }
+            if (typeof parsed.dbPath === 'string' && parsed.dbPath.trim() !== '') {
+                const resolvedCfgDb = path.resolve(parsed.dbPath)
+                if (fs.existsSync(resolvedCfgDb)) return resolvedCfgDb
+            }
+        }
+    } catch {
+        // Ignore config read errors and fall through to standard paths
     }
     const defaultProdPath = path.resolve(process.cwd(), 'data', 'mj-production.db')
     if (fs.existsSync(defaultProdPath)) {
@@ -74,6 +89,7 @@ function checkUnassignedEntries(): void {
             FROM memory_journal 
             WHERE workspace_id = 'default' 
                OR workspace_id IS NULL 
+               OR TRIM(workspace_id) = '' 
                OR project_number = 0 
                OR project_number IS NULL
         `).all() as Array<{

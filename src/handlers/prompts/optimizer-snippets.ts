@@ -93,7 +93,7 @@ export function buildStatsSnippet(db: IDatabaseAdapter): string {
         const causalMetricsText = formatRelationshipTypes(stats)
         const entryTypesText = formatTopEntryTypes(stats)
 
-        const allTags = typeof db.listTags === 'function' ? db.listTags() : []
+        const allTags = typeof db.listTags === 'function' ? db.listTags('*') : []
         const totalTags = allTags.length
 
         statsSnippet = `**Global Database Health & Relationship Graph Metrics:**

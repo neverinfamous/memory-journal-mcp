@@ -12,9 +12,11 @@ import * as p from '@clack/prompts'
 import * as yaml from 'yaml'
 import type { BaseEntryOptionsSchema, createEntryOptionsSchema } from '../schemas.js'
 import {
-    normalizeValidationStatus,
     relationshipsFromMetadata,
     resolveAutoContext,
+    resolveEntryTypeAndTags,
+    resolveExplicitProjectAndWorkspace,
+    resolveScoresAndValidation,
 } from './entry-payload-helpers.js'
 
 /** How long to wait for piped stdin before failing a non-interactive create. */
@@ -209,52 +211,57 @@ export function parseRelationships(
         try {
             str = readFileSync(relFileStr, 'utf-8')
         } catch (e) {
-            process.stderr.write(
-                `Warning: Failed to read --rel-file: ${e instanceof Error ? e.message : String(e)}\n`
+            throw new Error(
+                `Failed to read --rel-file: ${e instanceof Error ? e.message : String(e)}`,
+                { cause: e }
             )
         }
     }
 
     if (typeof str !== 'string') return []
+    let parsed: unknown
     try {
-        const parsed: unknown = JSON.parse(str)
-        if (Array.isArray(parsed)) {
-            return parsed
-                .map((r: unknown) => {
-                    if (typeof r !== 'object' || r === null) return null
-                    const rec = z.record(z.string(), z.unknown()).parse(r)
-                    return {
-                        target_id: Number(rec['target_id']),
-                        relation_type: String(rec['relation_type']),
-                    }
-                })
-                .filter(
-                    (r): r is { target_id: number; relation_type: string } =>
-                        r !== null && !isNaN(r.target_id) && Boolean(r.relation_type)
-                )
-        }
+        parsed = JSON.parse(str)
     } catch (e) {
-        process.stderr.write(
-            `Warning: Failed to parse relationships JSON: ${e instanceof Error ? e.message : String(e)}\n`
+        throw new Error(
+            `Failed to parse relationships JSON: ${e instanceof Error ? e.message : String(e)}`,
+            { cause: e }
         )
     }
-    return []
+    if (!Array.isArray(parsed)) {
+        throw new Error('Failed to parse relationships JSON: expected a JSON array')
+    }
+    return parsed
+        .map((r: unknown) => {
+            if (typeof r !== 'object' || r === null) return null
+            const rec = z.record(z.string(), z.unknown()).parse(r)
+            return {
+                target_id: Number(rec['target_id']),
+                relation_type: String(rec['relation_type']),
+            }
+        })
+        .filter(
+            (r): r is { target_id: number; relation_type: string } =>
+                r !== null && !isNaN(r.target_id) && Boolean(r.relation_type)
+        )
 }
 
 export function parseMetadata(metadataFile: unknown): Record<string, unknown> {
     if (typeof metadataFile !== 'string') return {}
+    let parsed: unknown
     try {
         const str = readFileSync(metadataFile, 'utf-8')
-        const parsed: unknown = JSON.parse(str)
-        if (typeof parsed === 'object' && parsed !== null) {
-            return z.record(z.string(), z.unknown()).parse(parsed)
-        }
+        parsed = JSON.parse(str)
     } catch (e) {
-        process.stderr.write(
-            `Warning: Failed to parse --metadata JSON: ${e instanceof Error ? e.message : String(e)}\n`
+        throw new Error(
+            `Failed to parse --metadata JSON: ${e instanceof Error ? e.message : String(e)}`,
+            { cause: e }
         )
     }
-    return {}
+    if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+        return z.record(z.string(), z.unknown()).parse(parsed)
+    }
+    throw new Error('Failed to parse --metadata JSON: expected a JSON object')
 }
 
 export function buildEntryPayload(
@@ -263,46 +270,15 @@ export function buildEntryPayload(
     config?: ToolHandlerConfig,
     content?: string
 ): EntryPayload {
-    const entryTypeStr =
-        options.type ??
-        options.category ??
-        metadata['type'] ??
-        metadata['entry_type'] ??
-        metadata['entryType']
-    const entryType = entryTypeStr as EntryType | undefined
-
-    const tagsStr = options.tags
-    let tags: string[] | undefined
-    if (tagsStr !== undefined) {
-        tags = tagsStr
-            .split(/[,\s]+/)
-            .map((t) => t.trim())
-            .filter(Boolean)
-    } else if (metadata['tags'] !== undefined && metadata['tags'] !== null) {
-        tags = Array.isArray(metadata['tags']) ? metadata['tags'].map(String) : undefined
-    }
-
-    const projectRaw =
-        options.project ??
-        options.projectNumber ??
-        options.project_number ??
-        metadata['project'] ??
-        metadata['projectNumber'] ??
-        metadata['project_number']
-    const parsedProjectNum = projectRaw !== undefined ? Number(projectRaw) : undefined
-    const explicitProjectNum =
-        parsedProjectNum !== undefined && !isNaN(parsedProjectNum) ? parsedProjectNum : undefined
-
-    const optsRec = z.record(z.string(), z.unknown()).parse(options)
-    const explicitWorkspaceId =
-        optsRec['workspaceId'] ??
-        optsRec['workspace_id'] ??
-        metadata['workspaceId'] ??
-        metadata['workspace_id']
+    const { entryType, tags } = resolveEntryTypeAndTags(options, metadata)
+    const { explicitProjectNum, explicitWorkspaceId } = resolveExplicitProjectAndWorkspace(
+        options,
+        metadata
+    )
 
     const resolved = resolveProjectContext(
         {
-            workspace_id: explicitWorkspaceId as string | undefined,
+            workspace_id: explicitWorkspaceId,
             project_number: explicitProjectNum,
             content: content ?? options.content,
             tags,
@@ -312,36 +288,10 @@ export function buildEntryPayload(
     const projectNumber = explicitProjectNum ?? resolved.projectNumber
     const workspaceId = resolved.workspaceId
 
-    const trustRaw =
-        options.trustScore ??
-        options.trust_score ??
-        options.confidence ??
-        metadata['trust'] ??
-        metadata['trustScore'] ??
-        metadata['trust_score'] ??
-        metadata['confidence']
-    const trustScore = trustRaw !== undefined ? Number(trustRaw) : undefined
-
-    const impactRaw =
-        options.impactScore ??
-        options.impact_score ??
-        metadata['impact'] ??
-        metadata['impactScore'] ??
-        metadata['impact_score']
-    const impactScore = impactRaw !== undefined ? Number(impactRaw) : undefined
-
-    const valStatusRaw =
-        options.validationStatus ??
-        options.validation_status ??
-        options.validation ??
-        metadata['validation_status'] ??
-        metadata['validationStatus'] ??
-        metadata['validation']
-    const validationStatus = normalizeValidationStatus(valStatusRaw)
-
-    const sessionIdRaw =
-        options.sessionId ?? options.session_id ?? metadata['session_id'] ?? metadata['sessionId']
-    const sessionId = sessionIdRaw as string | undefined
+    const { trustScore, impactScore, validationStatus, sessionId } = resolveScoresAndValidation(
+        options,
+        metadata
+    )
 
     const autoContextStr = resolveAutoContext(
         options.autoContext,

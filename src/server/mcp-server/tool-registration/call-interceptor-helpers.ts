@@ -6,6 +6,10 @@ import {
 } from '../../../handlers/tools/core/dummy-healing.js'
 import { logAgentIssue } from '../../../utils/issue-logger.js'
 import { logger } from '../../../utils/logger.js'
+import {
+    findCanonicalRegistryKey,
+    loadProjectRegistryFromConfig,
+} from '../../../utils/workspace-resolver.js'
 import type { ServerOptions } from '../types.js'
 
 /**
@@ -64,15 +68,27 @@ export function normalizeAndAliasToolCall(
     if (typeof toolArgs['project_number'] === 'string') {
         const strVal = toolArgs['project_number']
         const parsed = Number(strVal)
-        if (!Number.isNaN(parsed)) {
+        if (!Number.isNaN(parsed) && strVal.trim() !== '') {
             toolArgs['project_number'] = parsed
-        } else if (options.projectRegistry !== undefined) {
-            let entry = options.projectRegistry[strVal]
-            if (entry === undefined && strVal.includes('/')) {
-                const repoName = strVal.split('/').pop()
-                if (repoName !== undefined && repoName !== '') entry = options.projectRegistry[repoName]
+        } else {
+            const registry = options.projectRegistry ?? loadProjectRegistryFromConfig()
+            if (registry !== undefined) {
+                const candidate = strVal.includes('/')
+                    ? (strVal.split('/').pop() ?? strVal)
+                    : strVal
+                const canonicalKey = findCanonicalRegistryKey(candidate, registry) ?? candidate
+                const entry = registry[canonicalKey] ?? registry[strVal]
+                if (entry?.project_number !== undefined) {
+                    toolArgs['project_number'] = entry.project_number
+                }
+                if (
+                    toolArgs['workspace_id'] === undefined ||
+                    toolArgs['workspace_id'] === 'default'
+                ) {
+                    toolArgs['workspace_id'] =
+                        entry !== undefined ? canonicalKey : candidate.trim()
+                }
             }
-            if (entry?.project_number !== undefined) toolArgs['project_number'] = entry.project_number
         }
     }
 

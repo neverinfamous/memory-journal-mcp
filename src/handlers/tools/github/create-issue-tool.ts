@@ -5,7 +5,11 @@
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
-import { resolveProjectContext } from '../../../utils/workspace-resolver.js'
+import {
+    findCanonicalRegistryKey,
+    loadProjectRegistryFromConfig,
+    resolveProjectContext,
+} from '../../../utils/workspace-resolver.js'
 import { relaxedNumber } from '../schemas.js'
 import { CreateGitHubIssueWithEntryOutputSchema } from './schemas.js'
 import { resolveOwnerRepo, resolveProjectNumber } from './helpers.js'
@@ -98,11 +102,14 @@ export function getCreateGitHubIssueTool(context: ToolContext): ToolDefinition {
                             ? `\nDescription: ${input.body.slice(0, 200)}${input.body.length > 200 ? '...' : ''}`
                             : '')
 
+                const registry =
+                    context.config?.projectRegistry ?? loadProjectRegistryFromConfig()
+                const canonicalRepo = resolved.repo
+                    ? (findCanonicalRegistryKey(resolved.repo, registry) ?? resolved.repo)
+                    : undefined
                 const resolvedCtx = resolveProjectContext(
                     {
-                        workspace_id:
-                            input.workspace_id ??
-                            (input.repo !== undefined ? resolved.repo : undefined),
+                        workspace_id: input.workspace_id ?? canonicalRepo,
                         project_number: entryProjectNumber,
                         content: entryContent,
                         tags: input.tags,
@@ -110,8 +117,8 @@ export function getCreateGitHubIssueTool(context: ToolContext): ToolDefinition {
                     context.config
                 )
                 const workspaceId =
-                    resolvedCtx.workspaceId === 'default' && resolved.repo
-                        ? resolved.repo
+                    resolvedCtx.workspaceId === 'default' && canonicalRepo
+                        ? canonicalRepo
                         : resolvedCtx.workspaceId
                 const projectNumber = resolvedCtx.projectNumber ?? entryProjectNumber
 

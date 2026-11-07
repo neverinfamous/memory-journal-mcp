@@ -2,7 +2,7 @@
 
 import type { Command } from 'commander'
 import type { z } from 'zod'
-import { createProgram, addAgentInstructions, withGroup, withValidation } from './program.js'
+import { createProgram, addAgentInstructions, withGroup, withValidation, normalizeCliArgv } from './program.js'
 import { 
     addServerOptions, addCoreOptions, addDatabaseOptions, 
     addCodeModeOptions, addAuditOptions, addPruningOptions,
@@ -52,11 +52,12 @@ const projectCmd = program
     .command('project')
     .description('Manage projects in the memory-journal-mcp global registry')
 
-projectCmd
+const projectListCmd = projectCmd
     .command('list')
     .description('List all registered projects')
     .option('--json', 'Output as JSON')
-    .action(projectListAction)
+addCoreOptions(projectListCmd)
+projectListCmd.action(projectListAction)
 
 const projectCreateCmd = projectCmd
     .command('create <name>')
@@ -87,12 +88,14 @@ withGroup(projectUpdateCmd, 'Command Options', (cmd: Command) => {
         .option('--number <number>', 'New GitHub Project number')
         .option('--rename <name>', 'Rename the project key')
 })
+addCoreOptions(projectUpdateCmd)
 projectUpdateCmd.action(projectUpdateAction)
 
 const projectDeleteCmd = projectCmd
     .command('delete <name>')
     .alias('remove')
     .description('Remove a project from the global registry')
+addCoreOptions(projectDeleteCmd)
 projectDeleteCmd.action(projectDeleteAction)
 
 // Setup 'exec' command
@@ -484,11 +487,4 @@ sessionCmd.action(withValidation(searchSchema, async (args: string[], options: R
     await searchAction(query, options, command);
 }))
 
-// Auto-heal snake_case flags hallucinatory arguments to kebab-case
-const args = process.argv.map(arg => {
-    if (arg.startsWith('--') && arg.includes('_')) {
-        return arg.replace(/_/g, '-');
-    }
-    return arg;
-});
-program.parse(args)
+program.parse(normalizeCliArgv(process.argv))

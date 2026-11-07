@@ -66,9 +66,13 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                     // Validate all entries and resolve project context first
                     const resolvedEntries = []
                     for (const e of input.entries) {
+                        const rawEntryWs =
+                            e.workspace_id !== undefined && e.workspace_id !== 'default'
+                                ? e.workspace_id
+                                : undefined
                         const resolved = resolveProjectContext(
                             {
-                                workspace_id: e.workspace_id ?? input.workspace_id,
+                                workspace_id: rawEntryWs ?? input.workspace_id,
                                 project_number: e.project_number ?? input.project_number,
                                 content: e.content,
                                 tags: e.tags,
@@ -78,9 +82,7 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                         const projectNumber =
                             e.project_number ??
                             input.project_number ??
-                            (resolved.workspaceId !== 'default'
-                                ? resolved.projectNumber
-                                : undefined)
+                            resolved.projectNumber
                         if (projectNumber === undefined || projectNumber === null) {
                             return {
                                 success: false,

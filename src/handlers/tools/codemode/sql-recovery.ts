@@ -48,17 +48,26 @@ export function extractAndRecoverSqlCode(code: string): string | null {
 
     const isCount = /\bCOUNT\s*\(/i.test(cleanSql)
 
+    const projectMatch = /\b(?:WHERE|AND)\s+[`"']?(?:project_number|project_id)[`"']?\s*=\s*(\d+)/i.exec(cleanSql)
+    const projectVal = projectMatch?.[1] !== undefined ? parseInt(projectMatch[1], 10) : undefined
+    const wsMatch = /\b(?:WHERE|AND)\s+[`"']?workspace_id[`"']?\s*=\s*['"]([^'"]+)['"]/i.exec(cleanSql)
+    const wsVal = wsMatch?.[1]
+    const scopeFields: Record<string, unknown> = {
+        ...(projectVal !== undefined ? { project_number: projectVal } : {}),
+        ...(wsVal !== undefined && wsVal !== '' ? { workspace_id: wsVal } : {}),
+    }
+
     if (tableName === 'tags' || tableName === 'entry_tags' || tableName === 'journal_tags') {
-        return `return await mj.core.listTags({});`
+        return `return await mj.core.listTags(${JSON.stringify(scopeFields)});`
     }
     if (tableName === 'projects' || tableName === 'project_registry') {
         return `return await mj.admin.listProjects({});`
     }
     if (tableName === 'relationships' || tableName === 'entry_relationships' || tableName === 'links') {
         if (idVal !== undefined) {
-            return `return await mj.relationships.visualizeRelationships({ entry_id: ${idVal} });`
+            return `return await mj.relationships.visualizeRelationships(${JSON.stringify({ entry_id: idVal, ...scopeFields })});`
         }
-        return `return await mj.relationships.visualizeRelationships({});`
+        return `return await mj.relationships.visualizeRelationships(${JSON.stringify(scopeFields)});`
     }
     if (tableName === 'team_members' || tableName === 'members') {
         return `return await mj.team.teamListMembers({});`
@@ -72,26 +81,23 @@ export function extractAndRecoverSqlCode(code: string): string | null {
 
     if (/^SELECT\b/i.test(cleanSql)) {
         if (isCount) {
-            return `return await mj.analytics.getStatistics({});`
+            return `return await mj.analytics.getStatistics(${JSON.stringify(scopeFields)});`
         }
         if (idVal !== undefined) {
-            return `return await mj.core.getEntryById({ entry_id: ${idVal} });`
+            return `return await mj.core.getEntryById(${JSON.stringify({ entry_id: idVal, ...scopeFields })});`
         }
         if (searchQuery !== undefined && searchQuery !== '') {
-            const searchParams: Record<string, unknown> = { query: searchQuery }
+            const searchParams: Record<string, unknown> = { query: searchQuery, ...scopeFields }
             if (limitVal !== undefined) searchParams['limit'] = limitVal
             return `return await mj.search.searchEntries(${JSON.stringify(searchParams)});`
         }
-        const projectMatch = /\bWHERE\s+[`"']?(?:project_number|project_id)[`"']?\s*=\s*(\d+)/i.exec(cleanSql)
-        const projectVal = projectMatch?.[1] !== undefined ? parseInt(projectMatch[1], 10) : undefined
-
-        const typeMatch = /\bWHERE\s+[`"']?(?:type|entry_type)[`"']?\s*=\s*['"]([^'"]+)['"]/i.exec(cleanSql)
+        const typeMatch = /\b(?:WHERE|AND)\s+[`"']?(?:type|entry_type)[`"']?\s*=\s*['"]([^'"]+)['"]/i.exec(cleanSql)
         const typeVal = typeMatch?.[1]
 
         const params: Record<string, unknown> = {
             limit: limitVal ?? 10,
+            ...scopeFields,
         }
-        if (projectVal !== undefined) params['project_number'] = projectVal
         if (typeVal !== undefined) params['entry_type'] = typeVal
 
         return `return await mj.core.getRecentEntries(${JSON.stringify(params)});`
@@ -100,7 +106,7 @@ export function extractAndRecoverSqlCode(code: string): string | null {
     if (/^INSERT\s+INTO\b/i.test(cleanSql)) {
         const rec = extractAndRecoverEntryCode(cleanSql)
         if (rec !== null) return rec
-        return `return await mj.createEntry({ content: ${JSON.stringify(cleanSql)} });`
+        return `return await mj.createEntry(${JSON.stringify({ content: cleanSql, ...scopeFields })});`
     }
 
     if (/^UPDATE\b/i.test(cleanSql)) {
@@ -365,6 +371,10 @@ function recoverPreparedInsert(parsedArgs: unknown[]): string {
             if (typeof arg['content'] === 'string') payload['content'] = arg['content']
             if (typeof arg['title'] === 'string') payload['title'] = arg['title']
             if (Array.isArray(arg['tags'])) payload['tags'] = arg['tags'].map(String)
+            const projNum = arg['project_number'] ?? arg['projectNumber']
+            if (typeof projNum === 'number') payload['project_number'] = projNum
+            const wsId = arg['workspace_id'] ?? arg['workspaceId']
+            if (typeof wsId === 'string' && wsId.trim() !== '') payload['workspace_id'] = wsId
         }
     }
     if (typeof payload['title'] !== 'string') payload['title'] = 'Journal Entry'

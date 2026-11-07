@@ -47,7 +47,8 @@ export interface InternalPromptDef {
         db: IDatabaseAdapter,
         teamDb?: IDatabaseAdapter,
         github?: GitHubIntegration,
-        briefingConfig?: BriefingConfig
+        briefingConfig?: BriefingConfig,
+        runtime?: object | null
     ) => { messages: PromptMessage[] } | Promise<{ messages: PromptMessage[] }>
 }
 
@@ -72,7 +73,8 @@ export function getPrompt(
     db: IDatabaseAdapter,
     teamDb?: IDatabaseAdapter,
     github?: GitHubIntegration,
-    briefingConfig?: BriefingConfig
+    briefingConfig?: BriefingConfig,
+    runtime?: object | null
 ): Promise<{ messages: PromptMessage[] }> {
     const prompts = getAllPromptDefinitions()
     const prompt = prompts.find((p) => p.name === name)
@@ -82,7 +84,7 @@ export function getPrompt(
     }
 
     return Promise.resolve().then(() =>
-        prompt.handler(args, db, teamDb, github, briefingConfig)
+        prompt.handler(args, db, teamDb, github, briefingConfig, runtime)
     )
 }
 

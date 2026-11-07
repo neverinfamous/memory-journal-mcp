@@ -7,6 +7,7 @@
  */
 
 import type { IDatabaseAdapter } from '../database/core/interfaces.js'
+import type { ToolHandlerConfig } from '../types/index.js'
 import type { VectorSearchManager } from '../vector/vector-search-manager/index.js'
 import { logger } from '../utils/logger.js'
 import { parseDigestSnapshot, type DigestSnapshot } from '../database/sqlite-adapter/entries/digest.js'
@@ -48,6 +49,10 @@ export interface SchedulerOptions {
     pruneExcludeTags?: string[]
     /** Workspace used by digest and report jobs. Omitted means `default`. */
     defaultWorkspaceId?: string
+    /** Default project number used to resolve workspace when `defaultWorkspaceId` is unset. */
+    defaultProjectNumber?: number
+    /** Project registry used to resolve workspace when `defaultWorkspaceId` is unset. */
+    projectRegistry?: ToolHandlerConfig['projectRegistry']
 }
 
 /** Status of a single scheduled job */
@@ -394,9 +399,28 @@ export class Scheduler {
     // Private — Prune job
     // ========================================================================
 
-    /**
-     * Prune job: auto-prune low-importance old entries.
-     */
+    private resolveDefaultWorkspace(): string {
+        const { defaultWorkspaceId, defaultProjectNumber, projectRegistry } = this.options
+        return resolveWorkspaceId(defaultWorkspaceId, defaultProjectNumber, {
+            ...(defaultWorkspaceId !== undefined ? { defaultWorkspaceId } : {}),
+            ...(defaultProjectNumber !== undefined ? { defaultProjectNumber } : {}),
+            ...(projectRegistry !== undefined ? { projectRegistry } : {}),
+            ...(this.runtime !== undefined ? { runtime: this.runtime } : {}),
+        })
+    }
+
+    /** Update workspace resolution context after a hot-reloaded configuration change. */
+    updateWorkspaceContext(updates: {
+        defaultWorkspaceId?: string
+        defaultProjectNumber?: number
+        projectRegistry?: ToolHandlerConfig['projectRegistry']
+    }): void {
+        if (updates.defaultWorkspaceId !== undefined) this.options.defaultWorkspaceId = updates.defaultWorkspaceId
+        if (updates.defaultProjectNumber !== undefined) this.options.defaultProjectNumber = updates.defaultProjectNumber
+        if (updates.projectRegistry !== undefined) this.options.projectRegistry = updates.projectRegistry
+    }
+
+    /** Prune job: auto-prune low-importance old entries. */
     private async runPrune(): Promise<void> {
         const pruneResult = await runAutoPrune(this.db, {
             archiveOlderThanDays: this.options.archiveOlderThanDays ?? 0,
@@ -405,7 +429,7 @@ export class Scheduler {
             importanceThreshold: this.options.pruneImportanceThreshold ?? 0.15,
             dryRun: this.options.pruneDryRun,
             excludeTags: this.options.pruneExcludeTags,
-            workspaceId: this.options.defaultWorkspaceId,
+            workspaceId: this.resolveDefaultWorkspace(),
         })
         logger.info('Scheduled auto-prune completed', {
             module: 'Scheduler',
@@ -416,15 +440,9 @@ export class Scheduler {
         })
     }
 
-    // ========================================================================
-    // Private — Digest job
-    // ========================================================================
-
-    /**
-     * Digest job: compute analytics snapshot and persist to database.
-     */
+    /** Digest job: compute analytics snapshot and persist to database. */
     private runDigest(): void {
-        const wsId = resolveWorkspaceId(this.options.defaultWorkspaceId, undefined)
+        const wsId = this.resolveDefaultWorkspace()
         const snapshot = this.db.computeDigest(wsId)
         this.db.saveAnalyticsSnapshot('digest', snapshot, wsId)
         logger.info('Scheduled analytics digest computed', {
@@ -438,50 +456,29 @@ export class Scheduler {
         })
     }
 
-    // ========================================================================
-    // Private — Report job
-    // ========================================================================
-
-    /**
-     * Report job: compute analytics snapshot, persist, and deliver via webhook.
-     */
+    /** Report job: compute analytics snapshot, persist, and deliver via webhook. */
     private async runReport(): Promise<void> {
-        const wsId = resolveWorkspaceId(this.options.defaultWorkspaceId, undefined)
+        const wsId = this.resolveDefaultWorkspace()
         const snapshot = this.db.computeDigest(wsId)
         this.db.saveAnalyticsSnapshot('report', snapshot, wsId)
         logger.info('Scheduled analytics report computed', {
             module: 'Scheduler',
             operation: 'report',
-            context: {
-                currentPeriodEntries: snapshot.currentPeriodEntries,
-            },
+            context: { currentPeriodEntries: snapshot.currentPeriodEntries },
         })
 
         if (this.options.reportDeliveryOptions?.webhookUrl) {
             const report = formatDigestReport(snapshot, VERSION)
-            const delivered = await deliverReport(
-                report,
-                snapshot,
-                this.options.reportDeliveryOptions
-            )
-            if (!delivered) {
-                throw new Error('Scheduled analytics report delivery failed')
-            }
+            const delivered = await deliverReport(report, snapshot, this.options.reportDeliveryOptions)
+            if (!delivered) throw new Error('Scheduled analytics report delivery failed')
         }
     }
 
-    // ========================================================================
-    // Public — Digest accessor
-    // ========================================================================
-
-    /**
-     * Get the latest digest snapshot from the database.
-     * Returns null if no digest has been computed yet.
-     */
+    /** Get the latest digest snapshot from the database, or null if none exists. */
     getLatestDigest(workspaceId?: string): DigestSnapshot | null {
         const snapshot = this.db.getLatestAnalyticsSnapshot(
             'digest',
-            workspaceId ?? this.options.defaultWorkspaceId
+            workspaceId ?? this.resolveDefaultWorkspace()
         )
         if (!snapshot) return null
         return parseDigestSnapshot(snapshot.data)

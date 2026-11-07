@@ -101,19 +101,26 @@ export class TagsManager {
     }
 
     listTags(workspaceId?: string): Tag[] {
-        if (workspaceId !== undefined && workspaceId !== '*') {
+        const wsId = effectiveWorkspace(workspaceId)
+        if (wsId !== '*') {
+            const hasDeletedAt =
+                this.db
+                    .prepare(
+                        "SELECT 1 FROM pragma_table_info('memory_journal') WHERE name = 'deleted_at'"
+                    )
+                    .get() !== undefined
             const rows = this.db
                 .prepare(
                     `SELECT t.id, t.name, COUNT(et.entry_id) as usage_count
                      FROM tags t
                      JOIN entry_tags et ON t.id = et.tag_id
                      JOIN memory_journal mj ON et.entry_id = mj.id
-                     WHERE mj.workspace_id = ? AND mj.deleted_at IS NULL
+                     WHERE mj.workspace_id = ?${hasDeletedAt ? ' AND mj.deleted_at IS NULL' : ''}
                      GROUP BY t.id, t.name
                      HAVING COUNT(et.entry_id) > 0
                      ORDER BY usage_count DESC`
                 )
-                .all(workspaceId) as { id: number; name: string; usage_count: number }[]
+                .all(wsId) as { id: number; name: string; usage_count: number }[]
 
             return rows.map((r) => ({ id: r.id, name: r.name, usageCount: r.usage_count }))
         }

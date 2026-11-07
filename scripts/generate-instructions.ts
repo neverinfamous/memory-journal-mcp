@@ -7,7 +7,7 @@
  * Usage: npx tsx scripts/generate-instructions.ts
  */
 
-import { readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { dirname, resolve, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -25,11 +25,7 @@ function escapeForTemplateLiteral(content: string): string {
 }
 
 // Ensure the target directory exists
-try {
-    readdirSync(instructionsDir)
-} catch {
-    // Directory might not exist or be empty, handled by existing repo structure
-}
+mkdirSync(instructionsDir, { recursive: true })
 
 const mdFiles = readdirSync(mdDir).filter((f) => f.endsWith('.md'))
 

@@ -10,7 +10,6 @@ import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import { ICON_PROMPT } from '../../constants/icons.js'
 import type { InternalPromptDef } from './index.js'
 import type { BriefingConfig } from '../resources/shared.js'
-import { markUntrustedContent } from '../../utils/security-utils.js'
 import {
     planReviewArgsSchema,
     auditArgsSchema,
@@ -18,11 +17,10 @@ import {
     AUDIT_ARGUMENTS,
     type ReviewDepth,
     buildDimensionsTable,
-    formatPriorEntries,
     buildCopilotStep,
     sanitizeCopilotTarget,
     sanitizePromptTarget,
-    resolvePromptPriorWorkspace,
+    buildPlanReviewPriorContextSection,
     buildPriorAuditSection,
     buildSubagentProtocolGuidance,
 } from './adversarial-helpers.js'
@@ -38,24 +36,20 @@ export function getAdversarialPromptDefinitions(): InternalPromptDef[] {
                 'Bootstrap an adversarial planning workflow with structured review dimensions, scoring rubric, and prior plan context from the journal. Optional parameters: topic, depth, copilot, workspace_id.',
             icons: [ICON_PROMPT],
             arguments: PLAN_REVIEW_ARGUMENTS,
-            handler: (args: Record<string, string> | undefined, db: IDatabaseAdapter, _teamDb?: IDatabaseAdapter, _github?: unknown, briefingConfig?: BriefingConfig) => {
+            handler: (args: Record<string, string> | undefined, db: IDatabaseAdapter, _teamDb?: IDatabaseAdapter, _github?: unknown, briefingConfig?: BriefingConfig, runtime?: object | null) => {
                 const parsed = planReviewArgsSchema.parse(args ?? {})
                 const topic = sanitizePromptTarget(parsed.topic ?? '{topic}')
                 const depth: ReviewDepth = parsed.depth ?? 'standard'
                 const useCopilot = parsed.copilot === 'true'
 
-                // Pre-fetch prior finalized plans related to this topic and resolved project workspace
-                const priorWorkspace = resolvePromptPriorWorkspace(
+                const priorContextSection = buildPlanReviewPriorContextSection(
+                    db,
+                    topic,
+                    parsed.topic,
                     briefingConfig,
                     parsed.workspace_id,
-                    parsed.topic
+                    runtime
                 )
-                const { entries: priorPlans } = db.searchEntries(topic, {
-                    entryType: 'plan_finalized',
-                    tags: ['adversarial-planner'],
-                    limit: 5,
-                    workspaceId: priorWorkspace,
-                })
 
                 const dimensionsTable = buildDimensionsTable(depth)
                 const copilotInstruction = buildCopilotStep(
@@ -123,14 +117,7 @@ ${copilotInstruction}
 
 Present the refined plan for approval with the final score, all disposition decisions, and Copilot feedback (if enabled).
 
-## Prior Context
-
-**Journal Attribution Rule**: ${priorWorkspace !== 'default' ? `When logging plan-review entries or session summaries for this topic, always pass \`workspace_id: "${priorWorkspace}"\` so entries route to their proper project instead of \`default\`.` : 'Never log plan-review entries or session summaries to workspace `default`. Resolve and pass the target project\'s `workspace_id` and `project_number` explicitly.'}
-
-### Prior Finalized Plans
-${markUntrustedContent(formatPriorEntries(priorPlans, 5))}
-
-Review prior entries for recurring findings and reusable patterns before drafting.`,
+${priorContextSection}`,
                             },
                         },
                     ],
@@ -142,7 +129,7 @@ Review prior entries for recurring findings and reusable patterns before draftin
             description: 'Multi-pass adversarial code quality audit (dead code, type safety, silent failures, workspace isolation, complexity, file size). Optional parameters: target, copilot, workspace_id',
             icons: [ICON_PROMPT],
             arguments: AUDIT_ARGUMENTS,
-            handler: (args: Record<string, string> | undefined, db: IDatabaseAdapter, _teamDb?: IDatabaseAdapter, _github?: unknown, briefingConfig?: BriefingConfig) => {
+            handler: (args: Record<string, string> | undefined, db: IDatabaseAdapter, _teamDb?: IDatabaseAdapter, _github?: unknown, briefingConfig?: BriefingConfig, runtime?: object | null) => {
                 const parsed = auditArgsSchema.parse(args ?? {})
                 const target = sanitizePromptTarget(parsed.target ?? '{target}')
                 const copilotTarget = sanitizeCopilotTarget(target)
@@ -156,7 +143,8 @@ Review prior entries for recurring findings and reusable patterns before draftin
                     'Prior code-quality audits',
                     briefingConfig,
                     parsed.workspace_id,
-                    parsed.target
+                    parsed.target,
+                    runtime
                 )
                 return {
                     messages: [{
@@ -164,7 +152,7 @@ Review prior entries for recurring findings and reusable patterns before draftin
                         content: {
                             type: 'text',
                             text: `# Adversarial Code Quality Audit
-Prompt revision: 2026-11-06-audit-pass10.
+Prompt revision: 2026-11-07-audit-pass11.
 Target: ${target}
 
 If the target is '{target}', determine it from the user's request. If the user hasn't specified a target file or module, ask them for it now.
@@ -182,11 +170,11 @@ This prompt is shared by every project. Audit the repository the user named. Do 
      3. **Cognitive Complexity & Nesting Hotspot Scan**: Flag functions over 80 lines or control-flow nesting deeper than 4. Measure function length and nesting with a script (for example the TypeScript compiler API via \`createRequire(path.join(process.cwd(), 'package.json'))('typescript')\` and \`path.join(process.cwd(), 'src')\`, skipping \`vendor\` and \`third_party\` directories, so execution proxies that rewrite inline \`bun -e\` scripts to a temp directory still resolve the target repo), not by eye, and report the measured line count. Do not file a split for a declarative registration factory whose body is a table of tool, prompt, resource, route, or schema definitions. Measure the inner handlers and real helpers. A file over 500 lines is still High when it is mostly declarations.
      4. **Schema-to-Handler Parameter Drift Check**: Every input-schema property is consumed by the handler or rewritten by that project's own parameter-normalization layer. Do not assume a file named \`param-normalizer.ts\` exists. Quote the schema field and the handler or normalizer read. Ignore fields that are forwarded as a whole parsed object.
      5. **Uncleaned Timer / EventListener Detector**: Flag \`setInterval\`, retained \`setTimeout\` handles, \`fs.watch\`, and \`process\` / server / filesystem / worker \`.on(\` registrations that lack \`unref()\`, \`clear*\`, or \`close()\` / \`finally\` cleanup. An awaited one-shot delay is not a leak.
-     6. **Type-safety Detector**: Flag \`any\`, \`as any\`, TypeScript postfix non-null assertions (\`value!\`), definite assignment (\`!:\`), and a double assertion (\`as unknown as\`) that reads a property the source type does not declare. Ignore GraphQL \`Type!\`, \`!=\`, and \`!condition\`. Leave SDK boundary casts, such as simple-git options, alone. Do not file every \`as\` on a database row.
+     6. **Type-safety Detector**: Flag \`any\`, \`as any\`, \`z.any()\` in Zod schemas (unless explicitly documented for arbitrary untrusted JSON passthrough), TypeScript postfix non-null assertions (\`value!\`), definite assignment (\`!:\`), and a double assertion (\`as unknown as\`) that reads a property the source type does not declare. Ignore GraphQL \`Type!\`, \`!=\`, and \`!condition\`. Leave SDK boundary casts, such as simple-git options, alone. Do not file every \`as\` on a database row.
      7. **Fuzzy method dispatch**: Flag \`includes\`, \`startsWith\`, or \`endsWith\` on a method or tool name used to choose a handler. Quote the token and the name that would take the wrong branch, such as \`listDeletedEntries\` matching \`delete\`. Exact \`Map\` lookup is not fuzzy.
      8. **Accepted-but-ignored parameters**: A schema field is ignored when the handler passes a literal \`undefined\` in its place, or copies the field into a bag that no callee reads. Quote both sites. A whole parsed object that is forwarded counts as consumed.
      9. **False success**: Flag a \`success: true\` result, or a resolved promise of one, on a path that did not perform the requested operation. Leave out a documented discovery response, including a \`_healing_note\` that says the operation did not run. A success that silently drops a requested side effect (for example a relationship link or a vector write that failed inside an empty \`catch\`) without a warning field is a false success. A success with no such note, a failed result whose array methods return an empty collection, and a filesystem shim that returns true from a substring stay in scope.
-    10. **Sentinel scope**: Flag an omitted workspace that selects every row, and a supplied workspace that is replaced or dropped. An omission that becomes the server's configured default is a product note. Explicit \`'*'\` on multi-workspace DB queries is an intentional admin override; flag \`'*'\` when a fallback manufactures it after a miss or when it is passed to a single-root filesystem mutation.
+    10. **Sentinel scope**: Flag an omitted workspace that selects every row, and a supplied workspace or project number that is replaced or dropped (including \`resolveWorkspaceId\` callers that discard \`projectNumber\` or hot-reload listeners that fail to propagate \`projectRegistry\` updates to background schedulers or interceptors). An omission that becomes the server's configured default is a product note. Explicit \`'*'\` on multi-workspace DB queries is an intentional admin override; flag \`'*'\` when a fallback manufactures it after a miss or when it is passed to a single-root filesystem mutation.
     11. **Safety gate**: Flag a \`catch\` that logs and then continues a destructive operation, such as a failed backup followed by a prune.
 2. **Scan for files exceeding 500 lines using two redundant methods.** Run both from the target repository root. Scope them to \`src\` and \`scripts\` when those directories exist. Skip test files and vendored or synced third-party trees in every detector, not only this count. Common vendored or build names are \`vendor\`, \`src/vendor\`, \`third_party\`, \`node_modules\`, \`dist\`, \`coverage\`, \`build\`, \`.next\`, and \`out\`. If \`scripts\` is absent, scan \`src\` only. Skip those directories by name before descending. Both methods must print \`SCAN_OK scanned=<n> over500=<n>\`. A scan that does not print that line failed. Do not treat that as zero files over 500 lines.
    - **Method 1 (Native PowerShell)**:
@@ -238,7 +226,7 @@ ${priorAuditSection}`
             description: 'Multi-pass adversarial security audit (threat modeling, attack surfaces) Optional parameters: target, copilot, workspace_id',
             icons: [ICON_PROMPT],
             arguments: AUDIT_ARGUMENTS,
-            handler: (args: Record<string, string> | undefined, db: IDatabaseAdapter, _teamDb?: IDatabaseAdapter, _github?: unknown, briefingConfig?: BriefingConfig) => {
+            handler: (args: Record<string, string> | undefined, db: IDatabaseAdapter, _teamDb?: IDatabaseAdapter, _github?: unknown, briefingConfig?: BriefingConfig, runtime?: object | null) => {
                 const parsed = auditArgsSchema.parse(args ?? {})
                 const target = sanitizePromptTarget(parsed.target ?? '{target}')
                 const copilotTarget = sanitizeCopilotTarget(target)
@@ -252,7 +240,8 @@ ${priorAuditSection}`
                     'Prior security audits',
                     briefingConfig,
                     parsed.workspace_id,
-                    parsed.target
+                    parsed.target,
+                    runtime
                 )
                 return {
                     messages: [{
@@ -292,7 +281,7 @@ ${priorAuditSection}`
             description: 'Multi-pass adversarial performance audit (profiling, stress-testing) Optional parameters: target, copilot, workspace_id',
             icons: [ICON_PROMPT],
             arguments: AUDIT_ARGUMENTS,
-            handler: (args: Record<string, string> | undefined, db: IDatabaseAdapter, _teamDb?: IDatabaseAdapter, _github?: unknown, briefingConfig?: BriefingConfig) => {
+            handler: (args: Record<string, string> | undefined, db: IDatabaseAdapter, _teamDb?: IDatabaseAdapter, _github?: unknown, briefingConfig?: BriefingConfig, runtime?: object | null) => {
                 const parsed = auditArgsSchema.parse(args ?? {})
                 const target = sanitizePromptTarget(parsed.target ?? '{target}')
                 const copilotTarget = sanitizeCopilotTarget(target)
@@ -306,7 +295,8 @@ ${priorAuditSection}`
                     'Prior performance audits',
                     briefingConfig,
                     parsed.workspace_id,
-                    parsed.target
+                    parsed.target,
+                    runtime
                 )
                 return {
                     messages: [{
@@ -345,7 +335,7 @@ ${priorAuditSection}`
             description: 'Adversarial SEO audit (technical, semantic HTML, ARIA, structured data, Core Web Vitals) Optional parameters: target, copilot, workspace_id',
             icons: [ICON_PROMPT],
             arguments: AUDIT_ARGUMENTS,
-            handler: (args: Record<string, string> | undefined, db: IDatabaseAdapter, _teamDb?: IDatabaseAdapter, _github?: unknown, briefingConfig?: BriefingConfig) => {
+            handler: (args: Record<string, string> | undefined, db: IDatabaseAdapter, _teamDb?: IDatabaseAdapter, _github?: unknown, briefingConfig?: BriefingConfig, runtime?: object | null) => {
                 const parsed = auditArgsSchema.parse(args ?? {})
                 const target = sanitizePromptTarget(parsed.target ?? '{target}')
                 const copilotTarget = sanitizeCopilotTarget(target)
@@ -359,7 +349,8 @@ ${priorAuditSection}`
                     'Prior SEO audits',
                     briefingConfig,
                     parsed.workspace_id,
-                    parsed.target
+                    parsed.target,
+                    runtime
                 )
                 return {
                     messages: [{
@@ -393,7 +384,7 @@ ${priorAuditSection}`
             description: 'Multi-pass adversarial skill audit (research, evaluate triggers, stress-test) Optional parameters: target, copilot, workspace_id',
             icons: [ICON_PROMPT],
             arguments: AUDIT_ARGUMENTS,
-            handler: (args: Record<string, string> | undefined, db: IDatabaseAdapter, _teamDb?: IDatabaseAdapter, _github?: unknown, briefingConfig?: BriefingConfig) => {
+            handler: (args: Record<string, string> | undefined, db: IDatabaseAdapter, _teamDb?: IDatabaseAdapter, _github?: unknown, briefingConfig?: BriefingConfig, runtime?: object | null) => {
                 const parsed = auditArgsSchema.parse(args ?? {})
                 const target = sanitizePromptTarget(parsed.target ?? '{target}')
                 const copilotTarget = sanitizeCopilotTarget(target)
@@ -407,7 +398,8 @@ ${priorAuditSection}`
                     'Prior skill audits',
                     briefingConfig,
                     parsed.workspace_id,
-                    parsed.target
+                    parsed.target,
+                    runtime
                 )
                 return {
                     messages: [{
@@ -439,7 +431,7 @@ ${priorAuditSection}`
             description: 'Multi-pass adversarial workflow audit (clarity, safety gates, loop prevention) Optional parameters: target, copilot, workspace_id',
             icons: [ICON_PROMPT],
             arguments: AUDIT_ARGUMENTS,
-            handler: (args: Record<string, string> | undefined, db: IDatabaseAdapter, _teamDb?: IDatabaseAdapter, _github?: unknown, briefingConfig?: BriefingConfig) => {
+            handler: (args: Record<string, string> | undefined, db: IDatabaseAdapter, _teamDb?: IDatabaseAdapter, _github?: unknown, briefingConfig?: BriefingConfig, runtime?: object | null) => {
                 const parsed = auditArgsSchema.parse(args ?? {})
                 const target = sanitizePromptTarget(parsed.target ?? '{target}')
                 const copilotTarget = sanitizeCopilotTarget(target)
@@ -453,7 +445,8 @@ ${priorAuditSection}`
                     'Prior workflow audits',
                     briefingConfig,
                     parsed.workspace_id,
-                    parsed.target
+                    parsed.target,
+                    runtime
                 )
                 return {
                     messages: [{

@@ -1,5 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { z } from 'zod'
+import type { EntryType } from '../../types/index.js'
+import type { createEntryOptionsSchema } from '../schemas.js'
 
 /**
  * Pure helpers for resolving entry payload fields from CLI options and metadata.
@@ -42,8 +44,9 @@ export function resolveAutoContext(
         try {
             autoContextStr = readFileSync(autoContextFile, 'utf-8')
         } catch (e) {
-            process.stderr.write(
-                `Warning: Failed to read --auto-context-file: ${e instanceof Error ? e.message : String(e)}\n`
+            throw new Error(
+                `Failed to read --auto-context-file: ${e instanceof Error ? e.message : String(e)}`,
+                { cause: e }
             )
         }
     } else if (
@@ -78,4 +81,98 @@ export function relationshipsFromMetadata(
             (r) =>
                 !isNaN(r.target_id) && Boolean(r.relation_type) && r.relation_type !== 'undefined'
         )
+}
+
+export function resolveEntryTypeAndTags(
+    options: z.infer<typeof createEntryOptionsSchema>,
+    metadata: Record<string, unknown>
+): { entryType: EntryType | undefined; tags: string[] | undefined } {
+    const entryTypeStr =
+        options.type ??
+        options.category ??
+        metadata['type'] ??
+        metadata['entry_type'] ??
+        metadata['entryType']
+    const entryType = entryTypeStr as EntryType | undefined
+
+    const tagsStr = options.tags
+    let tags: string[] | undefined
+    if (tagsStr !== undefined) {
+        tags = tagsStr
+            .split(/[,\s]+/)
+            .map((t) => t.trim())
+            .filter(Boolean)
+    } else if (metadata['tags'] !== undefined && metadata['tags'] !== null) {
+        tags = Array.isArray(metadata['tags']) ? metadata['tags'].map(String) : undefined
+    }
+    return { entryType, tags }
+}
+
+export function resolveExplicitProjectAndWorkspace(
+    options: z.infer<typeof createEntryOptionsSchema>,
+    metadata: Record<string, unknown>
+): { explicitProjectNum: number | undefined; explicitWorkspaceId: string | undefined } {
+    const projectRaw =
+        options.project ??
+        options.projectNumber ??
+        options.project_number ??
+        metadata['project'] ??
+        metadata['projectNumber'] ??
+        metadata['project_number']
+    const parsedProjectNum = projectRaw !== undefined ? Number(projectRaw) : undefined
+    const explicitProjectNum =
+        parsedProjectNum !== undefined && !isNaN(parsedProjectNum) ? parsedProjectNum : undefined
+
+    const optsRec = z.record(z.string(), z.unknown()).parse(options)
+    const rawWs =
+        optsRec['workspaceId'] ??
+        optsRec['workspace_id'] ??
+        metadata['workspace'] ??
+        metadata['workspaceId'] ??
+        metadata['workspace_id']
+    const explicitWorkspaceId = typeof rawWs === 'string' ? rawWs : undefined
+    return { explicitProjectNum, explicitWorkspaceId }
+}
+
+export function resolveScoresAndValidation(
+    options: z.infer<typeof createEntryOptionsSchema>,
+    metadata: Record<string, unknown>
+): {
+    trustScore: number | undefined
+    impactScore: number | undefined
+    validationStatus: 'passed' | 'failed' | 'none' | undefined
+    sessionId: string | undefined
+} {
+    const trustRaw =
+        options.trustScore ??
+        options.trust_score ??
+        options.confidence ??
+        metadata['trust'] ??
+        metadata['trustScore'] ??
+        metadata['trust_score'] ??
+        metadata['confidence']
+    const trustScore = trustRaw !== undefined ? Number(trustRaw) : undefined
+
+    const impactRaw =
+        options.impactScore ??
+        options.impact_score ??
+        metadata['impact'] ??
+        metadata['impactScore'] ??
+        metadata['impact_score']
+    const impactScore = impactRaw !== undefined ? Number(impactRaw) : undefined
+
+    const valStatusRaw =
+        options.validationStatus ??
+        options.validation_status ??
+        options.validation ??
+        metadata['validation_status'] ??
+        metadata['validationStatus'] ??
+        metadata['validation']
+    const validationStatus = normalizeValidationStatus(valStatusRaw)
+
+    const sessionIdRaw =
+        options.sessionId ?? options.session_id ?? metadata['session_id'] ?? metadata['sessionId']
+    const sessionId = sessionIdRaw as string | undefined
+
+    return { trustScore, impactScore, validationStatus, sessionId }
 }

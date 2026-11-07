@@ -87,7 +87,7 @@ An entry is considered incomplete and worthy of auditing/enrichment if it lacks 
 3. **ALWAYS** call \`backup_journal\` (and \`cleanup_backups\` with \`keep_count: 15\`) before any batch mutation/delete. Abort if backup fails.
 4. **NEVER** delete entries with \`significance_type\` set.
 5. Max batch size: 50 entries per mutation pass.
-6. **Log operations**: Create a journal entry with \`entry_type: 'maintenance'\` and tags \`['cms', 'cms-02-nrem-consolidation', 'database-optimizer', 'maintenance']\`.
+6. **Log operations**: Create a journal entry with \`entry_type: 'maintenance'\`, \`workspace_id: 'memory-journal-mcp'\`, \`project_number: 5\`, and tags \`['cms', 'cms-02-nrem-consolidation', 'database-optimizer', 'maintenance']\`.
 7. **Execution Scope**: Systematically process entries across registered projects in \`PROJECT_REGISTRY\` (or restricted to \`${targetProject !== undefined && targetProject !== '' ? targetProject : 'all'}\` if specified).
 
 ---

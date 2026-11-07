@@ -168,6 +168,17 @@ export async function createServer(options: ServerOptions): Promise<void> {
             baseConfig.projectRegistry = nextBriefing.projectRegistry
             customToolHandlerConfig.projectRegistry = nextBriefing.projectRegistry
         }
+        scheduler?.updateWorkspaceContext({
+            ...(nextBriefing.defaultWorkspaceId !== undefined
+                ? { defaultWorkspaceId: nextBriefing.defaultWorkspaceId }
+                : {}),
+            ...(nextBriefing.defaultProjectNumber !== undefined
+                ? { defaultProjectNumber: nextBriefing.defaultProjectNumber }
+                : {}),
+            ...(nextBriefing.projectRegistry !== undefined
+                ? { projectRegistry: nextBriefing.projectRegistry }
+                : {}),
+        })
         void globalSubscriptionManager.notifyResourceUpdated('memory://briefing')
         try {
             void globalSubscriptionManager.broadcastNotification('notifications/tools/list_changed')

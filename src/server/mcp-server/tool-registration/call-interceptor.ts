@@ -294,7 +294,18 @@ export function attachCallToolInterceptor(
 
             if (req.params !== undefined && healingEnabled) {
                 req.params.arguments ??= {}
-                normalizeAndAliasToolCall(req.params, options)
+                normalizeAndAliasToolCall(req.params, {
+                    ...options,
+                    ...(customToolHandlerConfig.projectRegistry !== undefined
+                        ? { projectRegistry: customToolHandlerConfig.projectRegistry }
+                        : {}),
+                    ...(customToolHandlerConfig.defaultProjectNumber !== undefined
+                        ? { defaultProjectNumber: customToolHandlerConfig.defaultProjectNumber }
+                        : {}),
+                    ...(customToolHandlerConfig.defaultWorkspaceId !== undefined
+                        ? { defaultWorkspaceId: customToolHandlerConfig.defaultWorkspaceId }
+                        : {}),
+                })
                 const toolArgs = req.params.arguments
 
                 if (req.params.name !== undefined && req.params.name !== '') {

@@ -1,6 +1,6 @@
 import { ICON_PROMPT } from '../../constants/icons.js'
 import type { InternalPromptDef, PromptMessage } from './index.js'
-import type { BriefingConfig } from '../resources/shared.js'
+import { resourceWorkspace, type BriefingConfig } from '../resources/shared.js'
 import {
     loadProjectRegistryFromConfig,
     setActiveSessionProject,
@@ -143,7 +143,8 @@ export function getLoadBriefingPromptDefinitions(): InternalPromptDef[] {
                 _db: unknown,
                 _teamDb?: unknown,
                 _github?: unknown,
-                briefingConfig?: BriefingConfig
+                briefingConfig?: BriefingConfig,
+                runtime?: object | null
             ) => {
                 const projectsArg = args['projects']
                 const requestedProjects = projectsArg
@@ -165,6 +166,21 @@ export function getLoadBriefingPromptDefinitions(): InternalPromptDef[] {
                     )
                     if (activeKey) {
                         activeWorkspace = `${activeKey} (#${String(briefingConfig.defaultProjectNumber)})`
+                    }
+                } else {
+                    const resolvedWs = resourceWorkspace({
+                        briefingConfig: {
+                            ...briefingConfig,
+                            projectRegistry: registry as BriefingConfig['projectRegistry'],
+                        },
+                        ...(runtime !== undefined ? { runtime } : {}),
+                    })
+                    if (resolvedWs && resolvedWs !== 'default') {
+                        const projNum = getProjectNumber(registry[resolvedWs])
+                        activeWorkspace =
+                            projNum !== undefined
+                                ? `${resolvedWs} (#${String(projNum)})`
+                                : resolvedWs
                     }
                 }
 
@@ -218,7 +234,7 @@ export function getLoadBriefingPromptDefinitions(): InternalPromptDef[] {
                     const primaryKey = firstResolvedUri.slice('memory://briefing/'.length)
                     if (primaryKey.length > 0) {
                         const primaryProjNum = getProjectNumber(registry[primaryKey])
-                        setActiveSessionProject(primaryKey, primaryProjNum)
+                        setActiveSessionProject(primaryKey, primaryProjNum, runtime)
                     }
                 }
 

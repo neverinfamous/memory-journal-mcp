@@ -79,6 +79,7 @@ export async function execAction(scriptPath: string, options: z.infer<typeof exe
         callTool(name, args, db, vectorManager, github, customToolHandlerConfig, undefined, teamDb ?? undefined, teamVectorManager ?? undefined)
     customToolHandlerConfig.dispatch = dispatch
 
+    let exitCode = 0
     try {
         const result = await callTool(
             'mj_execute_code',
@@ -91,11 +92,19 @@ export async function execAction(scriptPath: string, options: z.infer<typeof exe
             teamDb ?? undefined,
             teamVectorManager ?? undefined
         )
+        if (
+            typeof result === 'object' &&
+            result !== null &&
+            'success' in result &&
+            result.success === false
+        ) {
+            exitCode = 1
+        }
 
         process.stdout.write(JSON.stringify(result, null, 2) + '\n')
     } catch (error) {
         process.stderr.write("Execution failed: " + (error instanceof Error ? error.message : String(error)) + '\n')
-        process.exit(1)
+        exitCode = 1
     } finally {
         runtime.stopBackgroundTasks?.()
         configManager.close()
@@ -103,6 +112,6 @@ export async function execAction(scriptPath: string, options: z.infer<typeof exe
         if (context.activeMetricsPath) await runtime.metrics.saveToFile(context.activeMetricsPath)
         db.close()
         teamDb?.close()
-        process.exit(0)
     }
+    process.exit(exitCode)
 }

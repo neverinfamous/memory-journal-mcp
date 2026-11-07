@@ -260,16 +260,19 @@ export function resolveProjectContext(
 ): ResolvedContext {
     const registry = config?.projectRegistry ?? loadProjectRegistryFromConfig()
 
-    // Reject internal wildcard sentinel '*' from external input so it falls through to normal resolution
+    // Reject internal wildcard sentinel '*', empty strings, and 'default' from external input so they fall through to normal resolution
+    const trimmedWorkspaceId =
+        typeof input.workspace_id === 'string' ? input.workspace_id.trim() : undefined
     const sanitizedWorkspaceId =
-        input.workspace_id === '*' ? undefined : input.workspace_id
+        trimmedWorkspaceId === undefined ||
+        trimmedWorkspaceId === '' ||
+        trimmedWorkspaceId === '*' ||
+        trimmedWorkspaceId.toLowerCase() === 'default'
+            ? undefined
+            : trimmedWorkspaceId
 
     // 1. Truly explicit non-'default' workspace_id provided
-    if (
-        sanitizedWorkspaceId !== undefined &&
-        sanitizedWorkspaceId !== null &&
-        sanitizedWorkspaceId !== 'default'
-    ) {
+    if (sanitizedWorkspaceId !== undefined) {
         let wsId = sanitizedWorkspaceId
         const canonicalKey = findCanonicalRegistryKey(wsId, registry)
         if (canonicalKey) wsId = canonicalKey
@@ -305,26 +308,37 @@ export function resolveProjectContext(
 
     // 4. Explicit input.project_number fallback (when no conflicting registry workspace matched)
     if (input.project_number !== undefined && input.project_number !== null) {
-        const wsId = findWorkspaceByProjectNumber(input.project_number, registry) ?? sanitizedWorkspaceId
+        const cwdMatch = registry
+            ? resolveWorkspaceFromFilePath(process.cwd(), { ...config, projectRegistry: registry })
+            : undefined
+        const sessionCtx = getActiveSessionProject(config?.runtime)
+        const wsId =
+            findWorkspaceByProjectNumber(input.project_number, registry) ??
+            sanitizedWorkspaceId ??
+            cwdMatch?.workspaceId ??
+            config?.defaultWorkspaceId ??
+            sessionCtx.workspaceId
         return {
-            workspaceId: wsId ?? config?.defaultWorkspaceId ?? 'default',
+            workspaceId: wsId ?? 'default',
             projectNumber: input.project_number,
         }
     }
 
     // 5. CWD / Config / Active Session Fallback
     const sessionCtx = getActiveSessionProject(config?.runtime)
+    const cwdMatch = registry
+        ? resolveWorkspaceFromFilePath(process.cwd(), { ...config, projectRegistry: registry })
+        : undefined
     const cwdProjNum =
+        cwdMatch?.projectNumber ??
         resolveProjectNumberFromPath(process.cwd(), registry) ??
         config?.defaultProjectNumber ??
         sessionCtx.projectNumber
-    let resolvedWsId = sanitizedWorkspaceId
-    if ((resolvedWsId === undefined || resolvedWsId === 'default') && cwdProjNum !== undefined) {
+    let resolvedWsId = sanitizedWorkspaceId ?? cwdMatch?.workspaceId
+    if (resolvedWsId === undefined && cwdProjNum !== undefined) {
         resolvedWsId = findWorkspaceByProjectNumber(cwdProjNum, registry) ?? resolvedWsId
     }
-    if (resolvedWsId === undefined || resolvedWsId === 'default') {
-        resolvedWsId = config?.defaultWorkspaceId ?? sessionCtx.workspaceId ?? resolvedWsId
-    }
+    resolvedWsId ??= config?.defaultWorkspaceId ?? sessionCtx.workspaceId
 
     return {
         workspaceId: resolvedWsId ?? 'default',
