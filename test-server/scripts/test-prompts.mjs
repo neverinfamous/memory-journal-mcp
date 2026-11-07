@@ -23,6 +23,9 @@ const proc = spawn(process.execPath, [
         TEST_TEAM_DB_PATH: 'test-team-prompts.db',
         JOURNAL_CONFIG_DIR: 'test-server',
         MEMORY_JOURNAL_CONFIG: join(__dirname, 'test-server-config.json'),
+        PROJECT_REGISTRY: JSON.stringify({
+            'memory-journal-mcp': { path: projectDir, project_number: 5 },
+        }),
         AUTO_REBUILD_INDEX: 'false',
     },
     stdio: ['pipe', 'pipe', 'pipe'],
