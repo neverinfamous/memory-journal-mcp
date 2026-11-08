@@ -61,21 +61,23 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                     coerceSignificanceAlias(params)
 
                     const input = TeamUpdateEntrySchema.parse(params)
-                    let wsId = resolveWriteWorkspaceId(
-                        input.workspace_id,
-                        input.project_number,
-                        context.config,
-                        input.content,
-                        input.tags
-                    )
+                    let wsId =
+                        input.workspace_id === '*'
+                            ? '*'
+                            : resolveWriteWorkspaceId(
+                                  input.workspace_id,
+                                  input.project_number,
+                                  context.config,
+                                  input.content,
+                                  input.tags
+                              )
 
                     // Verify entry exists
                     let existing = teamDb.getEntryById(input.entry_id, wsId)
                     if (
                         !existing &&
                         input.workspace_id === undefined &&
-                        input.project_number === undefined &&
-                        wsId === 'default'
+                        input.project_number === undefined
                     ) {
                         existing = teamDb.getEntryById(input.entry_id, '*')
                         if (existing?.workspaceId !== undefined) {
@@ -199,13 +201,15 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
 
                     const { entry_id, project_number, expected_version, workspace_id } = TeamDeleteEntrySchema.parse(params)
 
-                    let wsId = resolveWriteWorkspaceId(workspace_id, project_number, context.config)
+                    let wsId =
+                        workspace_id === '*'
+                            ? '*'
+                            : resolveWriteWorkspaceId(workspace_id, project_number, context.config)
                     let existing = teamDb.getEntryByIdIncludeDeleted(entry_id, wsId)
                     if (
                         !existing &&
                         workspace_id === undefined &&
-                        project_number === undefined &&
-                        wsId === 'default'
+                        project_number === undefined
                     ) {
                         existing = teamDb.getEntryByIdIncludeDeleted(entry_id, '*')
                         if (existing?.workspaceId !== undefined) {
@@ -324,13 +328,15 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
 
                     const { entry_id, project_number, workspace_id } = TeamRestoreEntrySchema.parse(params)
 
-                    let wsId = resolveWriteWorkspaceId(workspace_id, project_number, context.config)
+                    let wsId =
+                        workspace_id === '*'
+                            ? '*'
+                            : resolveWriteWorkspaceId(workspace_id, project_number, context.config)
                     let existing = teamDb.getEntryByIdIncludeDeleted(entry_id, wsId)
                     if (
                         !existing &&
                         workspace_id === undefined &&
-                        project_number === undefined &&
-                        wsId === 'default'
+                        project_number === undefined
                     ) {
                         existing = teamDb.getEntryByIdIncludeDeleted(entry_id, '*')
                         if (existing?.workspaceId !== undefined) {

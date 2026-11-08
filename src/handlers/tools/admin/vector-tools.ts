@@ -7,7 +7,7 @@ import {
 } from './schemas.js'
 import { relaxedNumber } from '../schemas.js'
 import { logger } from '../../../utils/logger.js'
-import { resolveWriteWorkspaceId } from '../write-workspace.js'
+import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 
 const preprocessVectorEntryId = (val: unknown): unknown => {
     if (typeof val === 'object' && val !== null) {
@@ -126,18 +126,19 @@ export function getVectorTools(context: ToolContext): ToolDefinition[] {
                             recoverable: false,
                         }
                     }
-                    let wsId = resolveWriteWorkspaceId(workspace_id, project_number, context.config)
+                    let wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
                     let entry = db.getEntryById(entry_id, wsId)
                     if (
                         !entry &&
                         workspace_id === undefined &&
-                        project_number === undefined &&
-                        wsId === 'default'
+                        project_number === undefined
                     ) {
                         entry = db.getEntryById(entry_id, '*')
                         if (entry?.workspaceId !== undefined) {
                             wsId = entry.workspaceId
                         }
+                    } else if (entry?.workspaceId !== undefined && (wsId === '*' || wsId === 'default')) {
+                        wsId = entry.workspaceId
                     }
                     if (!entry || (project_number !== undefined && entry.projectNumber !== project_number)) {
                         return {

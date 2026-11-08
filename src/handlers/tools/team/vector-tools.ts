@@ -9,7 +9,6 @@ import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
-import { resolveWriteWorkspaceId } from '../write-workspace.js'
 import { logger } from '../../../utils/logger.js'
 import { TEAM_DB_ERROR_RESPONSE, batchFetchAuthors, resolveTeamProjectNumber } from './helpers.js'
 import {
@@ -344,18 +343,19 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    let wsId = resolveWriteWorkspaceId(workspace_id, project_number, context.config)
+                    let wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
                     let entry = teamDb.getEntryById(entry_id, wsId)
                     if (
                         !entry &&
                         workspace_id === undefined &&
-                        project_number === undefined &&
-                        wsId === 'default'
+                        project_number === undefined
                     ) {
                         entry = teamDb.getEntryById(entry_id, '*')
                         if (entry?.workspaceId !== undefined) {
                             wsId = entry.workspaceId
                         }
+                    } else if (entry?.workspaceId !== undefined && (wsId === '*' || wsId === 'default')) {
+                        wsId = entry.workspaceId
                     }
                     const projectNumber =
                         project_number ??

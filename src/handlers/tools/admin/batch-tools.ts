@@ -123,17 +123,19 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
                     const updates = input.updates.map((u) => {
                         const explicitWs = u.workspace_id || input.workspace_id
                         const explicitPn = u.project_number ?? input.project_number
-                        let resolvedWs = resolveWriteWorkspaceId(
-                            explicitWs,
-                            explicitPn,
-                            context.config,
-                            u.content,
-                            u.tags ?? undefined
-                        )
+                        let resolvedWs =
+                            explicitWs === '*'
+                                ? '*'
+                                : resolveWriteWorkspaceId(
+                                      explicitWs,
+                                      explicitPn,
+                                      context.config,
+                                      u.content,
+                                      u.tags ?? undefined
+                                  )
                         if (
                             explicitWs === undefined &&
-                            explicitPn === undefined &&
-                            resolvedWs === 'default'
+                            explicitPn === undefined
                         ) {
                             const existingByPk = db.getEntryById(u.entry_id, '*')
                             if (existingByPk?.workspaceId !== undefined) {
@@ -220,15 +222,17 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
             handler: async (params: unknown) => {
                 try {
                     const input = BatchDeleteEntriesSchema.parse(params)
-                    let wsId = resolveWriteWorkspaceId(
-                        input.workspace_id,
-                        input.project_number,
-                        context.config
-                    )
+                    let wsId =
+                        input.workspace_id === '*'
+                            ? '*'
+                            : resolveWriteWorkspaceId(
+                                  input.workspace_id,
+                                  input.project_number,
+                                  context.config
+                              )
                     if (
                         input.workspace_id === undefined &&
-                        input.project_number === undefined &&
-                        wsId === 'default'
+                        input.project_number === undefined
                     ) {
                         for (const id of input.entry_ids) {
                             const existing = db.getEntryByIdIncludeDeleted(id, '*')

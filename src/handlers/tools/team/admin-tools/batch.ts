@@ -327,12 +327,14 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                     const currentUser = resolveAuthenticatedAuthor()
                     const codemodeBypass = context.config?.codemodeInternalFullAccess === true
                     
-                    let wsId = resolveWriteWorkspaceId(input.workspace_id, input.project_number, context.config)
+                    let wsId =
+                        input.workspace_id === '*'
+                            ? '*'
+                            : resolveWriteWorkspaceId(input.workspace_id, input.project_number, context.config)
                     let inferredProjectNum: number | undefined
                     if (
                         input.workspace_id === undefined &&
-                        input.project_number === undefined &&
-                        wsId === 'default'
+                        input.project_number === undefined
                     ) {
                         for (const id of input.entry_ids) {
                             const existing = teamDb.getEntryByIdIncludeDeleted(id, '*')
@@ -351,7 +353,10 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                     if (projectNumber === undefined || projectNumber === null) {
                         return missingProjectNumberResponse()
                     }
-                    wsId = resolveWriteWorkspaceId(input.workspace_id ?? wsId, projectNumber, context.config)
+                    wsId =
+                        input.workspace_id === '*' || wsId === '*'
+                            ? '*'
+                            : resolveWriteWorkspaceId(input.workspace_id ?? wsId, projectNumber, context.config)
 
                     // Filter ids to those that match the project number and check permissions
                     const callerRole =

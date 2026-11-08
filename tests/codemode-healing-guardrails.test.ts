@@ -2577,5 +2577,70 @@ return { success: true, projectId };
             expect(res['success']).toBe(true)
             expect(Array.isArray(res['results'])).toBe(true)
         })
+
+        it('should fallback to wildcard workspace when get_entry_by_id fails in active workspace', async () => {
+            const { callTool } = await import('../src/handlers/tools/index.js')
+            const mockDb = {
+                getEntryById: vi.fn((id: number, ws: string) => {
+                    if (ws === 'memory-journal-mcp') return null
+                    if (ws === '*') return { id: 14463, title: 'Test Entry', workspaceId: 'adamic' }
+                    if (ws === 'adamic') return { id: 14463, title: 'Test Entry', workspaceId: 'adamic' }
+                    return null
+                }),
+                getRelationships: vi.fn().mockReturnValue([]),
+                calculateImportance: vi.fn().mockReturnValue({ score: 0.5, breakdown: {} })
+            } as unknown as Parameters<typeof callTool>[2]
+
+            const customConfig = { ...mockConfig, defaultWorkspaceId: 'memory-journal-mcp' }
+            const res = (await callTool('get_entry_by_id', {
+                entry_id: 14463
+            }, mockDb, undefined, undefined, customConfig)) as Record<string, unknown>
+
+            expect(res['success']).toBe(true)
+            expect((res['entry'] as Record<string, unknown> | undefined)?.['workspaceId']).toBe('adamic')
+            expect(mockDb.getEntryById).toHaveBeenCalledWith(14463, '*')
+        })
+
+        it('should accept workspace_id: "*" in batch_update_entries for cross-workspace updates', async () => {
+            const { callTool } = await import('../src/handlers/tools/index.js')
+            const mockDb = {
+                updateEntries: vi.fn().mockReturnValue({
+                    updated: [{ id: 14460, workspaceId: 'db-mcp' }],
+                    notFound: [],
+                    errors: []
+                })
+            } as unknown as Parameters<typeof callTool>[2]
+
+            const res = (await callTool('batch_update_entries', {
+                workspace_id: '*',
+                updates: [
+                    { entry_id: 14460, significance_type: 'blocker_resolved' }
+                ]
+            }, mockDb, undefined, undefined, mockConfig)) as Record<string, unknown>
+
+            expect(res['success']).toBe(true)
+            expect(mockDb.updateEntries).toHaveBeenCalled()
+            const callArgs = (mockDb.updateEntries as unknown as { mock: { calls: Record<string, unknown>[][][] } }).mock.calls[0]?.[0]
+            expect(callArgs?.[0]?.['workspaceId']).toBe('*')
+        })
+
+        it('should accept workspace_id: "*" in batch_delete_entries for cross-workspace deletions', async () => {
+            const { callTool } = await import('../src/handlers/tools/index.js')
+            const mockDb = {
+                deleteEntries: vi.fn().mockReturnValue({
+                    deleted: [14460],
+                    notFound: [],
+                    errors: []
+                })
+            } as unknown as Parameters<typeof callTool>[2]
+
+            const res = (await callTool('batch_delete_entries', {
+                workspace_id: '*',
+                entry_ids: [14460]
+            }, mockDb, undefined, undefined, mockConfig)) as Record<string, unknown>
+
+            expect(res['success']).toBe(true)
+            expect(mockDb.deleteEntries).toHaveBeenCalledWith([14460], false, '*')
+        })
     })
 })

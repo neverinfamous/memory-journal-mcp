@@ -207,13 +207,14 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                     if (
                         !entry &&
                         input.workspace_id === undefined &&
-                        input.project_number === undefined &&
-                        wsId === 'default'
+                        input.project_number === undefined
                     ) {
                         entry = db.getEntryById(input.entry_id, '*')
                         if (entry?.workspaceId !== undefined) {
                             wsId = entry.workspaceId
                         }
+                    } else if (entry?.workspaceId !== undefined && (wsId === '*' || wsId === 'default')) {
+                        wsId = entry.workspaceId
                     }
                     if (!entry) {
                         return {
@@ -294,13 +295,14 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                     if (
                         !current &&
                         input.workspace_id === undefined &&
-                        input.project_number === undefined &&
-                        wsId === 'default'
+                        input.project_number === undefined
                     ) {
                         current = db.getEntryById(input.entry_id, '*')
                         if (current?.workspaceId !== undefined) {
                             wsId = current.workspaceId
                         }
+                    } else if (current?.workspaceId !== undefined && (wsId === '*' || wsId === 'default')) {
+                        wsId = current.workspaceId
                     }
                     if (!current) {
                         return {

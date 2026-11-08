@@ -54,8 +54,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         ('workspace_id' in params || 'workspaceId' in params || 'workspace' in params)
                     if (
                         !rawHasExplicitWorkspace &&
-                        input.project_number === undefined &&
-                        wsId === 'default'
+                        input.project_number === undefined
                     ) {
                         const existingByPk = db.getEntryById(input.entry_id, '*')
                         if (existingByPk?.workspaceId !== undefined) {
@@ -131,8 +130,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                     let wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
                     if (
                         workspace_id === undefined &&
-                        project_number === undefined &&
-                        wsId === 'default'
+                        project_number === undefined
                     ) {
                         const existingByPk = db.getEntryByIdIncludeDeleted(entry_id, '*')
                         if (existingByPk?.workspaceId !== undefined) {
@@ -240,8 +238,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                     let wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
                     if (
                         workspace_id === undefined &&
-                        project_number === undefined &&
-                        wsId === 'default'
+                        project_number === undefined
                     ) {
                         const existingByPk = db.getEntryByIdIncludeDeleted(entry_id, '*')
                         if (existingByPk?.workspaceId !== undefined) {

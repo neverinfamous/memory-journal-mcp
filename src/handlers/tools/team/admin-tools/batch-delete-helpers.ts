@@ -74,11 +74,16 @@ export function buildValidatedTeamBatchUpdates(
     for (const u of rawUpdates) {
         const explicitWs = u.workspace_id ?? rootWorkspaceId
         const explicitPn = u.project_number ?? rootProjectNumber
-        let wsId = resolveWriteWorkspaceId(explicitWs, explicitPn, context.config, u.content, u.tags)
+        let wsId =
+            explicitWs === '*'
+                ? '*'
+                : resolveWriteWorkspaceId(explicitWs, explicitPn, context.config, u.content, u.tags)
         let existing = teamDb.getEntryById(u.entry_id, wsId)
-        if (!existing && explicitWs === undefined && explicitPn === undefined && wsId === 'default') {
+        if (!existing && explicitWs === undefined && explicitPn === undefined) {
             existing = teamDb.getEntryById(u.entry_id, '*')
             if (existing?.workspaceId !== undefined) wsId = existing.workspaceId
+        } else if (existing?.workspaceId !== undefined && (wsId === '*' || wsId === 'default')) {
+            wsId = existing.workspaceId
         }
         const projectNumber =
             u.project_number ??

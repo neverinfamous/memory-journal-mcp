@@ -223,13 +223,14 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                     if (
                         !entry &&
                         workspace_id === undefined &&
-                        project_number === undefined &&
-                        wsId === 'default'
+                        project_number === undefined
                     ) {
                         entry = teamDb.getEntryById(entry_id, '*')
                         if (entry?.workspaceId !== undefined) {
                             wsId = entry.workspaceId
                         }
+                    } else if (entry?.workspaceId !== undefined && (wsId === '*' || wsId === 'default')) {
+                        wsId = entry.workspaceId
                     }
 
                     if (!entry) {
