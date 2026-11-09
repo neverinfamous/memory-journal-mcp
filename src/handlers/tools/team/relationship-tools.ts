@@ -132,7 +132,10 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                         project_number,
                         workspace_id,
                     } = TeamLinkEntriesSchema.parse(params)
-                    let wsId = resolveWriteWorkspaceId(workspace_id, project_number, context.config)
+                    let wsId =
+                        workspace_id === '*'
+                            ? '*'
+                            : resolveWriteWorkspaceId(workspace_id, project_number, context.config)
 
                     // Guard: self-referential links are not meaningful
                     if (from_entry_id === to_entry_id) {
@@ -151,19 +154,20 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                     let fromEntry = teamDb.getEntryById(from_entry_id, wsId)
                     if (
                         !fromEntry &&
-                        workspace_id === undefined &&
+                        (workspace_id === undefined || workspace_id === '*') &&
                         project_number === undefined
                     ) {
                         fromEntry = teamDb.getEntryById(from_entry_id, '*')
-                        if (fromEntry?.workspaceId !== undefined) {
+                        if (fromEntry?.workspaceId !== undefined && wsId !== '*') {
                             wsId = fromEntry.workspaceId
                         }
                     }
-                    const projectNumber =
+                    const resolvedPn =
                         project_number ??
-                        fromEntry?.projectNumber ??
-                        resolveTeamProjectNumber(context, wsId, project_number)
-                    if (projectNumber === undefined || projectNumber === null) {
+                        (fromEntry?.projectNumber !== null ? fromEntry?.projectNumber : undefined) ??
+                        (wsId !== '*' ? resolveTeamProjectNumber(context, wsId, project_number) : undefined)
+                    const projectNumber = resolvedPn !== null ? resolvedPn : undefined
+                    if (workspace_id !== '*' && projectNumber === undefined) {
                         return {
                             success: false,
                             error: 'Missing project_number. You MUST provide a valid project_number (e.g., 1) or configure DEFAULT_PROJECT_NUMBER on the server.',
@@ -174,7 +178,9 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                             recoverable: true,
                         }
                     }
-                    wsId = resolveWriteWorkspaceId(workspace_id ?? wsId, projectNumber, context.config)
+                    if (workspace_id !== '*') {
+                        wsId = resolveWriteWorkspaceId(workspace_id ?? wsId, projectNumber, context.config)
+                    }
                     if (!fromEntry) {
                         return {
                             success: false,
@@ -185,7 +191,7 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                             recoverable: true,
                         }
                     }
-                    if (fromEntry.projectNumber !== undefined && fromEntry.projectNumber !== projectNumber) {
+                    if (workspace_id !== '*' && fromEntry.projectNumber !== undefined && projectNumber !== undefined && fromEntry.projectNumber !== projectNumber) {
                         return {
                             success: false,
                             error: `Team entry ${String(from_entry_id)} does not belong to project ${String(projectNumber)}`,
@@ -198,7 +204,7 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                     let toEntry = teamDb.getEntryById(to_entry_id, wsId)
                     if (
                         !toEntry &&
-                        workspace_id === undefined &&
+                        (workspace_id === undefined || workspace_id === '*') &&
                         project_number === undefined
                     ) {
                         toEntry = teamDb.getEntryById(to_entry_id, '*')
@@ -213,7 +219,7 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                             recoverable: true,
                         }
                     }
-                    if (toEntry.projectNumber !== undefined && toEntry.projectNumber !== projectNumber) {
+                    if (workspace_id !== '*' && toEntry.projectNumber !== undefined && projectNumber !== undefined && toEntry.projectNumber !== projectNumber) {
                         return {
                             success: false,
                             error: `Team entry ${String(to_entry_id)} does not belong to project ${String(projectNumber)}`,
@@ -222,6 +228,10 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                             suggestion: 'Verify the team entry ID and project number, and try again',
                             recoverable: true,
                         }
+                    }
+
+                    if (fromEntry.workspaceId !== toEntry.workspaceId && workspace_id === undefined) {
+                        wsId = '*'
                     }
 
                     // Check for existing relationship (exact direction only).

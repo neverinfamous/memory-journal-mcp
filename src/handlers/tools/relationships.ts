@@ -229,11 +229,14 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     const input = LinkEntriesSchema.parse(LinkEntriesSchemaMcp.parse(params))
-                    let wsId = resolveWriteWorkspaceId(
-                        input.workspace_id,
-                        input.project_number,
-                        context.config
-                    )
+                    let wsId =
+                        input.workspace_id === '*'
+                            ? '*'
+                            : resolveWriteWorkspaceId(
+                                  input.workspace_id,
+                                  input.project_number,
+                                  context.config
+                              )
 
                     // Guard: self-referential links are not meaningful
                     if (input.from_entry_id === input.to_entry_id) {
@@ -251,11 +254,10 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                     let fromEntry = db.getEntryById(input.from_entry_id, wsId)
                     if (
                         !fromEntry &&
-                        input.workspace_id === undefined &&
-                        input.project_number === undefined
+                        (input.workspace_id === undefined || input.workspace_id === '*')
                     ) {
                         fromEntry = db.getEntryById(input.from_entry_id, '*')
-                        if (fromEntry?.workspaceId !== undefined) {
+                        if (fromEntry?.workspaceId !== undefined && wsId !== '*') {
                             wsId = fromEntry.workspaceId
                         }
                     }
@@ -270,8 +272,7 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                     let toEntry = db.getEntryById(input.to_entry_id, wsId)
                     if (
                         !toEntry &&
-                        input.workspace_id === undefined &&
-                        input.project_number === undefined
+                        (input.workspace_id === undefined || input.workspace_id === '*')
                     ) {
                         toEntry = db.getEntryById(input.to_entry_id, '*')
                     }
@@ -282,6 +283,10 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                             ),
                             success: false,
                         }
+                    }
+
+                    if (fromEntry.workspaceId !== toEntry.workspaceId && input.workspace_id === undefined) {
+                        wsId = '*'
                     }
 
                     // Check for existing duplicate relationship (exact direction only).

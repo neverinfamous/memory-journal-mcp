@@ -2642,5 +2642,92 @@ return { success: true, projectId };
             expect(res['success']).toBe(true)
             expect(mockDb.deleteEntries).toHaveBeenCalledWith([14460], false, '*')
         })
+
+        it('should fallback to wildcard workspace in get_entry_by_id even when project_number is supplied', async () => {
+            const { callTool } = await import('../src/handlers/tools/index.js')
+            const mockDb = {
+                getEntryById: vi.fn((id: number, ws: string) => {
+                    if (ws === 'memory-journal-mcp') return null
+                    if (ws === '*') return { id: 14463, title: 'Test Entry', workspaceId: 'adamic' }
+                    if (ws === 'adamic') return { id: 14463, title: 'Test Entry', workspaceId: 'adamic' }
+                    return null
+                }),
+                getRelationships: vi.fn().mockReturnValue([]),
+                calculateImportance: vi.fn().mockReturnValue({ score: 0.5, breakdown: {} })
+            } as unknown as Parameters<typeof callTool>[2]
+
+            const res = (await callTool('get_entry_by_id', {
+                entry_id: 14463,
+                project_number: 5
+            }, mockDb, undefined, undefined, mockConfig)) as Record<string, unknown>
+
+            expect(res['success']).toBe(true)
+            expect((res['entry'] as Record<string, unknown> | undefined)?.['workspaceId']).toBe('adamic')
+            expect(mockDb.getEntryById).toHaveBeenCalledWith(14463, '*')
+        })
+
+        it('should accept workspace_id: "*" in link_entries for cross-workspace relationships', async () => {
+            const { callTool } = await import('../src/handlers/tools/index.js')
+            const mockDb = {
+                getEntryById: vi.fn((id: number, _ws: string) => {
+                    if (id === 14464) return { id: 14464, workspaceId: 'memory-journal-mcp' }
+                    if (id === 14462) return { id: 14462, workspaceId: 'memory-journal-mcp' }
+                    return null
+                }),
+                getRelationships: vi.fn().mockReturnValue([]),
+                linkEntries: vi.fn().mockReturnValue({
+                    id: 999,
+                    fromEntryId: 14464,
+                    toEntryId: 14462,
+                    relationshipType: 'resolved'
+                })
+            } as unknown as Parameters<typeof callTool>[2]
+
+            const res = (await callTool('link_entries', {
+                from_entry_id: 14464,
+                to_entry_id: 14462,
+                relationship_type: 'resolved',
+                workspace_id: '*'
+            }, mockDb, undefined, undefined, mockConfig)) as Record<string, unknown>
+
+            expect(res['success']).toBe(true)
+            expect(mockDb.linkEntries).toHaveBeenCalledWith(14464, 14462, 'resolved', undefined, '*')
+        })
+
+        it('should allow cross-workspace linking in link_entries when endpoints belong to different workspaces', async () => {
+            const { callTool } = await import('../src/handlers/tools/index.js')
+            const mockDb = {
+                getEntryById: vi.fn((id: number, ws: string) => {
+                    if (id === 14464) {
+                        return ws === 'memory-journal-mcp' || ws === '*'
+                            ? { id: 14464, workspaceId: 'memory-journal-mcp' }
+                            : null
+                    }
+                    if (id === 14463) {
+                        return ws === 'adamic' || ws === '*'
+                            ? { id: 14463, workspaceId: 'adamic' }
+                            : null
+                    }
+                    return null
+                }),
+                getRelationships: vi.fn().mockReturnValue([]),
+                linkEntries: vi.fn().mockReturnValue({
+                    id: 1000,
+                    fromEntryId: 14464,
+                    toEntryId: 14463,
+                    relationshipType: 'references'
+                })
+            } as unknown as Parameters<typeof callTool>[2]
+
+            const customConfig = { ...mockConfig, defaultWorkspaceId: 'memory-journal-mcp' }
+            const res = (await callTool('link_entries', {
+                from_entry_id: 14464,
+                to_entry_id: 14463,
+                relationship_type: 'references'
+            }, mockDb, undefined, undefined, customConfig)) as Record<string, unknown>
+
+            expect(res['success']).toBe(true)
+            expect(mockDb.linkEntries).toHaveBeenCalledWith(14464, 14463, 'references', undefined, '*')
+        })
     })
 })
