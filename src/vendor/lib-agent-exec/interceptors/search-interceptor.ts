@@ -203,7 +203,9 @@ export function handleFindInterception(ctx: ExecutionContext): void {
     }
     newArgs.push('-name', pattern);
     ctx.args = newArgs;
-    return;
+    if (!hasRecurse) {
+      return;
+    }
   }
 
   // Auto-heal common find -type hallucinations (e.g. -type file -> -type f, -type fts* -> -name fts*)

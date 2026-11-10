@@ -726,6 +726,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
         if (ctx.payload.type === 'command') {
           ctx.payload.command = 'find';
         }
+        ctx.cmdBasename = 'find';
         const newArgs = [targetPath];
         if (!hasRecurse) {
           newArgs.push('-maxdepth', '1');
@@ -734,6 +735,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
         if (hasDir) newArgs.push('-type', 'd');
         newArgs.push('-name', pattern);
         ctx.args = newArgs;
+        handleFindInterception(ctx);
         return;
       }
 
@@ -757,11 +759,13 @@ export function systemInterceptor(ctx: ExecutionContext): void {
           if (ctx.payload.type === 'command') {
             ctx.payload.command = 'find';
           }
+          ctx.cmdBasename = 'find';
           const newArgs = [targetPath];
           if (hasFile) newArgs.push('-type', 'f');
           if (hasDir) newArgs.push('-type', 'd');
           newArgs.push('-name', pattern);
           ctx.args = newArgs;
+          handleFindInterception(ctx);
           return;
         }
       }
