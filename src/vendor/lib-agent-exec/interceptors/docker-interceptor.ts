@@ -83,11 +83,19 @@ export function dockerInterceptor({ cmdBasename, args, payload }: ExecutionConte
   const isDockerScout = 
     (dockerCmds.includes(cmdBasename) && (subCmd === 'scout' || args.includes('scout')));
 
-  if (isDockerBuild || isDockerScout) {
-    console.error(`\n   🛠️ AUTONOMOUS HEALING: Disabling stall interceptors and extending timeout to 600s for Docker build/scout... (Frictionless Recovery)`);
+  if (isDockerScout && process.platform === 'win32' && payload.target !== 'wsl2') {
+    console.error(`\n   💡 AGENT INTERCEPT: 'docker scout' on Windows Docker CLI experiences proxy timeouts while indexing images.`);
+    console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Switching execution target to WSL2 with 1800s timeout... (Frictionless Recovery)\x1b[0m`);
+    payload.target = 'wsl2';
     payload.bypassInterceptors = true;
-    if (payload.timeoutMs === undefined || payload.timeoutMs < 600000) {
-      payload.timeoutMs = 600000;
+    payload.timeoutMs = Math.max(payload.timeoutMs ?? 0, 1800000);
+  } else if (isDockerBuild || isDockerScout) {
+    const minTimeout = isDockerScout ? 1800000 : 600000;
+    const timeoutMsg = isDockerScout ? '1800s' : '600s';
+    console.error(`\n   🛠️ AUTONOMOUS HEALING: Disabling stall interceptors and extending timeout to ${timeoutMsg} for Docker ${isDockerScout ? 'scout' : 'build'}... (Frictionless Recovery)`);
+    payload.bypassInterceptors = true;
+    if (payload.timeoutMs === undefined || payload.timeoutMs < minTimeout) {
+      payload.timeoutMs = minTimeout;
     }
   }
 

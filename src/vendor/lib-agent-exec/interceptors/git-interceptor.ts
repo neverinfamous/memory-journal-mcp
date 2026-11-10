@@ -157,6 +157,9 @@ export function gitInterceptor(ctx: ExecutionContext): void {
     .with(
       { cmd: P.union('log', 'shortlog', 'show', 'diff', 'status') },
       ({ ctx, args, cmd }) => {
+        if (cmd === 'diff' && args.includes('--no-index')) {
+          return;
+        }
         const cwd = ctx.payload.cwd || process.cwd();
         const fallbackScript = path.resolve(__dirname, '../../get-git-history-json.ts');
         const scriptCandidate = findEcosystemScript(targetCwd, 'get-git-history-json.ts') || findEcosystemScript(rawCwd, 'get-git-history-json.ts') || findEcosystemScript(cwd, 'get-git-history-json.ts') || (fs.existsSync(fallbackScript) ? fallbackScript : null);

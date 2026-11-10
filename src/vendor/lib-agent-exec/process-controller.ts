@@ -213,6 +213,7 @@ export class ProcessController {
   private ioController!: IOController;
   
   private isFinished = false;
+  private hasRetriedWsl = false;
   private timeoutTimer: NodeJS.Timeout | null = null;
   private forceKillTimer: NodeJS.Timeout | null = null;
   private cleanupProcessHandlers: (() => void)[] = [];
@@ -446,7 +447,28 @@ export class ProcessController {
 
     if (this.timeoutTimer) clearTimeout(this.timeoutTimer);
     if (this.forceKillTimer) clearTimeout(this.forceKillTimer);
-    
+
+    if (code === 255 && path.basename(this.cmd).toLowerCase() === 'wsl.exe' && !this.hasRetriedWsl && !signal) {
+      this.hasRetriedWsl = true;
+      this.isFinished = false;
+      if (this.ioController) {
+        this.ioController.destroyStreams();
+      }
+      console.error(`\n   💡 AGENT HINT: 'wsl.exe' exited with code 255 (transient WSL VM startup/pipe issue).`);
+      console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Automatically retrying command in WSL2 after 500ms... (Frictionless Recovery)\x1b[0m`);
+      setTimeout(() => {
+        try {
+          this.spawnChild();
+          this.setupIOController();
+          this.setupEventHandlers();
+          this.setupTimeouts();
+        } catch {
+          this.handleFinish(1, null, false);
+        }
+      }, 500);
+      return;
+    }
+
     this.cleanupTempScript();
     if (this.ioController) {
       this.ioController.flushAll();

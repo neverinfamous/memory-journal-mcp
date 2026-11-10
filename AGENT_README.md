@@ -73,6 +73,12 @@ The server supports strict data isolation using `workspace_id`.
 - The `workspace_id` is assigned upon creation and cannot be overwritten directly on standard updates; cross-workspace entry migration uses `update_entry` with `workspace_id: '*'` and `target_workspace_id`.
 - Read, search, and relationship tools accept `workspace_id: "*"` to query across all workspaces (`resolveWorkspaceId('*')` preserves wildcard sentinel `'*'`); `create_entry` uses `resolveProjectContext`, which treats `workspace_id: '*'` as omitted so `'*'` is never stored. `update_entry`, `delete_entry`, `restore_entry`, `batch_update_entries`, `batch_delete_entries`, `link_entries`, and `team_link_entries` keep `'*'` as a cross-workspace caller scope. A stored workspace changes only when `target_workspace_id` is set and is not `'*'`.
 
+### 4. Knowledge Graph Relationships & Parameter Healing
+
+- Tools creating entries (`create_entry`, `team_create_entry`, `batch_create_entries`, and `team_batch_create_entries`) accept a canonical `relationships: [{ targetId, relationType }]` array.
+- Autonomous agents frequently supply top-level relationship fields (`evolves_from`, `references`, `implements`, `related_to`, `clarifies`, `response_to`, `blocked_by`, `resolved`, `resolves`, `caused`, `depends_on`, or their camelCase equivalents).
+- `healAgentHallucinations` autonomously intercepts and translates top-level relationship parameters into the canonical `relationships` structure and purges the top-level keys before strict Zod validation, ensuring zero friction across single and batch creation flows.
+
 ---
 
 ## 📡 Session Initialization & Context

@@ -131,15 +131,26 @@ export const StrictProjectNumberSchema = z
  * into canonical { targetId, relationType } shape before Zod validation.
  */
 export function preprocessRelationshipItem(item: unknown): unknown {
+    if (typeof item === 'number' && !Number.isNaN(item)) {
+        return { targetId: item, relationType: 'references' }
+    }
+    if (typeof item === 'string' && /^\d+$/.test(item.trim())) {
+        return { targetId: Number(item.trim()), relationType: 'references' }
+    }
     if (item !== null && typeof item === 'object') {
         const relObj = item as Record<string, unknown>
+        const rawTarget =
+            relObj['targetId'] ??
+            relObj['target_id'] ??
+            relObj['to_entry_id'] ??
+            relObj['toEntryId'] ??
+            relObj['id']
+        const targetId =
+            typeof rawTarget === 'string' && /^\d+$/.test(rawTarget.trim())
+                ? Number(rawTarget.trim())
+                : rawTarget
         return {
-            targetId:
-                relObj['targetId'] ??
-                relObj['target_id'] ??
-                relObj['to_entry_id'] ??
-                relObj['toEntryId'] ??
-                relObj['id'],
+            targetId,
             relationType:
                 relObj['relationType'] ??
                 relObj['relation_type'] ??

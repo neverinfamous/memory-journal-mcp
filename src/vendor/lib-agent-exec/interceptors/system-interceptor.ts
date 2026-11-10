@@ -90,7 +90,9 @@ export function systemInterceptor(ctx: ExecutionContext): void {
               nestedTimeout = parsed;
             }
           }
-          if (/(?:docker|docker-compose|podman)/i.test(a) && /(?:build|scout)/i.test(a)) {
+          if (/(?:docker|docker-compose|podman)/i.test(a) && /scout/i.test(a)) {
+            nestedTimeout = Math.max(nestedTimeout, 1800000);
+          } else if (/(?:docker|docker-compose|podman)/i.test(a) && /build/i.test(a)) {
             nestedTimeout = Math.max(nestedTimeout, 600000);
           }
           if (/(?:playwright|cypress|\be2e\b)/i.test(a)) {
@@ -112,7 +114,9 @@ export function systemInterceptor(ctx: ExecutionContext): void {
                   nestedTimeout = parsed;
                 }
               }
-              if (/(?:docker|docker-compose|podman)/i.test(fileContent) && /(?:build|scout)/i.test(fileContent)) {
+              if (/(?:docker|docker-compose|podman)/i.test(fileContent) && /scout/i.test(fileContent)) {
+                nestedTimeout = Math.max(nestedTimeout, 1800000);
+              } else if (/(?:docker|docker-compose|podman)/i.test(fileContent) && /build/i.test(fileContent)) {
                 nestedTimeout = Math.max(nestedTimeout, 600000);
               }
               if (/(?:playwright|cypress|\be2e\b)/i.test(fileContent)) {
@@ -494,7 +498,8 @@ export function systemInterceptor(ctx: ExecutionContext): void {
       const isInlineShellHallucination = payload.type === 'eval' && /^\s*(?:pwsh|powershell|cmd|bash|sh|wsl)(?:\.exe)?\b/i.test(codeOrScript);
       const isPlaywright = !isInlineShellHallucination && Boolean(codeOrScript && /(?:playwright|cypress|\be2e\b|test:e2e)/i.test(codeOrScript));
       const isCoverage = !isInlineShellHallucination && Boolean(codeOrScript && /(?:coverage|--coverage)/i.test(codeOrScript));
-      const isDocker = !isInlineShellHallucination && Boolean(codeOrScript && /(?:docker|docker-compose|podman)/i.test(codeOrScript) && /(?:build|scout)/i.test(codeOrScript));
+      const isDockerScout = !isInlineShellHallucination && Boolean(codeOrScript && /(?:docker|docker-compose|podman)/i.test(codeOrScript) && /scout/i.test(codeOrScript));
+      const isDockerBuild = !isInlineShellHallucination && !isDockerScout && Boolean(codeOrScript && /(?:docker|docker-compose|podman)/i.test(codeOrScript) && /build/i.test(codeOrScript));
       const isChainedQuality = !isInlineShellHallucination && payload.type === 'eval' && Boolean(codeOrScript && /(?:typecheck|tsc|lint|check|build|test).*(?:&&|;).*(?:typecheck|tsc|lint|check|build|test)/i.test(codeOrScript));
       const hasQualityCheck = !isInlineShellHallucination && payload.type === 'eval' && Boolean(codeOrScript && /(?:(?:bun|pnpm|npm|yarn|npx|bunx|pnpx)\s+(?:run\s+)?(?:typecheck|tsc|lint|check|build|test)\b|\b(?:vitest|jest|tsc|eslint)\b)/i.test(codeOrScript));
       const isKnownDeterministic = !isInlineShellHallucination && Boolean(codeOrScript && /(?:commit\.ts|get-git-history-json\.ts|backup-conversations\.ts)/i.test(codeOrScript));
@@ -504,10 +509,14 @@ export function systemInterceptor(ctx: ExecutionContext): void {
         defaultWslTimeout = 600000;
         payload.bypassInterceptors = true;
         console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected Playwright/E2E test in WSL2 eval payload. Auto-extending timeout to 600s... (Frictionless Recovery)`);
-      } else if (isDocker) {
+      } else if (isDockerScout) {
+        defaultWslTimeout = 1800000;
+        payload.bypassInterceptors = true;
+        console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected Docker scout in WSL2 eval payload. Auto-extending timeout to 1800s... (Frictionless Recovery)`);
+      } else if (isDockerBuild) {
         defaultWslTimeout = 600000;
         payload.bypassInterceptors = true;
-        console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected Docker build/scout in WSL2 eval payload. Auto-extending timeout to 600s... (Frictionless Recovery)`);
+        console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected Docker build in WSL2 eval payload. Auto-extending timeout to 600s... (Frictionless Recovery)`);
       } else if (isCoverage) {
         defaultWslTimeout = 300000;
         payload.bypassInterceptors = true;
@@ -527,14 +536,15 @@ export function systemInterceptor(ctx: ExecutionContext): void {
     } else if (payload.type === 'command') {
       const underlyingScript = getUnderlyingPackageScript(cmdBasename, args, payload.cwd);
       const isNestedAgentExec = (args && args.some(a => path.basename(a).toLowerCase() === 'agent-exec.ts'));
-      const isDocker = /(?:docker|docker-compose|podman)/i.test(cmdBasename) && (args && args.some(a => /(?:build|scout)/i.test(a)));
+      const isDockerScout = /(?:docker|docker-compose|podman)/i.test(cmdBasename) && (args && args.some(a => /scout/i.test(a)));
+      const isDockerBuild = !isDockerScout && /(?:docker|docker-compose|podman)/i.test(cmdBasename) && (args && args.some(a => /build/i.test(a)));
       const isPlaywright = /(?:playwright|cypress)/i.test(cmdBasename) ||
         (args && args.some(a => /(?:playwright|cypress|\be2e\b|test:e2e|test-e2e)/i.test(a))) ||
         /(?:playwright|cypress|\be2e\b)/i.test(underlyingScript);
       const isCoverage = /(?:coverage)/i.test(cmdBasename) ||
         (args && args.some(a => /(?:coverage|--coverage|test:coverage)/i.test(a))) ||
         /(?:coverage|--coverage)/i.test(underlyingScript);
-      const isQuality = !isNestedAgentExec && !isDocker && (
+      const isQuality = !isNestedAgentExec && !isDockerScout && !isDockerBuild && (
         /(?:typecheck|tsc|lint|check|build|test|vitest|jest)/i.test(cmdBasename) ||
         (args && args.some(a => /(?:typecheck|tsc|lint|check|build|test|vitest|jest)/i.test(a))) ||
         /(?:typecheck|tsc|lint|check|build|test|vitest|jest)/i.test(underlyingScript)
@@ -542,7 +552,10 @@ export function systemInterceptor(ctx: ExecutionContext): void {
       const isKnownDeterministic = /(?:commit\.ts|get-git-history-json\.ts|backup-conversations\.ts)/i.test(cmdBasename) || (args && args.some(a => /(?:commit\.ts|get-git-history-json\.ts|backup-conversations\.ts)/i.test(a)));
       const isSearch = /(?:find|grep|rg|ls|tree)\b/i.test(cmdBasename) || (args && args.some(a => /(?:find|grep|rg|ls|tree)\b/i.test(a)));
       
-      if (isPlaywright || isDocker) {
+      if (isDockerScout) {
+        defaultWslTimeout = 1800000;
+        payload.bypassInterceptors = true;
+      } else if (isPlaywright || isDockerBuild) {
         defaultWslTimeout = 600000;
         payload.bypassInterceptors = true;
       } else if (isQuality || isKnownDeterministic) {

@@ -2730,4 +2730,78 @@ return { success: true, projectId };
             expect(mockDb.linkEntries).toHaveBeenCalledWith(14464, 14463, 'references', undefined, '*')
         })
     })
+
+    describe('Layer 2 & Schemas: Relationship Top-Level Parameter Auto-Healing', () => {
+        it('should heal evolves_from parameter in CreateEntrySchema into relationships array (agent-issues.jsonl regression)', async () => {
+            const { CreateEntrySchema } = await import('../src/handlers/tools/core/schemas.js')
+            const parsed = CreateEntrySchema.parse({
+                workspace_id: 'adamic',
+                project_number: 16,
+                session_id: 'c019df63-1145-4e67-b34c-d42dad4ed8db',
+                entry_type: 'maintenance',
+                content: 'Reflex healing summary',
+                tags: ['cms', 'cms-03-reflex-healing'],
+                validation_status: 'passed',
+                impact_score: 0.7,
+                trust_score: 1,
+                significance_type: 'milestone',
+                evolves_from: 14515,
+            })
+
+            expect(parsed.relationships).toBeDefined()
+            expect(parsed.relationships).toEqual([
+                { targetId: 14515, relationType: 'evolves_from' }
+            ])
+            expect((parsed as Record<string, unknown>)['evolves_from']).toBeUndefined()
+        })
+
+        it('should heal multiple top-level relationship keys and merge with existing relationships', async () => {
+            const { CreateEntrySchema } = await import('../src/handlers/tools/core/schemas.js')
+            const parsed = CreateEntrySchema.parse({
+                workspace_id: 'memory-journal-mcp',
+                project_number: 5,
+                content: 'CMS-04 supervisor entry',
+                evolves_from: 14522,
+                references: 14605,
+                related_to: 14512,
+            })
+
+            expect(parsed.relationships).toBeDefined()
+            expect(parsed.relationships).toHaveLength(3)
+            expect(parsed.relationships).toContainEqual({ targetId: 14522, relationType: 'evolves_from' })
+            expect(parsed.relationships).toContainEqual({ targetId: 14605, relationType: 'references' })
+            expect(parsed.relationships).toContainEqual({ targetId: 14512, relationType: 'relates_to' })
+        })
+
+        it('should fold non-numeric references text into content as markdown notes', async () => {
+            const { CreateEntrySchema } = await import('../src/handlers/tools/core/schemas.js')
+            const parsed = CreateEntrySchema.parse({
+                workspace_id: 'memory-journal-mcp',
+                project_number: 5,
+                content: 'Architecture note',
+                references: 'See RFC 2119 and ISO 8601',
+            })
+
+            expect(parsed.content).toContain('**References:** See RFC 2119 and ISO 8601')
+            expect(parsed.relationships).toBeUndefined()
+        })
+
+        it('should normalize raw numeric and string IDs in preprocessRelationshipItem', async () => {
+            const { preprocessRelationshipItem } = await import(
+                '../src/handlers/tools/schemas/constants-and-primitives.js'
+            )
+            expect(preprocessRelationshipItem(14515)).toEqual({
+                targetId: 14515,
+                relationType: 'references',
+            })
+            expect(preprocessRelationshipItem('14515')).toEqual({
+                targetId: 14515,
+                relationType: 'references',
+            })
+            expect(preprocessRelationshipItem({ id: '14515', type: 'implements' })).toEqual({
+                targetId: 14515,
+                relationType: 'implements',
+            })
+        })
+    })
 })

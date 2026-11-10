@@ -171,7 +171,7 @@ ${markUntrustedContent(deletedSnippet)}
    - \`significance_type: 'milestone'\`
    - \`tags: ['cms', 'cms-04-rem-supervisor', 'meta-learning', 'maintenance']\`
    - \`trust_score: 1.0\`, \`impact_score: 0.6\`, \`validation_status: 'passed'\`
-   - Link via \`evolves_from\` to the prior \`cms-04-rem-supervisor\` entry and via \`references\` to the latest \`cms-02-nrem-consolidation\` entry.
+   - Link via \`relationships: [{ targetId: <prior_cms04_id>, relationType: 'evolves_from' }, { targetId: <latest_cms02_id>, relationType: 'references' }]\` (or top-level \`evolves_from\` and \`references\` fields).
 `,
                             },
                         },
