@@ -39,7 +39,7 @@ const TABLES = [
 /**
  * Builds the `mj.schema` virtual namespace proxy.
  */
-export function createSchemaProxy(safeRpcCall: SafeRpcCallFn): object {
+export function createSchemaProxy(_safeRpcCall: SafeRpcCallFn): object {
     const schemaHelp = (): Promise<unknown> =>
         Promise.resolve({
             group: 'schema',
@@ -68,11 +68,10 @@ export function createSchemaProxy(safeRpcCall: SafeRpcCallFn): object {
             usage: 'Use mj.core.createEntry.schema() for entry parameter details, or mj.analytics.getStatistics() for database statistics.',
         })
 
-    const schemaCallable = (..._args: unknown[]): Promise<unknown> =>
-        safeRpcCall('analytics', 'get_statistics', []).then(wrapResult)
+    const schemaCallable = (..._args: unknown[]): Promise<unknown> => schemaHelp()
 
     return new Proxy(schemaCallable, {
-        apply: (_t, _thisArg, args) => safeRpcCall('analytics', 'get_statistics', args).then(wrapResult),
+        apply: () => schemaHelp(),
         get(_t, p): unknown {
             if (typeof p === 'symbol' || p === 'then') return undefined
             if (p === 'help' || p === 'describe' || p === 'describeTable' || p === 'getSchema') return schemaHelp
@@ -156,13 +155,14 @@ export function createProjectsProxy(
             if (typeof p === 'string') {
                 const tokens = methodTokens(p)
                 const has = (token: string): boolean => tokens.includes(token)
-                if (has('delete') || has('remove')) return adminDeleteProject
+                // [INVARIANT] deleteAll tokenizes to delete+all and must not hit the list handler.
+                if (has('list') || (has('all') && !has('delete') && !has('remove'))) return adminListProjects
+                if (has('get') || has('find')) return adminGetProject
                 if (has('update') || has('edit')) return adminUpdateProject
                 if (has('create') || has('register') || has('add')) return adminRegisterProject
-                if (has('list') || has('all')) {
-                    return adminListProjects
+                if ((has('delete') || has('remove')) && !has('list') && !has('get')) {
+                    return adminDeleteProject
                 }
-                if (has('get') || has('find')) return adminGetProject
             }
             return Reflect.get(t, p) as unknown
         },

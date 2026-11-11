@@ -101,13 +101,17 @@ async function routeNamedTargetTool(
     }
 }
 
-export function projectAliasTarget(name: string): 'get_project' | 'list_projects' {
+export function projectAliasTarget(name: string): 'get_project' | 'list_projects' | undefined {
     const tokens = methodTokens(name)
     const has = (token: string): boolean => tokens.includes(token)
+    if (has('archive') || has('settings')) return undefined
     if (has('project') && !has('projects') && (has('get') || has('find'))) return 'get_project'
-    if (name.startsWith('mj.projects') && (has('get') || has('find'))) return 'get_project'
-    if (has('projects') || has('list') || name.startsWith('mj.projects')) return 'list_projects'
-    return 'list_projects'
+    const lastToken = tokens[tokens.length - 1]
+    if (has('projects') && !has('list') && (lastToken === 'get' || lastToken === 'find')) return 'get_project'
+    if (name === 'mj.projects' || (has('projects') && (has('list') || has('get') || has('all') || tokens.length <= 2))) {
+        return 'list_projects'
+    }
+    return undefined
 }
 
 function isProjectAlias(name: string): boolean {
@@ -150,7 +154,9 @@ function resolveTargetFromAlias(
         }
     }
     if (isProjectAlias(name)) {
-        return { target: projectAliasTarget(name), group: 'admin' }
+        const target = projectAliasTarget(name)
+        if (target === undefined) return undefined
+        return { target, group: 'admin' }
     }
     return undefined
 }
@@ -376,6 +382,16 @@ export function getEntryAndCodemodeFallbackToolDefinitions(
                             ? (params as Record<string, unknown>)
                             : {}
                     const targetTool = projectAliasTarget(name)
+                    if (targetTool === undefined) {
+                        return {
+                            success: false,
+                            error: `🛠️ AUTONOMOUS HEALING: '${name}' was not routed to a project tool.`,
+                            code: 'VALIDATION_ERROR',
+                            category: 'validation',
+                            recoverable: true,
+                            _healing_note: 'The operation was not executed.',
+                        }
+                    }
 
                     if (context !== undefined) {
                         const tool = getAdminTools(context).find((t) => t.name === targetTool)

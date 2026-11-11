@@ -96,7 +96,7 @@ const JOURNAL_TABLES = [
     'team_flags',
 ]
 
-export function createSchemaCallable(analyticsApi: GroupApiRecord): unknown {
+export function createSchemaCallable(_analyticsApi: GroupApiRecord): unknown {
     const schemaHelpFn = (): Promise<unknown> =>
         Promise.resolve({
             group: 'schema',
@@ -126,11 +126,7 @@ export function createSchemaCallable(analyticsApi: GroupApiRecord): unknown {
         })
 
     return Object.assign(
-        async (...args: unknown[]): Promise<unknown> => {
-            const stats = analyticsApi['getStatistics']
-            if (typeof stats === 'function') return stats(...args)
-            return schemaHelpFn()
-        },
+        schemaHelpFn,
         {
             help: schemaHelpFn,
             describe: schemaHelpFn,

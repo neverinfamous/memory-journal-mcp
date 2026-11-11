@@ -73,7 +73,12 @@ function createProcessOperationFn(shimMj: Record<string, unknown>): (arg: unknow
                 return getGroupMethod(shimMj, 'search', 'searchEntries')?.(arg)
             }
         }
-        return getGroupMethod(shimMj, 'core', 'createEntry')?.(arg)
+        return Promise.resolve({
+            success: false,
+            code: 'VALIDATION_ERROR',
+            error: 'Unknown process operation',
+            _healing_note: 'The operation was not executed.',
+        })
     }
 }
 
@@ -326,8 +331,13 @@ export function buildSandboxGlobals(
         loadJournal: (): Promise<unknown> => Promise.resolve(shimMj),
         saveJournal: (): Promise<unknown> =>
             Promise.resolve({ success: false, code: 'VALIDATION_ERROR', error: 'saveJournal is not available in the sandbox' }),
-        readJournal: (): unknown =>
-            getGroupMethod(shimMj, 'core', 'getRecentEntries')?.({ limit: 50 }),
+        readJournal: (): Promise<unknown> =>
+            Promise.resolve({
+                success: false,
+                code: 'VALIDATION_ERROR',
+                error: 'readJournal is not available in the sandbox',
+                _healing_note: 'Use mj.core.getRecentEntries or mj.search.searchEntries.',
+            }),
         loadMemory: (): Promise<unknown> => Promise.resolve(shimMj),
         saveMemory: saveMemoryFn,
         save_memory: saveMemoryFn,

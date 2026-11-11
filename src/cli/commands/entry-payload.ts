@@ -5,6 +5,7 @@ import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import type { EntryType, ToolHandlerConfig } from '../../types/index.js'
 import { ConfigResolver } from '../../utils/config-resolver.js'
 import { resolveProjectContext } from '../../utils/workspace-resolver.js'
+import { activeProjectRegistry, pairStoredScope } from '../../utils/write-scope.js'
 import { logger } from '../../utils/logger.js'
 import { buildServerOptions } from '../server-options-builder.js'
 import { z } from 'zod'
@@ -286,8 +287,13 @@ export function buildEntryPayload(
         },
         config
     )
-    const projectNumber = resolved.projectNumber ?? explicitProjectNum
-    const workspaceId = resolved.workspaceId
+    const paired = pairStoredScope(
+        resolved.workspaceId,
+        explicitProjectNum ?? resolved.projectNumber,
+        activeProjectRegistry(config?.projectRegistry)
+    )
+    const projectNumber = paired.projectNumber ?? explicitProjectNum
+    const workspaceId = paired.workspaceId ?? resolved.workspaceId
 
     const { trustScore, impactScore, validationStatus, sessionId } = resolveScoresAndValidation(
         options,

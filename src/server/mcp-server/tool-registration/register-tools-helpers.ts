@@ -9,7 +9,7 @@ import type { DEFAULT_BRIEFING_CONFIG } from '../../../handlers/resources/shared
 import type { PromptDefinition } from '../../registration.js'
 import { globalSubscriptionManager } from '../../subscription-manager.js'
 import { logAgentIssue } from '../../../utils/issue-logger.js'
-import { getActiveSessionProject } from '../../../utils/workspace-resolver.js'
+import { findCanonicalRegistryKey, getActiveSessionProject } from '../../../utils/workspace-resolver.js'
 import type { ServerContext, ServerOptions } from '../types.js'
 
 /**
@@ -131,15 +131,22 @@ export function resolveActiveBriefingConfig(
     allowedIoRoots: string[]
 ): typeof DEFAULT_BRIEFING_CONFIG {
     const sessionCtx = getActiveSessionProject()
-    const resolvedDefaultProj =
-        briefingConfig.defaultProjectNumber ??
-        options.defaultProjectNumber ??
-        sessionCtx.projectNumber
     const resolvedRegistry = briefingConfig.projectRegistry ?? options.projectRegistry
     const resolvedDefaultWs =
         briefingConfig.defaultWorkspaceId ??
         options.defaultWorkspaceId ??
         sessionCtx.workspaceId
+    const canonicalWs =
+        resolvedDefaultWs !== undefined
+            ? (findCanonicalRegistryKey(resolvedDefaultWs, resolvedRegistry) ?? resolvedDefaultWs)
+            : undefined
+    const registryProject =
+        canonicalWs !== undefined ? resolvedRegistry?.[canonicalWs]?.project_number : undefined
+    const resolvedDefaultProj =
+        registryProject ??
+        briefingConfig.defaultProjectNumber ??
+        options.defaultProjectNumber ??
+        sessionCtx.projectNumber
     return {
         ...briefingConfig,
         ...(resolvedDefaultProj !== undefined ? { defaultProjectNumber: resolvedDefaultProj } : {}),

@@ -5,6 +5,7 @@
  */
 
 import type { ToolContext } from '../../../types/index.js'
+import { ValidationError } from '../../../types/errors.js'
 import { logger } from '../../../utils/logger.js'
 import {
     activeProjectRegistry,
@@ -87,8 +88,16 @@ export function resolveTeamProjectNumber(
     const concrete = concreteWorkspace(wsId)
     const key = concrete !== undefined ? exactRegistryKey(concrete, registry) : undefined
     const regProj = key !== undefined ? registry?.[key]?.project_number : undefined
-    if (regProj !== undefined) return regProj
     const explicit = explicitProjectNumber ?? undefined
+    if (regProj !== undefined) {
+        if (explicit !== undefined && explicit !== regProj) {
+            throw new ValidationError(
+                `project_number ${String(explicit)} belongs to a different workspace than '${key}'.`,
+                { workspaceId: key, projectNumber: explicit }
+            )
+        }
+        return regProj
+    }
     if (explicit !== undefined) return explicit
     return context.config?.defaultProjectNumber
 }

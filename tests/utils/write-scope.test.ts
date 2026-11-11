@@ -33,12 +33,24 @@ describe('pairStoredScope', () => {
             projectNumber: 99,
         })
     })
+
+    it('rejects a default workspace carrying another registry project', () => {
+        expect(() => pairStoredScope('default', 16, registry)).toThrow(ValidationError)
+        expect(pairStoredScope('default', undefined, registry)).toEqual({
+            workspaceId: 'default',
+            projectNumber: undefined,
+        })
+    })
 })
 
 describe('alignedProjectFilter', () => {
-    it('uses the registry project of an explicit workspace', () => {
-        expect(alignedProjectFilter('adamic', 5, registry)).toBe(16)
+    it('keeps a project number that belongs to the workspace', () => {
+        expect(alignedProjectFilter('adamic', 16, registry)).toBe(16)
         expect(alignedProjectFilter('*', 5, registry)).toBe(5)
         expect(alignedProjectFilter('adamic', undefined, registry)).toBeUndefined()
+    })
+
+    it('rejects a project number from a different workspace', () => {
+        expect(() => alignedProjectFilter('adamic', 5, registry)).toThrow(ValidationError)
     })
 })

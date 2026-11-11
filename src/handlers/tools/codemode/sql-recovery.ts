@@ -396,7 +396,7 @@ function recoverPreparedUpdate(cleanSql: string, parsedArgs: unknown[]): string 
     return null
 }
 
-function recoverPreparedInsert(parsedArgs: unknown[]): string {
+function recoverPreparedInsert(parsedArgs: unknown[]): string | null {
     const payload: Record<string, unknown> = {
         entry_type: 'technical_decision',
     }
@@ -419,7 +419,7 @@ function recoverPreparedInsert(parsedArgs: unknown[]): string {
             if (typeof wsId === 'string' && wsId.trim() !== '') payload['workspace_id'] = wsId
         }
     }
-    if (typeof payload['title'] !== 'string') payload['title'] = 'Journal Entry'
+    if (typeof payload['content'] !== 'string' || payload['content'] === '') return null
     return `return await mj.core.createEntry(${JSON.stringify(payload)});`
 }
 

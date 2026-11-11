@@ -96,7 +96,7 @@ export function getMiscTools(context: ToolContext): ToolDefinition[] {
                                 input.project_number,
                                 context.config
                             )
-                    const result = db.mergeTags(source_tag, target_tag, wsId)
+                    const result = db.mergeTags(source_tag, target_tag, wsId, input.project_number)
                     return {
                         success: true,
                         sourceTag: source_tag,

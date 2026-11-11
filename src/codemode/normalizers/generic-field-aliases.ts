@@ -1,5 +1,6 @@
 import type { ProjectRegistryEntry } from '../../types/index.js'
 import { loadProjectRegistryFromConfig, resolveProjectContext } from '../../utils/workspace-resolver.js'
+import { activeProjectRegistry as registryForScope, pairStoredScope } from '../../utils/write-scope.js'
 import { hasMethodToken } from '../method-tokens.js'
 import { isRecord, safeString } from './shared-utils.js'
 
@@ -277,11 +278,18 @@ export function resolveCreateEntryProjectContext(obj: Record<string, unknown>): 
     }
     const content = typeof obj['content'] === 'string' ? obj['content'] : undefined
     const tags = Array.isArray(obj['tags']) ? obj['tags'].filter((t): t is string => typeof t === 'string') : undefined
+    const wsRaw = typeof obj['workspace_id'] === 'string' ? obj['workspace_id'] : undefined
+    const workspaceIsConcrete =
+        wsRaw !== undefined && wsRaw !== '' && wsRaw !== 'default' && wsRaw !== '*'
     const resolved = resolveProjectContext({
-        ...(typeof obj['workspace_id'] === 'string' ? { workspace_id: obj['workspace_id'] } : {}),
+        ...(wsRaw !== undefined ? { workspace_id: wsRaw } : {}),
         ...(projNum !== undefined ? { project_number: projNum } : {}),
-        ...(content !== undefined ? { content } : {}),
-        ...(tags !== undefined ? { tags } : {}),
+        ...(workspaceIsConcrete || projNum !== undefined
+            ? {}
+            : {
+                  ...(content !== undefined ? { content } : {}),
+                  ...(tags !== undefined ? { tags } : {}),
+              }),
     })
     if (
         resolved.workspaceId !== undefined &&
@@ -298,13 +306,13 @@ export function resolveCreateEntryProjectContext(obj: Record<string, unknown>): 
             delete obj['workspace_id']
         }
     }
-    if (resolved.projectNumber !== undefined) {
-        const ws = obj['workspace_id']
-        const workspaceIsConcrete =
-            typeof ws === 'string' && ws !== '' && ws !== 'default' && ws !== '*'
-        if (obj['project_number'] === undefined || workspaceIsConcrete) {
-            obj['project_number'] = resolved.projectNumber
-        }
+    const wsAfter = obj['workspace_id']
+    const concreteAfter =
+        typeof wsAfter === 'string' && wsAfter !== '' && wsAfter !== 'default' && wsAfter !== '*'
+    if (projNum !== undefined && concreteAfter) {
+        pairStoredScope(wsAfter, projNum, registryForScope(activeProjectRegistry))
+    } else if (obj['project_number'] === undefined && resolved.projectNumber !== undefined) {
+        obj['project_number'] = resolved.projectNumber
     }
 }
 

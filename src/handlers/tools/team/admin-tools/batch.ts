@@ -10,6 +10,7 @@ import { formatHandlerError } from '../../../../utils/error-helpers.js'
 import { resolveAuthor, resolveAuthenticatedAuthor } from '../../../../utils/security-utils.js'
 import { getAuthContext } from '../../../../auth/auth-context.js'
 import { resolveProjectContext } from '../../../../utils/workspace-resolver.js'
+import { activeProjectRegistry, pairStoredScope } from '../../../../utils/write-scope.js'
 import { TEAM_DB_ERROR_RESPONSE, fetchAuthor, batchFetchAuthors, triggerTeamNotifications, resolveTeamProjectNumber } from '../helpers.js'
 import { resolveWriteWorkspaceId } from '../../write-workspace.js'
 import {
@@ -66,6 +67,16 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                     // Validate all entries and resolve project context first
                     const resolvedEntries = []
                     for (const e of input.entries) {
+                        if (e.workspace_id === '*' || input.workspace_id === '*') {
+                            return {
+                                success: false,
+                                error: "workspace_id '*' is a read-only wildcard and cannot be used to create team entries.",
+                                code: 'VALIDATION_ERROR',
+                                category: 'validation',
+                                suggestion: 'Pass a concrete workspace_id or a project_number.',
+                                recoverable: true,
+                            }
+                        }
                         const rawEntryWs =
                             e.workspace_id !== undefined && e.workspace_id !== 'default'
                                 ? e.workspace_id
@@ -90,11 +101,8 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                         // [INVARIANT] A configured defaultProjectNumber does not satisfy team batch create.
                         // Only an explicit number, or the registry project of a named workspace, does.
                         const projectNumber =
-                            requestedProject !== undefined && requestedProject !== null
-                                ? (resolved.projectNumber ?? requestedProject)
-                                : callerWorkspace !== undefined
-                                  ? resolved.projectNumber
-                                  : undefined
+                            requestedProject ??
+                            (callerWorkspace !== undefined ? resolved.projectNumber : undefined)
                         if (projectNumber === undefined || projectNumber === null) {
                             return {
                                 success: false,
@@ -128,17 +136,23 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                                 recoverable: false,
                             }
                         }
+                        const workspaceId = resolveWriteWorkspaceId(
+                            resolved.workspaceId !== 'default'
+                                ? resolved.workspaceId
+                                : (e.workspace_id ?? input.workspace_id),
+                            projectNumber,
+                            context.config
+                        )
+                        const paired = pairStoredScope(
+                            workspaceId,
+                            projectNumber,
+                            activeProjectRegistry(context.config?.projectRegistry)
+                        )
                         resolvedEntries.push({
                             e,
                             author: resolvedAuthor,
-                            projectNumber,
-                            workspaceId: resolveWriteWorkspaceId(
-                                resolved.workspaceId !== 'default'
-                                    ? resolved.workspaceId
-                                    : (e.workspace_id ?? input.workspace_id),
-                                projectNumber,
-                                context.config
-                            ),
+                            projectNumber: paired.projectNumber ?? projectNumber,
+                            workspaceId: paired.workspaceId ?? workspaceId,
                         })
                     }
 

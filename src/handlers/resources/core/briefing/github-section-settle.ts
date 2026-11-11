@@ -139,7 +139,7 @@ function unpackLocalGit(
 ): LocalGitStatus & { degraded?: boolean } {
     if (result.status === 'rejected') {
         reasons.push(`Local Git Status fetch failed: ${String(result.reason)}`)
-        return { modified: 0, untracked: 0, isClean: true, degraded: true }
+        return { modified: 0, untracked: 0, isClean: false, degraded: true }
     }
     return result.value
 }

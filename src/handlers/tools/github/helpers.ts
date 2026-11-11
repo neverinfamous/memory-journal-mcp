@@ -223,20 +223,7 @@ export async function resolveOwnerRepo(
         }
     }
 
-    let repoInfo = await toolGithub.getRepoInfo()
-    if (
-        usedRegistryGithub &&
-        repoInfo.owner === null &&
-        repoInfo.repo === null &&
-        context.github &&
-        context.github !== toolGithub &&
-        context.github.isApiAvailable()
-    ) {
-        toolGithub = context.github
-        repoInfo = await toolGithub.getRepoInfo()
-        usedRegistryGithub = false
-    }
-
+    const repoInfo = await toolGithub.getRepoInfo()
     const detectedOwner = repoInfo.owner
     const detectedRepo = repoInfo.repo
 

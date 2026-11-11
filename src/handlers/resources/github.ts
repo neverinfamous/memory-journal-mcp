@@ -5,6 +5,7 @@
  */
 
 import { ICON_GITHUB, ICON_MILESTONE } from '../../constants/icons.js'
+import { findCanonicalRegistryKey } from '../../utils/workspace-resolver.js'
 import {
     withPriority,
     ASSISTANT_FOCUSED,
@@ -113,13 +114,23 @@ async function handleGitHubStatusResource(
     if (isResourceError(resolved)) return resolved
     const { owner, repo, branch, lastModified, github } = resolved
 
-    const defaultProjectNumber = context.briefingConfig?.defaultProjectNumber
+    const registry = context.briefingConfig?.projectRegistry
+    const canonicalRepo =
+        targetRepo !== undefined && targetRepo !== ''
+            ? findCanonicalRegistryKey(targetRepo, registry)
+            : undefined
+    const repoProject =
+        canonicalRepo !== undefined ? registry?.[canonicalRepo]?.project_number : undefined
+    const kanbanProject =
+        targetRepo !== undefined && targetRepo !== ''
+            ? repoProject
+            : context.briefingConfig?.defaultProjectNumber
 
     const [repoContextResult, kanbanResult] = await Promise.allSettled([
         withGithubTimeout((s) => github.getRepoContext(s), 10000, 'getRepoContext'),
-        defaultProjectNumber !== undefined
+        kanbanProject !== undefined
             ? withGithubTimeout(
-                  (s) => github.getProjectKanban(owner, defaultProjectNumber, repo, s),
+                  (s) => github.getProjectKanban(owner, kanbanProject, repo, s),
                   10000,
                   'getProjectKanban'
               )
@@ -195,9 +206,16 @@ async function handleGitHubStatusResource(
     let fetchStatus: 'ok' | 'degraded' | 'failed' = 'ok'
     const failures: string[] = []
     if (repoContextResult.status === 'rejected') failures.push('context')
+    if (
+        repoContextResult.status === 'fulfilled' &&
+        Array.isArray(repoContextResult.value.degraded) &&
+        repoContextResult.value.degraded.length > 0
+    ) {
+        failures.push('context')
+    }
     if (kanbanResult.status === 'rejected') failures.push('kanban')
     if (failures.length > 0) {
-        const totalAttempts = defaultProjectNumber !== undefined ? 2 : 1
+        const totalAttempts = kanbanProject !== undefined ? 2 : 1
         fetchStatus = failures.length === totalAttempts ? 'failed' : 'degraded'
     }
 

@@ -350,7 +350,14 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
                     const missingBeforeDelete: number[] = []
                     for (const id of input.entry_ids) {
                         const existing = db.getEntryByIdIncludeDeleted(id, wsId)
-                        if (existing === null || existing === undefined) missingBeforeDelete.push(id)
+                        if (
+                            existing === null ||
+                            existing === undefined ||
+                            (input.project_number !== undefined &&
+                                existing.projectNumber !== input.project_number)
+                        ) {
+                            missingBeforeDelete.push(id)
+                        }
                     }
                     if (missingBeforeDelete.length > 0) {
                         return {

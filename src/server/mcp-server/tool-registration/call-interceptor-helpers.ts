@@ -96,9 +96,8 @@ export function normalizeAndAliasToolCall(
                 ) {
                     toolArgs['project_number'] = entry.project_number
                 }
-                if (workspaceMissingOrDefault) {
-                    toolArgs['workspace_id'] =
-                        entry !== undefined ? canonicalKey : candidate.trim()
+                if (workspaceMissingOrDefault && entry !== undefined) {
+                    toolArgs['workspace_id'] = canonicalKey
                 }
             }
         }

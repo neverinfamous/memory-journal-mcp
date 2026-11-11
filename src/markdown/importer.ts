@@ -341,15 +341,19 @@ function linkImportedRelationships(
     relationships: { type: string; target_id: number }[] | undefined,
     workspaceId: string | undefined,
     idRemap: ReadonlyMap<number, number>
-): number {
-    if (relationships === undefined) return 0
+): { linked: number; rejected: string[] } {
+    if (relationships === undefined) return { linked: 0, rejected: [] }
     let linked = 0
     const existingRels =
         typeof db.getRelationships === 'function'
             ? db.getRelationships(entryId, workspaceId)
             : []
+    const rejected: string[] = []
     for (const rel of relationships) {
-        if (!VALID_RELATIONSHIP_TYPES.has(rel.type)) continue
+        if (!VALID_RELATIONSHIP_TYPES.has(rel.type)) {
+            rejected.push(rel.type)
+            continue
+        }
         const targetId = idRemap.get(rel.target_id) ?? rel.target_id
         if (targetId === entryId) continue
         const alreadyExists = existingRels.some(
@@ -383,7 +387,7 @@ function linkImportedRelationships(
             linked++
         }
     }
-    return linked
+    return { linked, rejected }
 }
 
 /**
@@ -447,13 +451,21 @@ export async function processImportBatch(
         }
 
         for (const pending of pendingLinks) {
-            result.relationshipsLinked += linkImportedRelationships(
+            const linked = linkImportedRelationships(
                 db,
                 pending.entryId,
                 pending.relationships,
                 pending.workspaceId,
                 idRemap
             )
+            result.relationshipsLinked += linked.linked
+            for (const relType of linked.rejected) {
+                result.errors.push({
+                    file: '',
+                    error: `Unknown relationship type '${relType}' was not linked`,
+                })
+                result.success = false
+            }
         }
     })
 

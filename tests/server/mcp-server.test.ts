@@ -642,9 +642,8 @@ describe('McpServer', function () {
 
             const result = await handler({ workspace_id: 'default', project_number: 1, content: 'Will fail' }, { _meta: {} })
 
-            // With deterministic error handling, errors are caught by the handler
-            // and returned as structured JSON (not as MCP isError)
-            expect(result.isError).toBeUndefined()
+            // Tool results with success: false are returned as structured JSON and flagged isError.
+            expect(result.isError).toBe(true)
             expect(result.content[0]!.type).toBe('text')
 
             const text = result.content[0]!.text
@@ -1390,7 +1389,7 @@ describe('McpServer', function () {
             // Success path — callTool dispatches to the group handler which calls db.createEntry
             mockCreateEntry.mockReturnValueOnce({ id: 99, content: 'passed' })
             const successResult = await handler(
-                { content: 'test', entry_type: 'personal_reflection' },
+                { content: 'test', entry_type: 'personal_reflection', workspace_id: 'default', project_number: 1 },
                 {}
             )
             expect(successResult.isError).toBeUndefined()

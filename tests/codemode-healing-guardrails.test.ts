@@ -2565,7 +2565,7 @@ return { success: true, projectId };
             }, mockDb, undefined, undefined, mockConfig)) as Record<string, unknown>
 
             expect(res['success']).toBe(true)
-            expect(mockDb.mergeTags).toHaveBeenCalledWith('usability-testing', 'usability-test', '*')
+            expect(mockDb.mergeTags).toHaveBeenCalledWith('usability-testing', 'usability-test', '*', undefined)
         })
 
         it('should accept workspace_id: "*" in check_entry_staleness without validation error', async () => {

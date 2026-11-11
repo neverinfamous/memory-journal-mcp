@@ -13,6 +13,7 @@ import { getAuthContext } from '../../../auth/auth-context.js'
 import { resolveIssueUrl } from '../../../utils/github-helpers.js'
 import { autoIndexEntry } from '../../../utils/vector-index-helpers.js'
 import { resolveWorkspaceId, resolveProjectContext } from '../../../utils/workspace-resolver.js'
+import { activeProjectRegistry, pairStoredScope } from '../../../utils/write-scope.js'
 import {
     TEAM_DB_ERROR_RESPONSE,
     batchFetchAuthors,
@@ -93,8 +94,13 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                         },
                         context.config
                     )
-                    const wsId = resolved.workspaceId
-                    const projectNumber = resolved.projectNumber
+                    const paired = pairStoredScope(
+                        resolved.workspaceId,
+                        input.project_number ?? resolved.projectNumber,
+                        activeProjectRegistry(context.config?.projectRegistry)
+                    )
+                    const wsId = paired.workspaceId ?? resolved.workspaceId
+                    const projectNumber = paired.projectNumber
 
                     if (projectNumber === undefined || projectNumber === null || projectNumber <= 0) {
                         return {
@@ -377,7 +383,7 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                         input.project_number,
                         context.config
                     )
-                    const rawTags = teamDb.listTags(wsId)
+                    const rawTags = teamDb.listTags(wsId, input.project_number)
                     const tags = rawTags.map((t) => ({ name: t.name, count: t.usageCount }))
                     return { success: true, tags, count: tags.length }
                 } catch (err) {

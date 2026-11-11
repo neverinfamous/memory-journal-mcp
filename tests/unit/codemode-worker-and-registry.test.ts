@@ -335,6 +335,7 @@ describe('Code Mode Worker Core & Project Registry Ops', () => {
                 success: false,
                 code: 'VALIDATION_ERROR',
                 error: 'Statement could not be mapped to a journal method',
+                _healing_note: 'The SQL statement was not executed.',
             })
             expect((pragmaStmt['bind'] as () => unknown)()).toBe(pragmaStmt)
             expect((pragmaStmt['columns'] as () => unknown[])()).toEqual([])

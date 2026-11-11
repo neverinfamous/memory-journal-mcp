@@ -280,12 +280,13 @@ function parseUpdateStatement(cleanSql: string, args: unknown[]): ParsedSql {
     if (workspaceId !== undefined) updatePayload['workspace_id'] = workspaceId
     if (projectNumber !== undefined) updatePayload['project_number'] = projectNumber
 
+    if (entryId === undefined) return { action: 'unmapped', params: {} }
     return { action: 'update', params: updatePayload }
 }
 
 function parseInsertStatement(args: unknown[]): ParsedSql {
     let content = ''
-    let title = 'Journal Entry'
+    let title: string | undefined
     let tags: string[] = []
     let entryType = 'technical_decision'
     let workspaceId: string | undefined
@@ -300,8 +301,8 @@ function parseInsertStatement(args: unknown[]): ParsedSql {
             }
             if (content === '') {
                 content = arg
-            } else if (title === 'Journal Entry') {
-                title = arg
+            } else {
+                title ??= arg
             }
         } else if (Array.isArray(arg)) {
             tags = arg.map(String)
@@ -317,11 +318,12 @@ function parseInsertStatement(args: unknown[]): ParsedSql {
         }
     }
 
+    if (content === '') return { action: 'unmapped', params: {} }
     return {
         action: 'create',
         params: {
             content,
-            title,
+            ...(title !== undefined ? { title } : {}),
             tags,
             entry_type: entryType,
             ...(workspaceId !== undefined ? { workspace_id: workspaceId } : {}),
@@ -447,10 +449,11 @@ export function createPreparedStatementShim(
             )
         }
         return Promise.resolve({
-                    success: false,
-                    code: 'VALIDATION_ERROR',
-                    error: 'Statement could not be mapped to a journal method',
-                })
+            success: false,
+            code: 'VALIDATION_ERROR',
+            error: 'Statement could not be mapped to a journal method',
+            _healing_note: 'The SQL statement was not executed.',
+        })
     }
 
     const stmtObj: Record<string, unknown> = {

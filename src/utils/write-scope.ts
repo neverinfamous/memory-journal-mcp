@@ -8,11 +8,19 @@ export function activeProjectRegistry(registry?: ProjectRegistry): ProjectRegist
     return registry ?? loadProjectRegistryFromConfig()
 }
 
-/** A workspace name that can own a row. `*`, `default`, and blanks stay unscoped. */
+/** A named registry workspace. `*`, `default`, and blanks are not registry keys. */
 export function concreteWorkspace(workspaceId: string | undefined): string | undefined {
     if (workspaceId === undefined) return undefined
     const trimmed = workspaceId.trim()
     if (trimmed === '' || trimmed === '*' || trimmed.toLowerCase() === 'default') return undefined
+    return trimmed
+}
+
+/** Workspace stored on a row. `default` is a real workspace. Only `*` and blanks are unscoped. */
+function persistedWorkspace(workspaceId: string | undefined): string | undefined {
+    if (workspaceId === undefined) return undefined
+    const trimmed = workspaceId.trim()
+    if (trimmed === '' || trimmed === '*') return undefined
     return trimmed
 }
 
@@ -55,7 +63,7 @@ export function pairStoredScope(
     projectNumber: number | null | undefined,
     registry: ProjectRegistry | undefined
 ): { workspaceId: string | undefined; projectNumber: number | null | undefined } {
-    const concrete = concreteWorkspace(workspaceId)
+    const concrete = persistedWorkspace(workspaceId)
     const key = concrete !== undefined ? exactRegistryKey(concrete, registry) : undefined
     const registryProject = key !== undefined ? registry?.[key]?.project_number : undefined
     const supplied = suppliedProject(projectNumber)
@@ -91,8 +99,9 @@ export function pairStoredScope(
 }
 
 /**
- * A read filter uses the registry project of an explicit workspace.
- * `*` and `default` keep the requested number.
+ * A read filter keeps a requested project number when it belongs to that workspace.
+ * `*` and `default` keep the requested number. A concrete workspace with a different
+ * registry project is rejected.
  */
 export function alignedProjectFilter(
     workspaceId: string,
@@ -105,5 +114,11 @@ export function alignedProjectFilter(
     const key = exactRegistryKey(concrete, registry)
     const registryProject = key !== undefined ? registry?.[key]?.project_number : undefined
     if (registryProject === undefined) return requested
-    return registryProject
+    if (requested !== registryProject) {
+        throw new ValidationError(
+            `project_number ${String(requested)} does not match workspace '${key}', which uses project_number ${String(registryProject)}.`,
+            { workspaceId: key, projectNumber: requested }
+        )
+    }
+    return requested
 }

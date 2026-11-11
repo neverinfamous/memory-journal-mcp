@@ -108,10 +108,15 @@ describe('ProjectsManager — branch coverage', () => {
             expect(result!.projectTitle).toBe('Org Project')
         })
 
-        it('should return null when all sources fail', async () => {
-            client.graphqlWithAuth = vi.fn().mockRejectedValue(new Error('fail'))
+        it('should return null when every source reports the project was not found', async () => {
+            client.graphqlWithAuth = vi.fn().mockRejectedValue(new Error('Project could not be found'))
             const result = await projects.getProjectKanban('owner', 1)
             expect(result).toBeNull()
+        })
+
+        it('should rethrow when a project lookup fails for a reason other than not found', async () => {
+            client.graphqlWithAuth = vi.fn().mockRejectedValue(new Error('fail'))
+            await expect(projects.getProjectKanban('owner', 1)).rejects.toThrow('fail')
         })
 
         it('should return null when no Status field', async () => {

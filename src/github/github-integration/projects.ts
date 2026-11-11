@@ -13,6 +13,11 @@ interface OrgProjectResponse {
     organization: { projectV2: ProjectV2Data | null } | null
 }
 
+function projectLookupMiss(error: unknown): boolean {
+    const message = error instanceof Error ? error.message : String(error)
+    return /not found|could not resolve|could not be found/i.test(message)
+}
+
 const PROJECT_DATA_FRAGMENT = `
     fragment ProjectData on ProjectV2 {
         id
@@ -138,7 +143,8 @@ export class ProjectsManager {
             if (response.user?.projectV2) {
                 return { project: response.user.projectV2, source: 'user' }
             }
-        } catch {
+        } catch (error) {
+            if (!projectLookupMiss(error)) throw error
             logger.debug('User project not found, trying repository...', { module: 'GitHub' })
         }
 
@@ -154,7 +160,8 @@ export class ProjectsManager {
                 if (response.repository?.projectV2) {
                     return { project: response.repository.projectV2, source: 'repository' }
                 }
-            } catch {
+            } catch (error) {
+                if (!projectLookupMiss(error)) throw error
                 logger.debug('Repository project not found, trying organization...', {
                     module: 'GitHub',
                 })
@@ -171,7 +178,8 @@ export class ProjectsManager {
             if (response.organization?.projectV2) {
                 return { project: response.organization.projectV2, source: 'organization' }
             }
-        } catch {
+        } catch (error) {
+            if (!projectLookupMiss(error)) throw error
             logger.debug('Organization project not found', { module: 'GitHub' })
         }
 
@@ -352,6 +360,9 @@ export class ProjectsManager {
                 context: { projectId, contentId, itemId },
             })
 
+            if (typeof itemId !== 'string' || itemId.length === 0) {
+                return { success: false, error: 'GitHub did not return a project item id' }
+            }
             return { success: true, itemId }
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error)

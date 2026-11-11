@@ -172,17 +172,19 @@ async function tryAutonomousUnknownToolFallback(
         requestedTool === 'projects'
     ) {
         const target = requestedTool === 'projects' ? 'list_projects' : projectAliasTarget(requestedTool)
-        enforceAccessBoundary(target, 'tool', undefined, runtime.auditLogger)
-        if (target === 'get_project') {
-            return formatSuccessPayload(
-                resolveSingleProjectFromRegistry(customToolHandlerConfig.projectRegistry, toolArgs, requestedTool)
-            )
+        if (target !== undefined) {
+            enforceAccessBoundary(target, 'tool', undefined, runtime.auditLogger)
+            if (target === 'get_project') {
+                return formatSuccessPayload(
+                    resolveSingleProjectFromRegistry(customToolHandlerConfig.projectRegistry, toolArgs, requestedTool)
+                )
+            }
+            return formatSuccessPayload({
+                success: true,
+                projects: customToolHandlerConfig.projectRegistry ?? {},
+                _healing_note: `🛠️ AUTONOMOUS HEALING: '${requestedTool}' was called as an MCP tool. Returned registered projects from projectRegistry successfully.`,
+            })
         }
-        return formatSuccessPayload({
-            success: true,
-            projects: customToolHandlerConfig.projectRegistry ?? {},
-            _healing_note: `🛠️ AUTONOMOUS HEALING: '${requestedTool}' was called as an MCP tool. Returned registered projects from projectRegistry successfully.`,
-        })
     }
 
     if (matchesExactName(requestedTool, DUMMY_ADAPTER_TOOL_NAMES)) {

@@ -299,7 +299,7 @@ export interface IDatabaseAdapter {
     // Tags Manager
     getTagsForEntry(entryId: number): string[]
     getTagsForEntries(entryIds: number[]): Map<number, string[]>
-    listTags(workspaceId?: string): Tag[]
+    listTags(workspaceId?: string, projectNumber?: number): Tag[]
     mergeTags(
         sourceTag: string,
         targetTag: string,

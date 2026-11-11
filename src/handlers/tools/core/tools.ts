@@ -218,7 +218,11 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                     if (entry?.workspaceId !== undefined && (wsId === '*' || wsId === 'default')) {
                         wsId = entry.workspaceId
                     }
-                    if (!entry) {
+                    if (
+                        !entry ||
+                        (input.project_number !== undefined &&
+                            entry.projectNumber !== input.project_number)
+                    ) {
                         return {
                             success: false,
                             error: `Entry ${String(input.entry_id)} not found`,
@@ -304,7 +308,11 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                     if (current?.workspaceId !== undefined && (wsId === '*' || wsId === 'default')) {
                         wsId = current.workspaceId
                     }
-                    if (!current) {
+                    if (
+                        !current ||
+                        (input.project_number !== undefined &&
+                            current.projectNumber !== input.project_number)
+                    ) {
                         return {
                             success: false,
                             error: `Entry ${String(input.entry_id)} not found`,
@@ -363,7 +371,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         context.config
                     )
                     const tags = db
-                        .listTags(wsId)
+                        .listTags(wsId, input.project_number)
                         .map((t) => ({ name: t.name, count: t.usageCount ?? 0 }))
                     return { success: true, tags, count: tags.length }
                 } catch (err) {

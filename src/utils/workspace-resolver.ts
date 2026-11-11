@@ -164,15 +164,7 @@ export function findCanonicalRegistryKey(
     const direct = matchKeyCaseInsensitive(lower, registry)
     if (direct !== undefined) return direct
 
-    const byAlias = matchAliasInTable(lower, registry)
-    if (byAlias !== undefined) return byAlias
-
-    for (const token of lower.split(/[-_:.]+/)) {
-        if (token.length < 3) continue
-        const byToken = matchAliasInTable(token, registry)
-        if (byToken !== undefined) return byToken
-    }
-    return undefined
+    return matchAliasInTable(lower, registry)
 }
 
 function collectAliasesForKey(key: string): string[] {

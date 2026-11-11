@@ -239,15 +239,23 @@ function registerAllToolsOnServer(
 
                     const textContent =
                         typeof result === 'string' ? result : JSON.stringify(result, null, 2)
+                    const failed =
+                        typeof result === 'object' &&
+                        result !== null &&
+                        (result as Record<string, unknown>)['success'] === false
 
                     if (hasOutputSchema) {
                         return {
                             content: [{ type: 'text' as const, text: textContent }],
                             structuredContent: result as Record<string, unknown>,
+                            ...(failed ? { isError: true as const } : {}),
                         }
                     }
 
-                    return { content: [{ type: 'text' as const, text: textContent }] }
+                    return {
+                        content: [{ type: 'text' as const, text: textContent }],
+                        ...(failed ? { isError: true as const } : {}),
+                    }
                 } catch (error) {
                     const errorResult = formatToolFailure(error, tool.name, args)
 

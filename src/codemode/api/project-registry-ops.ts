@@ -211,11 +211,11 @@ export function createDeleteProjectFn(): (...args: unknown[]) => Promise<{
     }
 }
 
-export function createListProjectsFn(analyticsApi: GroupApiRecord): () => Promise<unknown> {
-    return async (): Promise<unknown> => {
+export function createListProjectsFn(_analyticsApi: GroupApiRecord): () => Promise<unknown> {
+    return (): Promise<unknown> => {
         try {
             const registry = parseProjectRegistry()
-            if (registry !== undefined && registry.length > 0) return registry
+            if (registry !== undefined && registry.length > 0) return Promise.resolve(registry)
         } catch (err) {
             mcpLogger.warning('codemode', 'Registry parse failed; falling back to config registry', {
                 error: registryError(err),
@@ -226,40 +226,33 @@ export function createListProjectsFn(analyticsApi: GroupApiRecord): () => Promis
             const { registry: reg } = readRegistryConfig()
             const entries = Object.entries(reg)
             if (entries.length > 0) {
-                return entries.map(([name, val]) => {
-                    const info = isRecord(val) ? val : {}
-                    return {
-                        name,
-                        projectNumber: info['project_number'] ?? info['id'],
-                        project_number: info['project_number'] ?? info['id'],
-                        ...info,
-                    }
-                })
+                return Promise.resolve(
+                    entries.map(([name, val]) => {
+                        const info = isRecord(val) ? val : {}
+                        return {
+                            name,
+                            projectNumber: info['project_number'] ?? info['id'],
+                            project_number: info['project_number'] ?? info['id'],
+                            ...info,
+                        }
+                    })
+                )
             }
         } catch (err) {
-            mcpLogger.warning('codemode', 'Registry read failed; falling back to analytics', {
+            mcpLogger.warning('codemode', 'Registry read failed', {
                 error: registryError(err),
             })
+            return Promise.resolve({
+                success: false,
+                error: registryError(err),
+                code: 'REGISTRY_UNAVAILABLE',
+            })
         }
-
-        const statsFn = analyticsApi['getStatistics']
-        if (typeof statsFn === 'function') {
-            try {
-                const stats = await statsFn({ group_by: 'month', project_breakdown: true })
-                if (isRecord(stats) && Array.isArray(stats['projectBreakdown'])) {
-                    return stats['projectBreakdown']
-                }
-            } catch (err) {
-                mcpLogger.warning('codemode', 'Project statistics fallback failed', {
-                    error: registryError(err),
-                })
-            }
-        }
-        return {
+        return Promise.resolve({
             success: false,
             error: 'Project registry is unavailable',
             code: 'REGISTRY_UNAVAILABLE',
-        }
+        })
     }
 }
 

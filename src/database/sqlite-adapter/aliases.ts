@@ -151,7 +151,7 @@ export class AliasManager {
             const scopeId = effectiveWorkspace(workspaceId)
             const scoped = scopeId !== '*'
             const sql = scoped
-                ? `SELECT canonical_author FROM author_aliases WHERE alias = ? COLLATE NOCASE AND (workspace_id IS NULL OR workspace_id = ?)`
+                ? `SELECT canonical_author FROM author_aliases WHERE alias = ? COLLATE NOCASE AND workspace_id = ?`
                 : `SELECT canonical_author FROM author_aliases WHERE alias = ? COLLATE NOCASE`
             const params = scoped ? [rawAuthor, scopeId] : [rawAuthor]
             const results = this.db.exec(sql, params)
@@ -186,7 +186,7 @@ export class AliasManager {
             const scopeId = effectiveWorkspace(workspaceId)
             const scoped = scopeId !== '*'
             const sql = scoped
-                ? `SELECT alias, canonical_author FROM author_aliases WHERE alias IN (${placeholders}) COLLATE NOCASE AND (workspace_id IS NULL OR workspace_id = ?)`
+                ? `SELECT alias, canonical_author FROM author_aliases WHERE alias IN (${placeholders}) COLLATE NOCASE AND workspace_id = ?`
                 : `SELECT alias, canonical_author FROM author_aliases WHERE alias IN (${placeholders}) COLLATE NOCASE`
             const params = scoped ? [...rawAuthors, scopeId] : rawAuthors
             const results = this.db.exec(sql, params)

@@ -149,7 +149,7 @@ describe('SQLite Database Extended Operations', () => {
                 impactScore: 0.9,
                 trustScore: 0.9,
                 validationStatus: 'passed',
-                workspaceId: 'default',
+                workspaceId: 'my-registered-project',
                 projectNumber: 77,
                 anchors: [{ anchorPath: 'src/index.ts', anchorType: 'file' }],
             })
@@ -164,16 +164,16 @@ describe('SQLite Database Extended Operations', () => {
                 issueUrl: 'https://github.com/owner/fallback-repo/issues/12',
             })
 
-            db.linkEntries(e2.id, e1.id, 'caused', 'Caused by decision')
-            db.linkEntries(e1.id, e2.id, 'resolved', 'Resolved issue')
+            db.linkEntries(e2.id, e1.id, 'caused', 'Caused by decision', '*')
+            db.linkEntries(e1.id, e2.id, 'resolved', 'Resolved issue', '*')
 
             // Verify anchors were inserted and update anchor status
-            const anchors = db.getAnchorsByEntryId(e1.id)
+            const anchors = db.getAnchorsByEntryId(e1.id, 'my-registered-project')
             expect(anchors.length).toBe(1)
             expect(anchors[0]?.anchorPath).toBe('src/index.ts')
 
             // Calculate importance with pending anchor
-            const impPending = db.calculateImportance(e1.id)
+            const impPending = db.calculateImportance(e1.id, 'my-registered-project')
             expect(impPending.score).toBeGreaterThan(0)
             expect(impPending.breakdown.significance).toBeGreaterThan(0)
             expect(impPending.breakdown.relationships).toBeGreaterThan(0)
@@ -181,23 +181,23 @@ describe('SQLite Database Extended Operations', () => {
 
             // Update anchor status to stale (rank 2 -> 0.8x) and invalidated (rank 1 -> 0.1x)
             if (anchors[0]) {
-                db.updateAnchorStatus(anchors[0].id, 'stale')
-                const impStale = db.calculateImportance(e1.id)
+                db.updateAnchorStatus(anchors[0].id, 'stale', 'my-registered-project')
+                const impStale = db.calculateImportance(e1.id, 'my-registered-project')
                 expect(impStale.score).toBeLessThan(impPending.score)
 
-                db.updateAnchorStatus(anchors[0].id, 'invalidated')
-                const impInvalid = db.calculateImportance(e1.id)
+                db.updateAnchorStatus(anchors[0].id, 'invalidated', 'my-registered-project')
+                const impInvalid = db.calculateImportance(e1.id, 'my-registered-project')
                 expect(impInvalid.score).toBeLessThan(impStale.score)
             }
 
             // Batch importance calculation
-            const batchImp = db.getEntriesByIdsWithImportance([e1.id, e2.id])
+            const batchImp = db.getEntriesByIdsWithImportance([e1.id, e2.id], '*')
             expect(batchImp.size).toBe(2)
             expect(batchImp.get(e1.id)?.importance.score).toBeDefined()
             expect(batchImp.get(e2.id)?.importance.score).toBeDefined()
 
             // Statistics with projectBreakdown (resolving project 77 from config and project 88 from URL)
-            const stats = db.getStatistics('day', '2020-01-01', '2030-12-31', true)
+            const stats = db.getStatistics('day', '2020-01-01', '2030-12-31', true, '*')
             const breakdown = stats['projectBreakdown'] as {
                 project_number: number
                 name?: string

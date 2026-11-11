@@ -100,27 +100,39 @@ export class TagsManager {
         return tagMap
     }
 
-    listTags(workspaceId?: string): Tag[] {
+    listTags(workspaceId?: string, projectNumber?: number): Tag[] {
         const wsId = effectiveWorkspace(workspaceId)
-        if (wsId !== '*') {
+        const scopedProject =
+            typeof projectNumber === 'number' && projectNumber > 0 ? projectNumber : undefined
+        if (wsId !== '*' || scopedProject !== undefined) {
             const hasDeletedAt =
                 this.db
                     .prepare(
                         "SELECT 1 FROM pragma_table_info('memory_journal') WHERE name = 'deleted_at'"
                     )
                     .get() !== undefined
+            const filters = [hasDeletedAt ? 'mj.deleted_at IS NULL' : '1 = 1']
+            const params: unknown[] = []
+            if (wsId !== '*') {
+                filters.push('mj.workspace_id = ?')
+                params.push(wsId)
+            }
+            if (scopedProject !== undefined) {
+                filters.push('mj.project_number = ?')
+                params.push(scopedProject)
+            }
             const rows = this.db
                 .prepare(
                     `SELECT t.id, t.name, COUNT(et.entry_id) as usage_count
                      FROM tags t
                      JOIN entry_tags et ON t.id = et.tag_id
                      JOIN memory_journal mj ON et.entry_id = mj.id
-                     WHERE mj.workspace_id = ?${hasDeletedAt ? ' AND mj.deleted_at IS NULL' : ''}
+                     WHERE ${filters.join(' AND ')}
                      GROUP BY t.id, t.name
                      HAVING COUNT(et.entry_id) > 0
                      ORDER BY usage_count DESC`
                 )
-                .all(wsId) as { id: number; name: string; usage_count: number }[]
+                .all(...params) as { id: number; name: string; usage_count: number }[]
 
             return rows.map((r) => ({ id: r.id, name: r.name, usageCount: r.usage_count }))
         }
