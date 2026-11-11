@@ -67,7 +67,11 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
   }
 
   if (['npm', 'npm.cmd', 'npm.exe', 'pnpm', 'pnpm.cmd', 'pnpm.exe', 'yarn', 'yarn.cmd', 'yarn.exe', 'bun', 'bun.cmd', 'bun.exe'].includes(cmdBasename)) {
-    const isBunProject = fs.existsSync(path.join(ctx.payload.cwd || process.cwd(), 'bun.lockb'));
+    const projectDir = ctx.payload.cwd !== undefined && ctx.payload.cwd.length > 0
+      ? path.resolve(ctx.payload.cwd)
+      : process.cwd();
+    // [INVARIANT]: Detect both modern text lockfile ('bun.lock') and legacy binary lockfile ('bun.lockb').
+    const isBunProject = fs.existsSync(path.join(projectDir, 'bun.lock')) || fs.existsSync(path.join(projectDir, 'bun.lockb'));
     const isNpm = cmdBasename.startsWith('npm');
     const isYarn = cmdBasename.startsWith('yarn');
     const isPnpm = cmdBasename.startsWith('pnpm');
@@ -125,7 +129,7 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
     envOverrides['CI'] = '1';
     envOverrides['PNPM_INTERACTIVE'] = 'false';
 
-    const isYarnOrPnpm = cmdBasename.includes('yarn') || cmdBasename.includes('pnpm');
+    const isYarnOrPnpm = isYarn || isPnpm || cmdBasename.includes('yarn') || cmdBasename.includes('pnpm');
     if (args.includes('--interactive') || (isYarnOrPnpm && args.includes('-i'))) {
       console.error(`\n   🛠️ AUTONOMOUS HEALING: Stripping interactive flag from ${cmdBasename} command... (Frictionless Recovery)`);
       for (let i = args.length - 1; i >= 0; i--) {
@@ -282,19 +286,22 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
       return;
     }
     const nonFlagArgs = args.filter(a => !a.startsWith('-'));
+    const subCmdLower = subCmd !== undefined ? subCmd.toLowerCase() : (isYarn ? 'install' : '');
+    // [INTENT]: Bypass IOController prompt-stall aborts and grant >=300s timeout during dependency resolution/installation across pnpm, npm, yarn, and bun.
+    const isPackageResolution = ['install', 'i', 'ci', 'add', 'update', 'up', 'dedupe'].includes(subCmdLower);
     const targetScript = (subCmd === 'run' || subCmd === 'exec') ? nonFlagArgs[1] : subCmd;
     const underlyingScript = getUnderlyingPackageScript(cmdBasename, args, ctx.payload.cwd);
-    const isPlaywright = Boolean(
+    const isPlaywright = !isPackageResolution && Boolean(
       (targetScript && /(?:playwright|cypress|\be2e\b|test:e2e|test-e2e)/i.test(targetScript)) ||
       args.some(a => /(?:playwright|cypress|\be2e\b|test:e2e|test-e2e)/i.test(a)) ||
       (underlyingScript && /(?:playwright|cypress|\be2e\b)/i.test(underlyingScript))
     );
-    const isCoverage = Boolean(
+    const isCoverage = !isPackageResolution && Boolean(
       (targetScript && /(?:coverage|test:coverage)/i.test(targetScript)) ||
       args.some(a => /(?:coverage|--coverage|test:coverage)/i.test(a)) ||
       (underlyingScript && /(?:coverage|--coverage)/i.test(underlyingScript))
     );
-    const isLongRunningQualityCheck = Boolean(
+    const isLongRunningQualityCheck = !isPackageResolution && Boolean(
       isPlaywright ||
       isCoverage ||
       (targetScript && (
@@ -307,7 +314,13 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
       args.some(a => /(?:vitest|jest|playwright|cypress|test|lint|typecheck|tsc)/i.test(a)) ||
       (underlyingScript && /(?:vitest|jest|playwright|cypress|eslint|tsc|typecheck|test)/i.test(underlyingScript))
     );
-    if (isPlaywright) {
+    if (isPackageResolution) {
+      console.error(`\n   🛠️ AUTONOMOUS HEALING: Disabling stall interceptors and extending timeout for package installation/resolution command to prevent false positive aborts.... (Frictionless Recovery)`);
+      ctx.payload.bypassInterceptors = true;
+      if (ctx.payload.timeoutMs === undefined || ctx.payload.timeoutMs < 300000) {
+        ctx.payload.timeoutMs = 300000;
+      }
+    } else if (isPlaywright) {
       console.error(`\n   🛠️ AUTONOMOUS HEALING: Disabling stall interceptors and extending timeout for Playwright/E2E test to prevent false positive aborts.... (Frictionless Recovery)`);
       ctx.payload.bypassInterceptors = true;
       if (ctx.payload.timeoutMs === undefined || ctx.payload.timeoutMs < 600000) {

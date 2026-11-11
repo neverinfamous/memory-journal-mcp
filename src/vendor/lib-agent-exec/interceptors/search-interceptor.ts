@@ -43,6 +43,74 @@ export interface ParsedGrepSearchArgs {
   isRegex: boolean;
 }
 
+const EXTENSIONLESS_FILENAMES_REGEX = /^(?:Makefile|Dockerfile|Containerfile|Procfile|Gemfile|Rakefile|Brewfile|Vagrantfile|Jenkinsfile|Justfile|LICENSE|README|CHANGELOG|AUTHORS|CODEOWNERS|OWNERS)$/i;
+const KNOWN_POSIX_ROOT_DIRS_REGEX = /^\/(?:etc|var|var\/log|tmp|usr|usr\/local|opt|home|root|srv|bin|sbin|lib|lib64|dev|proc|sys|run)$/;
+
+// [INTENT]: Distinguishes directory targets from patterns and single-file paths in rg/grep interceptors.
+// [INVARIANT]: Must NOT assume arbitrary POSIX paths without trailing '/' (e.g., '/var/log/syslog', '/etc/os-release', '/proc/cpuinfo') are directories on Windows hosts.
+export function isLikelyDirectoryArg(arg: string, cwd?: string): boolean {
+  if (arg.length === 0 || arg.startsWith('-') || arg.startsWith('\\-')) return false;
+  if (/[()*+?[\]^$|{}]/.test(arg) || /\\[bBwWdDsSnrtv0()[\]{}.*+?^$|\-.]/.test(arg) || arg.includes('|')) {
+    return false;
+  }
+
+  if (arg === '.' || arg === '..' || arg.endsWith('/') || arg.endsWith('\\') || /^[a-zA-Z]:[/\\]?$/.test(arg)) {
+    return true;
+  }
+
+  if (process.platform === 'win32' && /^\/mnt\/[a-zA-Z](?:\/|$)/.test(arg)) {
+    const winMapped = arg.replace(/^\/mnt\/([a-zA-Z])(?:\/(.*))?$/, (_, drive: string, rest?: string) =>
+      `${drive.toUpperCase()}:\\${(rest ?? '').replace(/\//g, '\\')}`
+    );
+    try {
+      if (fs.existsSync(winMapped)) {
+        return fs.statSync(winMapped).isDirectory();
+      }
+    } catch {
+      // ignore stat errors
+    }
+    return !/\.[a-zA-Z0-9]{1,6}$/.test(arg) && path.extname(arg).length === 0;
+  }
+
+  if (arg.startsWith('/')) {
+    if (process.platform !== 'win32') {
+      try {
+        if (fs.existsSync(arg)) {
+          return fs.statSync(arg).isDirectory();
+        }
+      } catch {
+        // ignore stat errors
+      }
+    }
+    return KNOWN_POSIX_ROOT_DIRS_REGEX.test(arg);
+  }
+
+  try {
+    const baseDir = cwd !== undefined && cwd.length > 0 ? path.resolve(cwd) : process.cwd();
+    const resolved = path.resolve(baseDir, arg);
+    if (fs.existsSync(resolved)) {
+      return fs.statSync(resolved).isDirectory();
+    }
+  } catch {
+    // ignore stat errors
+  }
+
+  if (/\.[a-zA-Z0-9]{1,6}$/.test(arg)) {
+    return false;
+  }
+
+  if (/^[a-zA-Z]:[/\\]/.test(arg) && path.extname(arg).length === 0) {
+    return true;
+  }
+
+  const baseName = path.posix.basename(arg.replace(/\\/g, '/'));
+  if (EXTENSIONLESS_FILENAMES_REGEX.test(baseName)) {
+    return false;
+  }
+
+  return arg.includes('/') || arg.includes('\\');
+}
+
 export function parseGrepSearchArgs(args: string[]): ParsedGrepSearchArgs {
   let isCaseInsensitive = false;
   let isWord = false;
@@ -443,34 +511,7 @@ export function handleRipgrepInterception(ctx: ExecutionContext, hasStdin: boole
   const hasFiles = ctx.args.includes('--files');
   const hasGlob = ctx.args.some(a => a === '-g' || a === '--glob' || a.startsWith('-g=') || a.startsWith('--glob='));
 
-  const isDir = (arg: string): boolean => {
-    try {
-      const cwd = ctx.payload.cwd !== undefined && ctx.payload.cwd.length > 0 ? path.resolve(ctx.payload.cwd) : process.cwd();
-      const p = path.resolve(cwd, arg);
-      if (fs.existsSync(p)) {
-        return fs.statSync(p).isDirectory();
-      }
-    } catch {
-      // ignore
-    }
-    if (/[()*+?[\]^$|{}]/.test(arg) || /\\[bBwWdDsSnrtv0()[\]{}.*+?^$|\-.]/.test(arg) || arg.includes('|')) return false;
-    if (/\.[a-zA-Z0-9]{1,6}$/.test(arg)) return false;
-    if (
-      arg.endsWith('/') ||
-      arg.endsWith('\\') ||
-      arg === '.' ||
-      arg === '..' ||
-      arg.startsWith('./') ||
-      arg.startsWith('../') ||
-      /^[a-zA-Z]:[/\\]?$/.test(arg) ||
-      (/^[a-zA-Z]:[/\\]/.test(arg) && !path.extname(arg)) ||
-      (arg.startsWith('/mnt/') && !path.extname(arg)) ||
-      ((arg.includes('/') || arg.includes('\\')) && !arg.startsWith('-') && !arg.startsWith('\\-'))
-    ) {
-      return true;
-    }
-    return false;
-  };
+  const isDir = (arg: string): boolean => isLikelyDirectoryArg(arg, ctx.payload.cwd);
 
   const isPathLike = (arg: string): boolean => {
     if (/[()*+?[\]^$|{}]/.test(arg) || /\\[bBwWdDsSnrtv0()[\]{}.*+?^$|\-.]/.test(arg) || arg.includes('|')) return false;
@@ -483,12 +524,11 @@ export function handleRipgrepInterception(ctx: ExecutionContext, hasStdin: boole
       arg.endsWith('\\') ||
       /^[a-zA-Z]:/.test(arg) ||
       arg.startsWith('/mnt/') ||
+      (arg.startsWith('/') && arg.slice(1).includes('/')) ||
       /\.[a-zA-Z0-9_-]+$/.test(arg) ||
       isDir(arg)
     );
   };
-
-  const isPathOrDir = (arg: string): boolean => isDir(arg) || isPathLike(arg);
 
   // Auto-heal reversed arguments (e.g. rg src/adapters/sqlite pattern)
   if (!hasStdin && !hasPatternFlag && !hasFiles && positionalArgs.length === 2) {
@@ -512,7 +552,7 @@ export function handleRipgrepInterception(ctx: ExecutionContext, hasStdin: boole
       ctx.args.unshift('--files');
       ctx.args.push('.');
       positionalArgs = ['.'];
-    } else if (positionalArgs.length === 1 && isPathOrDir(positionalArgs[0])) {
+    } else if (positionalArgs.length === 1 && isDir(positionalArgs[0])) {
       console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected 'rg' with glob flag and target path but no search pattern. Auto-injecting '--files' to search filenames... (Frictionless Recovery)\x1b[0m`);
       ctx.args.unshift('--files');
     } else if (positionalArgs.length >= 2 && positionalArgs.every(a => isDir(a))) {
@@ -681,21 +721,7 @@ export function handleGrepInterception(ctx: ExecutionContext, hasStdin: boolean)
 
   // Auto-heal reversed arguments (e.g. grep -r src/adapters/sqlite pattern)
   if (!hasStdin && !hasPatternFlag && positionalArgs.length === 2) {
-    const isDir = (arg: string): boolean => {
-      if (/[()*+?[\]^$|{}]/.test(arg) || /\\[bBwWdDsSnrtv0()[\]{}.*+?^$|]/.test(arg)) return false;
-      try {
-        const cwd = ctx.payload.cwd !== undefined && ctx.payload.cwd.length > 0 ? path.resolve(ctx.payload.cwd) : process.cwd();
-        const p = path.resolve(cwd, arg);
-        if (fs.existsSync(p)) {
-          return fs.statSync(p).isDirectory();
-        }
-      } catch {
-        // ignore
-      }
-      if (/\.[a-zA-Z0-9]{1,6}$/.test(arg)) return false;
-      if (arg.endsWith('/') || arg.endsWith('\\') || arg === '.' || arg === '..' || arg.startsWith('./') || arg.startsWith('../') || arg.includes('/') || arg.includes('\\') || /^[a-zA-Z]:/.test(arg)) return true;
-      return false;
-    };
+    const isDir = (arg: string): boolean => isLikelyDirectoryArg(arg, ctx.payload.cwd);
     if (isDir(positionalArgs[0]) && !isDir(positionalArgs[1])) {
       console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected reversed arguments in '${cmdBasename}' (directory before pattern). Swapping arguments to place pattern first... (Frictionless Recovery)\x1b[0m`);
       const idx0 = ctx.args.indexOf(positionalArgs[0]);
@@ -733,16 +759,7 @@ export function handleGrepInterception(ctx: ExecutionContext, hasStdin: boolean)
       ctx.args.push('.');
     }
   } else if (!hasStdin && fileArgsCount > 0 && !isRecursive) {
-    const hasDirTarget = targetFileArgs.some(a => {
-      if (a.endsWith('/') || a.endsWith('\\') || a === '.' || a === '..' || a.startsWith('./') || a.startsWith('../')) return true;
-      try {
-        const cwd = ctx.payload.cwd !== undefined && ctx.payload.cwd.length > 0 ? path.resolve(ctx.payload.cwd) : process.cwd();
-        const p = path.resolve(cwd, a);
-        return fs.existsSync(p) && fs.statSync(p).isDirectory();
-      } catch {
-        return false;
-      }
-    });
+    const hasDirTarget = targetFileArgs.some(a => isLikelyDirectoryArg(a, ctx.payload.cwd));
     if (hasDirTarget) {
       console.error(`\n   💡 AGENT HINT: '${cmdBasename.replace(/\.exe$/, '')}' called with a directory target without recursive flag.`);
       console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-injecting '-r' to search directory recursively... (Frictionless Recovery)\x1b[0m`);

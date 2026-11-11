@@ -282,6 +282,7 @@ export function buildEntryPayload(
             project_number: explicitProjectNum,
             content: content ?? options.content,
             tags,
+            preferCwdOverKeywords: true,
         },
         config
     )

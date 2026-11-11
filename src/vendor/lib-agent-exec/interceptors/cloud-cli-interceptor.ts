@@ -198,13 +198,26 @@ export function cloudCliInterceptor({ cmdBasename, args, envOverrides, payload }
         }
       })
       .with(['issue', 'edit'], () => {
-        if (!args.includes('--title') && !args.includes('--body') && !args.includes('--add-assignee') && !args.includes('--add-label')) {
+        const issueEditFlags = [
+          '--title', '-t', '--body', '-b', '--body-file', '-F',
+          '--add-assignee', '--remove-assignee', '--add-label', '--remove-label',
+          '--add-project', '--remove-project', '--milestone', '-m', '--remove-milestone',
+        ];
+        const hasIssueModFlag = args.some(a => issueEditFlags.includes(a) || issueEditFlags.some(f => a.startsWith(`${f}=`)));
+        if (!hasIssueModFlag) {
           console.error(`\n   💡 AGENT HINT: 'gh issue edit' is interactive without modification flags. Blocking execution.\n${AUTONOMOUS_HEALING_MSG}`);
           process.exit(1);
         }
       })
       .with(['pr', 'edit'], () => {
-        if (!args.includes('--title') && !args.includes('--body') && !args.includes('--add-assignee') && !args.includes('--add-label') && !args.includes('--add-reviewer')) {
+        const prEditFlags = [
+          '--title', '-t', '--body', '-b', '--body-file', '-F',
+          '--add-assignee', '--remove-assignee', '--add-label', '--remove-label',
+          '--add-reviewer', '--remove-reviewer', '--add-project', '--remove-project',
+          '--milestone', '-m', '--remove-milestone', '--base', '-B',
+        ];
+        const hasPrModFlag = args.some(a => prEditFlags.includes(a) || prEditFlags.some(f => a.startsWith(`${f}=`)));
+        if (!hasPrModFlag) {
           console.error(`\n   💡 AGENT HINT: 'gh pr edit' is interactive without modification flags. Blocking execution.\n${AUTONOMOUS_HEALING_MSG}`);
           process.exit(1);
         }
@@ -231,9 +244,13 @@ export function cloudCliInterceptor({ cmdBasename, args, envOverrides, payload }
         console.error(`\n   💡 AGENT HINT: 'gh codespace ssh' runs an interactive shell. Blocking execution.\n${AUTONOMOUS_HEALING_MSG}`);
         process.exit(1);
       })
-      .with(['secret', 'set'], () => {
-        if (!args.includes('--body') && !payload.stdin) {
-          console.error(`\n   💡 AGENT HINT: 'gh secret set' requires '--body' or stdin. Blocking execution to prevent interactive prompt.\n${AUTONOMOUS_HEALING_MSG}`);
+      .with([P.union('secret', 'variable'), 'set'], () => {
+        const setFlags = ['--body', '-b', '--env-file', '-f'];
+        const hasValueFlag = args.some(a => setFlags.includes(a) || setFlags.some(f => a.startsWith(`${f}=`)));
+        const hasStdin = payload.stdin !== undefined && payload.stdin.length > 0;
+        const hasPositionalVarValue = subCmd1 === 'variable' && posArgs.length >= 4;
+        if (!hasValueFlag && !hasStdin && !hasPositionalVarValue) {
+          console.error(`\n   💡 AGENT HINT: 'gh ${subCmd1} set' requires '--body'/'-b', '--env-file'/'-f', or stdin. Blocking execution to prevent interactive prompt.\n${AUTONOMOUS_HEALING_MSG}`);
           process.exit(1);
         }
       })

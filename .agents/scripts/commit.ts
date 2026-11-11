@@ -6,13 +6,17 @@ import os from 'node:os';
 import crypto from 'node:crypto';
 import { z } from 'zod';
 import { match, P } from 'ts-pattern';
+import {
+  VALID_CATEGORIES,
+  TYPE_TO_CATEGORY,
+  capitalizeCategory,
+  generateHistoryEntry,
+  createJournalEntry,
+} from './commit-journal.js';
 
-const VALID_CATEGORIES = ['Added', 'Changed', 'Fixed', 'Removed', 'Security', 'Deprecated'] as const;
 const VALIDATION_STATES = ['passed', 'none', 'failed'] as const;
 const CONVENTIONAL_COMMIT_REGEX = /^([a-zA-Z0-9_-]+)(?:\(([^)]+)\))?(!)?:\s+(.+)$/;
-const HISTORY_CATEGORY_REGEX = /^([A-Za-z]+):\s*([\s\S]+)$/;
 const COMMIT_MSG_PREFIX = 'commit-msg-';
-const JOURNAL_PREFIX = 'journal-';
 
 const CLI_OPTIONS = {
   msg: { type: 'string', short: 'm' },
@@ -31,11 +35,8 @@ const CLI_OPTIONS = {
   add: { type: 'string', multiple: true },
   journal: { type: 'boolean' },
   'journal-project': { type: 'string' },
+  'session-id': { type: 'string' },
 } as const;
-
-function capitalize(val: string): string {
-  return val.charAt(0).toUpperCase() + val.slice(1).toLowerCase();
-}
 
 function fatalError(msg: string): never {
   console.error(`❌ ${msg}`);
@@ -45,31 +46,13 @@ function fatalError(msg: string): never {
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error) {
     let msg = error.message;
-    if ('stderr' in error && error.stderr) {
+    if ('stderr' in error && error.stderr !== null && error.stderr !== undefined) {
       msg += '\nSTDERR:\n' + String(error.stderr);
     }
     return msg;
   }
   return String(error);
 }
-
-function isValidCategory(cat: string): cat is typeof VALID_CATEGORIES[number] {
-  return VALID_CATEGORIES.some((c) => c === cat);
-}
-
-const TYPE_TO_CATEGORY: Record<string, typeof VALID_CATEGORIES[number]> = {
-  feat: 'Added',
-  fix: 'Fixed',
-  perf: 'Changed',
-  refactor: 'Changed',
-  remove: 'Removed',
-  drop: 'Removed',
-  security: 'Security',
-  docs: 'Changed',
-  style: 'Changed',
-  test: 'Changed',
-  chore: 'Changed',
-};
 
 // [BOUNDARY]: Strict Zod CLI schema boundary. [INVARIANT]: All inputs must be coerced and validated here. Do NOT implement manual validation downstream.
 export const cliSchema = z.object({
@@ -173,11 +156,11 @@ export const cliSchema = z.object({
   category: z.preprocess(
     (val) => {
       if (typeof val !== 'string') return val;
-      const cap = capitalize(val);
+      const cap = capitalizeCategory(val);
       if ((VALID_CATEGORIES as readonly string[]).includes(cap)) return cap;
       
       const mapped = TYPE_TO_CATEGORY[val.toLowerCase()];
-      if (mapped) {
+      if (mapped !== undefined) {
         console.warn(`⚠️ AUTONOMOUS HEALING: Invalid category '${val}' mapped to '${mapped}'.`);
         return mapped;
       }
@@ -189,6 +172,7 @@ export const cliSchema = z.object({
   add: z.array(z.string().max(4096)).optional(),
   journal: z.boolean().default(false),
   'journal-project': z.coerce.number().int().finite().positive().optional(),
+  'session-id': z.string().trim().min(1).max(256).optional(),
 }).strict().transform(data => {
   if (data['journal-project'] !== undefined && !data.journal) {
     console.warn("⚠️ AUTONOMOUS HEALING: --journal-project provided without --journal flag. Automatically enabling --journal.");
@@ -203,13 +187,18 @@ function parseArguments(): CliArgs {
   const rawArgs = process.argv.slice(2);
 
   for (let i = 0; i < rawArgs.length - 1; i++) {
+    const currentArg = rawArgs[i];
+    const nextArg = rawArgs[i + 1];
+    const isNegativeNumericValue = nextArg.startsWith('-') && !Number.isNaN(Number(nextArg));
+    const isMarkdownBulletHistoryOrMsg =
+      (currentArg === '--history' || currentArg === '--msg' || currentArg === '--message') &&
+      /^-\s/.test(nextArg);
     if (
-      rawArgs[i].startsWith('--') &&
-      !rawArgs[i].includes('=') &&
-      rawArgs[i + 1].startsWith('-') &&
-      !Number.isNaN(Number(rawArgs[i + 1]))
+      currentArg.startsWith('--') &&
+      !currentArg.includes('=') &&
+      (isNegativeNumericValue || isMarkdownBulletHistoryOrMsg)
     ) {
-      rawArgs[i] = `${rawArgs[i]}=${rawArgs[i + 1]}`;
+      rawArgs[i] = `${currentArg}=${nextArg}`;
       rawArgs.splice(i + 1, 1);
       i--; // adjust index since we mutated the array
     }
@@ -341,7 +330,8 @@ Options:
   --add <path>           Explicitly stage these files before committing. Can be used multiple times (or provide as additional positional arguments).
   --cwd <path>           Explicit working directory for the git command.
   --journal              Automatically create a memory journal entry for this commit.
-  --journal-project <id> Specify the project ID for the journal entry (defaults to omitting it).
+  --journal-project <id> Specify the project ID for the journal entry (auto-resolved from projectRegistry if omitted).
+  --session-id <id>      Conversation/session ID to attach to the automated journal entry.
   --help                 Show this help message.
   
 🤖 AI AGENT INSTRUCTIONS:
@@ -437,32 +427,6 @@ function ensureStagedFiles(cwd: string, filesToAdd?: string[]): void {
   }
 }
 
-function parseCategory(history: string, type: string): { category: string; entry: string } {
-  const cleanHistory = history.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n');
-  const categoryMatch = cleanHistory.match(HISTORY_CATEGORY_REGEX);
-
-  if (categoryMatch) {
-    const matchedCat = categoryMatch[1];
-    const capitalizedMatch = capitalize(matchedCat);
-    
-    if (isValidCategory(capitalizedMatch)) {
-      return { category: capitalizedMatch, entry: categoryMatch[2].trim() };
-    }
-
-    const mapped = TYPE_TO_CATEGORY[matchedCat.toLowerCase()];
-    if (mapped) {
-      console.warn(`⚠️ AUTONOMOUS HEALING: Invalid history category '${matchedCat}' mapped to '${mapped}'.`);
-      return { category: mapped, entry: categoryMatch[2].trim() };
-    }
-
-    console.warn(`⚠️ AUTONOMOUS HEALING: Unrecognized history category '${matchedCat}'. Falling back to default category.`);
-    return { category: TYPE_TO_CATEGORY[type] || 'Changed', entry: categoryMatch[2].trim() };
-  }
-
-  const category = TYPE_TO_CATEGORY[type] || 'Changed';
-  return { category, entry: cleanHistory.trim() };
-}
-
 const tempFilesToCleanup = new Set<string>();
 process.on('exit', () => {
   for (const file of tempFilesToCleanup) {
@@ -475,47 +439,6 @@ function cleanupTempFile(filepath: string): void {
     if (fs.existsSync(filepath)) fs.unlinkSync(filepath);
     tempFilesToCleanup.delete(filepath);
   } catch { /* ignore */ }
-}
-
-function shouldCreateJournal(args: CliArgs, _historyContent: string): boolean {
-  return args.journal;
-}
-
-function generateHistoryEntry(args: CliArgs, type: string, historyContent: string): string {
-  const parsedCategory = parseCategory(historyContent, type);
-  const category = args.category || parsedCategory.category;
-
-  let entry = parsedCategory.entry;
-
-  if (entry) {
-    entry = entry
-      .replace(/\r\n/g, '\n')
-      .split('\n')
-      .map(line => line.trim() === '' ? '\u200B' : line)
-      .join('\n')
-      .replace(/\n/g, '\n  ');
-  }
-
-  let body = `\n\nHistory-Category: ${category}`;
-  
-  if (entry || !args['no-history']) {
-      body += `\nHistory-Entry: ${entry}`;
-  }
-
-  if (args.significance) {
-    body += `\nHistory-Significance: ${args.significance}`;
-  }
-  body += `\nHistory-Impact: ${args.impact}`;
-  body += `\nHistory-Confidence: ${args.confidence}`;
-  body += `\nHistory-Validation: ${args.validation}`;
-  if (shouldCreateJournal(args, historyContent)) {
-    body += `\nHistory-Journal: true`;
-    if (args['journal-project'] !== undefined) {
-      body += `\nHistory-Journal-Project: ${args['journal-project']}`;
-    }
-  }
-
-  return body;
 }
 
 // [INTENT]: Executes native git commit. [SIDE-EFFECT]: Writes the commit message to a temporary file on disk rather than passing it inline to prevent shell escaping traps. [DEPENDENCY]: Relies on node:os and node:crypto for safe temp file generation.
@@ -534,49 +457,6 @@ function executeCommit(header: string, body: string, cwd?: string): string {
   console.log(`__COMMIT_SHA__:${sha}`);
   
   return sha;
-}
-
-function createJournalEntry(sha: string, header: string, args: CliArgs, historyContent: string, cwd?: string): void {
-  if (!shouldCreateJournal(args, historyContent)) {
-    return;
-  }
-
-  console.log(`\n📓 Creating automated journal entry for ${sha}...`);
-  try {
-    const frontmatterLines = [
-      '---',
-      'type: "architecture"',
-      'tags: ["commit-narrative"]'
-    ];
-    
-    if (args['journal-project']) {
-      frontmatterLines.push(`project: ${args['journal-project']}`);
-    }
-    
-    frontmatterLines.push(`impact: ${args.impact}`);
-    frontmatterLines.push(`trust: ${args.confidence}`);
-    frontmatterLines.push(`validation_status: "${args.validation}"`);
-    
-    frontmatterLines.push('auto_context:');
-    frontmatterLines.push('  type: "session-commits"');
-    frontmatterLines.push(`  commits: ["${sha}"]`);
-    frontmatterLines.push('---');
-    
-    const journalBody = historyContent || header;
-    const journalContent = `${frontmatterLines.join('\n')}\n${journalBody}\n\nCommit: ${sha}`;
-    
-    const journalFile = path.join(os.tmpdir(), `${JOURNAL_PREFIX}${sha}.md`);
-    tempFilesToCleanup.add(journalFile);
-    fs.writeFileSync(journalFile, journalContent, { mode: 0o600 });
-    
-    try {
-      execFileSync('memory-journal-mcp', ['entry', 'create', '--file', journalFile], { stdio: 'inherit', shell: process.platform === 'win32', cwd });
-    } finally {
-        cleanupTempFile(journalFile);
-    }
-  } catch (e) {
-    console.error(`\n⚠️ Failed to create journal entry: ${getErrorMessage(e)}`);
-  }
 }
 
 function main(): void {
@@ -630,7 +510,16 @@ function main(): void {
 
     const body = generateHistoryEntry(args, type, historyContent);
     const sha = executeCommit(args.msg, body, cwd);
-    createJournalEntry(sha, args.msg, args, historyContent, cwd);
+    createJournalEntry(
+      sha,
+      args.msg,
+      args,
+      historyContent,
+      cwd,
+      (filepath) => { tempFilesToCleanup.add(filepath); },
+      cleanupTempFile,
+      getErrorMessage
+    );
 
   } catch (error) {
     if (error instanceof Error && error.stack) {

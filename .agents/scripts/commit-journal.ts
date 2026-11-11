@@ -1,0 +1,282 @@
+import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { z } from 'zod';
+
+export const VALID_CATEGORIES = ['Added', 'Changed', 'Fixed', 'Removed', 'Security', 'Deprecated'] as const;
+export type CommitCategory = (typeof VALID_CATEGORIES)[number];
+
+export const TYPE_TO_CATEGORY: Record<string, CommitCategory> = {
+  feat: 'Added',
+  fix: 'Fixed',
+  perf: 'Changed',
+  refactor: 'Changed',
+  remove: 'Removed',
+  drop: 'Removed',
+  security: 'Security',
+  docs: 'Changed',
+  style: 'Changed',
+  test: 'Changed',
+  chore: 'Changed',
+};
+
+const HISTORY_CATEGORY_REGEX = /^([A-Za-z]+):\s*([\s\S]+)$/;
+const JOURNAL_PREFIX = 'journal-';
+const DEFAULT_WINDOWS_MJ_CONFIG = 'C:\\Users\\chris\\.gemini\\config\\memory-journal.config.json';
+
+const projectRegistryEntrySchema = z.object({
+  path: z.string().min(1),
+  project_number: z.number().int().positive(),
+});
+
+const memoryJournalConfigSchema = z.object({
+  projectRegistry: z.record(z.string(), projectRegistryEntrySchema).optional(),
+});
+
+export interface CommitJournalArgs {
+  impact: number;
+  confidence: number;
+  validation: 'passed' | 'none' | 'failed';
+  journal: boolean;
+  'journal-project'?: number | undefined;
+  'session-id'?: string | undefined;
+  significance?: string | undefined;
+  category?: CommitCategory | undefined;
+  'no-history': boolean;
+}
+
+export interface ResolvedJournalTarget {
+  workspaceId?: string;
+  projectNumber?: number;
+}
+
+export function capitalizeCategory(val: string): string {
+  return val.charAt(0).toUpperCase() + val.slice(1).toLowerCase();
+}
+
+export function isValidCategory(cat: string): cat is CommitCategory {
+  return VALID_CATEGORIES.some((c) => c === cat);
+}
+
+function normalizeRegistryPath(targetPath: string): string {
+  return path.resolve(targetPath).replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+}
+
+function getDefaultConfigPath(): string {
+  const homeConfig = path.join(os.homedir(), '.gemini', 'config', 'memory-journal.config.json');
+  if (fs.existsSync(homeConfig)) {
+    return homeConfig;
+  }
+  return DEFAULT_WINDOWS_MJ_CONFIG;
+}
+
+// [INTENT]: Resolves deterministic workspace_id and project_number from memory-journal.config.json projectRegistry so commit.ts --journal never falls back to keyword-alias matching.
+export function resolveJournalTarget(
+  cwd: string,
+  explicitProjectNumber?: number,
+  configPath?: string
+): ResolvedJournalTarget {
+  const result: ResolvedJournalTarget = {};
+  if (explicitProjectNumber !== undefined) {
+    result.projectNumber = explicitProjectNumber;
+  }
+
+  const effectiveConfigPath = configPath !== undefined && configPath.length > 0
+    ? configPath
+    : getDefaultConfigPath();
+
+  if (!fs.existsSync(effectiveConfigPath)) {
+    return result;
+  }
+
+  try {
+    const rawContent = fs.readFileSync(effectiveConfigPath, 'utf-8');
+    const parsedJson: unknown = JSON.parse(rawContent);
+    const parsedConfig = memoryJournalConfigSchema.safeParse(parsedJson);
+    if (!parsedConfig.success || parsedConfig.data.projectRegistry === undefined) {
+      return result;
+    }
+
+    const registry = parsedConfig.data.projectRegistry;
+    const normalizedCwd = normalizeRegistryPath(cwd);
+
+    let bestPathMatch: { workspaceId: string; projectNumber: number; matchLen: number } | undefined;
+    for (const [workspaceName, entry] of Object.entries(registry)) {
+      const normalizedEntryPath = normalizeRegistryPath(entry.path);
+      const isMatch =
+        normalizedCwd === normalizedEntryPath ||
+        normalizedCwd.startsWith(`${normalizedEntryPath}/`);
+      if (isMatch && (bestPathMatch === undefined || normalizedEntryPath.length > bestPathMatch.matchLen)) {
+        bestPathMatch = {
+          workspaceId: workspaceName,
+          projectNumber: entry.project_number,
+          matchLen: normalizedEntryPath.length,
+        };
+      }
+    }
+
+    if (explicitProjectNumber !== undefined) {
+      if (bestPathMatch !== undefined && bestPathMatch.projectNumber === explicitProjectNumber) {
+        result.workspaceId = bestPathMatch.workspaceId;
+      } else {
+        for (const [workspaceName, entry] of Object.entries(registry)) {
+          if (entry.project_number === explicitProjectNumber) {
+            result.workspaceId = workspaceName;
+            break;
+          }
+        }
+        if (result.workspaceId === undefined && bestPathMatch !== undefined) {
+          result.workspaceId = bestPathMatch.workspaceId;
+        }
+      }
+    } else if (bestPathMatch !== undefined) {
+      result.workspaceId = bestPathMatch.workspaceId;
+      result.projectNumber = bestPathMatch.projectNumber;
+    }
+  } catch {
+    // Non-fatal: fall back to explicit CLI flags if config file cannot be parsed
+  }
+
+  return result;
+}
+
+export function parseCategory(history: string, type: string): { category: string; entry: string } {
+  const cleanHistory = history.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n');
+  const categoryMatch = cleanHistory.match(HISTORY_CATEGORY_REGEX);
+
+  if (categoryMatch !== null) {
+    const matchedCat = categoryMatch[1] ?? '';
+    const entryBody = (categoryMatch[2] ?? '').trim();
+    const capitalizedMatch = capitalizeCategory(matchedCat);
+
+    if (isValidCategory(capitalizedMatch)) {
+      return { category: capitalizedMatch, entry: entryBody };
+    }
+
+    const mapped = TYPE_TO_CATEGORY[matchedCat.toLowerCase()];
+    if (mapped !== undefined) {
+      console.warn(`⚠️ AUTONOMOUS HEALING: Invalid history category '${matchedCat}' mapped to '${mapped}'.`);
+      return { category: mapped, entry: entryBody };
+    }
+
+    console.warn(`⚠️ AUTONOMOUS HEALING: Unrecognized history category '${matchedCat}'. Falling back to default category.`);
+    return { category: TYPE_TO_CATEGORY[type] ?? 'Changed', entry: entryBody };
+  }
+
+  const category = TYPE_TO_CATEGORY[type] ?? 'Changed';
+  return { category, entry: cleanHistory.trim() };
+}
+
+export function generateHistoryEntry(args: CommitJournalArgs, type: string, historyContent: string): string {
+  const parsedCategory = parseCategory(historyContent, type);
+  const category = args.category ?? parsedCategory.category;
+
+  let entry = parsedCategory.entry;
+
+  if (entry.length > 0) {
+    entry = entry
+      .replace(/\r\n/g, '\n')
+      .split('\n')
+      .map(line => line.trim() === '' ? '\u200B' : line)
+      .join('\n')
+      .replace(/\n/g, '\n  ');
+  }
+
+  let body = `\n\nHistory-Category: ${category}`;
+
+  if (entry.length > 0 || !args['no-history']) {
+    body += `\nHistory-Entry: ${entry}`;
+  }
+
+  if (args.significance !== undefined && args.significance.length > 0) {
+    body += `\nHistory-Significance: ${args.significance}`;
+  }
+  body += `\nHistory-Impact: ${args.impact}`;
+  body += `\nHistory-Confidence: ${args.confidence}`;
+  body += `\nHistory-Validation: ${args.validation}`;
+  if (args.journal) {
+    body += `\nHistory-Journal: true`;
+    if (args['journal-project'] !== undefined) {
+      body += `\nHistory-Journal-Project: ${args['journal-project']}`;
+    }
+  }
+
+  return body;
+}
+
+export function buildCommitJournalContent(
+  sha: string,
+  header: string,
+  args: CommitJournalArgs,
+  historyContent: string,
+  cwd: string,
+  configPath?: string
+): string {
+  const resolved = resolveJournalTarget(cwd, args['journal-project'], configPath);
+  const frontmatterLines = [
+    '---',
+    'type: "technical_note"',
+    'tags: ["commit-narrative"]',
+  ];
+
+  if (resolved.workspaceId !== undefined && resolved.workspaceId.length > 0) {
+    frontmatterLines.push(`workspace_id: ${JSON.stringify(resolved.workspaceId)}`);
+  }
+  if (resolved.projectNumber !== undefined) {
+    frontmatterLines.push(`project: ${resolved.projectNumber}`);
+  }
+  if (args['session-id'] !== undefined && args['session-id'].length > 0) {
+    frontmatterLines.push(`session_id: ${JSON.stringify(args['session-id'])}`);
+  }
+  if (args.significance !== undefined && args.significance.length > 0) {
+    frontmatterLines.push(`significance: ${JSON.stringify(args.significance)}`);
+  }
+
+  frontmatterLines.push(`impact: ${args.impact}`);
+  frontmatterLines.push(`trust: ${args.confidence}`);
+  frontmatterLines.push(`validation_status: "${args.validation}"`);
+
+  frontmatterLines.push('auto_context:');
+  frontmatterLines.push('  type: "session-commits"');
+  frontmatterLines.push(`  commits: ["${sha}"]`);
+  frontmatterLines.push('---');
+
+  const journalBody = historyContent.length > 0 ? historyContent : header;
+  return `${frontmatterLines.join('\n')}\n${journalBody}\n\nCommit: ${sha}`;
+}
+
+export function createJournalEntry(
+  sha: string,
+  header: string,
+  args: CommitJournalArgs,
+  historyContent: string,
+  cwd: string,
+  registerTempFile: (filepath: string) => void,
+  cleanupTempFile: (filepath: string) => void,
+  formatError: (error: unknown) => string
+): void {
+  if (!args.journal) {
+    return;
+  }
+
+  console.log(`\n📓 Creating automated journal entry for ${sha}...`);
+  try {
+    const journalContent = buildCommitJournalContent(sha, header, args, historyContent, cwd);
+    const journalFile = path.join(os.tmpdir(), `${JOURNAL_PREFIX}${sha}.md`);
+    registerTempFile(journalFile);
+    fs.writeFileSync(journalFile, journalContent, { mode: 0o600 });
+
+    try {
+      execFileSync('memory-journal-mcp', ['entry', 'create', '--file', journalFile], {
+        stdio: 'inherit',
+        shell: process.platform === 'win32',
+        cwd,
+      });
+    } finally {
+      cleanupTempFile(journalFile);
+    }
+  } catch (e: unknown) {
+    console.error(`\n⚠️ Failed to create journal entry: ${formatError(e)}`);
+  }
+}

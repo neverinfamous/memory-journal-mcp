@@ -6,7 +6,7 @@
 **Purpose**: This module functions as a **hardened, deterministic execution substrate** for AI agents. It shields you from the inherent unreliability of interactive shell environments (hanging processes, TTY bugs, quoting flaws) by providing a robust, non-interactive execution bridge.
 
 ✨ **NEW: PowerShell Proxy Interceptors** ✨
-You no longer need to manually craft JSON payloads for most standard commands! The PowerShell environment now automatically intercepts native CLI tools (`git`, `docker`, `bun`, `npm`, `npx`, `bunx`, `pnpm`, `gh`, `node`, `python`, etc.) via proxy functions. When you execute `run_command("bun run check")`, the proxy seamlessly intercepts it and routes it through `lib-agent-exec` securely under the hood.
+You no longer need to manually craft JSON payloads for most standard commands! The PowerShell environment now automatically intercepts native CLI tools (`git`, `docker`, `bun`, `npm`, `npx`, `bunx`, `pnpm`, `gh`, `node`, `python`, etc.) via proxy functions. When you execute `run_command("bun run lint")`, the proxy seamlessly intercepts it and routes it through `lib-agent-exec` securely under the hood.
 
 You only need to manually pass a JSON payload (as described below) if you are executing complex scripts or raw `eval` code snippets that are not natively intercepted. By pairing this deterministic execution with a deterministic repository model (`lib-git-history`), we eliminate the two largest sources of friction in agentic workflows.
 
@@ -16,7 +16,7 @@ You only need to manually pass a JSON payload (as described below) if you are ex
 ## ⚠️ The `&&` Pipeline Chaining Rule & WSL2 Linux Support
 
 > [!WARNING]
-> Even though we develop and test natively on **PowerShell 7.6.4** (which *does* support `&&` and `||`), the system's global agent rules strictly **FORBID** their use natively to prevent proxy interception conflicts and syntax hallucination traps. If you use `&&` natively, it may cause a `ParserError`.
+> Even though we develop and test natively on **PowerShell 7.x** (which *does* support `&&` and `||`), the system's global agent rules strictly **FORBID** their use natively to prevent proxy interception conflicts and syntax hallucination traps. If you use `&&` natively, it will be blocked by `lib-agent-exec` unless routed to WSL2.
 > 
 > **Rule of Thumb:**
 > 1. For native Windows command separation, **MUST** use semicolons (`;`).
@@ -71,7 +71,7 @@ Used for executing standard CLI binaries.
   "maxBuffer": 10485760, // Optional
   "truncateOutputLength": 1048576, // Optional
   "keepPayload": false, // Optional
-  "bypassInterceptors": true, // Optional (disables safety heuristics)
+  "bypassInterceptors": false, // Optional (INTERNAL ONLY — reserved for internal stall-bypass exemptions; agents MUST NEVER set bypassInterceptors: true)
   "timeoutMs": 30000, // Optional
   "stallTimeoutMs": 10000, // Optional
   "expectJsonEnvelope": false, // Optional
@@ -138,7 +138,7 @@ If you interrupt tests (or if a specific stress test fails), you might leave orp
 
 ## Security & Reliability (Interception Rules)
 
-To ensure non-interactive reliability, `agent-exec.ts` actively intercepts and modifies commands to prevent hanging and false positives. If you need to explicitly bypass these interceptors (e.g., for testing edge cases), you can set `"bypassInterceptors": true` in your JSON payload:
+To ensure non-interactive reliability, `agent-exec.ts` actively intercepts and modifies commands to prevent hanging and false positives (`bypassInterceptors` in the schema is reserved strictly for internal interceptor stall-bypass exemptions — AI agents MUST NEVER pass `"bypassInterceptors": true` in payloads):
 
 
 - **Graceful Filtering Tools**: Commands like `grep`, `egrep`, `rg`, `diff`, and `git diff` return exit code `1` when no matches/differences are found. Similarly, package manager commands like `npm outdated` or `pnpm outdated` return `1` when updates are available. The bridge automatically treats code `1` for these tools as a clean `0` success, preventing false-positive pipeline failures. This behavior correctly applies even when these commands are executed indirectly via shell wrappers (e.g. `wsl`, `bash -c`, or `powershell`), within `eval` snippets and `script` payloads, AND when the agent requests a JSON envelope (e.g., `--json`), outputting `status: "success"` instead of an error.
@@ -148,20 +148,20 @@ To ensure non-interactive reliability, `agent-exec.ts` actively intercepts and m
 - **TUI & Interactive App Blocking**: TUI apps (`vim`, `nano`, `less`, etc.) are blocked natively, wrapped via `wsl`, or launched inside containers via `docker exec`/`docker run` to prevent the agent from hanging.
 - **Interactive REPL Blocks**: Attempting to launch `node`, `python`, or `bash` without arguments or a script file will be intercepted and terminated immediately to prevent hanging.
 - **Shell Wrapper Blocking**: Wrapping standard tools (`git`, `docker`, `gh`, `npm`, `npx`, `bunx`, etc.) inside inline shell invocations (e.g., `pwsh -c "git log"`) bypasses the interceptor pipeline and is strictly blocked across native commands, `eval` snippets, and `script` payloads. Invoke the tool directly via a `command` payload, or write the raw script commands without an inline shell wrapper.
-- **Prompt Detection & Stall Prevention**: Deep heuristic regexes detect unexpected interactive prompts (including standard package manager queries, `inquirer.js` progress flows, editor blocks like `Waiting for Emacs...`, standard TTY forced shells like `bash$`, `sh$`, and `bash-5.1$`, `title:`, `body:`, and `y/n` confirmations) and terminate the process to prevent indefinite hanging.
-- **Git Interception**: The bridge aggressively intercepts forbidden git flows. History commands (`git log`, `git shortlog`, `git show`) and raw `git commit` are completely blocked to prevent unparsable text dumps and interactive hanging. You MUST use the deterministic wrappers (`bun .\.agents\scripts\get-git-history-json.ts` and `bun .\.agents\scripts\commit.ts`). Interactive patching (`-p`) and interactive rebasing (`-i`) are also blocked. While explicit file staging (`--add <path>`) is strongly preferred for atomic commits, wildcard staging (`--add .`) and positional staging are fully supported by `commit.ts`. `commit.ts` also features comprehensive **Autonomous Healing** (auto-corrects conventional commit message formatting, defaults missing `--impact`, `--confidence`, and `--validation`, maps deprecated `--trust` to `--confidence`, auto-enables `--journal` when `--journal-project` is provided, and auto-recovers paths with spaces).
+- **Prompt Detection & Stall Prevention**: Deep heuristic regexes detect unexpected interactive prompts (including standard package manager queries, `inquirer.js` progress flows, editor blocks like `Waiting for Emacs...`, standard TTY forced shells like `bash$`, `sh$`, and `bash-5.1$`, `title:`, `body:`, and `y/n` confirmations) and terminate the process to prevent indefinite hanging. Long-running quality gates (`lint`, `typecheck`, `test`, `build`) and package installation/resolution commands (`install`, `ci`, `add`, `update`, `dedupe` across `pnpm`, `npm`, `yarn`, and `bun`) automatically receive extended timeouts and internal runtime stall-bypass exemptions.
+- **Git Interception**: History/inspection commands (`git log`, `git show`, `git diff`, `git status`) are transparently rewritten to `get-git-history-json.ts` (Frictionless Recovery), while raw `git commit`, `git shortlog`, interactive patching (`-p`), and interactive rebasing (`-i`) are blocked in favor of the deterministic wrappers (`bun .\.agents\scripts\get-git-history-json.ts` and `bun .\.agents\scripts\commit.ts`). In `commit.ts`, you MUST explicitly pass `--impact <0.0-1.0>`, `--confidence <0.0-1.0>`, and `--validation <passed|none|failed>` (they are strictly required and never defaulted). `commit.ts` also supports **Autonomous Healing** (auto-corrects conventional commit message formatting, maps deprecated `--trust` to `--confidence`, auto-enables `--journal` when `--journal-project` is provided, auto-resolves `workspace_id` and `project_number` from `memory-journal.config.json` when `--journal` is enabled, supports `--session-id`, and auto-recovers `--add` paths containing spaces).
 - **Quote Stripping**: Spurious quotes around arguments are stripped since the shell execution is bypassed.
 
 ## 🪤 Common PowerShell Hallucination Traps
 
 Agents frequently hallucinate Unix tools or specific flags that break natively in PowerShell:
 
-1. **`curl` & `wget`**: PowerShell natively aliases these to `Invoke-WebRequest`. Unix flags like `-s`, `-D`, or `-L` will instantly fail (e.g., `Missing an argument for parameter 'SessionVariable'`). 
-   * **Fix**: Always use the native `read_url_content` tool. If you must use curl CLI, invoke `curl.exe` explicitly to bypass the PowerShell alias.
-2. **`cat`, `ls`, `grep` & Native PowerShell Cmdlets**: PowerShell aliases `cat` to `Get-Content`, `ls` to `Get-ChildItem`, and lacks native Unix `grep` (often substituted with `Select-String`). Do NOT use these commands or their PowerShell cmdlet equivalents for file operations. They bypass the proxy's safety guardrails and will fail ungracefully if you hallucinate file paths.
-   * **Fix**: You MUST use the agent-native tools instead for files: `view_file` (instead of cat/Get-Content), `list_dir` (instead of ls/Get-ChildItem), and `grep_search` (instead of grep/Select-String).
-   * **Exception 1 (Streaming)**: You ARE allowed to use `grep`, `rg`, or `cat` natively when piping data into them as a stream filter (e.g., `npm list | grep foo`). The interceptor will block them if used as standalone file commands without stdin.
-   * **Exception 2 (Sandbox Limits)**: The native `grep_search` tool can only search within the IDE's active workspace roots. If you need to search a directory outside these roots and `grep_search` fails, you MAY fallback to executing `rg` natively (e.g., `run_command("rg 'pattern' C:\\path\\outside\\workspace")`), as `rg` is explicitly whitelisted from the standalone block.
+1. **`curl` & `wget`**: PowerShell natively aliases these to `Invoke-WebRequest`. Unix flags like `-s`, `-D`, or `-L` fail in raw PowerShell (e.g., `Missing an argument for parameter 'SessionVariable'`).
+   * **Fix**: Prefer native `search_web` / `read_url_content` tools. When CLI HTTP requests are needed, `lib-agent-exec` automatically routes `curl`/`wget` to WSL2 (Frictionless Recovery), or you may invoke `curl.exe` explicitly.
+2. **`cat`, `ls`, `grep` & Native PowerShell Cmdlets**: PowerShell aliases `cat` to `Get-Content` and `ls` to `Get-ChildItem`, and lacks native Unix `grep` (`Select-String`).
+   * **Fix**: **ALWAYS** prefer declared agent-native tools first: `read_file` / `view_file` (for reading files), `edit_file` / `write_file` (for modifying/creating files), `list_dir` / `find_by_name` (for directory discovery), and `grep_search` (for searching code).
+   * **WSL2 Frictionless Recovery**: If standalone `ls`, `grep`, `cat`, `rg`, `find`, `jq`, `sed`, or `awk` are invoked on Windows, `lib-agent-exec` transparently routes them to WSL2, converts Windows paths (`C:\...` -> `/mnt/c/...`), and injects recursive exclusions (`node_modules`, `.git`, `dist`, etc.) where appropriate.
+   * **Workspace Boundary Fallback**: When `grep_search` or `list_dir` is unavailable in the active model harness or blocked outside workspace roots, fall back cleanly to `rg` (e.g., `rg -n "pattern" "C:\path\outside\workspace"`) or `Get-ChildItem`.
 3. **`gh run view --log`**: If a GitHub Action job is still running, this command exits with code 1 instead of waiting.
    * **Fix**: Do NOT poll this in a loop. Use the `schedule` tool to set an asynchronous timer to check back later.
 

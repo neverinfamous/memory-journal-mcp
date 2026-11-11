@@ -154,7 +154,7 @@ function buildOptimizeWorkflowOptionsSection(
 
 ### Option B: Ground-Truth Verification, Staleness Sweep & Targeted Quality Audit (Executed Automatically)
 1. **Ground-Truth Verification & Staleness Sweep**:
-   - Cross-check recent \`session-summary\`, \`bug_fix\`, \`project_decision\`, and \`planning\` entries against Git/GitHub truth (\`mj.git.getGitContext\`, \`mj.github.getGithubIssues\`, \`mj.github.getGithubPrs\`).
+   - Cross-check recent \`session-summary\`, \`bug_fix\`, \`project_decision\`, and \`planning\` entries against Git/GitHub truth (\`mj.git.getCommitHistory\`, \`mj.github.getGithubIssues\`, \`mj.github.getGithubPrs\`).
    - Run \`mj.git.checkEntryStaleness({ entry_id: id, workspace_id: '*' })\` and update stale anchors via \`mj.core.markAnchorsStale\`.
 2. **Quality Dimension Audit (\`${targetDimension}\`)**:
    - \`unassigned\`: Audit only unassigned or default workspace entries.

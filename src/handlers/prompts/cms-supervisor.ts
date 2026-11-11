@@ -132,7 +132,7 @@ ${markUntrustedContent(deletedSnippet)}
 
 ### Phase A — Post-NREM Supervisor Audit & Safety Rollback
 1. **Verify \`CMS-02\` Pruning Safety**:
-   - Inspect the recent soft-deleted entries above (or query \`await mj.admin.listDeletedEntries({ limit: 50 })\` via \`mj_execute_code\`).
+   - Inspect the recent soft-deleted entries above (or query \`await mj.admin.listDeletedEntries({ limit: 50 })\` and \`await mj.admin.searchAuditLog({ limit: 100 })\` via \`mj_execute_code\`).
    - If any soft-deleted entry from the last \`${String(lookbackHours)}h\` has \`significanceType !== null\`, \`impactScore >= 0.5\`, or active relationships, **immediately restore it** via \`await mj.admin.restoreEntry({ entry_id })\` and record the false-positive pruning pattern.
 2. **Global Invariant Verification**:
    - Confirm \`0\` unassigned (\`workspaceId === 'default'\` or \`projectNumber <= 0\`) entries exist across \`workspace_id: '*'\`.

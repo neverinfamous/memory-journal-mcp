@@ -9,6 +9,7 @@ export interface ResolutionInput {
     project_number?: number
     content?: string
     tags?: string[]
+    preferCwdOverKeywords?: boolean
 }
 
 export interface ResolvedContext {
@@ -300,6 +301,27 @@ export function resolveProjectContext(
         }
     }
 
+    // 2.5. CLI mode: registered CWD path takes priority over content/tag keyword aliases
+    if (
+        input.preferCwdOverKeywords === true &&
+        input.project_number === undefined &&
+        registry !== undefined
+    ) {
+        const cwdMatch = resolveWorkspaceFromFilePath(process.cwd(), {
+            ...config,
+            projectRegistry: registry,
+        })
+        if (
+            cwdMatch !== undefined &&
+            !SENTINEL_PROJECT_KEYS.includes(cwdMatch.workspaceId.toLowerCase())
+        ) {
+            return {
+                workspaceId: cwdMatch.workspaceId,
+                projectNumber: cwdMatch.projectNumber ?? config?.defaultProjectNumber,
+            }
+        }
+    }
+
     // 3. Content / Tags keyword matching against projectRegistry
     if (registry) {
         const matched = matchRegistryByTagsOrContent(input, registry)
@@ -382,10 +404,6 @@ interface ParsedConfig {
 }
 
 /**
- * Automatically resolves a project number by inspecting the global config
- * and matching the provided working directory against registered paths.
- */
-/**
  * True when cwd is the registry root or a directory inside it.
  * A sibling whose name only shares a prefix, such as
  * `memory-journal-mcp.wiki` next to `memory-journal-mcp`, does not match.
@@ -401,6 +419,26 @@ export function cwdMatchesRegistryPath(registryPath: string, cwd: string): boole
         return false
     }
     return true
+}
+
+function findBestMatchingPathEntry(
+    targetPath: string,
+    registry: Record<string, RegistryEntry>
+): ResolvedContext | undefined {
+    let bestMatchLength = -1
+    let bestMatch: ResolvedContext | undefined = undefined
+    for (const [key, entry] of Object.entries(registry)) {
+        const entryPath = entry.path
+        if (entryPath === undefined || entryPath === null || !cwdMatchesRegistryPath(entryPath, targetPath)) {
+            continue
+        }
+        const resolvedLength = path.resolve(entryPath).length
+        if (resolvedLength > bestMatchLength) {
+            bestMatchLength = resolvedLength
+            bestMatch = { workspaceId: key, projectNumber: entry.project_number }
+        }
+    }
+    return bestMatch
 }
 
 /**
@@ -423,30 +461,11 @@ export function resolveProjectNumberFromPath(
         if (projectRegistry === undefined) {
             const configPath = getConfigPath()
             if (!fs.existsSync(configPath)) return undefined
-
             const content = fs.readFileSync(configPath, 'utf-8')
             projectRegistry = (JSON.parse(content) as ParsedConfig).projectRegistry
         }
-
         if (projectRegistry === undefined || projectRegistry === null) return undefined
-
-        // Find the most specific (longest) matching path
-        let bestMatchLength = -1
-        let bestProjectNumber: number | undefined = undefined
-
-        for (const [, entry] of Object.entries(projectRegistry)) {
-            const entryPath = entry.path
-            if (entryPath === undefined || entryPath === null) continue
-            if (!cwdMatchesRegistryPath(entryPath, cwd)) continue
-
-            const resolvedLength = path.resolve(entryPath).length
-            if (resolvedLength > bestMatchLength) {
-                bestMatchLength = resolvedLength
-                bestProjectNumber = entry.project_number
-            }
-        }
-        
-        return bestProjectNumber
+        return findBestMatchingPathEntry(cwd, projectRegistry)?.projectNumber
     } catch (err) {
         logger.warning(
             `Project auto-resolution from path failed: ${err instanceof Error ? err.message : String(err)}`,
@@ -465,24 +484,5 @@ export function resolveWorkspaceFromFilePath(
     config?: ToolHandlerConfig
 ): ResolvedContext | undefined {
     const registry = config?.projectRegistry ?? loadProjectRegistryFromConfig()
-    if (!registry) return undefined
-
-    let bestMatchLength = -1
-    let bestMatch: ResolvedContext | undefined = undefined
-
-    for (const [key, entry] of Object.entries(registry)) {
-        const entryPath = entry.path
-        if (entryPath === undefined || entryPath === null) continue
-        if (!cwdMatchesRegistryPath(entryPath, targetPath)) continue
-
-        const resolvedLength = path.resolve(entryPath).length
-        if (resolvedLength > bestMatchLength) {
-            bestMatchLength = resolvedLength
-            bestMatch = {
-                workspaceId: key,
-                projectNumber: entry.project_number,
-            }
-        }
-    }
-    return bestMatch
+    return registry ? findBestMatchingPathEntry(targetPath, registry) : undefined
 }

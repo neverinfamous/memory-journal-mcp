@@ -52,34 +52,12 @@ export function buildCommand(payload: ExecPayload, cwd: string, isJson: boolean 
   let args: string[];
   let tempScriptPath: string | null = null;
   const envOverrides: Record<string, string> = {};
-
-  if (!payload.bypassInterceptors) {
-    const initialCmdBasename = payload.type === 'command' ? path.basename(payload.command).toLowerCase() : '';
-    const initialCtx: ExecutionContext = { cmdBasename: initialCmdBasename, args: payload.args ? [...payload.args] : [], envOverrides, payload };
-    systemInterceptor(initialCtx);
-    if (payload.type === 'command') {
-      payload.args = initialCtx.args;
-    }
-  }
-
-  // [INVARIANT]: Native PowerShell execution must NEVER allow && or || operators. All POSIX pipelines MUST be routed to target: 'wsl2'.
-  if (process.platform === 'win32' && payload.target !== 'wsl2') {
-    const hasPipeCommand = payload.type === 'command' && (payload.command.includes(' && ') || payload.command.includes(' || ') || payload.command.includes(' | ') || payload.command.includes(' > '));
-    const hasPipeArg = payload.args?.some(a => a.trim() === '&&' || a.trim() === '||' || a.trim() === '|' || a.trim() === '>');
-    if (hasPipeCommand || hasPipeArg) {
-      recordAgentIssue('POSIX_PIPES_IN_POWERSHELL', 'Native PowerShell does NOT support && or ||', { payload });
-      if (isJson) {
-        exitWithError(`Native PowerShell does NOT support '&&', '||', or POSIX pipelines. You MUST use "target": "wsl2" in your JSON payload to execute POSIX shell pipelines.`);
-      } else {
-        console.error(`\n   \x1b[38;5;208m🛠️ AUTONOMOUS HEALING: Native PowerShell does NOT support '&&', '||', or POSIX pipelines. You MUST use "target": "wsl2" in your JSON payload to execute POSIX shell pipelines.\x1b[0m`);
-        process.exit(1);
-      }
-    }
-  }
+  // [INVARIANT]: Preserve caller's explicit bypass flag separately from runtime stall-bypass mutations (`payload.bypassInterceptors = true`) set inside interceptors.
+  const callerBypassedInterceptors = Boolean(payload.bypassInterceptors);
 
   const replaceTemplates = (str: string) => replaceIntegrationContext(str, payload);
 
-  if ('integrationContext' in payload && payload.integrationContext) {
+  if ('integrationContext' in payload && payload.integrationContext !== undefined) {
     const contextStr = JSON.stringify(payload.integrationContext);
     const MAX_WINDOWS_ENV_SIZE = 32000;
     if (contextStr.length > MAX_WINDOWS_ENV_SIZE) {
@@ -87,10 +65,10 @@ export function buildCommand(payload: ExecPayload, cwd: string, isJson: boolean 
     }
     // SEC-FIX: Removed integrationContext from envOverrides to prevent data boundary leak
 
-    if (payload.args) {
+    if (payload.args !== undefined) {
       payload.args = payload.args.map(a => replaceTemplates(a));
     }
-    if (payload.env) {
+    if (payload.env !== undefined) {
       const newEnv: Record<string, string> = {};
       for (const [k, v] of Object.entries(payload.env)) {
         newEnv[k] = replaceTemplates(v);
@@ -109,15 +87,44 @@ export function buildCommand(payload: ExecPayload, cwd: string, isJson: boolean 
       })
       .exhaustive();
 
-    if (payload.templateOverride) {
+    if (payload.templateOverride !== undefined && payload.templateOverride.length > 0) {
       payload.templateOverride = replaceTemplates(payload.templateOverride);
     }
-    if (payload.webhookHeaders) {
+    if (payload.webhookHeaders !== undefined) {
       const newHeaders: Record<string, string> = {};
       for (const [k, v] of Object.entries(payload.webhookHeaders)) {
         newHeaders[k] = replaceTemplates(v);
       }
       payload.webhookHeaders = newHeaders;
+    }
+  }
+
+  let initialInterceptedBase = '';
+  if (!callerBypassedInterceptors) {
+    const initialCmdBasename = payload.type === 'command' ? path.basename(payload.command).toLowerCase() : '';
+    const initialCtx: ExecutionContext = { cmdBasename: initialCmdBasename, args: payload.args !== undefined ? [...payload.args] : [], envOverrides, payload };
+    systemInterceptor(initialCtx);
+    initialInterceptedBase = initialCtx.cmdBasename.toLowerCase().replace(/\.(exe|cmd|bat|com|ps1)$/i, '');
+    if (payload.type === 'command') {
+      payload.args = initialCtx.args;
+      if (initialCtx.cmdBasename.length > 0 && initialCtx.cmdBasename !== initialCmdBasename) {
+        payload.command = initialCtx.cmdBasename;
+      }
+    }
+  }
+
+  // [INVARIANT]: Native PowerShell execution must NEVER allow && or || operators. All POSIX pipelines MUST be routed to target: 'wsl2'.
+  if (process.platform === 'win32' && payload.target !== 'wsl2') {
+    const hasPipeCommand = payload.type === 'command' && (payload.command.includes(' && ') || payload.command.includes(' || ') || payload.command.includes(' | ') || payload.command.includes(' > '));
+    const hasPipeArg = payload.args?.some(a => a.trim() === '&&' || a.trim() === '||' || a.trim() === '|' || a.trim() === '>');
+    if (hasPipeCommand || hasPipeArg === true) {
+      recordAgentIssue('POSIX_PIPES_IN_POWERSHELL', 'Native PowerShell does NOT support && or ||', { payload });
+      if (isJson) {
+        exitWithError(`Native PowerShell does NOT support '&&', '||', or POSIX pipelines. You MUST use "target": "wsl2" in your JSON payload to execute POSIX shell pipelines.`);
+      } else {
+        console.error(`\n   \x1b[38;5;208m🛠️ AUTONOMOUS HEALING: Native PowerShell does NOT support '&&', '||', or POSIX pipelines. You MUST use "target": "wsl2" in your JSON payload to execute POSIX shell pipelines.\x1b[0m`);
+        process.exit(1);
+      }
     }
   }
 
@@ -385,10 +392,18 @@ export function buildCommand(payload: ExecPayload, cwd: string, isJson: boolean 
 
   const cmdBasename = path.basename(cmd).toLowerCase();
   const ctx: ExecutionContext = { cmdBasename, args, envOverrides, payload };
+  const isNestedAgentExec = payload.type === 'command' && args.some(a => path.basename(a).toLowerCase() === 'agent-exec.ts');
 
   // Apply Interceptors Pipeline
-  if (!payload.bypassInterceptors) {
-    systemInterceptor(ctx);
+  // [INVARIANT]: Avoid invoking systemInterceptor a second time on already-intercepted payloads so AUTONOMOUS_HEALING_TRIGGERED logs are emitted at most once per healing event.
+  if (!callerBypassedInterceptors && !isNestedAgentExec) {
+    const currentBase = cmdBasename.replace(/\.(exe|cmd|bat|com|ps1)$/i, '');
+    const unwrappedNewCommand = payload.type === 'command' &&
+      currentBase !== initialInterceptedBase &&
+      !['pwsh', 'powershell', 'sh', 'bash', 'cmd', 'wsl'].includes(currentBase);
+    if (unwrappedNewCommand) {
+      systemInterceptor(ctx);
+    }
     gitInterceptor(ctx);
     dockerInterceptor(ctx);
     packageManagerInterceptor(ctx);

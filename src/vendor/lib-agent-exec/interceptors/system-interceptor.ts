@@ -10,7 +10,7 @@ import { findEcosystemScript } from '../utils.js';
 import { runMutatingInterceptors } from './mutating-interceptors.js';
 import { runStructuralInterceptors } from './structural-interceptors.js';
 import { healPathHallucinations, healEvalCodePathHallucinations } from '../path-healer.js';
-import { handleFindInterception, handleRipgrepInterception, handleGrepInterception, parseGrepSearchArgs, GREP_EXCLUDE_DIRS } from './search-interceptor.js';
+import { handleFindInterception, handleRipgrepInterception, handleGrepInterception, parseGrepSearchArgs, GREP_EXCLUDE_DIRS, isLikelyDirectoryArg } from './search-interceptor.js';
 import { isPowerShellCode } from '../eval-healer.js';
 const INTERPRETER_INLINE_FLAGS: Record<string, readonly string[]> = {
   node: ['-e', '--eval', '-p', '--print'],
@@ -302,38 +302,27 @@ export function systemInterceptor(ctx: ExecutionContext): void {
     if (grepDirMatch !== null) {
       const rest = grepDirMatch[1] ?? '';
       const tokens = rest.trim().split(/\s+/);
-      const isDir = (t: string): boolean => {
-        if (/[()*+?[\]^$|{}]/.test(t) || /\\[bBwWdDsSnrtv0()[\]{}.*+?^$|]/.test(t)) return false;
-        try {
-          const cwd = payload.cwd !== undefined && payload.cwd.length > 0 ? path.resolve(payload.cwd) : process.cwd();
-          const p = path.resolve(cwd, t);
-          if (fs.existsSync(p)) {
-            return fs.statSync(p).isDirectory();
-          }
-        } catch {
-          // ignore
-        }
-        if (/\.[a-zA-Z0-9]{1,6}$/.test(t)) return false;
-        if (t.endsWith('/') || t.endsWith('\\') || t === '.' || t === '..' || t.startsWith('./') || t.startsWith('../') || t.includes('/') || t.includes('\\') || /^[a-zA-Z]:/.test(t)) return true;
-        return false;
-      };
+      const isDir = (t: string): boolean => isLikelyDirectoryArg(t.replace(/^['"]|['"]$/g, ''), payload.cwd);
 
-      if (!/(?:^|\s)(?:-[a-zA-Z]*[rR]\b|--recursive\b)/.test(payload.code)) {
-        const isTargetingDir = tokens.some(t => !t.startsWith('-') && isDir(t));
-        if (isTargetingDir) {
-          console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected directory target in eval grep without recursive flag. Auto-injecting '-r'... (Frictionless Recovery)\x1b[0m`);
-          payload.code = payload.code.replace(/^(grep|egrep)\b/i, '$1 -r');
-        }
-      }
-
-      // Check for reversed arguments: grep [flags] <dir> <pattern> -> grep [flags] <pattern> <dir>
-      const nonFlagTokens = tokens.filter(t => !t.startsWith('-'));
+      // Check for reversed arguments first: grep [flags] <dir> <pattern> -> grep [flags] <pattern> <dir>
+      let nonFlagTokens = tokens.filter(t => !t.startsWith('-'));
       if (nonFlagTokens.length === 2 && !payload.code.includes('-e') && !payload.code.includes('--regexp')) {
         const [first, second] = nonFlagTokens;
-        if (isDir(first) && !isDir(second)) {
+        if (first !== undefined && second !== undefined && isDir(first) && !isDir(second) && !second.startsWith('/')) {
           console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected reversed arguments in eval grep (directory before pattern). Swapping arguments to place pattern first... (Frictionless Recovery)\x1b[0m`);
           const regexSwap = new RegExp(`(${first.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})\\s+(${second.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`);
           payload.code = payload.code.replace(regexSwap, '$2 $1');
+          nonFlagTokens = [second, first];
+        }
+      }
+
+      if (!/(?:^|\s)(?:-[a-zA-Z]*[rR]\b|--recursive\b)/.test(payload.code)) {
+        const hasPatternFlagInEval = /(?:^|\s)(?:-e\b|--regexp\b|-f\b|--file\b)/.test(payload.code);
+        const targetTokens = hasPatternFlagInEval ? nonFlagTokens : nonFlagTokens.slice(1);
+        const isTargetingDir = targetTokens.some(t => isDir(t));
+        if (isTargetingDir) {
+          console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected directory target in eval grep without recursive flag. Auto-injecting '-r'... (Frictionless Recovery)\x1b[0m`);
+          payload.code = payload.code.replace(/^(grep|egrep)\b/i, '$1 -r');
         }
       }
 
@@ -371,16 +360,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
       }
       const rest = rgDirMatch[1] ?? '';
       const tokens = rest.trim().split(/\s+/);
-      const isDir = (t: string): boolean => {
-        if (t.endsWith('/') || t.endsWith('\\') || t === '.' || t === '..' || t.startsWith('./') || t.startsWith('../') || t.includes('/') || t.includes('\\') || /^[a-zA-Z]:/.test(t)) return true;
-        try {
-          const cwd = payload.cwd !== undefined && payload.cwd.length > 0 ? path.resolve(payload.cwd) : process.cwd();
-          const p = path.resolve(cwd, t);
-          return fs.existsSync(p) && fs.statSync(p).isDirectory();
-        } catch {
-          return false;
-        }
-      };
+      const isDir = (t: string): boolean => isLikelyDirectoryArg(t.replace(/^['"]|['"]$/g, ''), payload.cwd);
 
       const nonFlagTokens = tokens.filter(t => !t.startsWith('-'));
       if (nonFlagTokens.length === 2 && !payload.code.includes('-e') && !payload.code.includes('--regexp')) {
