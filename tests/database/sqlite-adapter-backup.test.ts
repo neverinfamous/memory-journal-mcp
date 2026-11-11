@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
+import { ServerRuntime } from '../../src/utils/maintenance-lock.js'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 
@@ -72,6 +73,26 @@ describe('Backup Manager Edge Cases', () => {
         // Should succeed because lock is stale and gets overridden
         const result = await db.restoreFromFile(backup.filename)
         expect(result.restoredFrom).toBe(backup.filename)
+    })
+
+    it('should reclaim a leftover lock owned by this process during maintenance', async () => {
+        const backup = await db.exportToFile('self-lock')
+        const lockDir = `${testDbPath}.lock.d`
+        const lockFile = path.join(lockDir, 'lock.json')
+        fs.mkdirSync(lockDir, { recursive: true })
+        fs.writeFileSync(
+            lockFile,
+            JSON.stringify({ pid: process.pid, timestamp: Date.now(), nonce: 'self' })
+        )
+
+        const runtime = new ServerRuntime()
+        await runtime.maintenanceManager.acquireMaintenanceLock()
+        try {
+            const result = await db.restoreFromFile(backup.filename, runtime)
+            expect(result.restoredFrom).toBe(backup.filename)
+        } finally {
+            runtime.maintenanceManager.releaseMaintenanceLock()
+        }
     })
 
     it('should rollback on restore failure', async () => {

@@ -47,6 +47,15 @@ function isHoldingPidStale(
         })
         return true
     }
+    // [INVARIANT] Restore turns maintenance on before taking this directory, and the
+    // maintenance lock is exclusive. A lock file still owned by this process is leftover.
+    if (holdingPid === process.pid) {
+        logger.warning('Found stale database restore lock (current process)', {
+            path: lockDir,
+            module: 'SqliteAdapter',
+        })
+        return true
+    }
     if (
         runtime !== undefined &&
         runtime !== null &&
