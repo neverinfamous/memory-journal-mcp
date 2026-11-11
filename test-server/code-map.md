@@ -25,8 +25,12 @@ However, agents and developers must bridge into **WSL** (Linux) under the follow
 src/
 ├── cli/                            # CLI entry point
 │   ├── index.ts                    # Main CLI execution and command logic
-│   ├── program-options.ts          # Commander.js CLI option definitions
-│   └── server-options-builder.ts   # Maps CLI options/env vars to ServerConfig
+│   ├── program.ts                  # Commander.js program factory, option grouping, and Zod validation wrapper
+│   ├── option-groups.ts            # Grouped Commander.js CLI option definitions
+│   ├── schemas.ts                  # Zod validation schemas for CLI command options
+│   ├── server-options-builder.ts   # Maps CLI options/env vars to ServerConfig
+│   ├── server-options-parsers.ts   # Structured option parsers (project registry, team DBs, IO roots)
+│   └── commands/                   # CLI subcommand handlers (serve, entry, exec, search, admin, io, analytics, visualize, project)
 ├── index.ts                        # Barrel re-export for library consumers
 ├── version.ts                      # Version SSoT — reads package.json, exports VERSION
 │
