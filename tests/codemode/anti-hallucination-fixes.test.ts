@@ -5,6 +5,7 @@
 import { describe, it, expect } from 'vitest'
 import { applyArgInterceptions } from '../../src/codemode/param-normalizer.js'
 import { wrapResult } from '../../src/codemode/worker-result-proxy.js'
+import { createContextProxy } from '../../src/codemode/worker/namespace-shims.js'
 import { JournalApi } from '../../src/codemode/api/journal-api.js'
 import type { ToolDefinition } from '../../src/types/index.js'
 
@@ -174,6 +175,22 @@ describe('Anti-Hallucination Fixes', () => {
             expect(instance).toBe(bindings)
             expect(typeof instance['searchEntries']).toBe('function')
             expect(typeof instance['createEntry']).toBe('function')
+        })
+    })
+
+    describe('Context Proxy camelCase-to-snake_case Fallback', () => {
+        it('should resolve camelCase property reads and context.get() against snake_case keys normalized by MCP', async () => {
+            const proxy = createContextProxy({
+                adamic_arch_content: '# Architecture Decision',
+                directKey: 'exact',
+            })
+
+            expect(proxy['adamicArchContent']).toBe('# Architecture Decision')
+            expect(proxy['adamic_arch_content']).toBe('# Architecture Decision')
+            expect(proxy['directKey']).toBe('exact')
+
+            const getFn = proxy['get'] as (key?: string) => Promise<unknown>
+            await expect(getFn('adamicArchContent')).resolves.toBe('# Architecture Decision')
         })
     })
 })
