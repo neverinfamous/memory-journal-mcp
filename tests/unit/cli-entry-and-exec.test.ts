@@ -20,7 +20,11 @@ vi.mock('@huggingface/transformers', () => ({
     env: { allowRemoteModels: false, localModelPath: '' },
 }))
 
-import { createEntryAction, updateEntryAction } from '../../src/cli/commands/entry.js'
+import {
+    buildEntryPayload,
+    createEntryAction,
+    updateEntryAction,
+} from '../../src/cli/commands/entry.js'
 import { execAction } from '../../src/cli/commands/exec.js'
 import { getSandboxPool } from '../../src/handlers/tools/codemode/singleton-state.js'
 import {
@@ -287,6 +291,91 @@ describe('CLI Entry & Exec Commands', () => {
                 )
             ).rejects.toThrow('PROCESS_EXIT_1')
             expect(stderrOutput.join('')).toContain('not found or version mismatch')
+        })
+
+        it('should attribute CLI buildEntryPayload and createEntryAction to registered CWD repo instead of hijacking on keyword aliases like "sqlite"', async () => {
+            const adamicDir = path.join(tmpDir, 'adamic')
+            const dbMcpDir = path.join(tmpDir, 'db-mcp')
+            fs.mkdirSync(adamicDir, { recursive: true })
+            fs.mkdirSync(dbMcpDir, { recursive: true })
+
+            const registry = {
+                'db-mcp': { path: dbMcpDir, project_number: 15 },
+                adamic: { path: adamicDir, project_number: 16 },
+            }
+
+            const cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue(adamicDir)
+            const savedRegistryEnv = process.env['PROJECT_REGISTRY']
+            delete process.env['PROJECT_REGISTRY']
+            try {
+                // 1. Direct buildEntryPayload check: CWD ('adamic' #16) beats 'sqlite' keyword ('db-mcp' #15)
+                const payload = buildEntryPayload(
+                    { tags: 'sqlite,skills' },
+                    {},
+                    { projectRegistry: registry },
+                    'Refined sqlite PRAGMA rules in adamic skill'
+                )
+                expect(payload.workspaceId).toBe('adamic')
+                expect(payload.projectNumber).toBe(16)
+                expect(payload.hasExplicitProject).toBe(false)
+                expect(payload.hasExplicitWorkspace).toBe(false)
+
+                // Explicit --project / --workspace still overrides CWD
+                const explicitPayload = buildEntryPayload(
+                    { project: 15, tags: 'sqlite' },
+                    {},
+                    { projectRegistry: registry },
+                    'Explicitly targeting db-mcp from adamic CWD'
+                )
+                expect(explicitPayload.workspaceId).toBe('db-mcp')
+                expect(explicitPayload.projectNumber).toBe(15)
+                expect(explicitPayload.hasExplicitProject).toBe(true)
+
+                // 2. End-to-end createEntryAction with config file projectRegistry and no --project/--workspace
+                const cfgFile = path.join(tmpDir, 'cwd-priority-config.json')
+                fs.writeFileSync(
+                    cfgFile,
+                    JSON.stringify({ projectRegistry: registry }),
+                    'utf-8'
+                )
+                const realSourceCmd = new Command('entry')
+                vi.spyOn(realSourceCmd, 'getOptionValueSource').mockImplementation((key: string) =>
+                    ['db', 'config', 'tags', 'json'].includes(key) ? 'cli' : 'default'
+                )
+
+                stdoutOutput = []
+                await createEntryAction(
+                    'Documented sqlite connection pooling rules inside adamic',
+                    {
+                        db: dbPath,
+                        config: cfgFile,
+                        tags: 'sqlite,docs',
+                        json: true,
+                    },
+                    realSourceCmd
+                )
+
+                const created = JSON.parse(stdoutOutput.join('')) as {
+                    status: string
+                    id: number
+                }
+                expect(created.status).toBe('success')
+
+                const db = new DatabaseAdapter(dbPath)
+                await db.initialize()
+                const stored = db.getEntryById(created.id, 'adamic')
+                expect(stored).not.toBeNull()
+                expect(stored?.workspaceId).toBe('adamic')
+                expect(stored?.projectNumber).toBe(16)
+                db.close()
+            } finally {
+                if (savedRegistryEnv !== undefined) {
+                    process.env['PROJECT_REGISTRY'] = savedRegistryEnv
+                } else {
+                    delete process.env['PROJECT_REGISTRY']
+                }
+                cwdSpy.mockRestore()
+            }
         })
     })
 

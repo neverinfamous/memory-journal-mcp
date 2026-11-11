@@ -182,4 +182,62 @@ describe('workspace-resolver with keyword and tag inference', () => {
             spy.mockRestore()
         }
     })
+
+    it('prioritizes registered CWD over content/tag keywords when preferCwdOverKeywords is true (CLI mode)', () => {
+        const adamicRoot = path.resolve('workspace-roots', 'adamic')
+        const dbMcpRoot = path.resolve('workspace-roots', 'db-mcp')
+        const cliRegistryConfig: ToolHandlerConfig = {
+            defaultWorkspaceId: 'default',
+            projectRegistry: {
+                'db-mcp': {
+                    path: dbMcpRoot,
+                    project_number: 15,
+                },
+                adamic: {
+                    path: adamicRoot,
+                    project_number: 16,
+                },
+            },
+        }
+
+        const spy = vi.spyOn(process, 'cwd').mockReturnValue(path.join(adamicRoot, 'skills'))
+        try {
+            // Default MCP server mode (preferCwdOverKeywords omitted): keyword alias 'sqlite' wins over CWD
+            const mcpResolved = resolveProjectContext(
+                {
+                    content: 'Updated sqlite skill documentation and rules',
+                    tags: ['sqlite', 'docs'],
+                },
+                cliRegistryConfig
+            )
+            expect(mcpResolved.workspaceId).toBe('db-mcp')
+            expect(mcpResolved.projectNumber).toBe(15)
+
+            // CLI mode (preferCwdOverKeywords: true): registered CWD ('adamic') wins over 'sqlite' keyword
+            const cliResolved = resolveProjectContext(
+                {
+                    content: 'Updated sqlite skill documentation and rules',
+                    tags: ['sqlite', 'docs'],
+                    preferCwdOverKeywords: true,
+                },
+                cliRegistryConfig
+            )
+            expect(cliResolved.workspaceId).toBe('adamic')
+            expect(cliResolved.projectNumber).toBe(16)
+
+            // Explicit workspace_id or project_number still overrides CWD in CLI mode
+            const explicitProject = resolveProjectContext(
+                {
+                    project_number: 15,
+                    content: 'Cross-repo note logged from adamic CWD',
+                    preferCwdOverKeywords: true,
+                },
+                cliRegistryConfig
+            )
+            expect(explicitProject.workspaceId).toBe('db-mcp')
+            expect(explicitProject.projectNumber).toBe(15)
+        } finally {
+            spy.mockRestore()
+        }
+    })
 })
