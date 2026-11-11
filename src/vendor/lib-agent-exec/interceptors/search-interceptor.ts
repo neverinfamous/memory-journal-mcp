@@ -46,11 +46,19 @@ export interface ParsedGrepSearchArgs {
 const EXTENSIONLESS_FILENAMES_REGEX = /^(?:Makefile|Dockerfile|Containerfile|Procfile|Gemfile|Rakefile|Brewfile|Vagrantfile|Jenkinsfile|Justfile|LICENSE|README|CHANGELOG|AUTHORS|CODEOWNERS|OWNERS)$/i;
 const KNOWN_POSIX_ROOT_DIRS_REGEX = /^\/(?:etc|var|var\/log|tmp|usr|usr\/local|opt|home|root|srv|bin|sbin|lib|lib64|dev|proc|sys|run)$/;
 
+function hasUnambiguousRegexMeta(arg: string): boolean {
+  return /[()*+?[\]^$|{}]/.test(arg) || arg.includes('|');
+}
+
+function hasBackslashRegexEscape(arg: string): boolean {
+  return /\\[bBwWdDsSnrtv0()[\]{}.*+?^$|\-.]/.test(arg);
+}
+
 // [INTENT]: Distinguishes directory targets from patterns and single-file paths in rg/grep interceptors.
-// [INVARIANT]: Must NOT assume arbitrary POSIX paths without trailing '/' (e.g., '/var/log/syslog', '/etc/os-release', '/proc/cpuinfo') are directories on Windows hosts.
+// [INVARIANT]: Must NOT assume arbitrary POSIX paths without trailing '/' (e.g., '/var/log/syslog', '/etc/os-release', '/proc/cpuinfo') are directories on Windows hosts, and must NOT misclassify Windows backslash paths (e.g., 'C:\Users\...\Desktop\...\src' containing '\D' and '\s') as regex escapes.
 export function isLikelyDirectoryArg(arg: string, cwd?: string): boolean {
   if (arg.length === 0 || arg.startsWith('-') || arg.startsWith('\\-')) return false;
-  if (/[()*+?[\]^$|{}]/.test(arg) || /\\[bBwWdDsSnrtv0()[\]{}.*+?^$|\-.]/.test(arg) || arg.includes('|')) {
+  if (hasUnambiguousRegexMeta(arg)) {
     return false;
   }
 
@@ -95,12 +103,16 @@ export function isLikelyDirectoryArg(arg: string, cwd?: string): boolean {
     // ignore stat errors
   }
 
-  if (/\.[a-zA-Z0-9]{1,6}$/.test(arg)) {
+  if (/^[a-zA-Z]:[/\\]/.test(arg)) {
+    return !/\.[a-zA-Z0-9]{1,6}$/.test(arg) && path.extname(arg).length === 0;
+  }
+
+  if (!/^\.{1,2}[/\\]/.test(arg) && hasBackslashRegexEscape(arg)) {
     return false;
   }
 
-  if (/^[a-zA-Z]:[/\\]/.test(arg) && path.extname(arg).length === 0) {
-    return true;
+  if (/\.[a-zA-Z0-9]{1,6}$/.test(arg)) {
+    return false;
   }
 
   const baseName = path.posix.basename(arg.replace(/\\/g, '/'));
@@ -514,7 +526,8 @@ export function handleRipgrepInterception(ctx: ExecutionContext, hasStdin: boole
   const isDir = (arg: string): boolean => isLikelyDirectoryArg(arg, ctx.payload.cwd);
 
   const isPathLike = (arg: string): boolean => {
-    if (/[()*+?[\]^$|{}]/.test(arg) || /\\[bBwWdDsSnrtv0()[\]{}.*+?^$|\-.]/.test(arg) || arg.includes('|')) return false;
+    if (hasUnambiguousRegexMeta(arg)) return false;
+    if (!/^[a-zA-Z]:[/\\]/.test(arg) && !/^\.{1,2}[/\\]/.test(arg) && hasBackslashRegexEscape(arg)) return false;
     return (
       arg === '.' ||
       arg === '..' ||
@@ -676,7 +689,8 @@ export function handleGrepInterception(ctx: ExecutionContext, hasStdin: boolean)
 
   if (!hasStdin && !hasPatternFlag && positionalArgs.length > 2) {
     const isPathLike = (arg: string): boolean => {
-      if (/[()*+?[\]^$|{}]/.test(arg) || /\\[bBwWdDsSnrtv0()[\]{}.*+?^$|\-.]/.test(arg) || arg.includes('|')) return false;
+      if (hasUnambiguousRegexMeta(arg)) return false;
+      if (!/^[a-zA-Z]:[/\\]/.test(arg) && !/^\.{1,2}[/\\]/.test(arg) && hasBackslashRegexEscape(arg)) return false;
       return (
         arg === '.' ||
         arg === '..' ||
