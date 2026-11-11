@@ -6,6 +6,7 @@
 
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../types/index.js'
+import { ValidationError } from '../../types/errors.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
 import { resolveWorkspaceId } from '../../utils/workspace-resolver.js'
 import {
@@ -18,6 +19,31 @@ import { ErrorFieldsMixin } from './error-fields-mixin.js'
 
 // Named constants (magic value extraction)
 const INACTIVE_THRESHOLD_DAYS = 7
+
+const PROJECT_NUMBER_ERROR =
+    'project_number must be a finite number or a decimal integer string'
+
+/**
+ * A numeric project_number selects a workspace. Decimal integer strings are coerced.
+ * Any other present value is rejected so the handler does not silently use the default workspace.
+ */
+function coerceAnalyticsProjectNumber(projectNumber: unknown): number | undefined {
+    if (projectNumber === undefined) return undefined
+    if (typeof projectNumber === 'number') {
+        if (!Number.isFinite(projectNumber)) {
+            throw new ValidationError(PROJECT_NUMBER_ERROR)
+        }
+        return projectNumber
+    }
+    if (typeof projectNumber === 'string' && /^-?\d+$/.test(projectNumber)) {
+        const parsed = Number(projectNumber)
+        if (!Number.isFinite(parsed)) {
+            throw new ValidationError(PROJECT_NUMBER_ERROR)
+        }
+        return parsed
+    }
+    throw new ValidationError(PROJECT_NUMBER_ERROR)
+}
 
 // ============================================================================
 // Output Schemas
@@ -217,8 +243,7 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
                         workspace_id,
                         project_number,
                     } = GetStatisticsSchema.parse(params)
-                    const resolvedProjectNumber =
-                        typeof project_number === 'number' ? project_number : undefined
+                    const resolvedProjectNumber = coerceAnalyticsProjectNumber(project_number)
                     const wsId = resolveWorkspaceId(
                         workspace_id,
                         resolvedProjectNumber,
@@ -254,8 +279,7 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     const input = CrossProjectInsightsInputSchema.parse(params)
-                    const resolvedProjectNumber =
-                        typeof input.project_number === 'number' ? input.project_number : undefined
+                    const resolvedProjectNumber = coerceAnalyticsProjectNumber(input.project_number)
                     const wsId = resolveWorkspaceId(
                         input.workspace_id,
                         resolvedProjectNumber,

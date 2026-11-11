@@ -19,6 +19,27 @@ import {
     generateUpdateEntryPrompt,
 } from './workflow-helpers.js'
 
+function resolveWorkflowPromptScope(args: Record<string, string> | undefined): {
+    workspaceHint?: string
+    projectNumber?: number
+} {
+    const rawWorkspace = args?.['workspace_id']?.trim()
+    const rawProject = args?.['project_number']?.trim()
+    const hasWorkspace = rawWorkspace !== undefined && rawWorkspace.length > 0
+    const numericProject =
+        rawProject !== undefined && /^\d+$/.test(rawProject) ? Number(rawProject) : undefined
+    const scope: { workspaceHint?: string; projectNumber?: number } = {}
+    if (hasWorkspace) {
+        scope.workspaceHint = rawWorkspace
+    } else if (rawProject !== undefined && numericProject !== undefined) {
+        scope.workspaceHint = rawProject
+    }
+    if (numericProject !== undefined && Number.isFinite(numericProject)) {
+        scope.projectNumber = numericProject
+    }
+    return scope
+}
+
 /**
  * Get workflow prompt definitions
  */
@@ -37,13 +58,21 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
                 briefingConfig?: Partial<BriefingConfig>,
                 runtime?: object | null
             ) => {
+                const scope = resolveWorkflowPromptScope(args)
                 const ws = resolvePromptPriorWorkspace(
                     briefingConfig,
-                    args?.['workspace_id'] ?? args?.['project_number'],
+                    scope.workspaceHint,
                     undefined,
                     runtime
                 )
-                return generateSummaryPrompt(db, teamDb, 'personal', ws, briefingConfig)
+                return generateSummaryPrompt(
+                    db,
+                    teamDb,
+                    'personal',
+                    ws,
+                    briefingConfig,
+                    scope.projectNumber
+                )
             },
         },
         {
@@ -59,13 +88,21 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
                 briefingConfig?: Partial<BriefingConfig>,
                 runtime?: object | null
             ) => {
+                const scope = resolveWorkflowPromptScope(args)
                 const ws = resolvePromptPriorWorkspace(
                     briefingConfig,
-                    args?.['workspace_id'] ?? args?.['project_number'],
+                    scope.workspaceHint,
                     undefined,
                     runtime
                 )
-                return generateSummaryPrompt(db, teamDb, 'team', ws, briefingConfig)
+                return generateSummaryPrompt(
+                    db,
+                    teamDb,
+                    'team',
+                    ws,
+                    briefingConfig,
+                    scope.projectNumber
+                )
             },
         },
         {
@@ -81,13 +118,21 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
                 briefingConfig?: Partial<BriefingConfig>,
                 runtime?: object | null
             ) => {
+                const scope = resolveWorkflowPromptScope(args)
                 const ws = resolvePromptPriorWorkspace(
                     briefingConfig,
-                    args?.['workspace_id'] ?? args?.['project_number'],
+                    scope.workspaceHint,
                     undefined,
                     runtime
                 )
-                return generateEntryPrompt(db, teamDb, 'personal', ws, briefingConfig)
+                return generateEntryPrompt(
+                    db,
+                    teamDb,
+                    'personal',
+                    ws,
+                    briefingConfig,
+                    scope.projectNumber
+                )
             },
         },
         {
@@ -103,13 +148,21 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
                 briefingConfig?: Partial<BriefingConfig>,
                 runtime?: object | null
             ) => {
+                const scope = resolveWorkflowPromptScope(args)
                 const ws = resolvePromptPriorWorkspace(
                     briefingConfig,
-                    args?.['workspace_id'] ?? args?.['project_number'],
+                    scope.workspaceHint,
                     undefined,
                     runtime
                 )
-                return generateEntryPrompt(db, teamDb, 'team', ws, briefingConfig)
+                return generateEntryPrompt(
+                    db,
+                    teamDb,
+                    'team',
+                    ws,
+                    briefingConfig,
+                    scope.projectNumber
+                )
             },
         },
         {
@@ -125,13 +178,21 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
                 briefingConfig?: Partial<BriefingConfig>,
                 runtime?: object | null
             ) => {
+                const scope = resolveWorkflowPromptScope(args)
                 const ws = resolvePromptPriorWorkspace(
                     briefingConfig,
-                    args?.['workspace_id'] ?? args?.['project_number'],
+                    scope.workspaceHint,
                     undefined,
                     runtime
                 )
-                return generateUpdateEntryPrompt(db, teamDb, 'personal', ws, briefingConfig)
+                return generateUpdateEntryPrompt(
+                    db,
+                    teamDb,
+                    'personal',
+                    ws,
+                    briefingConfig,
+                    scope.projectNumber
+                )
             },
         },
         {
@@ -147,13 +208,21 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
                 briefingConfig?: Partial<BriefingConfig>,
                 runtime?: object | null
             ) => {
+                const scope = resolveWorkflowPromptScope(args)
                 const ws = resolvePromptPriorWorkspace(
                     briefingConfig,
-                    args?.['workspace_id'] ?? args?.['project_number'],
+                    scope.workspaceHint,
                     undefined,
                     runtime
                 )
-                return generateUpdateEntryPrompt(db, teamDb, 'team', ws, briefingConfig)
+                return generateUpdateEntryPrompt(
+                    db,
+                    teamDb,
+                    'team',
+                    ws,
+                    briefingConfig,
+                    scope.projectNumber
+                )
             },
         },
         {

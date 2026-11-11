@@ -193,8 +193,16 @@ describe('Code Mode Worker Proxies & Globals', () => {
         expect(entriesDomain['fetchById']).toBe(getEntryByIdMock)
         expect(entriesDomain['patchEntry']).toBe(updateEntryMock)
         expect(entriesDomain['removeItem']).toBe(deleteEntryMock)
-        expect(entriesDomain['listDeletedEntries']).toBe(getRecentEntriesMock)
-        expect(entriesDomain['listDeletedEntries']).not.toBe(deleteEntryMock)
+        const listDeleted = entriesDomain['listDeletedEntries'] as () => Promise<{
+            success: boolean
+            code: string
+        }>
+        expect(listDeleted).not.toBe(getRecentEntriesMock)
+        expect(listDeleted).not.toBe(deleteEntryMock)
+        await expect(listDeleted()).resolves.toMatchObject({
+            success: false,
+            code: 'VALIDATION_ERROR',
+        })
         expect(entriesDomain['listAll']).toBe(getRecentEntriesMock)
 
         const getRead = createGetReadFindInterceptor(mjApi, shimMj)
@@ -244,7 +252,6 @@ describe('Code Mode Worker Proxies & Globals', () => {
             type: 'bug_fix',
             tags: ['tagA'],
             content: '{"key":"val"}',
-            metadata: { extra: 1 },
         })
 
         await (shimMj['loadBriefing'] as (a?: Record<string, unknown>) => Promise<unknown>)({

@@ -76,7 +76,10 @@ export const METHOD_ALIASES: Record<string, Record<string, string>> = {
             'readResource'
         ),
         ...mapToTarget(['history', 'revisions', 'get_entry_history'], 'getEntryHistory'),
-        ...mapToTarget(['schema', 'getSchema', 'get_schema', 'database', 'getDatabase', 'get_database', 'getDb', 'get_db'], 'getStatistics'),
+        ...mapToTarget(
+            ['schema', 'getSchema', 'get_schema', 'database', 'getDatabase', 'get_database', 'getDb', 'get_db'],
+            'maintenanceUnavailable'
+        ),
         ...SHARED_PROJECT_ALIASES,
         ...SHARED_HEALTH_ALIASES,
         ...SHARED_GREP_SEARCH_ALIASES,
@@ -115,13 +118,16 @@ export const METHOD_ALIASES: Record<string, Record<string, string>> = {
     analytics: {
         ...mapToTarget(
             [
-                'stats', 'getStats', 'statistics', 'schema', 'getSchema', 'get_schema', 'tables',
+                'stats', 'getStats', 'statistics', 'tables',
                 'getTables', 'get_tables', 'describe', 'databaseInfo', 'getDatabaseInfo',
-                'get_database_info', 'database', 'getDatabase', 'get_database', 'getDb', 'get_db',
-                'db', 'dbStats', 'getDbStats', 'get_db_stats', 'dbInfo', 'getDbInfo',
+                'get_database_info', 'db', 'dbStats', 'getDbStats', 'get_db_stats', 'dbInfo', 'getDbInfo',
                 'get_db_info', 'get_statistics',
             ],
             'getStatistics'
+        ),
+        ...mapToTarget(
+            ['schema', 'getSchema', 'get_schema', 'database', 'getDatabase', 'get_database', 'getDb', 'get_db'],
+            'maintenanceUnavailable'
         ),
         ...SHARED_HEALTH_ALIASES,
         ...mapToTarget(

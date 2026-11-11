@@ -398,11 +398,11 @@ export class GitHubIntegration {
         return this.insightsManager.getTrafficData(owner, repo)
     }
 
-    async getTopReferrers(owner: string, repo: string, limit = 5): Promise<TrafficReferrer[]> {
+    async getTopReferrers(owner: string, repo: string, limit = 5): Promise<TrafficReferrer[] | null> {
         return this.insightsManager.getTopReferrers(owner, repo, limit)
     }
 
-    async getPopularPaths(owner: string, repo: string, limit = 5): Promise<PopularPath[]> {
+    async getPopularPaths(owner: string, repo: string, limit = 5): Promise<PopularPath[] | null> {
         return this.insightsManager.getPopularPaths(owner, repo, limit)
     }
 }

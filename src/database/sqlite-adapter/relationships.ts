@@ -24,14 +24,15 @@ export class RelationshipsManager {
     ): Relationship {
         const db = this.db
 
-        // Workspace enforcement: when workspaceId is provided (and not '*'), both endpoints
-        // must belong to that workspace. When omitted, both endpoints must share the same workspace.
-        const scoped = workspaceId !== undefined && workspaceId !== '*'
+        // [INVARIANT] A supplied workspace, including '', scopes both endpoints ('' is default).
+        // Omitted workspace stays unscoped so both endpoints must share one workspace. '*' stays unscoped.
+        const scopeId = workspaceId === undefined ? undefined : effectiveWorkspace(workspaceId)
+        const scoped = scopeId !== undefined && scopeId !== '*'
         const wsStmt = db.prepare(
             `SELECT workspace_id FROM memory_journal WHERE id = ? AND deleted_at IS NULL${scoped ? ' AND workspace_id = ?' : ''}`
         )
         const getWs = (entryId: number): { workspace_id: string } | undefined =>
-            (scoped ? wsStmt.get(entryId, workspaceId) : wsStmt.get(entryId)) as
+            (scoped ? wsStmt.get(entryId, scopeId) : wsStmt.get(entryId)) as
                 | { workspace_id: string }
                 | undefined
         const fromRow = getWs(fromEntryId)

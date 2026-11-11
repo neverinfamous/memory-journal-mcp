@@ -15,6 +15,23 @@ interface BatchIndexParams {
     doneMessage: string
     /** Optional filter selecting which entries need (re)indexing. */
     shouldIndex?: (entryId: number) => boolean
+    /** Workspace already resolved for every entry in this batch. */
+    workspaceId?: string
+    /** Per-entry workspace when a batch spans more than one workspace. */
+    workspaceByEntryId?: ReadonlyMap<number, string>
+}
+
+export function collectIndexWorkspaces(
+    entries: readonly { id: number; workspaceId?: string | null }[]
+): Map<number, string> {
+    const workspaces = new Map<number, string>()
+    for (const entry of entries) {
+        const workspaceId = entry.workspaceId
+        if (typeof workspaceId === 'string' && workspaceId.length > 0 && workspaceId !== '*') {
+            workspaces.set(entry.id, workspaceId)
+        }
+    }
+    return workspaces
 }
 
 /**
@@ -24,7 +41,18 @@ interface BatchIndexParams {
 export async function indexBatchEntries(
     params: BatchIndexParams
 ): Promise<{ indexStatuses: string[]; indexErrors: Error[] }> {
-    const { progress, vectorManager, db, autoIndex, entryIds, errorPrefix, doneMessage, shouldIndex } = params
+    const {
+        progress,
+        vectorManager,
+        db,
+        autoIndex,
+        entryIds,
+        errorPrefix,
+        doneMessage,
+        shouldIndex,
+        workspaceId,
+        workspaceByEntryId,
+    } = params
     const indexStatuses: string[] = []
     const indexErrors: Error[] = []
 
@@ -38,7 +66,8 @@ export async function indexBatchEntries(
         const entryId = entryIds[i]
         if (entryId !== undefined && (shouldIndex === undefined || shouldIndex(entryId))) {
             try {
-                const status = await autoIndexEntry(vectorManager, db, entryId)
+                const indexedWorkspace = workspaceByEntryId?.get(entryId) ?? workspaceId
+                const status = await autoIndexEntry(vectorManager, db, entryId, indexedWorkspace)
                 if (status) indexStatuses.push(status)
             } catch (err) {
                 indexErrors.push(

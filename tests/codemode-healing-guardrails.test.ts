@@ -79,7 +79,10 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
 
             expect(failedResult['success']).toBe(false)
             expect(failedResult['relationships']).toEqual([])
-            expect(failedResult['entries']).toEqual([])
+            expect(() => failedResult['entries']).toThrow('Entry 9999 not found')
+            expect(() => failedResult['items']).toThrow('Entry 9999 not found')
+            expect(() => failedResult['deleted']).toThrow('Entry 9999 not found')
+            expect(() => [...(failedResult as unknown as Iterable<unknown>)]).toThrow('Entry 9999 not found')
             expect(failedResult['projects']).toEqual([])
             expect(failedResult['length']).toBe(0)
             expect(typeof failedResult['map']).toBe('function')
@@ -255,6 +258,23 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
 
             expect(healed).toBeDefined()
             expect(healed).toContain('mj.core.listTags')
+        })
+
+        it('keeps workspace_id on a healed DELETE and ignores a later numeric bind for a literal id', async () => {
+            const { extractAndRecoverPreparedStatementCode, extractAndRecoverSqlCode } = await import(
+                '../src/handlers/tools/codemode/sql-recovery.js'
+            )
+            const deleted = extractAndRecoverSqlCode(
+                "DELETE FROM memory_journal WHERE id = 12 AND workspace_id = 'adamic'"
+            )
+            expect(deleted).toContain('"workspace_id":"adamic"')
+            expect(deleted).toContain('"entry_id":12')
+
+            const updated = extractAndRecoverPreparedStatementCode(
+                'db.prepare("UPDATE memory_journal SET content = ? WHERE id = 44").run("hello", 9);'
+            )
+            expect(updated).toContain('"entry_id":44')
+            expect(updated).not.toContain('"entry_id":9')
         })
 
         it('should auto-heal PRAGMA and SHOW commands into getStatistics', () => {
@@ -746,9 +766,9 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
 
         it('should alias schema in METHOD_ALIASES for analytics and core', async () => {
             const { METHOD_ALIASES } = await import('../src/codemode/api-constants.js')
-            expect(METHOD_ALIASES.analytics?.schema).toBe('getStatistics')
+            expect(METHOD_ALIASES.analytics?.schema).toBe('maintenanceUnavailable')
             expect(METHOD_ALIASES.analytics?.tables).toBe('getStatistics')
-            expect(METHOD_ALIASES.core?.schema).toBe('getStatistics')
+            expect(METHOD_ALIASES.core?.schema).toBe('maintenanceUnavailable')
         })
 
         it('should parse learned_context and group_name in ExecuteCodeSchema', async () => {
@@ -1447,7 +1467,7 @@ return mj.createEntry({
   type: "progress",
   title: "db-mcp Code Mode Testing - Core Tools Part 2",
   content: "Completed rigorous testing of sqlite.core.upsert and sqlite.core.batchInsert.",
-  project_number: "db-mcp"
+  project_number: 6
 });
 `;
 
@@ -1880,10 +1900,10 @@ return { success: true, projectId };
 
         it('should map getDatabase and database aliases in METHOD_ALIASES for analytics and core', async () => {
             const { METHOD_ALIASES } = await import('../src/codemode/api-constants.js')
-            expect(METHOD_ALIASES['analytics']?.['getDatabase']).toBe('getStatistics')
-            expect(METHOD_ALIASES['analytics']?.['database']).toBe('getStatistics')
-            expect(METHOD_ALIASES['core']?.['getDatabase']).toBe('getStatistics')
-            expect(METHOD_ALIASES['core']?.['database']).toBe('getStatistics')
+            expect(METHOD_ALIASES['analytics']?.['getDatabase']).toBe('maintenanceUnavailable')
+            expect(METHOD_ALIASES['analytics']?.['database']).toBe('maintenanceUnavailable')
+            expect(METHOD_ALIASES['core']?.['getDatabase']).toBe('maintenanceUnavailable')
+            expect(METHOD_ALIASES['core']?.['database']).toBe('maintenanceUnavailable')
         })
 
         it('should provide getDatabase, getDb, and connectToDatabase factory methods on buildApiProxy', async () => {
@@ -2626,6 +2646,10 @@ return { success: true, projectId };
         it('should accept workspace_id: "*" in batch_delete_entries for cross-workspace deletions', async () => {
             const { callTool } = await import('../src/handlers/tools/index.js')
             const mockDb = {
+                getEntryByIdIncludeDeleted: vi.fn().mockReturnValue({
+                    id: 14460,
+                    workspaceId: 'db-mcp',
+                }),
                 deleteEntries: vi.fn().mockReturnValue({
                     deleted: [14460],
                     notFound: [],

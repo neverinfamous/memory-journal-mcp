@@ -4,7 +4,13 @@
  */
 
 import { type SafeFsShim, pathShim, consoleShim, createPreparedStatementShim } from './node-shims.js'
-import { DB_TO_JOURNAL, createCallableShim, createSchemaShim } from './namespace-shims.js'
+import {
+    DB_TO_JOURNAL,
+    createCallableShim,
+    createMaintenanceUnavailableFn,
+    createSchemaShim,
+    isDbMaintenanceCall,
+} from './namespace-shims.js'
 import {
     createAdaptersShim,
     createShimReadResourceHandler,
@@ -304,6 +310,7 @@ export function createShimMjProxy(options: CreateShimMjOptions): Record<string, 
             if (typeof prop === 'string' && prop.includes('_')) {
                 const camelProp = prop.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase())
                 if (camelProp !== prop) {
+                    if (isDbMaintenanceCall(camelProp)) return createMaintenanceUnavailableFn()
                     const mapping = DB_TO_JOURNAL[camelProp]
                     if (mapping !== undefined) {
                         const [group, method] = mapping
@@ -314,6 +321,7 @@ export function createShimMjProxy(options: CreateShimMjOptions): Record<string, 
             }
 
             if (typeof prop === 'string') {
+                if (isDbMaintenanceCall(prop)) return createMaintenanceUnavailableFn()
                 const mapping = DB_TO_JOURNAL[prop]
                 if (mapping !== undefined) {
                     const [group, method] = mapping

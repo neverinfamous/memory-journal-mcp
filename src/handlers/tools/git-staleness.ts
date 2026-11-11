@@ -73,6 +73,8 @@ export interface StalenessCheckRow {
     newStatus: AnchorStatus
     commitsSince: number
     isDeleted: boolean
+    /** Set when git failed for a reason other than a missing path or rejected traversal. */
+    error?: string
 }
 
 function isEnoent(err: unknown): boolean {
@@ -136,7 +138,8 @@ export async function evaluateAnchorStaleness(
 
 /**
  * A missing path or a rejected traversal is a permanent resolution failure.
- * Other errors, including a failed git command, leave the stored status alone.
+ * Other errors, including a failed git command, leave the stored status alone
+ * and surface `error` on the row so the caller does not report success.
  */
 export function stalenessFailure(
     anchor: { id?: number; anchorPath: string; status: AnchorStatus },
@@ -172,6 +175,7 @@ export function stalenessFailure(
             newStatus: anchor.status,
             commitsSince: 0,
             isDeleted: false,
+            error: message,
         },
     }
 }

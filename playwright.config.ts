@@ -16,6 +16,10 @@ const createWebServerConfig = (workerIndex: number) => {
             ALLOWED_IO_ROOTS: path.join(process.cwd(), '.test-output', 'e2e'),
             METRICS_EXPORT: 'prometheus',
             MEMORY_JOURNAL_CONFIG: path.join(process.cwd(), 'tests', 'e2e', 'empty-config.json'),
+            // [INTENT] Staleness checks refuse a workspace that has no registered repository path.
+            PROJECT_REGISTRY: JSON.stringify({
+                default: { path: process.cwd(), project_number: 1 },
+            }),
         },
         url: `http://localhost:${port}/health`,
         reuseExistingServer: !process.env.CI,

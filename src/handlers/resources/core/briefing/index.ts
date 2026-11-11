@@ -103,7 +103,9 @@ export async function buildBriefingData(
         if (registryEntry) {
             activeRepoPath = registryEntry.path
             activeGithub = getGitHubIntegration(registryEntry.path, context.runtime)
-            activeProjectNumber ??= registryEntry.project_number ?? undefined
+            if (registryEntry.project_number !== undefined) {
+                activeProjectNumber = registryEntry.project_number
+            }
         }
     }
 

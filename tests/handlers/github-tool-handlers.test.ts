@@ -819,6 +819,36 @@ describe('GitHub Tool Handlers', () => {
             expect(result['referrers']).toBeDefined()
         })
 
+        it('returns GITHUB_API_ERROR when referrers fail, including an all-section request', async () => {
+            const github = createMockGitHub({
+                getRepoStats: vi.fn().mockResolvedValue({
+                    stars: 1,
+                    forks: 0,
+                    watchers: 0,
+                    openIssues: 0,
+                    size: 1,
+                    defaultBranch: 'main',
+                }),
+                getTrafficData: vi.fn().mockResolvedValue({
+                    clones: { total: 0, unique: 0, dailyAvg: 0 },
+                    views: { total: 0, unique: 0, dailyAvg: 0 },
+                    period: '14 days',
+                }),
+                getTopReferrers: vi.fn().mockResolvedValue(null),
+                getPopularPaths: vi.fn().mockResolvedValue([]),
+            })
+            const result = (await callTool(
+                'get_repo_insights',
+                { sections: 'all' },
+                db,
+                undefined,
+                github
+            )) as Record<string, unknown>
+            expect(result['success']).toBe(false)
+            expect(result['code']).toBe('GITHUB_API_ERROR')
+            expect(result['error']).toContain('referrers')
+        })
+
         it('should return paths section', async () => {
             const github = createMockGitHub({
                 getPopularPaths: vi

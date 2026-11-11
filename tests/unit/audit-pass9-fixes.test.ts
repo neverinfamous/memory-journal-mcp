@@ -5,6 +5,10 @@ import { buildPriorAuditSection, resolvePromptPriorWorkspace } from '../../src/h
 import { resourceWorkspace } from '../../src/handlers/resources/shared.js'
 import { getCoreTools as getAdminCoreTools } from '../../src/handlers/tools/admin/core-tools.js'
 import { applyGenericInterceptions } from '../../src/codemode/normalizers/generic-interceptions.js'
+import {
+    extractAndRecoverPreparedStatementCode,
+    extractAndRecoverSqlCode,
+} from '../../src/handlers/tools/codemode/sql-recovery.js'
 import { normalizeParams } from '../../src/codemode/api/param-normalizer.js'
 import { formatPositiveIntOrPlaceholder } from '../../src/handlers/prompts/github.js'
 
@@ -162,10 +166,32 @@ describe('Pass 9 Audit Fixes — Workspace Routing & Normalizers', () => {
             const res = applyGenericInterceptions('search_entries', [
                 { query: 'audit', project_number: 'memory-journal-mcp' },
             ])
-            expect('args' in res && res.args[0]).toEqual({
-                query: 'audit',
-                workspace_id: 'memory-journal-mcp',
-            })
+            expect('error' in res).toBe(true)
+            if ('error' in res) {
+                expect(res.error['success']).toBe(false)
+                expect(res.error['code']).toBe('VALIDATION_ERROR')
+                expect(String(res.error['error'])).toContain('memory-journal-mcp')
+            }
+        })
+
+        it('applyGenericInterceptions keeps a search query when a string is paired with options', () => {
+            const res = applyGenericInterceptions('searchEntries', ['audit', { limit: 5 }])
+            expect('args' in res && res.args[0]).toEqual({ limit: 5, query: 'audit' })
+        })
+
+        it('keeps workspace scope on healed DELETE and does not let a later number replace a literal id', () => {
+            const deleted = extractAndRecoverSqlCode(
+                "DELETE FROM memory_journal WHERE id = 12 AND workspace_id = 'adamic'"
+            )
+            expect(deleted).toContain('mj.admin.deleteEntry')
+            expect(deleted).toContain('"entry_id":12')
+            expect(deleted).toContain('"workspace_id":"adamic"')
+
+            const updated = extractAndRecoverPreparedStatementCode(
+                'db.prepare("UPDATE memory_journal SET content = ? WHERE id = 44").run("hello", 9);'
+            )
+            expect(updated).toContain('"entry_id":44')
+            expect(updated).not.toContain('"entry_id":9')
         })
     })
 

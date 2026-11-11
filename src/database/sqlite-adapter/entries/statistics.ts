@@ -1,4 +1,5 @@
 import type { EntriesSharedContext } from './shared.js'
+import { effectiveWorkspace } from '../../workspace-scope.js'
 import { validateDateFormatPattern } from '../../../utils/security-utils.js'
 
 /** Maximum number of period rows returned in the activity timeline */
@@ -187,8 +188,9 @@ export function getStatistics(
     workspaceId = 'default'
 ): Record<string, unknown> {
     const { db } = context
+    const scopeId = effectiveWorkspace(workspaceId)
 
-    const { dateFilter, dateParams } = buildDateFilter(workspaceId, startDate, endDate)
+    const { dateFilter, dateParams } = buildDateFilter(scopeId, startDate, endDate)
 
     const { totalEntries, entriesByType } = getTypeCounts(db, dateFilter, dateParams)
 

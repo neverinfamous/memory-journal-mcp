@@ -225,18 +225,11 @@ export class JournalApi {
         if (deletedFn) this.core['listDeletedEntries'] = deletedFn
 
         const semanticFn = this.search['semanticSearch']
-        const searchEntriesFallbackFn = this.search['searchEntries']
         if (semanticFn) {
             const wrappedSemanticFn = async (...args: unknown[]): Promise<unknown> => {
                 const res = await semanticFn(...args)
-                if (isRecord(res) && Array.isArray(res['entries']) && res['entries'].length === 0 && searchEntriesFallbackFn) {
-                    const params = args[0]
-                    if (isRecord(params) && typeof params['query'] === 'string') {
-                        const fallback = await searchEntriesFallbackFn(...args)
-                        if (isRecord(fallback) && Array.isArray(fallback['entries']) && fallback['entries'].length > 0) {
-                            return fallback
-                        }
-                    }
+                if (isRecord(res) && Array.isArray(res['entries']) && res['entries'].length === 0) {
+                    return { ...res, warning: 'Semantic search returned no entries' }
                 }
                 return res
             }
@@ -341,9 +334,21 @@ export class JournalApi {
     }
 
     private wireMethodAliases(): void {
+        const maintenanceUnavailable = (): Promise<{ success: false; error: string; code: string }> =>
+            Promise.resolve({
+                success: false,
+                error: 'Maintenance call is not available',
+                code: 'VALIDATION_ERROR',
+            })
         for (const [groupName, aliases] of Object.entries(METHOD_ALIASES)) {
             const groupApi = this.groupApiMap[groupName]
             if (!groupApi) continue
+            if (
+                Object.values(aliases).includes('maintenanceUnavailable') &&
+                typeof groupApi['maintenanceUnavailable'] !== 'function'
+            ) {
+                groupApi['maintenanceUnavailable'] = maintenanceUnavailable
+            }
             for (const [aliasName, canonicalMethod] of Object.entries(aliases)) {
                 if (typeof groupApi[aliasName] !== 'function' && typeof groupApi[canonicalMethod] === 'function') {
                     groupApi[aliasName] = groupApi[canonicalMethod]

@@ -96,7 +96,7 @@ const ENTRY_DELETE_ALIASES = new Set([
     'remove', 'removeEntry', 'removeItem', 'deleteItem',
 ])
 const ENTRY_LIST_ALIASES = new Set([
-    'recent', 'all', 'getAll', 'listAll', 'fetchEntries', 'listDeletedEntries', 'list_deleted_entries',
+    'recent', 'all', 'getAll', 'listAll', 'fetchEntries',
 ])
 
 export function createEntriesDomainProxy(target: Record<string, unknown>): unknown {
@@ -146,6 +146,14 @@ export function createEntriesDomainProxy(target: Record<string, unknown>): unkno
                 if (ENTRY_GET_ALIASES.has(p) && typeof getFn === 'function') return getFn
                 if (ENTRY_UPDATE_ALIASES.has(p) && typeof updateFn === 'function') return updateFn
                 if (ENTRY_DELETE_ALIASES.has(p) && typeof deleteFn === 'function') return deleteFn
+                if (p === 'listDeletedEntries' || p === 'list_deleted_entries') {
+                    return () =>
+                        Promise.resolve({
+                            success: false,
+                            error: 'listDeletedEntries is not available',
+                            code: 'VALIDATION_ERROR',
+                        })
+                }
                 if (ENTRY_LIST_ALIASES.has(p)) return listFunc
             }
             return Reflect.get(targetFn, p, receiver) as unknown
@@ -348,6 +356,15 @@ export function createSearchDomainProxy(target: Record<string, unknown>): unknow
     return searchGroup
 }
 
+function readAppendMetadata(value: unknown): Record<string, unknown> | undefined {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined
+    const record: Record<string, unknown> = {}
+    for (const [key, entry] of Object.entries(value)) {
+        record[key] = entry
+    }
+    return record
+}
+
 export function createAppendInterceptor(
     target: Record<string, unknown>
 ): ((arg1: unknown, arg2: unknown, arg3: unknown) => unknown) | undefined {
@@ -356,13 +373,18 @@ export function createAppendInterceptor(
     return (arg1: unknown, arg2: unknown, arg3: unknown): unknown => {
         const tags = Array.isArray(arg1) ? arg1 : [typeof arg1 === 'string' ? arg1 : 'test']
         const content = typeof arg2 === 'string' ? arg2 : arg2 !== null && arg2 !== undefined ? JSON.stringify(arg2) : ''
-        const metadata: Record<string, unknown> | undefined =
-            typeof arg3 === 'object' && arg3 !== null && !Array.isArray(arg3) ? { ...arg3 } : undefined
+        const metadata = readAppendMetadata(arg3)
 
         const typeVal = metadata?.['type']
         const type = typeof typeVal === 'string' && typeVal !== '' ? typeVal : 'test_entry'
-        if (metadata !== undefined && 'type' in metadata) delete metadata['type']
+        const payload: Record<string, unknown> = { type, tags, content }
+        if (metadata !== undefined) {
+            const wsId = metadata['workspace_id'] ?? metadata['workspaceId']
+            if (typeof wsId === 'string' && wsId.trim() !== '') payload['workspace_id'] = wsId
+            const projNum = metadata['project_number'] ?? metadata['projectNumber']
+            if (typeof projNum === 'number' && !Number.isNaN(projNum)) payload['project_number'] = projNum
+        }
 
-        return (createEntry as (args: unknown) => unknown)({ type, tags, content, metadata })
+        return (createEntry as (args: unknown) => unknown)(payload)
     }
 }

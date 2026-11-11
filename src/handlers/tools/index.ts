@@ -23,6 +23,7 @@ import type { VectorSearchManager } from '../../vector/vector-search-manager/ind
 import type { GitHubIntegration } from '../../github/github-integration/index.js'
 import type { ProgressContext } from '../../utils/progress-utils.js'
 import { isToolVisibleForFilter } from '../../filtering/tool-filter.js'
+import { setActiveProjectRegistry } from '../../codemode/normalizers/generic-field-aliases.js'
 
 import {
     getCoreTools,
@@ -302,12 +303,17 @@ export async function callTool(
     ensureToolCache(db, vectorManager, github, config, teamDb, teamVectorManager)
 
     if (config?.agentHealing !== false) {
-        const intercept = applyArgInterceptions(name, [args])
-        if ('error' in intercept) {
-            return intercept.error
+        setActiveProjectRegistry(config?.projectRegistry)
+        try {
+            const intercept = applyArgInterceptions(name, [args])
+            if ('error' in intercept) {
+                return intercept.error
+            }
+            const cleanArgs = (intercept.args[0] as Record<string, unknown>) ?? args
+            args = cleanArgs
+        } finally {
+            setActiveProjectRegistry(undefined)
         }
-        const cleanArgs = (intercept.args[0] as Record<string, unknown>) ?? args
-        args = cleanArgs
     }
 
     const mapToUse = config?.runtime?.toolMapCache ?? toolMapCache ?? EMPTY_TOOL_MAP

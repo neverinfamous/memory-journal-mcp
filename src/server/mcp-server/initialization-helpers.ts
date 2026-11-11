@@ -106,11 +106,19 @@ export function createVectorManagers(inputs: VectorManagerInputs): VectorManager
         primaryVectorManager
             .initialize()
             .then(async () => {
-                const { indexed: count } = await primaryVectorManager.rebuildIndex()
-                logger.info('Vector index rebuilt in background', {
+                const rebuilt = await primaryVectorManager.rebuildIndex()
+                const rebuildLog = {
                     module: 'McpServer',
-                    entriesIndexed: count,
-                })
+                    entriesIndexed: rebuilt.indexed,
+                    success: rebuilt.success,
+                    failed: rebuilt.failed,
+                    firstError: rebuilt.firstError,
+                }
+                if (rebuilt.success) {
+                    logger.info('Vector index rebuilt in background', rebuildLog)
+                } else {
+                    logger.error('Vector index rebuild failed in background', rebuildLog)
+                }
             })
             .catch((err: unknown) => {
                 logger.error('Background vector init/rebuild failed', {

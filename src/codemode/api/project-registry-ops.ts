@@ -255,7 +255,11 @@ export function createListProjectsFn(analyticsApi: GroupApiRecord): () => Promis
                 })
             }
         }
-        return []
+        return {
+            success: false,
+            error: 'Project registry is unavailable',
+            code: 'REGISTRY_UNAVAILABLE',
+        }
     }
 }
 

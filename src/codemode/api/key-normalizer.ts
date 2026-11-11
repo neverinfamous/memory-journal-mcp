@@ -135,8 +135,16 @@ function entryAliasReplacement(value: unknown, methodName: string | undefined): 
     return undefined
 }
 
+function isExactMethod(methodLower: string | undefined, names: readonly string[]): boolean {
+    return methodLower !== undefined && names.includes(methodLower)
+}
+
+const EXPORT_MARKDOWN_METHODS = ['export_markdown', 'exportmarkdown', 'team_export_markdown', 'teamexportmarkdown']
+const IMPORT_EXTERNAL_METHODS = ['import_external', 'importexternal', 'team_import_external', 'teamimportexternal']
+const IMPORT_MARKDOWN_METHODS = ['import_markdown', 'importmarkdown', 'team_import_markdown', 'teamimportmarkdown']
+
 function pathAliasReplacement(methodLower: string | undefined): string | undefined {
-    if (methodLower?.includes('export')) return 'output_dir'
+    if (isExactMethod(methodLower, EXPORT_MARKDOWN_METHODS)) return 'output_dir'
     if (!methodLower?.includes('import')) return undefined
     return 'keep'
 }
@@ -158,7 +166,8 @@ function resolveAliasedKey(startKey: string, value: unknown, ctx: KeyContext): s
     ) {
         return startKey
     }
-    if (startKey === 'source' && methodLower?.includes('import')) return 'source_format'
+    if (startKey === 'source' && isExactMethod(methodLower, IMPORT_EXTERNAL_METHODS)) return 'source_format'
+    if (startKey === 'source' && isExactMethod(methodLower, IMPORT_MARKDOWN_METHODS)) return startKey
     if (startKey === 'path') {
         const pathKey = pathAliasReplacement(methodLower)
         if (pathKey === 'keep') return alias

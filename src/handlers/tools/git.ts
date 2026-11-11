@@ -8,7 +8,7 @@ import {
     loadProjectRegistryFromConfig,
     resolveWorkspaceId,
 } from '../../utils/workspace-resolver.js'
-import { evaluateAnchorStaleness, resolveGitWorkingDir } from './git-staleness.js'
+import { evaluateAnchorStaleness, resolveGitWorkingDir, type StalenessCheckRow } from './git-staleness.js'
 import { coerceNumber } from '../../utils/query-helpers.js'
 import { ErrorFieldsMixin } from './error-fields-mixin.js'
 import { relaxedNumber } from './schemas.js'
@@ -369,8 +369,10 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                     oldStatus: z.string(),
                     newStatus: z.string(),
                     commitsSince: z.number(),
-                    isDeleted: z.boolean()
+                    isDeleted: z.boolean(),
+                    error: z.string().optional(),
                 })).optional(),
+                skippedWorkspaces: z.array(z.string()).optional(),
                 error: z.string().optional()
             }).extend(ErrorFieldsMixin.shape),
             annotations: {
@@ -405,23 +407,34 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                             if (!entry) throw new ResourceNotFoundError('entry', String(resolvedEntryId))
                             targetWorkspaces.push(entry.workspaceId ?? defaultWs)
                         } else {
-                            const configured = Object.keys(registry ?? {}).filter((k) => registry?.[k]?.path)
-                            targetWorkspaces.push(...(configured.length > 0 ? Array.from(new Set(configured)) : [defaultWs]))
+                            const registryKeys = Object.keys(registry ?? {})
+                            targetWorkspaces.push(
+                                ...(registryKeys.length > 0
+                                    ? Array.from(new Set(registryKeys))
+                                    : [defaultWs])
+                            )
                         }
                     } else {
                         targetWorkspaces.push(resolveWorkspaceId(rawWs, rawProj, context.config))
                     }
 
-                    const results: {
-                        anchorId: number
-                        path: string
-                        oldStatus: string
-                        newStatus: string
-                        commitsSince: number
-                        isDeleted: boolean
-                    }[] = []
+                    const results: StalenessCheckRow[] = []
+                    const skippedWorkspaces: string[] = []
 
                     for (const wsId of targetWorkspaces) {
+                        const canonicalWs = findCanonicalRegistryKey(wsId, registry) ?? wsId
+                        const registryPath = registry?.[canonicalWs]?.path
+                        if (registryPath === undefined || registryPath.length === 0) {
+                            if (rawWs === '*') {
+                                skippedWorkspaces.push(wsId)
+                                continue
+                            }
+                            throw new ValidationError(
+                                `No registered repository path for workspace '${wsId}'. Register the project path before checking its anchors.`
+                            )
+                        }
+                        const cwd = registryPath
+
                         const targets: { id: number; timestamp: string }[] = []
                         if (resolvedEntryId !== undefined) {
                             const entry = db.getEntryByIdIncludeDeleted(resolvedEntryId, rawWs === '*' ? '*' : wsId)
@@ -437,20 +450,8 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                             }
                         }
 
-                        const canonicalWs = findCanonicalRegistryKey(wsId, registry) ?? wsId
-                        const registryPath = registry?.[canonicalWs]?.path
-                        const hasRegistryPath = registryPath !== undefined && registryPath.length > 0
-                        const lacksRepositoryRoot = !hasRegistryPath && wsId !== defaultWs
-                        if (lacksRepositoryRoot && rawWs === '*') continue
-                        const cwd = hasRegistryPath ? registryPath : process.cwd()
-
                         for (const target of targets) {
                             for (const anchor of db.getAnchorsByEntryId(target.id, wsId)) {
-                                if (lacksRepositoryRoot) {
-                                    throw new ValidationError(
-                                        `No registered repository path for workspace '${wsId}'. Register the project path before checking its anchors.`
-                                    )
-                                }
                                 results.push(
                                     await evaluateAnchorStaleness(
                                         db,
@@ -465,7 +466,23 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    return { success: true, results }
+                    const failureMessages: string[] = []
+                    for (const row of results) {
+                        if (row.error !== undefined) {
+                            failureMessages.push(`${row.path}: ${row.error}`)
+                        }
+                    }
+                    const skipped =
+                        skippedWorkspaces.length > 0 ? { skippedWorkspaces } : {}
+                    if (failureMessages.length > 0) {
+                        return {
+                            success: false,
+                            results,
+                            error: failureMessages.join('; '),
+                            ...skipped,
+                        }
+                    }
+                    return { success: true, results, ...skipped }
                 } catch (err) {
                     return formatHandlerError(err)
                 }

@@ -91,6 +91,9 @@ export async function exportMarkdownAction(options: z.infer<typeof exportMarkdow
         // We bypass allowedRoots check for CLI since it's run by a trusted human/agent directly
         const result = await exportEntriesToMarkdown(exportable, options.dir, db, [path.resolve(options.dir)])
         process.stdout.write(JSON.stringify(result, null, 2) + '\n')
+        if (!result.success) {
+            process.exitCode = 1
+        }
     } catch (e) {
         process.stderr.write("Export markdown failed: " + (e instanceof Error ? e.message : String(e)) + '\n')
         process.exit(1)
@@ -135,6 +138,9 @@ export async function importMarkdownAction(options: z.infer<typeof importMarkdow
         )
         
         process.stdout.write(JSON.stringify(result, null, 2) + '\n')
+        if (!result.success) {
+            process.exitCode = 1
+        }
     } catch (e) {
         process.stderr.write("Import markdown failed: " + (e instanceof Error ? e.message : String(e)) + '\n')
         process.exit(1)

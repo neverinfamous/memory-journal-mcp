@@ -52,6 +52,20 @@ export function getLifecycleTools(context: ToolContext): ToolDefinition[] {
                         ...(excludeTags !== undefined ? { excludeTags } : {}),
                     })
 
+                    if (pruneResult.aborted === true) {
+                        return {
+                            success: false,
+                            error: 'Safety backup failed and no rows were changed.',
+                            code: 'INTERNAL_ERROR',
+                            category: 'internal',
+                            recoverable: true,
+                            archivedCount: pruneResult.archivedCount,
+                            prunedCount: pruneResult.prunedCount,
+                            hardDeletedCount: pruneResult.hardDeletedCount,
+                            dryRun: parsed.dry_run,
+                        }
+                    }
+
                     return {
                         success: true,
                         archivedCount: pruneResult.archivedCount,

@@ -88,9 +88,9 @@ export class InsightsManager {
         }
     }
 
-    async getTopReferrers(owner: string, repo: string, limit = 5): Promise<TrafficReferrer[]> {
+    async getTopReferrers(owner: string, repo: string, limit = 5): Promise<TrafficReferrer[] | null> {
         if (!this.client.octokit) {
-            return []
+            return null
         }
 
         const cacheKey = `referrers:${owner}:${repo}`
@@ -116,13 +116,13 @@ export class InsightsManager {
                 error: error instanceof Error ? error.message : String(error),
                 context: { owner, repo },
             })
-            return []
+            return null
         }
     }
 
-    async getPopularPaths(owner: string, repo: string, limit = 5): Promise<PopularPath[]> {
+    async getPopularPaths(owner: string, repo: string, limit = 5): Promise<PopularPath[] | null> {
         if (!this.client.octokit) {
-            return []
+            return null
         }
 
         const cacheKey = `paths:${owner}:${repo}`
@@ -149,7 +149,7 @@ export class InsightsManager {
                 error: error instanceof Error ? error.message : String(error),
                 context: { owner, repo },
             })
-            return []
+            return null
         }
     }
 }

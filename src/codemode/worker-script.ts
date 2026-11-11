@@ -11,6 +11,7 @@ import * as vm from 'node:vm'
 import type { MessagePort } from 'node:worker_threads'
 import type { RpcRequest, RpcResponse, SandboxResult, ExecutionMetrics } from './types.js'
 import { transformAutoReturn } from './auto-return.js'
+import { readProjectRegistryPayload, setActiveProjectRegistry } from './normalizers/generic-field-aliases.js'
 import { buildApiProxy } from './worker-api-proxy.js'
 import { hardenOuterFunctionPrototypes, freezeInnerVmContext } from './worker/prototype-hardening.js'
 import { createSafeFsShim } from './worker/node-shims.js'
@@ -147,6 +148,10 @@ async function executeCode(
     const startTime = performance.now()
     const activeTimers = new Set<NodeJS.Timeout>()
 
+    const registryPayload = contextObj?.['__mj_project_registry']
+    if (contextObj !== undefined) Reflect.deleteProperty(contextObj, '__mj_project_registry')
+    setActiveProjectRegistry(readProjectRegistryPayload(registryPayload))
+
     try {
         const mjApi = buildApiProxy(rpcCall, methodList, schemaList, readonlyMode, contextObj)
 
@@ -236,6 +241,7 @@ async function executeCode(
             },
         }
     } finally {
+        setActiveProjectRegistry(undefined)
         for (const handle of activeTimers) {
             clearTimeout(handle)
         }

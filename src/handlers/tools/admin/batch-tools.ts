@@ -1,6 +1,6 @@
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
-import { indexBatchEntries } from '../batch-indexing.js'
+import { collectIndexWorkspaces, indexBatchEntries } from '../batch-indexing.js'
 import { createBatchProgressReporter, sendProgress } from '../../../utils/progress-utils.js'
 import { linkRequestedRelationships } from '../relationship-linking.js'
 import { resolveWriteWorkspaceId } from '../write-workspace.js'
@@ -80,6 +80,7 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
                         entryIds: results.map((r) => r.id),
                         errorPrefix: 'Entry',
                         doneMessage: 'Batch create complete',
+                        workspaceByEntryId: collectIndexWorkspaces(results),
                     })
 
                     const allErrors = [
@@ -188,6 +189,7 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
                         errorPrefix: 'Entry',
                         doneMessage: 'Batch update complete',
                         shouldIndex: (id) => contentUpdatedIds.has(id),
+                        workspaceByEntryId: collectIndexWorkspaces(updated),
                     })
 
                     const allErrors = [
@@ -222,7 +224,113 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
             handler: async (params: unknown) => {
                 try {
                     const input = BatchDeleteEntriesSchema.parse(params)
-                    let wsId =
+                    if (
+                        input.workspace_id === undefined &&
+                        input.project_number === undefined
+                    ) {
+                        const missing: number[] = []
+                        const groups = new Map<string, number[]>()
+                        for (const id of input.entry_ids) {
+                            const existing = db.getEntryByIdIncludeDeleted(id, '*')
+                            if (existing === null || existing === undefined) {
+                                missing.push(id)
+                                continue
+                            }
+                            const entryWorkspace = existing.workspaceId
+                            if (entryWorkspace === undefined || entryWorkspace.length === 0) {
+                                missing.push(id)
+                                continue
+                            }
+                            const bucket = groups.get(entryWorkspace)
+                            if (bucket === undefined) {
+                                groups.set(entryWorkspace, [id])
+                            } else {
+                                bucket.push(id)
+                            }
+                        }
+                        if (missing.length > 0) {
+                            return {
+                                success: false,
+                                error: `Batch delete aborted because entries were not found: ${missing.join(', ')}. No rows were deleted.`,
+                                code: 'RESOURCE_NOT_FOUND',
+                                category: 'resource',
+                                recoverable: false,
+                                suggestion: 'Verify the entry identifiers and try again',
+                                count: 0,
+                                deleted: [],
+                                notFound: missing,
+                                permanent: input.permanent,
+                            }
+                        }
+
+                        await sendProgress(progress, 0, 2, 'Deleting entries...')
+                        const deleted: number[] = []
+                        const notFound: number[] = []
+                        const errors: { id: number; error: Error }[] = []
+                        for (const [groupWorkspace, ids] of groups) {
+                            let groupResult: {
+                                deleted: number[]
+                                notFound: number[]
+                                errors: { id: number; error: Error }[]
+                            }
+                            try {
+                                groupResult = db.deleteEntries(ids, input.permanent, groupWorkspace)
+                            } catch (err) {
+                                const message = err instanceof Error ? err.message : String(err)
+                                return {
+                                    success: false,
+                                    error: `Batch delete stopped after a committed delete: ${message}`,
+                                    code: 'INTERNAL_ERROR',
+                                    category: 'internal',
+                                    recoverable: false,
+                                    count: deleted.length,
+                                    deleted,
+                                    notFound,
+                                    permanent: input.permanent,
+                                }
+                            }
+                            deleted.push(...groupResult.deleted)
+                            notFound.push(...groupResult.notFound)
+                            errors.push(...groupResult.errors)
+                            if (vectorManager) {
+                                for (const id of groupResult.deleted) {
+                                    db.deleteVector(id)
+                                }
+                            }
+                        }
+
+                        await sendProgress(progress, 2, 2, 'Batch delete complete')
+
+                        if (errors.length > 0 || notFound.length > 0) {
+                            return {
+                                success: false,
+                                error: `Batch delete partially failed: ${String(notFound.length + errors.length)} failed`,
+                                code: 'AGGREGATE_ERROR',
+                                category: 'internal',
+                                recoverable: false,
+                                count: deleted.length,
+                                deleted,
+                                notFound,
+                                permanent: input.permanent,
+                                aggregated_errors: [
+                                    ...notFound.map((id) => ({ message: `Entry ${String(id)} not found` })),
+                                    ...errors.map((entry) => ({
+                                        message: `Entry ${String(entry.id)} failed to delete: ${entry.error.message}`,
+                                    })),
+                                ],
+                            }
+                        }
+
+                        return {
+                            success: true,
+                            count: deleted.length,
+                            deleted,
+                            notFound,
+                            permanent: input.permanent,
+                        }
+                    }
+
+                    const wsId =
                         input.workspace_id === '*'
                             ? '*'
                             : resolveWriteWorkspaceId(
@@ -230,16 +338,23 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
                                   input.project_number,
                                   context.config
                               )
-                    if (
-                        input.workspace_id === undefined &&
-                        input.project_number === undefined
-                    ) {
-                        for (const id of input.entry_ids) {
-                            const existing = db.getEntryByIdIncludeDeleted(id, '*')
-                            if (existing?.workspaceId !== undefined) {
-                                wsId = existing.workspaceId
-                                break
-                            }
+                    const missingBeforeDelete: number[] = []
+                    for (const id of input.entry_ids) {
+                        const existing = db.getEntryByIdIncludeDeleted(id, wsId)
+                        if (existing === null || existing === undefined) missingBeforeDelete.push(id)
+                    }
+                    if (missingBeforeDelete.length > 0) {
+                        return {
+                            success: false,
+                            error: `Batch delete aborted because entries were not found: ${missingBeforeDelete.join(', ')}. No rows were deleted.`,
+                            code: 'RESOURCE_NOT_FOUND',
+                            category: 'resource',
+                            recoverable: false,
+                            suggestion: 'Verify the entry identifiers and try again',
+                            count: 0,
+                            deleted: [],
+                            notFound: missingBeforeDelete,
+                            permanent: input.permanent,
                         }
                     }
                     await sendProgress(progress, 0, 2, 'Deleting entries...')
@@ -259,11 +374,23 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     if (errors.length > 0 || notFound.length > 0) {
-                        const mcpErrors = [
-                            ...notFound.map(id => new Error(`Entry ${id} not found`)),
-                            ...errors.map(e => new Error(`Entry ${e.id} failed to delete: ${e.error.message}`))
-                        ];
-                        throw new AggregateError(mcpErrors, `Batch delete partially failed: ${mcpErrors.length} failed`);
+                        return {
+                            success: false,
+                            error: `Batch delete partially failed: ${String(notFound.length + errors.length)} failed`,
+                            code: 'AGGREGATE_ERROR',
+                            category: 'internal',
+                            recoverable: false,
+                            count: deleted.length,
+                            deleted,
+                            notFound,
+                            permanent: input.permanent,
+                            aggregated_errors: [
+                                ...notFound.map((id) => ({ message: `Entry ${String(id)} not found` })),
+                                ...errors.map((entry) => ({
+                                    message: `Entry ${String(entry.id)} failed to delete: ${entry.error.message}`,
+                                })),
+                            ],
+                        }
                     }
 
                     return { success: true, count: deleted.length, deleted, notFound, permanent: input.permanent }

@@ -446,6 +446,11 @@ export function buildSandboxUserContext(
         userContext['workspace_id'] ??= resolvedWorkspaceId
         userContext['workspaceId'] ??= resolvedWorkspaceId
     }
+    if (sessionContext.config?.projectRegistry !== undefined) {
+        userContext['__mj_project_registry'] = sessionContext.config.projectRegistry
+    } else {
+        Reflect.deleteProperty(userContext, '__mj_project_registry')
+    }
 
     const directSize = parseSizeInBytes(
         input.max_result_size ?? input.maxResultSize ?? input.max_result_size_bytes ?? input.maxResultSizeBytes ??

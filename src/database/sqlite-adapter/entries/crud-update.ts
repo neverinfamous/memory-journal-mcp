@@ -157,14 +157,18 @@ export function performUpdateEntry(
 ): boolean {
     const { db, tagsMgr } = context
 
-    const existing = db
-        .prepare(
-            'SELECT id, content, version, workspace_id as workspaceId FROM memory_journal WHERE id = ? AND deleted_at IS NULL'
-        )
-        .get(id) as ExistingEntryRow | undefined
+    const callerWorkspace = effectiveWorkspace(input.workspaceId)
+    const scopedSelect = callerWorkspace !== '*'
+    const selectSql = scopedSelect
+        ? 'SELECT id, content, version, workspace_id as workspaceId FROM memory_journal WHERE id = ? AND deleted_at IS NULL AND workspace_id = ?'
+        : 'SELECT id, content, version, workspace_id as workspaceId FROM memory_journal WHERE id = ? AND deleted_at IS NULL'
+    const existing = (
+        scopedSelect
+            ? db.prepare(selectSql).get(id, callerWorkspace)
+            : db.prepare(selectSql).get(id)
+    ) as ExistingEntryRow | undefined
     if (existing === undefined) return false
 
-    const callerWorkspace = effectiveWorkspace(input.workspaceId)
     assertUpdateAllowed(id, existing, callerWorkspace, input)
 
     const { updates, values } = buildUpdateSets(id, existing, callerWorkspace, input)

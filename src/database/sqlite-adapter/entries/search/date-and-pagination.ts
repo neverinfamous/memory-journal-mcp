@@ -63,6 +63,7 @@ export function getRecentEntries(
     offset = 0
 ): { entries: JournalEntry[]; nextCursor?: string } {
     const { db, tagsMgr } = context
+    const scopeId = effectiveWorkspace(workspaceId)
 
     if (sortBy === 'importance') {
         return getRecentEntriesByImportance(
@@ -70,7 +71,7 @@ export function getRecentEntries(
             limit,
             cursor,
             includeArchived,
-            workspaceId,
+            scopeId,
             projectNumber,
             offset
         )
@@ -79,8 +80,8 @@ export function getRecentEntries(
     let cursorCondition = ''
     const params: unknown[] = []
 
-    if (workspaceId !== '*') {
-        params.push(workspaceId)
+    if (scopeId !== '*') {
+        params.push(scopeId)
     }
 
     let projectCondition = ''
@@ -104,7 +105,7 @@ export function getRecentEntries(
 
     const stmt = db.prepare(`
         SELECT ${ENTRY_COLUMNS} FROM memory_journal 
-        WHERE deleted_at IS NULL ${!includeArchived ? 'AND is_archived = 0' : ''} ${workspaceId !== '*' ? 'AND workspace_id = ?' : ''} ${projectCondition} ${cursorCondition}
+        WHERE deleted_at IS NULL ${!includeArchived ? 'AND is_archived = 0' : ''} ${scopeId !== '*' ? 'AND workspace_id = ?' : ''} ${projectCondition} ${cursorCondition}
         ORDER BY timestamp DESC, id DESC LIMIT ?${offsetClause}
     `)
     params.push(limit)
@@ -135,9 +136,10 @@ export function getEntriesPage(
     workspaceId = 'default'
 ): { entries: JournalEntry[]; nextCursor?: string } {
     const { db, tagsMgr } = context
+    const scopeId = effectiveWorkspace(workspaceId)
 
     const sortDir = order === 'asc' ? 'ASC' : 'DESC'
-    const scoped = workspaceId !== '*'
+    const scoped = scopeId !== '*'
 
     const stmt = db.prepare(`
         SELECT ${ENTRY_COLUMNS} FROM memory_journal 
@@ -145,7 +147,7 @@ export function getEntriesPage(
         ORDER BY timestamp ${sortDir}, id ${sortDir} 
         LIMIT ? OFFSET ?
     `)
-    const rows = scoped ? stmt.all([workspaceId, limit, offset]) : stmt.all([limit, offset])
+    const rows = scoped ? stmt.all([scopeId, limit, offset]) : stmt.all([limit, offset])
     const entries = rowsToEntries(tagsMgr, rows)
 
     if (entries.length === limit && limit > 0) {

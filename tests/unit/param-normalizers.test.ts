@@ -528,9 +528,13 @@ describe('src/codemode/api/param-normalizer.ts (convertKeysToSnakeCase & normali
         expect(convertKeysToSnakeCase({ path: '/out' }, 'exportMarkdown')['output_dir']).toBe(
             '/out'
         )
+        expect(convertKeysToSnakeCase({ path: '/out' }, 'exportEntries')['output_dir']).toBeUndefined()
+        expect(convertKeysToSnakeCase({ path: '/out' }, 'exportEntries')['path']).toBe('/out')
         expect(convertKeysToSnakeCase({ source: 'obsidian' }, 'importExternal')['source_format']).toBe(
             'obsidian'
         )
+        expect(convertKeysToSnakeCase({ source: 'obsidian' }, 'importMarkdown')['source_format']).toBeUndefined()
+        expect(convertKeysToSnakeCase({ source: 'obsidian' }, 'importMarkdown')['source']).toBe('obsidian')
         expect(
             convertKeysToSnakeCase(
                 { name: 'Issue Title', message: 'Issue Body' },

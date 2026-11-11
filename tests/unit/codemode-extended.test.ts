@@ -132,10 +132,12 @@ describe('Code Mode Extended Coverage', () => {
             expect(failed['error']).toBe('[VALIDATION_ERROR] Invalid input')
             expect(failed['length']).toBe(0)
             expect(failed['0']).toBeUndefined()
-            expect(failed['entries']).toEqual([])
+            expect(() => failed['entries']).toThrow('Invalid input')
+            expect(() => failed['items']).toThrow('Invalid input')
+            expect(() => failed['deleted']).toThrow('Invalid input')
             expect(typeof failed['map']).toBe('function')
             expect(() => (failed['map'] as () => unknown[])()).toThrow('Invalid input')
-            expect([...(failed as unknown as Iterable<unknown>)]).toEqual([])
+            expect(() => [...(failed as unknown as Iterable<unknown>)]).toThrow('Invalid input')
 
             // 3. Array result proxy
             const arrProxy = wrapResult([{ id: 1 }, { id: 2 }]) as Record<string, unknown>

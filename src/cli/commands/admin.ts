@@ -138,6 +138,12 @@ export async function pruneAction(options: z.infer<typeof pruneSchema>, command:
             if (result.backupFile) {
                 process.stderr.write(`  Safety backup created: ${result.backupFile}\n`)
             }
+            if (result.aborted === true) {
+                process.stderr.write('  Safety backup failed. No rows were changed.\n')
+            }
+        }
+        if (result.aborted === true) {
+            process.exit(1)
         }
     } catch (e) {
         process.stderr.write("Prune failed: " + (e instanceof Error ? e.message : String(e)) + '\n')

@@ -14,6 +14,7 @@ export function getEntryById(
     workspaceId = 'default'
 ): JournalEntry | null {
     const { db, tagsMgr } = context
+    const scopeId = effectiveWorkspace(workspaceId)
     const stmt = db.prepare(
         `SELECT ${ENTRY_COLUMNS} FROM memory_journal WHERE id = ? AND deleted_at IS NULL`
     )
@@ -24,7 +25,7 @@ export function getEntryById(
     }
 
     const entry = rowToEntry(tagsMgr, row)
-    if (workspaceId !== '*' && entry.workspaceId !== workspaceId) {
+    if (scopeId !== '*' && entry.workspaceId !== scopeId) {
         return null
     }
     return entry
@@ -77,6 +78,7 @@ export function getEntryByIdIncludeDeleted(
     workspaceId = 'default'
 ): JournalEntry | null {
     const { db, tagsMgr } = context
+    const scopeId = effectiveWorkspace(workspaceId)
     const stmt = db.prepare(`SELECT ${ENTRY_COLUMNS} FROM memory_journal WHERE id = ?`)
     const row = rowToObject(stmt.get(id))
 
@@ -85,7 +87,7 @@ export function getEntryByIdIncludeDeleted(
     }
 
     const entry = rowToEntry(tagsMgr, row)
-    if (workspaceId !== '*' && entry.workspaceId !== workspaceId) {
+    if (scopeId !== '*' && entry.workspaceId !== scopeId) {
         return null
     }
     return entry

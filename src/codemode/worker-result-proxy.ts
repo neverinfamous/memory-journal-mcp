@@ -86,6 +86,13 @@ function bindArrayMethod(arr: unknown[], prop: string): ((...args: unknown[]) =>
     return undefined
 }
 
+function failedResultMessage(target: object): string {
+    const errVal: unknown = Reflect.get(target, 'error')
+    return typeof errVal === 'string' ? errVal : 'Operation failed'
+}
+
+const FAILED_THROW_COLLECTION_KEYS = new Set(['entries', 'items', 'deleted'])
+
 function createFailedResultProxy(result: object): unknown {
     return new Proxy(result, {
         ownKeys: (target) => Reflect.ownKeys(target),
@@ -99,10 +106,15 @@ function createFailedResultProxy(result: object): unknown {
             if (prop in target) return Reflect.get(target, prop) as unknown
             if (prop === 'length') return 0
             if (typeof prop === 'string' && /^\d+$/.test(prop)) return undefined
-            if (prop === Symbol.iterator) return function* () { yield* [] }
+            if (
+                prop === Symbol.iterator ||
+                (typeof prop === 'string' && FAILED_THROW_COLLECTION_KEYS.has(prop))
+            ) {
+                throw new Error(failedResultMessage(target))
+            }
             if (typeof prop === 'string' && RESULT_COLLECTION_KEYS.includes(prop)) return []
             if (typeof prop === 'string' && FAILED_ARRAY_METHODS.includes(prop)) {
-                const message = typeof errVal === 'string' ? errVal : 'Operation failed'
+                const message = failedResultMessage(target)
                 return () => {
                     throw new Error(message)
                 }

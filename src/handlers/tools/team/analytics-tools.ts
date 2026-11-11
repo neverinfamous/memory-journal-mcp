@@ -173,9 +173,7 @@ export function getTeamAnalyticsTools(context: ToolContext): ToolDefinition[] {
 
                     const { period, limit, project_number, workspace_id } = TeamCollaborationMatrixSchema.parse(params)
                     const workspaceId = resolveWorkspaceId(workspace_id, project_number, context.config)
-                    const matrix = workspaceId === undefined || workspaceId === '*'
-                        ? teamDb.getTeamCollaborationMatrix({ period, limit })
-                        : teamDb.getTeamCollaborationMatrix({ period, limit, workspaceId })
+                    const matrix = teamDb.getTeamCollaborationMatrix({ period, limit, workspaceId })
 
                     return {
                         success: true,

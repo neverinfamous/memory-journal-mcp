@@ -16,7 +16,6 @@ export function getAgentContextResource(): InternalResourceDef {
         annotations: withPriority(1.0, ASSISTANT_FOCUSED),
         handler: (uri: string, context: ResourceContext): ResourceResult => {
             const config = context?.briefingConfig
-            const defaultProjectNumber = config?.defaultProjectNumber
 
             const match = /^memory:\/\/(?:agent-context|agent-id)(?:\/(.+))?$/.exec(uri)
             const rawRepo = match?.[1] !== undefined ? decodeURIComponent(match[1]) : undefined
@@ -30,15 +29,19 @@ export function getAgentContextResource(): InternalResourceDef {
                 }
             )
 
-            let projectNumber = resolved.projectNumber ?? defaultProjectNumber ?? -1
+            let projectNumber = resolved.projectNumber ?? -1
             const workspaceId = resolved.workspaceId
 
-            if (projectNumber === -1) {
+            if (repo === undefined && projectNumber === -1) {
                 projectNumber =
                     resolveProjectNumberFromPath(process.cwd(), config?.projectRegistry) ?? -1
             }
 
-            if (repo !== undefined && workspaceId !== 'default') {
+            if (
+                repo !== undefined &&
+                workspaceId !== 'default' &&
+                resolved.projectNumber !== undefined
+            ) {
                 setActiveSessionProject(
                     workspaceId,
                     projectNumber > 0 ? projectNumber : undefined,

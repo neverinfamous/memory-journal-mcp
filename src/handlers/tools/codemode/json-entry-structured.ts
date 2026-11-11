@@ -38,7 +38,7 @@ export function recoverStructuredJsonCode(code: string): string | null {
     if (toolCall !== null) return toolCall
     const searchCall = recoverSearchCall(target)
     if (searchCall !== null) return searchCall
-    return recoverEntryMutation(target)
+    return recoverEntryMutation(parsed, target)
 }
 
 function unwrapPayloadTarget(parsed: Record<string, unknown>): Record<string, unknown> {
@@ -123,11 +123,19 @@ function readOperation(target: Record<string, unknown>): string {
     return ''
 }
 
-function recoverEntryMutation(target: Record<string, unknown>): string | null {
+function recoverEntryMutation(
+    original: Record<string, unknown>,
+    target: Record<string, unknown>,
+): string | null {
     const entryId = readEntryId(target)
     const op = readOperation(target)
     if ((op === 'delete' || op === 'delete_entry') && entryId !== undefined) {
-        return `return await mj.admin.deleteEntry({ entry_id: ${entryId} });`
+        const deleteParams: Record<string, unknown> = { entry_id: entryId }
+        const wsId = readWorkspaceId(target) ?? readWorkspaceId(original)
+        if (wsId !== undefined) deleteParams['workspace_id'] = wsId
+        const projNum = readProjectNumber(target) ?? readProjectNumber(original)
+        if (projNum !== undefined) deleteParams['project_number'] = projNum
+        return `return await mj.admin.deleteEntry(${JSON.stringify(deleteParams)});`
     }
     const signals = readPayloadSignals(target, op)
     if (!hasJournalFields(signals) && entryId !== undefined) {

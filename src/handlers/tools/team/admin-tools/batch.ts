@@ -31,7 +31,7 @@ import {
     TeamBatchDeleteEntriesOutputSchema,
 } from '../schemas.js'
 import { sendProgress } from '../../../../utils/progress-utils.js'
-import { indexBatchEntries } from '../../batch-indexing.js'
+import { collectIndexWorkspaces, indexBatchEntries } from '../../batch-indexing.js'
 
 // ============================================================================
 // Tool Definitions
@@ -190,6 +190,7 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                         entryIds: entries.map((e) => e.id),
                         errorPrefix: 'Team entry',
                         doneMessage: 'Team batch create complete',
+                        workspaceByEntryId: collectIndexWorkspaces(entries),
                     })
 
                     const allErrors = [
@@ -283,6 +284,7 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                         errorPrefix: 'Team entry',
                         doneMessage: 'Team batch update complete',
                         shouldIndex: (id) => contentUpdatedIds.has(id),
+                        workspaceByEntryId: collectIndexWorkspaces(entries),
                     })
 
                     const finalNotFound = [...notFound, ...updateNotFound]

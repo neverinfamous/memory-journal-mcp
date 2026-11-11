@@ -228,13 +228,9 @@ export function resolvePromptPriorWorkspace(
         if (exactMatch !== undefined) {
             return sanitizePromptTarget(exactMatch).slice(0, MAX_WORKSPACE_ID_LENGTH)
         }
-        const normalizedTarget = cleanTarget.replace(/\\/g, '/').toLowerCase()
         const sortedEntries = Object.entries(registry).sort(([a], [b]) => b.length - a.length)
         for (const [key, data] of sortedEntries) {
             if (data.path !== undefined && cwdMatchesRegistryPath(data.path, cleanTarget)) {
-                return sanitizePromptTarget(key).slice(0, MAX_WORKSPACE_ID_LENGTH)
-            }
-            if (normalizedTarget.includes(key.toLowerCase())) {
                 return sanitizePromptTarget(key).slice(0, MAX_WORKSPACE_ID_LENGTH)
             }
         }
@@ -284,7 +280,7 @@ export function buildPlanReviewPriorContextSection(
               entryType: 'plan_finalized',
               tags: ['adversarial-planner'],
               limit: 5,
-              workspaceId: priorWorkspace === 'default' ? '*' : priorWorkspace,
+              workspaceId: priorWorkspace,
           })
 
     const attributionRule =
@@ -331,17 +327,6 @@ export function buildPriorAuditSection(
             tags: [tag],
             limit: 5,
             workspaceId: priorWorkspace,
-        }).entries
-    }
-    if (
-        priorAudits.length === 0 &&
-        priorWorkspace === 'default' &&
-        (workspaceId === undefined || workspaceId.trim() === '')
-    ) {
-        priorAudits = db.searchByDateRange('1970-01-01', '2999-12-31', {
-            tags: [tag],
-            limit: 5,
-            workspaceId: '*',
         }).entries
     }
     const scopeNote =

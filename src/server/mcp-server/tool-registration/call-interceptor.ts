@@ -38,6 +38,7 @@ import { isToolVisibleForFilter } from '../../../filtering/tool-filter.js'
 import type { PromptDefinition } from '../../registration.js'
 import { logAgentIssue } from '../../../utils/issue-logger.js'
 import { applyArgInterceptions } from '../../../codemode/param-normalizer.js'
+import { setActiveProjectRegistry } from '../../../codemode/normalizers/generic-field-aliases.js'
 import { enforceAccessBoundary } from '../../../auth/validation.js'
 import type { ServerContext, ServerOptions } from '../types.js'
 import type { ToolRegistration, ToolHandlerConfig, ToolContext } from '../../../types/index.js'
@@ -309,7 +310,13 @@ export function attachCallToolInterceptor(
                 const toolArgs = req.params.arguments
 
                 if (req.params.name !== undefined && req.params.name !== '') {
-                    const intercept = applyArgInterceptions(req.params.name, [toolArgs])
+                    setActiveProjectRegistry(customToolHandlerConfig.projectRegistry)
+                    let intercept: ReturnType<typeof applyArgInterceptions>
+                    try {
+                        intercept = applyArgInterceptions(req.params.name, [toolArgs])
+                    } finally {
+                        setActiveProjectRegistry(undefined)
+                    }
                     if ('error' in intercept) {
                         const errorResult = intercept.error
                         logAgentIssue({

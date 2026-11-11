@@ -47,11 +47,16 @@ export function getProjectRegistryHint(briefingConfig?: Partial<BriefingConfig>)
 
 export function buildExplicitAttributionArgs(
     workspaceId: string,
-    briefingConfig?: Partial<BriefingConfig>
+    briefingConfig?: Partial<BriefingConfig>,
+    explicitProjectNumber?: number
 ): string {
     if (workspaceId === 'default' || workspaceId === '') return ''
     const registry = briefingConfig?.projectRegistry ?? loadProjectRegistryFromConfig()
-    const projNum = registry?.[workspaceId]?.project_number ?? briefingConfig?.defaultProjectNumber
+    const registryNumber = registry?.[workspaceId]?.project_number
+    const projNum =
+        explicitProjectNumber !== undefined && Number.isFinite(explicitProjectNumber)
+            ? explicitProjectNumber
+            : registryNumber
     return `, workspace_id: "${workspaceId}"${projNum !== undefined ? `, project_number: ${String(projNum)}` : ''}`
 }
 
@@ -60,7 +65,8 @@ export function generateSummaryPrompt(
     teamDb: IDatabaseAdapter | undefined,
     target: 'personal' | 'team',
     workspaceId = 'default',
-    briefingConfig?: Partial<BriefingConfig>
+    briefingConfig?: Partial<BriefingConfig>,
+    projectNumber?: number
 ): { messages: PromptMessage[] } {
     if (target === 'team' && !teamDb) {
         throw new ConfigurationError('Team database not configured')
@@ -87,7 +93,7 @@ export function generateSummaryPrompt(
             : '- No entries yet'
 
     const registryHint = getProjectRegistryHint(briefingConfig)
-    const attributionArgs = buildExplicitAttributionArgs(workspaceId, briefingConfig)
+    const attributionArgs = buildExplicitAttributionArgs(workspaceId, briefingConfig, projectNumber)
 
     return {
         messages: [
@@ -159,10 +165,11 @@ export function generateEntryPrompt(
     _teamDb: IDatabaseAdapter | undefined,
     target: 'personal' | 'team',
     workspaceId = 'default',
-    briefingConfig?: Partial<BriefingConfig>
+    briefingConfig?: Partial<BriefingConfig>,
+    projectNumber?: number
 ): { messages: PromptMessage[] } {
     const registryHint = getProjectRegistryHint(briefingConfig)
-    const attributionArgs = buildExplicitAttributionArgs(workspaceId, briefingConfig)
+    const attributionArgs = buildExplicitAttributionArgs(workspaceId, briefingConfig, projectNumber)
 
     return {
         messages: [
@@ -209,7 +216,8 @@ export function generateUpdateEntryPrompt(
     teamDb: IDatabaseAdapter | undefined,
     target: 'personal' | 'team',
     workspaceId = 'default',
-    briefingConfig?: Partial<BriefingConfig>
+    briefingConfig?: Partial<BriefingConfig>,
+    projectNumber?: number
 ): { messages: PromptMessage[] } {
     const targetDb = target === 'team' && teamDb ? teamDb : db
     let entryContext = ''
@@ -244,7 +252,7 @@ ${markUntrustedContent(String(recent['content']))}
     }
 
     const registryHint = getProjectRegistryHint(briefingConfig)
-    const attributionArgs = buildExplicitAttributionArgs(workspaceId, briefingConfig)
+    const attributionArgs = buildExplicitAttributionArgs(workspaceId, briefingConfig, projectNumber)
     const cliWorkspaceFlag =
         workspaceId !== 'default' && workspaceId !== '' ? `--workspace ${workspaceId} ` : ''
 

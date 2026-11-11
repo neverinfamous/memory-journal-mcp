@@ -11,12 +11,29 @@ export const DB_TO_JOURNAL: Record<string, [string, string]> = {
     describeTable: ['analytics', 'getStatistics'],
     count: ['analytics', 'getStatistics'],
     analyze: ['analytics', 'getStatistics'],
-    vacuum: ['analytics', 'getStatistics'],
-    integrityCheck: ['analytics', 'getStatistics'],
     exists: ['core', 'getEntryById'],
     upsert: ['core', 'createEntry'],
     batchInsert: ['core', 'createEntry'],
     readQuery: ['core', 'readQuery'],
+}
+
+const DB_MAINTENANCE_CALLS = new Set(['vacuum', 'integrityCheck'])
+
+export function isDbMaintenanceCall(name: string): boolean {
+    return DB_MAINTENANCE_CALLS.has(name)
+}
+
+export function createMaintenanceUnavailableFn(): () => Promise<{
+    success: false
+    error: string
+    code: string
+}> {
+    return () =>
+        Promise.resolve({
+            success: false,
+            error: 'Maintenance call is not available',
+            code: 'VALIDATION_ERROR',
+        })
 }
 
 /**

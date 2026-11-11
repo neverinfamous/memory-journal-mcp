@@ -444,9 +444,10 @@ describe('ConfigManager & Configuration Tools', () => {
                 hard_delete_older_than_days: 30,
                 importance_threshold: 0.5,
                 dry_run: false,
-            })) as { success: boolean; dryRun: boolean }
+            })) as { success: boolean; dryRun: boolean; error?: string }
 
-            expect(liveRes.success).toBe(true)
+            expect(liveRes.success).toBe(false)
+            expect(liveRes.error).toContain('backup')
             expect(liveRes.dryRun).toBe(false)
         })
 

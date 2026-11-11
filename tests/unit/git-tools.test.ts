@@ -209,6 +209,12 @@ describe('Git Tools Handler', () => {
 
     describe('check_entry_staleness', () => {
         it('should return error when entry does not exist', async () => {
+            context.config = {
+                defaultWorkspaceId: 'default',
+                projectRegistry: {
+                    default: { path: process.cwd() },
+                },
+            }
             const tools = getGitTools(context)
             const tool = tools.find((t) => t.name === 'check_entry_staleness')!
             const res = (await tool.handler({ entryId: 99999 })) as {
@@ -221,6 +227,12 @@ describe('Git Tools Handler', () => {
 
         it('should return empty results when entry has no anchors', async () => {
             const entry = db.createEntry({ content: 'Entry without file references' })
+            context.config = {
+                defaultWorkspaceId: 'default',
+                projectRegistry: {
+                    default: { path: process.cwd() },
+                },
+            }
             const tools = getGitTools(context)
             const tool = tools.find((t) => t.name === 'check_entry_staleness')!
             const res = (await tool.handler({ entryId: entry.id })) as {
@@ -233,6 +245,13 @@ describe('Git Tools Handler', () => {
 
         it('should locate an entry only in its own workspace', async () => {
             const entry = db.createEntry({ content: 'Non-default workspace entry', workspaceId: 'custom-ws' })
+            context.config = {
+                defaultWorkspaceId: 'default',
+                projectRegistry: {
+                    default: { path: process.cwd() },
+                    'custom-ws': { path: process.cwd() },
+                },
+            }
             const tools = getGitTools(context)
             const tool = tools.find((t) => t.name === 'check_entry_staleness')!
             const res = (await tool.handler({ entry_id: entry.id, workspace_id: 'custom-ws' })) as {
@@ -263,6 +282,12 @@ describe('Git Tools Handler', () => {
                 { anchorPath: '../../outside-traversal.ts', anchorType: 'file' },
             ])
 
+            context.config = {
+                defaultWorkspaceId: 'default',
+                projectRegistry: {
+                    default: { path: process.cwd() },
+                },
+            }
             const tools = getGitTools(context)
             const tool = tools.find((t) => t.name === 'check_entry_staleness')!
             const res = (await tool.handler({ entryId: entry.id })) as {
@@ -307,17 +332,53 @@ describe('Git Tools Handler', () => {
                 { anchorPath: 'package.json', anchorType: 'file' },
             ])
 
+            context.config = {
+                defaultWorkspaceId: 'default',
+                projectRegistry: {
+                    default: { path: process.cwd() },
+                },
+            }
             const tools = getGitTools(context)
             const tool = tools.find((t) => t.name === 'check_entry_staleness')
             if (tool === undefined) throw new Error('check_entry_staleness missing')
             const res = (await tool.handler({ entryId: entry.id })) as {
                 success: boolean
-                results: { path: string; newStatus: string }[]
+                error?: string
+                results: { path: string; newStatus: string; error?: string }[]
             }
 
-            expect(res.success).toBe(true)
+            expect(res.success).toBe(false)
             expect(res.results[0]?.newStatus).toBe('pending')
+            expect(res.results[0]?.error).toContain('git failed')
             expect(update).not.toHaveBeenCalled()
+        })
+
+        it('refuses a staleness check when the workspace has no registered path', async () => {
+            context.config = { projectRegistry: {} }
+            const tools = getGitTools(context)
+            const tool = tools.find((t) => t.name === 'check_entry_staleness')
+            if (tool === undefined) throw new Error('check_entry_staleness missing')
+            const res = (await tool.handler({})) as { success: boolean; error?: string }
+            expect(res.success).toBe(false)
+            expect(res.error).toContain('No registered repository path')
+        })
+
+        it('records workspaces skipped by a star scan when they have no repository path', async () => {
+            context.config = {
+                projectRegistry: {
+                    alpha: { path: '' },
+                    beta: { path: '' },
+                },
+            }
+            const tools = getGitTools(context)
+            const tool = tools.find((t) => t.name === 'check_entry_staleness')
+            if (tool === undefined) throw new Error('check_entry_staleness missing')
+            const res = (await tool.handler({ workspace_id: '*' })) as {
+                success: boolean
+                skippedWorkspaces?: string[]
+            }
+            expect(res.success).toBe(true)
+            expect(res.skippedWorkspaces).toEqual(['alpha', 'beta'])
         })
     })
 })

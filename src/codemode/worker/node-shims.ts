@@ -181,15 +181,28 @@ function tryParseTagsString(arg: string): string[] | undefined {
     return undefined
 }
 
-/** Entry id from `WHERE id = N` plus any numeric bind argument (later args win). */
+/** Entry id from `WHERE id = N`, or the first numeric bind when the placeholder is `?`. */
 function resolveEntryIdFromSql(cleanSql: string, args: unknown[]): number | undefined {
-    let entryId: number | undefined
     const idMatch = WHERE_ID_PATTERN.exec(cleanSql)
-    if (idMatch?.[1] !== undefined) entryId = parseInt(idMatch[1], 10)
+    if (idMatch?.[1] !== undefined) return parseInt(idMatch[1], 10)
+    const whereUsesPlaceholder = idMatch !== null && idMatch[1] === undefined
+    if (!whereUsesPlaceholder) return undefined
     for (const arg of args) {
-        if (typeof arg === 'number') entryId = arg
+        if (typeof arg === 'number') return arg
     }
-    return entryId
+    return undefined
+}
+
+function scopeFromRecordArgs(args: unknown[]): Record<string, unknown> {
+    const scope: Record<string, unknown> = {}
+    for (const arg of args) {
+        if (!isPlainRecord(arg)) continue
+        const wsId = arg['workspace_id'] ?? arg['workspaceId']
+        if (typeof wsId === 'string' && wsId.trim() !== '') scope['workspace_id'] = wsId
+        const projNum = arg['project_number'] ?? arg['projectNumber']
+        if (typeof projNum === 'number') scope['project_number'] = projNum
+    }
+    return scope
 }
 
 function parseUpdateStatement(cleanSql: string, args: unknown[]): ParsedSql {
@@ -326,7 +339,10 @@ export function createPreparedStatementShim(
         if (isDelete) {
             const entryId = resolveEntryIdFromSql(cleanSql, args)
             if (entryId === undefined) return { action: 'unmapped', params: {} }
-            return { action: 'delete', params: { entry_id: entryId } }
+            return {
+                action: 'delete',
+                params: { entry_id: entryId, ...scopeFromRecordArgs(args) },
+            }
         }
 
         if (isSelect) {

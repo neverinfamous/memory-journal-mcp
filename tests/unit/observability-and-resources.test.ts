@@ -236,12 +236,15 @@ describe('Observability, SSE Transport, Utils & Catalog Resource', () => {
             const mockVm = { addEntry: vi.fn().mockResolvedValue(true) }
             expect(await autoIndexEntry(mockVm as never, db, 99999)).toBe('failed')
 
-            // 3. Success when entry exists and addEntry succeeds
-            expect(await autoIndexEntry(mockVm as never, db, entry.id)).toBe('success')
+            // 3. Failed when the caller does not name a workspace
+            expect(await autoIndexEntry(mockVm as never, db, entry.id)).toBe('failed')
 
-            // 4. Failed when addEntry throws
+            // 4. Success when the entry's workspace is supplied and addEntry succeeds
+            expect(await autoIndexEntry(mockVm as never, db, entry.id, entry.workspaceId)).toBe('success')
+
+            // 5. Failed when addEntry throws
             const throwingVm = { addEntry: vi.fn().mockRejectedValue(new Error('Embed error')) }
-            expect(await autoIndexEntry(throwingVm as never, db, entry.id)).toBe('failed')
+            expect(await autoIndexEntry(throwingVm as never, db, entry.id, entry.workspaceId)).toBe('failed')
         })
     })
 

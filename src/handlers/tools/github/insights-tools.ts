@@ -100,50 +100,58 @@ export function getGitHubInsightsTools(context: ToolContext): ToolDefinition[] {
                         section,
                     }
 
+                    const sectionFailure = (
+                        label: string
+                    ): {
+                        success: false
+                        error: string
+                        code: 'GITHUB_API_ERROR'
+                        category: 'connection'
+                        recoverable: true
+                    } => ({
+                        success: false,
+                        error: `Failed to fetch repository ${label} for ${owner}/${repo}`,
+                        code: 'GITHUB_API_ERROR',
+                        category: 'connection',
+                        recoverable: true,
+                    })
+
                     if (hasSection('stars')) {
                         const stats = await resolved.github.getRepoStats(owner, repo)
-                        if (stats) {
-                            result.stars = stats.stars
-                            result.forks = stats.forks
-                            result.watchers = stats.watchers
-                            result.openIssues = stats.openIssues
-                            if (sectionSet.has('all')) {
-                                result.size = stats.size
-                                result.defaultBranch = stats.defaultBranch
-                            }
-                        } else if (!sectionSet.has('all') && sectionSet.size === 1) {
-                            return {
-                                success: false,
-                                error: `Failed to fetch repository stats for ${owner}/${repo}`,
-                                code: 'GITHUB_API_ERROR',
-                                category: 'connection',
-                                recoverable: true,
-                            }
+                        if (stats === null) {
+                            return sectionFailure('stats')
+                        }
+                        result.stars = stats.stars
+                        result.forks = stats.forks
+                        result.watchers = stats.watchers
+                        result.openIssues = stats.openIssues
+                        if (sectionSet.has('all')) {
+                            result.size = stats.size
+                            result.defaultBranch = stats.defaultBranch
                         }
                     }
 
                     if (hasSection('traffic')) {
                         const traffic = await resolved.github.getTrafficData(owner, repo)
-                        if (traffic) {
-                            result.traffic = traffic
-                        } else if (!sectionSet.has('all') && sectionSet.size === 1) {
-                            return {
-                                success: false,
-                                error: `Failed to fetch repository traffic for ${owner}/${repo}`,
-                                code: 'GITHUB_API_ERROR',
-                                category: 'connection',
-                                recoverable: true,
-                            }
+                        if (traffic === null) {
+                            return sectionFailure('traffic')
                         }
+                        result.traffic = traffic
                     }
 
                     if (hasSection('referrers')) {
                         const referrers = await resolved.github.getTopReferrers(owner, repo, 5)
+                        if (referrers === null) {
+                            return sectionFailure('referrers')
+                        }
                         result.referrers = referrers
                     }
 
                     if (hasSection('paths')) {
                         const paths = await resolved.github.getPopularPaths(owner, repo, 5)
+                        if (paths === null) {
+                            return sectionFailure('paths')
+                        }
                         result.paths = paths
                     }
 

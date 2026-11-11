@@ -57,6 +57,26 @@ export function extractAndRecoverSqlCode(code: string): string | null {
         ...(wsVal !== undefined && wsVal !== '' ? { workspace_id: wsVal } : {}),
     }
 
+    if (
+        tableName === 'tags' ||
+        tableName === 'entry_tags' ||
+        tableName === 'journal_tags' ||
+        tableName === 'projects' ||
+        tableName === 'project_registry' ||
+        tableName === 'relationships' ||
+        tableName === 'entry_relationships' ||
+        tableName === 'links' ||
+        tableName === 'team_members' ||
+        tableName === 'members' ||
+        tableName === 'author_aliases' ||
+        tableName === 'aliases' ||
+        tableName === 'audit_log' ||
+        tableName === 'audit' ||
+        tableName === 'audit_logs'
+    ) {
+        if (!/^SELECT\b/i.test(cleanSql)) return null
+    }
+
     if (tableName === 'tags' || tableName === 'entry_tags' || tableName === 'journal_tags') {
         return `return await mj.core.listTags(${JSON.stringify(scopeFields)});`
     }
@@ -119,17 +139,20 @@ export function extractAndRecoverSqlCode(code: string): string | null {
                 const updatePayload: Record<string, unknown> = {
                     entry_id: idVal,
                     content: setContentMatch[2],
+                    ...scopeFields,
                 }
                 return `return await mj.admin.updateEntry(${JSON.stringify(updatePayload)});`
             }
             return null
         }
+        return null
     }
 
-    if (/^DELETE\s+FROM\b/i.test(cleanSql)) {
+    if (/^DELETE\b/i.test(cleanSql)) {
         if (idVal !== undefined) {
-            return `return await mj.admin.deleteEntry({ entry_id: ${idVal} });`
+            return `return await mj.admin.deleteEntry(${JSON.stringify({ entry_id: idVal, ...scopeFields })});`
         }
+        return null
     }
 
     return `return await mj.core.getRecentEntries({ limit: ${limitVal ?? 10} });`
@@ -307,28 +330,37 @@ function parseTagsArg(arg: string): string[] | undefined {
 
 const ENTRY_ID_WHERE_PATTERN = /\bWHERE\s+[`"']?(?:id|entry_id)[`"']?\s*=\s*(?:\?|(\d+))/i
 
-/** Entry id from a `WHERE id = N` clause overridden by a numeric bound argument. */
+/** Entry id from `WHERE id = N`, or the first numeric bind when the placeholder is `?`. */
 function extractEntryId(cleanSql: string, parsedArgs: unknown[]): number | undefined {
-    let entryId: number | undefined
     const idMatch = ENTRY_ID_WHERE_PATTERN.exec(cleanSql)
-    if (idMatch?.[1] !== undefined) entryId = parseInt(idMatch[1], 10)
+    if (idMatch?.[1] !== undefined) return parseInt(idMatch[1], 10)
+    const whereUsesPlaceholder = idMatch !== null && idMatch[1] === undefined
+    if (!whereUsesPlaceholder) return undefined
     for (const arg of parsedArgs) {
-        if (typeof arg === 'number') entryId = arg
+        if (typeof arg === 'number') return arg
     }
-    return entryId
+    return undefined
+}
+
+function scopeFromRecordBinds(parsedArgs: unknown[]): Record<string, unknown> {
+    const scope: Record<string, unknown> = {}
+    for (const arg of parsedArgs) {
+        if (!isRecord(arg)) continue
+        const projNum = arg['project_number'] ?? arg['projectNumber']
+        if (typeof projNum === 'number') scope['project_number'] = projNum
+        const wsId = arg['workspace_id'] ?? arg['workspaceId']
+        if (typeof wsId === 'string' && wsId.trim() !== '') scope['workspace_id'] = wsId
+    }
+    return scope
 }
 
 function recoverPreparedUpdate(cleanSql: string, parsedArgs: unknown[]): string | null {
     const payload: Record<string, unknown> = {}
-    const idMatch = ENTRY_ID_WHERE_PATTERN.exec(cleanSql)
-    if (idMatch?.[1] !== undefined) {
-        payload['entry_id'] = parseInt(idMatch[1], 10)
-    }
+    const entryId = extractEntryId(cleanSql, parsedArgs)
+    if (entryId !== undefined) payload['entry_id'] = entryId
 
     for (const arg of parsedArgs) {
-        if (typeof arg === 'number') {
-            payload['entry_id'] = arg
-        } else if (typeof arg === 'string') {
+        if (typeof arg === 'string') {
             const tags = parseTagsArg(arg)
             if (tags !== undefined) {
                 payload['tags'] = tags
@@ -341,6 +373,10 @@ function recoverPreparedUpdate(cleanSql: string, parsedArgs: unknown[]): string 
             if (typeof arg['id'] === 'number') payload['entry_id'] = arg['id']
             if (typeof arg['content'] === 'string') payload['content'] = arg['content']
             if (Array.isArray(arg['tags'])) payload['tags'] = arg['tags'].map(String)
+            const projNum = arg['project_number'] ?? arg['projectNumber']
+            if (typeof projNum === 'number') payload['project_number'] = projNum
+            const wsId = arg['workspace_id'] ?? arg['workspaceId']
+            if (typeof wsId === 'string' && wsId.trim() !== '') payload['workspace_id'] = wsId
         }
     }
 
@@ -387,15 +423,17 @@ function recoverPreparedInsert(parsedArgs: unknown[]): string {
 function recoverPreparedDelete(cleanSql: string, parsedArgs: unknown[]): string | null {
     const entryId = extractEntryId(cleanSql, parsedArgs)
     if (entryId !== undefined) {
-        return `return await mj.admin.deleteEntry({ entry_id: ${entryId} });`
+        const payload = { entry_id: entryId, ...scopeFromRecordBinds(parsedArgs) }
+        return `return await mj.admin.deleteEntry(${JSON.stringify(payload)});`
     }
     return null
 }
 
-function recoverPreparedSelect(cleanSql: string, parsedArgs: unknown[]): string {
+function recoverPreparedSelect(cleanSql: string, parsedArgs: unknown[]): string | null {
     const entryId = extractEntryId(cleanSql, parsedArgs)
     if (entryId !== undefined) {
-        return `return await mj.core.getEntryById({ entry_id: ${entryId} });`
+        const payload = { entry_id: entryId, ...scopeFromRecordBinds(parsedArgs) }
+        return `return await mj.core.getEntryById(${JSON.stringify(payload)});`
     }
-    return `return await mj.core.getRecentEntries({ limit: 10 });`
+    return null
 }

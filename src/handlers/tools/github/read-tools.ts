@@ -400,10 +400,12 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                     )
 
                     let targetGithub: GitHubIntegration
+                    const callerSuppliedOwner = input.owner !== undefined
+                    const callerSuppliedRepo = input.repo !== undefined
                     if ('error' in resolved) {
-                        // Maintain strict payload contract: gracefully degrade instead of erroring
-                        // when no specific repo input is provided and auto-detect fails.
-                        if (!context.github) return resolved.response
+                        if (callerSuppliedOwner || callerSuppliedRepo || context.github === undefined) {
+                            return resolved.response
+                        }
                         targetGithub = context.github
                     } else {
                         targetGithub = resolved.github
