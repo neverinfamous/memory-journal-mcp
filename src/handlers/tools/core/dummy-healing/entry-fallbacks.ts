@@ -104,7 +104,8 @@ async function routeNamedTargetTool(
 export function projectAliasTarget(name: string): 'get_project' | 'list_projects' {
     const tokens = methodTokens(name)
     const has = (token: string): boolean => tokens.includes(token)
-    if (has('project') && (has('get') || has('find'))) return 'get_project'
+    if (has('project') && !has('projects') && (has('get') || has('find'))) return 'get_project'
+    if (name.startsWith('mj.projects') && (has('get') || has('find'))) return 'get_project'
     if (has('projects') || has('list') || name.startsWith('mj.projects')) return 'list_projects'
     return 'list_projects'
 }

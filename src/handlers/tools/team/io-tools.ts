@@ -176,7 +176,8 @@ function resolveTeamImportScope(
         context.config
     )
     const projectNumber =
-        resolveTeamProjectNumber(context, wsId, explicitPn ?? dirMatch?.projectNumber) ?? undefined
+        resolveTeamProjectNumber(context, wsId, explicitPn ?? dirMatch?.projectNumber) ??
+        undefined
     return { wsId, projectNumber }
 }
 

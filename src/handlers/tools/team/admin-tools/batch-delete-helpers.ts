@@ -85,11 +85,11 @@ export function buildValidatedTeamBatchUpdates(
         } else if (existing?.workspaceId !== undefined && (wsId === '*' || wsId === 'default')) {
             wsId = existing.workspaceId
         }
-        const projectNumber =
-            u.project_number ??
-            rootProjectNumber ??
-            existing?.projectNumber ??
-            resolveTeamProjectNumber(context, wsId, undefined)
+        const projectNumber = resolveTeamProjectNumber(
+            context,
+            wsId,
+            u.project_number ?? rootProjectNumber ?? existing?.projectNumber
+        )
         if (projectNumber === undefined || projectNumber === null) {
             return {
                 errorResponse: {

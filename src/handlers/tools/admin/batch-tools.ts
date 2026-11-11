@@ -4,6 +4,7 @@ import { collectIndexWorkspaces, indexBatchEntries } from '../batch-indexing.js'
 import { createBatchProgressReporter, sendProgress } from '../../../utils/progress-utils.js'
 import { linkRequestedRelationships } from '../relationship-linking.js'
 import { resolveWriteWorkspaceId } from '../write-workspace.js'
+import { resolveProjectContext } from '../../../utils/workspace-resolver.js'
 import { prepareBatchCreateInputs, shareBatchEntriesWithTeam } from './batch-create-helpers.js'
 import {
     BatchCreateEntriesSchema,
@@ -124,16 +125,21 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
                     const updates = input.updates.map((u) => {
                         const explicitWs = u.workspace_id || input.workspace_id
                         const explicitPn = u.project_number ?? input.project_number
+                        const resolvedUpdate = resolveProjectContext(
+                            {
+                                ...(explicitWs !== undefined && explicitWs !== '*'
+                                    ? { workspace_id: explicitWs }
+                                    : {}),
+                                ...(explicitPn !== undefined ? { project_number: explicitPn } : {}),
+                                ...(u.content !== undefined ? { content: u.content } : {}),
+                                ...(u.tags !== undefined ? { tags: u.tags } : {}),
+                            },
+                            context.config
+                        )
                         let resolvedWs =
                             explicitWs === '*'
                                 ? '*'
-                                : resolveWriteWorkspaceId(
-                                      explicitWs,
-                                      explicitPn,
-                                      context.config,
-                                      u.content,
-                                      u.tags ?? undefined
-                                  )
+                                : resolvedUpdate.workspaceId
                         if (
                             explicitWs === undefined &&
                             explicitPn === undefined
@@ -150,7 +156,10 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
                             isPersonal: u.is_personal,
                             tags: u.tags,
                             significanceType: u.significance_type,
-                            projectNumber: u.project_number,
+                            projectNumber:
+                                u.project_number === undefined && input.project_number === undefined
+                                    ? undefined
+                                    : resolvedUpdate.projectNumber,
                             projectOwner: u.project_owner,
                             issueNumber: u.issue_number,
                             issueUrl: u.issue_url,

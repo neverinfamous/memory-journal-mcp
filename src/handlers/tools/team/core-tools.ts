@@ -277,7 +277,7 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     const importance = teamDb.calculateImportance(entry_id, wsId)
-                    result['importance'] = importance
+                    if (importance !== null) result['importance'] = importance
 
                     return result
                 } catch (err) {

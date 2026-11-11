@@ -1,5 +1,6 @@
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
+import { activeProjectRegistry, alignedProjectFilter } from '../../../utils/write-scope.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { calcPerDbLimit, mergeAndDedup } from './helpers.js'
 import { SearchByDateRangeSchema, SearchByDateRangeSchemaMcp } from './schemas.js'
@@ -25,6 +26,11 @@ export function getDateRangeSearchTool(context: ToolContext): ToolDefinition[] {
                 try {
                     const input = SearchByDateRangeSchema.parse(params)
                     const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
+                    const projectNumber = alignedProjectFilter(
+                        wsId,
+                        input.project_number,
+                        activeProjectRegistry(context.config?.projectRegistry)
+                    )
 
                     // Validate date range order (YYYY-MM-DD sorts lexicographically)
                     if (input.start_date > input.end_date) {
@@ -54,7 +60,7 @@ export function getDateRangeSearchTool(context: ToolContext): ToolDefinition[] {
                         entryType: input.entry_type,
                         tags: input.tags,
                         isPersonal: input.is_personal,
-                        projectNumber: input.project_number,
+                        projectNumber,
                         issueNumber: input.issue_number,
                         prNumber: input.pr_number,
                         workflowRunId: input.workflow_run_id,
@@ -74,7 +80,7 @@ export function getDateRangeSearchTool(context: ToolContext): ToolDefinition[] {
                             {
                                 entryType: input.entry_type,
                                 tags: input.tags,
-                                projectNumber: input.project_number,
+                                projectNumber,
                                 issueNumber: input.issue_number,
                                 prNumber: input.pr_number,
                                 workflowRunId: input.workflow_run_id,

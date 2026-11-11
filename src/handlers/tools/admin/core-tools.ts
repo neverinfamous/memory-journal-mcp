@@ -2,7 +2,7 @@ import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { autoIndexEntry } from '../../../utils/vector-index-helpers.js'
-import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
+import { resolveProjectContext, resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { coerceSignificanceAlias } from '../schemas.js'
 import {
     UpdateEntrySchema,
@@ -41,13 +41,16 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                     coerceSignificanceAlias(params)
 
                     const input = UpdateEntrySchema.parse(params)
-                    let wsId = resolveWorkspaceId(
-                        input.workspace_id,
-                        input.project_number,
-                        context.config,
-                        input.content,
-                        input.tags ?? undefined
+                    const resolved = resolveProjectContext(
+                        {
+                            workspace_id: input.workspace_id,
+                            project_number: input.project_number,
+                            content: input.content,
+                            tags: input.tags ?? undefined,
+                        },
+                        context.config
                     )
+                    let wsId = input.workspace_id === '*' ? '*' : resolved.workspaceId
                     const rawHasExplicitWorkspace =
                         typeof params === 'object' &&
                         params !== null &&
@@ -67,7 +70,8 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         isPersonal: input.is_personal,
                         tags: input.tags,
                         significanceType: input.significance_type,
-                        projectNumber: input.project_number,
+                        projectNumber:
+                            input.project_number === undefined ? undefined : resolved.projectNumber,
                         projectOwner: input.project_owner,
                         issueNumber: input.issue_number,
                         issueUrl: input.issue_url,

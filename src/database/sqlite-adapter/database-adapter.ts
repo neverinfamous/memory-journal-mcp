@@ -42,7 +42,7 @@ export class DatabaseAdapter extends AdapterDelegates implements IDatabaseAdapte
         return this.entriesMgr.getEntriesByIdsWithImportance(ids, workspaceId)
     }
 
-    calculateImportance(entryId: number, workspaceId?: string): ImportanceResult {
+    calculateImportance(entryId: number, workspaceId?: string): ImportanceResult | null {
         return this.entriesMgr.calculateImportance(entryId, workspaceId)
     }
 

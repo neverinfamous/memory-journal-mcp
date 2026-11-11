@@ -42,10 +42,7 @@ async function prepareBatchEntry(
         context.config
     )
     const wsId = resolved.workspaceId
-    const pNumber =
-        requestedProject !== undefined && requestedProject > 0
-            ? requestedProject
-            : resolved.projectNumber
+    const pNumber = resolved.projectNumber ?? requestedProject
 
     if (pNumber === undefined || pNumber <= 0) {
         throw new Error(

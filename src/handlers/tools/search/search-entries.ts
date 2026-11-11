@@ -1,5 +1,6 @@
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
+import { activeProjectRegistry, alignedProjectFilter } from '../../../utils/write-scope.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { ValidationError } from '../../../types/errors.js'
 import { resolveSearchMode } from './auto.js'
@@ -31,6 +32,11 @@ export function getSearchEntriesTool(context: ToolContext): ToolDefinition[] {
                 try {
                     const input = SearchEntriesSchema.parse(params)
                     const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
+                    const projectNumber = alignedProjectFilter(
+                        wsId,
+                        input.project_number,
+                        activeProjectRegistry(context.config?.projectRegistry)
+                    )
                     const query = input.query?.trim() || ''
                     const mode = input.mode
 
@@ -84,7 +90,7 @@ export function getSearchEntriesTool(context: ToolContext): ToolDefinition[] {
                         limit: input.limit,
                         cursor: input.cursor,
                         isPersonal: input.is_personal,
-                        projectNumber: input.project_number,
+                        projectNumber,
                         issueNumber: input.issue_number,
                         prNumber: input.pr_number,
                         prStatus: input.pr_status,
@@ -106,7 +112,7 @@ export function getSearchEntriesTool(context: ToolContext): ToolDefinition[] {
                     if (input.include_facets) {
                         facets = db.getSearchFacets(query, {
                             isPersonal: input.is_personal,
-                            projectNumber: input.project_number,
+                            projectNumber,
                             issueNumber: input.issue_number,
                             prNumber: input.pr_number,
                             prStatus: input.pr_status,

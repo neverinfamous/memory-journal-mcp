@@ -136,7 +136,7 @@ describe('SQLite Database Extended Operations', () => {
         it('should compute single and batch importance scores with relationships and anchors', () => {
             // Nonexistent entry returns 0
             const missingImp = db.calculateImportance(999999)
-            expect(missingImp.score).toBe(0)
+            expect(missingImp).toBeNull()
 
             // Empty batch returns empty map
             expect(db.getEntriesByIdsWithImportance([]).size).toBe(0)

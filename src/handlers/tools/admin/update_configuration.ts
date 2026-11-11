@@ -6,6 +6,8 @@ import {
     loadProjectRegistryFromConfig,
     setActiveSessionProject,
 } from '../../../utils/workspace-resolver.js'
+import { activeProjectRegistry, exactRegistryKey } from '../../../utils/write-scope.js'
+import { ValidationError } from '../../../types/errors.js'
 import { relaxedNumber } from '../schemas.js'
 
 function preprocessUpdateConfig(val: unknown): unknown {
@@ -165,6 +167,16 @@ export function handleUpdateConfiguration(
     if (args.briefing_workflow_status !== undefined) { newBc.workflowStatusBreakdown = args.briefing_workflow_status; bcChanged = true; updatedKeys.push('briefing_workflow_status'); }
     if (args.briefing_copilot !== undefined) { newBc.copilotReviews = args.briefing_copilot; bcChanged = true; updatedKeys.push('briefing_copilot'); }
     const registry = newBc.projectRegistry ?? config.projectRegistry ?? loadProjectRegistryFromConfig()
+    if (args.workspace_id !== undefined && args.project_number !== undefined) {
+        const canonical = findCanonicalRegistryKey(args.workspace_id, registry) ?? args.workspace_id
+        const exactKey = exactRegistryKey(canonical, activeProjectRegistry(registry)) ?? canonical
+        const regProjNum = registry?.[exactKey]?.project_number
+        if (regProjNum !== undefined && args.project_number !== regProjNum) {
+            throw new ValidationError(
+                `workspace '${exactKey}' uses project_number ${String(regProjNum)}, not ${String(args.project_number)}.`
+            )
+        }
+    }
     if (args.project_number !== undefined) {
         newBc.defaultProjectNumber = args.project_number
         config.defaultProjectNumber = args.project_number
@@ -182,9 +194,19 @@ export function handleUpdateConfiguration(
     }
     if (args.workspace_id !== undefined) {
         const canonical = findCanonicalRegistryKey(args.workspace_id, registry) ?? args.workspace_id
-        newBc.defaultWorkspaceId = canonical
-        config.defaultWorkspaceId = canonical
-        const regProjNum = registry?.[canonical]?.project_number
+        const exactKey = exactRegistryKey(canonical, activeProjectRegistry(registry)) ?? canonical
+        const regProjNum = registry?.[exactKey]?.project_number
+        if (
+            args.project_number !== undefined &&
+            regProjNum !== undefined &&
+            args.project_number !== regProjNum
+        ) {
+            throw new ValidationError(
+                `workspace '${exactKey}' uses project_number ${String(regProjNum)}, not ${String(args.project_number)}.`
+            )
+        }
+        newBc.defaultWorkspaceId = exactKey
+        config.defaultWorkspaceId = exactKey
         if (regProjNum !== undefined && args.project_number === undefined) {
             newBc.defaultProjectNumber = regProjNum
             config.defaultProjectNumber = regProjNum

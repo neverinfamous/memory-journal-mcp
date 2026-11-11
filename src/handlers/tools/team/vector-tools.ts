@@ -73,8 +73,6 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                             suggestion:
                                 'Provide a text query for semantic search, or an entry_id to find related entries',
                             recoverable: true,
-                            entries: [],
-                            count: 0,
                         }
                     }
 
@@ -88,8 +86,6 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                                 'Enable semantic search with --auto-rebuild-index or set up the vector manager',
                             recoverable: true,
                             query: input.query,
-                            entries: [],
-                            count: 0,
                         }
                     }
 

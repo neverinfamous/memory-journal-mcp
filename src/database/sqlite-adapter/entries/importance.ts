@@ -74,7 +74,7 @@ export function calculateImportance(
     context: EntriesSharedContext,
     entryId: number,
     workspaceId?: string
-): ImportanceResult {
+): ImportanceResult | null {
     const { db } = context
     const scopeId = effectiveWorkspace(workspaceId)
     const scoped = scopeId !== '*'
@@ -104,12 +104,7 @@ export function calculateImportance(
     const baseParams = [entryId, entryId, entryId, entryId, entryId, entryId]
     const row = rowToObject(stmt.get(...(scoped ? [...baseParams, scopeId] : baseParams)))
 
-    if (!row) {
-        return {
-            score: 0,
-            breakdown: { significance: 0, relationships: 0, causal: 0, recency: 0 },
-        }
-    }
+    if (!row) return null
 
     const significanceType = row['significanceType'] as string | null
     const impactScore = (row['impactScore'] as number) ?? 0.0

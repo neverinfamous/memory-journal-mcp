@@ -165,6 +165,8 @@ function recoverEntryMutation(
         if (projNum !== undefined) entryParams['project_number'] = projNum
     }
     const isUpdate = op === 'update_entry' || op === 'update' || (entryId !== undefined && !signals.hasOp)
+    const content = entryParams['content']
+    if (!isUpdate && (typeof content !== 'string' || content.trim() === '')) return null
     if (isUpdate && entryId !== undefined) {
         entryParams['entry_id'] = entryId
         return `return await mj.admin.updateEntry(${JSON.stringify(entryParams)});`
@@ -227,9 +229,7 @@ function hasJournalFields(signals: PayloadSignals): boolean {
         signals.hasSummary ||
         signals.hasDescription ||
         signals.hasFindings ||
-        signals.hasDetails ||
-        signals.hasType ||
-        signals.hasOp
+        signals.hasDetails
     )
 }
 
@@ -270,7 +270,6 @@ function collectContent(target: Record<string, unknown>, signals: PayloadSignals
     if (finalContent === '' && (signals.hasTask || signals.hasTitle)) {
         finalContent = String(target['task'] ?? target['title'])
     }
-    if (finalContent === '') finalContent = 'Recorded via Code Mode payload'
     return finalContent
 }
 

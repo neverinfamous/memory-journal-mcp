@@ -2,6 +2,7 @@ import type { EntryType } from '../../../types/index.js'
 import type { EntriesSharedContext } from './shared.js'
 import { effectiveWorkspace } from '../../workspace-scope.js'
 import { ConflictError } from '../../../types/errors.js'
+import { activeProjectRegistry, pairStoredScope } from '../../../utils/write-scope.js'
 import { snapshotAndEvictRevisions } from './revisions.js'
 
 /** Thrown inside the update transaction to roll back revision bookkeeping when no row matched. */
@@ -171,7 +172,23 @@ export function performUpdateEntry(
 
     assertUpdateAllowed(id, existing, callerWorkspace, input)
 
-    const { updates, values } = buildUpdateSets(id, existing, callerWorkspace, input)
+    const registry = activeProjectRegistry(context.config?.projectRegistry)
+    const destination =
+        input.targetWorkspaceId !== undefined && input.targetWorkspaceId !== '*'
+            ? input.targetWorkspaceId
+            : existing.workspaceId
+    let writeInput = input
+    if (input.projectNumber !== undefined && input.projectNumber !== null) {
+        const paired = pairStoredScope(destination, input.projectNumber, registry)
+        writeInput = { ...input, projectNumber: paired.projectNumber }
+    } else if (input.targetWorkspaceId !== undefined && input.targetWorkspaceId !== '*') {
+        const paired = pairStoredScope(input.targetWorkspaceId, undefined, registry)
+        if (paired.projectNumber !== undefined && paired.projectNumber !== null) {
+            writeInput = { ...input, projectNumber: paired.projectNumber }
+        }
+    }
+
+    const { updates, values } = buildUpdateSets(id, existing, callerWorkspace, writeInput)
 
     const scopeUpdate = callerWorkspace !== '*'
     const query = `UPDATE memory_journal SET ${updates.join(', ')} WHERE id = ? AND deleted_at IS NULL${scopeUpdate ? ' AND workspace_id = ?' : ''}`

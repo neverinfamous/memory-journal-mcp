@@ -95,10 +95,18 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    const projectNumber =
-                        input.project_number ??
-                        existing.projectNumber ??
-                        resolveTeamProjectNumber(context, wsId, input.project_number)
+                    wsId = resolveWriteWorkspaceId(
+                        input.workspace_id ?? existing.workspaceId,
+                        input.project_number,
+                        context.config,
+                        input.content,
+                        input.tags
+                    )
+                    const projectNumber = resolveTeamProjectNumber(
+                        context,
+                        wsId,
+                        input.project_number ?? existing.projectNumber
+                    )
                     if (projectNumber === undefined || projectNumber === null) {
                         return {
                             success: false,
@@ -109,13 +117,6 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                             recoverable: true,
                         }
                     }
-                    wsId = resolveWriteWorkspaceId(
-                        input.workspace_id ?? existing.workspaceId,
-                        projectNumber,
-                        context.config,
-                        input.content,
-                        input.tags
-                    )
 
 
 

@@ -126,10 +126,9 @@ describe('DatabaseAdapter', () => {
     // ========================================================================
 
     describe('calculateImportance', () => {
-        it('should return 0 for nonexistent entry', () => {
+        it('should return null for nonexistent entry', () => {
             const result = db.calculateImportance(99999)
-            expect(result.score).toBe(0)
-            expect(result.breakdown.significance).toBe(0)
+            expect(result).toBeNull()
         })
 
         it('should include recency component for fresh entries', () => {

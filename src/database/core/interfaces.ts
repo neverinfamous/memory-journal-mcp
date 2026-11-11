@@ -124,7 +124,7 @@ export interface IDatabaseAdapter {
         ids: number[],
         workspaceId?: string
     ): Map<number, { entry: JournalEntry; importance: ImportanceResult }>
-    calculateImportance(entryId: number, workspaceId?: string): ImportanceResult
+    calculateImportance(entryId: number, workspaceId?: string): ImportanceResult | null
     getRecentEntries(
         limit?: number,
         isPersonal?: boolean,

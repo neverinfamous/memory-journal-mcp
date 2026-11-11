@@ -94,7 +94,7 @@ export function extractAndRecoverSqlCode(code: string): string | null {
 
     if (/^SELECT\b/i.test(cleanSql)) {
         if (isCount) {
-            return `return await mj.analytics.getStatistics(${JSON.stringify(scopeFields)});`
+            return null
         }
         if (idVal !== undefined) {
             if (Object.keys(scopeFields).length === 0) {
@@ -107,22 +107,13 @@ export function extractAndRecoverSqlCode(code: string): string | null {
             if (limitVal !== undefined) searchParams['limit'] = limitVal
             return `return await mj.search.searchEntries(${JSON.stringify(searchParams)});`
         }
-        const typeMatch = /\b(?:WHERE|AND)\s+[`"']?(?:type|entry_type)[`"']?\s*=\s*['"]([^'"]+)['"]/i.exec(cleanSql)
-        const typeVal = typeMatch?.[1]
-
-        const params: Record<string, unknown> = {
-            limit: limitVal ?? 10,
-            ...scopeFields,
-        }
-        if (typeVal !== undefined) params['entry_type'] = typeVal
-
-        return `return await mj.core.getRecentEntries(${JSON.stringify(params)});`
+        return null
     }
 
     if (/^INSERT\s+INTO\b/i.test(cleanSql)) {
         const rec = extractAndRecoverEntryCode(cleanSql)
         if (rec !== null) return rec
-        return `return await mj.createEntry(${JSON.stringify({ content: cleanSql, ...scopeFields })});`
+        return null
     }
 
     if (/^UPDATE\b/i.test(cleanSql)) {

@@ -114,7 +114,7 @@ export async function projectCreateAction(name: string, options: Record<string, 
     }
 
     const { serverOptions } = buildServerOptions(resolver, options, command, [])
-    const effectiveProjNum = projNum ?? serverOptions.defaultProjectNumber
+    const effectiveProjNum = projNum
 
     if (effectiveProjNum === undefined) {
         if (isJson) {

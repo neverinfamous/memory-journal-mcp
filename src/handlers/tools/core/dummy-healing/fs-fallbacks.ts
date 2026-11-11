@@ -50,8 +50,9 @@ function matchesFilePattern(entryName: string, filePattern?: string): boolean {
     const pattern = filePattern.toLowerCase()
     const name = entryName.toLowerCase()
     if (pattern.startsWith('*.')) return name.endsWith(pattern.slice(1))
-    const cleanPattern = pattern.replace(/^\*+/, '').replace(/\*+$/, '')
-    return cleanPattern.length === 0 || name.includes(cleanPattern)
+    if (!pattern.includes('*')) return name === pattern
+    const expression = `^${pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*')}$`
+    return new RegExp(expression).test(name)
 }
 
 function scanContentLines(

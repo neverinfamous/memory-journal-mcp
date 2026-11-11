@@ -373,9 +373,9 @@ describe('calculateImportance — branch coverage', () => {
         context = { db, tagsMgr: createTagsMgr() }
     })
 
-    it('should return 0 score for non-existent entry', () => {
+    it('should return null for a non-existent entry', () => {
         const result = calculateImportance(context, 999)
-        expect(result.score).toBe(0)
+        expect(result).toBeNull()
     })
 
     it('should compute importance for entry with significance and relationships', () => {

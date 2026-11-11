@@ -7,8 +7,8 @@ import {
     resolveWorkspaceFromFilePath,
     resolveWorkspaceId,
 } from '../../../utils/workspace-resolver.js'
-import { resolveWriteWorkspaceId } from '../write-workspace.js'
-
+import { activeProjectRegistry, alignedProjectFilter } from '../../../utils/write-scope.js'
+import { resolveProjectContext } from '../../../utils/workspace-resolver.js'
 import { exportEntriesToMarkdown } from '../../../markdown/index.js'
 import { importMarkdownEntries, processImportBatch, convertFile } from '../../../markdown/index.js'
 import type { ExportableEntry, ParsedFile } from '../../../markdown/index.js'
@@ -52,6 +52,11 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
                 try {
                     const input = ExportEntriesSchema.parse(params)
                     const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
+                    const projectNumber = alignedProjectFilter(
+                        wsId,
+                        input.project_number,
+                        activeProjectRegistry(context.config?.projectRegistry)
+                    )
                     const limit = input.limit ?? 100
 
                     await sendProgress(progress, 0, 2, 'Fetching entries...')
@@ -70,7 +75,7 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
                             tags: input.tags,
                             limit: fetchLimit,
                             workspaceId: wsId,
-                            ...(input.project_number !== undefined ? { projectNumber: input.project_number } : {}),
+                            ...(projectNumber !== undefined ? { projectNumber } : {}),
                         }).entries
                     } else if ((input.tags && input.tags.length > 0) || hasTypeFilter) {
                         // Tags/types filter: use a wide date range to scan the full database
@@ -78,11 +83,11 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
                             tags: input.tags,
                             limit: fetchLimit,
                             workspaceId: wsId,
-                            ...(input.project_number !== undefined ? { projectNumber: input.project_number } : {}),
+                            ...(projectNumber !== undefined ? { projectNumber } : {}),
                         }).entries
                     } else {
-                        entries = (input.project_number !== undefined
-                            ? db.getRecentEntries(fetchLimit, undefined, undefined, undefined, undefined, wsId, input.project_number)
+                        entries = (projectNumber !== undefined
+                            ? db.getRecentEntries(fetchLimit, undefined, undefined, undefined, undefined, wsId, projectNumber)
                             : db.getRecentEntries(fetchLimit, undefined, undefined, undefined, undefined, wsId)
                         ).entries
                     }
@@ -168,6 +173,11 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
                 try {
                     const input = ExportMarkdownSchema.parse(params)
                     const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
+                    const projectNumber = alignedProjectFilter(
+                        wsId,
+                        input.project_number,
+                        activeProjectRegistry(context.config?.projectRegistry)
+                    )
 
                     // Determine allowed roots
                     // Security fix: Use explicitly configured roots, without CWD fallback
@@ -188,18 +198,18 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
                             tags: input.tags,
                             limit: fetchLimit,
                             workspaceId: wsId,
-                            ...(input.project_number !== undefined ? { projectNumber: input.project_number } : {}),
+                            ...(projectNumber !== undefined ? { projectNumber } : {}),
                         }).entries
                     } else if ((input.tags && input.tags.length > 0) || hasTypeFilter) {
                         entries = db.searchByDateRange(DATE_MIN_SENTINEL, DATE_MAX_SENTINEL, {
                             tags: input.tags,
                             limit: fetchLimit,
                             workspaceId: wsId,
-                            ...(input.project_number !== undefined ? { projectNumber: input.project_number } : {}),
+                            ...(projectNumber !== undefined ? { projectNumber } : {}),
                         }).entries
                     } else {
-                        entries = (input.project_number !== undefined
-                            ? db.getRecentEntries(fetchLimit, undefined, undefined, undefined, undefined, wsId, input.project_number)
+                        entries = (projectNumber !== undefined
+                            ? db.getRecentEntries(fetchLimit, undefined, undefined, undefined, undefined, wsId, projectNumber)
                             : db.getRecentEntries(fetchLimit, undefined, undefined, undefined, undefined, wsId)
                         ).entries
                     }
@@ -277,12 +287,16 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
                         input.workspace_id === undefined && input.project_number === undefined
                             ? resolveWorkspaceFromFilePath(input.source_dir, context.config)
                             : undefined
-                    const effectiveProjectNum = input.project_number ?? dirMatch?.projectNumber
-                    const wsId = resolveWriteWorkspaceId(
-                        input.workspace_id ?? dirMatch?.workspaceId,
-                        effectiveProjectNum,
+                    const requestedProject = input.project_number ?? dirMatch?.projectNumber
+                    const resolvedImport = resolveProjectContext(
+                        {
+                            workspace_id: input.workspace_id ?? dirMatch?.workspaceId,
+                            project_number: requestedProject,
+                        },
                         context.config
                     )
+                    const wsId = resolvedImport.workspaceId
+                    const effectiveProjectNum = resolvedImport.projectNumber ?? requestedProject
 
                     // Determine allowed roots
                     // Security fix: Use explicitly configured roots, without CWD fallback
@@ -351,12 +365,16 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
                         input.workspace_id === undefined && input.project_number === undefined
                             ? resolveWorkspaceFromFilePath(input.source_dir, context.config)
                             : undefined
-                    const effectiveProjectNum = input.project_number ?? dirMatch?.projectNumber
-                    const wsId = resolveWriteWorkspaceId(
-                        input.workspace_id ?? dirMatch?.workspaceId,
-                        effectiveProjectNum,
+                    const requestedProject = input.project_number ?? dirMatch?.projectNumber
+                    const resolvedImport = resolveProjectContext(
+                        {
+                            workspace_id: input.workspace_id ?? dirMatch?.workspaceId,
+                            project_number: requestedProject,
+                        },
                         context.config
                     )
+                    const wsId = resolvedImport.workspaceId
+                    const effectiveProjectNum = resolvedImport.projectNumber ?? requestedProject
 
                     // Determine allowed roots
                     const allowedRoots = context.config?.allowedIoRoots ?? []

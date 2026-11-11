@@ -228,7 +228,7 @@ export class EntriesManager {
         return searchByDateRange(this.sharedContext, startDate, endDate, options)
     }
 
-    calculateImportance(entryId: number, workspaceId?: string): ImportanceResult {
+    calculateImportance(entryId: number, workspaceId?: string): ImportanceResult | null {
         return calculateImportance(this.sharedContext, entryId, workspaceId)
     }
 

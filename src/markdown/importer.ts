@@ -283,13 +283,8 @@ function resolveImportedFileContext(
         content: body,
         tags: metadata.tags,
     })
-    const effectiveWsId =
-        rawWorkspaceId !== undefined && rawWorkspaceId !== 'default'
-            ? rawWorkspaceId
-            : resolved.workspaceId !== 'default'
-              ? resolved.workspaceId
-              : rawWorkspaceId
-    const effectiveProjNum = options.project_number ?? fileProject ?? resolved.projectNumber
+    const effectiveWsId = resolved.workspaceId
+    const effectiveProjNum = resolved.projectNumber
     return { effectiveWsId, effectiveProjNum }
 }
 

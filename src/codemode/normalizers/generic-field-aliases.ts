@@ -298,8 +298,13 @@ export function resolveCreateEntryProjectContext(obj: Record<string, unknown>): 
             delete obj['workspace_id']
         }
     }
-    if (obj['project_number'] === undefined && resolved.projectNumber !== undefined) {
-        obj['project_number'] = resolved.projectNumber
+    if (resolved.projectNumber !== undefined) {
+        const ws = obj['workspace_id']
+        const workspaceIsConcrete =
+            typeof ws === 'string' && ws !== '' && ws !== 'default' && ws !== '*'
+        if (obj['project_number'] === undefined || workspaceIsConcrete) {
+            obj['project_number'] = resolved.projectNumber
+        }
     }
 }
 

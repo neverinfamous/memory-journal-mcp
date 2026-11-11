@@ -153,8 +153,13 @@ export class JournalApi {
                     rec['workspace_id'] = resolved.workspaceId
                     rec['workspaceId'] = resolved.workspaceId
                 }
-                if (rec['project_number'] === undefined && resolved.projectNumber !== undefined) {
-                    rec['project_number'] = resolved.projectNumber
+                if (resolved.projectNumber !== undefined) {
+                    const ws = rec['workspace_id'] ?? rec['workspaceId']
+                    const workspaceIsConcrete =
+                        typeof ws === 'string' && ws !== '' && ws !== 'default' && ws !== '*'
+                    if (rec['project_number'] === undefined || workspaceIsConcrete) {
+                        rec['project_number'] = resolved.projectNumber
+                    }
                 }
             }
         }

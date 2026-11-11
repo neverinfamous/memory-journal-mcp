@@ -1,5 +1,6 @@
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
+import { activeProjectRegistry, alignedProjectFilter } from '../../../utils/write-scope.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import {
     passMetadataFilters,
@@ -33,6 +34,11 @@ export function getSemanticSearchTool(context: ToolContext): ToolDefinition[] {
                 try {
                     const input = SemanticSearchSchema.parse(params)
                     const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
+                    const projectNumber = alignedProjectFilter(
+                        wsId,
+                        input.project_number,
+                        activeProjectRegistry(context.config?.projectRegistry)
+                    )
 
                     // Validate: at least one of query or entry_id must be provided
                     if (!input.query && input.entry_id === undefined) {
@@ -44,8 +50,6 @@ export function getSemanticSearchTool(context: ToolContext): ToolDefinition[] {
                             suggestion:
                                 'Provide a text query for semantic search, or an entry_id to find related entries',
                             recoverable: true,
-                            entries: [],
-                            count: 0,
                         }
                     }
 
@@ -59,8 +63,6 @@ export function getSemanticSearchTool(context: ToolContext): ToolDefinition[] {
                                 'Enable semantic search with --auto-rebuild-index or set up the vector manager',
                             recoverable: false,
                             query: input.query,
-                            entries: [],
-                            count: 0,
                         }
                     }
 
@@ -111,7 +113,7 @@ export function getSemanticSearchTool(context: ToolContext): ToolDefinition[] {
 
                     const filterOptions = {
                         isPersonal: input.is_personal,
-                        projectNumber: input.project_number,
+                        projectNumber,
                         issueNumber: input.issue_number,
                         prNumber: input.pr_number,
                         workflowRunId: input.workflow_run_id,

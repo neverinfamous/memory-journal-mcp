@@ -7,9 +7,10 @@
 import type { ToolContext } from '../../../types/index.js'
 import { logger } from '../../../utils/logger.js'
 import {
-    findCanonicalRegistryKey,
-    loadProjectRegistryFromConfig,
-} from '../../../utils/workspace-resolver.js'
+    activeProjectRegistry,
+    concreteWorkspace,
+    exactRegistryKey,
+} from '../../../utils/write-scope.js'
 
 // ============================================================================
 // Constants
@@ -74,20 +75,20 @@ export function triggerTeamNotifications(context: ToolContext): void {
 }
 
 /**
- * Derive the project number for a team tool call: explicit input first, then the project
- * registry entry for the resolved workspace, then the configured default.
+ * Derive the project number for a team tool call. A registered workspace keeps its
+ * registry project. Otherwise use the explicit number, then the configured default.
  */
 export function resolveTeamProjectNumber(
     context: ToolContext,
     wsId: string,
-    explicitProjectNumber: number | undefined
+    explicitProjectNumber: number | null | undefined
 ): number | null | undefined {
-    if (explicitProjectNumber !== undefined) return explicitProjectNumber
-    if (wsId !== 'default' && wsId !== '*') {
-        const registry = context.config?.projectRegistry ?? loadProjectRegistryFromConfig()
-        const canonicalKey = findCanonicalRegistryKey(wsId, registry) ?? wsId
-        const regProj = registry?.[canonicalKey]?.project_number
-        if (regProj !== undefined) return regProj
-    }
+    const registry = activeProjectRegistry(context.config?.projectRegistry)
+    const concrete = concreteWorkspace(wsId)
+    const key = concrete !== undefined ? exactRegistryKey(concrete, registry) : undefined
+    const regProj = key !== undefined ? registry?.[key]?.project_number : undefined
+    if (regProj !== undefined) return regProj
+    const explicit = explicitProjectNumber ?? undefined
+    if (explicit !== undefined) return explicit
     return context.config?.defaultProjectNumber
 }

@@ -286,7 +286,7 @@ export function buildEntryPayload(
         },
         config
     )
-    const projectNumber = explicitProjectNum ?? resolved.projectNumber
+    const projectNumber = resolved.projectNumber ?? explicitProjectNum
     const workspaceId = resolved.workspaceId
 
     const { trustScore, impactScore, validationStatus, sessionId } = resolveScoresAndValidation(

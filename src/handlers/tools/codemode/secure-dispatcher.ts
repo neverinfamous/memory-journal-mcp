@@ -243,9 +243,9 @@ async function normalizeDispatchParams(
         paramsObj['workspace_id'] = String(paramsObj['workspace_id'])
     }
     if (
-        paramsObj['project_number'] === undefined &&
         typeof paramsObj['workspace_id'] === 'string' &&
         paramsObj['workspace_id'] !== 'default' &&
+        paramsObj['workspace_id'] !== '*' &&
         checkSchemaAcceptsKey(tool.inputSchema, 'project_number')
     ) {
         const wsReg = lookupRegistryEntry(sessionContext.config?.projectRegistry, paramsObj['workspace_id'])
@@ -475,7 +475,7 @@ export async function resolveCodeModeSessionContext(
         context.config
     )
     const workspaceId = resolvedContext.workspaceId
-    if (numericProjectId === undefined && resolvedContext.projectNumber !== undefined) {
+    if (resolvedContext.projectNumber !== undefined) {
         numericProjectId = resolvedContext.projectNumber
         projectId = resolvedContext.projectNumber
     }

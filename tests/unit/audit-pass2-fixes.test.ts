@@ -42,6 +42,7 @@ describe('audit pass 2 fixes', () => {
         expect(projectAliasTarget('get_projects')).toBe('list_projects')
         expect(projectAliasTarget('mj.core.getProject')).toBe('get_project')
         expect(projectAliasTarget('get_project')).toBe('get_project')
+        expect(projectAliasTarget('mj.projects.get')).toBe('get_project')
     })
 
     it('returns the statement result instead of a fake success', async () => {

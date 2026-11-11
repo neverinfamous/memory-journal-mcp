@@ -153,6 +153,17 @@ export function getStalenessTools(context: ToolContext): ToolDefinition[] {
                         }
                     })
 
+                    if (updatedCount === 0) {
+                        return {
+                            success: false,
+                            error: 'No anchors were updated',
+                            code: 'RESOURCE_NOT_FOUND',
+                            category: 'resource',
+                            recoverable: true,
+                            updated_count: 0,
+                            ...(missingIds.length > 0 ? { not_found_ids: missingIds } : {}),
+                        }
+                    }
                     return {
                         success: true,
                         updated_count: updatedCount,

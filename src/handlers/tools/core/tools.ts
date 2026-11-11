@@ -5,6 +5,7 @@ import { sendProgress } from '../../../utils/progress-utils.js'
 import { resolveIssueUrl } from '../../../utils/github-helpers.js'
 import { buildCreateEntryInput, shareCreatedEntryWithTeam } from './create-entry-helpers.js'
 import { resolveWorkspaceId, resolveProjectContext } from '../../../utils/workspace-resolver.js'
+import { activeProjectRegistry, alignedProjectFilter } from '../../../utils/write-scope.js'
 import { MemoryJournalMcpError } from '../../../types/errors.js'
 import { logger } from '../../../utils/logger.js'
 
@@ -236,8 +237,10 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     const importance = db.calculateImportance(input.entry_id, wsId)
-                    result['importance'] = importance.score
-                    result['importanceBreakdown'] = importance.breakdown
+                    if (importance !== null) {
+                        result['importance'] = importance.score
+                        result['importanceBreakdown'] = importance.breakdown
+                    }
 
                     return result
                 } catch (err) {
@@ -262,7 +265,12 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                 try {
                     const input = GetRecentEntriesSchema.parse(params)
                     const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
-                    const result = db.getRecentEntries(input.limit, input.is_personal, input.sort_by, input.cursor, input.include_archived, wsId, input.project_number, input.offset)
+                    const projectNumber = alignedProjectFilter(
+                        wsId,
+                        input.project_number,
+                        activeProjectRegistry(context.config?.projectRegistry)
+                    )
+                    const result = db.getRecentEntries(input.limit, input.is_personal, input.sort_by, input.cursor, input.include_archived, wsId, projectNumber, input.offset)
                     return {
                         success: true,
                         entries: result.entries,

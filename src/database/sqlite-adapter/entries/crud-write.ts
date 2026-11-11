@@ -3,6 +3,7 @@ import type { CreateEntryInput } from '../../core/interfaces.js'
 import type { EntriesSharedContext } from './shared.js'
 import { effectiveWorkspace } from '../../workspace-scope.js'
 import { resolveProjectContext } from '../../../utils/workspace-resolver.js'
+import { activeProjectRegistry, pairStoredScope } from '../../../utils/write-scope.js'
 import { insertAnchors } from './anchors.js'
 import { getEntryById, getEntriesByIds } from './crud-read.js'
 import { normalizeTag, performUpdateEntry } from './crud-update.js'
@@ -84,24 +85,22 @@ function insertEntryRow(context: EntriesSharedContext, input: CreateEntryInput):
         const nonEmpty = (s: string | null | undefined): string | null =>
             s !== undefined && s !== null && s !== '' ? s : null
         const omittedWorkspace = input.workspaceId === undefined || input.workspaceId.length === 0
-        const resolved =
-            omittedWorkspace || input.projectNumber === undefined
-                ? resolveProjectContext(
-                      {
-                          ...(omittedWorkspace ? {} : { workspace_id: input.workspaceId }),
-                          ...(input.projectNumber !== undefined
-                              ? { project_number: input.projectNumber }
-                              : {}),
-                          content: input.content,
-                          ...(input.tags !== undefined ? { tags: input.tags } : {}),
-                      },
-                      context.config
-                  )
-                : undefined
-        const finalProjNum = input.projectNumber ?? resolved?.projectNumber ?? null
-        const finalWsId = omittedWorkspace
-            ? (resolved?.workspaceId ?? 'default')
-            : effectiveWorkspace(input.workspaceId)
+        const resolved = resolveProjectContext(
+            {
+                ...(omittedWorkspace ? {} : { workspace_id: input.workspaceId }),
+                ...(input.projectNumber !== undefined ? { project_number: input.projectNumber } : {}),
+                content: input.content,
+                ...(input.tags !== undefined ? { tags: input.tags } : {}),
+            },
+            context.config
+        )
+        const paired = pairStoredScope(
+            omittedWorkspace ? resolved.workspaceId : input.workspaceId,
+            input.projectNumber ?? resolved.projectNumber,
+            activeProjectRegistry(context.config?.projectRegistry)
+        )
+        const finalProjNum = paired.projectNumber ?? null
+        const finalWsId = effectiveWorkspace(paired.workspaceId)
         const values = [
             input.entryType ?? 'personal_reflection',
             input.content,
@@ -249,11 +248,21 @@ export function createEntries(
     }
 
     const resultsMap = getEntriesByIds(context, createdIds, '*')
-    const created = createdIds
-        .map((id) => resultsMap.get(id))
-        .filter((entry): entry is JournalEntry => entry !== undefined)
+    const created: JournalEntry[] = []
+    const errors: { index: number; error: Error }[] = []
+    createdIds.forEach((id, index) => {
+        const entry = resultsMap.get(id)
+        if (entry === undefined) {
+            errors.push({
+                index,
+                error: new Error(`Entry ${String(id)} was written but could not be read back.`),
+            })
+        } else {
+            created.push(entry)
+        }
+    })
 
-    return { created, errors: [] }
+    return { created, errors }
 }
 
 export function updateEntries(
@@ -289,11 +298,21 @@ export function updateEntries(
     }
 
     const resultsMap = getEntriesByIds(context, updatedIds, '*')
-    const updated = updatedIds
-        .map((id) => resultsMap.get(id))
-        .filter((entry): entry is JournalEntry => entry !== undefined)
+    const updated: JournalEntry[] = []
+    const errors: { id: number; error: Error }[] = []
+    for (const id of updatedIds) {
+        const entry = resultsMap.get(id)
+        if (entry === undefined) {
+            errors.push({
+                id,
+                error: new Error(`Entry ${String(id)} was updated but could not be read back.`),
+            })
+        } else {
+            updated.push(entry)
+        }
+    }
 
-    return { updated, notFound, errors: [] }
+    return { updated, notFound, errors }
 }
 
 export function deleteEntries(

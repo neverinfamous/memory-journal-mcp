@@ -200,30 +200,12 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
     })
 
     describe('Layer 2: SQL Query Code Mode Auto-Healing (agent-issues.jsonl regression)', () => {
-        it('should auto-heal raw SELECT queries from agent issues into valid Code Mode calls', () => {
+        it('leaves an unmatched SELECT as SQL instead of reading recent entries', () => {
             const rawSql = 'SELECT id, type, content, metadata FROM journal_entries ORDER BY id DESC LIMIT 10;'
             const healed = healCodeModeScript(rawSql)
 
-            expect(healed).toBeDefined()
-            expect(healed).toContain('mj.core.getRecentEntries')
-            expect(healed).toContain('"limit":10')
-
-            // Verify healed code compiles and executes in a VM script
-            const wrapped = `(async () => {
-                let calledWith = null;
-                const mj = {
-                    core: {
-                        getRecentEntries: async (params) => {
-                            calledWith = params;
-                            return { success: true, entries: [] };
-                        }
-                    }
-                };
-                ${healed}
-            })()`
-            expect(() => {
-                new vm.Script(wrapped)
-            }).not.toThrow()
+            expect(healed).not.toContain('mj.core.getRecentEntries')
+            expect(healed).toContain('SELECT')
         })
 
         it('should auto-heal SELECT by ID queries', () => {
@@ -244,12 +226,12 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
             expect(healed).toContain('authentication')
         })
 
-        it('should auto-heal COUNT(*) queries into analytics statistics calls', () => {
+        it('leaves a COUNT query as SQL instead of calling statistics', () => {
             const rawSql = 'SELECT count(*) FROM journal_entries;'
             const healed = healCodeModeScript(rawSql)
 
-            expect(healed).toBeDefined()
-            expect(healed).toContain('mj.analytics.getStatistics')
+            expect(healed).not.toContain('mj.analytics.getStatistics')
+            expect(healed).toContain('count(*)')
         })
 
         it('should auto-heal queries on tags table into listTags', () => {
