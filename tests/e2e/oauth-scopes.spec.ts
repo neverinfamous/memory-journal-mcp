@@ -224,7 +224,8 @@ test.describe('OAuth 2.1 Scope Enforcement E2E', () => {
             }
         } else {
             expect(body.error).toBeUndefined()
-            expect(body.result?.isError).not.toBe(true)
+            const allowedText = body.result?.content?.[0]?.text ?? ''
+            expect(allowedText).not.toMatch(/scope|denied|unauthorized|Access/i)
         }
     }
 

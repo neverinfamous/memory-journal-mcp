@@ -96,33 +96,35 @@ export async function callToolAndParse(
     }
     const response = await client.callTool({ name: toolName, arguments: args })
 
-    if (response.isError) {
-        console.error(
-            'Tool call returned isError: true. Response:',
-            JSON.stringify(response, null, 2)
-        )
-    }
-    expect(response.isError).toBeUndefined()
     expect(Array.isArray(response.content)).toBe(true)
 
     const content = response.content as Array<{ type: string; text?: string }>
     expect(content.length).toBeGreaterThan(0)
 
     // MCP SDK may support unknown fields or ignore them. Check if attached natively:
+    let payload: Record<string, unknown>
     if ('structuredContent' in response && response.structuredContent) {
-        return response.structuredContent as Record<string, unknown>
+        payload = response.structuredContent as Record<string, unknown>
+    } else {
+        const first = content[0]!
+        expect(first.type).toBe('text')
+
+        // If the structed property was stripped by strict-schema SDK parsing, we cannot test the E2E JSON effectively from the test harness if it just says "[Structured output attached]".
+        // But since the original code was JSON stringified, if we encounter the optimization string, we have a problem.
+        if (first.text === '[Structured output attached]') {
+            throw new Error('SDK stripped structuredContent and only optimization text remains.')
+        }
+
+        payload = JSON.parse(first.text!) as Record<string, unknown>
     }
 
-    const first = content[0]!
-    expect(first.type).toBe('text')
-
-    // If the structed property was stripped by strict-schema SDK parsing, we cannot test the E2E JSON effectively from the test harness if it just says "[Structured output attached]".
-    // But since the original code was JSON stringified, if we encounter the optimization string, we have a problem.
-    if (first.text === '[Structured output attached]') {
-        throw new Error('SDK stripped structuredContent and only optimization text remains.')
+    // Structured handler failures set isError and still return { success: false }.
+    // Any other isError is a transport or protocol failure.
+    if (response.isError === true && payload.success !== false) {
+        expect(response.isError, JSON.stringify(payload)).toBeUndefined()
     }
 
-    return JSON.parse(first.text!) as Record<string, unknown>
+    return payload
 }
 
 /**
