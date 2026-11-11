@@ -90,11 +90,16 @@ function resolveRequestedProjectUris(
 
         if (/^\d+$/.test(requested)) {
             const requestedNumber = Number(requested)
-            const byNumber = registryKeys.find(
+            const byNumber = registryKeys.filter(
                 (k) => getProjectNumber(registry[k]) === requestedNumber
             )
-            if (byNumber) {
-                resolvedUris.push(`memory://briefing/${byNumber}`)
+            if (byNumber.length === 1) {
+                const matchedKey = byNumber[0]
+                if (matchedKey !== undefined) {
+                    resolvedUris.push(`memory://briefing/${matchedKey}`)
+                }
+            } else if (byNumber.length > 1) {
+                ambiguous.push(`${requested} (matches: ${byNumber.join(', ')})`)
             } else {
                 notFound.push(requested)
             }
@@ -104,15 +109,7 @@ function resolveRequestedProjectUris(
         const partialMatches = registryKeys.filter((k) =>
             k.toLowerCase().includes(requestedLower)
         )
-        if (partialMatches.length === 1) {
-            const matchedKey = partialMatches[0]
-            if (typeof matchedKey === 'string') {
-                resolvedUris.push(`memory://briefing/${matchedKey}`)
-            } else {
-                notFound.push(requested)
-            }
-            continue
-        } else if (partialMatches.length > 1) {
+        if (partialMatches.length > 1) {
             ambiguous.push(`${requested} (matches: ${partialMatches.join(', ')})`)
             continue
         }

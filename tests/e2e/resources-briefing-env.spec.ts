@@ -15,7 +15,7 @@ import { setTimeout as delay } from 'node:timers/promises'
 import * as fs from 'node:fs'
 import path from 'node:path'
 
-const BRIEFING_PORT = 5126 + (Number(process.env.TEST_PARALLEL_INDEX || 0) * 100)
+const BRIEFING_PORT = 5126 + (Number(process.env.TEST_WORKER_INDEX || process.env.TEST_PARALLEL_INDEX || 0) * 100)
 const BRIEFING_BASE = `http://localhost:${BRIEFING_PORT}`
 
 test.describe.configure({ mode: 'serial' })
@@ -47,6 +47,8 @@ test.describe('Resources: Briefing Environment Configurations', () => {
                 env: {
                     ...process.env,
                     ALLOWED_IO_ROOTS: process.cwd(),
+                    GITHUB_TOKEN: '',
+                    GITHUB_PERSONAL_ACCESS_TOKEN: '',
                     MCP_RATE_LIMIT_MAX: '10000',
                     BRIEFING_ENTRY_COUNT: '2', // Only 2 entries max
                     BRIEFING_INCLUDE_TEAM: 'true', // Force inclusion
@@ -63,18 +65,21 @@ test.describe('Resources: Briefing Environment Configurations', () => {
         serverProcess.stdout?.on('data', (data) => fs.appendFileSync('serverProcess.log', `[OUT] ${data.toString()}`));
         serverProcess.stderr?.on('data', (data) => fs.appendFileSync('serverProcess.log', `[ERR] ${data.toString()}`));
 
+        const readyDeadline = Date.now() + 40_000
         let ready = false
-        for (let i = 0; i < 120; i++) {
+        while (Date.now() < readyDeadline) {
             try {
-                const res = await fetch(`${BRIEFING_BASE}/health`)
+                const res = await fetch(`${BRIEFING_BASE}/health`, { signal: AbortSignal.timeout(1000) })
                 if (res.ok) {
                     ready = true
                     break
                 }
-            } catch {}
-            await delay(500)
+            } catch {
+                // Server not ready yet
+            }
+            await delay(200)
         }
-        if (!ready) throw new Error('Briefing MCP server failed to start within 60 seconds')
+        if (!ready) throw new Error('Briefing MCP server failed to start within 40 seconds')
 
         const transport = new StreamableHTTPClientTransport(new URL(`${BRIEFING_BASE}/mcp`), {
             requestInit: { headers: { Authorization: 'Bearer test-token' } },

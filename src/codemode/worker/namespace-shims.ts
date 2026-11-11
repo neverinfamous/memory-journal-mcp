@@ -7,8 +7,6 @@ import { wrapResult } from '../worker-result-proxy.js'
 import { ENTRY_TYPES, SIGNIFICANCE_TYPES } from '../../handlers/tools/schemas/constants-and-primitives.js'
 
 export const DB_TO_JOURNAL: Record<string, [string, string]> = {
-    listTables: ['analytics', 'getStatistics'],
-    describeTable: ['analytics', 'getStatistics'],
     count: ['analytics', 'getStatistics'],
     analyze: ['analytics', 'getStatistics'],
     exists: ['core', 'getEntryById'],
@@ -18,9 +16,18 @@ export const DB_TO_JOURNAL: Record<string, [string, string]> = {
 }
 
 const DB_MAINTENANCE_CALLS = new Set(['vacuum', 'integrityCheck'])
+const SCHEMA_OPS_NOT_RUN = new Set(['listTables', 'describeTable'])
+
+// [INVARIANT] The shim proxy calls isDbMaintenanceCall and then createMaintenanceUnavailableFn
+// in the same turn. The pending name selects the schema-operation error for those two names.
+let pendingUnavailableName: string | undefined
 
 export function isDbMaintenanceCall(name: string): boolean {
-    return DB_MAINTENANCE_CALLS.has(name)
+    if (SCHEMA_OPS_NOT_RUN.has(name) || DB_MAINTENANCE_CALLS.has(name)) {
+        pendingUnavailableName = name
+        return true
+    }
+    return false
 }
 
 export function createMaintenanceUnavailableFn(): () => Promise<{
@@ -28,6 +35,16 @@ export function createMaintenanceUnavailableFn(): () => Promise<{
     error: string
     code: string
 }> {
+    const name = pendingUnavailableName
+    pendingUnavailableName = undefined
+    if (name !== undefined && SCHEMA_OPS_NOT_RUN.has(name)) {
+        return () =>
+            Promise.resolve({
+                success: false,
+                code: 'VALIDATION_ERROR',
+                error: `Schema operation '${name}' did not run`,
+            })
+    }
     return () =>
         Promise.resolve({
             success: false,

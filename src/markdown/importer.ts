@@ -15,7 +15,11 @@ import type { EntryType, RelationshipType, SignificanceType } from '../types/ind
 import { ENTRY_TYPES, RELATIONSHIP_TYPES } from '../types/index.js'
 import { parseFrontmatter } from './frontmatter.js'
 import { assertSafeDirectoryPath, assertSafeFilePath } from '../utils/security-utils.js'
-import { resolveProjectContext } from '../utils/workspace-resolver.js'
+import {
+    findCanonicalRegistryKey,
+    loadProjectRegistryFromConfig,
+    resolveProjectContext,
+} from '../utils/workspace-resolver.js'
 
 /** Maximum size (5 MB) permitted for a single markdown file during import. */
 const MAX_IMPORT_FILE_SIZE_BYTES = 5 * 1024 * 1024
@@ -231,13 +235,48 @@ function assertImportAuthorOwnership(
     }
 }
 
+function concreteCallerWorkspace(workspaceId: string | undefined): string | undefined {
+    if (workspaceId === undefined) return undefined
+    const trimmed = workspaceId.trim()
+    if (trimmed === '' || trimmed === '*' || trimmed.toLowerCase() === 'default') return undefined
+    return trimmed
+}
+
+function registryWorkspaceForProject(projectNumber: number): string | undefined {
+    const registry = loadProjectRegistryFromConfig()
+    if (registry === undefined) return undefined
+    for (const [key, entry] of Object.entries(registry)) {
+        if (entry.project_number === projectNumber) return key
+    }
+    return undefined
+}
+
+function sameRegistryWorkspace(left: string, right: string): boolean {
+    const registry = loadProjectRegistryFromConfig()
+    const leftKey = findCanonicalRegistryKey(left, registry) ?? left
+    const rightKey = findCanonicalRegistryKey(right, registry) ?? right
+    return leftKey.toLowerCase() === rightKey.toLowerCase()
+}
+
 function resolveImportedFileContext(
     file: ParsedFile,
     options: ImportOptions
 ): { effectiveWsId: string | undefined; effectiveProjNum: number | undefined } {
     const { body, metadata } = file
     const rawWorkspaceId = options.workspaceId ?? metadata.workspace_id
-    const rawProjectNumber = options.project_number ?? metadata.project_number
+    if (rawWorkspaceId?.trim() === '*') {
+        throw new Error("Workspace '*' cannot be used for import writes")
+    }
+
+    const lockedWorkspace = concreteCallerWorkspace(options.workspaceId)
+    let fileProject = metadata.project_number
+    if (lockedWorkspace !== undefined && fileProject !== undefined) {
+        const owner = registryWorkspaceForProject(fileProject)
+        if (owner !== undefined && !sameRegistryWorkspace(lockedWorkspace, owner)) {
+            fileProject = undefined
+        }
+    }
+    const rawProjectNumber = options.project_number ?? fileProject
     const resolved = resolveProjectContext({
         workspace_id: rawWorkspaceId,
         project_number: rawProjectNumber,
@@ -250,7 +289,7 @@ function resolveImportedFileContext(
             : resolved.workspaceId !== 'default'
               ? resolved.workspaceId
               : rawWorkspaceId
-    const effectiveProjNum = rawProjectNumber ?? resolved.projectNumber
+    const effectiveProjNum = options.project_number ?? fileProject ?? resolved.projectNumber
     return { effectiveWsId, effectiveProjNum }
 }
 

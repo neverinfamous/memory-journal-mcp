@@ -11,10 +11,16 @@ import {
     loadProjectRegistryFromConfig,
     resolveProjectContext,
 } from '../../../utils/workspace-resolver.js'
-import { relaxedNumber } from '../schemas.js'
 import { CloseGitHubIssueWithEntryOutputSchema } from './schemas.js'
 import { resolveOwnerRepo, resolveProjectNumber } from './helpers.js'
 import { moveIssueToDone, type KanbanMoveResult } from './close-issue-kanban.js'
+
+function concreteCallerWorkspace(workspaceId: string | undefined): string | undefined {
+    if (workspaceId === undefined) return undefined
+    const trimmed = workspaceId.trim()
+    if (trimmed === '' || trimmed === '*' || trimmed.toLowerCase() === 'default') return undefined
+    return trimmed
+}
 
 const CloseIssueHandlerInputSchema = z.object({
     issue_number: z.number(),
@@ -70,24 +76,31 @@ async function executeCloseIssueMutation(
         resolved.repo,
         input.project_number
     )
+    const callerWorkspace = concreteCallerWorkspace(input.workspace_id)
+    const pairCallerWorkspace =
+        callerWorkspace !== undefined && input.project_number === undefined
     const registry = context.config?.projectRegistry ?? loadProjectRegistryFromConfig()
     const canonicalRepo = resolved.repo
         ? (findCanonicalRegistryKey(resolved.repo, registry) ?? resolved.repo)
         : undefined
     const resolvedCtx = resolveProjectContext(
         {
-            workspace_id: input.workspace_id ?? canonicalRepo,
-            project_number: entryProjectNumber,
+            workspace_id: callerWorkspace ?? canonicalRepo,
+            ...(pairCallerWorkspace || entryProjectNumber === undefined
+                ? {}
+                : { project_number: entryProjectNumber }),
             content: entryContent,
             tags: input.tags,
         },
         context.config
     )
     const workspaceId =
-        resolvedCtx.workspaceId === 'default' && canonicalRepo
+        resolvedCtx.workspaceId === 'default' && canonicalRepo && callerWorkspace === undefined
             ? canonicalRepo
             : resolvedCtx.workspaceId
-    const projectNumber = resolvedCtx.projectNumber ?? entryProjectNumber
+    const projectNumber = pairCallerWorkspace
+        ? resolvedCtx.projectNumber
+        : (resolvedCtx.projectNumber ?? entryProjectNumber)
     const entry = db.createEntry({
         content: entryContent,
         entryType: 'bug_fix',
@@ -170,7 +183,7 @@ export function getCloseGitHubIssueTool(context: ToolContext): ToolDefinition {
             'Close a GitHub issue AND create a journal entry documenting the resolution.',
         group: 'github',
         inputSchema: z.object({
-            issue_number: relaxedNumber().optional().describe('Issue number to close'),
+            issue_number: z.number().describe('Issue number to close'),
             resolution_notes: z
                 .string()
                 .optional()
@@ -184,7 +197,8 @@ export function getCloseGitHubIssueTool(context: ToolContext): ToolDefinition {
                 .optional()
                 .default(false)
                 .describe('Move the associated Kanban item to "Done" column'),
-            project_number: relaxedNumber()
+            project_number: z
+                .number()
                 .optional()
                 .describe(
                     'GitHub Project number (required if move_to_done is true, or uses DEFAULT_PROJECT_NUMBER)'

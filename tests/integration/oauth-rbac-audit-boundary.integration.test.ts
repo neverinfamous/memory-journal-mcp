@@ -288,7 +288,7 @@ describe('OAuth Scopes, Team RBAC, Audit Boundary & DatabaseAdapterProxy Integra
                 {
                     content: 'Isolated test database entry via use_test_db flag',
                     entry_type: 'technical_note',
-                    workspace_id: 'ws-alpha',
+                    workspace_id: 'ws-sandbox',
                     project_number: 999,
                     use_test_db: true,
                 },
@@ -303,7 +303,8 @@ describe('OAuth Scopes, Team RBAC, Audit Boundary & DatabaseAdapterProxy Integra
         })
 
         expect(primaryDb.getActiveEntryCount('ws-alpha')).toBe(primaryCountBefore)
-        expect(testDb.getActiveEntryCount('ws-alpha')).toBe(1)
+        expect(testDb.getActiveEntryCount('ws-sandbox')).toBe(1)
+        expect(testDb.getActiveEntryCount('ws-alpha')).toBe(0)
 
         requestContextStorage.run({ useTestDb: true }, () => {
             const alphaWf = proxiedDb.createEntry({
@@ -366,7 +367,7 @@ describe('OAuth Scopes, Team RBAC, Audit Boundary & DatabaseAdapterProxy Integra
                 inactiveThresholdDays: 1,
                 workspaceId: 'ws-alpha',
             })
-            expect(insightsAlpha.projects.map((p) => p['project_number'])).toEqual(expect.arrayContaining([77, 999]))
+            expect(insightsAlpha.projects.map((p) => p['project_number'])).toEqual([77])
             expect(insightsAlpha.inactiveProjects.map((p) => p.project_number)).toEqual([77])
 
             const insightsBeta = proxiedDb.getCrossProjectInsights({

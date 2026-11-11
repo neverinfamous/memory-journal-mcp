@@ -35,28 +35,38 @@ describe('workspace-resolver with keyword and tag inference', () => {
         expect(res.projectNumber).toBe(16)
     })
 
-    it('infers project from tag when workspace_id and project_number are omitted', () => {
-        const res = resolveProjectContext(
-            {
-                content: 'Refactored OCC fuzzing tools',
-                tags: ['mysql-mcp', 'fuzzing']
-            },
-            mockConfig
-        )
-        expect(res.workspaceId).toBe('mysql-mcp')
-        expect(res.projectNumber).toBe(9)
+    it('infers project from tag when workspace, project, and cwd are all unresolved', () => {
+        const spy = vi.spyOn(process, 'cwd').mockReturnValue('C:\\tmp\\unregistered-project')
+        try {
+            const res = resolveProjectContext(
+                {
+                    content: 'Refactored OCC fuzzing tools',
+                    tags: ['mysql-mcp', 'fuzzing']
+                },
+                mockConfig
+            )
+            expect(res.workspaceId).toBe('mysql-mcp')
+            expect(res.projectNumber).toBe(9)
+        } finally {
+            spy.mockRestore()
+        }
     })
 
-    it('infers project from content text when workspace_id and project_number are omitted', () => {
-        const res = resolveProjectContext(
-            {
-                content: '# mysql-mcp core OCC tools fuzzing test report\n\nAdded new tests',
-                tags: ['session-summary']
-            },
-            mockConfig
-        )
-        expect(res.workspaceId).toBe('mysql-mcp')
-        expect(res.projectNumber).toBe(9)
+    it('infers project from content text when workspace, project, and cwd are all unresolved', () => {
+        const spy = vi.spyOn(process, 'cwd').mockReturnValue('C:\\tmp\\unregistered-project')
+        try {
+            const res = resolveProjectContext(
+                {
+                    content: '# mysql-mcp core OCC tools fuzzing test report\n\nAdded new tests',
+                    tags: ['session-summary']
+                },
+                mockConfig
+            )
+            expect(res.workspaceId).toBe('mysql-mcp')
+            expect(res.projectNumber).toBe(9)
+        } finally {
+            spy.mockRestore()
+        }
     })
 
     it('falls back to config.defaultProjectNumber when no keywords or explicit IDs match and cwd is unregistered', () => {
@@ -93,17 +103,40 @@ describe('workspace-resolver with keyword and tag inference', () => {
         }
     })
 
-    it('auto-corrects unregistered project_number (like 7) when content matches a registered workspace', () => {
-        const res = resolveProjectContext(
-            {
-                project_number: 7, // Unregistered project number
-                content: 'Tested mysql-mcp stats_moving_avg and mysql_stats_ntile',
-                tags: ['journal']
-            },
-            mockConfig
-        )
-        expect(res.workspaceId).toBe('mysql-mcp')
-        expect(res.projectNumber).toBe(9) // Corrected from 7 to mysql-mcp's registered project_number 9
+    it('keeps an explicit unregistered project_number instead of retargeting from content keywords', () => {
+        const spy = vi.spyOn(process, 'cwd').mockReturnValue('C:\\tmp\\unregistered-project')
+        try {
+            const res = resolveProjectContext(
+                {
+                    project_number: 7,
+                    content: 'Tested mysql-mcp stats_moving_avg and mysql_stats_ntile',
+                    tags: ['journal']
+                },
+                mockConfig
+            )
+            expect(res.workspaceId).toBe('default')
+            expect(res.projectNumber).toBe(7)
+        } finally {
+            spy.mockRestore()
+        }
+    })
+
+    it('pairs an explicit workspace with its registry project and ignores a conflicting project_number and cwd', () => {
+        const spy = vi.spyOn(process, 'cwd').mockReturnValue('C:\\Users\\chris\\Desktop\\memory-journal-mcp\\src')
+        try {
+            const res = resolveProjectContext(
+                {
+                    workspace_id: 'adamic',
+                    project_number: 5,
+                    content: 'sqlite notes that must not retarget adamic',
+                },
+                mockConfig
+            )
+            expect(res.workspaceId).toBe('adamic')
+            expect(res.projectNumber).toBe(16)
+        } finally {
+            spy.mockRestore()
+        }
     })
 
     it('preserves explicit project_number when no workspace keywords conflict', () => {
@@ -133,15 +166,20 @@ describe('workspace-resolver with keyword and tag inference', () => {
         expect(cwdMatchesRegistryPath(root, root)).toBe(true)
     })
 
-    it('resolveWorkspaceId helper delegates accurately', () => {
-        const wsId = resolveWorkspaceId(
-            undefined,
-            undefined,
-            mockConfig,
-            'Working on adamic codebase enhancements',
-            ['dev']
-        )
-        expect(wsId).toBe('adamic')
+    it('resolveWorkspaceId helper delegates accurately when cwd is not a registered project', () => {
+        const spy = vi.spyOn(process, 'cwd').mockReturnValue('C:\\tmp\\unregistered-project')
+        try {
+            const wsId = resolveWorkspaceId(
+                undefined,
+                undefined,
+                mockConfig,
+                'Working on adamic codebase enhancements',
+                ['dev']
+            )
+            expect(wsId).toBe('adamic')
+        } finally {
+            spy.mockRestore()
+        }
     })
 
     it('resolves proper project instead of staying on "default" when workspace_id: "default" is passed alongside project_number, tags, content, or registered cwd', () => {
@@ -202,7 +240,7 @@ describe('workspace-resolver with keyword and tag inference', () => {
 
         const spy = vi.spyOn(process, 'cwd').mockReturnValue(path.join(adamicRoot, 'skills'))
         try {
-            // Default MCP server mode (preferCwdOverKeywords omitted): keyword alias 'sqlite' wins over CWD
+            // Registered cwd wins over the sqlite alias in both MCP and CLI mode.
             const mcpResolved = resolveProjectContext(
                 {
                     content: 'Updated sqlite skill documentation and rules',
@@ -210,10 +248,9 @@ describe('workspace-resolver with keyword and tag inference', () => {
                 },
                 cliRegistryConfig
             )
-            expect(mcpResolved.workspaceId).toBe('db-mcp')
-            expect(mcpResolved.projectNumber).toBe(15)
+            expect(mcpResolved.workspaceId).toBe('adamic')
+            expect(mcpResolved.projectNumber).toBe(16)
 
-            // CLI mode (preferCwdOverKeywords: true): registered CWD ('adamic') wins over 'sqlite' keyword
             const cliResolved = resolveProjectContext(
                 {
                     content: 'Updated sqlite skill documentation and rules',

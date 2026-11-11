@@ -137,29 +137,37 @@ export class TagsManager {
     mergeTags(
         sourceTag: string,
         targetTag: string,
-        workspaceId?: string
+        workspaceId?: string,
+        projectNumber?: number
     ): { entriesUpdated: number; sourceDeleted: boolean } {
         const db = this.db
 
         const mergeOp = db.transaction(() => {
             const { sourceTagId, targetTagId } = this.prepareMergeTags(sourceTag, targetTag)
 
-            // Select only valid entries (join ensures no orphans)
+            // Select only valid entries (join ensures no orphans).
+            // A positive project number still applies when workspace is '*'.
             const scopeId = effectiveWorkspace(workspaceId)
             const scopedWorkspace = scopeId === '*' ? undefined : scopeId
+            const scopedProject =
+                typeof projectNumber === 'number' && projectNumber > 0 ? projectNumber : undefined
+            const conditions = ['et.tag_id = ?']
+            const selectParams: unknown[] = [sourceTagId]
+            if (scopedWorkspace !== undefined) {
+                conditions.push('mj.workspace_id = ?')
+                selectParams.push(scopedWorkspace)
+            }
+            if (scopedProject !== undefined) {
+                conditions.push('mj.project_number = ?')
+                selectParams.push(scopedProject)
+            }
             const entryRows = db
                 .prepare(
-                    scopedWorkspace !== undefined
-                        ? `SELECT et.entry_id FROM entry_tags et
+                    `SELECT et.entry_id FROM entry_tags et
                      JOIN memory_journal mj ON et.entry_id = mj.id
-                     WHERE et.tag_id = ? AND mj.workspace_id = ?`
-                        : `SELECT et.entry_id FROM entry_tags et
-                     JOIN memory_journal mj ON et.entry_id = mj.id
-                     WHERE et.tag_id = ?`
+                     WHERE ${conditions.join(' AND ')}`
                 )
-                .all(
-                    ...(scopedWorkspace !== undefined ? [sourceTagId, scopedWorkspace] : [sourceTagId])
-                ) as { entry_id: number }[]
+                .all(...selectParams) as { entry_id: number }[]
             const entryIds = entryRows.map((r) => r.entry_id)
 
             // Pre-fetch entries already linked to targetTag in one query (O(1) vs O(N))
@@ -186,7 +194,12 @@ export class TagsManager {
                 )
             }
 
-            const sourceDeleted = this.detachSourceTag(sourceTagId, entryIds, scopedWorkspace)
+            const sourceDeleted = this.detachSourceTag(
+                sourceTagId,
+                entryIds,
+                scopedWorkspace,
+                scopedProject
+            )
 
             return { entriesUpdated: newEntryIds.length, sourceDeleted }
         })
@@ -234,23 +247,33 @@ export class TagsManager {
     /**
      * Remove the source tag from the merged entries (all entries when unscoped), then delete
      * the source tag if no links remain. Returns whether the source tag was deleted.
+     * A positive project number keeps the detach inside that project, including when workspace is '*'.
      */
     private detachSourceTag(
         sourceTagId: number,
         entryIds: number[],
-        scopedWorkspace: string | undefined
+        scopedWorkspace: string | undefined,
+        scopedProject: number | undefined
     ): boolean {
         const db = this.db
-        if (scopedWorkspace !== undefined && entryIds.length > 0) {
+        const scoped = scopedWorkspace !== undefined || scopedProject !== undefined
+        if (scoped && entryIds.length > 0) {
             const idPlaceholders = entryIds.map(() => '?').join(', ')
+            const params: unknown[] = [sourceTagId, ...entryIds]
+            let projectClause = ''
+            if (scopedProject !== undefined) {
+                projectClause =
+                    ' AND entry_id IN (SELECT id FROM memory_journal WHERE project_number = ?)'
+                params.push(scopedProject)
+            }
             db.prepare(
-                `DELETE FROM entry_tags WHERE tag_id = ? AND entry_id IN (${idPlaceholders})`
-            ).run(sourceTagId, ...entryIds)
+                `DELETE FROM entry_tags WHERE tag_id = ? AND entry_id IN (${idPlaceholders})${projectClause}`
+            ).run(...params)
             db.prepare('UPDATE tags SET usage_count = MAX(0, usage_count - ?) WHERE id = ?').run(
                 entryIds.length,
                 sourceTagId
             )
-        } else if (scopedWorkspace === undefined) {
+        } else if (!scoped) {
             db.prepare('DELETE FROM entry_tags WHERE tag_id = ?').run(sourceTagId)
         }
 

@@ -58,13 +58,25 @@ function recoverNamedToolCall(target: Record<string, unknown>): string | null {
                 ? target['function']
                 : undefined
     if (toolName === undefined || toolName === '') return null
-    const toolParams = isRecord(target['params'])
-        ? target['params']
+    const toolParams: Record<string, unknown> = isRecord(target['params'])
+        ? { ...target['params'] }
         : isRecord(target['args'])
-          ? target['args']
+          ? { ...target['args'] }
           : {}
+    assignMissingScope(toolParams, target)
     const cleanTool = toolName.replace(/^mj[._]/, '')
     return `return await (mj.${cleanTool} || mj.core.${cleanTool} || mj.${toolName})(${JSON.stringify(toolParams)});`
+}
+
+function assignMissingScope(params: Record<string, unknown>, source: Record<string, unknown>): void {
+    if (params['workspace_id'] === undefined && params['workspaceId'] === undefined) {
+        const wsId = readWorkspaceId(source)
+        if (wsId !== undefined) params['workspace_id'] = wsId
+    }
+    if (params['project_number'] === undefined && params['projectNumber'] === undefined) {
+        const projNum = readProjectNumber(source)
+        if (projNum !== undefined) params['project_number'] = projNum
+    }
 }
 
 function readProjectNumber(target: Record<string, unknown>): number | undefined {
@@ -139,17 +151,41 @@ function recoverEntryMutation(
     }
     const signals = readPayloadSignals(target, op)
     if (!hasJournalFields(signals) && entryId !== undefined) {
-        return `return await mj.core.getEntryById({ entry_id: ${entryId} });`
+        return formatGetEntryById(entryId, target, original)
     }
     if (!hasJournalFields(signals)) return null
 
     const entryParams = buildEntryParams(target, signals)
+    if (readWorkspaceId(target) === undefined) {
+        const wsId = readWorkspaceId(original)
+        if (wsId !== undefined) entryParams['workspace_id'] = wsId
+    }
+    if (readProjectNumber(target) === undefined) {
+        const projNum = readProjectNumber(original)
+        if (projNum !== undefined) entryParams['project_number'] = projNum
+    }
     const isUpdate = op === 'update_entry' || op === 'update' || (entryId !== undefined && !signals.hasOp)
     if (isUpdate && entryId !== undefined) {
         entryParams['entry_id'] = entryId
         return `return await mj.admin.updateEntry(${JSON.stringify(entryParams)});`
     }
     return `return await mj.core.createEntry(${JSON.stringify(entryParams)});`
+}
+
+function formatGetEntryById(
+    entryId: number,
+    target: Record<string, unknown>,
+    original: Record<string, unknown>,
+): string {
+    const params: Record<string, unknown> = { entry_id: entryId }
+    const wsId = readWorkspaceId(target) ?? readWorkspaceId(original)
+    if (wsId !== undefined) params['workspace_id'] = wsId
+    const projNum = readProjectNumber(target) ?? readProjectNumber(original)
+    if (projNum !== undefined) params['project_number'] = projNum
+    if (wsId === undefined && projNum === undefined) {
+        return `return await mj.core.getEntryById({ entry_id: ${entryId} });`
+    }
+    return `return await mj.core.getEntryById(${JSON.stringify(params)});`
 }
 
 function readPayloadSignals(target: Record<string, unknown>, op: string): PayloadSignals {

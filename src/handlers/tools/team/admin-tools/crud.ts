@@ -430,7 +430,7 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                         workspace_id === '*'
                             ? '*'
                             : resolveWriteWorkspaceId(workspace_id, project_number, context.config)
-                    const result = teamDb.mergeTags(source_tag, target_tag, wsId)
+                    const result = teamDb.mergeTags(source_tag, target_tag, wsId, project_number)
 
                     triggerTeamNotifications(context)
 

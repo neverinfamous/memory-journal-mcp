@@ -74,6 +74,16 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                     coerceSignificanceAlias(params)
 
                     const input = TeamCreateEntrySchema.parse(params)
+                    if (input.workspace_id === '*') {
+                        return {
+                            success: false,
+                            error: "workspace_id '*' is a read-only wildcard and cannot be used to create a team entry. Pass a specific workspace_id or project_number.",
+                            code: 'VALIDATION_ERROR',
+                            category: 'validation',
+                            suggestion: 'Pass the repository name or a project_number.',
+                            recoverable: true,
+                        }
+                    }
                     const resolved = resolveProjectContext(
                         {
                             workspace_id: input.workspace_id,
@@ -86,7 +96,7 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                     const wsId = resolved.workspaceId
                     const projectNumber = resolved.projectNumber
 
-                    if (projectNumber === undefined || projectNumber === null) {
+                    if (projectNumber === undefined || projectNumber === null || projectNumber <= 0) {
                         return {
                             success: false,
                             error: 'Missing or unresolvable project_number. Team entry creation blocked because no valid project could be determined for this entry.',

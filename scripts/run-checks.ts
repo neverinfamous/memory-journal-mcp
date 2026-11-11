@@ -129,12 +129,10 @@ if (!target) {
     if (!unassignedPassed) success = false
 }
 
-const overallOk = lintOk && typecheckOk
-
 console.log(success ? 'Checks passed!' : 'Checks failed!')
 writeFileSync(
     healthStatusFile,
-    JSON.stringify({ ok: overallOk, lintOk, typecheckOk, timestamp: Date.now() }, null, 2)
+    JSON.stringify({ ok: success, lintOk, typecheckOk, timestamp: Date.now() }, null, 2)
 )
 
 if (!success) {

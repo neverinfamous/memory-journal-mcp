@@ -131,6 +131,25 @@ async function initializeTeamDatabase(options: ServerOptions): Promise<{
     return { primaryTeamDb, testTeamDb, teamDb }
 }
 
+const STARTUP_REPO_INFO_TIMEOUT_MS = 8000
+
+async function readStartupRepoInfo(github: ReturnType<typeof getGitHubIntegration>): Promise<void> {
+    let timer: ReturnType<typeof setTimeout> | undefined
+    try {
+        await Promise.race([
+            github.getRepoInfo(),
+            new Promise<never>((_resolve, reject) => {
+                timer = setTimeout(() => {
+                    reject(new Error('Timed out reading repository info during startup'))
+                }, STARTUP_REPO_INFO_TIMEOUT_MS)
+                timer.unref()
+            }),
+        ])
+    } finally {
+        if (timer !== undefined) clearTimeout(timer)
+    }
+}
+
 async function initializeGitHubIntegration(
     options: ServerOptions,
     runtime: ServerRuntime
@@ -149,8 +168,9 @@ async function initializeGitHubIntegration(
     const github = getGitHubIntegration(githubPath, runtime)
 
     try {
-        // Pre-populate repository cache so synchronous tools (e.g. create_entry) can resolve GitHub URLs
-        await github.getRepoInfo()
+        // Pre-populate repository cache so synchronous tools (e.g. create_entry) can resolve GitHub URLs.
+        // A stuck local git process must not keep the HTTP server from listening.
+        await readStartupRepoInfo(github)
     } catch (error: unknown) {
         logger.warning('Failed to pre-populate GitHub repository cache', {
             module: 'McpServer',

@@ -247,13 +247,17 @@ function findWorkspaceByProjectNumber(
 }
 
 /**
- * Resolves full workspace and project context from available inputs.
+ * Resolves one workspace and that workspace's project number.
  * Priority:
- * 1. Explicit non-'default' workspace_id
- * 2. Explicit project_number -> lookup workspace_id in projectRegistry
- * 3. Content / Tags fuzzy matching against projectRegistry keys and names
- * 4. Explicit project_number fallback (when unregistered and no conflicting keywords matched)
- * 5. process.cwd() path matching against projectRegistry or config defaults
+ * 1. Explicit workspace_id, paired with its registry project (never the cwd project)
+ * 2. Explicit project_number, paired with its registry workspace
+ * 3. Registered process.cwd()
+ * 4. Active session workspace
+ * 5. Content / tag keywords, only when 1–4 did not resolve a project
+ * 6. Configured default
+ *
+ * [INVARIANT] `*` and `default` are omitted here so reads can fall through.
+ * Write callers must reject `*` before they persist a row.
  */
 export function resolveProjectContext(
     input: ResolutionInput,
@@ -261,7 +265,6 @@ export function resolveProjectContext(
 ): ResolvedContext {
     const registry = config?.projectRegistry ?? loadProjectRegistryFromConfig()
 
-    // Reject internal wildcard sentinel '*', empty strings, and 'default' from external input so they fall through to normal resolution
     const trimmedWorkspaceId =
         typeof input.workspace_id === 'string' ? input.workspace_id.trim() : undefined
     const sanitizedWorkspaceId =
@@ -272,99 +275,74 @@ export function resolveProjectContext(
             ? undefined
             : trimmedWorkspaceId
 
-    // 1. Truly explicit non-'default' workspace_id provided
+    const cwdMatch = registry
+        ? resolveWorkspaceFromFilePath(process.cwd(), { ...config, projectRegistry: registry })
+        : undefined
+    const registeredCwd =
+        cwdMatch !== undefined && !SENTINEL_PROJECT_KEYS.includes(cwdMatch.workspaceId.toLowerCase())
+            ? cwdMatch
+            : undefined
+
+    // 1. Explicit workspace. Its registry project wins over a conflicting project_number and over cwd.
     if (sanitizedWorkspaceId !== undefined) {
         let wsId = sanitizedWorkspaceId
         const canonicalKey = findCanonicalRegistryKey(wsId, registry)
         if (canonicalKey) wsId = canonicalKey
-        let projNum =
-            input.project_number ??
-            (canonicalKey ? registry?.[canonicalKey]?.project_number : registry?.[wsId]?.project_number)
-        projNum ??=
-            resolveProjectNumberFromPath(process.cwd(), registry) ??
-            config?.defaultProjectNumber ??
-            getActiveSessionProject(config?.runtime).projectNumber
-        return {
-            workspaceId: wsId,
-            projectNumber: projNum,
-        }
+        const registryProject = canonicalKey
+            ? registry?.[canonicalKey]?.project_number
+            : registry?.[wsId]?.project_number
+        const projectNumber = registryProject ?? input.project_number ?? undefined
+        return { workspaceId: wsId, projectNumber }
     }
 
-    // 2. Explicit project_number provided -> lookup matching workspace_id in projectRegistry
+    // 2. Explicit project_number. Keywords must not retarget an unregistered number.
     if (input.project_number !== undefined && input.project_number !== null) {
         const wsId = findWorkspaceByProjectNumber(input.project_number, registry)
         if (wsId !== undefined) {
-            return {
-                workspaceId: wsId,
-                projectNumber: input.project_number,
-            }
+            return { workspaceId: wsId, projectNumber: input.project_number }
+        }
+        const sessionCtx = getActiveSessionProject(config?.runtime)
+        const fallbackWs =
+            registeredCwd?.workspaceId ??
+            config?.defaultWorkspaceId ??
+            sessionCtx.workspaceId ??
+            'default'
+        return { workspaceId: fallbackWs, projectNumber: input.project_number }
+    }
+
+    // 3. Registered cwd, ahead of incidental words in the body.
+    if (registeredCwd !== undefined) {
+        return {
+            workspaceId: registeredCwd.workspaceId,
+            projectNumber: registeredCwd.projectNumber ?? config?.defaultProjectNumber,
         }
     }
 
-    // 2.5. CLI mode: registered CWD path takes priority over content/tag keyword aliases
+    // 4. Active session, when the host actually exposes one (tests suppress the global).
+    const sessionCtx = getActiveSessionProject(config?.runtime)
     if (
-        input.preferCwdOverKeywords === true &&
-        input.project_number === undefined &&
-        registry !== undefined
+        sessionCtx.workspaceId !== undefined &&
+        sessionCtx.workspaceId !== '' &&
+        sessionCtx.workspaceId !== '*' &&
+        sessionCtx.workspaceId.toLowerCase() !== 'default'
     ) {
-        const cwdMatch = resolveWorkspaceFromFilePath(process.cwd(), {
-            ...config,
-            projectRegistry: registry,
-        })
-        if (
-            cwdMatch !== undefined &&
-            !SENTINEL_PROJECT_KEYS.includes(cwdMatch.workspaceId.toLowerCase())
-        ) {
-            return {
-                workspaceId: cwdMatch.workspaceId,
-                projectNumber: cwdMatch.projectNumber ?? config?.defaultProjectNumber,
-            }
-        }
+        const sessionProject =
+            sessionCtx.projectNumber ??
+            registry?.[sessionCtx.workspaceId]?.project_number ??
+            config?.defaultProjectNumber
+        return { workspaceId: sessionCtx.workspaceId, projectNumber: sessionProject }
     }
 
-    // 3. Content / Tags keyword matching against projectRegistry
-    if (registry) {
+    // 5. Keywords only when no explicit scope, cwd, or session was available.
+    // preferCwdOverKeywords skips this step for CLI callers that already tried cwd.
+    if (registry && input.preferCwdOverKeywords !== true) {
         const matched = matchRegistryByTagsOrContent(input, registry)
         if (matched !== undefined) return matched
     }
 
-    // 4. Explicit input.project_number fallback (when no conflicting registry workspace matched)
-    if (input.project_number !== undefined && input.project_number !== null) {
-        const cwdMatch = registry
-            ? resolveWorkspaceFromFilePath(process.cwd(), { ...config, projectRegistry: registry })
-            : undefined
-        const sessionCtx = getActiveSessionProject(config?.runtime)
-        const wsId =
-            findWorkspaceByProjectNumber(input.project_number, registry) ??
-            sanitizedWorkspaceId ??
-            cwdMatch?.workspaceId ??
-            config?.defaultWorkspaceId ??
-            sessionCtx.workspaceId
-        return {
-            workspaceId: wsId ?? 'default',
-            projectNumber: input.project_number,
-        }
-    }
-
-    // 5. CWD / Config / Active Session Fallback
-    const sessionCtx = getActiveSessionProject(config?.runtime)
-    const cwdMatch = registry
-        ? resolveWorkspaceFromFilePath(process.cwd(), { ...config, projectRegistry: registry })
-        : undefined
-    const cwdProjNum =
-        cwdMatch?.projectNumber ??
-        resolveProjectNumberFromPath(process.cwd(), registry) ??
-        config?.defaultProjectNumber ??
-        sessionCtx.projectNumber
-    let resolvedWsId = sanitizedWorkspaceId ?? cwdMatch?.workspaceId
-    if (resolvedWsId === undefined && cwdProjNum !== undefined) {
-        resolvedWsId = findWorkspaceByProjectNumber(cwdProjNum, registry) ?? resolvedWsId
-    }
-    resolvedWsId ??= config?.defaultWorkspaceId ?? sessionCtx.workspaceId
-
     return {
-        workspaceId: resolvedWsId ?? 'default',
-        projectNumber: cwdProjNum,
+        workspaceId: config?.defaultWorkspaceId ?? sessionCtx.workspaceId ?? 'default',
+        projectNumber: config?.defaultProjectNumber ?? sessionCtx.projectNumber,
     }
 }
 

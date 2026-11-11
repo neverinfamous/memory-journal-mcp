@@ -31,7 +31,7 @@ export function extractAndRecoverSqlCode(code: string): string | null {
         /^(?:PRAGMA|SHOW|DESCRIBE|EXPLAIN|SCHEMA|TABLES)\b/i.test(cleanSql) ||
         /^(?:\.schema|\.tables|\\d|\\dt)/i.test(cleanSql)
     ) {
-        return `return await mj.analytics.getStatistics({});`
+        return null
     }
 
     const fromMatch = /\bFROM\s+[`"']?([a-zA-Z0-9_]+)[`"']?/i.exec(cleanSql)
@@ -48,14 +48,7 @@ export function extractAndRecoverSqlCode(code: string): string | null {
 
     const isCount = /\bCOUNT\s*\(/i.test(cleanSql)
 
-    const projectMatch = /\b(?:WHERE|AND)\s+[`"']?(?:project_number|project_id)[`"']?\s*=\s*(\d+)/i.exec(cleanSql)
-    const projectVal = projectMatch?.[1] !== undefined ? parseInt(projectMatch[1], 10) : undefined
-    const wsMatch = /\b(?:WHERE|AND)\s+[`"']?workspace_id[`"']?\s*=\s*['"]([^'"]+)['"]/i.exec(cleanSql)
-    const wsVal = wsMatch?.[1]
-    const scopeFields: Record<string, unknown> = {
-        ...(projectVal !== undefined ? { project_number: projectVal } : {}),
-        ...(wsVal !== undefined && wsVal !== '' ? { workspace_id: wsVal } : {}),
-    }
+    const scopeFields = scopeFromSqlLiterals(cleanSql)
 
     if (
         tableName === 'tags' ||
@@ -81,7 +74,7 @@ export function extractAndRecoverSqlCode(code: string): string | null {
         return `return await mj.core.listTags(${JSON.stringify(scopeFields)});`
     }
     if (tableName === 'projects' || tableName === 'project_registry') {
-        return `return await mj.admin.listProjects({});`
+        return `return await mj.admin.listProjects(${JSON.stringify(scopeFields)});`
     }
     if (tableName === 'relationships' || tableName === 'entry_relationships' || tableName === 'links') {
         if (idVal !== undefined) {
@@ -90,13 +83,13 @@ export function extractAndRecoverSqlCode(code: string): string | null {
         return `return await mj.relationships.visualizeRelationships(${JSON.stringify(scopeFields)});`
     }
     if (tableName === 'team_members' || tableName === 'members') {
-        return `return await mj.team.teamListMembers({});`
+        return `return await mj.team.teamListMembers(${JSON.stringify(scopeFields)});`
     }
     if (tableName === 'author_aliases' || tableName === 'aliases') {
-        return `return await mj.team.teamListAuthorAliases({});`
+        return `return await mj.team.teamListAuthorAliases(${JSON.stringify(scopeFields)});`
     }
     if (tableName === 'audit_log' || tableName === 'audit' || tableName === 'audit_logs') {
-        return `return await mj.admin.searchAuditLog({});`
+        return `return await mj.admin.searchAuditLog(${JSON.stringify(scopeFields)});`
     }
 
     if (/^SELECT\b/i.test(cleanSql)) {
@@ -155,7 +148,18 @@ export function extractAndRecoverSqlCode(code: string): string | null {
         return null
     }
 
-    return `return await mj.core.getRecentEntries({ limit: ${limitVal ?? 10} });`
+    return null
+}
+
+function scopeFromSqlLiterals(cleanSql: string): Record<string, unknown> {
+    const projectMatch = /\b(?:WHERE|AND)\s+[`"']?(?:project_number|project_id)[`"']?\s*=\s*(\d+)/i.exec(cleanSql)
+    const projectVal = projectMatch?.[1] !== undefined ? parseInt(projectMatch[1], 10) : undefined
+    const wsMatch = /\b(?:WHERE|AND)\s+[`"']?workspace_id[`"']?\s*=\s*['"]([^'"]+)['"]/i.exec(cleanSql)
+    const wsVal = wsMatch?.[1]
+    return {
+        ...(projectVal !== undefined ? { project_number: projectVal } : {}),
+        ...(wsVal !== undefined && wsVal !== '' ? { workspace_id: wsVal } : {}),
+    }
 }
 
 function splitTopLevelCommaArgs(rawArgs: string): string[] {
@@ -387,6 +391,14 @@ function recoverPreparedUpdate(cleanSql: string, parsedArgs: unknown[]): string 
         }
     }
 
+    const sqlScope = scopeFromSqlLiterals(cleanSql)
+    if (payload['workspace_id'] === undefined && sqlScope['workspace_id'] !== undefined) {
+        payload['workspace_id'] = sqlScope['workspace_id']
+    }
+    if (payload['project_number'] === undefined && sqlScope['project_number'] !== undefined) {
+        payload['project_number'] = sqlScope['project_number']
+    }
+
     if (payload['entry_id'] !== undefined) {
         return `return await mj.admin.updateEntry(${JSON.stringify(payload)});`
     }
@@ -423,7 +435,11 @@ function recoverPreparedInsert(parsedArgs: unknown[]): string {
 function recoverPreparedDelete(cleanSql: string, parsedArgs: unknown[]): string | null {
     const entryId = extractEntryId(cleanSql, parsedArgs)
     if (entryId !== undefined) {
-        const payload = { entry_id: entryId, ...scopeFromRecordBinds(parsedArgs) }
+        const payload = {
+            entry_id: entryId,
+            ...scopeFromSqlLiterals(cleanSql),
+            ...scopeFromRecordBinds(parsedArgs),
+        }
         return `return await mj.admin.deleteEntry(${JSON.stringify(payload)});`
     }
     return null

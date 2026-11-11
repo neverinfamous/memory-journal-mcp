@@ -205,6 +205,17 @@ function scopeFromRecordArgs(args: unknown[]): Record<string, unknown> {
     return scope
 }
 
+function scopeFromSqlLiterals(cleanSql: string): Record<string, unknown> {
+    const projectMatch = /\b(?:WHERE|AND)\s+[`"']?(?:project_number|project_id)[`"']?\s*=\s*(\d+)/i.exec(cleanSql)
+    const projectVal = projectMatch?.[1] !== undefined ? parseInt(projectMatch[1], 10) : undefined
+    const wsMatch = /\b(?:WHERE|AND)\s+[`"']?workspace_id[`"']?\s*=\s*['"]([^'"]+)['"]/i.exec(cleanSql)
+    const wsVal = wsMatch?.[1]
+    return {
+        ...(projectVal !== undefined ? { project_number: projectVal } : {}),
+        ...(wsVal !== undefined && wsVal !== '' ? { workspace_id: wsVal } : {}),
+    }
+}
+
 function parseUpdateStatement(cleanSql: string, args: unknown[]): ParsedSql {
     const idMatch = WHERE_ID_PATTERN.exec(cleanSql)
     let entryId: number | undefined
@@ -251,6 +262,14 @@ function parseUpdateStatement(cleanSql: string, args: unknown[]): ParsedSql {
         if (setContentMatch?.[1] !== undefined) {
             content = setContentMatch[1]
         }
+    }
+
+    const sqlScope = scopeFromSqlLiterals(cleanSql)
+    if (workspaceId === undefined && typeof sqlScope['workspace_id'] === 'string') {
+        workspaceId = sqlScope['workspace_id']
+    }
+    if (projectNumber === undefined && typeof sqlScope['project_number'] === 'number') {
+        projectNumber = sqlScope['project_number']
     }
 
     const updatePayload: Record<string, unknown> = {}
@@ -341,14 +360,25 @@ export function createPreparedStatementShim(
             if (entryId === undefined) return { action: 'unmapped', params: {} }
             return {
                 action: 'delete',
-                params: { entry_id: entryId, ...scopeFromRecordArgs(args) },
+                params: {
+                    entry_id: entryId,
+                    ...scopeFromSqlLiterals(cleanSql),
+                    ...scopeFromRecordArgs(args),
+                },
             }
         }
 
         if (isSelect) {
             const entryId = resolveEntryIdFromSql(cleanSql, args)
             if (entryId !== undefined) {
-                return { action: 'get_by_id', params: { entry_id: entryId } }
+                return {
+                    action: 'get_by_id',
+                    params: {
+                        entry_id: entryId,
+                        ...scopeFromSqlLiterals(cleanSql),
+                        ...scopeFromRecordArgs(args),
+                    },
+                }
             }
             return { action: 'unmapped', params: {} }
         }

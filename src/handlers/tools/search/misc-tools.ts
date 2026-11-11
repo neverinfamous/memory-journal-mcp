@@ -76,7 +76,12 @@ export function getMiscSearchTools(context: ToolContext): ToolDefinition[] {
                     const rawWs = parsed.workspace_id ?? parsed.workspaceId
                     const rawProj = parsed.project_number ?? parsed.projectNumber
                     const wsId = rawWs === '*' ? '*' : resolveWorkspaceId(rawWs, rawProj, context.config)
-                    const result = db.getDeletedEntries({ limit: parsed.limit, offset: parsed.offset, workspaceId: wsId })
+                    const result = db.getDeletedEntries({
+                        limit: parsed.limit,
+                        offset: parsed.offset,
+                        workspaceId: wsId,
+                        ...(typeof rawProj === 'number' ? { projectNumber: rawProj } : {}),
+                    })
                     return {
                         success: true,
                         entries: result.entries.map((e) => ({ ...e, source: 'personal' as const })),

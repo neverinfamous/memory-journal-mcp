@@ -83,20 +83,25 @@ function insertEntryRow(context: EntriesSharedContext, input: CreateEntryInput):
         ]
         const nonEmpty = (s: string | null | undefined): string | null =>
             s !== undefined && s !== null && s !== '' ? s : null
-        const resolvedProjNum =
-            input.projectNumber ??
-            resolveProjectContext(
-                {
-                    ...(input.workspaceId !== undefined
-                        ? { workspace_id: input.workspaceId }
-                        : {}),
-                    content: input.content,
-                    ...(input.tags !== undefined ? { tags: input.tags } : {}),
-                },
-                context.config
-            ).projectNumber
-        const finalProjNum = resolvedProjNum ?? null
-        const finalWsId = effectiveWorkspace(input.workspaceId)
+        const omittedWorkspace = input.workspaceId === undefined || input.workspaceId.length === 0
+        const resolved =
+            omittedWorkspace || input.projectNumber === undefined
+                ? resolveProjectContext(
+                      {
+                          ...(omittedWorkspace ? {} : { workspace_id: input.workspaceId }),
+                          ...(input.projectNumber !== undefined
+                              ? { project_number: input.projectNumber }
+                              : {}),
+                          content: input.content,
+                          ...(input.tags !== undefined ? { tags: input.tags } : {}),
+                      },
+                      context.config
+                  )
+                : undefined
+        const finalProjNum = input.projectNumber ?? resolved?.projectNumber ?? null
+        const finalWsId = omittedWorkspace
+            ? (resolved?.workspaceId ?? 'default')
+            : effectiveWorkspace(input.workspaceId)
         const values = [
             input.entryType ?? 'personal_reflection',
             input.content,

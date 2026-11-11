@@ -62,8 +62,13 @@ const dictToItems = (obj: Record<string, unknown>): unknown[] =>
             if (isObject(item)) {
                 const name = typeof item['name'] === 'string' && item['name'].length > 0 ? item['name'] : key
                 const desc = typeof item['description'] === 'string' ? item['description'] : ''
-                const projNum = item['project_number'] ?? item['id'] ?? item['projectNumber']
-                return { ...item, name, description: desc, project_number: projNum, projectNumber: projNum }
+                const projNum = item['project_number'] ?? item['projectNumber']
+                const mapped: Record<string, unknown> = { ...item, name, description: desc }
+                if (projNum !== undefined) {
+                    mapped['project_number'] = projNum
+                    mapped['projectNumber'] = projNum
+                }
+                return mapped
             }
             return { name: key, description: '', value: item }
         })
@@ -91,8 +96,6 @@ function failedResultMessage(target: object): string {
     return typeof errVal === 'string' ? errVal : 'Operation failed'
 }
 
-const FAILED_THROW_COLLECTION_KEYS = new Set(['entries', 'items', 'deleted'])
-
 function createFailedResultProxy(result: object): unknown {
     return new Proxy(result, {
         ownKeys: (target) => Reflect.ownKeys(target),
@@ -108,11 +111,10 @@ function createFailedResultProxy(result: object): unknown {
             if (typeof prop === 'string' && /^\d+$/.test(prop)) return undefined
             if (
                 prop === Symbol.iterator ||
-                (typeof prop === 'string' && FAILED_THROW_COLLECTION_KEYS.has(prop))
+                (typeof prop === 'string' && RESULT_COLLECTION_KEYS.includes(prop))
             ) {
                 throw new Error(failedResultMessage(target))
             }
-            if (typeof prop === 'string' && RESULT_COLLECTION_KEYS.includes(prop)) return []
             if (typeof prop === 'string' && FAILED_ARRAY_METHODS.includes(prop)) {
                 const message = failedResultMessage(target)
                 return () => {

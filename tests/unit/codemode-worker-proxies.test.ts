@@ -10,6 +10,8 @@ import { describe, it, expect, vi } from 'vitest'
 import { createSafeFsShim, consoleShim } from '../../src/codemode/worker/node-shims.js'
 import {
     DB_TO_JOURNAL,
+    isDbMaintenanceCall,
+    createMaintenanceUnavailableFn,
     createCallableShim,
     createUpdateMemoryFn,
     wrapDelegatingTool,
@@ -125,7 +127,21 @@ describe('Code Mode Worker Proxies & Globals', () => {
         expect(await umWithMeta.schema()).toBe('{ content: string }')
 
         // 3. createSchemaShim & schemaHelpFn
-        expect(DB_TO_JOURNAL['listTables']).toEqual(['analytics', 'getStatistics'])
+        expect(DB_TO_JOURNAL['listTables']).toBeUndefined()
+        expect(DB_TO_JOURNAL['describeTable']).toBeUndefined()
+        expect(DB_TO_JOURNAL['count']).toEqual(['analytics', 'getStatistics'])
+        expect(isDbMaintenanceCall('listTables')).toBe(true)
+        await expect(createMaintenanceUnavailableFn()()).resolves.toEqual({
+            success: false,
+            code: 'VALIDATION_ERROR',
+            error: "Schema operation 'listTables' did not run",
+        })
+        expect(isDbMaintenanceCall('describeTable')).toBe(true)
+        await expect(createMaintenanceUnavailableFn()()).resolves.toEqual({
+            success: false,
+            code: 'VALIDATION_ERROR',
+            error: "Schema operation 'describeTable' did not run",
+        })
         const sHelp = (await schemaHelpFn()) as { group: string }
         expect(sHelp.group).toBe('schema')
         const schemaShim = createSchemaShim(shimMj) as unknown as {
@@ -270,7 +286,17 @@ describe('Code Mode Worker Proxies & Globals', () => {
         expect(spawnRes.kill()).toBe(false)
         expect((shimMj['join'] as (...p: string[]) => string)('x', 'y')).toBe('x/y')
         expect((shimMj['format'] as (...a: unknown[]) => string)('hi', 5)).toBe('hi 5')
-        expect(shimMj['list_tables']).toBe(getStatsMock)
+        const listTables = shimMj['list_tables'] as () => Promise<{
+            success: boolean
+            code: string
+            error: string
+        }>
+        expect(listTables).not.toBe(getStatsMock)
+        await expect(listTables()).resolves.toEqual({
+            success: false,
+            code: 'VALIDATION_ERROR',
+            error: "Schema operation 'listTables' did not run",
+        })
 
         // 6. buildSandboxGlobals
         const activeTimers = new Set<NodeJS.Timeout>()

@@ -301,7 +301,8 @@ test.describe('Errors: Backup', () => {
 // =============================================================================
 
 test.describe('Errors: Team', () => {
-    const TEAM_EXT_PORT = 5125 + (Number(process.env.TEST_PARALLEL_INDEX || 0) * 100)
+    test.describe.configure({ mode: 'serial' })
+    const TEAM_EXT_PORT = 5125 + (Number(process.env.TEST_WORKER_INDEX || process.env.TEST_PARALLEL_INDEX || 0) * 100)
     let client: import('@modelcontextprotocol/client').Client
 
     test.beforeAll(async () => {

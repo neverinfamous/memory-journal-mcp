@@ -250,7 +250,7 @@ export class EntriesManager {
         return restoreEntry(this.sharedContext, id, workspaceId)
     }
 
-    getDeletedEntries(options?: { limit?: number; offset?: number; workspaceId?: string }): { entries: JournalEntry[]; count: number } {
+    getDeletedEntries(options?: { limit?: number; offset?: number; workspaceId?: string; projectNumber?: number }): { entries: JournalEntry[]; count: number } {
         return getDeletedEntries(this.sharedContext, options)
     }
 

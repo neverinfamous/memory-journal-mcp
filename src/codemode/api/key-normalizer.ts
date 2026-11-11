@@ -145,8 +145,13 @@ const IMPORT_MARKDOWN_METHODS = ['import_markdown', 'importmarkdown', 'team_impo
 
 function pathAliasReplacement(methodLower: string | undefined): string | undefined {
     if (isExactMethod(methodLower, EXPORT_MARKDOWN_METHODS)) return 'output_dir'
-    if (!methodLower?.includes('import')) return undefined
-    return 'keep'
+    if (
+        isExactMethod(methodLower, IMPORT_MARKDOWN_METHODS) ||
+        isExactMethod(methodLower, IMPORT_EXTERNAL_METHODS)
+    ) {
+        return 'keep'
+    }
+    return undefined
 }
 
 /** Applies PARAM_ALIASES unless a method/context-specific rule suppresses or redirects the alias. */
@@ -226,7 +231,11 @@ function resolveContentLikeKey(startKey: string, ctx: KeyContext): string {
 
 /** Coerces numeric-looking id strings and entry-type aliases; undefined means "no coercion applied". */
 function coerceNumericValue(snakeKey: string, value: unknown): { value: unknown } | undefined {
-    if ((snakeKey.endsWith('_id') || snakeKey === 'id' || snakeKey === 'project_number') && typeof value === 'string') {
+    if (
+        snakeKey !== 'workspace_id' &&
+        (snakeKey.endsWith('_id') || snakeKey === 'id' || snakeKey === 'project_number') &&
+        typeof value === 'string'
+    ) {
         const num = Number(value)
         if (!Number.isNaN(num) && value.trim() !== '') {
             return { value: num }

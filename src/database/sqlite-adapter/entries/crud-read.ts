@@ -109,30 +109,34 @@ export function getActiveEntryCount(context: EntriesSharedContext, workspaceId?:
 
 export function getDeletedEntries(
     context: EntriesSharedContext,
-    options?: { limit?: number; offset?: number; workspaceId?: string }
+    options?: { limit?: number; offset?: number; workspaceId?: string; projectNumber?: number }
 ): { entries: JournalEntry[]; count: number } {
     const { db, tagsMgr } = context
     const limit = options?.limit ?? 50
     const offset = options?.offset ?? 0
     const scopeId = effectiveWorkspace(options?.workspaceId)
 
-    let wsFilter = ''
-    const wsParams: unknown[] = []
+    let scopeFilter = ''
+    const scopeParams: unknown[] = []
     if (scopeId !== '*') {
-        wsFilter = ' AND workspace_id = ?'
-        wsParams.push(scopeId)
+        scopeFilter += ' AND workspace_id = ?'
+        scopeParams.push(scopeId)
+    }
+    if (typeof options?.projectNumber === 'number') {
+        scopeFilter += ' AND project_number = ?'
+        scopeParams.push(options.projectNumber)
     }
 
     const countStmt = db.prepare(
-        `SELECT COUNT(*) as count FROM memory_journal WHERE deleted_at IS NOT NULL${wsFilter}`
+        `SELECT COUNT(*) as count FROM memory_journal WHERE deleted_at IS NOT NULL${scopeFilter}`
     )
-    const countRow = rowToObject(countStmt.get(...wsParams))
+    const countRow = rowToObject(countStmt.get(...scopeParams))
     const count = typeof countRow?.['count'] === 'number' ? countRow['count'] : 0
 
     const stmt = db.prepare(
-        `SELECT ${ENTRY_COLUMNS} FROM memory_journal WHERE deleted_at IS NOT NULL${wsFilter} ORDER BY deleted_at DESC LIMIT ? OFFSET ?`
+        `SELECT ${ENTRY_COLUMNS} FROM memory_journal WHERE deleted_at IS NOT NULL${scopeFilter} ORDER BY deleted_at DESC LIMIT ? OFFSET ?`
     )
-    const rows = stmt.all(...wsParams, limit, offset)
+    const rows = stmt.all(...scopeParams, limit, offset)
     const entries = rowsToEntries(tagsMgr, rows)
 
     return { entries, count }

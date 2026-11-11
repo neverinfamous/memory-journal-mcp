@@ -78,13 +78,25 @@ export function normalizeAndAliasToolCall(
                     : strVal
                 const canonicalKey = findCanonicalRegistryKey(candidate, registry) ?? candidate
                 const entry = registry[canonicalKey] ?? registry[strVal]
-                if (entry?.project_number !== undefined) {
+                const rawWorkspace = toolArgs['workspace_id']
+                const workspaceMissingOrDefault =
+                    rawWorkspace === undefined ||
+                    (typeof rawWorkspace === 'string' &&
+                        (rawWorkspace.trim() === '' || rawWorkspace.trim().toLowerCase() === 'default'))
+                const existingWorkspace =
+                    typeof rawWorkspace === 'string' && !workspaceMissingOrDefault
+                        ? (findCanonicalRegistryKey(rawWorkspace, registry) ?? rawWorkspace.trim())
+                        : undefined
+                const sameWorkspace =
+                    existingWorkspace?.toLowerCase() === canonicalKey.toLowerCase()
+                // A repo-name project_number may fill a missing workspace, not a different concrete one.
+                if (
+                    entry?.project_number !== undefined &&
+                    (workspaceMissingOrDefault || sameWorkspace)
+                ) {
                     toolArgs['project_number'] = entry.project_number
                 }
-                if (
-                    toolArgs['workspace_id'] === undefined ||
-                    toolArgs['workspace_id'] === 'default'
-                ) {
+                if (workspaceMissingOrDefault) {
                     toolArgs['workspace_id'] =
                         entry !== undefined ? canonicalKey : candidate.trim()
                 }

@@ -247,7 +247,7 @@ export function resolvePromptPriorWorkspace(
 }
 
 export function buildSubagentProtocolGuidance(): string {
-    return `- **Subagent & Verification Protocol**: Put the parent conversation ID in every subagent prompt so replies reach the parent. Instruct subagents to read full function bodies (not only grep hits), treat a grep-only detector as \`not run\`, and return exact 1-indexed file paths, line numbers, raw single-line quotes, severity, and a one-sentence fix. The parent MUST re-read every Critical and High citation and drop any citation whose quote does not match the source line.`
+    return `- **Subagent & Verification Protocol**: Put the parent conversation ID in every subagent prompt so replies reach the parent. Instruct subagents to read full function bodies (not only grep hits), treat a grep-only detector as \`not run\`, and return exact 1-indexed file paths, line numbers, raw single-line quotes, severity, and a one-sentence fix. The parent MUST re-read every Critical and High citation and drop any citation whose quote does not match the source line. Ignore samples that exist only inside prompt template strings. Detector 3 (complexity) is parent-owned. Cap 8 Moderate and 5 Low per subagent.`
 }
 
 export function buildPlanReviewPriorContextSection(

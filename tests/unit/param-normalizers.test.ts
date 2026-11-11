@@ -321,7 +321,7 @@ describe('src/codemode/param-normalizer.ts (applyArgInterceptions)', () => {
 
         // GitHub
         const ghIssue = applyArgInterceptions('create_github_issue_with_entry', [{ text: 'body' }])
-        if ('args' in ghIssue) expect(ghIssue.args[0]).toEqual({ body: 'body' })
+        if ('args' in ghIssue) expect(ghIssue.args[0]).toEqual({ text: 'body' })
 
         const ghMs = applyArgInterceptions('create_github_milestone', [{ message: 'v1' }])
         if ('args' in ghMs) expect(ghMs.args[0]).toEqual({ title: 'v1' })
@@ -330,7 +330,7 @@ describe('src/codemode/param-normalizer.ts (applyArgInterceptions)', () => {
             { text: 'c1', description: 'res1' },
         ])
         if ('args' in ghClose) {
-            expect(ghClose.args[0]).toEqual({ comment: 'c1', resolution_notes: 'res1' })
+            expect(ghClose.args[0]).toEqual({ text: 'c1', description: 'res1' })
         }
 
         const ghList = applyArgInterceptions('get_github_issues', [{ keep: true }])

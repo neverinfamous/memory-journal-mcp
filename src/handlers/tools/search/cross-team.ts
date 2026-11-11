@@ -192,6 +192,7 @@ export async function handleCrossTeamSearch(
             fuzzy_match: args.fuzzy_match,
             includeArchived: args.include_archived,
             workspaceId: wsId,
+            ...(args.project_number !== undefined ? { projectNumber: args.project_number } : {}),
         })
 
         // Tag entries with their source
@@ -242,12 +243,19 @@ export async function handleCrossTeamSearch(
         } as z.infer<typeof EntryOutputSchema> & { team_db: string; author?: string | null }
     })
 
+    const everySearchFailed = searched_dbs.length === 0 && errors.length > 0
     return {
-        success: true,
+        success: !everySearchFailed,
         entries: finalEntries,
         count: finalEntries.length,
         searched_dbs,
         ...(degraded ? { degraded: true, errors } : { degraded: false }),
+        ...(everySearchFailed
+            ? {
+                  error: 'Every team database query failed',
+                  code: 'DATABASE_ERROR',
+              }
+            : {}),
     }
 }
 

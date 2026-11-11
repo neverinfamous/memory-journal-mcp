@@ -168,6 +168,31 @@ const GetStatisticsSchema = z.object({
     project_number: z.unknown().optional(), // Allow injected project_number
 }).strict()
 
+const STATISTICS_STRICT_KEYS = new Set([
+    'group_by',
+    'start_date',
+    'end_date',
+    'project_breakdown',
+    'workspace_id',
+    'project_number',
+])
+
+function isStatisticsArgRecord(params: unknown): params is Record<string, unknown> {
+    return typeof params === 'object' && params !== null && !Array.isArray(params)
+}
+
+/** Drop public hint keys such as timeframe, period, and time before the strict parse. */
+function omitNonStrictStatisticsKeys(params: unknown): unknown {
+    if (!isStatisticsArgRecord(params)) return params
+    const kept: Record<string, unknown> = {}
+    for (const key of Object.keys(params)) {
+        if (STATISTICS_STRICT_KEYS.has(key) && key in params) {
+            kept[key] = params[key]
+        }
+    }
+    return kept
+}
+
 /** Relaxed schema — passed to SDK inputSchema so Zod errors reach the handler */
 const GetStatisticsSchemaMcp = z.object({
     group_by: z.string().optional().default('week'),
@@ -242,7 +267,7 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
                         project_breakdown,
                         workspace_id,
                         project_number,
-                    } = GetStatisticsSchema.parse(params)
+                    } = GetStatisticsSchema.parse(omitNonStrictStatisticsKeys(params))
                     const resolvedProjectNumber = coerceAnalyticsProjectNumber(project_number)
                     const wsId = resolveWorkspaceId(
                         workspace_id,

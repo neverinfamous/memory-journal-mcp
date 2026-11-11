@@ -255,7 +255,9 @@ export async function startServer(
     const maxAttempts = 600
     for (let i = 0; i < maxAttempts; i++) {
         try {
-            const res = await fetch(`http://localhost:${port}/health`)
+            const res = await fetch(`http://localhost:${port}/health`, {
+                signal: AbortSignal.timeout(1000),
+            })
             if (res.ok) return
         } catch {
             // Server not ready yet

@@ -421,6 +421,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                         pullRequests: ctx.pullRequests,
                         issueCount: ctx.issues.length,
                         prCount: ctx.pullRequests.length,
+                        ...(ctx.degraded !== undefined ? { degraded: ctx.degraded } : {}),
                     }
                 } catch (err) {
                     return formatHandlerError(err)

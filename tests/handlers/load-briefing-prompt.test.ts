@@ -83,9 +83,11 @@ describe('load-briefing prompt', () => {
             expect(text).toContain('Available projects: adamic (#16), R2-Manager-Worker (#24), do-test-worker (#1), no-number')
         })
 
-        it('still resolves names and partial names', async () => {
+        it('resolves exact names case-insensitively and does not resolve a unique substring', async () => {
             expect(await runPrompt('ADAMIC')).toContain('memory://briefing/adamic')
-            expect(await runPrompt('r2-man')).toContain('memory://briefing/R2-Manager-Worker')
+            const partial = await runPrompt('r2-man')
+            expect(partial).toContain('Not found: r2-man')
+            expect(partial).not.toContain('memory://briefing/R2-Manager-Worker')
         })
     })
 })

@@ -78,12 +78,12 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
             }) as Record<string, unknown>
 
             expect(failedResult['success']).toBe(false)
-            expect(failedResult['relationships']).toEqual([])
+            expect(() => failedResult['relationships']).toThrow('Entry 9999 not found')
             expect(() => failedResult['entries']).toThrow('Entry 9999 not found')
             expect(() => failedResult['items']).toThrow('Entry 9999 not found')
             expect(() => failedResult['deleted']).toThrow('Entry 9999 not found')
             expect(() => [...(failedResult as unknown as Iterable<unknown>)]).toThrow('Entry 9999 not found')
-            expect(failedResult['projects']).toEqual([])
+            expect(() => failedResult['projects']).toThrow('Entry 9999 not found')
             expect(failedResult['length']).toBe(0)
             expect(typeof failedResult['map']).toBe('function')
             expect(() => (failedResult['map'] as () => unknown)()).toThrow('Entry 9999 not found')
@@ -277,14 +277,14 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
             expect(updated).not.toContain('"entry_id":9')
         })
 
-        it('should auto-heal PRAGMA and SHOW commands into getStatistics', () => {
+        it('should not rewrite PRAGMA and SHOW commands into getStatistics', () => {
             const pragmaSql = 'PRAGMA table_info(journal_entries);'
             const healedPragma = healCodeModeScript(pragmaSql)
-            expect(healedPragma).toContain('mj.analytics.getStatistics')
+            expect(healedPragma).not.toContain('mj.analytics.getStatistics')
 
             const showSql = 'SHOW TABLES;'
             const healedShow = healCodeModeScript(showSql)
-            expect(healedShow).toContain('mj.analytics.getStatistics')
+            expect(healedShow).not.toContain('mj.analytics.getStatistics')
         })
     })
 
@@ -531,6 +531,7 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
         })
 
         it('should auto-resolve db-mcp project_number from sqlite keywords in tags or content (agent-issues.jsonl Records 1, 2, 4 regression)', async () => {
+            const cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue('C:\\tmp\\unregistered-project')
             const { resolveProjectContext } = await import('../src/utils/workspace-resolver.js')
             const mockConfig = {
                 projectRegistry: {
@@ -568,9 +569,11 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
             }, mockConfig as unknown as import('../src/types/index.js').ToolHandlerConfig)
             expect(res4.workspaceId).toBe('db-mcp')
             expect(res4.projectNumber).toBe(15)
+            cwdSpy.mockRestore()
         })
 
         it('should auto-resolve project_number from snake_case keywords and tokenized tags (Issue 1 regression)', async () => {
+            const cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue('C:\\tmp\\unregistered-project')
             const { resolveProjectContext } = await import('../src/utils/workspace-resolver.js')
             const mockConfig = {
                 projectRegistry: {
@@ -617,6 +620,7 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
             }, mockConfig as unknown as import('../src/types/index.js').ToolHandlerConfig)
             expect(res4.workspaceId).toBe('adamic')
             expect(res4.projectNumber).toBe(16)
+            cwdSpy.mockRestore()
         })
 
         it('should support mj.search.queryEntries and aliases via METHOD_ALIASES (agent-issues.jsonl Record 1 regression)', async () => {
@@ -754,14 +758,14 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
             }
         })
 
-        it('should heal schema, .schema, tables, and \\d inspection commands to getStatistics', async () => {
+        it('should not heal schema, .schema, tables, and \\d inspection commands to getStatistics', async () => {
             const { extractAndRecoverSqlCode } = await import('../src/handlers/tools/codemode/handler.js')
-            expect(extractAndRecoverSqlCode('schema')).toBe('return await mj.analytics.getStatistics({});')
-            expect(extractAndRecoverSqlCode('SCHEMA')).toBe('return await mj.analytics.getStatistics({});')
-            expect(extractAndRecoverSqlCode('.schema')).toBe('return await mj.analytics.getStatistics({});')
-            expect(extractAndRecoverSqlCode('tables')).toBe('return await mj.analytics.getStatistics({});')
-            expect(extractAndRecoverSqlCode('.tables')).toBe('return await mj.analytics.getStatistics({});')
-            expect(extractAndRecoverSqlCode('\\d')).toBe('return await mj.analytics.getStatistics({});')
+            expect(extractAndRecoverSqlCode('schema')).toBeNull()
+            expect(extractAndRecoverSqlCode('SCHEMA')).toBeNull()
+            expect(extractAndRecoverSqlCode('.schema')).toBeNull()
+            expect(extractAndRecoverSqlCode('tables')).toBeNull()
+            expect(extractAndRecoverSqlCode('.tables')).toBeNull()
+            expect(extractAndRecoverSqlCode('\\d')).toBeNull()
         })
 
         it('should alias schema in METHOD_ALIASES for analytics and core', async () => {
@@ -2562,8 +2566,8 @@ return { success: true, projectId };
                 error: 'Entry not found: 14367',
                 code: 'RESOURCE_NOT_FOUND'
             }) as Record<string, unknown>
-            expect(failedProxy['nodes']).toEqual([])
-            expect(failedProxy['edges']).toEqual([])
+            expect(() => failedProxy['nodes']).toThrow('Entry not found: 14367')
+            expect(() => failedProxy['edges']).toThrow('Entry not found: 14367')
         })
 
         it('should accept workspace_id: "*" in merge_tags for global consolidation', async () => {

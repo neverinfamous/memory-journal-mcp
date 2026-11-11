@@ -8,7 +8,12 @@ import {
     loadProjectRegistryFromConfig,
     resolveWorkspaceId,
 } from '../../utils/workspace-resolver.js'
-import { evaluateAnchorStaleness, resolveGitWorkingDir, type StalenessCheckRow } from './git-staleness.js'
+import {
+    evaluateAnchorStaleness,
+    readLatestGitTag,
+    resolveGitWorkingDir,
+    type StalenessCheckRow,
+} from './git-staleness.js'
 import { coerceNumber } from '../../utils/query-helpers.js'
 import { ErrorFieldsMixin } from './error-fields-mixin.js'
 import { relaxedNumber } from './schemas.js'
@@ -166,17 +171,16 @@ const NO_TAG_FALLBACK_MAX_COMMITS = 100
 async function getUnreleasedChangelog(
     cwd: string
 ): Promise<{ latestTag: string | null; commits: CommitEntry[]; truncated: boolean }> {
-    const { execFileSync } = await import('node:child_process')
-    // A simplified version to get latest tag, then get commits since then
-    try {
-        const latestTag = execFileSync('git', ['describe', '--tags', '--abbrev=0'], { cwd, encoding: 'utf-8', windowsHide: true }).trim()
-        const commits = await fetchCommits({ ref: `${latestTag}..HEAD`, maxCount: UNRELEASED_MAX_COMMITS }, cwd)
-        return { latestTag, commits, truncated: commits.length >= UNRELEASED_MAX_COMMITS }
-    } catch {
-        // Fallback if no tags
+    const latestTag = readLatestGitTag(cwd)
+    if (latestTag === null) {
         const commits = await fetchCommits({ maxCount: NO_TAG_FALLBACK_MAX_COMMITS }, cwd)
         return { latestTag: null, commits, truncated: commits.length >= NO_TAG_FALLBACK_MAX_COMMITS }
     }
+    const commits = await fetchCommits(
+        { ref: `${latestTag}..HEAD`, maxCount: UNRELEASED_MAX_COMMITS },
+        cwd
+    )
+    return { latestTag, commits, truncated: commits.length >= UNRELEASED_MAX_COMMITS }
 }
 
 export function getGitTools(context: ToolContext): ToolDefinition[] {
@@ -444,7 +448,8 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                             }
                             targets.push({ id: entry.id, timestamp: entry.timestamp })
                         } else {
-                            const { entries: recent } = db.getRecentEntries(20, undefined, undefined, undefined, false, wsId)
+                            const projectNumber = typeof rawProj === 'number' ? rawProj : undefined
+                            const { entries: recent } = db.getRecentEntries(20, undefined, undefined, undefined, false, wsId, projectNumber)
                             for (const r of recent) {
                                 targets.push({ id: r.id, timestamp: r.timestamp })
                             }
@@ -459,7 +464,8 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                                         target.timestamp,
                                         cwd,
                                         async (anchorPath, since) =>
-                                            (await fetchCommits({ path: anchorPath, since }, cwd)).length
+                                            (await fetchCommits({ path: anchorPath, since }, cwd)).length,
+                                        wsId
                                     )
                                 )
                             }

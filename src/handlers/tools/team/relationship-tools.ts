@@ -237,7 +237,7 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
 
                     // Check for existing relationship (exact direction only).
                     // Reverse direction is allowed to model bidirectional relationships.
-                    const existing = teamDb.getRelationships(from_entry_id)
+                    const existing = teamDb.getRelationships(from_entry_id, wsId)
                     const duplicate = existing.find(
                         (r) =>
                             r.fromEntryId === from_entry_id &&
@@ -297,6 +297,8 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                     const { entry_id, tag, depth, project_number, workspace_id } =
                         TeamVisualizeRelationshipsSchema.parse(params)
                     let wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
+                    const resolvedProject = resolveTeamProjectNumber(context, wsId, project_number)
+                    const projectNumber = typeof resolvedProject === 'number' ? resolvedProject : undefined
 
                     // Collect entry IDs to visualize
                     let entryIds: number[] = []
@@ -331,11 +333,20 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                             tags: [tag],
                             limit: 50,
                             workspaceId: wsId,
+                            ...(projectNumber !== undefined ? { projectNumber } : {}),
                         })
                         entryIds = tagEntries.map((e) => e.id)
                     } else {
                         // Default: recent entries
-                        const { entries: recent } = teamDb.getRecentEntries(20, undefined, undefined, undefined, undefined, wsId)
+                        const { entries: recent } = teamDb.getRecentEntries(
+                            20,
+                            undefined,
+                            undefined,
+                            undefined,
+                            undefined,
+                            wsId,
+                            projectNumber
+                        )
                         entryIds = recent.map((e) => e.id)
                     }
 

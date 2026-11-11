@@ -165,6 +165,39 @@ async function writeExportFile(
     }
 }
 
+function loadExportRelationships(
+    db: IDatabaseAdapter,
+    entries: ExportableEntry[]
+): ReturnType<IDatabaseAdapter['getRelationshipsForEntries']> {
+    const idsByWorkspace = new Map<string, number[]>()
+    for (const entry of entries) {
+        const workspaceId = entry.workspaceId ?? 'default'
+        const ids = idsByWorkspace.get(workspaceId)
+        if (ids === undefined) idsByWorkspace.set(workspaceId, [entry.id])
+        else ids.push(entry.id)
+    }
+
+    if (idsByWorkspace.size <= 1) {
+        const onlyWorkspace = idsByWorkspace.keys().next().value
+        const scope = typeof onlyWorkspace === 'string' ? onlyWorkspace : '*'
+        return db.getRelationshipsForEntries(
+            entries.map((entry) => entry.id),
+            scope
+        )
+    }
+
+    const merged: ReturnType<IDatabaseAdapter['getRelationshipsForEntries']> = new Map()
+    for (const [workspaceId, ids] of idsByWorkspace) {
+        const part = db.getRelationshipsForEntries(ids, workspaceId)
+        for (const [entryId, relationships] of part) {
+            const existing = merged.get(entryId)
+            if (existing === undefined) merged.set(entryId, [...relationships])
+            else existing.push(...relationships)
+        }
+    }
+    return merged
+}
+
 /**
  * Export journal entries to frontmattered markdown files.
  *
@@ -215,15 +248,7 @@ export async function exportEntriesToMarkdown(
     // We do not catch and swallow errors here. If relationship fetch fails, we must
     // explicitly fail the export to prevent generating corrupt files that lack their
     // associated relationship data, preserving interchange fidelity.
-    const relationshipWorkspaces = new Set(validEntries.map((entry) => entry.workspaceId ?? 'default'))
-    const relationshipScope =
-        relationshipWorkspaces.size === 1
-            ? (validEntries[0]?.workspaceId ?? 'default')
-            : '*'
-    const relationshipsMap = db.getRelationshipsForEntries(
-        validEntries.map((e) => e.id),
-        relationshipScope
-    )
+    const relationshipsMap = loadExportRelationships(db, validEntries)
 
     const CHUNK_SIZE = 50
     for (let i = 0; i < validEntries.length; i += CHUNK_SIZE) {

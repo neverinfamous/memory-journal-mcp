@@ -116,7 +116,7 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         success: true,
                         entries: enriched,
                         count: enriched.length,
-                        degraded: false,
+                        degraded: result.degraded ?? false,
                         next_cursor: nextCursor,
                         suggestions: (result as { suggestions?: string[] }).suggestions,
                         correctedQuery: (result as { correctedQuery?: string }).correctedQuery,
@@ -249,14 +249,18 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                             recoverable: true,
                         }
                     }
-                    const result = teamDb.getDeletedEntries({ limit, offset, workspaceId: wsId })
-                    const entries = result.entries.filter((e) => e.projectNumber === projectNumber)
-                    const authorMap = batchFetchAuthors(teamDb, entries.map((e) => e.id))
-                    const enriched = entries.map((e) => ({
+                    const result = teamDb.getDeletedEntries({
+                        limit,
+                        offset,
+                        workspaceId: wsId,
+                        projectNumber,
+                    })
+                    const authorMap = batchFetchAuthors(teamDb, result.entries.map((e) => e.id))
+                    const enriched = result.entries.map((e) => ({
                         ...e,
                         author: authorMap.get(e.id) ?? null,
                     }))
-                    return { success: true, entries: enriched, count: enriched.length }
+                    return { success: true, entries: enriched, count: result.count }
                 } catch (err) {
                     return formatHandlerError(err)
                 }

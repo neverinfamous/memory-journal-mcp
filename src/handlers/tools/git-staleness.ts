@@ -1,8 +1,10 @@
+import { execFileSync } from 'node:child_process'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import type { AnchorStatus, ToolHandlerConfig } from '../../types/index.js'
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import { mcpLogger } from '../../utils/mcp-logger.js'
+import { assertSafeDirectoryPath } from '../../utils/security-utils.js'
 import {
     loadProjectRegistryFromConfig,
     findCanonicalRegistryKey,
@@ -23,8 +25,23 @@ export function resolveGitWorkingDir(
     config?: ToolHandlerConfig
 ): string {
     if (input.cwd !== undefined && input.cwd !== '') {
-        if (fs.existsSync(input.cwd)) return input.cwd
-        throw new Error(`Git working directory does not exist: ${input.cwd}`)
+        if (!fs.existsSync(input.cwd)) {
+            throw new Error(`Git working directory does not exist: ${input.cwd}`)
+        }
+        const registry = config?.projectRegistry ?? loadProjectRegistryFromConfig()
+        const roots = [
+            ...(config?.allowedIoRoots ?? []),
+            ...Object.values(registry ?? {})
+                .map((entry) => entry.path)
+                .filter((entryPath) => entryPath.length > 0),
+        ]
+        if (roots.length === 0) {
+            throw new Error(
+                'Git working directory must be a registered repository path or an allowed I/O root'
+            )
+        }
+        assertSafeDirectoryPath(input.cwd, roots)
+        return input.cwd
     }
     const target = input.repo ?? input.workspace_id ?? input.workspaceId
     const registry = config?.projectRegistry ?? loadProjectRegistryFromConfig()
@@ -77,6 +94,30 @@ export interface StalenessCheckRow {
     error?: string
 }
 
+function stderrText(err: unknown): string {
+    if (typeof err !== 'object' || err === null || !('stderr' in err)) return ''
+    const stderr = err.stderr
+    if (typeof stderr === 'string') return stderr
+    if (stderr instanceof Uint8Array) return new TextDecoder().decode(stderr)
+    return ''
+}
+
+/** `git describe` with no tags. Other describe failures must propagate. */
+export function readLatestGitTag(cwd: string): string | null {
+    try {
+        const described = execFileSync('git', ['describe', '--tags', '--abbrev=0'], {
+            cwd,
+            encoding: 'utf-8',
+            windowsHide: true,
+        }).trim()
+        return described === '' ? null : described
+    } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err)
+        if (`${message}\n${stderrText(err)}`.includes('No names found')) return null
+        throw err
+    }
+}
+
 function isEnoent(err: unknown): boolean {
     return typeof err === 'object' && err !== null && 'code' in err && err.code === 'ENOENT'
 }
@@ -91,7 +132,8 @@ export async function evaluateAnchorStaleness(
     anchor: { id?: number; anchorPath: string; status: AnchorStatus },
     entryTimestamp: string,
     workspaceRoot: string,
-    countCommitsSince: (anchorPath: string, since: string) => Promise<number>
+    countCommitsSince: (anchorPath: string, since: string) => Promise<number>,
+    workspaceId: string | undefined
 ): Promise<StalenessCheckRow> {
     try {
         const fullPath = path.resolve(workspaceRoot, anchor.anchorPath)
@@ -116,7 +158,7 @@ export async function evaluateAnchorStaleness(
         }
 
         if (newStatus !== anchor.status && anchor.id !== undefined) {
-            db.updateAnchorStatus(anchor.id, newStatus)
+            db.updateAnchorStatus(anchor.id, newStatus, workspaceId)
         }
 
         return {
@@ -130,7 +172,7 @@ export async function evaluateAnchorStaleness(
     } catch (err: unknown) {
         const failure = stalenessFailure(anchor, err)
         if (failure.persistUnresolvable && anchor.id !== undefined) {
-            db.updateAnchorStatus(anchor.id, 'unresolvable')
+            db.updateAnchorStatus(anchor.id, 'unresolvable', workspaceId)
         }
         return failure.row
     }

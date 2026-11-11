@@ -10,6 +10,7 @@ import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { TEAM_DB_ERROR_RESPONSE, triggerTeamNotifications } from './helpers.js'
 import { getCallerIdentity } from './rbac.js'
 import { ErrorFieldsMixin } from '../error-fields-mixin.js'
+import { ValidationError } from '../../../types/errors.js'
 // Tool Schemas
 // ============================================================================
 
@@ -38,8 +39,10 @@ const preprocessMember = (val: unknown): unknown => {
             }
         }
         if ('workspace_id' in obj) {
-            Reflect.deleteProperty(obj, 'workspace_id');
-            modified = true;
+            throw new ValidationError(
+                'workspace_id is not accepted. Team membership is global and has no workspace column.',
+                { field: 'workspace_id' }
+            )
         }
         return modified ? obj : val;
     }

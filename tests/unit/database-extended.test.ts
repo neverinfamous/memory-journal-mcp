@@ -149,6 +149,7 @@ describe('SQLite Database Extended Operations', () => {
                 impactScore: 0.9,
                 trustScore: 0.9,
                 validationStatus: 'passed',
+                workspaceId: 'default',
                 projectNumber: 77,
                 anchors: [{ anchorPath: 'src/index.ts', anchorType: 'file' }],
             })
@@ -158,6 +159,7 @@ describe('SQLite Database Extended Operations', () => {
                 impactScore: 0.4,
                 trustScore: 0.5,
                 validationStatus: 'failed',
+                workspaceId: 'default',
                 projectNumber: 88,
                 issueUrl: 'https://github.com/owner/fallback-repo/issues/12',
             })

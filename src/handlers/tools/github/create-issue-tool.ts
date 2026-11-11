@@ -10,10 +10,16 @@ import {
     loadProjectRegistryFromConfig,
     resolveProjectContext,
 } from '../../../utils/workspace-resolver.js'
-import { relaxedNumber } from '../schemas.js'
 import { CreateGitHubIssueWithEntryOutputSchema } from './schemas.js'
 import { resolveOwnerRepo, resolveProjectNumber } from './helpers.js'
 import { addIssueToProject, type IssueProjectResult } from './create-issue-project.js'
+
+function concreteCallerWorkspace(workspaceId: string | undefined): string | undefined {
+    if (workspaceId === undefined) return undefined
+    const trimmed = workspaceId.trim()
+    if (trimmed === '' || trimmed === '*' || trimmed.toLowerCase() === 'default') return undefined
+    return trimmed
+}
 
 const CreateIssueHandlerInputSchema = z.object({
     title: z.string().min(1),
@@ -39,14 +45,16 @@ export function getCreateGitHubIssueTool(context: ToolContext): ToolDefinition {
             'Create a GitHub issue AND automatically create a linked journal entry documenting the issue creation.',
         group: 'github',
         inputSchema: z.object({
-            title: z.string().optional().describe('Issue title'),
+            title: z.string().min(1).describe('Issue title'),
             body: z.string().optional().describe('Issue body/description'),
             labels: z.array(z.string()).optional().describe('Labels to apply'),
             assignees: z.array(z.string()).optional().describe('Users to assign'),
-            milestone_number: relaxedNumber()
+            milestone_number: z
+                .number()
                 .optional()
                 .describe('Milestone number to assign this issue to'),
-            project_number: relaxedNumber()
+            project_number: z
+                .number()
                 .optional()
                 .describe('GitHub Project number to add this issue to'),
             workspace_id: z
@@ -92,15 +100,9 @@ export function getCreateGitHubIssueTool(context: ToolContext): ToolDefinition {
                     resolved.repo,
                     input.project_number
                 )
-
-                // 1. OUTBOX PATTERN: Create journal entry in pending state FIRST
-                const entryContent =
-                    input.entry_content ??
-                    `[PENDING] Creating GitHub issue: ${input.title}\n` +
-                        (entryProjectNumber !== undefined ? `Project: #${entryProjectNumber}\n` : '') +
-                        (input.body
-                            ? `\nDescription: ${input.body.slice(0, 200)}${input.body.length > 200 ? '...' : ''}`
-                            : '')
+                const callerWorkspace = concreteCallerWorkspace(input.workspace_id)
+                const pairCallerWorkspace =
+                    callerWorkspace !== undefined && input.project_number === undefined
 
                 const registry =
                     context.config?.projectRegistry ?? loadProjectRegistryFromConfig()
@@ -109,18 +111,31 @@ export function getCreateGitHubIssueTool(context: ToolContext): ToolDefinition {
                     : undefined
                 const resolvedCtx = resolveProjectContext(
                     {
-                        workspace_id: input.workspace_id ?? canonicalRepo,
-                        project_number: entryProjectNumber,
-                        content: entryContent,
+                        workspace_id: callerWorkspace ?? canonicalRepo,
+                        ...(pairCallerWorkspace || entryProjectNumber === undefined
+                            ? {}
+                            : { project_number: entryProjectNumber }),
+                        content: input.entry_content,
                         tags: input.tags,
                     },
                     context.config
                 )
                 const workspaceId =
-                    resolvedCtx.workspaceId === 'default' && canonicalRepo
+                    resolvedCtx.workspaceId === 'default' && canonicalRepo && callerWorkspace === undefined
                         ? canonicalRepo
                         : resolvedCtx.workspaceId
-                const projectNumber = resolvedCtx.projectNumber ?? entryProjectNumber
+                const projectNumber = pairCallerWorkspace
+                    ? resolvedCtx.projectNumber
+                    : (resolvedCtx.projectNumber ?? entryProjectNumber)
+
+                // 1. OUTBOX PATTERN: Create journal entry in pending state FIRST
+                const entryContent =
+                    input.entry_content ??
+                    `[PENDING] Creating GitHub issue: ${input.title}\n` +
+                        (projectNumber !== undefined ? `Project: #${projectNumber}\n` : '') +
+                        (input.body
+                            ? `\nDescription: ${input.body.slice(0, 200)}${input.body.length > 200 ? '...' : ''}`
+                            : '')
 
                 const entry = db.createEntry({
                     content: entryContent,

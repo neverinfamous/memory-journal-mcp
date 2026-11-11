@@ -175,9 +175,10 @@ export class AdapterDelegates {
     mergeTags(
         sourceTag: string,
         targetTag: string,
-        workspaceId?: string
+        workspaceId?: string,
+        projectNumber?: number
     ): { entriesUpdated: number; sourceDeleted: boolean } {
-        return this.tagsMgr.mergeTags(sourceTag, targetTag, workspaceId)
+        return this.tagsMgr.mergeTags(sourceTag, targetTag, workspaceId, projectNumber)
     }
 
     linkEntries(

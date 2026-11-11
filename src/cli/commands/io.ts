@@ -1,7 +1,7 @@
 import type { Command } from 'commander'
 import { type z } from 'zod'
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
-import type { JournalEntry } from '../../types/index.js'
+import type { JournalEntry, ToolHandlerConfig } from '../../types/index.js'
 import { 
     ioExportJsonOptionsSchema,
     ioExportMarkdownOptionsSchema,
@@ -11,7 +11,12 @@ import {
 import { getCliCommandDb as getDb } from './db-helper.js'
 import { exportEntriesToMarkdown, importMarkdownEntries, processImportBatch, convertFile, type ParsedFile } from '../../markdown/index.js'
 import { VectorSearchManager } from '../../vector/vector-search-manager/index.js'
-import { resolveProjectContext, resolveWorkspaceFromFilePath, resolveWorkspaceId } from '../../utils/workspace-resolver.js'
+import {
+    findCanonicalRegistryKey,
+    resolveProjectContext,
+    resolveWorkspaceFromFilePath,
+    resolveWorkspaceId,
+} from '../../utils/workspace-resolver.js'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import { constants } from 'node:fs'
@@ -102,6 +107,74 @@ export async function exportMarkdownAction(options: z.infer<typeof exportMarkdow
     }
 }
 
+function concreteImportWorkspace(workspace: string | undefined): string | undefined {
+    if (workspace === undefined) return undefined
+    const trimmed = workspace.trim()
+    if (trimmed === '' || trimmed === '*' || trimmed.toLowerCase() === 'default') return undefined
+    return trimmed
+}
+
+function workspacesReferToSameProject(
+    left: string,
+    right: string,
+    registry: ToolHandlerConfig['projectRegistry']
+): boolean {
+    const leftKey = findCanonicalRegistryKey(left, registry) ?? left
+    const rightKey = findCanonicalRegistryKey(right, registry) ?? right
+    return leftKey.toLowerCase() === rightKey.toLowerCase()
+}
+
+function resolveImportWriteScope(
+    options: { dir?: string; workspace?: string; defaultProject?: number },
+    serverOptions: ToolHandlerConfig
+): { workspaceId: string; projectNumber: number | undefined } {
+    if (options.dir === undefined || options.dir === '') {
+        throw new Error('--dir is required')
+    }
+    if (options.workspace?.trim() === '*') {
+        throw new Error("Workspace '*' cannot be used for import writes")
+    }
+
+    const dirMatch = resolveWorkspaceFromFilePath(options.dir, serverOptions)
+    const namedWorkspace = concreteImportWorkspace(options.workspace)
+    if (namedWorkspace !== undefined) {
+        // [INVARIANT] A named workspace keeps its registry project. An explicit
+        // defaultProject applies only when that workspace has none. A directory
+        // from a different repo must not supply project_number.
+        const resolved = resolveProjectContext(
+            {
+                workspace_id: namedWorkspace,
+                ...(options.defaultProject !== undefined
+                    ? { project_number: options.defaultProject }
+                    : {}),
+            },
+            serverOptions
+        )
+        const sameDirectory =
+            dirMatch?.workspaceId !== undefined &&
+            workspacesReferToSameProject(
+                namedWorkspace,
+                dirMatch.workspaceId,
+                serverOptions.projectRegistry
+            )
+        const projectNumber =
+            resolved.projectNumber ?? (sameDirectory ? dirMatch?.projectNumber : undefined)
+        return { workspaceId: resolved.workspaceId, projectNumber }
+    }
+
+    const resolved = resolveProjectContext(
+        {
+            workspace_id: dirMatch?.workspaceId,
+            project_number:
+                options.defaultProject ??
+                dirMatch?.projectNumber ??
+                serverOptions.defaultProjectNumber,
+        },
+        serverOptions
+    )
+    return { workspaceId: resolved.workspaceId, projectNumber: resolved.projectNumber }
+}
+
 export async function importMarkdownAction(options: z.infer<typeof importMarkdownSchema>, command: Command): Promise<void> {
     const { db, serverOptions } = await getDb(options, command)
     try {
@@ -109,19 +182,7 @@ export async function importMarkdownAction(options: z.infer<typeof importMarkdow
             throw new Error('--dir is required for markdown import')
         }
 
-        const dirMatch = resolveWorkspaceFromFilePath(options.dir, serverOptions)
-        const resolved = resolveProjectContext(
-            {
-                workspace_id: options.workspace ?? dirMatch?.workspaceId,
-                project_number:
-                    options.defaultProject ??
-                    dirMatch?.projectNumber ??
-                    serverOptions.defaultProjectNumber,
-            },
-            serverOptions
-        )
-        const workspaceId = resolved.workspaceId
-        const projectNumber = resolved.projectNumber
+        const { workspaceId, projectNumber } = resolveImportWriteScope(options, serverOptions)
 
         const vectorManager = new VectorSearchManager(db, { modelName: serverOptions.embeddingModel })
 
@@ -159,19 +220,7 @@ export async function importExternalAction(options: z.infer<typeof importExterna
             throw new Error('--format is required for external import')
         }
 
-        const dirMatch = resolveWorkspaceFromFilePath(options.dir, serverOptions)
-        const resolved = resolveProjectContext(
-            {
-                workspace_id: options.workspace ?? dirMatch?.workspaceId,
-                project_number:
-                    options.defaultProject ??
-                    dirMatch?.projectNumber ??
-                    serverOptions.defaultProjectNumber,
-            },
-            serverOptions
-        )
-        const workspaceId = resolved.workspaceId
-        const projectNumber = resolved.projectNumber
+        const { workspaceId, projectNumber } = resolveImportWriteScope(options, serverOptions)
 
         const vectorManager = new VectorSearchManager(db, { modelName: serverOptions.embeddingModel })
 

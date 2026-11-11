@@ -190,7 +190,7 @@ export interface IDatabaseAdapter {
 
     // Soft-Delete Recovery
     restoreEntry(id: number, workspaceId?: string): boolean
-    getDeletedEntries(options?: { limit?: number; offset?: number; workspaceId?: string }): { entries: JournalEntry[]; count: number }
+    getDeletedEntries(options?: { limit?: number; offset?: number; workspaceId?: string; projectNumber?: number }): { entries: JournalEntry[]; count: number }
 
     // Batch Operations
     createEntries(inputs: CreateEntryInput[]): { created: JournalEntry[]; errors: { index: number; error: Error }[] }
@@ -303,7 +303,8 @@ export interface IDatabaseAdapter {
     mergeTags(
         sourceTag: string,
         targetTag: string,
-        workspaceId?: string
+        workspaceId?: string,
+        projectNumber?: number
     ): { entriesUpdated: number; sourceDeleted: boolean }
 
     // Relationships Manager

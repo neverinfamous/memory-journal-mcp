@@ -297,6 +297,7 @@ export interface GraphSummary {
     causalMetrics: Record<string, number>
     topHubs: { id: number; preview: string; count: number }[]
     orphanRatio?: number
+    degraded?: boolean
 }
 
 export function buildGraphContext(context: ResourceContext, workspaceId?: string): GraphSummary | undefined {
@@ -315,6 +316,7 @@ export function buildGraphContext(context: ResourceContext, workspaceId?: string
         // Fetch top hubs and orphan ratio via purpose-built safe methods
         let topHubs: { id: number; preview: string; count: number }[] = []
         let orphanRatio: number | undefined
+        let degraded = false
 
         try {
             const hubs = context.db.getRelationshipHubs(3, workspaceId)
@@ -328,8 +330,13 @@ export function buildGraphContext(context: ResourceContext, workspaceId?: string
                 const orphanCount = context.db.getOrphanCount(workspaceId)
                 orphanRatio = orphanCount / totalActiveEntries
             }
-        } catch {
-            // Ignore query errors gracefully
+        } catch (error) {
+            degraded = true
+            logger.warning('Graph hub query failed', {
+                module: 'BRIEFING',
+                operation: 'graph-context',
+                error: error instanceof Error ? error.message : String(error),
+            })
         }
 
         return {
@@ -338,6 +345,7 @@ export function buildGraphContext(context: ResourceContext, workspaceId?: string
             causalMetrics: causal,
             topHubs,
             orphanRatio,
+            ...(degraded ? { degraded: true } : {}),
         }
     } catch (error) {
         logger.debug('Failed to build graph context', {
