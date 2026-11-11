@@ -78,10 +78,7 @@ function createGroupNamespaceProxy(ctx: GroupProxyContext): object {
     Object.assign(groupCallable, groupProxy)
 
     return new Proxy(groupCallable, {
-        apply(_target, _thisArg, args: unknown[]): Promise<unknown> {
-            const primaryMethod = methodNames.find((m) => !m.endsWith('_help') && m !== 'help')
-            const fn = primaryMethod !== undefined ? groupProxy[primaryMethod] : undefined
-            if (fn !== undefined) return fn(...args)
+        apply(_target, _thisArg, _args: unknown[]): Promise<unknown> {
             return wrapPromise(
                 Promise.resolve(
                     wrapResult({

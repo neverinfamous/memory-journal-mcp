@@ -388,7 +388,9 @@ describe('Extended Tool Handlers (Team, IO, Admin, Core)', () => {
             expect(restoreOk.success).toBe(true)
 
             // 6. list_tags, test_simple, test_error_handling
-            const tagsRes = (await findTool(coreTools, 'list_tags').handler({})) as {
+            const tagsRes = (await findTool(coreTools, 'list_tags').handler({
+                workspace_id: 'memory-journal-mcp',
+            })) as {
                 success: boolean
                 count: number
             }

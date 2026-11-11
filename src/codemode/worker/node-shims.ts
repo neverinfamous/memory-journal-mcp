@@ -59,7 +59,7 @@ export function createSafeFsShim(contextObj?: Record<string, unknown>): SafeFsSh
         birthtime: Date
     } => ({
         size: Buffer.byteLength(readContent(), 'utf-8'),
-        isFile: () => true,
+        isFile: () => false,
         isDirectory: () => false,
         mtime: new Date(),
         birthtime: new Date(),

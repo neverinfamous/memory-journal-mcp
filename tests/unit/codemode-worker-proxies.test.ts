@@ -260,7 +260,7 @@ describe('Code Mode Worker Proxies & Globals', () => {
             'ls',
             () => undefined
         )
-        expect(spawnRes.kill()).toBe(true)
+        expect(spawnRes.kill()).toBe(false)
         expect((shimMj['join'] as (...p: string[]) => string)('x', 'y')).toBe('x/y')
         expect((shimMj['format'] as (...a: unknown[]) => string)('hi', 5)).toBe('hi 5')
         expect(shimMj['list_tables']).toBe(getStatsMock)
@@ -308,6 +308,11 @@ describe('Code Mode Worker Proxies & Globals', () => {
         const procObj = globals['process'] as {
             exit: (c?: number) => { exited: boolean; exitCode: number }
         }
-        expect(procObj.exit(0)).toEqual({ success: true, exited: true, exitCode: 0 })
+        expect(procObj.exit(0)).toEqual({
+            success: false,
+            exited: false,
+            exitCode: 0,
+            error: 'process.exit is disabled in the sandbox',
+        })
     })
 })

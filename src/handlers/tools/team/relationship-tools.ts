@@ -24,7 +24,12 @@ import {
 // ============================================================================
 
 /** Breadth-first walk of relationships from `startId`, returning the start id plus neighbors up to `depth`. */
-function collectNeighborhood(teamDb: IDatabaseAdapter, startId: number, depth: number): number[] {
+function collectNeighborhood(
+    teamDb: IDatabaseAdapter,
+    startId: number,
+    depth: number,
+    workspaceId: string
+): number[] {
     const entryIds: number[] = [startId]
     const visited = new Set<number>(entryIds)
     let frontier = [startId]
@@ -32,11 +37,11 @@ function collectNeighborhood(teamDb: IDatabaseAdapter, startId: number, depth: n
     for (let d = 0; d < depth && frontier.length > 0; d++) {
         const relMap =
             typeof teamDb.getRelationshipsForEntries === 'function'
-                ? teamDb.getRelationshipsForEntries(frontier)
+                ? teamDb.getRelationshipsForEntries(frontier, workspaceId)
                 : null
         const nextFrontier: number[] = []
         for (const fid of frontier) {
-            const rels = relMap ? (relMap.get(fid) ?? []) : teamDb.getRelationships(fid)
+            const rels = relMap ? (relMap.get(fid) ?? []) : teamDb.getRelationships(fid, workspaceId)
             for (const r of rels) {
                 const otherId = r.fromEntryId === fid ? r.toEntryId : r.fromEntryId
                 if (!visited.has(otherId)) {
@@ -65,7 +70,7 @@ export function buildRelationshipGraph(
         typeof teamDb.getEntriesByIds === 'function' ? teamDb.getEntriesByIds(entryIds, wsId) : null
     const batchRels =
         typeof teamDb.getRelationshipsForEntries === 'function'
-            ? teamDb.getRelationshipsForEntries(entryIds)
+            ? teamDb.getRelationshipsForEntries(entryIds, wsId)
             : null
 
     for (const eid of entryIds) {
@@ -82,7 +87,7 @@ export function buildRelationshipGraph(
             nodes.set(eid, label)
         }
 
-        const rels = batchRels ? (batchRels.get(eid) ?? []) : teamDb.getRelationships(eid)
+        const rels = batchRels ? (batchRels.get(eid) ?? []) : teamDb.getRelationships(eid, wsId)
         for (const r of rels) {
             const edgeKey = `${String(r.fromEntryId)}-${String(r.toEntryId)}`
             if (!seenEdges.has(edgeKey) && entryIdSet.has(r.fromEntryId) && entryIdSet.has(r.toEntryId)) {
@@ -152,15 +157,8 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
 
                     // Verify both entries exist and belong to the project
                     let fromEntry = teamDb.getEntryById(from_entry_id, wsId)
-                    if (
-                        !fromEntry &&
-                        (workspace_id === undefined || workspace_id === '*') &&
-                        project_number === undefined
-                    ) {
+                    if (!fromEntry && workspace_id === '*' && project_number === undefined) {
                         fromEntry = teamDb.getEntryById(from_entry_id, '*')
-                        if (fromEntry?.workspaceId !== undefined && wsId !== '*') {
-                            wsId = fromEntry.workspaceId
-                        }
                     }
                     const resolvedPn =
                         project_number ??
@@ -202,11 +200,7 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                         }
                     }
                     let toEntry = teamDb.getEntryById(to_entry_id, wsId)
-                    if (
-                        !toEntry &&
-                        (workspace_id === undefined || workspace_id === '*') &&
-                        project_number === undefined
-                    ) {
+                    if (!toEntry && workspace_id === '*' && project_number === undefined) {
                         toEntry = teamDb.getEntryById(to_entry_id, '*')
                     }
                     if (!toEntry) {
@@ -230,8 +224,15 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                         }
                     }
 
-                    if (fromEntry.workspaceId !== toEntry.workspaceId && workspace_id === undefined) {
-                        wsId = '*'
+                    if (fromEntry.workspaceId !== toEntry.workspaceId && workspace_id !== '*') {
+                        return {
+                            success: false,
+                            error: 'Cannot link team entries that belong to different workspaces',
+                            code: 'VALIDATION_ERROR',
+                            category: 'validation',
+                            suggestion: 'Pass workspace_id: "*" to link entries across workspaces',
+                            recoverable: true,
+                        }
                     }
 
                     // Check for existing relationship (exact direction only).
@@ -323,7 +324,7 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                             }
                         }
                         // Start from a specific entry and traverse
-                        entryIds = collectNeighborhood(teamDb, entry_id, depth)
+                        entryIds = collectNeighborhood(teamDb, entry_id, depth, wsId)
                     } else if (tag) {
                         // Get entries by tag using an all-time date range to bypass date filtering
                         const { entries: tagEntries } = teamDb.searchByDateRange('1970-01-01', '2999-12-31', {

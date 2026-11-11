@@ -5,13 +5,13 @@ import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
 import { convertToWslPath, getPositionalArgs, healFragmentedQuotes, escapeUnixArg, getUnderlyingPackageScript } from '../command-utils.js';
-import { getUnquoted } from './utils.js';
+import { getUnquoted, splitFirstShellSegment } from './utils.js';
 import { findEcosystemScript } from '../utils.js';
 import { runMutatingInterceptors } from './mutating-interceptors.js';
 import { runStructuralInterceptors } from './structural-interceptors.js';
 import { healPathHallucinations, healEvalCodePathHallucinations } from '../path-healer.js';
 import { handleFindInterception, handleRipgrepInterception, handleGrepInterception, parseGrepSearchArgs, GREP_EXCLUDE_DIRS, isLikelyDirectoryArg } from './search-interceptor.js';
-import { isPowerShellCode } from '../eval-healer.js';
+import { isPowerShellCode, healStrippedSqlTemplateLiterals } from '../eval-healer.js';
 const INTERPRETER_INLINE_FLAGS: Record<string, readonly string[]> = {
   node: ['-e', '--eval', '-p', '--print'],
   bun: ['-e', '--eval', '-p', '--print'],
@@ -92,7 +92,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
           }
           if (/(?:docker|docker-compose|podman)/i.test(a) && /scout/i.test(a)) {
             nestedTimeout = Math.max(nestedTimeout, 1800000);
-          } else if (/(?:docker|docker-compose|podman)/i.test(a) && /build/i.test(a)) {
+          } else if (((/(?:docker|docker-compose|podman)/i.test(a) && /build/i.test(a)) || /recreate-ecosystem/i.test(a))) {
             nestedTimeout = Math.max(nestedTimeout, 600000);
           }
           if (/(?:playwright|cypress|\be2e\b)/i.test(a)) {
@@ -116,7 +116,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
               }
               if (/(?:docker|docker-compose|podman)/i.test(fileContent) && /scout/i.test(fileContent)) {
                 nestedTimeout = Math.max(nestedTimeout, 1800000);
-              } else if (/(?:docker|docker-compose|podman)/i.test(fileContent) && /build/i.test(fileContent)) {
+              } else if (((/(?:docker|docker-compose|podman)/i.test(fileContent) && /build/i.test(fileContent)) || /recreate-ecosystem/i.test(fileContent))) {
                 nestedTimeout = Math.max(nestedTimeout, 600000);
               }
               if (/(?:playwright|cypress|\be2e\b)/i.test(fileContent)) {
@@ -298,78 +298,91 @@ export function systemInterceptor(ctx: ExecutionContext): void {
       payload.code = `rg ${flags}"${pattern}" ${targetPath}`;
     }
 
-    const grepDirMatch = payload.code.match(/^(?:grep|egrep)\s+(.*)$/i);
+    const { firstSegment: firstEvalSegment, remainder: evalPipelineRemainder } = splitFirstShellSegment(payload.code);
+    const grepDirMatch = firstEvalSegment.match(/^(?:grep|egrep)\s+(.*)$/i);
     if (grepDirMatch !== null) {
+      let updatedSegment = firstEvalSegment;
       const rest = grepDirMatch[1] ?? '';
-      const tokens = rest.trim().split(/\s+/);
-      const isDir = (t: string): boolean => isLikelyDirectoryArg(t.replace(/^['"]|['"]$/g, ''), payload.cwd);
+      const tokens = rest.match(/(?:[^\s"'`]+|"[^"]*"|'[^']*'|`[^`]*`)+/g) ?? [];
+      const isRedirectionToken = (t: string): boolean => /^(?:\d*>>?|\d*<)/.test(t);
+      const isDir = (t: string): boolean => isLikelyDirectoryArg(t.replace(/^['"`]|['"`]$/g, ''), payload.cwd);
 
       // Check for reversed arguments first: grep [flags] <dir> <pattern> -> grep [flags] <pattern> <dir>
-      let nonFlagTokens = tokens.filter(t => !t.startsWith('-'));
-      if (nonFlagTokens.length === 2 && !payload.code.includes('-e') && !payload.code.includes('--regexp')) {
+      let nonFlagTokens = tokens.filter(t => !t.startsWith('-') && !isRedirectionToken(t));
+      if (nonFlagTokens.length === 2 && !updatedSegment.includes('-e') && !updatedSegment.includes('--regexp')) {
         const [first, second] = nonFlagTokens;
         if (first !== undefined && second !== undefined && isDir(first) && !isDir(second) && !second.startsWith('/')) {
           console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected reversed arguments in eval grep (directory before pattern). Swapping arguments to place pattern first... (Frictionless Recovery)\x1b[0m`);
           const regexSwap = new RegExp(`(${first.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})\\s+(${second.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`);
-          payload.code = payload.code.replace(regexSwap, '$2 $1');
+          updatedSegment = updatedSegment.replace(regexSwap, '$2 $1');
           nonFlagTokens = [second, first];
         }
       }
 
-      if (!/(?:^|\s)(?:-[a-zA-Z]*[rR]\b|--recursive\b)/.test(payload.code)) {
-        const hasPatternFlagInEval = /(?:^|\s)(?:-e\b|--regexp\b|-f\b|--file\b)/.test(payload.code);
+      if (!/(?:^|\s)(?:-[a-zA-Z]*[rR]\b|--recursive\b)/.test(updatedSegment)) {
+        const hasPatternFlagInEval = /(?:^|\s)(?:-e\b|--regexp\b|-f\b|--file\b)/.test(updatedSegment);
         const targetTokens = hasPatternFlagInEval ? nonFlagTokens : nonFlagTokens.slice(1);
         const isTargetingDir = targetTokens.some(t => isDir(t));
         if (isTargetingDir) {
           console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected directory target in eval grep without recursive flag. Auto-injecting '-r'... (Frictionless Recovery)\x1b[0m`);
-          payload.code = payload.code.replace(/^(grep|egrep)\b/i, '$1 -r');
+          updatedSegment = updatedSegment.replace(/^(grep|egrep)\b/i, '$1 -r');
         }
       }
 
-      const isRecursiveGrep = /(?:^|\s)(?:-[a-zA-Z]*[rR]\b|--recursive\b)/.test(payload.code);
-      const isBroadGrep = tokens.some(t => {
-        if (t.startsWith('-')) return false;
-        const clean = t.replace(/^['"]|['"]$/g, '').trim();
+      const isRecursiveGrep = /(?:^|\s)(?:-[a-zA-Z]*[rR]\b|--recursive\b)/.test(updatedSegment);
+      const isBroadGrep = nonFlagTokens.some(t => {
+        const clean = t.replace(/^['"`]|['"`]$/g, '').trim();
         return clean === '.' || clean === './' || clean === '..' || clean === '../' || clean.startsWith('./.') || clean.startsWith('.agents') || clean.startsWith('/mnt/') || /^[a-zA-Z]:/.test(clean);
       });
       if (isRecursiveGrep && isBroadGrep) {
         const missingExcludes = GREP_EXCLUDE_DIRS.filter(
-          d => !payload.code.includes(`--exclude-dir=${d}`) && !payload.code.includes(`--exclude-dir ${d}`)
+          d => !updatedSegment.includes(`--exclude-dir=${d}`) && !updatedSegment.includes(`--exclude-dir ${d}`)
         );
-        if (missingExcludes.length > 0 && !payload.code.includes('--exclude-dir=')) {
+        if (missingExcludes.length > 0 && !updatedSegment.includes('--exclude-dir=')) {
           console.error(
             `\n   🛠️ AUTONOMOUS HEALING: Recursive grep on mounted Windows filesystem detected. Auto-injecting --exclude-dir for node_modules, .git, and dist (and artifact/cache dirs) to prevent timeouts... (Frictionless Recovery)\x1b[0m`
           );
           const excludeFlags = missingExcludes.map(d => `--exclude-dir=${d}`).join(' ');
-          payload.code = payload.code.replace(/^(grep|egrep)\b/i, `$1 ${excludeFlags}`);
+          updatedSegment = updatedSegment.replace(/^(grep|egrep)\b/i, `$1 ${excludeFlags}`);
         }
-        if (!payload.code.includes('--binary-files=')) {
-          payload.code = payload.code.replace(/^(grep|egrep)\b/i, '$1 --binary-files=without-match');
+        if (!updatedSegment.includes('--binary-files=')) {
+          updatedSegment = updatedSegment.replace(/^(grep|egrep)\b/i, '$1 --binary-files=without-match');
         }
         if (payload.timeoutMs === undefined || payload.timeoutMs <= 30000) {
           payload.timeoutMs = 60000;
         }
       }
+
+      if (updatedSegment !== firstEvalSegment) {
+        payload.code = `${updatedSegment}${evalPipelineRemainder}`;
+      }
     }
 
-    const rgDirMatch = payload.code.match(/^(?:rg|ripgrep)\s+(.*)$/i);
+    const { firstSegment: firstRgSegment, remainder: rgPipelineRemainder } = splitFirstShellSegment(payload.code);
+    const rgDirMatch = firstRgSegment.match(/^(?:rg|ripgrep)\s+(.*)$/i);
     if (rgDirMatch !== null) {
-      if (/\b(?:rg|ripgrep)\b.*-E\b/.test(payload.code)) {
-        payload.code = payload.code.replace(/\b(rg|ripgrep)\b(\s+(?:-[^\s]+\s+)*)-E\b/gi, '$1$2-e');
+      let updatedRgSegment = firstRgSegment;
+      if (/\b(?:rg|ripgrep)\b.*-E\b/.test(updatedRgSegment)) {
+        updatedRgSegment = updatedRgSegment.replace(/\b(rg|ripgrep)\b(\s+(?:-[^\s]+\s+)*)-E\b/gi, '$1$2-e');
         console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected grep-style '-E' flag in eval 'rg'. Rewriting to '-e'... (Frictionless Recovery)\x1b[0m`);
       }
       const rest = rgDirMatch[1] ?? '';
-      const tokens = rest.trim().split(/\s+/);
-      const isDir = (t: string): boolean => isLikelyDirectoryArg(t.replace(/^['"]|['"]$/g, ''), payload.cwd);
+      const tokens = rest.match(/(?:[^\s"'`]+|"[^"]*"|'[^']*'|`[^`]*`)+/g) ?? [];
+      const isRedirectionToken = (t: string): boolean => /^(?:\d*>>?|\d*<)/.test(t);
+      const isDir = (t: string): boolean => isLikelyDirectoryArg(t.replace(/^['"`]|['"`]$/g, ''), payload.cwd);
 
-      const nonFlagTokens = tokens.filter(t => !t.startsWith('-'));
-      if (nonFlagTokens.length === 2 && !payload.code.includes('-e') && !payload.code.includes('--regexp')) {
+      const nonFlagTokens = tokens.filter(t => !t.startsWith('-') && !isRedirectionToken(t));
+      if (nonFlagTokens.length === 2 && !updatedRgSegment.includes('-e') && !updatedRgSegment.includes('--regexp')) {
         const [first, second] = nonFlagTokens;
-        if (isDir(first) && !isDir(second)) {
+        if (first !== undefined && second !== undefined && isDir(first) && !isDir(second)) {
           console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected reversed arguments in eval 'rg' (directory before pattern). Swapping arguments to place pattern first... (Frictionless Recovery)\x1b[0m`);
           const regexSwap = new RegExp(`(${first.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})\\s+(${second.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`);
-          payload.code = payload.code.replace(regexSwap, '$2 $1');
+          updatedRgSegment = updatedRgSegment.replace(regexSwap, '$2 $1');
         }
+      }
+
+      if (updatedRgSegment !== firstRgSegment) {
+        payload.code = `${updatedRgSegment}${rgPipelineRemainder}`;
       }
     }
 
@@ -458,9 +471,11 @@ export function systemInterceptor(ctx: ExecutionContext): void {
       const searchCmdStr = tokens.find((t: string) => fsSearchAliases.includes(t));
       const fsListAliases = ['ls', 'ls.exe', 'dir', 'dir.exe', 'tree', 'tree.com'];
       const listCmdStr = tokens.find((t: string) => fsListAliases.includes(t));
+      const systemdAliases = ['journalctl', 'journalctl.exe'];
+      const systemdCmdStr = tokens.find((t: string) => systemdAliases.includes(t));
 
-      if (cmdStr || searchCmdStr || listCmdStr) {
-        const detected = cmdStr || searchCmdStr || listCmdStr;
+      if (cmdStr || searchCmdStr || listCmdStr || systemdCmdStr) {
+        const detected = cmdStr || searchCmdStr || listCmdStr || systemdCmdStr;
         console.error(`\n   🛠️ AUTONOMOUS HEALING: Shell command/script using '${detected}' detected. Switching execution target to WSL2... (Frictionless Recovery)\x1b[0m`);
         payload.target = 'wsl2';
         if (!payload.interpreter || ['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe', 'cmd', 'cmd.exe'].includes(payload.interpreter)) {
@@ -479,7 +494,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
       const isPlaywright = !isInlineShellHallucination && Boolean(codeOrScript && /(?:playwright|cypress|\be2e\b|test:e2e)/i.test(codeOrScript));
       const isCoverage = !isInlineShellHallucination && Boolean(codeOrScript && /(?:coverage|--coverage)/i.test(codeOrScript));
       const isDockerScout = !isInlineShellHallucination && Boolean(codeOrScript && /(?:docker|docker-compose|podman)/i.test(codeOrScript) && /scout/i.test(codeOrScript));
-      const isDockerBuild = !isInlineShellHallucination && !isDockerScout && Boolean(codeOrScript && /(?:docker|docker-compose|podman)/i.test(codeOrScript) && /build/i.test(codeOrScript));
+      const isDockerBuild = !isInlineShellHallucination && !isDockerScout && Boolean(codeOrScript && (((/(?:docker|docker-compose|podman)/i.test(codeOrScript) && /build/i.test(codeOrScript)) || /recreate-ecosystem/i.test(codeOrScript))));
       const isChainedQuality = !isInlineShellHallucination && payload.type === 'eval' && Boolean(codeOrScript && /(?:typecheck|tsc|lint|check|build|test).*(?:&&|;).*(?:typecheck|tsc|lint|check|build|test)/i.test(codeOrScript));
       const hasQualityCheck = !isInlineShellHallucination && payload.type === 'eval' && Boolean(codeOrScript && /(?:(?:bun|pnpm|npm|yarn|npx|bunx|pnpx)\s+(?:run\s+)?(?:typecheck|tsc|lint|check|build|test)\b|\b(?:vitest|jest|tsc|eslint)\b)/i.test(codeOrScript));
       const isKnownDeterministic = !isInlineShellHallucination && Boolean(codeOrScript && /(?:commit\.ts|get-git-history-json\.ts|backup-conversations\.ts)/i.test(codeOrScript));
@@ -496,7 +511,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
       } else if (isDockerBuild) {
         defaultWslTimeout = 600000;
         payload.bypassInterceptors = true;
-        console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected Docker build in WSL2 eval payload. Auto-extending timeout to 600s... (Frictionless Recovery)`);
+        console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected Docker build/ecosystem orchestration in WSL2 eval payload. Auto-extending timeout to 600s... (Frictionless Recovery)`);
       } else if (isCoverage) {
         defaultWslTimeout = 300000;
         payload.bypassInterceptors = true;
@@ -517,7 +532,10 @@ export function systemInterceptor(ctx: ExecutionContext): void {
       const underlyingScript = getUnderlyingPackageScript(cmdBasename, args, payload.cwd);
       const isNestedAgentExec = (args && args.some(a => path.basename(a).toLowerCase() === 'agent-exec.ts'));
       const isDockerScout = /(?:docker|docker-compose|podman)/i.test(cmdBasename) && (args && args.some(a => /scout/i.test(a)));
-      const isDockerBuild = !isDockerScout && /(?:docker|docker-compose|podman)/i.test(cmdBasename) && (args && args.some(a => /build/i.test(a)));
+      const isInfraOrchestration = /recreate-ecosystem/i.test(cmdBasename) ||
+        (args && args.some(a => /recreate-ecosystem/i.test(a))) ||
+        /recreate-ecosystem/i.test(underlyingScript);
+      const isDockerBuild = !isDockerScout && ((/(?:docker|docker-compose|podman)/i.test(cmdBasename) && (args && args.some(a => /build/i.test(a)))) || isInfraOrchestration);
       const isPlaywright = /(?:playwright|cypress)/i.test(cmdBasename) ||
         (args && args.some(a => /(?:playwright|cypress|\be2e\b|test:e2e|test-e2e)/i.test(a))) ||
         /(?:playwright|cypress|\be2e\b)/i.test(underlyingScript);
@@ -567,7 +585,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
       const isInlineShellHallucination = payload.type === 'eval' && /^\s*(?:pwsh|powershell|cmd|bash|sh|wsl)(?:\.exe)?\b/i.test(codeOrScript);
       const isPlaywright = !isInlineShellHallucination && Boolean(codeOrScript && /(?:playwright|cypress|\be2e\b|test:e2e)/i.test(codeOrScript));
       const isCoverage = !isInlineShellHallucination && Boolean(codeOrScript && /(?:coverage|--coverage)/i.test(codeOrScript));
-      const isDocker = !isInlineShellHallucination && Boolean(codeOrScript && /(?:docker|docker-compose|podman)/i.test(codeOrScript) && /(?:build|scout)/i.test(codeOrScript));
+      const isDocker = !isInlineShellHallucination && Boolean(codeOrScript && (((/(?:docker|docker-compose|podman)/i.test(codeOrScript) && /(?:build|scout)/i.test(codeOrScript)) || /recreate-ecosystem/i.test(codeOrScript))));
       const isChainedQuality = !isInlineShellHallucination && payload.type === 'eval' && Boolean(codeOrScript && /(?:typecheck|tsc|lint|check|build|test).*(?:&&|;).*(?:typecheck|tsc|lint|check|build|test)/i.test(codeOrScript));
       const hasQualityCheck = !isInlineShellHallucination && payload.type === 'eval' && Boolean(codeOrScript && /(?:(?:bun|pnpm|npm|yarn|npx|bunx|pnpx)\s+(?:run\s+)?(?:typecheck|tsc|lint|check|build|test)\b|\b(?:vitest|jest|tsc|eslint)\b)/i.test(codeOrScript));
       const isKnownDeterministic = !isInlineShellHallucination && Boolean(codeOrScript && /(?:commit\.ts|get-git-history-json\.ts|backup-conversations\.ts)/i.test(codeOrScript));
@@ -578,7 +596,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
       } else if (isDocker) {
         payload.timeoutMs = Math.max(payload.timeoutMs || 600000, 600000);
         payload.bypassInterceptors = true;
-        console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected Docker build/scout in Windows eval payload. Auto-extending timeout to 600s... (Frictionless Recovery)`);
+        console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected Docker build/scout or ecosystem orchestration in Windows eval payload. Auto-extending timeout to 600s... (Frictionless Recovery)`);
       } else if (isCoverage) {
         payload.timeoutMs = Math.max(payload.timeoutMs || 480000, 480000);
         payload.bypassInterceptors = true;
@@ -598,7 +616,10 @@ export function systemInterceptor(ctx: ExecutionContext): void {
     } else if (payload.type === 'command') {
       const underlyingScript = getUnderlyingPackageScript(cmdBasename, args, payload.cwd);
       const isNestedAgentExec = (args && args.some(a => path.basename(a).toLowerCase() === 'agent-exec.ts'));
-      const isDocker = /(?:docker|docker-compose|podman)/i.test(cmdBasename) && (args && args.some(a => /(?:build|scout)/i.test(a)));
+      const isInfraOrchestration = /recreate-ecosystem/i.test(cmdBasename) ||
+        (args && args.some(a => /recreate-ecosystem/i.test(a))) ||
+        /recreate-ecosystem/i.test(underlyingScript);
+      const isDocker = (/(?:docker|docker-compose|podman)/i.test(cmdBasename) && (args && args.some(a => /(?:build|scout)/i.test(a)))) || isInfraOrchestration;
       const isPlaywright = /(?:playwright|cypress)/i.test(cmdBasename) ||
         (args && args.some(a => /(?:playwright|cypress|\be2e\b|test:e2e|test-e2e)/i.test(a))) ||
         /(?:playwright|cypress|\be2e\b)/i.test(underlyingScript);
@@ -612,6 +633,9 @@ export function systemInterceptor(ctx: ExecutionContext): void {
       );
       const isKnownDeterministic = /(?:commit\.ts|get-git-history-json\.ts|backup-conversations\.ts)/i.test(cmdBasename) || (args && args.some(a => /(?:commit\.ts|get-git-history-json\.ts|backup-conversations\.ts)/i.test(a)));
       if (isPlaywright || isDocker) {
+        if (isInfraOrchestration) {
+          console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected ecosystem orchestration script ('recreate-ecosystem'). Auto-extending timeout to 600s... (Frictionless Recovery)`);
+        }
         payload.timeoutMs = Math.max(payload.timeoutMs || 600000, 600000);
         payload.bypassInterceptors = true;
       } else if (isQuality || isKnownDeterministic) {
@@ -630,7 +654,11 @@ export function systemInterceptor(ctx: ExecutionContext): void {
           (args && args.some(a => /(?:lint|check)/i.test(a))) ||
           /(?:lint|check)/i.test(underlyingScript);
         const isFullLintOrCheck = isLintOrCheck && !hasTargetFiles;
-        const winTimeout = isCoverage ? 480000 : (isFullLintOrCheck || hasLargeFile ? 600000 : (isTestDir || isFullSuite ? 360000 : (isMultiTest || isMultiFileLint ? 300000 : 240000)));
+        const isIsolatedFullSuite = isFullSuite && Boolean(
+          (args && args.includes('--isolate')) ||
+          /--isolate\b/.test(underlyingScript)
+        );
+        const winTimeout = isCoverage ? 480000 : (isFullLintOrCheck || hasLargeFile || isIsolatedFullSuite ? 600000 : (isTestDir || isFullSuite ? 360000 : (isMultiTest || isMultiFileLint ? 300000 : 240000)));
         payload.timeoutMs = Math.max(payload.timeoutMs || winTimeout, winTimeout);
         payload.bypassInterceptors = true;
       }
@@ -1005,7 +1033,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
 
     let fileContent = interpreterName.startsWith('python')
       ? `import sys; sys.path.insert(0, '')\n${scriptContent}`
-      : healEvalCodePathHallucinations(scriptContent, cwd, ctx.payload.target);
+      : healStrippedSqlTemplateLiterals(healEvalCodePathHallucinations(scriptContent, cwd, ctx.payload.target));
 
     if (isPrint) {
       fileContent = `try {\n  const __res = eval(${JSON.stringify(fileContent)});\n  if (__res !== undefined) console.log(__res);\n} catch {\n  ${fileContent}\n}\n`;

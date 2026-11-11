@@ -163,9 +163,9 @@ describe('Code Mode Worker Core & Project Registry Ops', () => {
             expect(fsShim.existsSync('memory_journal.db')).toBe(false)
             expect(fsShim.existsSync('notes.txt')).toBe(false)
             expect(fsShim.existsSync('')).toBe(false)
-            expect(fsShim.statSync('test.db').isFile()).toBe(true)
+            expect(fsShim.statSync('test.db').isFile()).toBe(false)
             expect(fsShim.statSync('test.db').isDirectory()).toBe(false)
-            expect(fsShim.lstatSync('test.db').isFile()).toBe(true)
+            expect(fsShim.lstatSync('test.db').isFile()).toBe(false)
             expect(fsShim.lstatSync('test.db').isDirectory()).toBe(false)
 
             let statCbCalled = false
@@ -190,7 +190,7 @@ describe('Code Mode Worker Core & Project Registry Ops', () => {
             expect(fsShim.readdirSync()).toEqual([])
 
             const pStat = await fsShim.promises.stat()
-            expect(pStat.isFile()).toBe(true)
+            expect(pStat.isFile()).toBe(false)
             expect(pStat.isDirectory()).toBe(false)
             await expect(fsShim.promises.readFile()).resolves.toBe('hello-from-context')
             await expect(fsShim.promises.writeFile()).resolves.toBeUndefined()

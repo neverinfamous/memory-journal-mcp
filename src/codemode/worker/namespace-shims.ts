@@ -363,17 +363,21 @@ export function createContextProxy(contextObj?: Record<string, unknown>): Record
             }
             if (prop === 'get' || prop === 'getContext' || prop === 'get_context') {
                 return (key?: string) => {
-                    const snakeKey =
-                        typeof key === 'string'
-                            ? key.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase()
-                            : undefined
-                    const resolved =
-                        typeof key === 'string' && key in target
-                            ? target[key]
-                            : snakeKey !== undefined && snakeKey in target
-                              ? target[snakeKey]
-                              : { success: true, ...target }
-                    return Promise.resolve(wrapResult(resolved))
+                    if (typeof key !== 'string') {
+                        return Promise.resolve(wrapResult(target))
+                    }
+                    const snakeKey = key.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase()
+                    if (key in target) return Promise.resolve(wrapResult(target[key]))
+                    if (snakeKey !== key && snakeKey in target) {
+                        return Promise.resolve(wrapResult(target[snakeKey]))
+                    }
+                    return Promise.resolve(
+                        wrapResult({
+                            success: false,
+                            error: `Context key '${key}' was not found`,
+                            code: 'RESOURCE_NOT_FOUND',
+                        })
+                    )
                 }
             }
             if (prop in target) return target[prop]

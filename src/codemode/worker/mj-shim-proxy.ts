@@ -150,13 +150,21 @@ function resolveNodeAndSqlShims(
                           : undefined
                 if (cb !== undefined) {
                     try {
-                        cb(null, '', '')
+                        cb(new Error('spawn is disabled in the sandbox'), '', '')
                     } catch {
                         // Ignore user callback errors on no-op child_process shim
                     }
                 }
                 const noop = (): void => { /* noop */ }
-                return { on: noop, stdout: { on: noop }, stderr: { on: noop }, kill: () => true, status: 0, output: ['', '', ''] }
+                return {
+                    on: noop,
+                    stdout: { on: noop },
+                    stderr: { on: noop },
+                    kill: () => false,
+                    status: 1,
+                    output: ['', '', 'spawn is disabled in the sandbox'],
+                    error: new Error('spawn is disabled in the sandbox'),
+                }
             },
         }
     }

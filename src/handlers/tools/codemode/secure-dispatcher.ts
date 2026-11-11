@@ -348,6 +348,108 @@ async function invokeToolWithGuards(
     return result
 }
 
+type ProjectRegistry = NonNullable<ToolContext['config']>['projectRegistry']
+
+function comparablePath(p: string): string {
+    const resolved = path.resolve(p)
+    return process.platform === 'win32' ? resolved.toLowerCase() : resolved
+}
+
+function githubInjectError(error: string): { errorResponse: Record<string, unknown> } {
+    return { errorResponse: { success: false, error, project_id: undefined, executionTimeMs: 0 } }
+}
+
+function resolveSessionProjectId(
+    context: ToolContext,
+    input: ExecuteCodeInput,
+    effectiveRegistry: ProjectRegistry
+): number | string | undefined {
+    let projectId: number | string | undefined = input.project_number
+    if ((projectId === undefined || projectId === null) && input.workspace_id !== undefined && input.workspace_id !== 'default') {
+        const wsEntry = lookupRegistryEntry(effectiveRegistry, input.workspace_id)
+        if (wsEntry?.project_number !== undefined) projectId = wsEntry.project_number
+    }
+    if ((projectId === undefined || projectId === null) && input.repo !== undefined && input.repo !== '') {
+        const repoEntry = lookupRegistryEntry(effectiveRegistry, input.repo)
+        if (repoEntry?.project_number !== undefined) projectId = repoEntry.project_number
+    }
+    projectId ??= projectIdFromDefaults(context, effectiveRegistry)
+    if (typeof projectId === 'string') {
+        const entry = lookupRegistryEntry(effectiveRegistry, projectId)
+        if (entry?.project_number !== undefined) projectId = entry.project_number
+    }
+    if (typeof projectId === 'string') {
+        const parsed = Number(projectId)
+        if (!Number.isNaN(parsed) && Number.isFinite(parsed)) projectId = parsed
+    }
+    return projectId
+}
+
+function projectIdFromDefaults(
+    context: ToolContext,
+    effectiveRegistry: ProjectRegistry
+): number | undefined {
+    if (context.config?.defaultProjectNumber !== undefined) {
+        return context.config.defaultProjectNumber
+    }
+    if (effectiveRegistry === undefined) return undefined
+    const cwd = process.cwd()
+    for (const entry of Object.values(effectiveRegistry)) {
+        if (
+            entry.path !== undefined &&
+            entry.path !== '' &&
+            cwdMatchesRegistryPath(entry.path, cwd) &&
+            entry.project_number !== undefined
+        ) {
+            return entry.project_number
+        }
+    }
+    return undefined
+}
+
+async function injectRepoGithub(
+    context: ToolContext,
+    repo: string | undefined,
+    effectiveRegistry: ProjectRegistry
+): Promise<ToolContext | { errorResponse: Record<string, unknown> }> {
+    if (repo === undefined || repo === '') return context
+    if (context.config?.codemodeInternalFullAccess !== true) {
+        return githubInjectError('Repo switching is restricted to internal administrative access.')
+    }
+    const registryEntry = lookupRegistryEntry(effectiveRegistry, repo)
+    if (registryEntry?.path === undefined || registryEntry.path === '') return context
+    try {
+        const injectedGithub = getGitHubIntegration(registryEntry.path, undefined, process.env['GITHUB_TOKEN'])
+        await injectedGithub.getRepoInfo()
+        return { ...context, github: injectedGithub }
+    } catch (error) {
+        return githubInjectError(
+            `Failed to initialize injected repository '${repo}': ${error instanceof Error ? error.message : String(error)}`
+        )
+    }
+}
+
+function injectProjectGithub(
+    sessionContext: ToolContext,
+    projectId: number | string | undefined,
+    effectiveRegistry: ProjectRegistry,
+    fullAccess: boolean
+): ToolContext | { errorResponse: Record<string, unknown> } {
+    if (projectId === undefined || effectiveRegistry === undefined) return sessionContext
+    const registryEntry = Object.values(effectiveRegistry).find((r) => r.project_number === projectId)
+    if (registryEntry?.path === undefined || registryEntry.path === '') return sessionContext
+    const isSameAsCwd = comparablePath(registryEntry.path) === comparablePath(process.cwd())
+    if (!fullAccess && !isSameAsCwd) return sessionContext
+    try {
+        const injectedGithub = getGitHubIntegration(registryEntry.path, undefined, process.env['GITHUB_TOKEN'])
+        return { ...sessionContext, github: injectedGithub }
+    } catch (error) {
+        return githubInjectError(
+            `Failed to initialize GitHub context for project ${String(projectId)}: ${error instanceof Error ? error.message : String(error)}`
+        )
+    }
+}
+
 export async function resolveCodeModeSessionContext(
     context: ToolContext,
     input: ExecuteCodeInput
@@ -360,48 +462,8 @@ export async function resolveCodeModeSessionContext(
       }
     | { errorResponse: Record<string, unknown> }
 > {
-    const normalizeComparablePath = (p: string): string => {
-        const resolved = path.resolve(p)
-        return process.platform === 'win32' ? resolved.toLowerCase() : resolved
-    }
-    const effectiveRegistry =
-        context.config?.projectRegistry ?? loadProjectRegistryFromConfig()
-    let projectId: number | string | undefined = input.project_number
-    if ((projectId === undefined || projectId === null) && input.workspace_id !== undefined && input.workspace_id !== 'default') {
-        const wsEntry = lookupRegistryEntry(effectiveRegistry, input.workspace_id)
-        if (wsEntry?.project_number !== undefined) projectId = wsEntry.project_number
-    }
-    if ((projectId === undefined || projectId === null) && input.repo !== undefined && input.repo !== '') {
-        const repoEntry = lookupRegistryEntry(effectiveRegistry, input.repo)
-        if (repoEntry?.project_number !== undefined) projectId = repoEntry.project_number
-    }
-    if (projectId === undefined || projectId === null) {
-        if (context.config?.defaultProjectNumber !== undefined) {
-            projectId = context.config.defaultProjectNumber
-        } else if (effectiveRegistry !== undefined) {
-            const cwd = process.cwd()
-            for (const entry of Object.values(effectiveRegistry)) {
-                if (
-                    entry.path !== undefined &&
-                    entry.path !== '' &&
-                    cwdMatchesRegistryPath(entry.path, cwd) &&
-                    entry.project_number !== undefined
-                ) {
-                    projectId = entry.project_number
-                    break
-                }
-            }
-        }
-    }
-
-    if (typeof projectId === 'string') {
-        const entry = lookupRegistryEntry(effectiveRegistry, projectId)
-        if (entry?.project_number !== undefined) projectId = entry.project_number
-    }
-    if (typeof projectId === 'string') {
-        const parsed = Number(projectId)
-        if (!Number.isNaN(parsed) && Number.isFinite(parsed)) projectId = parsed
-    }
+    const effectiveRegistry = context.config?.projectRegistry ?? loadProjectRegistryFromConfig()
+    let projectId = resolveSessionProjectId(context, input, effectiveRegistry)
 
     let numericProjectId = typeof projectId === 'number' ? projectId : undefined
     const resolvedContext = resolveProjectContext(
@@ -418,60 +480,15 @@ export async function resolveCodeModeSessionContext(
         projectId = resolvedContext.projectNumber
     }
 
-    let sessionContext = context
-    const repo = input.repo
-    if (repo !== undefined && repo !== '') {
-        if (context.config?.codemodeInternalFullAccess !== true) {
-            return {
-                errorResponse: {
-                    success: false,
-                    error: 'Repo switching is restricted to internal administrative access.',
-                    project_id: undefined,
-                    executionTimeMs: 0,
-                },
-            }
-        }
-        const registryEntry = lookupRegistryEntry(effectiveRegistry, repo)
-        if (registryEntry?.path !== undefined && registryEntry.path !== '') {
-            try {
-                const injectedGithub = getGitHubIntegration(registryEntry.path, undefined, process.env['GITHUB_TOKEN'])
-                await injectedGithub.getRepoInfo()
-                sessionContext = { ...context, github: injectedGithub }
-            } catch (error) {
-                return {
-                    errorResponse: {
-                        success: false,
-                        error: `Failed to initialize injected repository '${repo}': ${error instanceof Error ? error.message : String(error)}`,
-                        project_id: undefined,
-                        executionTimeMs: 0,
-                    },
-                }
-            }
-        }
-    }
-
-    if (projectId !== undefined && effectiveRegistry !== undefined) {
-        const registryEntry = Object.values(effectiveRegistry).find((r) => r.project_number === projectId)
-        if (registryEntry?.path !== undefined && registryEntry.path !== '') {
-            const isSameAsCwd =
-                normalizeComparablePath(registryEntry.path) === normalizeComparablePath(process.cwd())
-            if (context.config?.codemodeInternalFullAccess === true || isSameAsCwd) {
-                try {
-                    const injectedGithub = getGitHubIntegration(registryEntry.path, undefined, process.env['GITHUB_TOKEN'])
-                    sessionContext = { ...sessionContext, github: injectedGithub }
-                } catch (error) {
-                    return {
-                        errorResponse: {
-                            success: false,
-                            error: `Failed to initialize GitHub context for project ${String(projectId)}: ${error instanceof Error ? error.message : String(error)}`,
-                            project_id: undefined,
-                            executionTimeMs: 0,
-                        },
-                    }
-                }
-            }
-        }
-    }
+    const repoContext = await injectRepoGithub(context, input.repo, effectiveRegistry)
+    if ('errorResponse' in repoContext) return repoContext
+    const sessionContext = injectProjectGithub(
+        repoContext,
+        projectId,
+        effectiveRegistry,
+        context.config?.codemodeInternalFullAccess === true
+    )
+    if ('errorResponse' in sessionContext) return sessionContext
 
     return { sessionContext, projectId, numericProjectId, workspaceId }
 }

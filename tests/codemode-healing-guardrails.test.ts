@@ -2578,7 +2578,7 @@ return { success: true, projectId };
             expect(Array.isArray(res['results'])).toBe(true)
         })
 
-        it('should fallback to wildcard workspace when get_entry_by_id fails in active workspace', async () => {
+        it('should return not-found when get_entry_by_id misses the active workspace', async () => {
             const { callTool } = await import('../src/handlers/tools/index.js')
             const mockDb = {
                 getEntryById: vi.fn((id: number, ws: string) => {
@@ -2596,9 +2596,8 @@ return { success: true, projectId };
                 entry_id: 14463
             }, mockDb, undefined, undefined, customConfig)) as Record<string, unknown>
 
-            expect(res['success']).toBe(true)
-            expect((res['entry'] as Record<string, unknown> | undefined)?.['workspaceId']).toBe('adamic')
-            expect(mockDb.getEntryById).toHaveBeenCalledWith(14463, '*')
+            expect(res['success']).toBe(false)
+            expect(mockDb.getEntryById).not.toHaveBeenCalledWith(14463, '*')
         })
 
         it('should accept workspace_id: "*" in batch_update_entries for cross-workspace updates', async () => {
@@ -2643,7 +2642,7 @@ return { success: true, projectId };
             expect(mockDb.deleteEntries).toHaveBeenCalledWith([14460], false, '*')
         })
 
-        it('should fallback to wildcard workspace in get_entry_by_id even when project_number is supplied', async () => {
+        it('should return not-found for get_entry_by_id when project_number is supplied and the entry is in another workspace', async () => {
             const { callTool } = await import('../src/handlers/tools/index.js')
             const mockDb = {
                 getEntryById: vi.fn((id: number, ws: string) => {
@@ -2661,9 +2660,8 @@ return { success: true, projectId };
                 project_number: 5
             }, mockDb, undefined, undefined, mockConfig)) as Record<string, unknown>
 
-            expect(res['success']).toBe(true)
-            expect((res['entry'] as Record<string, unknown> | undefined)?.['workspaceId']).toBe('adamic')
-            expect(mockDb.getEntryById).toHaveBeenCalledWith(14463, '*')
+            expect(res['success']).toBe(false)
+            expect(mockDb.getEntryById).not.toHaveBeenCalledWith(14463, '*')
         })
 
         it('should accept workspace_id: "*" in link_entries for cross-workspace relationships', async () => {
@@ -2694,7 +2692,7 @@ return { success: true, projectId };
             expect(mockDb.linkEntries).toHaveBeenCalledWith(14464, 14462, 'resolved', undefined, '*')
         })
 
-        it('should allow cross-workspace linking in link_entries when endpoints belong to different workspaces', async () => {
+        it('should reject cross-workspace linking in link_entries when workspace_id is omitted', async () => {
             const { callTool } = await import('../src/handlers/tools/index.js')
             const mockDb = {
                 getEntryById: vi.fn((id: number, ws: string) => {
@@ -2726,8 +2724,8 @@ return { success: true, projectId };
                 relationship_type: 'references'
             }, mockDb, undefined, undefined, customConfig)) as Record<string, unknown>
 
-            expect(res['success']).toBe(true)
-            expect(mockDb.linkEntries).toHaveBeenCalledWith(14464, 14463, 'references', undefined, '*')
+            expect(res['success']).toBe(false)
+            expect(mockDb.linkEntries).not.toHaveBeenCalled()
         })
     })
 

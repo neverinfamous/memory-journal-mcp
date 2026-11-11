@@ -346,9 +346,13 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
         Boolean(targetScript && /(?:lint|check)/i.test(targetScript)) ||
         Boolean(underlyingScript && /(?:lint|check)/i.test(underlyingScript));
       const isFullLintOrCheck = isLintOrCheck && !hasTargetFiles;
+      const isIsolatedFullSuite = isFullSuite && Boolean(
+        args.includes('--isolate') ||
+        (underlyingScript && /--isolate\b/.test(underlyingScript))
+      );
       const targetTimeout = ctx.payload.target === 'wsl2'
-        ? (isCoverage ? 300000 : (isFullLintOrCheck || hasLargeFile ? 360000 : (isMultiTest || isTestDir || isFullSuite ? 180000 : 90000)))
-        : (isCoverage ? 480000 : (isFullLintOrCheck || hasLargeFile ? 600000 : (isTestDir || isFullSuite ? 360000 : (isMultiTest || isMultiFileLint ? 300000 : 240000))));
+        ? (isCoverage ? 300000 : (isFullLintOrCheck || hasLargeFile || isIsolatedFullSuite ? 360000 : (isMultiTest || isTestDir || isFullSuite ? 180000 : 90000)))
+        : (isCoverage ? 480000 : (isFullLintOrCheck || hasLargeFile || isIsolatedFullSuite ? 600000 : (isTestDir || isFullSuite ? 360000 : (isMultiTest || isMultiFileLint ? 300000 : 240000))));
       if (ctx.payload.timeoutMs === undefined || ctx.payload.timeoutMs < targetTimeout) {
         ctx.payload.timeoutMs = targetTimeout;
       }

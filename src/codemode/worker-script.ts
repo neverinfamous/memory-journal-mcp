@@ -72,6 +72,69 @@ function rpcCall(group: string, method: string, args: unknown[]): Promise<unknow
     })
 }
 
+function createSandboxExecutor(
+    shimMj: Record<string, unknown>,
+    vmContextRef: { current?: vm.Context },
+    timeoutMs: number
+): (arg: unknown) => Promise<unknown> {
+    const invokeCreateEntry = (payload: unknown): unknown => {
+        const coreGroup = shimMj['core']
+        if ((typeof coreGroup === 'object' && coreGroup !== null) || typeof coreGroup === 'function') {
+            const fn = Reflect.get(coreGroup, 'createEntry') as unknown
+            if (typeof fn === 'function') return (fn as (a: unknown) => unknown)(payload)
+        }
+        return undefined
+    }
+
+    return async (arg: unknown): Promise<unknown> => {
+        const codeToExec = readExecutableCode(arg)
+        if (codeToExec === null) return invokeCreateEntry(arg)
+        if (codeToExec === '') {
+            return { success: false, error: 'No code was executed', code: 'VALIDATION_ERROR' }
+        }
+        const natural = naturalLanguageEntry(codeToExec)
+        if (natural !== undefined) return invokeCreateEntry(natural)
+        if (vmContextRef.current !== undefined) {
+            const transformed = transformAutoReturn(codeToExec)
+            const wrapped = `(async () => {\n${transformed}\n})()`
+            return (await vm.runInContext(wrapped, vmContextRef.current, { timeout: timeoutMs })) as unknown
+        }
+        return { success: false, error: 'No code was executed', code: 'VALIDATION_ERROR' }
+    }
+}
+
+function readExecutableCode(arg: unknown): string | null {
+    if (typeof arg === 'string') return arg
+    if (typeof arg !== 'object' || arg === null || Array.isArray(arg)) return ''
+    const codeProp = Reflect.get(arg, 'code') as unknown
+    const scriptProp = Reflect.get(arg, 'script') as unknown
+    const codeToExec = typeof codeProp === 'string' ? codeProp : typeof scriptProp === 'string' ? scriptProp : ''
+    if (codeToExec !== '') return codeToExec
+    const hasEntryText =
+        typeof Reflect.get(arg, 'content') === 'string' ||
+        typeof Reflect.get(arg, 'text') === 'string' ||
+        typeof Reflect.get(arg, 'description') === 'string' ||
+        typeof Reflect.get(arg, 'title') === 'string'
+    return hasEntryText ? null : ''
+}
+
+function naturalLanguageEntry(codeToExec: string): { title: string; content: string; entry_type: string } | undefined {
+    const trimmed = codeToExec.trim()
+    const isNaturalPrompt =
+        /^(?:write|document|create|include|record|summary|log|add|added|note|task|fix|implement)\b/i.test(trimmed) &&
+        !/\b(const|let|var|function|return|await|import|export)\b/.test(trimmed)
+    const looksLikeCode = /[{}()=]/.test(trimmed)
+    if (looksLikeCode || !(isNaturalPrompt || /^(?:create|add|new|record|log)?\s*entry\b/i.test(trimmed))) {
+        return undefined
+    }
+    const firstLine = (trimmed.split('\n')[0] ?? '')
+        .replace(/^(?:create|add|new|record|log|insert)?\s*entry\s*(?:for|:)?\s*/i, '')
+        .replace(/[:.]+$/, '')
+        .trim()
+    const title = firstLine.length > 0 && firstLine.length < 80 ? firstLine : 'Journal Entry'
+    return { title, content: trimmed, entry_type: 'technical_decision' }
+}
+
 async function executeCode(
     code: string,
     methodList: Record<string, string[]>,
@@ -109,60 +172,7 @@ async function executeCode(
 
         const frozenContext = createContextProxy(contextObj)
         const vmContextRef: { current?: vm.Context } = {}
-
-        const invokeCreateEntry = (payload: unknown): unknown => {
-            const coreGroup = shimMj['core']
-            if ((typeof coreGroup === 'object' && coreGroup !== null) || typeof coreGroup === 'function') {
-                const fn = Reflect.get(coreGroup, 'createEntry') as unknown
-                if (typeof fn === 'function') return (fn as (a: unknown) => unknown)(payload)
-            }
-            return undefined
-        }
-
-        const executeCodeFn = async (arg: unknown): Promise<unknown> => {
-            let codeToExec = ''
-            if (typeof arg === 'string') {
-                codeToExec = arg
-            } else if (typeof arg === 'object' && arg !== null && !Array.isArray(arg)) {
-                const codeProp = Reflect.get(arg, 'code') as unknown
-                const scriptProp = Reflect.get(arg, 'script') as unknown
-                codeToExec = typeof codeProp === 'string' ? codeProp : typeof scriptProp === 'string' ? scriptProp : ''
-                if (
-                    codeToExec === '' &&
-                    (typeof Reflect.get(arg, 'content') === 'string' ||
-                        typeof Reflect.get(arg, 'text') === 'string' ||
-                        typeof Reflect.get(arg, 'description') === 'string' ||
-                        typeof Reflect.get(arg, 'title') === 'string')
-                ) {
-                    return invokeCreateEntry(arg)
-                }
-            }
-            if (codeToExec !== '') {
-                const trimmed = codeToExec.trim()
-                const isNaturalPrompt =
-                    /^(?:write|document|create|include|record|summary|log|add|added|note|task|fix|implement)\b/i.test(trimmed) &&
-                    !/\b(const|let|var|function|return|await|import|export)\b/.test(trimmed)
-                const looksLikeCode = /[{}()=]/.test(trimmed)
-                if (!looksLikeCode && (isNaturalPrompt || /^(?:create|add|new|record|log)?\s*entry\b/i.test(trimmed))) {
-                    const firstLine = (trimmed.split('\n')[0] ?? '')
-                        .replace(/^(?:create|add|new|record|log|insert)?\s*entry\s*(?:for|:)?\s*/i, '')
-                        .replace(/[:.]+$/, '')
-                        .trim()
-                    const title = firstLine.length > 0 && firstLine.length < 80 ? firstLine : 'Journal Entry'
-                    return invokeCreateEntry({ title, content: trimmed, entry_type: 'technical_decision' })
-                }
-                if (vmContextRef.current !== undefined) {
-                    const transformed = transformAutoReturn(codeToExec)
-                    const wrapped = `(async () => {\n${transformed}\n})()`
-                    return (await vm.runInContext(wrapped, vmContextRef.current, { timeout: timeoutMs })) as unknown
-                }
-            }
-            return {
-                success: false,
-                error: 'No code was executed',
-                code: 'VALIDATION_ERROR',
-            }
-        }
+        const executeCodeFn = createSandboxExecutor(shimMj, vmContextRef, timeoutMs)
         executeCodeFnRef.current = executeCodeFn
 
         const sandbox = buildSandboxGlobals({

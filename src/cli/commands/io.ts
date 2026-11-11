@@ -225,6 +225,9 @@ export async function importExternalAction(options: z.infer<typeof importExterna
         }
 
         process.stdout.write(JSON.stringify(result, null, 2) + '\n')
+        if (!result.success) {
+            process.exitCode = 1
+        }
     } catch (e) {
         process.stderr.write("Import external failed: " + (e instanceof Error ? e.message : String(e)) + '\n')
         process.exit(1)

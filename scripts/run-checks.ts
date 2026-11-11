@@ -6,6 +6,10 @@ const testOutputDir = join(process.cwd(), '.test-output')
 const healthStatusFile = join(testOutputDir, 'health-status.json')
 
 const target = process.argv[2] // 'lint', 'typecheck', or undefined for all
+if (target !== undefined && target !== 'lint' && target !== 'typecheck') {
+    console.error(`Unknown check target '${target}'. Expected lint or typecheck.`)
+    process.exit(1)
+}
 
 function isEnoent(error: unknown): boolean {
     return typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT'

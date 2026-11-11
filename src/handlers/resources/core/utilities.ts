@@ -66,7 +66,10 @@ export const significantResource: InternalResourceDef = {
         const MAX_CAUSAL_SCORE_AT = 3
 
         const entryIds = entries.map((e) => e.id)
-        const relationshipsMap = context.db.getRelationshipsForEntries(entryIds)
+        const relationshipsMap = context.db.getRelationshipsForEntries(
+            entryIds,
+            resourceWorkspace(context)
+        )
 
         const entriesWithImportance = entries.map((entry) => {
             const relationships = relationshipsMap.get(entry.id) ?? []

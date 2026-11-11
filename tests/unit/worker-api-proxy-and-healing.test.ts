@@ -68,9 +68,10 @@ describe('Worker API Proxy (buildApiProxy)', () => {
         }
         expect(await createFn.schema()).toBe('{ content: string }')
 
-        // Callable group invokes primary method (create_entry)
+        // Calling a group as a function is rejected instead of dispatching the first method
         const callableRes = (await core('Callable content')) as Record<string, unknown>
-        expect(callableRes['method']).toBe('create_entry')
+        expect(callableRes['success']).toBe(false)
+        expect(callableRes['code']).toBe('VALIDATION_ERROR')
 
         // Empty group callable returns validation error
         const emptyCallable = mj['emptyGroup'] as (...a: unknown[]) => Promise<Record<string, unknown>>

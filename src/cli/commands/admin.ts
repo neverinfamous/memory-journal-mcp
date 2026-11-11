@@ -91,6 +91,10 @@ export async function pruneAction(options: z.infer<typeof pruneSchema>, command:
                   .map((tag) => tag.trim())
                   .filter((tag) => tag !== '')
             : (serverOptions.pruneExcludeTags ?? [])
+        if (options.dumpConfig === true) {
+            process.stdout.write(JSON.stringify(serverOptions, null, 2) + '\n')
+            return
+        }
         const workspaceId = resolveWorkspaceId(
             options.workspace,
             options.defaultProject ?? serverOptions.defaultProjectNumber,

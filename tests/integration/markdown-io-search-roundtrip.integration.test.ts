@@ -210,9 +210,9 @@ describe('Markdown IO, Vector/Hybrid Search & Cross-Team Roundtrip Integration',
             tags: ['tag-keep', 'tag-drop'],
             workspaceId: 'ws-beta',
         })
-        expect(sourceDb.listTags().find((t) => t.name === 'tag-drop')?.usageCount).toBe(1)
+        expect(sourceDb.listTags('ws-beta').find((t) => t.name === 'tag-drop')?.usageCount).toBe(1)
         sourceDb.updateEntry(entry.id, { tags: ['tag-keep', 'tag-added'], workspaceId: 'ws-beta' })
-        const tagsAfter = sourceDb.listTags()
+        const tagsAfter = sourceDb.listTags('ws-beta')
         expect(tagsAfter.find((t) => t.name === 'tag-keep')?.usageCount).toBe(1)
         expect(tagsAfter.find((t) => t.name === 'tag-drop')?.usageCount ?? 0).toBe(0)
         expect(tagsAfter.find((t) => t.name === 'tag-added')?.usageCount).toBe(1)

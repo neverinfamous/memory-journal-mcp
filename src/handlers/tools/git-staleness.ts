@@ -22,25 +22,30 @@ export function resolveGitWorkingDir(
     input: GitWorkingDirInput,
     config?: ToolHandlerConfig
 ): string {
-    if (input.cwd && fs.existsSync(input.cwd)) {
-        return input.cwd
+    if (input.cwd !== undefined && input.cwd !== '') {
+        if (fs.existsSync(input.cwd)) return input.cwd
+        throw new Error(`Git working directory does not exist: ${input.cwd}`)
     }
     const target = input.repo ?? input.workspace_id ?? input.workspaceId
     const registry = config?.projectRegistry ?? loadProjectRegistryFromConfig()
-    if (target && registry) {
-        const canonicalKey = findCanonicalRegistryKey(target, registry)
-        const entry = canonicalKey ? registry[canonicalKey] : registry[target]
-        if (entry?.path && fs.existsSync(entry.path)) {
-            return entry.path
+    if (target !== undefined && target !== '') {
+        if (registry) {
+            const canonicalKey = findCanonicalRegistryKey(target, registry)
+            const entry = canonicalKey ? registry[canonicalKey] : registry[target]
+            if (entry?.path && fs.existsSync(entry.path)) return entry.path
         }
+        throw new Error(`Git repository '${target}' did not resolve to an existing path`)
     }
     const pNum = typeof input.project_number === 'string' ? Number(input.project_number) : input.project_number
-    if (pNum !== undefined && !Number.isNaN(pNum) && registry) {
-        for (const entry of Object.values(registry)) {
-            if (entry.project_number === pNum && entry.path && fs.existsSync(entry.path)) {
-                return entry.path
+    if (pNum !== undefined && !Number.isNaN(pNum)) {
+        if (registry) {
+            for (const entry of Object.values(registry)) {
+                if (entry.project_number === pNum && entry.path && fs.existsSync(entry.path)) {
+                    return entry.path
+                }
             }
         }
+        throw new Error(`Git repository for project ${String(pNum)} did not resolve to an existing path`)
     }
     const currentCwd = process.cwd()
     if (fs.existsSync(path.join(currentCwd, '.git'))) {

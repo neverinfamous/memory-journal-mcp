@@ -77,6 +77,94 @@ export function generateFilename(id: number, content: string): string {
 // Exporter
 // ============================================================================
 
+interface ExportRelationshipRef {
+    relationshipType: string
+    fromEntryId: number
+    toEntryId: number
+}
+
+function buildExportFileContent(entry: ExportableEntry, relationships: readonly ExportRelationshipRef[]): string {
+    const fmData: FrontmatterData = {
+        mj_id: entry.id,
+        entry_type: entry.entryType,
+        timestamp: entry.timestamp,
+        ...(entry.workspaceId !== undefined && entry.workspaceId !== 'default'
+            ? { workspace_id: entry.workspaceId }
+            : {}),
+        ...(entry.projectNumber !== undefined ? { project_number: entry.projectNumber } : {}),
+        source: 'memory-journal-mcp',
+    }
+    if (entry.tags !== undefined && entry.tags.length > 0) {
+        fmData.tags = entry.tags
+    }
+    if (entry.significance !== undefined) {
+        fmData.significance = entry.significance
+    }
+    if (entry.author !== undefined) {
+        fmData.author = entry.author
+    }
+    if (relationships.length > 0) {
+        fmData.relationships = relationships.map((r) => ({
+            type: r.relationshipType,
+            target_id: r.fromEntryId === entry.id ? r.toEntryId : r.fromEntryId,
+        }))
+    }
+    return serializeFrontmatter(fmData) + '\n' + entry.content + '\n'
+}
+
+function filesystemErrorCode(err: unknown): string | undefined {
+    if (typeof err !== 'object' || err === null || !('code' in err)) return undefined
+    const code = err.code
+    return typeof code === 'string' ? code : undefined
+}
+
+async function writeExportFile(
+    resolvedOutputDir: string,
+    preChunkRealpath: string,
+    filename: string,
+    fileContent: string,
+    swapState: { swapped: boolean }
+): Promise<'written' | 'skipped'> {
+    const filepath = join(resolvedOutputDir, filename)
+    let handle: Awaited<ReturnType<typeof open>> | undefined
+    try {
+        handle = await open(
+            filepath,
+            constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW,
+            0o600
+        )
+        const postRealpath = realpathSync.native(resolvedOutputDir)
+        if (preChunkRealpath !== postRealpath) {
+            swapState.swapped = true
+            throw new Error('Directory swapped during export operation! Aborting to prevent path traversal.')
+        }
+        await handle.writeFile(fileContent, 'utf-8')
+        return 'written'
+    } catch (err: unknown) {
+        if (
+            err instanceof Error &&
+            (err.message.includes('became a symlink') || err.message.includes('Directory swapped'))
+        ) {
+            throw err
+        }
+        const code = filesystemErrorCode(err)
+        if (code === 'ELOOP' || code === 'EEXIST') {
+            logger.warning('Refusing to overwrite symlink during export', { module: 'Exporter', filepath })
+        } else {
+            logger.error('Failed to write markdown file', {
+                module: 'Exporter',
+                filepath,
+                error: err instanceof Error ? err.message : String(err),
+            })
+        }
+        return 'skipped'
+    } finally {
+        if (handle !== undefined) {
+            await handle.close()
+        }
+    }
+}
+
 /**
  * Export journal entries to frontmattered markdown files.
  *
@@ -127,120 +215,44 @@ export async function exportEntriesToMarkdown(
     // We do not catch and swallow errors here. If relationship fetch fails, we must
     // explicitly fail the export to prevent generating corrupt files that lack their
     // associated relationship data, preserving interchange fidelity.
-    const relationshipsMap = db.getRelationshipsForEntries(validEntries.map((e) => e.id))
+    const relationshipWorkspaces = new Set(validEntries.map((entry) => entry.workspaceId ?? 'default'))
+    const relationshipScope =
+        relationshipWorkspaces.size === 1
+            ? (validEntries[0]?.workspaceId ?? 'default')
+            : '*'
+    const relationshipsMap = db.getRelationshipsForEntries(
+        validEntries.map((e) => e.id),
+        relationshipScope
+    )
 
     const CHUNK_SIZE = 50
     for (let i = 0; i < validEntries.length; i += CHUNK_SIZE) {
         const chunk = validEntries.slice(i, i + CHUNK_SIZE)
         const preChunkRealpath = realpathSync.native(resolvedOutputDir)
-        let directorySwapped = false
+        const swapState = { swapped: false }
 
         await Promise.all(
             chunk.map(async (entry) => {
-                // Build frontmatter data
-                const fmData: FrontmatterData = {
-                    mj_id: entry.id,
-                    entry_type: entry.entryType,
-                    timestamp: entry.timestamp,
-                    ...(entry.workspaceId !== undefined && entry.workspaceId !== 'default'
-                        ? { workspace_id: entry.workspaceId }
-                        : {}),
-                    ...(entry.projectNumber !== undefined
-                        ? { project_number: entry.projectNumber }
-                        : {}),
-                    source: 'memory-journal-mcp',
-                }
-
-                if (entry.tags !== undefined && entry.tags.length > 0) {
-                    fmData.tags = entry.tags
-                }
-
-                if (entry.significance !== undefined) {
-                    fmData.significance = entry.significance
-                }
-
-                if (entry.author !== undefined) {
-                    fmData.author = entry.author
-                }
-
-                // Apply pre-fetched relationships for this entry
                 const relationships = relationshipsMap.get(entry.id) ?? []
-                if (relationships.length > 0) {
-                    fmData.relationships = relationships.map((r) => ({
-                        type: r.relationshipType,
-                        target_id: r.fromEntryId === entry.id ? r.toEntryId : r.fromEntryId,
-                    }))
-                }
-
-                // Generate file content
-                const frontmatter = serializeFrontmatter(fmData)
-                const fileContent = frontmatter + '\n' + entry.content + '\n'
-
-                // Write file atomically preventing symlink traversal via O_NOFOLLOW
+                const fileContent = buildExportFileContent(entry, relationships)
                 const filename = generateFilename(entry.id, entry.content)
-                const filepath = join(resolvedOutputDir, filename)
-
-                let handle
-                try {
-                    // constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW
-                    handle = await open(
-                        filepath,
-                        constants.O_WRONLY |
-                            constants.O_CREAT |
-                            constants.O_TRUNC |
-                            constants.O_NOFOLLOW,
-                        0o600
-                    )
-
-                    // Post-open verification to mitigate TOCTOU (Node.js lacks openat)
-                    const postRealpath = realpathSync.native(resolvedOutputDir)
-                    if (preChunkRealpath !== postRealpath) {
-                        directorySwapped = true
-                        throw new Error(
-                            `Directory swapped during export operation! Aborting to prevent path traversal.`
-                        )
-                    }
-
-                    await handle.writeFile(fileContent, 'utf-8')
+                const outcome = await writeExportFile(
+                    resolvedOutputDir,
+                    preChunkRealpath,
+                    filename,
+                    fileContent,
+                    swapState
+                )
+                if (outcome === 'written') {
                     files.push(filename)
-                } catch (err: unknown) {
-                    if (
-                        err instanceof Error &&
-                        (err.message.includes('became a symlink') ||
-                            err.message.includes('Directory swapped'))
-                    ) {
-                        throw err
-                    }
-
-                    const code =
-                        err instanceof Error && 'code' in err
-                            ? (err as { code?: string }).code
-                            : undefined
-                    if (code === 'ELOOP' || code === 'EEXIST') {
-                        logger.warning('Refusing to overwrite symlink during export', {
-                            module: 'Exporter',
-                            filepath,
-                        })
-                        skipped++
-                        writeFailures++
-                    } else {
-                        logger.error('Failed to write markdown file', {
-                            module: 'Exporter',
-                            filepath,
-                            error: err instanceof Error ? err.message : String(err),
-                        })
-                        skipped++
-                        writeFailures++
-                    }
-                } finally {
-                    if (handle) {
-                        await handle.close()
-                    }
+                } else {
+                    skipped++
+                    writeFailures++
                 }
             })
         )
 
-        if (!directorySwapped) {
+        if (!swapState.swapped) {
             assertSafeDirectoryPath(preChunkRealpath, allowedRoots)
         }
     }

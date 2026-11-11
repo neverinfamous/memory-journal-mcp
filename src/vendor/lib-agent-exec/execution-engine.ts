@@ -85,9 +85,8 @@ export async function acquireWslLock(maxConcurrent = 4, timeoutMs = 30000): Prom
     }
     await new Promise(resolve => setTimeout(resolve, 100 + Math.random() * 100));
   }
-  // If we timeout, we proceed anyway to avoid completely deadlocking the agent, but write the lock
-  try { fs.writeFileSync(lockFile, process.pid.toString(), { encoding: 'utf8', mode: 0o600 }); } catch { /* ignore */ }
-  return lockFile;
+  // If we timeout, proceed without writing an overflow lock file so activeLockCount is not poisoned for subsequent callers
+  return '';
 }
 
 export async function executeCommand(
@@ -110,6 +109,34 @@ export async function executeCommand(
       process.exit(1);
     }
   }
+
+  if (payload.target === 'wsl2') {
+    const maxConcurrency = process.env.AGENT_WSL_CONCURRENCY ? parseInt(process.env.AGENT_WSL_CONCURRENCY, 10) : 4;
+    const lockWaitMs = payload.timeoutMs !== undefined && payload.timeoutMs > 30000
+      ? Math.min(Math.floor(payload.timeoutMs * 0.5), 45000)
+      : 30000;
+    const lockStartMs = Date.now();
+    const lockFile = await acquireWslLock(maxConcurrency, lockWaitMs);
+    if (payload.timeoutMs !== undefined && payload.timeoutMs > 0) {
+      const elapsedLockMs = Date.now() - lockStartMs;
+      payload.timeoutMs = Math.max(5000, payload.timeoutMs - elapsedLockMs);
+    }
+    
+    if (lockFile.length > 0) {
+      const releaseLock = () => {
+        try { if (fs.existsSync(lockFile)) fs.unlinkSync(lockFile); } catch { /* ignore */ }
+        process.off('exit', releaseLock);
+        process.off('SIGINT', releaseLock);
+        process.off('SIGTERM', releaseLock);
+        process.off('uncaughtException', releaseLock);
+      };
+      process.once('exit', releaseLock);
+      process.once('SIGINT', releaseLock);
+      process.once('SIGTERM', releaseLock);
+      process.once('uncaughtException', releaseLock);
+    }
+  }
+
   const controller = new ProcessController(
     payload,
     cwd,
@@ -119,23 +146,6 @@ export async function executeCommand(
     tempScriptPath || null,
     isJson
   );
-  
-  if (payload.target === 'wsl2') {
-    const maxConcurrency = process.env.AGENT_WSL_CONCURRENCY ? parseInt(process.env.AGENT_WSL_CONCURRENCY, 10) : 4;
-    const lockFile = await acquireWslLock(maxConcurrency);
-    
-    const releaseLock = () => {
-      try { if (fs.existsSync(lockFile)) fs.unlinkSync(lockFile); } catch { /* ignore */ }
-      process.off('exit', releaseLock);
-      process.off('SIGINT', releaseLock);
-      process.off('SIGTERM', releaseLock);
-      process.off('uncaughtException', releaseLock);
-    };
-    process.once('exit', releaseLock);
-    process.once('SIGINT', releaseLock);
-    process.once('SIGTERM', releaseLock);
-    process.once('uncaughtException', releaseLock);
-  }
   
   controller.start();
 }

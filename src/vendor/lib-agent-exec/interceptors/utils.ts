@@ -21,3 +21,44 @@ export const getUnquoted = (str: string): string => {
           .exhaustive();
   }, initialState).unquoted;
 };
+
+// [INTENT]: Splits a shell snippet at the first unquoted pipeline, chain, or newline operator so single-command heuristics do not bleed across piped stages.
+export function splitFirstShellSegment(code: string): { firstSegment: string; remainder: string } {
+  let inSingle = false;
+  let inDouble = false;
+  let inBacktick = false;
+
+  for (let i = 0; i < code.length; i++) {
+    const ch = code[i];
+    if (ch === '\\' && !inSingle) {
+      i++;
+      continue;
+    }
+    if (ch === "'" && !inDouble && !inBacktick) {
+      inSingle = !inSingle;
+      continue;
+    }
+    if (ch === '"' && !inSingle && !inBacktick) {
+      inDouble = !inDouble;
+      continue;
+    }
+    if (ch === '`' && !inSingle && !inDouble) {
+      inBacktick = !inBacktick;
+      continue;
+    }
+    if (!inSingle && !inDouble && !inBacktick) {
+      if (ch === '|' || ch === ';' || ch === '\n') {
+        return { firstSegment: code.slice(0, i), remainder: code.slice(i) };
+      }
+      if (ch === '&') {
+        const prev = code[i - 1];
+        const next = code[i + 1];
+        if (next === '&' || (prev !== '>' && next !== '>')) {
+          return { firstSegment: code.slice(0, i), remainder: code.slice(i) };
+        }
+      }
+    }
+  }
+
+  return { firstSegment: code, remainder: '' };
+}

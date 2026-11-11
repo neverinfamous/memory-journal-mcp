@@ -229,7 +229,7 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     const input = LinkEntriesSchema.parse(LinkEntriesSchemaMcp.parse(params))
-                    let wsId =
+                    const wsId =
                         input.workspace_id === '*'
                             ? '*'
                             : resolveWriteWorkspaceId(
@@ -251,16 +251,7 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                     // Guard: both entries must exist and not be soft-deleted.
                     // db.linkEntries only enforces FK against physical rows, so soft-deleted
                     // entries (deletedAt set) would pass the FK check silently.
-                    let fromEntry = db.getEntryById(input.from_entry_id, wsId)
-                    if (
-                        !fromEntry &&
-                        (input.workspace_id === undefined || input.workspace_id === '*')
-                    ) {
-                        fromEntry = db.getEntryById(input.from_entry_id, '*')
-                        if (fromEntry?.workspaceId !== undefined && wsId !== '*') {
-                            wsId = fromEntry.workspaceId
-                        }
-                    }
+                    const fromEntry = db.getEntryById(input.from_entry_id, wsId)
                     if (!fromEntry || fromEntry.deletedAt) {
                         return {
                             ...formatHandlerError(
@@ -269,13 +260,7 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                             success: false,
                         }
                     }
-                    let toEntry = db.getEntryById(input.to_entry_id, wsId)
-                    if (
-                        !toEntry &&
-                        (input.workspace_id === undefined || input.workspace_id === '*')
-                    ) {
-                        toEntry = db.getEntryById(input.to_entry_id, '*')
-                    }
+                    const toEntry = db.getEntryById(input.to_entry_id, wsId)
                     if (!toEntry || toEntry.deletedAt) {
                         return {
                             ...formatHandlerError(
@@ -285,8 +270,15 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    if (fromEntry.workspaceId !== toEntry.workspaceId && input.workspace_id === undefined) {
-                        wsId = '*'
+                    if (fromEntry.workspaceId !== toEntry.workspaceId && input.workspace_id !== '*') {
+                        return {
+                            ...formatHandlerError(
+                                new ValidationError(
+                                    'Cannot link entries that belong to different workspaces'
+                                )
+                            ),
+                            success: false,
+                        }
                     }
 
                     // Check for existing duplicate relationship (exact direction only).

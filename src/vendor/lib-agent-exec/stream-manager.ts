@@ -9,8 +9,12 @@ const ANSI_REGEX_K0 = new RegExp(`${ESC}\\[[0]?K`, 'g');
 const ANSI_REGEX_K2 = new RegExp(`${ESC}\\[2K`, 'g');
 const ANSI_REGEX_J2 = new RegExp(`${ESC}\\[2J`, 'g');
 const ANSI_REGEX_H = new RegExp(`${ESC}\\[H`, 'g');
+const LONG_CSI_REGEX = new RegExp(`[${ESC}${CSI}]\\[[\\x30-\\x3F]*[\\x20-\\x2F]*[\\x40-\\x7E]`, 'g');
+const OSC_REGEX = new RegExp(`[${ESC}${CSI}]][^\\x07${ESC}]*(?:\\x07|${ESC}\\\\)`, 'g');
 const COMPLETE_OSC_REGEX = new RegExp(`^[${ESC}${CSI}]][^${BEL}${ESC}]*(?:${BEL}|${ESC}\\\\)`);
 const COMPLETE_CSI_REGEX = new RegExp(`^(?:[${ESC}${CSI}]\\[|${CSI})[()#;?]*[\\x30-\\x3F]*[\\x20-\\x2F]*[\\x40-\\x7E]`);
+const DCS_START_REGEX = new RegExp(`^[${ESC}${CSI}][PX^_]`);
+const DCS_COMPLETE_REGEX = new RegExp(`^[${ESC}${CSI}][PX^_].*?(?:${ESC}\\\\|\\x07)`, 's');
 
 const DEFENSIVE_LINE_LIMIT = 2 * 1024 * 1024;
 const DEFAULT_MAX_OUTPUT_LENGTH = 1024 * 1024 * 1024;
@@ -48,6 +52,10 @@ export class StreamManager {
   }
 
   private stripAnsi(str: string): string {
+    if (!str.includes(ESC) && !str.includes(CSI)) {
+      return str;
+    }
+
     // Preserve Erase in Line/Whole Line semantics by translating them to \u001A (Substitute)
     // before stripping ANSI codes, so they can be processed dynamically in resolveCarriageReturns
     let preProcessed = str.replace(ANSI_REGEX_K0, '\u001A');
@@ -56,10 +64,8 @@ export class StreamManager {
     preProcessed = preProcessed.replace(ANSI_REGEX_H, '\n--- [Cursor Home] ---\n');
     
     // Node's stripVTControlCharacters restricts number length to 4 chars. Add a broad pass to catch overlong edge-cases.
-    const e=String.fromCharCode(27), c=String.fromCharCode(155); const longCsi = new RegExp(`[${e}${c}]\\[[\\x30-\\x3F]*[\\x20-\\x2F]*[\\x40-\\x7E]`, 'g');
-    const osc = new RegExp(`[${e}${c}]][^\\x07${e}]*(?:\\x07|${e}\\\\)`, 'g');
-    preProcessed = preProcessed.replace(longCsi, '');
-    preProcessed = preProcessed.replace(osc, '');
+    preProcessed = preProcessed.replace(LONG_CSI_REGEX, '');
+    preProcessed = preProcessed.replace(OSC_REGEX, '');
     
     return stripVTControlCharacters(preProcessed);
   }
@@ -98,6 +104,10 @@ export class StreamManager {
 
   public processChunk(isErr: boolean, data: string): string {
     const s = this.getState(isErr);
+    const targetStream = isErr ? this.errStream : this.outStream;
+    if (this.truncateOutputLength !== undefined && s.truncated && !targetStream) {
+      return '';
+    }
     s.ansiBuffer += data;
     
     let safeStr = s.ansiBuffer;
@@ -122,8 +132,8 @@ export class StreamManager {
         } else {
           s.ansiBuffer = '';
         }
-      } else if (new RegExp('^[' + String.fromCharCode(0x1b) + String.fromCharCode(0x9b) + '][PX^_]').test(potentialSeq)) {
-        const isComplete = new RegExp('^[' + String.fromCharCode(0x1b) + String.fromCharCode(0x9b) + '][PX^_].*?(?:' + String.fromCharCode(0x1b) + '\\\\|' + String.fromCharCode(0x07) + ')', 's').test(potentialSeq);
+      } else if (DCS_START_REGEX.test(potentialSeq)) {
+        const isComplete = DCS_COMPLETE_REGEX.test(potentialSeq);
         if (!isComplete && potentialSeq.length < MAX_ANSI_SEQ_LENGTH_OSC) {
           safeStr = s.ansiBuffer.substring(0, lastEscapeIdx);
           s.ansiBuffer = potentialSeq;
@@ -143,6 +153,10 @@ export class StreamManager {
     const stripped = this.stripAnsi(safeStr);
     
     s.lineBuffer += stripped;
+
+    if (!stripped.includes('\n') && s.lineBuffer.length <= DEFENSIVE_LINE_LIMIT) {
+      return '';
+    }
     
     // Defensive memory limit: force a newline if the line exceeds 2MB
     if (s.lineBuffer.length > DEFENSIVE_LINE_LIMIT) {

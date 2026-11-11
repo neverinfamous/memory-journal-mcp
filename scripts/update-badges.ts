@@ -200,6 +200,7 @@ function updateBadges() {
           "Failed to auto-commit badge updates:",
           err instanceof Error ? err.message : String(err),
         );
+        process.exit(1);
       }
     }
   }

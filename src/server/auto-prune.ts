@@ -72,6 +72,8 @@ export interface AutoPruneResult {
     pruneOlderThanDays: number
     hardDeleteOlderThanDays: number
     importanceThreshold: number
+    /** True when the pre-prune backup failed and no rows were changed. */
+    aborted?: boolean
 }
 
 // ============================================================================
@@ -169,6 +171,7 @@ export async function runAutoPrune(
                 pruneOlderThanDays,
                 hardDeleteOlderThanDays,
                 importanceThreshold,
+                aborted: true,
             }
         }
         backupFile = safety.backupFile

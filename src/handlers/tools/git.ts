@@ -445,7 +445,7 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                         const cwd = hasRegistryPath ? registryPath : process.cwd()
 
                         for (const target of targets) {
-                            for (const anchor of db.getAnchorsByEntryId(target.id)) {
+                            for (const anchor of db.getAnchorsByEntryId(target.id, wsId)) {
                                 if (lacksRepositoryRoot) {
                                     throw new ValidationError(
                                         `No registered repository path for workspace '${wsId}'. Register the project path before checking its anchors.`

@@ -431,6 +431,9 @@ export class Scheduler {
             excludeTags: this.options.pruneExcludeTags,
             workspaceId: this.resolveDefaultWorkspace(),
         })
+        if (pruneResult.aborted === true) {
+            throw new Error('Scheduled auto-prune aborted because the pre-prune backup failed')
+        }
         logger.info('Scheduled auto-prune completed', {
             module: 'Scheduler',
             operation: 'prune',

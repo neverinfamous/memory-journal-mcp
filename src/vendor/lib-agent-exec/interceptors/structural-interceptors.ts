@@ -124,7 +124,7 @@ export function runStructuralInterceptors(
       }
     })
     .with({ cmd: P.union('journalctl', 'journalctl.exe') }, () => {
-      if (args.includes('-f') || args.includes('--follow')) {
+      if (args.some(a => a === '-f' || a === '--follow' || /^-[exqrkaobml]*f[exqrkaobml]*$/i.test(a))) {
         console.error(`\n   💡 AGENT HINT: 'journalctl -f' runs indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
         process.exit(1);
       }

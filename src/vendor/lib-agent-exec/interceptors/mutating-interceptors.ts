@@ -51,6 +51,18 @@ export function runMutatingInterceptors(
         ctx.args.unshift('-n');
       }
     })
+    .with({ cmd: P.union('journalctl', 'journalctl.exe') }, ({ args: matchedArgs }) => {
+      const hasFollow = matchedArgs.some(a => a === '-f' || a === '--follow' || /^-[exqrkaobml]*f[exqrkaobml]*$/i.test(a));
+      if (hasFollow) return;
+      if (process.platform === 'win32' && ctx.payload.target !== 'wsl2') {
+        console.error(`\n   🛠️ AUTONOMOUS HEALING: 'journalctl' requires Linux systemd. Switching execution target to WSL2... (Frictionless Recovery)\x1b[0m`);
+        ctx.payload.target = 'wsl2';
+      }
+      if (!matchedArgs.includes('--no-pager')) {
+        console.error(`\n   🛠️ AUTONOMOUS HEALING: Automatically injecting '--no-pager' into ${cmdBasename} command to prevent pager hanging... (Frictionless Recovery)\x1b[0m`);
+        ctx.args.unshift('--no-pager');
+      }
+    })
     .with({ cmd: P.union('git', 'git.exe') }, ({ args: matchedArgs }) => {
       const gitCwd = ctx.payload.cwd !== undefined && ctx.payload.cwd.length > 0 ? path.resolve(ctx.payload.cwd) : process.cwd();
       const lockPath = path.join(gitCwd, '.git', 'index.lock');

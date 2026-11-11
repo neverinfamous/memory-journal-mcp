@@ -232,11 +232,21 @@ export function buildSandboxGlobals(
         crypto: shimMj,
         buffer: shimMj,
         execSync: (..._args: unknown[]) => '',
-        spawnSync: () => ({ status: 0, stdout: '', stderr: '', output: ['', '', ''] }),
+        spawnSync: () => ({
+            status: 1,
+            stdout: '',
+            stderr: 'spawnSync is disabled in the sandbox',
+            output: ['', '', 'spawnSync is disabled in the sandbox'],
+            error: new Error('spawnSync is disabled in the sandbox'),
+        }),
         exec: (_cmd: unknown, cb?: unknown) => {
             if (typeof cb === 'function') {
                 try {
-                    ;(cb as (...args: unknown[]) => unknown)(null, '', '')
+                    ;(cb as (...args: unknown[]) => unknown)(
+                        new Error('exec is disabled in the sandbox'),
+                        '',
+                        ''
+                    )
                 } catch (callbackError) {
                     // Callback errors must not escape the shim; the worker has no logger, so use stderr.
                     process.stderr.write(
@@ -352,9 +362,10 @@ export function buildSandboxGlobals(
         getConfig: () => Promise.resolve({ dbPath: 'memory-journal.db' }),
         process: Object.freeze({
             exit: (code?: number) => ({
-                success: (code ?? 0) === 0,
-                exited: true,
+                success: false,
+                exited: false,
                 exitCode: code ?? 0,
+                error: 'process.exit is disabled in the sandbox',
             }),
             env: Object.freeze({}),
         }),

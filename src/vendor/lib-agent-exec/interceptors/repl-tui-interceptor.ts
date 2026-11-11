@@ -13,7 +13,7 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
     'ssh', 'ssh.exe', 'sftp', 'sftp.exe', 'ftp', 'ftp.exe', 'telnet', 'telnet.exe', 'openssl', 'openssl.exe'
   ];
 
-  const baseTui = ['less', 'more', 'vi', 'vim', 'nvim', 'nano', 'emacs', 'top', 'htop', 'tmux', 'screen', 'lazygit', 'lazydocker', 'k9s', 'ncdu', 'fzf', 'mut', 'mc', 'micro', 'w3m', 'lynx', 'links', 'btop', 'nmon', 'glances', 'vimdiff', 'joe', 'bat', 'glow', 'tig', 'nmtui', 'minikube', 'k3d', 'alsamixer', 'cfdisk', 'cgdisk', 'parted', 'journalctl'];
+  const baseTui = ['less', 'more', 'vi', 'vim', 'nvim', 'nano', 'emacs', 'top', 'htop', 'tmux', 'screen', 'lazygit', 'lazydocker', 'k9s', 'ncdu', 'fzf', 'mut', 'mc', 'micro', 'w3m', 'lynx', 'links', 'btop', 'nmon', 'glances', 'vimdiff', 'joe', 'bat', 'glow', 'tig', 'nmtui', 'minikube', 'k3d', 'alsamixer', 'cfdisk', 'cgdisk', 'parted'];
   const tuiCommands = [...baseTui, ...baseTui.map(c => `${c}.exe`)];
 
   match({ cmdBasename, type: payload.type, hasStdin: !!payload.stdin, args })
@@ -211,7 +211,7 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
   const pathPrefix = `(?:[^\\s;\\|&'"]*[\\\\\\/])?`;
   const shellWrapperPrefix = `(?:(?:pwsh|powershell|bash|sh|zsh|cmd|wsl)(?:\\.exe)?\\s+(?:-c|-command|\\/c)\\s+)?`;
   const cmdPrefix = `(?:^|[;\\n&|{(\`]|\\$\\()\\s*(?:['"])?\\s*${shellWrapperPrefix}(?:(?:sudo|env|su|doas|time|timeout|stdbuf|nohup|exec)\\s+)*(?:['"])?\\s*`;
-  const tuiRegex = new RegExp(`(${cmdPrefix})(${pathPrefix})(${[...tuiCommands, 'journalctl', 'journalctl.exe'].join('|')})\\b`, 'i');
+  const tuiRegex = new RegExp(`(${cmdPrefix})(${pathPrefix})(${tuiCommands.join('|')})\\b`, 'i');
   const replPattern = replCommands.map(c => {
     const base = c.toLowerCase().replace(/\.exe$/, '');
     if (['sh', 'bash', 'zsh', 'pwsh', 'powershell', 'cmd', 'wsl'].includes(base)) {
@@ -236,6 +236,7 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
 
   const watchRegex = /watch(?:\.exe)?\s+/i;
   const tailFRegex = /tail(?:\\.exe)?.*(?:-f|--follow)/i;
+  const journalctlFollowRegex = /\bjournalctl(?:\.exe)?\b[^;\n|&]*(?:\s-(?:[exqrkaobml]*f[exqrkaobml]*)\b|\s--follow\b)/i;
   const dockerLogsRegex = /docker(?:-compose)?(?:\\.exe)?.*\\s+logs.*(?:-f|--follow)/i;
   const nodeWatchRegex = /(?:node|bun|npx|pnpx|bunx|yarn)(?:\\.exe|\\.cmd)?.*--watch/i;
   const watchToolRegex = /(?:nodemon|ts-node-dev)(?:\\.exe|\\.cmd)?/i;
@@ -434,6 +435,14 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
        console.error(`\n   💡 AGENT HINT: You passed 'tail' inside an eval payload.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
        console.error(`   Because 'agent-exec.ts' is non-interactive, running TUI/REPL applications natively will hang indefinitely.`);
        console.error(`   Please use standard terminal commands instead.`);
+       process.exit(1);
+    })
+    .with({ scriptBody: P.when(body => typeof body === 'string' && journalctlFollowRegex.test(body)) }, () => {
+       console.error(`\n   💡 AGENT HINT: 'journalctl -f' runs indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+       process.exit(1);
+    })
+    .with({ type: 'eval', code: P.when(c => typeof c === 'string' && journalctlFollowRegex.test(c)) }, () => {
+       console.error(`\n   💡 AGENT HINT: 'journalctl -f' runs indefinitely. Blocking execution.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
        process.exit(1);
     })
     .with({ scriptBody: P.when(body => typeof body === 'string' && dockerLogsRegex.test(body)) }, () => {

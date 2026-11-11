@@ -164,6 +164,182 @@ export function wrapCodeInAsyncIife(code: string): string {
   return `${imports}(async () => {\n${body}\n})().then(res => {\n  if (res !== undefined) console.log(typeof res === 'object' ? JSON.stringify(res, null, 2) : res);\n}).catch(err => {\n  console.error(err);\n  process.exit(1);\n});`;
 }
 
+const UNQUOTED_SQL_START_REGEX = /^(?:SELECT|INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|BEGIN|COMMIT|ROLLBACK|SAVEPOINT|RELEASE|PRAGMA|WITH|ATTACH|DETACH|VACUUM|REINDEX|REPLACE|EXPLAIN)\s+(?:[A-Za-z_*('"[]|--|\/\*)/i;
+
+function findMatchingSqlCloseParen(code: string, startIdx: number): number {
+  let depth = 1;
+  let inSingle = false;
+  let inDouble = false;
+  let inLineComment = false;
+  let inBlockComment = false;
+
+  for (let i = startIdx; i < code.length; i++) {
+    const ch = code[i];
+    const next = code[i + 1];
+
+    if (inLineComment) {
+      if (ch === '\n') inLineComment = false;
+      continue;
+    }
+    if (inBlockComment) {
+      if (ch === '*' && next === '/') {
+        inBlockComment = false;
+        i++;
+      }
+      continue;
+    }
+    if (inSingle) {
+      if (ch === "'" && next === "'") {
+        i++;
+        continue;
+      }
+      if (ch === '\\') {
+        i++;
+        continue;
+      }
+      if (ch === "'") inSingle = false;
+      continue;
+    }
+    if (inDouble) {
+      if (ch === '"' && next === '"') {
+        i++;
+        continue;
+      }
+      if (ch === '\\') {
+        i++;
+        continue;
+      }
+      if (ch === '"') inDouble = false;
+      continue;
+    }
+
+    if (ch === '-' && next === '-') {
+      inLineComment = true;
+      i++;
+      continue;
+    }
+    if (ch === '/' && next === '*') {
+      inBlockComment = true;
+      i++;
+      continue;
+    }
+    if (ch === "'") {
+      inSingle = true;
+      continue;
+    }
+    if (ch === '"') {
+      inDouble = true;
+      continue;
+    }
+    if (ch === '(') {
+      depth++;
+      continue;
+    }
+    if (ch === ')') {
+      depth--;
+      if (depth === 0) return i;
+    }
+  }
+  return -1;
+}
+
+// [INTENT]: Restores backtick template literals around unquoted SQL statements inside .exec(...) and .prepare(...) when PowerShell double-quoting stripped the backticks.
+export function healStrippedSqlTemplateLiterals(code: string): string {
+  let result = '';
+  let lastCopied = 0;
+  let healedCount = 0;
+  let inSingle = false;
+  let inDouble = false;
+  let inBacktick = false;
+  let inLineComment = false;
+  let inBlockComment = false;
+
+  for (let i = 0; i < code.length; i++) {
+    const ch = code[i];
+    const next = code[i + 1];
+
+    if (inLineComment) {
+      if (ch === '\n') inLineComment = false;
+      continue;
+    }
+    if (inBlockComment) {
+      if (ch === '*' && next === '/') {
+        inBlockComment = false;
+        i++;
+      }
+      continue;
+    }
+    if (inSingle) {
+      if (ch === '\\') { i++; continue; }
+      if (ch === "'") inSingle = false;
+      continue;
+    }
+    if (inDouble) {
+      if (ch === '\\') { i++; continue; }
+      if (ch === '"') inDouble = false;
+      continue;
+    }
+    if (inBacktick) {
+      if (ch === '\\') { i++; continue; }
+      if (ch === '`') inBacktick = false;
+      continue;
+    }
+
+    if (ch === '/' && next === '/') {
+      inLineComment = true;
+      i++;
+      continue;
+    }
+    if (ch === '/' && next === '*') {
+      inBlockComment = true;
+      i++;
+      continue;
+    }
+    if (ch === "'") { inSingle = true; continue; }
+    if (ch === '"') { inDouble = true; continue; }
+    if (ch === '`') { inBacktick = true; continue; }
+
+    if (ch === '.') {
+      const methodMatch = code.slice(i + 1).match(/^(exec|prepare)\s*\(/);
+      if (methodMatch !== null && methodMatch[0] !== undefined) {
+        const openParenIdx = i + methodMatch[0].length;
+        const afterOpen = code.slice(openParenIdx + 1);
+        const leadingTrimMatch = afterOpen.match(/^\s*(?:\\\s*)?/);
+        const leadingOffset = leadingTrimMatch !== null && leadingTrimMatch[0] !== undefined ? leadingTrimMatch[0].length : 0;
+        const candidateStart = afterOpen.slice(leadingOffset);
+        const firstSqlChar = candidateStart[0];
+
+        if (
+          firstSqlChar !== undefined &&
+          firstSqlChar !== "'" &&
+          firstSqlChar !== '"' &&
+          firstSqlChar !== '`' &&
+          UNQUOTED_SQL_START_REGEX.test(candidateStart)
+        ) {
+          const closeParenIdx = findMatchingSqlCloseParen(code, openParenIdx + 1);
+          if (closeParenIdx !== -1) {
+            let sqlBody = code.slice(openParenIdx + 1, closeParenIdx);
+            sqlBody = sqlBody.replace(/^(\s*)\\/, '$1').replace(/\\(\s*)$/, '$1');
+            sqlBody = sqlBody.replace(/`/g, '\\`').replace(/\$\{/g, '\\${');
+
+            result += code.slice(lastCopied, openParenIdx + 1) + '`' + sqlBody + '`';
+            lastCopied = closeParenIdx;
+            i = closeParenIdx - 1;
+            healedCount++;
+            continue;
+          }
+        }
+      }
+    }
+  }
+
+  if (healedCount === 0) return code;
+
+  result += code.slice(lastCopied);
+  console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected unquoted SQL inside .exec()/.prepare() from PowerShell backtick stripping. Restoring template literals... (Frictionless Recovery)\x1b[0m`);
+  return result;
+}
+
 export function resolveEvalExecutionTarget(
   p: Extract<ExecPayload, { type: 'eval' }>
 ): EvalExecutionTarget {

@@ -91,9 +91,11 @@ export async function buildBriefingData(
             const repoPath = registryEntry.path
             activeRepoPath = repoPath
             activeGithub = getGitHubIntegration(repoPath, context.runtime)
-            activeProjectNumber = registryEntry.project_number ?? undefined
+            if (registryEntry.project_number !== undefined) {
+                activeProjectNumber = registryEntry.project_number
+                setActiveSessionProject(resolvedRepo, activeProjectNumber, context.runtime)
+            }
         }
-        setActiveSessionProject(activeWorkspaceId, activeProjectNumber, context.runtime)
     } else if (activeWorkspaceId && activeWorkspaceId !== 'default' && activeWorkspaceId !== '*') {
         const canonicalKey = findCanonicalRegistryKey(activeWorkspaceId, registry) ?? activeWorkspaceId
         activeWorkspaceId = canonicalKey

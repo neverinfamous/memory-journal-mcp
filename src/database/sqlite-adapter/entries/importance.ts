@@ -1,4 +1,5 @@
 import type { ImportanceBreakdown, ImportanceResult, JournalEntry } from '../../../types/index.js'
+import { effectiveWorkspace } from '../../workspace-scope.js'
 import { type EntriesSharedContext, rowToObject } from './shared.js'
 import { getEntriesByIds } from './crud.js'
 
@@ -75,7 +76,8 @@ export function calculateImportance(
     workspaceId?: string
 ): ImportanceResult {
     const { db } = context
-    const scoped = workspaceId !== undefined && workspaceId !== '*'
+    const scopeId = effectiveWorkspace(workspaceId)
+    const scoped = scopeId !== '*'
     const round2 = (n: number): number => Math.round(n * 100) / 100
 
     const stmt = db.prepare(`SELECT
@@ -100,7 +102,7 @@ export function calculateImportance(
     WHERE m.id = ? AND m.deleted_at IS NULL${scoped ? ' AND m.workspace_id = ?' : ''}`)
 
     const baseParams = [entryId, entryId, entryId, entryId, entryId, entryId]
-    const row = rowToObject(stmt.get(...(scoped ? [...baseParams, workspaceId] : baseParams)))
+    const row = rowToObject(stmt.get(...(scoped ? [...baseParams, scopeId] : baseParams)))
 
     if (!row) {
         return {

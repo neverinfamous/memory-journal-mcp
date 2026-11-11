@@ -152,16 +152,18 @@ ${priorContextSection}`,
                         content: {
                             type: 'text',
                             text: `# Adversarial Code Quality Audit
-Prompt revision: 2026-11-07-audit-pass11.
+Prompt revision: 2026-11-11-audit-pass12.
 Target: ${target}
 
 If the target is '{target}', determine it from the user's request. If the user hasn't specified a target file or module, ask them for it now.
 
 This prompt is shared by every project. Audit the repository the user named. Do not assume that repository is memory-journal-mcp, and do not copy this server's directory layout, commit script, or parameter-normalizer filenames onto a different codebase. Discover those in the target.
 
+If \`memory://briefing/{repo}\` cannot be read, continue the audit. Resolve \`workspace_id\` and \`project_number\` with \`mj.core.getProject\` or \`mj.core.listProjects\`, and record the resource failure for later.
+
 1. Scan the target for dead code, duplication, type safety, magic values, complexity, boundary validation, monkey-patching, unused variables/exports, unhandled promises, and global scope pollution:
    - **Evidence & Low-Severity Rules**: File dead code, duplication, magic values, unused exports, and floating promises only when you quote them, and count those as **Low**.
-   - **Subagent Orchestration**: For a large or full-repository audit, run step 2 first and pass the \`SCAN_OK\` result to parallel read-only subagents partitioned by subsystem (assigning each directory to one subagent). In Cursor use the Task tool (\`explore\` or \`generalPurpose\`); on any other host use that host's read-only subagent tool. Put the parent conversation id in every subagent prompt. Instruct every subagent to read full function bodies (not only grep hits), treat a grep-only detector as \`not run\`, skip repeating step 2 file-size scans, and return one coverage line per detector (\`run\`, \`not run\`, or \`nothing found\`) plus findings (path, line number, raw one-line quote, severity, one-sentence fix). The parent runs any detector a subagent skipped before reporting it clean.
+   - **Subagent Orchestration**: For a large or full-repository audit, run step 2 first and pass the \`SCAN_OK\` result to parallel read-only subagents partitioned by subsystem (assigning each directory to one subagent). In Cursor use the Task tool (\`explore\` or \`generalPurpose\`); on any other host use that host's read-only subagent tool. Put the parent conversation id in every subagent prompt. Instruct every subagent to read full function bodies (not only grep hits), treat a grep-only detector as \`not run\`, skip repeating step 2 file-size scans, and return one coverage line per detector (\`run\`, \`not run\`, or \`nothing found\`) plus findings (path, line number, raw one-line quote, severity, one-sentence fix). The parent runs any detector a subagent skipped before reporting it clean. Each subagent returns at most 8 Moderate and 5 Low findings, already ranked. The parent merges parallel copies of one pattern into one finding that cites both sites.
    - **Severity Calibration**: Cross-workspace mutation is **Critical**; wrong-tool dispatch, false success, dropped isolation field, or a file over 500 lines is **High**; function length (>80 lines), deep nesting (>4), or a primary-key update that already rejects a workspace mismatch is **Moderate**. An explicit \`'*'\` that drives a mutation against a single repository root (e.g. \`process.cwd()\`) is **High**, whereas explicit \`'*'\` on multi-workspace DB queries/admin operations is an intentional admin override. A database-wide maintenance function with no scope parameter (or optional workspace kept database-wide on purpose) is a product note, not an automatic Critical.
    - **Parent Verification & Caps**: The parent dedupes a handler that drops a field and the callee branch it reaches into one finding with both lines, re-reads every Critical/High citation (and any cross-workspace, authz, or false-success citation marked Moderate), strips one wrapping backtick pair, and drops any citation whose quote is not on that line. Cap Moderate at 8 and Low at 5 per subsystem (parent table max: 12 Moderate, 8 Low; never cap Critical or High). Record which directories were opened and which detectors found nothing.
    - **Mandatory Deep-Quality Detectors (Always Run)**:
@@ -187,9 +189,11 @@ This prompt is shared by every project. Audit the repository the user named. Do 
        foreach ($item in (Get-ChildItem -LiteralPath $dir -Force)) {
          if ($skip -contains $item.Name) { continue }
          if ($item.PSIsContainer) { Walk $item.FullName; continue }
-         if ($item.Name -match '\\.(ts|tsx|js|mjs|cjs)$' -and $item.Name -notmatch '\\.(test|spec)\\.') {
+         if ($item.Name -cmatch '\\.(ts|tsx|js|mjs|cjs)$' -and $item.Name -cnotmatch '\\.(test|spec)\\.') {
            $script:n++
-           $lines = [System.IO.File]::ReadAllLines($item.FullName).Count
+           $parts = [System.IO.File]::ReadAllText($item.FullName) -split '\\r?\\n'
+           $lines = $parts.Length
+           if ($lines -gt 0 -and $parts[$lines - 1] -eq '') { $lines-- }
            if ($lines -gt 500) { $script:over++; Write-Output ($lines.ToString() + ' ' + $item.FullName) }
          }
        }
@@ -198,7 +202,7 @@ This prompt is shared by every project. Audit the repository the user named. Do 
      Walk 'scripts'
      Write-Output ('SCAN_OK scanned=' + $n + ' over500=' + $over)
      \`\`\`
-   - **Method 2 (PowerShell \`bun -e\` only)**: Do not pass this script to \`node -e\`. The walk can take more than 60 seconds. Both methods must print the same \`scanned\` and \`over500\` counts. A Node run uses \`node --input-type=module --eval\` with the same logic and \`node:fs\` / \`node:path\` imports.
+   - **Method 2 (PowerShell \`bun -e\` only)**: Do not pass this script to \`node\`. The walk can take more than 60 seconds. Both methods count lines by splitting on \`\\r?\\n\` and dropping one trailing empty segment, and both match extensions case-sensitively. Both methods must print the same \`scanned\` and \`over500\` counts. If \`bun\` is unavailable, stop and report that method 2 did not run.
      \`\`\`powershell
      bun -e @'
 import {readdirSync as r,statSync as s,readFileSync as f} from 'fs';import {join as j} from 'path';const skip=new Set(['vendor','third_party','node_modules','dist','coverage','build','.next','out']);let n=0,over=0;function w(d){if(!s(d,{throwIfNoEntry:false}))return;for(const x of r(d)){if(skip.has(x))continue;const p=j(d,x);if(s(p).isDirectory())w(p);else if(/\\.(ts|tsx|js|mjs|cjs)$/.test(x)&&!/\\.(test|spec)\\./.test(x)){n++;const parts=f(p,'utf8').split(/\\r?\\n/);const l=parts.length>0&&parts[parts.length-1]===''?parts.length-1:parts.length;if(l>500){over++;console.log(l,p)}}}}w('src');w('scripts');console.log('SCAN_OK scanned='+n+' over500='+over);
@@ -318,7 +322,7 @@ If the target is '{target}', determine it from the user's request. If the user h
      5. **Async Waterfall & I/O Batching Audit**: Scan for sequential \`await\` calls in loops or independent network/git/filesystem operations (e.g., GitHub API fetches, \`realpathSync.native\` in chunked file writes) that can be parallelized with \`Promise.all\` / \`Promise.allSettled\` or cached with TTL.
      6. **Benchmark Suite Realism & Contamination Audit**: Inspect \`tests/**/*.bench.ts\` to verify benchmarks do not silently benchmark validation errors (e.g., missing required parameters under \`VITEST=true\`), do not contaminate read/search benchmarks with thousands of prior write-benchmark rows or orphan vectors, and do not pay cold-start model loading costs when embeddings are mocked.
 2. **External Validation (Copilot — Opt-In)**: ${copilotInstruction}
-3. Present findings table (incorporating Copilot findings if applicable) grouped by subsystem and severity (Critical, High, Medium, Low) with quantified latency/allocation impact.
+3. Present findings table (incorporating Copilot findings if applicable) grouped by subsystem and severity (Critical, High, Moderate, Low) with quantified latency/allocation impact.
 4. Await approval before applying fixes. Diagnostic scans are part of the audit. Do not edit project files until the user approves the plan.
 5. After approval, apply fixes in phased stages, run the target's lint and typecheck, the tests that cover the change, and the benchmark command the target defines. Compare before and after telemetry.
 6. Commit with the target repository's own commit helper when one exists. Discover that helper. Do not invent a script path. Do not add an audit plan file to the repository.

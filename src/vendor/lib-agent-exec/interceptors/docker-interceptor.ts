@@ -250,6 +250,53 @@ export function dockerInterceptor({ cmdBasename, args, payload }: ExecutionConte
     }
   }
 
+  // [INTENT]: Split PowerShell/subshell whitespace-joined container/image IDs (e.g. "$(docker ps -aq)") into discrete target arguments under shell: false.
+  const multiTargetSubCmds = ['inspect', 'stop', 'start', 'restart', 'rm', 'rmi', 'kill', 'pause', 'unpause'];
+  if (dockerCmds.includes(cmdBasename) && !isComposePlugin && !isBuildxPlugin && subCmd !== undefined && multiTargetSubCmds.includes(subCmd)) {
+    const subCmdIdx = args.indexOf(subCmd);
+    if (subCmdIdx !== -1) {
+      const valueTakingFlags = new Set([
+        '-f', '--format', '--type', '-t', '--time', '--timeout',
+        '-s', '--signal', '--detach-keys', '--context', '-c',
+        '-H', '--host', '-l', '--log-level', '--config',
+      ]);
+      const expandedArgs: string[] = args.slice(0, subCmdIdx + 1);
+      let skipNext = false;
+      let splitCount = 0;
+
+      for (let i = subCmdIdx + 1; i < args.length; i++) {
+        const arg = args[i];
+        if (arg === undefined) continue;
+        if (skipNext) {
+          skipNext = false;
+          expandedArgs.push(arg);
+          continue;
+        }
+        if (arg.startsWith('-')) {
+          if (valueTakingFlags.has(arg)) {
+            skipNext = true;
+          }
+          expandedArgs.push(arg);
+          continue;
+        }
+        const unquoted = arg.replace(/^(["'])([\s\S]*)\1$/, '$2').trim();
+        if (/\s/.test(unquoted) && /^[a-zA-Z0-9][a-zA-Z0-9_./:@-]*(?:\s+[a-zA-Z0-9][a-zA-Z0-9_./:@-]*)+$/.test(unquoted)) {
+          const parts = unquoted.split(/\s+/).filter(Boolean);
+          expandedArgs.push(...parts);
+          splitCount += parts.length;
+          continue;
+        }
+        expandedArgs.push(arg);
+      }
+
+      if (splitCount > 0) {
+        console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected whitespace-joined target IDs in 'docker ${subCmd}'. Splitting into ${splitCount} individual arguments... (Frictionless Recovery)`);
+        args.length = 0;
+        args.push(...expandedArgs);
+      }
+    }
+  }
+
   if (isDockerTtySensitive) {
     const dockerValueFlags = ['-v', '--volume', '-p', '--publish', '--name', '-e', '--env', '--env-file', '--build-arg', '-f', '--file', '-w', '--workdir', '-u', '--user', '--network', '--entrypoint', '-m', '--memory', '--cpus', '--label', '--hostname', '--add-host', '--dns', '--cap-add', '--cap-drop', '--device', '--log-driver', '--log-opt', '--restart', '--mount', '--tmpfs', '--ulimit', '--pid', '--ipc', '--uts', '--userns', '--cgroupns', '--runtime', '--isolation', '--security-opt', '--storage-opt', '--sysctl', '--link', '--health-cmd', '--health-interval', '--health-retries', '--health-timeout', '--stop-signal', '--stop-timeout', '--shm-size', '--gpus', '--ip', '--ip6', '--mac-address', '--init', '--read-only', '--sig-proxy', '--platform', '--pull', '-l', '-h', '--group-add', '--expose', '--domainname', '--blkio-weight', '--cidfile', '--cgroup-parent'];
     

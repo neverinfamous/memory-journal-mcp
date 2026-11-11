@@ -495,9 +495,10 @@ describe('WorkerSandbox', () => {
             expect(result.result).toEqual({
                 alive: true,
                 exitRes: {
-                    success: true,
-                    exited: true,
+                    success: false,
+                    exited: false,
                     exitCode: 0,
+                    error: 'process.exit is disabled in the sandbox',
                 },
             })
 

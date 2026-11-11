@@ -1,4 +1,5 @@
 import type { EntryRevision } from '../../../types/index.js'
+import { effectiveWorkspace } from '../../workspace-scope.js'
 import type { EntriesSharedContext } from './shared.js'
 import { getEntryById } from './crud-read.js'
 
@@ -24,7 +25,8 @@ export function getEntryRevisions(
 ): EntryRevision[] {
     const { db } = context
 
-    if (workspaceId !== undefined && workspaceId !== '*' && getEntryById(context, id, workspaceId) === null) {
+    const scopeId = effectiveWorkspace(workspaceId)
+    if (scopeId !== '*' && getEntryById(context, id, scopeId) === null) {
         return []
     }
 
@@ -62,7 +64,7 @@ export function compareEntryVersions(
         toContent = toRev.contentSnapshot
         resolvedTo = toRevision
     } else {
-        const currentEntry = getEntryById(context, entryId, workspaceId ?? '*')
+        const currentEntry = getEntryById(context, entryId, effectiveWorkspace(workspaceId))
         if (currentEntry === null) return null
         toContent = currentEntry.content
     }

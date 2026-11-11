@@ -203,13 +203,8 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                 try {
                     const input = GetEntryByIdSchema.parse(params)
                     let wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
-                    let entry = db.getEntryById(input.entry_id, wsId)
-                    if (!entry && input.workspace_id === undefined) {
-                        entry = db.getEntryById(input.entry_id, '*')
-                        if (entry?.workspaceId !== undefined) {
-                            wsId = entry.workspaceId
-                        }
-                    } else if (entry?.workspaceId !== undefined && (wsId === '*' || wsId === 'default')) {
+                    const entry = db.getEntryById(input.entry_id, wsId)
+                    if (entry?.workspaceId !== undefined && (wsId === '*' || wsId === 'default')) {
                         wsId = entry.workspaceId
                     }
                     if (!entry) {
@@ -287,13 +282,8 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                 try {
                     const input = GetEntryHistorySchema.parse(params)
                     let wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
-                    let current = db.getEntryById(input.entry_id, wsId)
-                    if (!current && input.workspace_id === undefined) {
-                        current = db.getEntryById(input.entry_id, '*')
-                        if (current?.workspaceId !== undefined) {
-                            wsId = current.workspaceId
-                        }
-                    } else if (current?.workspaceId !== undefined && (wsId === '*' || wsId === 'default')) {
+                    const current = db.getEntryById(input.entry_id, wsId)
+                    if (current?.workspaceId !== undefined && (wsId === '*' || wsId === 'default')) {
                         wsId = current.workspaceId
                     }
                     if (!current) {
@@ -349,17 +339,11 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                             workspace_id: z.string().optional(),
                         })
                         .parse(params ?? {})
-                    const resolvedWs = resolveWorkspaceId(
+                    const wsId = resolveWorkspaceId(
                         input.workspace_id,
                         input.project_number,
                         context.config
                     )
-                    const wsId =
-                        input.workspace_id !== undefined ||
-                        input.project_number !== undefined ||
-                        resolvedWs !== 'default'
-                            ? resolvedWs
-                            : undefined
                     const tags = db
                         .listTags(wsId)
                         .map((t) => ({ name: t.name, count: t.usageCount ?? 0 }))

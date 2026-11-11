@@ -35,12 +35,16 @@ function getDatabasePath(): string {
 
 function checkUnassignedEntries(): void {
     const dbPath = getDatabasePath()
+    const isStrict = process.argv.includes('--strict') || process.env['CI'] === 'true'
     if (!fs.existsSync(dbPath)) {
-        console.log(`ℹ️ Database file not found at '${dbPath}', skipping workspace isolation check.`)
+        const message = `Database file not found at '${dbPath}', skipping workspace isolation check.`
+        if (isStrict) {
+            console.error(message)
+            process.exit(1)
+        }
+        console.log(`ℹ️ ${message}`)
         return
     }
-
-    const isStrict = process.argv.includes('--strict') || process.env['CI'] === 'true'
     let rawKey = process.env['MJ_DB_ENCRYPTION_KEY'] || process.env['DB_ENCRYPTION_KEY']
     let db: Database.Database
     try {

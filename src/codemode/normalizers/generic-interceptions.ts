@@ -410,23 +410,30 @@ function normalizeExecuteCodeAliases(obj: Record<string, unknown>): void {
     }
 }
 
-function synthesizeEntryMutationFields(obj: Record<string, unknown>): void {
+const ENTRY_TYPE_ALIASES: Record<string, string> = {
+    bug: 'bug_fix', bugfix: 'bug_fix', bug_fix: 'bug_fix', 'bug-fix': 'bug_fix', hotfix: 'bug_fix', defect: 'bug_fix',
+    progress: 'development_note', status: 'development_note', development: 'development_note',
+    feature: 'feature_implementation', meeting: 'meeting_notes',
+    task: 'technical_note', chore: 'technical_note', refactor: 'technical_note', fix: 'technical_note',
+    update: 'technical_note', technical: 'technical_note', note: 'technical_note',
+    documentation: 'technical_note', code: 'technical_note', coding: 'technical_note',
+    'session-summary': 'retrospective', session_summary: 'retrospective',
+    'team-session-summary': 'retrospective', team_session_summary: 'retrospective',
+    'team session summary': 'retrospective',
+}
+
+function canonicalizeEntryType(obj: Record<string, unknown>): void {
     if (obj['type'] !== undefined && obj['entry_type'] === undefined) {
         obj['entry_type'] = obj['type']
         delete obj['type']
     }
-    if (typeof obj['entry_type'] === 'string') {
-        const etLower = obj['entry_type'].toLowerCase().trim()
-        if (['bug', 'bugfix', 'bug_fix', 'bug-fix', 'hotfix', 'defect'].includes(etLower)) obj['entry_type'] = 'bug_fix'
-        else if (['progress', 'status', 'development'].includes(etLower)) obj['entry_type'] = 'development_note'
-        else if (etLower === 'feature') obj['entry_type'] = 'feature_implementation'
-        else if (etLower === 'meeting') obj['entry_type'] = 'meeting_notes'
-        else if (['task', 'chore', 'refactor', 'fix', 'update', 'technical', 'note', 'documentation', 'code', 'coding'].includes(etLower)) {
-            obj['entry_type'] = 'technical_note'
-        } else if (['session-summary', 'session_summary', 'team-session-summary', 'team_session_summary', 'team session summary'].includes(etLower)) {
-            obj['entry_type'] = 'retrospective'
-        }
-    }
+    if (typeof obj['entry_type'] !== 'string') return
+    const alias = ENTRY_TYPE_ALIASES[obj['entry_type'].toLowerCase().trim()]
+    if (alias !== undefined) obj['entry_type'] = alias
+}
+
+function synthesizeEntryMutationFields(obj: Record<string, unknown>): void {
+    canonicalizeEntryType(obj)
     const contentParts: string[] = []
 
     const consumeGroup = (keys: string[], format: (val: unknown) => string): void => {

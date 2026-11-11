@@ -415,8 +415,10 @@ describe('Cross-Subsystem Integration: Autonomous Healing, Validation & Observab
         const firstPayload = parseToolResponsePayload(firstRes)
         expect(getProp(firstPayload, 'success')).toBe(true)
         const firstId = Number(getProp(firstPayload, 'id'))
-        expect(db.getAnchorsByEntryId(firstId).length).toBe(1)
-        expect(db.getAnchorsByEntryId(firstId)[0]?.anchorPath).toBe('src/handlers/tools/core/tools.ts')
+        expect(db.getAnchorsByEntryId(firstId, 'healed-proj').length).toBe(1)
+        expect(db.getAnchorsByEntryId(firstId, 'healed-proj')[0]?.anchorPath).toBe(
+            'src/handlers/tools/core/tools.ts'
+        )
 
         const secondRes = await callToolHandler(
             {
@@ -441,7 +443,7 @@ describe('Cross-Subsystem Integration: Autonomous Healing, Validation & Observab
         expect(getProp(secondEntry, 'entryType')).toBe('maintenance')
 
         const secondId = Number(getProp(secondPayload, 'id'))
-        const rels = db.getRelationships(secondId)
+        const rels = db.getRelationships(secondId, 'healed-proj')
         expect(rels.some((r) => r.toEntryId === firstId && r.relationshipType === 'resolved')).toBe(true)
 
         const linkRes = await callToolHandler(

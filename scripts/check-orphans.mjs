@@ -34,6 +34,7 @@ function checkOrphans() {
         }
         
         db.close();
+        if (rows.length > 0) process.exit(1);
     } catch (e) {
         console.error(`\n❌ Error accessing database: ${e.message}`);
         console.log('Usage: node scripts/check-orphans.mjs [path/to/database.db]');

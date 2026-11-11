@@ -16,7 +16,7 @@ import {
 } from './interceptors/index.js';
 import { replaceIntegrationContext, BUILT_INS, recordAgentIssue } from './utils.js';
 import { DEFAULT_ENV_VARS } from './environment.js';
-import { resolveEvalExecutionTarget, hasTopLevelReturn, wrapCodeInAsyncIife } from './eval-healer.js';
+import { resolveEvalExecutionTarget, hasTopLevelReturn, wrapCodeInAsyncIife, healStrippedSqlTemplateLiterals } from './eval-healer.js';
 import { healEvalCodePathHallucinations } from './path-healer.js';
 import {
   isPwsh,
@@ -330,10 +330,13 @@ export function buildCommand(payload: ExecPayload, cwd: string, isJson: boolean 
             codeToExecute = codeToExecute.replace(/(^|\n)\s*\/\/\s*(.*)/g, '$1# $2');
           }
         }
-        if (['.js', '.ts'].includes(ext) && hasTopLevelReturn(codeToExecute)) {
-          console.error(`\n   💡 AGENT HINT: Code Mode style top-level 'return' detected in eval payload.`);
-          console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-wrapping code in async IIFE to capture returned output... (Frictionless Recovery)\x1b[0m`);
-          codeToExecute = wrapCodeInAsyncIife(codeToExecute);
+        if (['.js', '.ts'].includes(ext)) {
+          codeToExecute = healStrippedSqlTemplateLiterals(codeToExecute);
+          if (hasTopLevelReturn(codeToExecute)) {
+            console.error(`\n   💡 AGENT HINT: Code Mode style top-level 'return' detected in eval payload.`);
+            console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-wrapping code in async IIFE to capture returned output... (Frictionless Recovery)\x1b[0m`);
+            codeToExecute = wrapCodeInAsyncIife(codeToExecute);
+          }
         }
         fs.writeFileSync(tempScriptPath, codeToExecute, { encoding: 'utf-8', mode: 0o600 });
       } catch (err) {

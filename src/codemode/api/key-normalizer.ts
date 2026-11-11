@@ -121,64 +121,64 @@ function resolveBaseSnakeKey(key: string, ctx: KeyContext): string {
     return snakeKey
 }
 
+function entryAliasReplacement(value: unknown, methodName: string | undefined): string | undefined {
+    if (isRecord(value)) return undefined
+    if (typeof value !== 'string') return undefined
+    const numeric = /^\d+$/.test(value.trim())
+    const contentMethod =
+        methodName !== undefined &&
+        (hasMethodToken(methodName, 'create') ||
+            hasMethodToken(methodName, 'add') ||
+            hasMethodToken(methodName, 'insert') ||
+            (hasMethodToken(methodName, 'log') && !hasMethodToken(methodName, 'audit')))
+    if (!numeric || contentMethod) return 'content'
+    return undefined
+}
+
+function pathAliasReplacement(methodLower: string | undefined): string | undefined {
+    if (methodLower?.includes('export')) return 'output_dir'
+    if (!methodLower?.includes('import')) return undefined
+    return 'keep'
+}
+
 /** Applies PARAM_ALIASES unless a method/context-specific rule suppresses or redirects the alias. */
 function resolveAliasedKey(startKey: string, value: unknown, ctx: KeyContext): string {
     const { obj, result, methodName, methodLower, isGithubTool } = ctx
-    let snakeKey = startKey
-    {
-        const alias = PARAM_ALIASES[snakeKey]
-        let useAlias = alias !== undefined && !(alias in obj) && !(alias in result)
+    const alias = PARAM_ALIASES[startKey]
+    if (alias === undefined || alias in obj || alias in result) return startKey
 
-        if (useAlias && snakeKey === 'entry') {
-            if (isRecord(value)) {
-                useAlias = false
-            } else if (
-                typeof value === 'string' &&
-                (!/^\d+$/.test(value.trim()) ||
-                    (methodName !== undefined &&
-                        (hasMethodToken(methodName, 'create') ||
-                            hasMethodToken(methodName, 'add') ||
-                            hasMethodToken(methodName, 'insert') ||
-                            (hasMethodToken(methodName, 'log') && !hasMethodToken(methodName, 'audit')))))
-            ) {
-                useAlias = false
-                snakeKey = 'content'
-            }
-        } else if (useAlias && (snakeKey === 'title' || snakeKey === 'body') && isGithubTool) {
-            useAlias = false
-        } else if (
-            useAlias &&
-            snakeKey === 'keep' &&
-            !(methodName !== undefined && hasMethodToken(methodName, 'cleanup') && hasMethodToken(methodName, 'backups'))
-        ) {
-            useAlias = false
-        } else if (useAlias && snakeKey === 'source' && methodLower?.includes('import')) {
-            useAlias = false
-            snakeKey = 'source_format'
-        } else if (useAlias && snakeKey === 'path') {
-            if (methodLower?.includes('export')) {
-                useAlias = false
-                snakeKey = 'output_dir'
-            } else if (!methodLower?.includes('import')) {
-                useAlias = false
-            }
-        } else if (useAlias && (snakeKey === 'text' || snakeKey === 'body' || snakeKey === 'note' || snakeKey === 'title')) {
-            if (
-                methodLower !== undefined &&
-                !(
-                    isGithubTool ||
-                    hasMethodToken(methodLower, 'create') ||
-                    hasMethodToken(methodLower, 'update') ||
-                    hasMethodToken(methodLower, 'entry')
-                )
-            ) {
-                useAlias = false
-            }
-        }
-
-        if (useAlias && typeof alias === 'string') snakeKey = alias
+    if (startKey === 'entry') {
+        if (isRecord(value)) return startKey
+        return entryAliasReplacement(value, methodName) ?? alias
     }
-    return snakeKey
+    if ((startKey === 'title' || startKey === 'body') && isGithubTool) return startKey
+    if (
+        startKey === 'keep' &&
+        !(methodName !== undefined && hasMethodToken(methodName, 'cleanup') && hasMethodToken(methodName, 'backups'))
+    ) {
+        return startKey
+    }
+    if (startKey === 'source' && methodLower?.includes('import')) return 'source_format'
+    if (startKey === 'path') {
+        const pathKey = pathAliasReplacement(methodLower)
+        if (pathKey === 'keep') return alias
+        if (pathKey !== undefined) return pathKey
+        return startKey
+    }
+    const contentKeys = startKey === 'text' || startKey === 'body' || startKey === 'note' || startKey === 'title'
+    if (
+        contentKeys &&
+        methodLower !== undefined &&
+        !(
+            isGithubTool ||
+            hasMethodToken(methodLower, 'create') ||
+            hasMethodToken(methodLower, 'update') ||
+            hasMethodToken(methodLower, 'entry')
+        )
+    ) {
+        return startKey
+    }
+    return alias
 }
 
 /** Redirects content-like keys (message/name/description/...) to the right field per tool family. */

@@ -410,10 +410,12 @@ async function getAllToolDefinitionsAsync(context: ResourceContext): Promise<Min
             }
         })
     } catch (e: unknown) {
-        logger.error('HELP_LOAD_TOOLS_FAILED', {
-            error: e instanceof Error ? e.message : String(e),
-        })
-        return []
+        const message = e instanceof Error ? e.message : String(e)
+        logger.error('HELP_LOAD_TOOLS_FAILED', { error: message })
+        throw new ProtocolError(
+            ProtocolErrorCode.InternalError,
+            `Failed to load tool definitions: ${message}`
+        )
     }
 }
 

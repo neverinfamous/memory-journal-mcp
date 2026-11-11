@@ -45,6 +45,9 @@ export async function runStartupAutoPrune(
             options
         ),
     })
+    if (pruneResult.aborted === true) {
+        throw new Error('Auto-prune aborted because the pre-prune backup failed')
+    }
     logger.info('Auto-prune completed', {
         module: 'McpServer',
         archivedCount: pruneResult.archivedCount,
