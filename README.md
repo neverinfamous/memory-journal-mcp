@@ -45,11 +45,12 @@ Memory Journal builds your project's long-term memory. It acts as a **Project Co
 
 ## 🎯 What Sets Us Apart
 
-**MCP Tools** · **Workflow Prompts** · **Resources** · **Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights)
+**MCP Tools** · **Workflow Prompts** · **Resources** · **Tool Groups** · **Code Mode** · **Cognitive Automations (CMS)** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights)
 
 | Feature                       | Description                                                                                                          |
 | ----------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | **Session Intelligence**      | Auto-query project history, create checkpoints, and hand off context between sessions automatically.                 |
+| **Cognitive Automations**     | Consolidate episodic notes nightly (`CMS-02`), audit soft-deletions, and self-heal recurring tool friction (`CMS-04`). |
 | **GitHub Integration**        | Manage Issues, PRs, Actions, Kanban boards, and milestones. Access Copilot reviews and repository insights.          |
 | **Dynamic Project Routing**   | Switch contexts seamlessly and access CI/Issue tracking across multiple repositories from a single server instance.  |
 | **Knowledge Graphs**          | Link specifications, implementations, tests, and PRs visually using Mermaid diagrams.                                |
@@ -575,6 +576,23 @@ memory-journal-mcp --transport http --port 3000
 1. **Session start** → agent reads `memory://briefing` (or `memory://briefing/{+repo}`) and shows project context
 2. **Session summary** → use `/session-summary` to capture progress and next-session context
 3. Next session's briefing includes the previous summary — context flows seamlessly
+
+### 🌙 Automate Nightly Cognitive Maintenance (CMS)
+
+Keep project memory self-cleaning, drift-free, and self-healing across stdio and HTTP setups using the **Cognitive Management System (CMS)**:
+
+- **Session Hooks & Issue Telemetry** — Pair client `SessionStart` / `PostToolUse` hooks (Google Antigravity `hooks.json`, Cursor `.cursor/hooks.json`) with built-in server error telemetry (`logs/agent-issues.jsonl`) to inject `workspace_id` + `project_number` context at startup and capture validation friction automatically.
+- **`CMS-02`: NREM Memory Consolidation (`optimize-journal`)** — Unattended Data-Plane / Zero-Build curation: timestamped backups, unassigned entry migration, Git/GitHub ground-truth & anchor staleness checks, episodic-to-semantic compaction, tag/graph defrag, auto-pruning, and vector index parity.
+- **`CMS-04`: REM Meta-Cognitive Supervisor (`cms-rem-supervisor`)** — Control-Plane safety audit: automatic restoration of erroneously soft-deleted high-value entries, `logs/agent-issues.jsonl` telemetry mining, and batched schema/prompt healing behind a Dirty-Tree Conditional Validation Gate.
+
+Trigger either workflow on demand or via scheduled background agents in **Cursor**, **Google Antigravity**, **Claude Code**, or **Windsurf**:
+
+```text
+/mcp:memory-journal-mcp:optimize-journal mode="full" autoRun="true" limit="0"
+/mcp:memory-journal-mcp:cms-rem-supervisor lookbackHours="24" autoRestore="true"
+```
+
+**[Complete Automations, Hooks & Cross-Client Scheduling Guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Automations)**
 
 ## 🔧 Configuration
 

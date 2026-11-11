@@ -25,11 +25,12 @@
 
 ## 🎯 What Sets Us Apart
 
-**MCP Tools** · **Workflow Prompts** · **Resources** · **Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights)
+**MCP Tools** · **Workflow Prompts** · **Resources** · **Tool Groups** · **Code Mode** · **Cognitive Automations (CMS)** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights)
 
 | Feature | Description |
 | --- | --- |
 | **Session Intelligence** | Auto-query history, create checkpoints, and hand off context between sessions. Briefings adapt dynamically to your workspace. |
+| **Cognitive Automations** | Consolidate episodic notes nightly (`CMS-02`), audit soft-deletions, and self-heal recurring agent friction (`CMS-04`). |
 | **GitHub Integration** | Manage Issues, PRs, Actions, Kanban boards, and milestones. Switch contexts across multiple repositories seamlessly. |
 | **Knowledge & Search** | Find entries instantly using hybrid search and visualize relationships with Mermaid graphs. Auto-prune low-value entries to maintain search relevance. |
 | **Code Mode** | Execute multi-step operations efficiently in a secure sandbox to drastically reduce token usage. |
@@ -128,20 +129,13 @@ Comprehensive access to internal state via resources (`memory://briefing`, `memo
 
 ### ⚡ Cut Token Usage with Code Mode
 
-Code Mode (`mj_execute_code`) runs many journal operations in one sandboxed call, so the client does not resend every tool schema.
+Code Mode (`mj_execute_code`) runs multi-step journal operations in one sandboxed call, avoiding repeated tool schema overhead. Code executes in a **pre-warmed `worker_threads` V8 isolate pool + secondary `vm.createContext` boundary** with full `mj.*` API access:
 
-Code executes in a **pre-warmed `worker_threads` V8 isolate pool + secondary `vm.createContext` boundary** with multiple layers of security. All `mj.*` API calls execute against the journal within the sandbox, providing:
+- **V8 & Prototype Lockdown** — Disables `eval()`/`Function()` string codegen (`codeGeneration: { strings: false, wasm: false }`), nullifies `Proxy`, freezes built-in prototypes and `mj.*` bindings, and neuters `.constructor` chains across inner and outer realms.
+- **Lexical Validation & RPC Allowlist** — Enforces 50KB code caps, blocks `require()`, `import()`, `process`, `Reflect.*`, `Symbol.*`, prototype mutators, and filesystem/network access, and validates `mj.*` calls against `Object.hasOwn()` and active `--tool-filter` rules (`readonly` restricts `mj.*` to `readOnlyHint: true`).
+- **Resource & Egress Bounds** — Enforces 60 executions/min rate limits, bounded async timers (30s default timeout), and 100KB egress compaction (`CODE_MODE_MAX_RESULT_SIZE`).
 
-- **V8 code generation restrictions** — `eval()` and `Function()` construction from strings disabled at the V8 engine level via `codeGeneration: { strings: false, wasm: false }`
-- **Frozen prototypes & cross-realm constructor lockdown** — all built-in prototypes (`Object`, `Function`, `Array`, `Error`, etc.) and `mj.*` API bindings are frozen, and `.constructor` is neutered across `Object`, `Function`, `AsyncFunction`, `GeneratorFunction`, and `AsyncGeneratorFunction` prototypes in both the inner `vm` realm and outer worker realm to prevent dynamic constructor chain escapes
-- **Single-pass lexical validation** — pre-validation rate-limiting and 50KB byte caps run before any code normalization, followed by a single-pass lexical comment/string scanner (preserving `${...}` template expressions) and regex rules blocking `require()`, `import()`, `process`, `eval()`, `Reflect.*`, `Symbol.*`, `Object.getPrototypeOf`/`setPrototypeOf`/`defineProperty`, `new Proxy()`, `__proto__`, and filesystem/network access
-- **Proxy constructor nullified** — `Proxy: undefined` in the sandbox prevents meta-object protocol abuse
-- **Prototype-safe RPC allowlist** — host-side `Object.hasOwn()` validation, recursion-bounded argument normalization, and `--tool-filter` enforcement prevent workers from invoking unauthorized or filtered API methods
-- **Rate limiting** — 60 executions per minute per client
-- **Hard timeouts** — configurable execution limit (default 30s) with bounded async timer tracking (`setTimeout`/`sleep` capped and cleared on completion)
-- **Egress boundary enforcement** — result serialization capped (default 100KB via `CODE_MODE_MAX_RESULT_SIZE`) with automatic payload compaction to prevent OOM
-- **Full API access** — all tool groups are available via `mj.*` (e.g., `mj.core.createEntry()`, `mj.search.searchEntries()`, `mj.github.getGithubIssues()`)
-- **Readonly filter** — A filter containing `readonly` (and not `-readonly`) drops tools whose `readOnlyHint` is not `true`. `update_configuration` and `mj_execute_code` stay registered.
+**[Complete Code Mode guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Code-Mode)**
 
 ---
 
@@ -276,11 +270,15 @@ Restart Cursor or your MCP client and start journaling!
 
 For all environment variables and routing docs, see the **[Configuration Wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki/Configuration)**.
 
-### 🔄 Session Management
+### 🔄 Session Management & Nightly Automations (CMS)
 
-1. **Session start** → agent reads `memory://briefing` (or `memory://briefing/{+repo}`) and shows project context
-2. **Session summary** → use `/session-summary` to capture progress and next-session context
-3. Next session's briefing includes the previous summary — context flows seamlessly
+1. **Session start** → agent reads `memory://briefing` (or `memory://briefing/{+repo}`) and client `SessionStart` hooks inject `workspace_id` + `project_number` context.
+2. **Session summary & telemetry** → `/session-summary` captures handoff context, while built-in error logging (`logs/agent-issues.jsonl`) and client `PostToolUse` / `afterMCPExecution` hooks record tool friction.
+3. **Nightly Cognitive Maintenance (`CMS-02` & `CMS-04`)** → schedule or run native MCP prompts in **Cursor**, **Google Antigravity**, **Claude Code**, or **Windsurf**:
+   - `/mcp:memory-journal-mcp:optimize-journal mode="full" autoRun="true" limit="0"` (`CMS-02`: backups, unassigned migration, Git/GitHub ground-truth & staleness checks, episodic compaction, tag/graph defrag, auto-prune, and vector parity)
+   - `/mcp:memory-journal-mcp:cms-rem-supervisor lookbackHours="24" autoRestore="true"` (`CMS-04`: soft-delete safety rollback, issue-log mining, and self-healing)
+
+**[Complete Automations, Hooks & Scheduling Guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Automations)**
 
 ### 🌐 Scale with HTTP/SSE Transport
 
