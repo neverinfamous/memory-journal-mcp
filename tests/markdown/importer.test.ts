@@ -80,6 +80,7 @@ New content`
             content: 'New content',
             entryType: 'personal_reflection',
             tags: ['test'],
+            workspaceId: 'default',
         })
     })
 
@@ -109,6 +110,7 @@ Updated decision content`
             content: 'Updated decision content',
             entryType: 'project_decision',
             tags: undefined,
+            workspaceId: 'default',
         })
         expect(mockDb.createEntry).not.toHaveBeenCalled()
     })
@@ -139,6 +141,7 @@ Restored entry`
             content: 'Restored entry',
             entryType: 'personal_reflection',
             tags: undefined,
+            workspaceId: 'default',
         })
     })
 
@@ -265,7 +268,7 @@ Content`
         ])
 
         expect(result.success).toBe(true)
-        expect(mockDb.linkEntries).toHaveBeenCalledWith(99, 999, 'references')
+        expect(mockDb.linkEntries).toHaveBeenCalledWith(99, 999, 'references', undefined, 'default')
     })
 
     it('should record vector manager errors without crashing', async () => {

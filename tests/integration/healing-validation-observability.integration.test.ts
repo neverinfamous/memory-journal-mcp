@@ -329,7 +329,7 @@ describe('Cross-Subsystem Integration: Autonomous Healing, Validation & Observab
                 params: {
                     name: 'mj_execute_code',
                     arguments: {
-                        code: 'SELECT * FROM memory_journal LIMIT 5',
+                        code: 'SELECT * FROM memory_journal WHERE id = 1',
                         workspace_id: 'healed-proj',
                         project_number: 77,
                     },
@@ -339,8 +339,9 @@ describe('Cross-Subsystem Integration: Autonomous Healing, Validation & Observab
         )
         const sqlPayload = parseToolResponsePayload(sqlRecoveryRes)
         expect(getProp(sqlPayload, 'success')).toBe(true)
-        const sqlEntries = getProp(getProp(sqlPayload, 'result'), 'entries')
-        expect(Array.isArray(sqlEntries) ? sqlEntries.length : 0).toBe(1)
+        const sqlResult = getProp(sqlPayload, 'result')
+        const sqlEntry = isRecord(sqlResult) ? (getProp(sqlResult, 'entry') ?? sqlResult) : undefined
+        expect(getProp(sqlEntry, 'id')).toBe(1)
     }, 30_000)
 
     it('returns structured VALIDATION_ERROR payloads for unhealable Zod errors and records error telemetry', async () => {

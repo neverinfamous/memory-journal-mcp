@@ -79,17 +79,29 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                             },
                             context.config
                         )
+                        const requestedProject = e.project_number ?? input.project_number
+                        const callerWorkspace =
+                            rawEntryWs ??
+                            (input.workspace_id !== undefined &&
+                            input.workspace_id !== 'default' &&
+                            input.workspace_id !== '*'
+                                ? input.workspace_id
+                                : undefined)
+                        // [INVARIANT] A configured defaultProjectNumber does not satisfy team batch create.
+                        // Only an explicit number, or the registry project of a named workspace, does.
                         const projectNumber =
-                            resolved.projectNumber ??
-                            e.project_number ??
-                            input.project_number
+                            requestedProject !== undefined && requestedProject !== null
+                                ? (resolved.projectNumber ?? requestedProject)
+                                : callerWorkspace !== undefined
+                                  ? resolved.projectNumber
+                                  : undefined
                         if (projectNumber === undefined || projectNumber === null) {
                             return {
                                 success: false,
-                                error: 'Missing project_number. Each entry in the batch MUST provide a valid project_number or configure DEFAULT_PROJECT_NUMBER on the server.',
+                                error: 'Missing project_number. Each entry in the batch MUST provide a valid project_number or name a registered workspace.',
                                 code: 'VALIDATION_ERROR',
                                 category: 'validation',
-                                suggestion: 'Specify the project_number for all entries in your tool call, or ensure DEFAULT_PROJECT_NUMBER is configured on the server.',
+                                suggestion: 'Specify the project_number for every entry, or name a registered workspace whose project is already known.',
                                 recoverable: true,
                             }
                         }
