@@ -362,16 +362,29 @@ export function createContextProxy(contextObj?: Record<string, unknown>): Record
                 return () => target
             }
             if (prop === 'get' || prop === 'getContext' || prop === 'get_context') {
-                return (key?: string) =>
-                    Promise.resolve(
-                        wrapResult(
-                            typeof key === 'string' && key in target
-                                ? target[key]
-                                : { success: true, ...target }
-                        )
-                    )
+                return (key?: string) => {
+                    const snakeKey =
+                        typeof key === 'string'
+                            ? key.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase()
+                            : undefined
+                    const resolved =
+                        typeof key === 'string' && key in target
+                            ? target[key]
+                            : snakeKey !== undefined && snakeKey in target
+                              ? target[snakeKey]
+                              : { success: true, ...target }
+                    return Promise.resolve(wrapResult(resolved))
+                }
             }
             if (prop in target) return target[prop]
+            // [INVARIANT]: Outer MCP parameter normalization converts camelCase keys inside `context`
+            // into snake_case; fall back transparently so `context.myKey` resolves `target.my_key`.
+            if (typeof prop === 'string') {
+                const snakeProp = prop.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase()
+                if (snakeProp !== prop && snakeProp in target) {
+                    return target[snakeProp]
+                }
+            }
             if (
                 prop === 'executeSystemPrompt' ||
                 prop === 'getPrompt' ||
