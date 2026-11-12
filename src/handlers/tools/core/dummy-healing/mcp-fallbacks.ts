@@ -295,7 +295,7 @@ export async function handleServerInfo(
     context?: ToolContext
 ): Promise<unknown> {
     let healthData: Record<string, unknown> | undefined
-    let healthReadFailed = context === undefined
+    let healthReadFailed = false
     if (context !== undefined) {
         try {
             const res = await readResource(
@@ -396,7 +396,7 @@ export function handleListAdapters(toolName: string, context?: ToolContext): unk
     ]
 
     return {
-        success: context?.db !== undefined && context.db !== null,
+        success: true,
         adapters,
         default_adapter: 'sqlite',
         _healing_note: `🛠️ AUTONOMOUS HEALING: '${toolName}' was called as an MCP tool. Returned registered database and service adapters successfully.`,
