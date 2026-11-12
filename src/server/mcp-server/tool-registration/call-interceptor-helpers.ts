@@ -79,24 +79,21 @@ export function normalizeAndAliasToolCall(
                 const canonicalKey = findCanonicalRegistryKey(candidate, registry) ?? candidate
                 const entry = registry[canonicalKey] ?? registry[strVal]
                 const rawWorkspace = toolArgs['workspace_id']
-                const workspaceMissingOrDefault =
+                const workspaceMissing =
                     rawWorkspace === undefined ||
-                    (typeof rawWorkspace === 'string' &&
-                        (rawWorkspace.trim() === '' || rawWorkspace.trim().toLowerCase() === 'default'))
+                    (typeof rawWorkspace === 'string' && rawWorkspace.trim() === '')
                 const existingWorkspace =
-                    typeof rawWorkspace === 'string' && !workspaceMissingOrDefault
+                    typeof rawWorkspace === 'string' && !workspaceMissing
                         ? (findCanonicalRegistryKey(rawWorkspace, registry) ?? rawWorkspace.trim())
                         : undefined
                 const sameWorkspace =
                     existingWorkspace?.toLowerCase() === canonicalKey.toLowerCase()
                 // A repo-name project_number may fill a missing workspace, not a different concrete one.
-                if (
-                    entry?.project_number !== undefined &&
-                    (workspaceMissingOrDefault || sameWorkspace)
-                ) {
+                // Explicit workspace `default` stays on that workspace.
+                if (entry?.project_number !== undefined && (workspaceMissing || sameWorkspace)) {
                     toolArgs['project_number'] = entry.project_number
                 }
-                if (workspaceMissingOrDefault && entry !== undefined) {
+                if (workspaceMissing && entry !== undefined) {
                     toolArgs['workspace_id'] = canonicalKey
                 }
             }
@@ -318,18 +315,27 @@ export function resolveSingleProjectFromRegistry(
         numArg ??
         (nameArg !== undefined && !Number.isNaN(Number(nameArg)) ? Number(nameArg) : undefined)
     if (numericTarget !== undefined) {
-        for (const [pName, pData] of Object.entries(reg)) {
-            if (pData.project_number === numericTarget) {
-                return {
-                    success: true,
-                    project: {
-                        name: pName,
-                        id: pData.project_number,
-                        project_number: pData.project_number,
-                        ...pData,
-                    },
-                    _healing_note: `🛠️ AUTONOMOUS HEALING: '${requestedTool}' was called as an MCP tool. Returned registered project '${pName}' from projectRegistry successfully.`,
-                }
+        const matches = Object.entries(reg).filter(
+            ([, pData]) => pData.project_number === numericTarget
+        )
+        if (matches.length > 1) {
+            return {
+                success: false,
+                error: `project_number ${String(numericTarget)} is registered to more than one workspace.`,
+            }
+        }
+        const matched = matches[0]
+        if (matched !== undefined) {
+            const [pName, pData] = matched
+            return {
+                success: true,
+                project: {
+                    name: pName,
+                    id: pData.project_number,
+                    project_number: pData.project_number,
+                    ...pData,
+                },
+                _healing_note: `🛠️ AUTONOMOUS HEALING: '${requestedTool}' was called as an MCP tool. Returned registered project '${pName}' from projectRegistry successfully.`,
             }
         }
     }

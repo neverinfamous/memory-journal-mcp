@@ -171,7 +171,11 @@ function updateBadges() {
           encoding: "utf-8",
         }).trim();
         return diff.length > 0;
-      } catch {
+      } catch (error) {
+        console.error(
+          `git status failed for ${file}:`,
+          error instanceof Error ? error.message : error
+        );
         return false;
       }
     });

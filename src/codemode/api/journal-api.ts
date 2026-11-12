@@ -110,11 +110,7 @@ export class JournalApi {
                 if (!Number.isNaN(num) && cleaned !== '') {
                     rec['project_number'] = num
                 } else {
-                    if (
-                        rec['workspace_id'] === undefined ||
-                        rec['workspace_id'] === '' ||
-                        rec['workspace_id'] === 'default'
-                    ) {
+                    if (rec['workspace_id'] === undefined || rec['workspace_id'] === '') {
                         rec['workspace_id'] = cleaned
                     }
                     delete rec['project_number']
@@ -138,7 +134,7 @@ export class JournalApi {
                     : undefined
 
                 const resolved = resolveProjectContext({
-                    ...(typeof currentWs === 'string' && currentWs !== 'default' && currentWs !== ''
+                    ...(typeof currentWs === 'string' && currentWs !== ''
                         ? { workspace_id: currentWs }
                         : {}),
                     ...(projNum !== undefined ? { project_number: projNum } : {}),
@@ -158,8 +154,7 @@ export class JournalApi {
                     rec['workspaceId'] = resolved.workspaceId
                 }
                 const ws = rec['workspace_id'] ?? rec['workspaceId']
-                const workspaceIsConcrete =
-                    typeof ws === 'string' && ws !== '' && ws !== 'default' && ws !== '*'
+                const workspaceIsConcrete = typeof ws === 'string' && ws !== '' && ws !== '*'
                 if (projNum !== undefined && workspaceIsConcrete) {
                     pairStoredScope(ws, projNum, activeProjectRegistry())
                 } else if (
@@ -323,7 +318,7 @@ export class JournalApi {
             }
         }
 
-        const listProjectsFn = createListProjectsFn(this.analytics)
+        const listProjectsFn = createListProjectsFn()
         const getProjectFn = createGetProjectFn(listProjectsFn)
 
         for (const grp of [this.core, this.search, this.admin]) {

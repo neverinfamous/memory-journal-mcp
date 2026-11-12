@@ -14,6 +14,7 @@ import {
     StrictProjectNumberSchema,
 } from './schemas.js'
 import { resolveWorkspaceId } from '../../utils/workspace-resolver.js'
+import { activeProjectRegistry, alignedProjectFilter } from '../../utils/write-scope.js'
 import { resolveWriteWorkspaceId } from './write-workspace.js'
 import { ErrorFieldsMixin } from './error-fields-mixin.js'
 
@@ -357,6 +358,11 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                 try {
                     const input = VisualizeInputSchema.parse(VisualizeInputSchemaMcp.parse(params))
                     const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
+                    const projectNumber = alignedProjectFilter(
+                        wsId,
+                        input.project_number,
+                        activeProjectRegistry(context.config?.projectRegistry)
+                    )
                     if (input.entry_id !== undefined) {
                         const entry = db.getEntryById(input.entry_id, wsId)
                         if (!entry || entry.deletedAt) {
@@ -376,6 +382,7 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                         depth: input.depth,
                         limit: input.limit,
                         workspaceId: wsId,
+                        ...(projectNumber !== undefined ? { projectNumber } : {}),
                     })
 
                     if (results.nodes.length === 0) {

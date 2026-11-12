@@ -42,7 +42,10 @@ async function resolveKanbanMoveIfRequested(
     resolved: { owner: string; repo: string; github: ToolContext['github'] },
     issueNodeId: string | undefined
 ): Promise<KanbanMoveResult | undefined> {
-    if (!input.move_to_done || !resolved.github || issueNodeId === undefined) return undefined
+    if (!input.move_to_done) return undefined
+    if (!resolved.github || issueNodeId === undefined) {
+        return { moved: false, error: 'Kanban move did not run.' }
+    }
     const projectNum = resolveProjectNumber(context, resolved.repo, input.project_number)
     if (projectNum === undefined) {
         return {
@@ -154,24 +157,37 @@ async function executeCloseIssueMutation(
         workspaceId,
     })
 
+    const kanbanFailed = input.move_to_done && kanbanResult?.moved !== true
+    const closedIssue = {
+        number: input.issue_number,
+        title: issueDetails.title,
+        url: result.url,
+        previousState: 'OPEN' as const,
+        newState: 'CLOSED' as const,
+    }
+    const journalEntry = {
+        id: entry.id,
+        linkedToIssue: input.issue_number,
+        significanceType: 'blocker_resolved' as const,
+    }
+    if (kanbanFailed) {
+        return {
+            success: false,
+            warning: kanbanResult?.error ?? 'Kanban move did not run.',
+            issue: closedIssue,
+            journalEntry,
+            kanban: kanbanResult,
+            message: `Closed issue #${String(input.issue_number)} and created resolution entry #${String(entry.id)}, but the Kanban move did not run.`,
+        }
+    }
     return {
         success: true,
-        issue: {
-            number: input.issue_number,
-            title: issueDetails.title,
-            url: result.url,
-            previousState: 'OPEN',
-            newState: 'CLOSED',
-        },
-        journalEntry: {
-            id: entry.id,
-            linkedToIssue: input.issue_number,
-            significanceType: 'blocker_resolved',
-        },
+        issue: closedIssue,
+        journalEntry,
         kanban: kanbanResult,
         message:
             `Closed issue #${String(input.issue_number)} and created resolution entry #${String(entry.id)}` +
-            (kanbanResult?.moved ? ' and moved to Done' : ''),
+            (kanbanResult?.moved === true ? ' and moved to Done' : ''),
     }
 }
 

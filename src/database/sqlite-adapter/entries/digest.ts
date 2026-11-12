@@ -292,10 +292,11 @@ export function computeDigest(db: Database, workspaceId = 'default'): DigestSnap
 
 /**
  * Encode the workspace into the snapshot_type key so one workspace's snapshots are never
- * served to another. Omitted/'default' keep the plain legacy key; '*' uses `${type}:*`.
+ * served to another. An omitted workspace keeps the plain legacy key. Explicit `default`
+ * is its own workspace and uses `${type}:default`.
  */
 export function workspaceSnapshotType(type: string, workspaceId?: string): string {
-    if (workspaceId === undefined || workspaceId === 'default') {
+    if (workspaceId === undefined || workspaceId === '') {
         return type
     }
     return `${type}:${workspaceId}`

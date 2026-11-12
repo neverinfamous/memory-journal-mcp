@@ -226,7 +226,7 @@ export interface IDatabaseAdapter {
         ids: number[],
         permanent?: boolean,
         workspaceId?: string
-    ): { deleted: number[]; notFound: number[]; errors: { id: number; error: Error }[] }
+    ): { deleted: number[]; notFound: number[]; errors: { id: number; error: Error }[]; warning?: string }
 
     searchEntries(
         query: string,

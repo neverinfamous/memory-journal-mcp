@@ -234,6 +234,10 @@ export function resolvePromptPriorWorkspace(
         }
     }
 
+    if (cleanTarget === '{target}' || cleanTarget === '{topic}') {
+        return 'default'
+    }
+
     const fallback = resourceWorkspace({
         briefingConfig:
             registry !== undefined && briefingConfig?.projectRegistry === undefined

@@ -151,6 +151,23 @@ function buildUpdateSets(
     return { updates, values }
 }
 
+function withCanonicalMove(
+    input: UpdateEntryInput,
+    paired: { workspaceId: string | undefined; projectNumber: number | null | undefined }
+): UpdateEntryInput {
+    const moving = input.targetWorkspaceId !== undefined && input.targetWorkspaceId !== '*'
+    const canonical = paired.workspaceId
+    return {
+        ...input,
+        ...(paired.projectNumber !== undefined && paired.projectNumber !== null
+            ? { projectNumber: paired.projectNumber }
+            : {}),
+        ...(moving && canonical !== undefined && canonical !== '' && canonical !== '*'
+            ? { targetWorkspaceId: canonical }
+            : {}),
+    }
+}
+
 export function performUpdateEntry(
     context: EntriesSharedContext,
     id: number,
@@ -179,15 +196,14 @@ export function performUpdateEntry(
             : existing.workspaceId
     let writeInput = input
     if (input.projectNumber !== undefined && input.projectNumber !== null) {
-        const paired = pairStoredScope(destination, input.projectNumber, registry)
-        writeInput = { ...input, projectNumber: paired.projectNumber }
+        writeInput = withCanonicalMove(input, pairStoredScope(destination, input.projectNumber, registry))
     } else if (input.projectNumber === null) {
         writeInput = input
     } else if (input.targetWorkspaceId !== undefined && input.targetWorkspaceId !== '*') {
-        const paired = pairStoredScope(input.targetWorkspaceId, undefined, registry)
-        if (paired.projectNumber !== undefined && paired.projectNumber !== null) {
-            writeInput = { ...input, projectNumber: paired.projectNumber }
-        }
+        writeInput = withCanonicalMove(
+            input,
+            pairStoredScope(input.targetWorkspaceId, undefined, registry)
+        )
     }
 
     const { updates, values } = buildUpdateSets(id, existing, callerWorkspace, writeInput)

@@ -14,6 +14,17 @@ import { importMarkdownEntries, processImportBatch, convertFile } from '../../..
 import type { ExportableEntry, ParsedFile } from '../../../markdown/index.js'
 import { DATE_MIN_SENTINEL, DATE_MAX_SENTINEL } from '../schemas.js'
 
+function wildcardWriteRejection(workspaceId: string | undefined): Record<string, unknown> | undefined {
+    if (workspaceId?.trim() !== '*') return undefined
+    return {
+        success: false,
+        error: "workspace_id '*' cannot be used for a single-directory import or export.",
+        code: 'VALIDATION_ERROR',
+        category: 'validation',
+        recoverable: true,
+    }
+}
+
 import {
     ExportEntriesSchema,
     ExportEntriesSchemaMcp,
@@ -172,6 +183,8 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
             handler: async (params: unknown) => {
                 try {
                     const input = ExportMarkdownSchema.parse(params)
+                    const rejectedExport = wildcardWriteRejection(input.workspace_id)
+                    if (rejectedExport !== undefined) return rejectedExport
                     const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
                     const projectNumber = alignedProjectFilter(
                         wsId,
@@ -283,6 +296,8 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
             handler: async (params: unknown) => {
                 try {
                     const input = ImportMarkdownSchema.parse(params)
+                    const rejectedImport = wildcardWriteRejection(input.workspace_id)
+                    if (rejectedImport !== undefined) return rejectedImport
                     const dirMatch =
                         input.workspace_id === undefined && input.project_number === undefined
                             ? resolveWorkspaceFromFilePath(input.source_dir, context.config)
@@ -361,6 +376,8 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
             handler: async (params: unknown) => {
                 try {
                     const input = ImportExternalSchema.parse(params)
+                    const rejectedExternal = wildcardWriteRejection(input.workspace_id)
+                    if (rejectedExternal !== undefined) return rejectedExternal
                     const dirMatch =
                         input.workspace_id === undefined && input.project_number === undefined
                             ? resolveWorkspaceFromFilePath(input.source_dir, context.config)

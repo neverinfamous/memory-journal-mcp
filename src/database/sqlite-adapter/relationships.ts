@@ -172,15 +172,30 @@ export class RelationshipsManager {
         workspaceId?: string
     ): { entryId: number; content: string; totalLinks: number }[] {
         const scopeId = effectiveWorkspace(workspaceId)
-        const wsFilter = scopeId !== '*' ? ' AND m.workspace_id = ?' : ''
-        const params: unknown[] = scopeId !== '*' ? [scopeId, limit] : [limit]
+        const scoped = scopeId !== '*'
+        const linkFrom = scoped
+            ? `SELECT r.from_entry_id as entry_id, COUNT(*) as link_count
+               FROM relationships r
+               JOIN memory_journal endpoint ON endpoint.id = r.from_entry_id
+               WHERE endpoint.deleted_at IS NULL AND endpoint.workspace_id = ?
+               GROUP BY r.from_entry_id`
+            : `SELECT from_entry_id as entry_id, COUNT(*) as link_count FROM relationships GROUP BY from_entry_id`
+        const linkTo = scoped
+            ? `SELECT r.to_entry_id as entry_id, COUNT(*) as link_count
+               FROM relationships r
+               JOIN memory_journal endpoint ON endpoint.id = r.to_entry_id
+               WHERE endpoint.deleted_at IS NULL AND endpoint.workspace_id = ?
+               GROUP BY r.to_entry_id`
+            : `SELECT to_entry_id as entry_id, COUNT(*) as link_count FROM relationships GROUP BY to_entry_id`
+        const wsFilter = scoped ? ' AND m.workspace_id = ?' : ''
+        const params: unknown[] = scoped ? [scopeId, scopeId, scopeId, limit] : [limit]
         const rows = this.db
             .prepare(
                 `SELECT counts.entry_id, SUM(counts.link_count) as total_links, m.content
                  FROM (
-                     SELECT from_entry_id as entry_id, COUNT(*) as link_count FROM relationships GROUP BY from_entry_id
+                     ${linkFrom}
                      UNION ALL
-                     SELECT to_entry_id as entry_id, COUNT(*) as link_count FROM relationships GROUP BY to_entry_id
+                     ${linkTo}
                  ) counts
                  JOIN memory_journal m ON counts.entry_id = m.id
                  WHERE m.deleted_at IS NULL${wsFilter}
@@ -202,22 +217,28 @@ export class RelationshipsManager {
      * Used by the briefing resource to compute orphan ratio.
      */
     getOrphanCount(workspaceId?: string): number {
-        let filter = ''
-        const params: unknown[] = []
         const scopeId = effectiveWorkspace(workspaceId)
-        if (scopeId !== '*') {
-            filter = ' AND e.workspace_id = ?'
-            params.push(scopeId)
-        }
+        const scoped = scopeId !== '*'
+        const filter = scoped ? ' AND e.workspace_id = ?' : ''
+        const linkSet = scoped
+            ? `SELECT r.from_entry_id FROM relationships r
+               JOIN memory_journal endpoint ON endpoint.id = r.from_entry_id
+               WHERE endpoint.workspace_id = ?
+               UNION
+               SELECT r.to_entry_id FROM relationships r
+               JOIN memory_journal endpoint ON endpoint.id = r.to_entry_id
+               WHERE endpoint.workspace_id = ?`
+            : `SELECT from_entry_id FROM relationships
+               UNION
+               SELECT to_entry_id FROM relationships`
+        const params: unknown[] = scoped ? [scopeId, scopeId, scopeId] : []
 
         const row = this.db
             .prepare(
                 `SELECT COUNT(*) as orphan_count
                  FROM memory_journal e
                  WHERE e.deleted_at IS NULL${filter} AND e.id NOT IN (
-                     SELECT from_entry_id FROM relationships
-                     UNION
-                     SELECT to_entry_id FROM relationships
+                     ${linkSet}
                  )`
             )
             .get(...params) as { orphan_count: number } | undefined

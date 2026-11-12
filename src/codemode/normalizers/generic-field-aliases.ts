@@ -279,7 +279,7 @@ export function resolveCreateEntryProjectContext(obj: Record<string, unknown>): 
             projNum = parsedNum
             obj['project_number'] = parsedNum
         } else {
-            if (obj['workspace_id'] === undefined || obj['workspace_id'] === null || obj['workspace_id'] === '' || obj['workspace_id'] === 'default') {
+            if (obj['workspace_id'] === undefined || obj['workspace_id'] === null || obj['workspace_id'] === '') {
                 obj['workspace_id'] = cleaned
             }
             delete obj['project_number']
@@ -288,8 +288,7 @@ export function resolveCreateEntryProjectContext(obj: Record<string, unknown>): 
     const content = typeof obj['content'] === 'string' ? obj['content'] : undefined
     const tags = Array.isArray(obj['tags']) ? obj['tags'].filter((t): t is string => typeof t === 'string') : undefined
     const wsRaw = typeof obj['workspace_id'] === 'string' ? obj['workspace_id'] : undefined
-    const workspaceIsConcrete =
-        wsRaw !== undefined && wsRaw !== '' && wsRaw !== 'default' && wsRaw !== '*'
+    const workspaceIsConcrete = wsRaw !== undefined && wsRaw !== '' && wsRaw !== '*'
     const resolved = resolveProjectContext({
         ...(wsRaw !== undefined ? { workspace_id: wsRaw } : {}),
         ...(projNum !== undefined ? { project_number: projNum } : {}),
@@ -309,8 +308,7 @@ export function resolveCreateEntryProjectContext(obj: Record<string, unknown>): 
         obj['workspace_id'] = resolved.workspaceId
     }
     const wsAfter = obj['workspace_id']
-    const concreteAfter =
-        typeof wsAfter === 'string' && wsAfter !== '' && wsAfter !== 'default' && wsAfter !== '*'
+    const concreteAfter = typeof wsAfter === 'string' && wsAfter !== '' && wsAfter !== '*'
     if (projNum !== undefined && concreteAfter) {
         pairStoredScope(wsAfter, projNum, registryForScope(activeProjectRegistry))
     } else if (obj['project_number'] === undefined && resolved.projectNumber !== undefined) {

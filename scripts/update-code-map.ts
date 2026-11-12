@@ -4,6 +4,26 @@ import { fileURLToPath } from 'node:url'
 
 import type { IDatabaseAdapter } from '../src/database/core/interfaces.js'
 import { getTools } from '../src/handlers/tools/index.js'
+
+function isToolCatalogAdapter(value: unknown): value is IDatabaseAdapter {
+    return typeof value === 'object' && value !== null
+}
+
+function toolCatalogAdapter(): IDatabaseAdapter {
+    const target: object = Object.create(null)
+    const proxy: unknown = new Proxy(target, {
+        get(_obj, property) {
+            if (property === 'then') return undefined
+            return () => {
+                throw new Error(`Tool catalog adapter does not implement ${String(property)}`)
+            }
+        },
+    })
+    if (!isToolCatalogAdapter(proxy)) {
+        throw new Error('Tool catalog adapter was not created')
+    }
+    return proxy
+}
 import { getResources } from '../src/handlers/resources/index.js'
 import { getPrompts } from '../src/handlers/prompts/index.js'
 
@@ -29,7 +49,7 @@ function updateCodeMap() {
     // Generate Tools Markdown
     // getTools requires a DB context, but the definitions are built inside closures
     // so we can safely pass dummy objects to get the metadata arrays.
-    const rawTools = getTools({} as unknown as IDatabaseAdapter, null)
+    const rawTools = getTools(toolCatalogAdapter(), null)
     
     // Group tools by their icon title to provide a clean, human-readable grouping
     const toolsByGroup = new Map<string, Set<string>>()

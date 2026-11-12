@@ -96,6 +96,7 @@ export function createRegisterProjectFn(
         if (!createEntryFn) {
             return {
                 success: true,
+                warning: 'createEntry tool is missing. DB init skipped.',
                 message: `Project '${name}' registered, but createEntry tool is missing. DB init skipped.`,
             }
         }
@@ -211,7 +212,7 @@ export function createDeleteProjectFn(): (...args: unknown[]) => Promise<{
     }
 }
 
-export function createListProjectsFn(_analyticsApi: GroupApiRecord): () => Promise<unknown> {
+export function createListProjectsFn(): () => Promise<unknown> {
     return (): Promise<unknown> => {
         try {
             const registry = parseProjectRegistry()

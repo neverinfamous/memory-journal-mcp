@@ -220,9 +220,7 @@ function normalizeProjectFields(obj: Record<string, unknown>): boolean {
             }
         } else if (
             strVal !== '' &&
-            (obj['workspace_id'] === undefined ||
-                obj['workspace_id'] === null ||
-                obj['workspace_id'] === 'default')
+            (obj['workspace_id'] === undefined || obj['workspace_id'] === null || obj['workspace_id'] === '')
         ) {
             obj['workspace_id'] = strVal
         }
@@ -244,7 +242,7 @@ function normalizeProjectFields(obj: Record<string, unknown>): boolean {
             if (
                 obj['workspace_id'] === undefined ||
                 obj['workspace_id'] === null ||
-                obj['workspace_id'] === 'default'
+                obj['workspace_id'] === ''
             ) {
                 obj['workspace_id'] = cleaned
             }

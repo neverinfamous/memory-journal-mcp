@@ -84,18 +84,23 @@ export async function buildBriefingData(
                 : undefined
         const resolvedRepo = exactRegistryKey(targetRepo, registry) ?? numericWorkspace
         if (resolvedRepo !== undefined) {
-        activeWorkspaceId = resolvedRepo
+            activeWorkspaceId = resolvedRepo
 
-        const registryEntry = registry?.[resolvedRepo]
-        if (registryEntry) {
-            const repoPath = registryEntry.path
-            activeRepoPath = repoPath
-            activeGithub = getGitHubIntegration(repoPath, context.runtime)
-            if (registryEntry.project_number !== undefined) {
-                activeProjectNumber = registryEntry.project_number
-                setActiveSessionProject(resolvedRepo, activeProjectNumber, context.runtime)
+            const registryEntry = registry?.[resolvedRepo]
+            if (registryEntry) {
+                const repoPath = registryEntry.path
+                activeRepoPath = repoPath
+                activeGithub = getGitHubIntegration(repoPath, context.runtime)
+                if (registryEntry.project_number !== undefined) {
+                    activeProjectNumber = registryEntry.project_number
+                    setActiveSessionProject(resolvedRepo, activeProjectNumber, context.runtime)
+                }
             }
-        }
+        } else if (targetRepo.trim().toLowerCase() === 'default') {
+            activeWorkspaceId = 'default'
+            const registeredDefault = registry?.['default']?.project_number
+            activeProjectNumber = registeredDefault
+            setActiveSessionProject('default', registeredDefault ?? null, context.runtime)
         }
     } else if (activeWorkspaceId && activeWorkspaceId !== 'default' && activeWorkspaceId !== '*') {
         const canonicalKey = findCanonicalRegistryKey(activeWorkspaceId, registry) ?? activeWorkspaceId

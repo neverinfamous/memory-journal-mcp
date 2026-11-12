@@ -47,7 +47,13 @@ function resolveSessionProjectId(
     effectiveRegistry: ProjectRegistry
 ): number | string | undefined {
     let projectId: number | string | undefined = input.project_number
-    if ((projectId === undefined || projectId === null) && input.workspace_id !== undefined && input.workspace_id !== 'default') {
+    if (
+        (projectId === undefined || projectId === null) &&
+        input.workspace_id?.trim().toLowerCase() === 'default'
+    ) {
+        return lookupRegistryEntry(effectiveRegistry, input.workspace_id)?.project_number
+    }
+    if ((projectId === undefined || projectId === null) && input.workspace_id !== undefined && input.workspace_id !== '') {
         const wsEntry = lookupRegistryEntry(effectiveRegistry, input.workspace_id)
         if (wsEntry?.project_number !== undefined) projectId = wsEntry.project_number
     }
@@ -101,7 +107,11 @@ async function injectRepoGithub(
     const registryEntry = lookupRegistryEntry(effectiveRegistry, repo)
     if (registryEntry?.path === undefined || registryEntry.path === '') return context
     try {
-        const injectedGithub = getGitHubIntegration(registryEntry.path, undefined, process.env['GITHUB_TOKEN'])
+        const injectedGithub = getGitHubIntegration(
+            registryEntry.path,
+            context.config?.runtime,
+            process.env['GITHUB_TOKEN']
+        )
         await injectedGithub.getRepoInfo()
         return { ...context, github: injectedGithub }
     } catch (error) {
@@ -123,7 +133,11 @@ function injectProjectGithub(
     const isSameAsCwd = comparablePath(registryEntry.path) === comparablePath(process.cwd())
     if (!fullAccess && !isSameAsCwd) return sessionContext
     try {
-        const injectedGithub = getGitHubIntegration(registryEntry.path, undefined, process.env['GITHUB_TOKEN'])
+        const injectedGithub = getGitHubIntegration(
+            registryEntry.path,
+            sessionContext.config?.runtime,
+            process.env['GITHUB_TOKEN']
+        )
         return { ...sessionContext, github: injectedGithub }
     } catch (error) {
         return githubInjectError(

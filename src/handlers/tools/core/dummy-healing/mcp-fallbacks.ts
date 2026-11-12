@@ -207,19 +207,24 @@ export function handleListPrompts(toolName: string): unknown {
 }
 
 export function handleListTools(toolName: string, context?: ToolContext): unknown {
-    let toolsList: { name: string; title?: string; description?: string; group?: string }[] = []
-    if (context !== undefined) {
-        toolsList = [
-            ...getCoreTools(context),
-            ...getSearchTools(context),
-            ...getAdminTools(context),
-        ].map((t) => ({
-            name: t.name,
-            title: t.title,
-            description: t.description,
-            group: t.group,
-        }))
+    if (context === undefined) {
+        return {
+            success: false,
+            error: 'No server context was available, so the tool list was not built.',
+            tools: [],
+            _healing_note: `🛠️ AUTONOMOUS HEALING: '${toolName}' was called as an MCP tool instead of an MCP protocol request (tools/list). The tool list was not built because no server context was available.`,
+        }
     }
+    const toolsList = [
+        ...getCoreTools(context),
+        ...getSearchTools(context),
+        ...getAdminTools(context),
+    ].map((t) => ({
+        name: t.name,
+        title: t.title,
+        description: t.description,
+        group: t.group,
+    }))
     return {
         success: true,
         tools: toolsList,

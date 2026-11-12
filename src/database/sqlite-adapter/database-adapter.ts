@@ -185,21 +185,27 @@ export class DatabaseAdapter extends AdapterDelegates implements IDatabaseAdapte
         ids: number[],
         permanent = false,
         workspaceId?: string
-    ): { deleted: number[]; notFound: number[]; errors: { id: number; error: Error }[] } {
+    ): { deleted: number[]; notFound: number[]; errors: { id: number; error: Error }[]; warning?: string } {
         return this.executeInTransaction(() => {
             const result = this.entriesMgr.deleteEntries(ids, permanent, workspaceId)
+            const vectorFailures: string[] = []
             for (const id of result.deleted) {
                 try {
                     this.deleteVector(id)
                 } catch (error: unknown) {
+                    const message = error instanceof Error ? error.message : String(error)
                     // A vector failure must not fail the entry deletion, but leaves an orphan to reconcile
-                    logger.warning(
-                        `Vector delete failed for entry ${String(id)}: ${error instanceof Error ? error.message : String(error)}`,
-                        { module: 'DatabaseAdapter' }
-                    )
+                    logger.warning(`Vector delete failed for entry ${String(id)}: ${message}`, {
+                        module: 'DatabaseAdapter',
+                    })
+                    vectorFailures.push(`entry ${String(id)}: ${message}`)
                 }
             }
-            return result
+            if (vectorFailures.length === 0) return result
+            return {
+                ...result,
+                warning: `Vector delete failed: ${vectorFailures.join('; ')}`,
+            }
         })
     }
 

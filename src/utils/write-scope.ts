@@ -132,16 +132,9 @@ export function alignedProjectFilter(
     registry: ProjectRegistry | undefined
 ): number | undefined {
     if (requested === undefined) return undefined
-    const concrete = concreteWorkspace(workspaceId)
-    if (concrete === undefined) return requested
-    const key = exactRegistryKey(concrete, registry)
-    const registryProject = key !== undefined ? registry?.[key]?.project_number : undefined
-    if (registryProject === undefined) return requested
-    if (requested !== registryProject) {
-        throw new ValidationError(
-            `project_number ${String(requested)} does not match workspace '${key}', which uses project_number ${String(registryProject)}.`,
-            { workspaceId: key, projectNumber: requested }
-        )
-    }
-    return requested
+    const trimmed = workspaceId.trim()
+    // `*` remains an admin read override. `default` is a stored workspace and is pair-checked.
+    if (trimmed === '' || trimmed === '*') return requested
+    const paired = pairStoredScope(trimmed, requested, registry)
+    return typeof paired.projectNumber === 'number' ? paired.projectNumber : requested
 }

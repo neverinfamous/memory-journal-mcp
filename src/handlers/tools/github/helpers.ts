@@ -71,21 +71,32 @@ export async function resolveOwner(
     const registry = context.config?.projectRegistry ?? loadProjectRegistryFromConfig()
     let matchedRegistryKey: string | undefined
     if (!effectiveRepo && registry) {
-        if (
-            inputWorkspaceId !== undefined &&
-            inputWorkspaceId !== 'default' &&
-            inputWorkspaceId !== '*'
-        ) {
+        if (inputWorkspaceId !== undefined && inputWorkspaceId !== '*') {
             matchedRegistryKey =
                 findCanonicalRegistryKey(inputWorkspaceId, registry) ??
                 (Object.prototype.hasOwnProperty.call(registry, inputWorkspaceId)
                     ? inputWorkspaceId
                     : undefined)
-        } else if (inputProjectNumber !== undefined) {
-            const matched = Object.entries(registry).find(
+        }
+        const namedDefault = inputWorkspaceId?.trim().toLowerCase() === 'default'
+        if (matchedRegistryKey === undefined && inputProjectNumber !== undefined && !namedDefault) {
+            const matches = Object.entries(registry).filter(
                 ([, entry]) => entry.project_number === inputProjectNumber
             )
-            if (matched) matchedRegistryKey = matched[0]
+            if (matches.length > 1) {
+                return {
+                    error: true,
+                    response: {
+                        success: false,
+                        error: `project_number ${String(inputProjectNumber)} is registered to more than one workspace.`,
+                        code: 'VALIDATION_ERROR',
+                        category: 'validation',
+                        recoverable: true,
+                    },
+                }
+            }
+            const matched = matches[0]
+            if (matched !== undefined) matchedRegistryKey = matched[0]
         }
     }
     const registryKey = effectiveRepo
@@ -98,7 +109,7 @@ export async function resolveOwner(
 
     if (registryEntry?.path) {
         toolGithub = getGitHubIntegration(registryEntry.path, context.config?.runtime)
-    } else if (context.github) {
+    } else if (context.github && inputWorkspaceId?.trim().toLowerCase() !== 'default') {
         toolGithub = context.github
     }
 
@@ -168,21 +179,32 @@ export async function resolveOwnerRepo(
     const registry = context.config?.projectRegistry ?? loadProjectRegistryFromConfig()
     let matchedRegistryKey: string | undefined
     if (!effectiveRepo && registry) {
-        if (
-            input.workspace_id !== undefined &&
-            input.workspace_id !== 'default' &&
-            input.workspace_id !== '*'
-        ) {
+        if (input.workspace_id !== undefined && input.workspace_id !== '*') {
             matchedRegistryKey =
                 findCanonicalRegistryKey(input.workspace_id, registry) ??
                 (Object.prototype.hasOwnProperty.call(registry, input.workspace_id)
                     ? input.workspace_id
                     : undefined)
-        } else if (input.project_number !== undefined) {
-            const matched = Object.entries(registry).find(
+        }
+        const namedDefault = input.workspace_id?.trim().toLowerCase() === 'default'
+        if (matchedRegistryKey === undefined && input.project_number !== undefined && !namedDefault) {
+            const matches = Object.entries(registry).filter(
                 ([, entry]) => entry.project_number === input.project_number
             )
-            if (matched) matchedRegistryKey = matched[0]
+            if (matches.length > 1) {
+                return {
+                    error: true,
+                    response: {
+                        success: false,
+                        error: `project_number ${String(input.project_number)} is registered to more than one workspace.`,
+                        code: 'VALIDATION_ERROR',
+                        category: 'validation',
+                        recoverable: true,
+                    },
+                }
+            }
+            const matched = matches[0]
+            if (matched !== undefined) matchedRegistryKey = matched[0]
         }
     }
     const registryKey = effectiveRepo
@@ -204,7 +226,7 @@ export async function resolveOwnerRepo(
         } else {
             toolGithub = candidate
         }
-    } else if (context.github) {
+    } else if (context.github && input.workspace_id?.trim().toLowerCase() !== 'default') {
         toolGithub = context.github
     }
 

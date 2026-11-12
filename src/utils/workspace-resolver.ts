@@ -38,12 +38,10 @@ export function setActiveSessionProject(
     runtime?: object | null
 ): void {
     const validWs =
-        workspaceId !== undefined &&
-        workspaceId !== '' &&
-        workspaceId !== 'default' &&
-        workspaceId !== '*'
+        workspaceId !== undefined && workspaceId !== '' && workspaceId !== '*'
             ? workspaceId
             : undefined
+    const clearProject = projectNumber === null
     const validProj =
         typeof projectNumber === 'number' && !Number.isNaN(projectNumber) && projectNumber > 0
             ? projectNumber
@@ -59,13 +57,16 @@ export function setActiveSessionProject(
                   : {}),
             ...(validProj !== undefined
                 ? { projectNumber: validProj }
-                : prev?.projectNumber !== undefined
-                  ? { projectNumber: prev.projectNumber }
-                  : {}),
+                : clearProject
+                  ? {}
+                  : prev?.projectNumber !== undefined
+                    ? { projectNumber: prev.projectNumber }
+                    : {}),
         })
     }
     if (validWs !== undefined) activeSessionWorkspaceId = validWs
     if (validProj !== undefined) activeSessionProjectNumber = validProj
+    else if (clearProject) activeSessionProjectNumber = undefined
 }
 
 export function getActiveSessionProject(
@@ -233,10 +234,17 @@ function findWorkspaceByProjectNumber(
     registry: Record<string, RegistryEntry> | undefined
 ): string | undefined {
     if (!registry) return undefined
+    const matches: string[] = []
     for (const [key, entry] of Object.entries(registry)) {
-        if (entry.project_number === projNum) return key
+        if (entry.project_number === projNum) matches.push(key)
     }
-    return undefined
+    if (matches.length > 1) {
+        throw new ValidationError(
+            `project_number ${String(projNum)} is registered to more than one workspace.`,
+            { projectNumber: projNum }
+        )
+    }
+    return matches[0]
 }
 
 /**
@@ -272,7 +280,7 @@ export function resolveProjectContext(
         ? resolveWorkspaceFromFilePath(process.cwd(), { ...config, projectRegistry: registry })
         : undefined
     const registeredCwd =
-        cwdMatch !== undefined && !SENTINEL_PROJECT_KEYS.includes(cwdMatch.workspaceId.toLowerCase())
+        cwdMatch !== undefined && cwdMatch.workspaceId.toLowerCase() !== 'test'
             ? cwdMatch
             : undefined
 
@@ -316,9 +324,14 @@ export function resolveProjectContext(
 
     // 3. Registered cwd, ahead of incidental words in the body.
     if (registeredCwd !== undefined) {
+        const cwdProject =
+            registeredCwd.projectNumber ??
+            (registeredCwd.workspaceId.toLowerCase() === 'default'
+                ? undefined
+                : config?.defaultProjectNumber)
         return {
             workspaceId: registeredCwd.workspaceId,
-            projectNumber: registeredCwd.projectNumber ?? config?.defaultProjectNumber,
+            projectNumber: cwdProject,
         }
     }
 
@@ -327,13 +340,15 @@ export function resolveProjectContext(
     if (
         sessionCtx.workspaceId !== undefined &&
         sessionCtx.workspaceId !== '' &&
-        sessionCtx.workspaceId !== '*' &&
-        sessionCtx.workspaceId.toLowerCase() !== 'default'
+        sessionCtx.workspaceId !== '*'
     ) {
+        const registryProject = registry?.[sessionCtx.workspaceId]?.project_number
         const sessionProject =
             sessionCtx.projectNumber ??
-            registry?.[sessionCtx.workspaceId]?.project_number ??
-            config?.defaultProjectNumber
+            registryProject ??
+            (sessionCtx.workspaceId.toLowerCase() === 'default'
+                ? undefined
+                : config?.defaultProjectNumber)
         return { workspaceId: sessionCtx.workspaceId, projectNumber: sessionProject }
     }
     if (sessionCtx.projectNumber !== undefined) {

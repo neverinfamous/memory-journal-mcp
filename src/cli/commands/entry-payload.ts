@@ -331,8 +331,7 @@ export function buildEntryPayload(
         hasExplicitWorkspace:
             typeof explicitWorkspaceId === 'string' &&
             explicitWorkspaceId.trim().length > 0 &&
-            explicitWorkspaceId.trim() !== '*' &&
-            explicitWorkspaceId.trim().toLowerCase() !== 'default',
+            explicitWorkspaceId.trim() !== '*',
         trustScore,
         impactScore,
         validationStatus,

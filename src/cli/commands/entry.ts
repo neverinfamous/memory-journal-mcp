@@ -185,12 +185,7 @@ export async function createEntryAction(...args: unknown[]): Promise<void> {
         const { content, payload } = await loadCliEntryContentAndPayload(options, config)
 
         let resolvedWs = payload.workspaceId?.trim()
-        if (
-            resolvedWs === undefined ||
-            resolvedWs === '' ||
-            resolvedWs.toLowerCase() === 'default' ||
-            resolvedWs.toLowerCase() === 'test'
-        ) {
+        if (resolvedWs === undefined || resolvedWs === '' || resolvedWs.toLowerCase() === 'test') {
             resolvedWs = undefined
         }
 
@@ -289,7 +284,6 @@ export async function updateEntryAction(...args: unknown[]): Promise<void> {
         }
         const canReassignWorkspace =
             payload.workspaceId !== undefined &&
-            payload.workspaceId !== 'default' &&
             payload.workspaceId !== '*' &&
             (payload.hasExplicitWorkspace === true || payload.hasExplicitProject === true)
         if (canReassignWorkspace && payload.workspaceId !== undefined) {

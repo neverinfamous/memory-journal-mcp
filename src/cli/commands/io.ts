@@ -44,6 +44,9 @@ function fetchAllWorkspaceEntries(
 export async function exportJsonAction(options: z.infer<typeof exportJsonSchema>, command: Command): Promise<void> {
     const { db, serverOptions } = await getDb(options, command)
     try {
+        if (options.workspace?.trim() === '*') {
+            throw new Error("Workspace '*' cannot be used for a single-file export.")
+        }
         const requestedProject = options.defaultProject
         const workspaceId = resolveWorkspaceId(
             options.workspace,
@@ -79,6 +82,9 @@ export async function exportMarkdownAction(options: z.infer<typeof exportMarkdow
     try {
         if (!options.dir) {
             throw new Error('--dir is required for markdown export')
+        }
+        if (options.workspace?.trim() === '*') {
+            throw new Error("Workspace '*' cannot be used for a single-directory export.")
         }
         const requestedProject = options.defaultProject
         const workspaceId = resolveWorkspaceId(

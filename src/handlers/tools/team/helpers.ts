@@ -5,13 +5,8 @@
  */
 
 import type { ToolContext } from '../../../types/index.js'
-import { ValidationError } from '../../../types/errors.js'
 import { logger } from '../../../utils/logger.js'
-import {
-    activeProjectRegistry,
-    concreteWorkspace,
-    exactRegistryKey,
-} from '../../../utils/write-scope.js'
+import { activeProjectRegistry, pairStoredScope } from '../../../utils/write-scope.js'
 
 // ============================================================================
 // Constants
@@ -84,20 +79,14 @@ export function resolveTeamProjectNumber(
     wsId: string,
     explicitProjectNumber: number | null | undefined
 ): number | null | undefined {
-    const registry = activeProjectRegistry(context.config?.projectRegistry)
-    const concrete = concreteWorkspace(wsId)
-    const key = concrete !== undefined ? exactRegistryKey(concrete, registry) : undefined
-    const regProj = key !== undefined ? registry?.[key]?.project_number : undefined
-    const explicit = explicitProjectNumber ?? undefined
-    if (regProj !== undefined) {
-        if (explicit !== undefined && explicit !== regProj) {
-            throw new ValidationError(
-                `project_number ${String(explicit)} belongs to a different workspace than '${key}'.`,
-                { workspaceId: key, projectNumber: explicit }
-            )
-        }
-        return regProj
+    const trimmed = wsId.trim()
+    if (trimmed === '' || trimmed === '*') {
+        if (explicitProjectNumber !== undefined && explicitProjectNumber !== null) return explicitProjectNumber
+        return context.config?.defaultProjectNumber
     }
-    if (explicit !== undefined) return explicit
+    const registry = activeProjectRegistry(context.config?.projectRegistry)
+    const paired = pairStoredScope(trimmed, explicitProjectNumber, registry)
+    if (paired.projectNumber !== undefined && paired.projectNumber !== null) return paired.projectNumber
+    if (trimmed.toLowerCase() === 'default') return undefined
     return context.config?.defaultProjectNumber
 }
