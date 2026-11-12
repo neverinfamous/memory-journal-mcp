@@ -396,7 +396,7 @@ describe('Code Mode Worker Core & Project Registry Ops', () => {
             expect(updRes.success).toBe(true)
 
             delete process.env['PROJECT_REGISTRY']
-            const listFn = createListProjectsFn({})
+            const listFn = createListProjectsFn()
             const listed = (await listFn()) as Record<string, unknown>[]
             expect(listed.length).toBe(1)
             expect(listed[0]?.['name']).toBe('alpha-renamed')

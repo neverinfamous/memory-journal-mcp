@@ -158,9 +158,9 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
             expect(String(resPrompts['_healing_note'])).toContain('AUTONOMOUS HEALING')
 
             const resTools = await listToolsTool!.handler({}) as Record<string, unknown>
-            expect(resTools['success']).toBe(true)
+            expect(resTools['success']).toBe(false)
             expect(Array.isArray(resTools['tools'])).toBe(true)
-            expect(String(resTools['_healing_note'])).toContain('AUTONOMOUS HEALING')
+            expect(String(resTools['_healing_note'])).toContain('was not built')
         })
 
         it('should have load-briefing and mj_session_summary dummy prompt handlers', async () => {

@@ -1316,7 +1316,7 @@ describe('GitHub Tool Handlers', () => {
                 github
             )) as { success: boolean; kanban?: { moved: boolean; error: string } }
 
-            expect(result.success).toBe(true) // Issue still closes
+            expect(result.success).toBe(false)
             expect(result.kanban?.moved).toBe(false)
             expect(result.kanban?.error).toContain('project_number required')
         })
@@ -1339,7 +1339,7 @@ describe('GitHub Tool Handlers', () => {
                 github
             )) as { success: boolean; kanban?: { moved: boolean; error: string } }
 
-            expect(result.success).toBe(true)
+            expect(result.success).toBe(false)
             expect(result.kanban?.moved).toBe(false)
             expect(result.kanban?.error).toContain('not found')
         })
@@ -1372,7 +1372,7 @@ describe('GitHub Tool Handlers', () => {
                 github
             )) as { success: boolean; kanban?: { moved: boolean; error: string } }
 
-            expect(result.success).toBe(true)
+            expect(result.success).toBe(false)
             expect(result.kanban?.moved).toBe(false)
             expect(result.kanban?.error).toContain('Item add failed')
         })
@@ -1414,7 +1414,7 @@ describe('GitHub Tool Handlers', () => {
                 github
             )) as { success: boolean; kanban?: { moved: boolean; error: string } }
 
-            expect(result.success).toBe(true)
+            expect(result.success).toBe(false)
             expect(result.kanban?.moved).toBe(false)
             expect(result.kanban?.error).toContain('"Done" status column not found')
         })

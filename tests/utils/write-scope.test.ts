@@ -53,4 +53,9 @@ describe('alignedProjectFilter', () => {
     it('rejects a project number from a different workspace', () => {
         expect(() => alignedProjectFilter('adamic', 5, registry)).toThrow(ValidationError)
     })
+
+    it('pair-checks an explicit workspace of default', () => {
+        expect(() => alignedProjectFilter('default', 16, registry)).toThrow(ValidationError)
+        expect(alignedProjectFilter('default', undefined, registry)).toBeUndefined()
+    })
 })

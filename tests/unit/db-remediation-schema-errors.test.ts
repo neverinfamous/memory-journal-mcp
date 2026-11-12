@@ -16,9 +16,9 @@ describe('db-remediation: schema-errors', () => {
 })
 
 describe('db-remediation: workspaceSnapshotType', () => {
-    it('keeps legacy key for omitted/default workspaces and namespaces wildcard/* and other workspaces', () => {
+    it('keeps the legacy key for an omitted workspace and namespaces default, wildcard, and other workspaces', () => {
         expect(workspaceSnapshotType('digest')).toBe('digest')
-        expect(workspaceSnapshotType('digest', 'default')).toBe('digest')
+        expect(workspaceSnapshotType('digest', 'default')).toBe('digest:default')
         expect(workspaceSnapshotType('digest', '*')).toBe('digest:*')
     })
     it('namespaces other workspaces', () => {

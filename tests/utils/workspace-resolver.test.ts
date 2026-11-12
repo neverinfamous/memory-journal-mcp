@@ -217,6 +217,37 @@ describe('workspace-resolver with keyword and tag inference', () => {
         }
     })
 
+    it('keeps a session workspace of default ahead of content keywords', () => {
+        const runtime = {}
+        setActiveSessionProject('default', null, runtime)
+        const spy = vi.spyOn(process, 'cwd').mockReturnValue('C:\\tmp\\unregistered-project')
+        try {
+            const res = resolveProjectContext(
+                { content: 'mysql-mcp notes', tags: ['mysql'] },
+                { ...mockConfig, runtime }
+            )
+            expect(res.workspaceId).toBe('default')
+            expect(res.projectNumber).toBeUndefined()
+        } finally {
+            spy.mockRestore()
+            clearActiveSessionProject()
+        }
+    })
+
+    it('rejects a project number registered to more than one workspace', () => {
+        expect(() =>
+            resolveProjectContext(
+                { project_number: 5 },
+                {
+                    projectRegistry: {
+                        alpha: { path: 'C:\\repos\\alpha', project_number: 5 },
+                        beta: { path: 'C:\\repos\\beta', project_number: 5 },
+                    },
+                }
+            )
+        ).toThrow(ValidationError)
+    })
+
     it('binds a session project number before content keywords when the session workspace is missing', () => {
         const runtime = {}
         setActiveSessionProject(undefined, 5, runtime)
