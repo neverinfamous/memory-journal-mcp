@@ -291,9 +291,7 @@ export async function updateEntryAction(...args: unknown[]): Promise<void> {
             payload.workspaceId !== undefined &&
             payload.workspaceId !== 'default' &&
             payload.workspaceId !== '*' &&
-            (payload.hasExplicitWorkspace === true ||
-                payload.hasExplicitProject === true ||
-                existingEntry?.workspaceId === 'default')
+            (payload.hasExplicitWorkspace === true || payload.hasExplicitProject === true)
         if (canReassignWorkspace && payload.workspaceId !== undefined) {
             if (existingEntry !== null && existingEntry.workspaceId !== payload.workspaceId) {
                 updates.workspaceId = '*'

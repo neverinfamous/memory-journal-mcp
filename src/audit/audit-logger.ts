@@ -434,7 +434,12 @@ export class AuditLogger {
             for (let i = MAX_ARCHIVES - 1; i >= 1; i--) {
                 const oldFile = `${this.config.logPath}.${String(i)}`
                 const newFile = `${this.config.logPath}.${String(i + 1)}`
-                await rename(oldFile, newFile).catch(() => null)
+                await rename(oldFile, newFile).catch((err: unknown) => {
+                    if (nodeErrorCode(err) === 'ENOENT') return
+                    const message = err instanceof Error ? err.message : String(err)
+                    logger.error(`Audit log rotation failed: ${message}`, { module: 'Audit' })
+                    throw err
+                })
             }
 
             // Rename current directly to .1 to avoid a crash window where data is left in a .tmp file

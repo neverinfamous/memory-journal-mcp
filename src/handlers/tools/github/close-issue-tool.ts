@@ -18,7 +18,7 @@ import { moveIssueToDone, type KanbanMoveResult } from './close-issue-kanban.js'
 function concreteCallerWorkspace(workspaceId: string | undefined): string | undefined {
     if (workspaceId === undefined) return undefined
     const trimmed = workspaceId.trim()
-    if (trimmed === '' || trimmed === '*' || trimmed.toLowerCase() === 'default') return undefined
+    if (trimmed === '' || trimmed === '*') return undefined
     return trimmed
 }
 

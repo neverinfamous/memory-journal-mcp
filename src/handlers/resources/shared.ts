@@ -262,7 +262,8 @@ export function resourceWorkspace(context: {
 }): string {
     const cfg = context.briefingConfig
     const id = cfg?.defaultWorkspaceId
-    if (id !== undefined && id.length > 0 && id !== 'default') {
+    if (id !== undefined && id.length > 0) {
+        if (id.toLowerCase() === 'default') return 'default'
         return id
     }
     const sessionCtx = getActiveSessionProject(context.runtime)

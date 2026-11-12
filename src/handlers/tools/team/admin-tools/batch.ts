@@ -77,13 +77,10 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                                 recoverable: true,
                             }
                         }
-                        const rawEntryWs =
-                            e.workspace_id !== undefined && e.workspace_id !== 'default'
-                                ? e.workspace_id
-                                : undefined
+                        const namedWorkspace = e.workspace_id ?? input.workspace_id
                         const resolved = resolveProjectContext(
                             {
-                                workspace_id: rawEntryWs ?? input.workspace_id,
+                                workspace_id: namedWorkspace,
                                 project_number: e.project_number ?? input.project_number,
                                 content: e.content,
                                 tags: e.tags,
@@ -92,12 +89,9 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                         )
                         const requestedProject = e.project_number ?? input.project_number
                         const callerWorkspace =
-                            rawEntryWs ??
-                            (input.workspace_id !== undefined &&
-                            input.workspace_id !== 'default' &&
-                            input.workspace_id !== '*'
-                                ? input.workspace_id
-                                : undefined)
+                            namedWorkspace !== undefined && namedWorkspace !== '*'
+                                ? namedWorkspace
+                                : undefined
                         // [INVARIANT] A configured defaultProjectNumber does not satisfy team batch create.
                         // Only an explicit number, or the registry project of a named workspace, does.
                         const projectNumber =

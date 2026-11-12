@@ -11,8 +11,9 @@ import { join } from 'node:path'
 import { constants } from 'node:fs'
 import type { IDatabaseAdapter } from '../database/core/interfaces.js'
 import type { VectorSearchManager } from '../vector/vector-search-manager/index.js'
-import type { EntryType, RelationshipType, SignificanceType } from '../types/index.js'
-import { ENTRY_TYPES, RELATIONSHIP_TYPES } from '../types/index.js'
+import type { EntryType, SignificanceType } from '../types/index.js'
+import { ENTRY_TYPES } from '../types/index.js'
+import { linkImportedRelationships } from './import-relationships.js'
 import { parseFrontmatter } from './frontmatter.js'
 import { assertSafeDirectoryPath, assertSafeFilePath } from '../utils/security-utils.js'
 import {
@@ -55,8 +56,6 @@ export interface ImportResult {
 }
 
 /** Supported relationship types for validation */
-const VALID_RELATIONSHIP_TYPES = new Set<string>(RELATIONSHIP_TYPES)
-
 /** Valid entry types for casting */
 const VALID_ENTRY_TYPES = new Set<string>(ENTRY_TYPES)
 
@@ -269,11 +268,13 @@ function resolveImportedFileContext(
     }
 
     const lockedWorkspace = concreteCallerWorkspace(options.workspaceId)
-    let fileProject = metadata.project_number
+    const fileProject = metadata.project_number
     if (lockedWorkspace !== undefined && fileProject !== undefined) {
         const owner = registryWorkspaceForProject(fileProject)
         if (owner !== undefined && !sameRegistryWorkspace(lockedWorkspace, owner)) {
-            fileProject = undefined
+            throw new Error(
+                `project_number ${String(fileProject)} belongs to workspace '${owner}', not '${lockedWorkspace}'.`
+            )
         }
     }
     const rawProjectNumber = options.project_number ?? fileProject
@@ -333,61 +334,6 @@ function upsertParsedFile(
     })
     result.created++
     return { entryId: newEntry.id, workspaceId: effectiveWsId }
-}
-
-function linkImportedRelationships(
-    db: IDatabaseAdapter,
-    entryId: number,
-    relationships: { type: string; target_id: number }[] | undefined,
-    workspaceId: string | undefined,
-    idRemap: ReadonlyMap<number, number>
-): { linked: number; rejected: string[] } {
-    if (relationships === undefined) return { linked: 0, rejected: [] }
-    let linked = 0
-    const existingRels =
-        typeof db.getRelationships === 'function'
-            ? db.getRelationships(entryId, workspaceId)
-            : []
-    const rejected: string[] = []
-    for (const rel of relationships) {
-        if (!VALID_RELATIONSHIP_TYPES.has(rel.type)) {
-            rejected.push(rel.type)
-            continue
-        }
-        const targetId = idRemap.get(rel.target_id) ?? rel.target_id
-        if (targetId === entryId) continue
-        const alreadyExists = existingRels.some(
-            (r) =>
-                r.fromEntryId === entryId &&
-                r.toEntryId === targetId &&
-                r.relationshipType === rel.type
-        )
-        if (alreadyExists) continue
-        const targetExists = db.getEntryById(targetId, workspaceId)
-        if (targetExists) {
-            if (workspaceId !== undefined) {
-                db.linkEntries(
-                    entryId,
-                    targetId,
-                    rel.type as RelationshipType,
-                    undefined,
-                    workspaceId
-                )
-            } else {
-                db.linkEntries(entryId, targetId, rel.type as RelationshipType)
-            }
-            existingRels.push({
-                id: 0,
-                fromEntryId: entryId,
-                toEntryId: targetId,
-                relationshipType: rel.type as RelationshipType,
-                description: null,
-                createdAt: '',
-            })
-            linked++
-        }
-    }
-    return { linked, rejected }
 }
 
 /**
@@ -459,6 +405,13 @@ export async function processImportBatch(
                 idRemap
             )
             result.relationshipsLinked += linked.linked
+            for (const targetId of linked.missingTargets) {
+                result.errors.push({
+                    file: '',
+                    error: `Relationship target ${String(targetId)} does not exist and was not linked`,
+                })
+                result.success = false
+            }
             for (const relType of linked.rejected) {
                 result.errors.push({
                     file: '',

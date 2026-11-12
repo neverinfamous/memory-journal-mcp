@@ -191,8 +191,16 @@ function resolveAllowedRoots(rawRoots: string[]): string[] {
     for (const root of rawRoots) {
         try {
             allowedRoots.push(fs.realpathSync(path.resolve(root)))
-        } catch {
-            allowedRoots.push(path.resolve(root))
+        } catch (err) {
+            const code =
+                typeof err === 'object' && err !== null && 'code' in err
+                    ? (err as { code?: unknown }).code
+                    : undefined
+            if (code === 'ENOENT') {
+                allowedRoots.push(path.resolve(root))
+                continue
+            }
+            throw err
         }
     }
     return allowedRoots

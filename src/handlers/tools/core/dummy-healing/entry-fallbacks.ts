@@ -197,10 +197,13 @@ export function getEntryAndCodemodeFallbackToolDefinitions(
                     if (searchTool !== undefined) {
                         const result = await Promise.resolve(searchTool.handler(args))
                         if (typeof result === 'object' && result !== null) {
+                            const record = result as Record<string, unknown>
+                            const completed = record['success'] !== false
+                            const outcome = completed ? 'Search completed successfully.' : 'Search did not succeed.'
                             return {
-                                ...(result as Record<string, unknown>),
+                                ...record,
                                 _healing_note:
-                                    '🛠️ AUTONOMOUS HEALING: `search_entries` was invoked directly while in Code Mode. Search completed successfully. In Code Mode, prefer using `mj_execute_code` with `mj.search.searchEntries({ ... })`.',
+                                    `🛠️ AUTONOMOUS HEALING: \`search_entries\` was invoked directly while in Code Mode. ${outcome} In Code Mode, prefer using \`mj_execute_code\` with \`mj.search.searchEntries({ ... })\`.`,
                             }
                         }
                         return result

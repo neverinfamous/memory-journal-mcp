@@ -181,6 +181,8 @@ export function performUpdateEntry(
     if (input.projectNumber !== undefined && input.projectNumber !== null) {
         const paired = pairStoredScope(destination, input.projectNumber, registry)
         writeInput = { ...input, projectNumber: paired.projectNumber }
+    } else if (input.projectNumber === null) {
+        writeInput = input
     } else if (input.targetWorkspaceId !== undefined && input.targetWorkspaceId !== '*') {
         const paired = pairStoredScope(input.targetWorkspaceId, undefined, registry)
         if (paired.projectNumber !== undefined && paired.projectNumber !== null) {

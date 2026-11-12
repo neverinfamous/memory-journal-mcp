@@ -196,13 +196,13 @@ export function resolvePromptPriorWorkspace(
             if (matchByNum !== undefined) {
                 return sanitizePromptTarget(matchByNum).slice(0, MAX_WORKSPACE_ID_LENGTH)
             }
-            return 'default'
+            return sanitizePromptTarget(requested).slice(0, MAX_WORKSPACE_ID_LENGTH)
         }
         const canonical = exactRegistryKey(requested, registry)
         if (canonical !== undefined) {
             return sanitizePromptTarget(canonical).slice(0, MAX_WORKSPACE_ID_LENGTH)
         }
-        return 'default'
+        return sanitizePromptTarget(requested).slice(0, MAX_WORKSPACE_ID_LENGTH)
     }
 
     const cleanTarget = targetOrTopic?.trim()

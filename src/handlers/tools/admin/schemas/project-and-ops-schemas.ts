@@ -41,7 +41,6 @@ export const SearchAuditLogSchema = z.preprocess(
                 obj['user'] = obj['target_user']
                 delete obj['target_user']
             }
-            delete obj['workspace_id']
             return obj
         }
         return val
@@ -60,6 +59,7 @@ export const SearchAuditLogSchema = z.preprocess(
             category: z.enum(['read', 'write', 'admin', 'team', 'audit']).optional(),
             limit: z.number().min(1).max(1000).optional().default(100),
             project_number: z.number().int().optional(),
+            workspace_id: z.string().optional(),
         })
         .strict()
 )

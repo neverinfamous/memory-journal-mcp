@@ -134,7 +134,20 @@ export async function rebuildIndex(
     }
 
     if (totalEntries === 0) {
-        return { success: true, indexed: 0, failed: 0, firstError: null }
+        let cleanupError: string | undefined
+        try {
+            dbAdapter.cleanupStaleVectors()
+        } catch (err) {
+            cleanupError = err instanceof Error ? err.message : String(err)
+            logger.warning('Failed to cleanup stale vectors after rebuild', { error: err })
+        }
+        return {
+            success: cleanupError === undefined,
+            indexed: 0,
+            failed: cleanupError === undefined ? 0 : 1,
+            firstError: cleanupError ?? null,
+            ...(cleanupError !== undefined ? { warning: cleanupError } : {}),
+        }
     }
 
     await sendProgress(progress, 0, totalEntries, 'Starting vector index rebuild')

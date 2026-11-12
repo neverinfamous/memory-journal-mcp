@@ -81,9 +81,14 @@ function isHoldingPidStale(
         process.kill(holdingPid, 0)
     } catch (e: unknown) {
         // ESRCH means the process does not exist
-        if (e instanceof Error && (e as NodeJS.ErrnoException).code === 'ESRCH') {
+        if (hasErrorCode(e, 'ESRCH')) {
             return true
         }
+        logger.error('Failed to probe restore lock holder', {
+            error: e instanceof Error ? e.message : String(e),
+            module: 'SqliteAdapter',
+        })
+        throw e
     }
     return false
 }

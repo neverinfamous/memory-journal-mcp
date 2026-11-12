@@ -196,14 +196,18 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
 
                     teamDb.flushSave()
 
-                    await autoIndexEntry(context.teamVectorManager, teamDb, entry.id, wsId)
+                    const indexStatus = await autoIndexEntry(context.teamVectorManager, teamDb, entry.id, wsId)
 
                     triggerTeamNotifications(context)
 
                     return {
-                        success: true,
+                        success: indexStatus !== 'failed',
                         entry: { ...entry, author },
                         author,
+                        vectorIndex: indexStatus,
+                        ...(indexStatus === 'failed'
+                            ? { warning: `Entry #${String(entry.id)} was saved but vector indexing failed.` }
+                            : {}),
                         ...(relationshipWarnings.length > 0 ? { relationshipWarnings } : {}),
                     }
                 } catch (err) {

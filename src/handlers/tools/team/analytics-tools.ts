@@ -54,20 +54,31 @@ export function getTeamAnalyticsTools(context: ToolContext): ToolDefinition[] {
 
                     const { group_by, project_number, workspace_id } = TeamGetStatisticsSchema.parse(params)
                     const wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
-                    const stats = teamDb.getStatistics(group_by, undefined, undefined, undefined, wsId)
+                    const stats = teamDb.getStatistics(
+                        group_by,
+                        undefined,
+                        undefined,
+                        undefined,
+                        wsId,
+                        project_number
+                    )
 
                     let authors: { author: string; count: number }[] = []
+                    let authorStatsError: string | undefined
                     try {
                         authors = teamDb.getAuthorStatistics(wsId)
                     } catch (err) {
-                        // Author column may not exist yet
+                        authorStatsError = err instanceof Error ? err.message : String(err)
                         logger.debug('Failed to fetch team author statistics', { error: err })
                     }
 
                     return {
-                        success: true,
+                        success: authorStatsError === undefined,
                         ...(stats as object),
                         authors,
+                        ...(authorStatsError !== undefined
+                            ? { warning: `Author statistics failed: ${authorStatsError}` }
+                            : {}),
                     }
                 } catch (err) {
                     return formatHandlerError(err)

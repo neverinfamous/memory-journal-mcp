@@ -270,7 +270,7 @@ export const VectorStatsOutputSchema = z
     .object({
         available: z.boolean(),
         error: z.string().optional(),
-        itemCount: z.number().optional(),
+        itemCount: z.number().nullable().optional(),
         modelName: z.string().optional(),
         dimensions: z.number().optional(),
         success: z.boolean().optional(),

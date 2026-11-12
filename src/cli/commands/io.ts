@@ -116,7 +116,7 @@ export async function exportMarkdownAction(options: z.infer<typeof exportMarkdow
 function concreteImportWorkspace(workspace: string | undefined): string | undefined {
     if (workspace === undefined) return undefined
     const trimmed = workspace.trim()
-    if (trimmed === '' || trimmed === '*' || trimmed.toLowerCase() === 'default') return undefined
+    if (trimmed === '' || trimmed === '*') return undefined
     return trimmed
 }
 

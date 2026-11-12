@@ -295,7 +295,7 @@ export async function handleServerInfo(
     context?: ToolContext
 ): Promise<unknown> {
     let healthData: Record<string, unknown> | undefined
-    let healthReadFailed = false
+    let healthReadFailed = context === undefined
     if (context !== undefined) {
         try {
             const res = await readResource(
@@ -341,7 +341,19 @@ export async function handleServerInfo(
         ...(healthData !== undefined ? { health: healthData } : {}),
         ...(dbHealth !== undefined ? { database: dbHealth } : {}),
         capabilities: { codemode: true, resources: true, prompts: true, tools: true },
-        _healing_note: `🛠️ AUTONOMOUS HEALING: '${toolName}' was called as an MCP tool. Returned server diagnostic information and health status successfully.`,
+        _healing_note: healthReadFailed
+            ? `🛠️ AUTONOMOUS HEALING: '${toolName}' was called as an MCP tool. Health status was not read.`
+            : `🛠️ AUTONOMOUS HEALING: '${toolName}' was called as an MCP tool. Returned server diagnostic information and health status successfully.`,
+    }
+}
+
+function sqliteAdapterStatus(context?: ToolContext): string {
+    if (context?.db === undefined || context.db === null) return 'disabled'
+    try {
+        context.db.getHealthStatus()
+        return 'connected'
+    } catch {
+        return 'error'
     }
 }
 
@@ -351,7 +363,7 @@ export function handleListAdapters(toolName: string, context?: ToolContext): unk
             name: 'sqlite',
             type: 'database',
             driver: 'better-sqlite3',
-            status: 'connected',
+            status: sqliteAdapterStatus(context),
             primary: true,
             description: 'Primary SQLite storage engine for journal entries, tags, and relationships',
         },
@@ -384,7 +396,7 @@ export function handleListAdapters(toolName: string, context?: ToolContext): unk
     ]
 
     return {
-        success: true,
+        success: context?.db !== undefined && context.db !== null,
         adapters,
         default_adapter: 'sqlite',
         _healing_note: `🛠️ AUTONOMOUS HEALING: '${toolName}' was called as an MCP tool. Returned registered database and service adapters successfully.`,

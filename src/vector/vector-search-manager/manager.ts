@@ -332,7 +332,8 @@ export class VectorSearchManager {
     private resolveCandidates(
         candidates: VectorCandidate[],
         limit: number,
-        targetWs: string
+        targetWs: string,
+        projectNumber?: number
     ): SemanticSearchResult[] {
         if (candidates.length === 0) {
             return []
@@ -351,7 +352,11 @@ export class VectorSearchManager {
             const entry = entriesMap
                 ? (entriesMap.get(candidate.entryId) ?? null)
                 : this.dbAdapter.getEntryById(candidate.entryId, targetWs)
-            if (entry && (targetWs === '*' || entry.workspaceId === targetWs)) {
+            if (
+                entry &&
+                (targetWs === '*' || entry.workspaceId === targetWs) &&
+                (projectNumber === undefined || entry.projectNumber === projectNumber)
+            ) {
                 searchResults.push({
                     entryId: candidate.entryId,
                     entry,
@@ -373,7 +378,8 @@ export class VectorSearchManager {
         query: string,
         limit = 10,
         threshold = 0.0,
-        workspaceId?: string
+        workspaceId?: string,
+        projectNumber?: number
     ): Promise<SemanticSearchResult[]> {
         await this.initialize()
 
@@ -386,7 +392,7 @@ export class VectorSearchManager {
 
             const candidates = collectCandidates(results, threshold)
 
-            return this.resolveCandidates(candidates, limit, targetWs)
+            return this.resolveCandidates(candidates, limit, targetWs, projectNumber)
         } catch (error) {
             logger.error('Semantic search failed', {
                 error: error instanceof Error ? error.message : String(error),
@@ -442,8 +448,8 @@ export class VectorSearchManager {
     /**
      * Helper to get vector search statistics
      */
-    public getStats(): { itemCount: number; dimensions: number; modelName: string; isReady: boolean } {
-        let itemCount = 0
+    public getStats(): { itemCount: number | null; dimensions: number; modelName: string; isReady: boolean } {
+        let itemCount: number | null = null
         let isReady = false
 
         try {

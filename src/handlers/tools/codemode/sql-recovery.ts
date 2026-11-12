@@ -2,6 +2,7 @@
  * SQL and prepared statement recovery helpers for Code Mode execution payloads.
  */
 
+import { scopeFromInsertLiterals, scopeFromSqlLiterals } from '../../../codemode/sql-literal-scope.js'
 import { isRecord } from '../../../codemode/normalizers/shared-utils.js'
 import { extractAndRecoverEntryCode } from './json-entry-recovery.js'
 
@@ -140,17 +141,6 @@ export function extractAndRecoverSqlCode(code: string): string | null {
     }
 
     return null
-}
-
-function scopeFromSqlLiterals(cleanSql: string): Record<string, unknown> {
-    const projectMatch = /\b(?:WHERE|AND)\s+[`"']?(?:project_number|project_id)[`"']?\s*=\s*(\d+)/i.exec(cleanSql)
-    const projectVal = projectMatch?.[1] !== undefined ? parseInt(projectMatch[1], 10) : undefined
-    const wsMatch = /\b(?:WHERE|AND)\s+[`"']?workspace_id[`"']?\s*=\s*['"]([^'"]+)['"]/i.exec(cleanSql)
-    const wsVal = wsMatch?.[1]
-    return {
-        ...(projectVal !== undefined ? { project_number: projectVal } : {}),
-        ...(wsVal !== undefined && wsVal !== '' ? { workspace_id: wsVal } : {}),
-    }
 }
 
 function splitTopLevelCommaArgs(rawArgs: string): string[] {
@@ -295,7 +285,7 @@ export function extractAndRecoverPreparedStatementCode(code: string): string | n
     }
 
     if (isInsert) {
-        return recoverPreparedInsert(parsedArgs)
+        return recoverPreparedInsert(cleanSql, parsedArgs)
     }
 
     if (isDelete) {
@@ -396,7 +386,7 @@ function recoverPreparedUpdate(cleanSql: string, parsedArgs: unknown[]): string 
     return null
 }
 
-function recoverPreparedInsert(parsedArgs: unknown[]): string | null {
+function recoverPreparedInsert(cleanSql: string, parsedArgs: unknown[]): string | null {
     const payload: Record<string, unknown> = {
         entry_type: 'technical_decision',
     }
@@ -419,6 +409,13 @@ function recoverPreparedInsert(parsedArgs: unknown[]): string | null {
             if (typeof wsId === 'string' && wsId.trim() !== '') payload['workspace_id'] = wsId
         }
     }
+    const sqlScope = { ...scopeFromSqlLiterals(cleanSql), ...scopeFromInsertLiterals(cleanSql) }
+    if (payload['workspace_id'] === undefined && sqlScope['workspace_id'] !== undefined) {
+        payload['workspace_id'] = sqlScope['workspace_id']
+    }
+    if (payload['project_number'] === undefined && sqlScope['project_number'] !== undefined) {
+        payload['project_number'] = sqlScope['project_number']
+    }
     if (typeof payload['content'] !== 'string' || payload['content'] === '') return null
     return `return await mj.core.createEntry(${JSON.stringify(payload)});`
 }
@@ -439,7 +436,11 @@ function recoverPreparedDelete(cleanSql: string, parsedArgs: unknown[]): string 
 function recoverPreparedSelect(cleanSql: string, parsedArgs: unknown[]): string | null {
     const entryId = extractEntryId(cleanSql, parsedArgs)
     if (entryId !== undefined) {
-        const payload = { entry_id: entryId, ...scopeFromRecordBinds(parsedArgs) }
+        const payload = {
+            entry_id: entryId,
+            ...scopeFromSqlLiterals(cleanSql),
+            ...scopeFromRecordBinds(parsedArgs),
+        }
         return `return await mj.core.getEntryById(${JSON.stringify(payload)});`
     }
     return null

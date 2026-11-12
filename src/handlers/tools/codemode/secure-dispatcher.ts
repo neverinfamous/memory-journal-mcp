@@ -217,23 +217,38 @@ async function normalizeDispatchParams(
     if (typeof paramsObj['workspace_id'] === 'number') {
         paramsObj['workspace_id'] = String(paramsObj['workspace_id'])
     }
+    if (typeof paramsObj['project_number'] === 'string') {
+        const regEntry = lookupRegistryEntry(sessionContext.config?.projectRegistry, paramsObj['project_number'])
+        if (regEntry?.project_number !== undefined) paramsObj['project_number'] = regEntry.project_number
+    }
+    if (typeof paramsObj['project_number'] === 'string') {
+        const parsed = Number(paramsObj['project_number'])
+        if (!Number.isNaN(parsed) && Number.isFinite(parsed)) {
+            paramsObj['project_number'] = parsed
+        } else {
+            return {
+                errorResult: {
+                    success: false,
+                    error: `Invalid project_number: '${paramsObj['project_number']}'. Code Mode failed to resolve this to a known numeric ID. You can pass the exact numeric ID (e.g. 14), the repo name (e.g. 'mysql-mcp'), or simply OMIT the project_number field entirely to let the system auto-inject the current workspace's ID.`,
+                },
+            }
+        }
+    }
     if (
         typeof paramsObj['workspace_id'] === 'string' &&
-        paramsObj['workspace_id'] !== 'default' &&
         paramsObj['workspace_id'] !== '*' &&
         checkSchemaAcceptsKey(tool.inputSchema, 'project_number')
     ) {
         const wsReg = lookupRegistryEntry(sessionContext.config?.projectRegistry, paramsObj['workspace_id'])
-        if (wsReg?.project_number !== undefined) {
-            const supplied = typeof paramsObj['project_number'] === 'number' ? paramsObj['project_number'] : undefined
-            if (supplied !== undefined && supplied !== wsReg.project_number) {
-                pairStoredScope(
-                    paramsObj['workspace_id'],
-                    supplied,
-                    activeProjectRegistry(sessionContext.config?.projectRegistry)
-                )
-            }
-            if (supplied === undefined) paramsObj['project_number'] = wsReg.project_number
+        const supplied = typeof paramsObj['project_number'] === 'number' ? paramsObj['project_number'] : undefined
+        if (supplied !== undefined) {
+            pairStoredScope(
+                paramsObj['workspace_id'],
+                supplied,
+                activeProjectRegistry(sessionContext.config?.projectRegistry)
+            )
+        } else if (paramsObj['workspace_id'] !== 'default' && wsReg?.project_number !== undefined) {
+            paramsObj['project_number'] = wsReg.project_number
         }
     }
     const callerWorkspaceId =
@@ -259,25 +274,6 @@ async function normalizeDispatchParams(
     }
 
     await autoPopulateGithubUrls(paramsObj, sessionContext)
-
-    if (typeof paramsObj['project_number'] === 'string') {
-        const regEntry = lookupRegistryEntry(sessionContext.config?.projectRegistry, paramsObj['project_number'])
-        if (regEntry?.project_number !== undefined) paramsObj['project_number'] = regEntry.project_number
-    }
-
-    if (typeof paramsObj['project_number'] === 'string') {
-        const parsed = Number(paramsObj['project_number'])
-        if (!Number.isNaN(parsed) && Number.isFinite(parsed)) {
-            paramsObj['project_number'] = parsed
-        } else {
-            return {
-                errorResult: {
-                    success: false,
-                    error: `Invalid project_number: '${paramsObj['project_number']}'. Code Mode failed to resolve this to a known numeric ID. You can pass the exact numeric ID (e.g. 14), the repo name (e.g. 'mysql-mcp'), or simply OMIT the project_number field entirely to let the system auto-inject the current workspace's ID.`,
-                },
-            }
-        }
-    }
 
     return { params: paramsObj }
 }

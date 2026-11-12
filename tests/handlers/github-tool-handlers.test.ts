@@ -1171,7 +1171,7 @@ describe('GitHub Tool Handlers', () => {
                 github
             )) as { success: boolean; project?: { added: boolean; error: string } }
 
-            expect(result.success).toBe(true) // Issue still created
+            expect(result.success).toBe(false)
             expect(result.project?.added).toBe(false)
             expect(result.project?.error).toContain('not found')
         })
@@ -1203,7 +1203,7 @@ describe('GitHub Tool Handlers', () => {
                 github
             )) as { success: boolean; project?: { added: boolean; error: string } }
 
-            expect(result.success).toBe(true)
+            expect(result.success).toBe(false)
             expect(result.project?.added).toBe(false)
         })
 

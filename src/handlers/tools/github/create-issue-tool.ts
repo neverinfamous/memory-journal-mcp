@@ -17,7 +17,7 @@ import { addIssueToProject, type IssueProjectResult } from './create-issue-proje
 function concreteCallerWorkspace(workspaceId: string | undefined): string | undefined {
     if (workspaceId === undefined) return undefined
     const trimmed = workspaceId.trim()
-    if (trimmed === '' || trimmed === '*' || trimmed.toLowerCase() === 'default') return undefined
+    if (trimmed === '' || trimmed === '*') return undefined
     return trimmed
 }
 
@@ -207,8 +207,14 @@ export function getCreateGitHubIssueTool(context: ToolContext): ToolDefinition {
                     workspaceId,
                 })
 
+                const projectWarning =
+                    projectResult !== undefined && !projectResult.added
+                        ? (projectResult.error ??
+                          'Issue was created but it was not added to the project.')
+                        : undefined
                 return {
-                    success: true,
+                    success: projectWarning === undefined,
+                    ...(projectWarning !== undefined ? { warning: projectWarning } : {}),
                     issue: {
                         number: issue.number,
                         title: issue.title,

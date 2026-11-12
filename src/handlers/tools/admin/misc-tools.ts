@@ -11,6 +11,21 @@ import {
     SearchAuditLogOutputSchema,
 } from './schemas.js'
 
+function auditScopeWarning(
+    projectNumber: number | undefined,
+    workspaceId: string | undefined
+): { warning: string } | Record<string, never> {
+    const ignored: string[] = []
+    if (projectNumber !== undefined) {
+        ignored.push('project_number was ignored: audit log entries are not project-scoped')
+    }
+    if (workspaceId !== undefined) {
+        ignored.push('workspace_id was ignored: audit log entries are not workspace-scoped')
+    }
+    if (ignored.length === 0) return {}
+    return { warning: `${ignored.join('; ')}, so results are not filtered by that scope.` }
+}
+
 export const MergeTagsSchemaMcp = z.preprocess(
     healAgentHallucinations,
     z
@@ -166,12 +181,7 @@ export function getMiscTools(context: ToolContext): ToolDefinition[] {
                         success: true,
                         count: results.length,
                         results,
-                        ...(input.project_number !== undefined
-                            ? {
-                                  warning:
-                                      'project_number was ignored: audit log entries are not project-scoped, so results are not filtered by project.',
-                              }
-                            : {}),
+                        ...auditScopeWarning(input.project_number, input.workspace_id),
                     }
                 } catch (err) {
                     return formatHandlerError(err)

@@ -210,8 +210,9 @@ describe('Team Analytics Tool Handlers', () => {
                     teamDb
                 )) as any
 
-                expect(result.success).toBe(true)
+                expect(result.success).toBe(false)
                 expect(result.authors).toEqual([])
+                expect(result.warning).toContain('Author statistics failed')
             } finally {
                 teamDb.getAuthorStatistics = originalGetStats
             }

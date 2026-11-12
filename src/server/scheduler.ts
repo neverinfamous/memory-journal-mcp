@@ -430,6 +430,9 @@ export class Scheduler {
             dryRun: this.options.pruneDryRun,
             excludeTags: this.options.pruneExcludeTags,
             workspaceId: this.resolveDefaultWorkspace(),
+            ...(this.options.defaultProjectNumber !== undefined
+                ? { projectNumber: this.options.defaultProjectNumber }
+                : {}),
         })
         if (pruneResult.aborted === true) {
             throw new Error('Scheduled auto-prune aborted because the pre-prune backup failed')

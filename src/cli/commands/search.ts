@@ -32,7 +32,7 @@ export async function searchAction(query: string | undefined, options: z.infer<t
 
         if (mode === 'semantic') {
             const vectorManager = new VectorSearchManager(db, { modelName: serverOptions.embeddingModel })
-            result = await vectorManager.search(finalQuery, limit, 0.25, workspaceId)
+            result = await vectorManager.search(finalQuery, limit, 0.25, workspaceId, requestedProject)
         } else if (mode === 'hybrid') {
             const vectorManager = new VectorSearchManager(db, { modelName: serverOptions.embeddingModel })
             result = await hybridSearch(finalQuery, db, vectorManager, { limit, ...workspaceFilter, ...projectFilter })

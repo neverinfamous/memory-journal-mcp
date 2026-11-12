@@ -25,7 +25,7 @@ export const healthResource: InternalResourceDef = {
 
         let vectorIndex: {
             available: boolean
-            itemCount: number
+            itemCount: number | null
             modelName: string | null
             isReady: boolean
         } | null = null

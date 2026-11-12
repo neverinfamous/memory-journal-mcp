@@ -196,8 +196,8 @@ Content`
             process.cwd(),
         ])
 
-        expect(result.success).toBe(true)
-        expect(result.errors).toEqual([]) // It shouldn't be a hard error, just skipped quietly in importer mapping
+        expect(result.success).toBe(false)
+        expect(result.errors.some((error) => error.error.includes('does not exist'))).toBe(true)
         // We ensure `linkEntries` is NOT called if target is missing
         expect(mockDb.linkEntries).not.toHaveBeenCalled()
     })

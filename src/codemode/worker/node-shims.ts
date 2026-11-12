@@ -3,6 +3,8 @@
  * and SQLite prepared statements (`db.prepare(...)`).
  */
 
+import { scopeFromInsertLiterals, scopeFromSqlLiterals } from '../sql-literal-scope.js'
+
 const toStr = (val: unknown): string => {
     if (typeof val === 'string') return val
     if (typeof val === 'number' || typeof val === 'boolean') return `${val}`
@@ -205,17 +207,6 @@ function scopeFromRecordArgs(args: unknown[]): Record<string, unknown> {
     return scope
 }
 
-function scopeFromSqlLiterals(cleanSql: string): Record<string, unknown> {
-    const projectMatch = /\b(?:WHERE|AND)\s+[`"']?(?:project_number|project_id)[`"']?\s*=\s*(\d+)/i.exec(cleanSql)
-    const projectVal = projectMatch?.[1] !== undefined ? parseInt(projectMatch[1], 10) : undefined
-    const wsMatch = /\b(?:WHERE|AND)\s+[`"']?workspace_id[`"']?\s*=\s*['"]([^'"]+)['"]/i.exec(cleanSql)
-    const wsVal = wsMatch?.[1]
-    return {
-        ...(projectVal !== undefined ? { project_number: projectVal } : {}),
-        ...(wsVal !== undefined && wsVal !== '' ? { workspace_id: wsVal } : {}),
-    }
-}
-
 function parseUpdateStatement(cleanSql: string, args: unknown[]): ParsedSql {
     const idMatch = WHERE_ID_PATTERN.exec(cleanSql)
     let entryId: number | undefined
@@ -284,7 +275,7 @@ function parseUpdateStatement(cleanSql: string, args: unknown[]): ParsedSql {
     return { action: 'update', params: updatePayload }
 }
 
-function parseInsertStatement(args: unknown[]): ParsedSql {
+function parseInsertStatement(cleanSql: string, args: unknown[]): ParsedSql {
     let content = ''
     let title: string | undefined
     let tags: string[] = []
@@ -319,6 +310,13 @@ function parseInsertStatement(args: unknown[]): ParsedSql {
     }
 
     if (content === '') return { action: 'unmapped', params: {} }
+    const sqlScope = { ...scopeFromSqlLiterals(cleanSql), ...scopeFromInsertLiterals(cleanSql) }
+    if (workspaceId === undefined && typeof sqlScope['workspace_id'] === 'string') {
+        workspaceId = sqlScope['workspace_id']
+    }
+    if (projectNumber === undefined && typeof sqlScope['project_number'] === 'number') {
+        projectNumber = sqlScope['project_number']
+    }
     return {
         action: 'create',
         params: {
@@ -354,7 +352,7 @@ export function createPreparedStatementShim(
         }
 
         if (isInsert) {
-            return parseInsertStatement(args)
+            return parseInsertStatement(cleanSql, args)
         }
 
         if (isDelete) {
@@ -427,21 +425,6 @@ export function createPreparedStatementShim(
             return (
                 invokeGroupMethod(shimMj, 'core', 'getEntryById', 'get_entry_by_id', params) ??
                 Promise.resolve({
-                    success: false,
-                    code: 'VALIDATION_ERROR',
-                    error: 'Statement could not be mapped to a journal method',
-                })
-            )
-        }
-        if (action === 'list') {
-            return (
-                invokeGroupMethod(
-                    shimMj,
-                    'core',
-                    'getRecentEntries',
-                    'get_recent_entries',
-                    params
-                ) ?? Promise.resolve({
                     success: false,
                     code: 'VALIDATION_ERROR',
                     error: 'Statement could not be mapped to a journal method',

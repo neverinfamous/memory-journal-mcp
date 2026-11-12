@@ -87,10 +87,20 @@ describe('Pass 9 Audit Fixes — Workspace Routing & Normalizers', () => {
     })
 
     describe('resourceWorkspace', () => {
-        it('resolves defaultProjectNumber via projectRegistry when defaultWorkspaceId is default', () => {
+        it('keeps an explicit default workspace instead of replacing it with the project registry workspace', () => {
             const ws = resourceWorkspace({
                 briefingConfig: {
                     defaultWorkspaceId: 'default',
+                    defaultProjectNumber: 5,
+                    projectRegistry: sampleRegistry,
+                },
+            })
+            expect(ws).toBe('default')
+        })
+
+        it('resolves an omitted workspace from defaultProjectNumber', () => {
+            const ws = resourceWorkspace({
+                briefingConfig: {
                     defaultProjectNumber: 5,
                     projectRegistry: sampleRegistry,
                 },

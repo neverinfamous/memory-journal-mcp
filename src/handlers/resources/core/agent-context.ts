@@ -20,7 +20,17 @@ export function getAgentContextResource(): InternalResourceDef {
 
             const match = /^memory:\/\/(?:agent-context|agent-id)(?:\/(.+))?$/.exec(uri)
             const rawRepo = match?.[1] !== undefined ? decodeURIComponent(match[1]) : undefined
-            const repo = rawRepo === 'default' ? undefined : rawRepo
+            if (rawRepo?.toLowerCase() === 'default') {
+                return {
+                    data: [
+                        'Project: default',
+                        'Project Number: unresolved',
+                        'Workspace ID: default',
+                        'Instructions: Use your Conversation ID as the session_id for all tool calls.',
+                    ].join('\n'),
+                }
+            }
+            const repo = rawRepo
 
             const numericRepo = repo !== undefined ? /^#?(\d+)$/.exec(repo) : null
             const exactRepo = repo !== undefined ? exactRegistryKey(repo, config?.projectRegistry) : undefined
