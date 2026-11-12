@@ -4,6 +4,7 @@ import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { ErrorFieldsMixin } from '../error-fields-mixin.js'
 import { relaxedNumber } from '../schemas.js'
+import { coerceAnchorStatusAlias } from '../schemas/hallucination-healer-fields.js'
 import { mcpLogger } from '../../../utils/mcp-logger.js'
 import {
     findCanonicalRegistryKey,
@@ -84,29 +85,69 @@ export function resolveEntryAnchors(
     }
 }
 
-export const MarkAnchorsStaleSchema = z.object({
-    updates: z.array(
-        z.object({
-            id: z.number(),
-            status: z.enum(['pending', 'valid', 'stale', 'invalidated', 'unresolvable']),
+function preprocessMarkAnchorsStale(val: unknown): unknown {
+    if (typeof val !== 'object' || val === null || Array.isArray(val)) return val
+    const obj = { ...(val as Record<string, unknown>) }
+    if (obj['updates'] === undefined && Array.isArray(obj['anchors'])) {
+        obj['updates'] = obj['anchors']
+        delete obj['anchors']
+    }
+    if (Array.isArray(obj['updates'])) {
+        obj['updates'] = obj['updates'].map((rawItem: unknown) => {
+            if (typeof rawItem !== 'object' || rawItem === null || Array.isArray(rawItem)) {
+                return rawItem
+            }
+            const item = { ...(rawItem as Record<string, unknown>) }
+            const rawId = item['id'] ?? item['anchor_id'] ?? item['anchorId'] ?? item['entry_id'] ?? item['entryId']
+            if (rawId !== undefined) {
+                const numId = typeof rawId === 'string' ? Number(rawId.trim()) : rawId
+                if (typeof numId === 'number' && !Number.isNaN(numId)) {
+                    item['id'] = numId
+                }
+            }
+            delete item['anchor_id']
+            delete item['anchorId']
+            delete item['entry_id']
+            delete item['entryId']
+            const mappedStatus = coerceAnchorStatusAlias(item['status'])
+            if (mappedStatus !== undefined) {
+                item['status'] = mappedStatus
+            }
+            return item
         })
-    ),
-    workspace_id: z.string().optional(),
-    project_number: z.number().optional(),
-})
+    }
+    return obj
+}
 
-export const MarkAnchorsStaleSchemaMcp = z.object({
-    updates: z
-        .array(
+export const MarkAnchorsStaleSchema = z.preprocess(
+    preprocessMarkAnchorsStale,
+    z.object({
+        updates: z.array(
             z.object({
-                id: relaxedNumber(),
-                status: z.string(),
+                id: z.number(),
+                status: z.enum(['pending', 'valid', 'stale', 'invalidated', 'unresolvable']),
             })
-        )
-        .optional(),
-    workspace_id: z.string().optional(),
-    project_number: relaxedNumber().optional(),
-})
+        ),
+        workspace_id: z.string().optional(),
+        project_number: z.number().optional(),
+    })
+)
+
+export const MarkAnchorsStaleSchemaMcp = z.preprocess(
+    preprocessMarkAnchorsStale,
+    z.object({
+        updates: z
+            .array(
+                z.object({
+                    id: relaxedNumber(),
+                    status: z.string(),
+                })
+            )
+            .optional(),
+        workspace_id: z.string().optional(),
+        project_number: relaxedNumber().optional(),
+    })
+)
 
 export function getStalenessTools(context: ToolContext): ToolDefinition[] {
     const { db } = context

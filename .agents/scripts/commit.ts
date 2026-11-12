@@ -36,6 +36,8 @@ const CLI_OPTIONS = {
   journal: { type: 'boolean' },
   'journal-project': { type: 'string' },
   'session-id': { type: 'string' },
+  tags: { type: 'string', multiple: true },
+  tag: { type: 'string', multiple: true },
 } as const;
 
 function fatalError(msg: string): never {
@@ -173,6 +175,21 @@ export const cliSchema = z.object({
   journal: z.boolean().default(false),
   'journal-project': z.coerce.number().int().finite().positive().optional(),
   'session-id': z.string().trim().min(1).max(256).optional(),
+  tags: z.preprocess((val) => {
+    if (val === undefined) return undefined;
+    const rawItems = Array.isArray(val) ? val : [val];
+    const normalized: string[] = [];
+    for (const item of rawItems) {
+      if (typeof item !== 'string') continue;
+      const trimmed = item.trim();
+      const inner = trimmed.startsWith('[') && trimmed.endsWith(']') ? trimmed.slice(1, -1) : trimmed;
+      for (const token of inner.split(',')) {
+        const clean = token.trim().replace(/^['"]|['"]$/g, '').trim();
+        if (clean.length > 0) normalized.push(clean);
+      }
+    }
+    return normalized.length > 0 ? normalized : undefined;
+  }, z.array(z.string().min(1).max(128)).optional()),
 }).strict().transform(data => {
   if (data['journal-project'] !== undefined && !data.journal) {
     console.warn("⚠️ AUTONOMOUS HEALING: --journal-project provided without --journal flag. Automatically enabling --journal.");
@@ -228,6 +245,11 @@ function parseArguments(): CliArgs {
   if (mergedValues.message) {
     mergedValues.msg = mergedValues.msg || mergedValues.message;
     delete mergedValues.message;
+  }
+
+  if (mergedValues.tag !== undefined) {
+    mergedValues.tags = [...(mergedValues.tags ?? []), ...mergedValues.tag];
+    delete mergedValues.tag;
   }
 
   if (mergedValues.trust !== undefined && mergedValues.confidence === undefined) {

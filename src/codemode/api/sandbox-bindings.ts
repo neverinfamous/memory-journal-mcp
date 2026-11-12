@@ -192,6 +192,8 @@ export function buildSandboxBindingsMap(api: SandboxBindingsSource, progressCtx?
         update_entry: api.admin['updateEntry'],
         get_entry_by_id: api.core['getEntryById'],
         listTags: api.core['listTags'],
+        markAnchorsStale: api.core['markAnchorsStale'],
+        mark_anchors_stale: api.core['markAnchorsStale'],
         semanticSearch: api.search['semanticSearch'],
         linkEntries: api.relationships['linkEntries'],
         mergeTags: api.admin['mergeTags'],

@@ -10,6 +10,7 @@ import {
     healSessionSummaryContent,
     healAutoContext,
 } from '../normalizers/shared-utils.js'
+import { healAnchorsField, healSortByField } from '../../handlers/tools/schemas/hallucination-healer-fields.js'
 import { hasMethodToken, methodTokens } from '../method-tokens.js'
 
 const CONTENT_LIKE_KEYS = new Set(['message', 'msg', 'name', 'heading', 'subject', 'description', 'content', 'comment'])
@@ -51,7 +52,7 @@ export function convertKeysToSnakeCase(obj: Record<string, unknown>, methodName?
         result[snakeKey] = value
     }
 
-    postProcessNormalizedKeys(result)
+    postProcessNormalizedKeys(result, methodLower)
     return result
 }
 
@@ -163,6 +164,9 @@ function resolveAliasedKey(startKey: string, value: unknown, ctx: KeyContext): s
     if (startKey === 'entry') {
         if (isRecord(value)) return startKey
         return entryAliasReplacement(value, methodName) ?? alias
+    }
+    if (startKey === 'user' && (methodLower === 'search_audit_log' || methodLower === 'searchauditlog')) {
+        return startKey
     }
     if ((startKey === 'title' || startKey === 'body') && isGithubTool) return startKey
     if (
@@ -276,7 +280,15 @@ function propagateBatchProjectNumber(result: Record<string, unknown>): void {
     }
 }
 
-function postProcessNormalizedKeys(result: Record<string, unknown>): void {
+const GIT_COMMIT_METHODS = new Set([
+    'get_commit_history', 'getcommithistory', 'search_commits', 'searchcommits',
+])
+
+function postProcessNormalizedKeys(result: Record<string, unknown>, methodLower?: string): void {
+    healAnchorsField(result)
+    if (methodLower === undefined || !GIT_COMMIT_METHODS.has(methodLower)) {
+        healSortByField(result)
+    }
     if ('tag' in result && !('tags' in result)) {
         const tagVal = result['tag']
         result['tags'] = Array.isArray(tagVal) ? tagVal : [tagVal]

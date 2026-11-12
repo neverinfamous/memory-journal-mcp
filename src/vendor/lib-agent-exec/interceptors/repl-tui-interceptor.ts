@@ -114,9 +114,30 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
         return false;
       };
 
+      const nodeValueFlags = new Set([
+        '-r', '--require', '--import', '--loader', '--experimental-loader',
+        '-C', '--conditions', '--input-type', '--env-file', '--env-file-if-exists',
+        '--watch-path', '--redirect-warnings', '--diagnostic-dir', '--heapsnapshot-signal',
+        '--openssl-config', '--icu-data-dir', '--title', '--max-old-space-size',
+      ]);
+      const hasNodeDebuggerArg = (a: readonly string[]): boolean => {
+        if (a.some(arg => arg.startsWith('--inspect'))) return true;
+        for (let i = 0; i < a.length; i++) {
+          const arg = a[i];
+          if (arg === undefined || arg === '--') return false;
+          if (arg === '-e' || arg === '--eval' || arg === '-p' || arg === '--print') return false;
+          if (arg.startsWith('-')) {
+            if (nodeValueFlags.has(arg)) i++;
+            continue;
+          }
+          return arg === 'inspect';
+        }
+        return false;
+      };
+
       const blockReason = match({ cmdBasename: cmdBasename.toLowerCase(), args })
         .with({ args: [] }, () => `without arguments or stdin`)
-        .with({ cmdBasename: P.union('node', 'node.exe', 'node.cmd'), args: P.when(a => a.some(arg => arg === 'inspect' || arg.startsWith('--inspect'))) }, () => `with a debugging flag`)
+        .with({ cmdBasename: P.union('node', 'node.exe', 'node.cmd'), args: P.when(a => hasNodeDebuggerArg(a)) }, () => `with a debugging flag`)
         .with({ cmdBasename: P.union('mysql', 'mysql.exe', 'psql', 'psql.exe', 'sqlite3', 'sqlite3.exe', 'sqlite', 'sqlite.exe', 'redis-cli', 'redis-cli.exe', 'mongo', 'mongo.exe', 'mongosh', 'mongosh.exe'), args: P.when(a => !isHelpOrVersion(a) && !isDbNonInteractive(cmdBasename.toLowerCase(), a)) }, () => `as a DB client without execution flags`)
         .with({ cmdBasename: P.union('ssh', 'ssh.exe', 'sftp', 'sftp.exe', 'ftp', 'ftp.exe', 'telnet', 'telnet.exe'), args: P.when(a => !isHelpOrVersion(a) && a.filter(arg => !arg.startsWith('-') && !arg.includes('@')).length === 0) }, () => `as a naked shell/connection without commands`)
         .with({ cmdBasename: P.union('node', 'node.exe', 'node.cmd', 'bun', 'bun.exe', 'bun.cmd', 'deno', 'deno.exe'), args: P.when(a => !isHelpOrVersion(a) && a.every(arg => arg.startsWith('-')) && !a.some(arg => ['-e', '--eval', '--print', '-p'].includes(arg))) }, () => `with only flags and no script execution flags`)
@@ -220,11 +241,12 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
     return c.replace('.', '\\.');
   }).join('|');
   const replRegex = new RegExp(`(${cmdPrefix})(${pathPrefix})(${replPattern})(?=\\s*['"]?\\s*(?:$|[;\\n&|)]))`, 'i');
-  const interactiveFlagPattern = `(?:-(?:i|it|ti)\\b|--interactive\\b|inspect\\b|--inspect\\b|--inspect-brk\\b|-m\\s+pdb\\b)`;
+  const interactiveFlagPattern = `(?:-(?:i|it|ti)\\b|--interactive\\b|--inspect\\b|--inspect-brk\\b|-m\\s+pdb\\b)`;
   const interactiveFlagRegex = new RegExp(`(${cmdPrefix})(${pathPrefix})(${replPattern})\\s+(?:[^;\\n|&]*\\s)?${interactiveFlagPattern}`);
+  const nodeInspectSubcmdRegex = new RegExp(`(${cmdPrefix})(${pathPrefix})(node(?:\\.exe|\\.cmd)?)\\s+(?:--?\\S+\\s+)*inspect\\b`, 'i');
   
   const isBlockedRepl = (body: string) => {
-    if (interactiveFlagRegex.test(body)) return true;
+    if (interactiveFlagRegex.test(body) || nodeInspectSubcmdRegex.test(body)) return true;
     const match = replRegex.exec(body);
     if (!match) return false;
     const delimiter = match[1].trim();
@@ -390,7 +412,7 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
       process.exit(1);
     })
     .with({ scriptBody: P.when(body => typeof body === 'string' && isBlockedRepl(body)) }, (p) => {
-      const m = typeof p.scriptBody === 'string' ? (replRegex.exec(p.scriptBody) || interactiveFlagRegex.exec(p.scriptBody)) : null;
+      const m = typeof p.scriptBody === 'string' ? (replRegex.exec(p.scriptBody) || interactiveFlagRegex.exec(p.scriptBody) || nodeInspectSubcmdRegex.exec(p.scriptBody)) : null;
       const innerCmdBasename = m ? m[3].toLowerCase() : 'repl-app';
       console.error(`\n   💡 AGENT HINT: You wrapped '${innerCmdBasename}' inside an inline script.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
       console.error(`   Because 'agent-exec.ts' is non-interactive, running TUI/REPL applications inside inline scripts will hang indefinitely.`);
@@ -418,7 +440,7 @@ export function replTuiInterceptor({ cmdBasename, args, envOverrides, payload }:
        process.exit(1);
     })
     .with({ type: 'eval', code: P.when(c => typeof c === 'string' && isBlockedRepl(c)) }, (p) => {
-       const m = typeof p.code === 'string' ? (replRegex.exec(p.code) || interactiveFlagRegex.exec(p.code)) : null;
+       const m = typeof p.code === 'string' ? (replRegex.exec(p.code) || interactiveFlagRegex.exec(p.code) || nodeInspectSubcmdRegex.exec(p.code)) : null;
        const innerCmdBasename = m ? m[3].toLowerCase() : 'repl-app';
        console.error(`\n   💡 AGENT HINT: You passed '${innerCmdBasename}' inside an eval payload.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
        console.error(`   Because 'agent-exec.ts' is non-interactive, running TUI/REPL applications natively will hang indefinitely.`);

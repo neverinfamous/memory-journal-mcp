@@ -1,11 +1,11 @@
 // @ts-nocheck
 import fs from 'fs';
-import os from 'os';
 import path from 'path';
 import { AUTONOMOUS_HEALING_MSG } from '../utils.js';
 import { ExecutionContext, AGENT_NATIVE_TOOLS, ECOSYSTEM_MCP_TOOLS } from './types.js';
 import { handleRipgrepInterception } from './search-interceptor.js';
 import { getUnderlyingPackageScript } from '../command-utils.js';
+import { rewriteInlineScriptToTempFile } from '../inline-script-healer.js';
 
 export function packageManagerInterceptor(ctx: ExecutionContext): void {
   let { cmdBasename } = ctx;
@@ -13,6 +13,10 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
   let { args } = ctx;
   if (!args) args = [];
   if (args.includes('--help') || args.includes('-h')) return;
+
+  const projectDir = ctx.payload.cwd !== undefined && ctx.payload.cwd.length > 0
+    ? path.resolve(ctx.payload.cwd)
+    : (ctx.cwd !== undefined && ctx.cwd.length > 0 ? path.resolve(ctx.cwd) : process.cwd());
 
   if (['apt', 'apt-get'].includes(cmdBasename)) {
     envOverrides['DEBIAN_FRONTEND'] = 'noninteractive';
@@ -67,9 +71,6 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
   }
 
   if (['npm', 'npm.cmd', 'npm.exe', 'pnpm', 'pnpm.cmd', 'pnpm.exe', 'yarn', 'yarn.cmd', 'yarn.exe', 'bun', 'bun.cmd', 'bun.exe'].includes(cmdBasename)) {
-    const projectDir = ctx.payload.cwd !== undefined && ctx.payload.cwd.length > 0
-      ? path.resolve(ctx.payload.cwd)
-      : process.cwd();
     // [INVARIANT]: Detect both modern text lockfile ('bun.lock') and legacy binary lockfile ('bun.lockb').
     const isBunProject = fs.existsSync(path.join(projectDir, 'bun.lock')) || fs.existsSync(path.join(projectDir, 'bun.lockb'));
     const isNpm = cmdBasename.startsWith('npm');
@@ -286,17 +287,38 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
       return;
     }
     const nonFlagArgs = args.filter(a => !a.startsWith('-'));
+    const tsxBin = (subCmd === 'tsx' || subCmd === 'ts-node')
+      ? subCmd
+      : ((subCmd === 'exec' || subCmd === 'run') && (nonFlagArgs[1] === 'tsx' || nonFlagArgs[1] === 'ts-node') ? nonFlagArgs[1] : undefined);
+    if (tsxBin !== undefined) {
+      const tsxIdx = args.indexOf(tsxBin);
+      if (tsxIdx !== -1) {
+        const rewritten = rewriteInlineScriptToTempFile({
+          interpreterName: tsxBin,
+          args,
+          envOverrides,
+          cwd: projectDir,
+          ...(ctx.payload.target !== undefined ? { target: ctx.payload.target } : {}),
+          ...(ctx.payload.env !== undefined ? { payloadEnv: ctx.payload.env } : {}),
+          startIdx: tsxIdx + 1,
+        });
+        if (rewritten !== null && 'command' in ctx.payload) {
+          ctx.payload.args = ctx.args;
+        }
+      }
+    }
     const subCmdLower = subCmd !== undefined ? subCmd.toLowerCase() : (isYarn ? 'install' : '');
     // [INTENT]: Bypass IOController prompt-stall aborts and grant >=300s timeout during dependency resolution/installation across pnpm, npm, yarn, and bun.
     const isPackageResolution = ['install', 'i', 'ci', 'add', 'update', 'up', 'dedupe'].includes(subCmdLower);
     const targetScript = (subCmd === 'run' || subCmd === 'exec') ? nonFlagArgs[1] : subCmd;
     const underlyingScript = getUnderlyingPackageScript(cmdBasename, args, ctx.payload.cwd);
-    const isPlaywright = !isPackageResolution && Boolean(
+    const isKnownDeterministic = args.some(a => /(?:commit\.ts|get-git-history-json\.ts|backup-conversations\.ts)/i.test(a));
+    const isPlaywright = !isPackageResolution && !isKnownDeterministic && Boolean(
       (targetScript && /(?:playwright|cypress|\be2e\b|test:e2e|test-e2e)/i.test(targetScript)) ||
       args.some(a => /(?:playwright|cypress|\be2e\b|test:e2e|test-e2e)/i.test(a)) ||
       (underlyingScript && /(?:playwright|cypress|\be2e\b)/i.test(underlyingScript))
     );
-    const isCoverage = !isPackageResolution && Boolean(
+    const isCoverage = !isPackageResolution && !isKnownDeterministic && Boolean(
       (targetScript && /(?:coverage|test:coverage)/i.test(targetScript)) ||
       args.some(a => /(?:coverage|--coverage|test:coverage)/i.test(a)) ||
       (underlyingScript && /(?:coverage|--coverage)/i.test(underlyingScript))
@@ -304,6 +326,7 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
     const isLongRunningQualityCheck = !isPackageResolution && Boolean(
       isPlaywright ||
       isCoverage ||
+      isKnownDeterministic ||
       (targetScript && (
         targetScript.startsWith('test') ||
         ['lint', 'typecheck', 'check', 'build'].includes(targetScript) ||
@@ -325,6 +348,13 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
       ctx.payload.bypassInterceptors = true;
       if (ctx.payload.timeoutMs === undefined || ctx.payload.timeoutMs < 600000) {
         ctx.payload.timeoutMs = 600000;
+      }
+    } else if (isKnownDeterministic) {
+      console.error(`\n   🛠️ AUTONOMOUS HEALING: Disabling stall interceptors and extending timeout for quality command to prevent false positive aborts.... (Frictionless Recovery)`);
+      ctx.payload.bypassInterceptors = true;
+      const detTimeout = ctx.payload.target === 'wsl2' ? 90000 : 240000;
+      if (ctx.payload.timeoutMs === undefined || ctx.payload.timeoutMs < detTimeout) {
+        ctx.payload.timeoutMs = detTimeout;
       }
     } else if (isLongRunningQualityCheck) {
       console.error(`\n   🛠️ AUTONOMOUS HEALING: Disabling stall interceptors and extending timeout for quality command to prevent false positive aborts.... (Frictionless Recovery)`);
@@ -399,30 +429,24 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
          ctx.payload.command = ctx.cmdBasename;
       }
       args.unshift('exec');
-      const evalIdx = args.findIndex(a => ['-e', '--eval'].includes(a));
-      if (evalIdx !== -1 && evalIdx + 1 < args.length) {
-        console.error(`\n   🛠️ AUTONOMOUS HEALING: Transparently rewriting inline tsx script to a temporary file execution to avoid quoting bugs... (Frictionless Recovery)\x1b[0m`);
-        const scriptContent = args[evalIdx + 1];
-        const outDir = os.tmpdir();
-        const tmpFile = path.join(outDir, `.agent_inline_script_${Date.now()}.ts`);
-        fs.writeFileSync(tmpFile, scriptContent, { mode: 0o600 });
-        process.on('exit', () => {
-          try {
-            if (fs.existsSync(tmpFile)) fs.unlinkSync(tmpFile);
-          } catch {
-            // ignore
-          }
-        });
-        args.splice(evalIdx, 2, tmpFile);
-        if ('command' in ctx.payload) {
-          ctx.payload.args = ctx.args;
-        }
+      const rewritten = rewriteInlineScriptToTempFile({
+        interpreterName: 'tsx',
+        args,
+        envOverrides,
+        cwd: projectDir,
+        ...(ctx.payload.target !== undefined ? { target: ctx.payload.target } : {}),
+        ...(ctx.payload.env !== undefined ? { payloadEnv: ctx.payload.env } : {}),
+        startIdx: args.indexOf('tsx') + 1,
+      });
+      if (rewritten !== null && 'command' in ctx.payload) {
+        ctx.payload.args = ctx.args;
       }
     } else {
       envOverrides['CI'] = '1';
-      const isPlaywright = args.some(a => /(?:playwright|cypress|\be2e\b|test:e2e|test-e2e)/i.test(a));
-      const isCoverage = args.some(a => /(?:coverage|--coverage|test:coverage)/i.test(a));
-      const isRunnerQuality = args.some(a => /(?:vitest|jest|playwright|cypress|test|lint|typecheck|tsc)/i.test(a));
+      const isKnownDeterministic = args.some(a => /(?:commit\.ts|get-git-history-json\.ts|backup-conversations\.ts)/i.test(a));
+      const isPlaywright = !isKnownDeterministic && args.some(a => /(?:playwright|cypress|\be2e\b|test:e2e|test-e2e)/i.test(a));
+      const isCoverage = !isKnownDeterministic && args.some(a => /(?:coverage|--coverage|test:coverage)/i.test(a));
+      const isRunnerQuality = isKnownDeterministic || args.some(a => /(?:vitest|jest|playwright|cypress|test|lint|typecheck|tsc)/i.test(a));
       if (isPlaywright) {
         console.error(`\n   🛠️ AUTONOMOUS HEALING: Disabling stall interceptors and extending timeout for Playwright/E2E test to prevent false positive aborts.... (Frictionless Recovery)`);
         ctx.payload.bypassInterceptors = true;

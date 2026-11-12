@@ -41,6 +41,7 @@ export interface CommitJournalArgs {
   journal: boolean;
   'journal-project'?: number | undefined;
   'session-id'?: string | undefined;
+  tags?: string[] | undefined;
   significance?: string | undefined;
   category?: CommitCategory | undefined;
   'no-history': boolean;
@@ -214,10 +215,11 @@ export function buildCommitJournalContent(
   configPath?: string
 ): string {
   const resolved = resolveJournalTarget(cwd, args['journal-project'], configPath);
+  const mergedTags = Array.from(new Set(['commit-narrative', ...(args.tags ?? [])]));
   const frontmatterLines = [
     '---',
     'type: "technical_note"',
-    'tags: ["commit-narrative"]',
+    `tags: ${JSON.stringify(mergedTags)}`,
   ];
 
   if (resolved.workspaceId !== undefined && resolved.workspaceId.length > 0) {

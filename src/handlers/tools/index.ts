@@ -317,6 +317,16 @@ export async function callTool(
     }
 
     const mapToUse = config?.runtime?.toolMapCache ?? toolMapCache ?? EMPTY_TOOL_MAP
+    if (
+        config?.agentHealing !== false &&
+        name === 'get_entry_by_id' &&
+        args['entry_id'] === undefined &&
+        typeof args['uri'] === 'string' &&
+        args['uri'].startsWith('memory://') &&
+        mapToUse.has('read_resource')
+    ) {
+        name = 'read_resource'
+    }
     const tool = mapToUse.get(name)
 
     if (!tool) {

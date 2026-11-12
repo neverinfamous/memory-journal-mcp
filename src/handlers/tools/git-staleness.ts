@@ -14,6 +14,7 @@ import {
 export interface GitWorkingDirInput {
     cwd?: string
     repo?: string
+    repo_name?: string
     workspace_id?: string
     workspaceId?: string
     project_number?: number | string
@@ -24,17 +25,19 @@ export function resolveGitWorkingDir(
     input: GitWorkingDirInput,
     config?: ToolHandlerConfig
 ): string {
+    const registry = config?.projectRegistry ?? loadProjectRegistryFromConfig()
+    const buildAllowedRoots = (): string[] => [
+        ...(config?.allowedIoRoots ?? []),
+        ...Object.values(registry ?? {})
+            .map((entry) => entry.path)
+            .filter((entryPath) => entryPath.length > 0),
+    ]
+
     if (input.cwd !== undefined && input.cwd !== '') {
         if (!fs.existsSync(input.cwd)) {
             throw new Error(`Git working directory does not exist: ${input.cwd}`)
         }
-        const registry = config?.projectRegistry ?? loadProjectRegistryFromConfig()
-        const roots = [
-            ...(config?.allowedIoRoots ?? []),
-            ...Object.values(registry ?? {})
-                .map((entry) => entry.path)
-                .filter((entryPath) => entryPath.length > 0),
-        ]
+        const roots = buildAllowedRoots()
         if (roots.length === 0) {
             throw new Error(
                 'Git working directory must be a registered repository path or an allowed I/O root'
@@ -43,13 +46,28 @@ export function resolveGitWorkingDir(
         assertSafeDirectoryPath(input.cwd, roots)
         return input.cwd
     }
-    const target = input.repo ?? input.workspace_id ?? input.workspaceId
-    const registry = config?.projectRegistry ?? loadProjectRegistryFromConfig()
+    const target = input.repo ?? input.repo_name ?? input.workspace_id ?? input.workspaceId
     if (target !== undefined && target !== '') {
         if (registry) {
             const canonicalKey = findCanonicalRegistryKey(target, registry)
             const entry = canonicalKey ? registry[canonicalKey] : registry[target]
             if (entry?.path && fs.existsSync(entry.path)) return entry.path
+            for (const regEntry of Object.values(registry)) {
+                if (
+                    regEntry.path &&
+                    cwdMatchesRegistryPath(regEntry.path, target) &&
+                    fs.existsSync(regEntry.path)
+                ) {
+                    return regEntry.path
+                }
+            }
+        }
+        if (fs.existsSync(target)) {
+            const roots = buildAllowedRoots()
+            if (roots.length > 0) {
+                assertSafeDirectoryPath(target, roots)
+                return target
+            }
         }
         throw new Error(`Git repository '${target}' did not resolve to an existing path`)
     }

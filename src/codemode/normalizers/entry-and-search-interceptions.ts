@@ -167,6 +167,13 @@ function applySingleIdInterception(
         }
         const idVal = obj['entry_id'] ?? obj['entryId'] ?? obj['id'] ?? obj['path'] ?? obj['keep']
         if (idVal === undefined) {
+            if (
+                (methodName === 'get_entry_by_id' || methodName === 'getEntryById') &&
+                typeof obj['uri'] === 'string' &&
+                obj['uri'].trim().startsWith('memory://')
+            ) {
+                return { args }
+            }
             return validationError(`${methodName} requires an 'entry_id' parameter.`, 'Provide { entry_id: number, ... } as the argument')
         }
         for (const k of ['path', 'keep']) {

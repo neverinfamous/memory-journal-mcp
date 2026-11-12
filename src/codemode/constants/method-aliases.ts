@@ -77,6 +77,10 @@ export const METHOD_ALIASES: Record<string, Record<string, string>> = {
         ),
         ...mapToTarget(['history', 'revisions', 'get_entry_history'], 'getEntryHistory'),
         ...mapToTarget(
+            ['mark_anchors_stale', 'markStale', 'updateAnchors', 'updateAnchorStatus', 'update_anchor_status'],
+            'markAnchorsStale'
+        ),
+        ...mapToTarget(
             ['schema', 'getSchema', 'get_schema', 'database', 'getDatabase', 'get_database', 'getDb', 'get_db'],
             'maintenanceUnavailable'
         ),
@@ -319,5 +323,11 @@ export const METHOD_ALIASES: Record<string, Record<string, string>> = {
         get_release_info: 'getReleaseInfo',
         get_unreleased_commits: 'getUnreleasedCommits',
         analyze_commit_patterns: 'analyzeCommitPatterns',
+        check_entry_staleness: 'checkEntryStaleness',
+        staleness: 'checkEntryStaleness',
+        checkStaleness: 'checkEntryStaleness',
+        mark_anchors_stale: 'markAnchorsStale',
+        markAnchorsStale: 'markAnchorsStale',
+        markStale: 'markAnchorsStale',
     },
 }

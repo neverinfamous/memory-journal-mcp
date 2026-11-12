@@ -70,3 +70,51 @@ export function shareCreatedEntryWithTeam(
     teamDb.flushSave()
     return author
 }
+
+/**
+ * [INTENT] Autonomous healing when an agent passes a non-entry MCP resource URI
+ * (e.g. `memory://briefing/memory-journal-mcp`) to `get_entry_by_id` inside Code Mode.
+ */
+export function tryResolveEntryResourceUri(
+    params: unknown,
+    context: ToolContext
+): Promise<unknown> | undefined {
+    if (context.config?.agentHealing === false || typeof params !== 'object' || params === null) {
+        return undefined
+    }
+    const obj = params as Record<string, unknown>
+    if (obj['entry_id'] !== undefined || typeof obj['uri'] !== 'string') return undefined
+    const uri = obj['uri'].trim()
+    if (!uri.startsWith('memory://') || /^memory:\/\/(?:entries|entry)\/\d+$/i.test(uri)) {
+        return undefined
+    }
+    return (async (): Promise<unknown> => {
+        try {
+            const { readResource } = await import('../../resources/index.js')
+            const res = await readResource(
+                uri,
+                context.db,
+                context.vectorManager,
+                context.config?.filterConfig,
+                context.github,
+                undefined,
+                context.teamDb,
+                context.config?.briefingConfig,
+                context.config?.runtime
+            )
+            return {
+                success: true,
+                data: res.data,
+                _healing_note: `🛠️ AUTONOMOUS HEALING: 'get_entry_by_id' was called with an MCP resource URI instead of an entry_id. The resource '${uri}' was resolved successfully.`,
+            }
+        } catch (err) {
+            return {
+                success: false,
+                error: `Failed to read resource '${uri}': ${err instanceof Error ? err.message : String(err)}`,
+                code: 'RESOURCE_ERROR',
+                category: 'resource',
+                recoverable: true,
+            }
+        }
+    })()
+}

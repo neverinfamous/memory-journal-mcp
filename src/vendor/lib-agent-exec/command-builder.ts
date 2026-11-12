@@ -17,6 +17,7 @@ import {
 import { replaceIntegrationContext, BUILT_INS, recordAgentIssue } from './utils.js';
 import { DEFAULT_ENV_VARS } from './environment.js';
 import { resolveEvalExecutionTarget, hasTopLevelReturn, wrapCodeInAsyncIife, healStrippedSqlTemplateLiterals } from './eval-healer.js';
+import { configureCwdModuleResolution, healStrippedStringRawLiterals } from './inline-script-healer.js';
 import { healEvalCodePathHallucinations } from './path-healer.js';
 import {
   isPwsh,
@@ -102,7 +103,7 @@ export function buildCommand(payload: ExecPayload, cwd: string, isJson: boolean 
   let initialInterceptedBase = '';
   if (!callerBypassedInterceptors) {
     const initialCmdBasename = payload.type === 'command' ? path.basename(payload.command).toLowerCase() : '';
-    const initialCtx: ExecutionContext = { cmdBasename: initialCmdBasename, args: payload.args !== undefined ? [...payload.args] : [], envOverrides, payload };
+    const initialCtx: ExecutionContext = { cmdBasename: initialCmdBasename, args: payload.args !== undefined ? [...payload.args] : [], envOverrides, payload, cwd };
     systemInterceptor(initialCtx);
     initialInterceptedBase = initialCtx.cmdBasename.toLowerCase().replace(/\.(exe|cmd|bat|com|ps1)$/i, '');
     if (payload.type === 'command') {
@@ -331,7 +332,7 @@ export function buildCommand(payload: ExecPayload, cwd: string, isJson: boolean 
           }
         }
         if (['.js', '.ts'].includes(ext)) {
-          codeToExecute = healStrippedSqlTemplateLiterals(codeToExecute);
+          codeToExecute = healStrippedStringRawLiterals(healStrippedSqlTemplateLiterals(codeToExecute));
           if (hasTopLevelReturn(codeToExecute)) {
             console.error(`\n   💡 AGENT HINT: Code Mode style top-level 'return' detected in eval payload.`);
             console.error(`\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Auto-wrapping code in async IIFE to capture returned output... (Frictionless Recovery)\x1b[0m`);
@@ -354,6 +355,9 @@ export function buildCommand(payload: ExecPayload, cwd: string, isJson: boolean 
         localCmd = 'pwsh';
       } else if (interpLower === 'sh') {
         localCmd = 'bash';
+      }
+      if (['node', 'bun', 'tsx', 'ts-node'].includes(localCmd.toLowerCase())) {
+        configureCwdModuleResolution(envOverrides, cwd, localCmd.toLowerCase(), p.target, p.env);
       }
       const localArgs = match(localCmd)
         .when(isPwsh, () => [
@@ -385,7 +389,15 @@ export function buildCommand(payload: ExecPayload, cwd: string, isJson: boolean 
     cmd = resolveWindowsCommand(cmd, cwd, payload.env);
   }
 
-  Object.assign(envOverrides, DEFAULT_ENV_VARS);
+  for (const [k, v] of Object.entries(DEFAULT_ENV_VARS)) {
+    if (k === 'NODE_OPTIONS' && envOverrides[k] !== undefined && envOverrides[k].length > 0) {
+      if (!envOverrides[k].includes(v)) {
+        envOverrides[k] = `${v} ${envOverrides[k]}`;
+      }
+    } else if (!(k in envOverrides)) {
+      envOverrides[k] = v;
+    }
+  }
 
   const wrapped = handleWindowsUnixCommandWrappers(cmd, args, payload);
   cmd = wrapped.cmd;
@@ -394,7 +406,7 @@ export function buildCommand(payload: ExecPayload, cwd: string, isJson: boolean 
   // integrationContext processed at the start of buildCommand
 
   const cmdBasename = path.basename(cmd).toLowerCase();
-  const ctx: ExecutionContext = { cmdBasename, args, envOverrides, payload };
+  const ctx: ExecutionContext = { cmdBasename, args, envOverrides, payload, cwd };
   const isNestedAgentExec = payload.type === 'command' && args.some(a => path.basename(a).toLowerCase() === 'agent-exec.ts');
 
   // Apply Interceptors Pipeline

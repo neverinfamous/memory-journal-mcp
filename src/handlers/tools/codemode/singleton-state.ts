@@ -2,7 +2,7 @@ import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { createSandboxPool, type ISandboxPool } from '../../../codemode/sandbox-factory.js'
 import { CodeModeSecurityManager } from '../../../codemode/security.js'
 
-import { getCoreTools } from '../core/index.js'
+import { getCoreTools, getStalenessTools } from '../core/index.js'
 import { getSearchTools } from '../search/index.js'
 import { getAnalyticsTools } from '../analytics.js'
 import { getRelationshipTools } from '../relationships.js'
@@ -58,6 +58,7 @@ export function collectNonCodeModeTools(context: ToolContext): ToolDefinition[] 
 
     const tools = [
         ...getCoreTools(context),
+        ...getStalenessTools(context),
         ...getSearchTools(context),
         ...getAnalyticsTools(context),
         ...getRelationshipTools(context),

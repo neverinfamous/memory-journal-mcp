@@ -1,4 +1,5 @@
 import { POSITIONAL_PARAM_MAP } from '../constants/examples-and-params.js'
+import { normalizeEntrySortByValue, healAnchorsField } from '../../handlers/tools/schemas/hallucination-healer-fields.js'
 import { isRecord } from './shared-utils.js'
 import {
     cleanSdkMetadataKeys,
@@ -13,6 +14,12 @@ import {
 
 const EXECUTE_METHODS = new Set([
     'execute', 'execute_code', 'executeCode', 'mj_execute_code', 'mjExecuteCode', 'mysql_execute_code', 'mysqlExecuteCode',
+])
+const AUDIT_LOG_METHODS = new Set(['search_audit_log', 'searchAuditLog'])
+const GIT_METHODS = new Set([
+    'get_commit_history', 'getCommitHistory', 'search_commits', 'searchCommits',
+    'get_release_info', 'getReleaseInfo', 'get_unreleased_commits', 'getUnreleasedCommits',
+    'analyze_commit_patterns', 'analyzeCommitPatterns', 'check_entry_staleness', 'checkEntryStaleness',
 ])
 
 const CREATE_ENTRY_METHODS = new Set([
@@ -79,10 +86,11 @@ export function applyGenericInterceptions(
     extractMetadataContextAliases(obj)
     const idError = coerceNumericStringIds(obj)
     if (idError !== undefined) return idError
-    normalizeGenericFieldAliases(obj)
+    normalizeGenericFieldAliases(obj, methodName)
 
     if (CREATE_ENTRY_METHODS.has(methodName)) {
         resolveCreateEntryProjectContext(obj)
+        healAnchorsField(obj)
     } else if (BATCH_CREATE_ENTRY_METHODS.has(methodName)) {
         resolveCreateEntryProjectContext(obj)
         if (Array.isArray(obj['entries'])) {
@@ -104,9 +112,10 @@ export function applyGenericInterceptions(
                     batchError = itemError
                     return rawItem
                 }
-                normalizeGenericFieldAliases(item)
+                normalizeGenericFieldAliases(item, 'create_entry')
                 resolveCreateEntryProjectContext(item)
                 synthesizeEntryMutationFields(item)
+                healAnchorsField(item)
                 return item
             })
             if (batchError !== undefined) return batchError
@@ -122,16 +131,26 @@ export function applyGenericInterceptions(
             obj['sort_by'] = obj['sort_by'].replace(/_desc$/i, '')
             obj['sort_order'] ??= 'desc'
         }
+        if (!GIT_METHODS.has(methodName)) {
+            const mappedSort = normalizeEntrySortByValue(obj['sort_by'])
+            if (mappedSort !== undefined) obj['sort_by'] = mappedSort
+        }
     }
 
     if (EXECUTE_METHODS.has(methodName)) {
         normalizeExecuteCodeAliases(obj)
+    } else if (GIT_METHODS.has(methodName)) {
+        if (obj['repo_name'] !== undefined && obj['repo'] === undefined) {
+            obj['repo'] = obj['repo_name']
+            delete obj['repo_name']
+        }
     } else if (obj['repo'] !== undefined && obj['repo_name'] === undefined) {
         obj['repo_name'] = obj['repo']
         delete obj['repo']
     }
 
     for (const [src, dst] of [['item_type', 'type'], ['category', 'type'], ['metadata', 'context']] as const) {
+        if (src === 'category' && AUDIT_LOG_METHODS.has(methodName)) continue
         if (obj[src] !== undefined && obj[dst] === undefined) {
             obj[dst] = obj[src]
             Reflect.deleteProperty(obj, src)

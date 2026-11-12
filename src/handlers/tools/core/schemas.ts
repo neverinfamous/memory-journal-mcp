@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { ErrorFieldsMixin } from '../error-fields-mixin.js'
+import { healSortByField } from '../schemas/hallucination-healer-fields.js'
 import {
     ENTRY_TYPES,
     SIGNIFICANCE_TYPES,
@@ -191,18 +192,36 @@ export const CreateEntryOutputSchema = z
     })
     .extend(ErrorFieldsMixin.shape)
 
-export const GetEntryByIdSchema = z.object({
-    entry_id: z.number().int(),
-    include_relationships: z.boolean().optional().default(true),
-    project_number: StrictProjectNumberSchema.optional(),
-    workspace_id: z.string().optional(),
-})
+function preprocessGetEntryById(val: unknown): unknown {
+    if (typeof val !== 'object' || val === null || Array.isArray(val)) return val
+    const obj = { ...(val as Record<string, unknown>) }
+    if (obj['entry_id'] === undefined && typeof obj['uri'] === 'string') {
+        const match = /^memory:\/\/(?:entries|entry)\/(\d+)$/i.exec(obj['uri'].trim())
+        if (match?.[1] !== undefined) {
+            obj['entry_id'] = Number(match[1])
+            delete obj['uri']
+            return obj
+        }
+    }
+    return val
+}
+
+export const GetEntryByIdSchema = z.preprocess(
+    preprocessGetEntryById,
+    z.object({
+        entry_id: z.number().int(),
+        include_relationships: z.boolean().optional().default(true),
+        project_number: StrictProjectNumberSchema.optional(),
+        workspace_id: z.string().optional(),
+    })
+)
 
 export const GetEntryByIdSchemaMcp = z.object({
     entry_id: relaxedNumber().optional().describe('The numeric ID of the entry to retrieve'),
     include_relationships: z.boolean().optional().default(true).describe('If true, includes all linked relationships (causal, related) in the response'),
     project_number: relaxedNumber().optional(),
     workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key. [ANTI-HALLUCINATION] If an entry returns RESOURCE_NOT_FOUND, it might belong to another workspace. Set workspace_id: "*" to search globally.'),
+    uri: z.string().optional(),
 })
 
 export const EntryByIdOutputSchema = z
@@ -216,20 +235,29 @@ export const EntryByIdOutputSchema = z
     })
     .extend(ErrorFieldsMixin.shape)
 
-export const GetRecentEntriesSchema = z.object({
-    limit: z.number().min(1).max(MAX_SEARCH_LIMIT).optional().default(10),
-    project_number: StrictProjectNumberSchema.optional(),
-    workspace_id: z.string().optional(),
-    is_personal: z.boolean().optional(),
-    sort_by: z
-        .enum(['timestamp', 'importance'])
-        .optional()
-        .default('timestamp')
-        .describe('Sort results by timestamp (default) or importance score'),
-    cursor: z.string().optional(),
-    offset: z.number().int().min(0).optional().default(0),
-    include_archived: z.boolean().optional().default(false),
-})
+function preprocessSortByOnly(val: unknown): unknown {
+    if (typeof val !== 'object' || val === null || Array.isArray(val)) return val
+    const obj = { ...(val as Record<string, unknown>) }
+    return healSortByField(obj) ? obj : val
+}
+
+export const GetRecentEntriesSchema = z.preprocess(
+    preprocessSortByOnly,
+    z.object({
+        limit: z.number().min(1).max(MAX_SEARCH_LIMIT).optional().default(10),
+        project_number: StrictProjectNumberSchema.optional(),
+        workspace_id: z.string().optional(),
+        is_personal: z.boolean().optional(),
+        sort_by: z
+            .enum(['timestamp', 'importance'])
+            .optional()
+            .default('timestamp')
+            .describe('Sort results by timestamp (default) or importance score'),
+        cursor: z.string().optional(),
+        offset: z.number().int().min(0).optional().default(0),
+        include_archived: z.boolean().optional().default(false),
+    })
+)
 
 export const GetRecentEntriesSchemaMcp = z.object({
     limit: relaxedNumber()

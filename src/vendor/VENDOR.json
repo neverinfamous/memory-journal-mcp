@@ -2,8 +2,8 @@
   "libs": {
     "lib-git-history": {
       "source": ".agents/scripts/lib-git-history",
-      "syncedAt": "2026-11-11T10:07:43.331Z",
-      "syncedFromCommit": "afad4937dc457ba041a25a32ceafbe2ff03363cc",
+      "syncedAt": "2026-11-12T09:04:07.264Z",
+      "syncedFromCommit": "96c1594d9295d2b3b31dfcca2f429185fe249809",
       "files": [
         "cache.ts",
         "cli.ts",
@@ -22,8 +22,8 @@
     },
     "lib-agent-exec": {
       "source": ".agents/scripts/lib-agent-exec",
-      "syncedAt": "2026-11-11T10:07:43.384Z",
-      "syncedFromCommit": "afad4937dc457ba041a25a32ceafbe2ff03363cc",
+      "syncedAt": "2026-11-12T09:04:07.290Z",
+      "syncedFromCommit": "96c1594d9295d2b3b31dfcca2f429185fe249809",
       "files": [
         "schema.ts",
         "environment.ts",
@@ -40,6 +40,8 @@
         "webhook-template.ts",
         "command-utils.ts",
         "eval-healer.ts",
+        "inline-script-healer.ts",
+        "cwd-module-resolver.mjs",
         "io-utils.ts",
         "path-healer.ts",
         "interceptors/index.ts",

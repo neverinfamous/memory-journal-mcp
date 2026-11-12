@@ -21,6 +21,7 @@ export const GROUP_EXAMPLES: Record<string, string[]> = {
         'mj.core.getRecentEntries({ limit: 10 })',
         'mj.core.createEntryMinimal({ content: "Quick note" })',
         'mj.core.listTags()',
+        'mj.core.markAnchorsStale({ updates: [{ id: 1, status: "stale" }] })',
     ],
     search: [
         'mj.search.searchEntries({ query: "performance" })',
@@ -87,6 +88,7 @@ export const GROUP_EXAMPLES: Record<string, string[]> = {
         'mj.git.getReleaseInfo()',
         'mj.git.getUnreleasedCommits()',
         'mj.git.analyzeCommitPatterns({ maxCount: 20 })',
+        'mj.git.checkEntryStaleness({ entry_id: 1 })',
     ],
 }
 
@@ -112,6 +114,7 @@ export const POSITIONAL_PARAM_MAP: Record<string, string | string[]> = {
     testSimple: 'message',
     writeQuery: 'content',
     getEntryHistory: 'entry_id',
+    markAnchorsStale: 'updates',
 
     // Search
     searchEntries: 'query',
@@ -212,6 +215,7 @@ export const POSITIONAL_PARAM_MAP: Record<string, string | string[]> = {
     searchCommits: 'query',
     getReleaseInfo: 'ref',
     analyzeCommitPatterns: 'maxCount',
+    checkEntryStaleness: 'entry_id',
 }
 
 // =============================================================================

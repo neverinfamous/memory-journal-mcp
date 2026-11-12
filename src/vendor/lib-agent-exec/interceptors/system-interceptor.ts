@@ -3,57 +3,23 @@ import { ExecutionContext, AGENT_NATIVE_TOOLS, ECOSYSTEM_MCP_TOOLS } from './typ
 import { match, P } from 'ts-pattern';
 import path from 'node:path';
 import fs from 'node:fs';
-import os from 'node:os';
 import { convertToWslPath, getPositionalArgs, healFragmentedQuotes, escapeUnixArg, getUnderlyingPackageScript } from '../command-utils.js';
 import { getUnquoted, splitFirstShellSegment } from './utils.js';
 import { findEcosystemScript } from '../utils.js';
 import { runMutatingInterceptors } from './mutating-interceptors.js';
 import { runStructuralInterceptors } from './structural-interceptors.js';
-import { healPathHallucinations, healEvalCodePathHallucinations } from '../path-healer.js';
+import { healPathHallucinations } from '../path-healer.js';
 import { handleFindInterception, handleRipgrepInterception, handleGrepInterception, parseGrepSearchArgs, GREP_EXCLUDE_DIRS, isLikelyDirectoryArg } from './search-interceptor.js';
-import { isPowerShellCode, healStrippedSqlTemplateLiterals } from '../eval-healer.js';
-const INTERPRETER_INLINE_FLAGS: Record<string, readonly string[]> = {
-  node: ['-e', '--eval', '-p', '--print'],
-  bun: ['-e', '--eval', '-p', '--print'],
-  tsx: ['-e', '--eval', '-p', '--print'],
-  'ts-node': ['-e', '--eval', '-p', '--print'],
-  python: ['-c', '--command'],
-  python3: ['-c', '--command'],
-};
-
-function getInlineScriptDetails(interpreter: string, args: string[]): { flagIdx: number; isPrint: boolean; scriptContent: string } | null {
-  const allowed = INTERPRETER_INLINE_FLAGS[interpreter.toLowerCase()];
-  if (!allowed || args.length === 0) return null;
-
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
-    if (allowed.includes(arg)) {
-      if (i + 1 < args.length) {
-        return {
-          flagIdx: i,
-          isPrint: ['-p', '--print'].includes(arg),
-          scriptContent: args[i + 1],
-        };
-      }
-      return null;
-    }
-    // If we encounter an argument before any inline flag that is NOT an interpreter option,
-    // then it's a subcommand or a script path, so any subsequent flags belong to that script/subcommand!
-    if (!arg.startsWith('-')) {
-      return null;
-    }
-    // If it looks like a script file or relative/absolute path, it's not an interpreter option
-    if (arg.startsWith('./') || arg.startsWith('.\\') || /\\.(?:ts|js|mjs|cjs|py)$/i.test(arg)) {
-      return null;
-    }
-  }
-  return null;
-}
+import { isPowerShellCode } from '../eval-healer.js';
+import { rewriteInlineScriptToTempFile } from '../inline-script-healer.js';
 
 export function systemInterceptor(ctx: ExecutionContext): void {
   const originalArgs = ctx.args;
   ctx.args = healFragmentedQuotes(ctx.args);
   if (ctx.args.length !== originalArgs.length || ctx.args.some((a, idx) => a !== originalArgs[idx])) {
+    if ('args' in ctx.payload && Array.isArray(ctx.payload.args)) {
+      ctx.payload.args = [...ctx.args];
+    }
     console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected fragmented quotes from PowerShell tokenization. Reassembling arguments... (Frictionless Recovery)\x1b[0m`);
   }
 
@@ -491,13 +457,13 @@ export function systemInterceptor(ctx: ExecutionContext): void {
     if (payload.type === 'eval' || payload.type === 'script') {
       const codeOrScript = payload.type === 'eval' ? payload.code : (payload.scriptPath || '');
       const isInlineShellHallucination = payload.type === 'eval' && /^\s*(?:pwsh|powershell|cmd|bash|sh|wsl)(?:\.exe)?\b/i.test(codeOrScript);
-      const isPlaywright = !isInlineShellHallucination && Boolean(codeOrScript && /(?:playwright|cypress|\be2e\b|test:e2e)/i.test(codeOrScript));
-      const isCoverage = !isInlineShellHallucination && Boolean(codeOrScript && /(?:coverage|--coverage)/i.test(codeOrScript));
+      const isKnownDeterministic = !isInlineShellHallucination && Boolean(codeOrScript && /(?:commit\.ts|get-git-history-json\.ts|backup-conversations\.ts)/i.test(codeOrScript));
+      const isPlaywright = !isInlineShellHallucination && !isKnownDeterministic && Boolean(codeOrScript && /(?:playwright|cypress|\be2e\b|test:e2e)/i.test(codeOrScript));
+      const isCoverage = !isInlineShellHallucination && !isKnownDeterministic && Boolean(codeOrScript && /(?:coverage|--coverage)/i.test(codeOrScript));
       const isDockerScout = !isInlineShellHallucination && Boolean(codeOrScript && /(?:docker|docker-compose|podman)/i.test(codeOrScript) && /scout/i.test(codeOrScript));
       const isDockerBuild = !isInlineShellHallucination && !isDockerScout && Boolean(codeOrScript && (((/(?:docker|docker-compose|podman)/i.test(codeOrScript) && /build/i.test(codeOrScript)) || /recreate-ecosystem/i.test(codeOrScript))));
       const isChainedQuality = !isInlineShellHallucination && payload.type === 'eval' && Boolean(codeOrScript && /(?:typecheck|tsc|lint|check|build|test).*(?:&&|;).*(?:typecheck|tsc|lint|check|build|test)/i.test(codeOrScript));
       const hasQualityCheck = !isInlineShellHallucination && payload.type === 'eval' && Boolean(codeOrScript && /(?:(?:bun|pnpm|npm|yarn|npx|bunx|pnpx)\s+(?:run\s+)?(?:typecheck|tsc|lint|check|build|test)\b|\b(?:vitest|jest|tsc|eslint)\b)/i.test(codeOrScript));
-      const isKnownDeterministic = !isInlineShellHallucination && Boolean(codeOrScript && /(?:commit\.ts|get-git-history-json\.ts|backup-conversations\.ts)/i.test(codeOrScript));
       const hasMountedSearch = !isInlineShellHallucination && Boolean(codeOrScript && /(?:find|grep|rg|ls|tree)\b/i.test(codeOrScript));
       
       if (isPlaywright) {
@@ -536,18 +502,22 @@ export function systemInterceptor(ctx: ExecutionContext): void {
         (args && args.some(a => /recreate-ecosystem/i.test(a))) ||
         /recreate-ecosystem/i.test(underlyingScript);
       const isDockerBuild = !isDockerScout && ((/(?:docker|docker-compose|podman)/i.test(cmdBasename) && (args && args.some(a => /build/i.test(a)))) || isInfraOrchestration);
-      const isPlaywright = /(?:playwright|cypress)/i.test(cmdBasename) ||
+      const isKnownDeterministic = /(?:commit\.ts|get-git-history-json\.ts|backup-conversations\.ts)/i.test(cmdBasename) || (args && args.some(a => /(?:commit\.ts|get-git-history-json\.ts|backup-conversations\.ts)/i.test(a)));
+      const isPlaywright = !isKnownDeterministic && (
+        /(?:playwright|cypress)/i.test(cmdBasename) ||
         (args && args.some(a => /(?:playwright|cypress|\be2e\b|test:e2e|test-e2e)/i.test(a))) ||
-        /(?:playwright|cypress|\be2e\b)/i.test(underlyingScript);
-      const isCoverage = /(?:coverage)/i.test(cmdBasename) ||
+        /(?:playwright|cypress|\be2e\b)/i.test(underlyingScript)
+      );
+      const isCoverage = !isKnownDeterministic && (
+        /(?:coverage)/i.test(cmdBasename) ||
         (args && args.some(a => /(?:coverage|--coverage|test:coverage)/i.test(a))) ||
-        /(?:coverage|--coverage)/i.test(underlyingScript);
+        /(?:coverage|--coverage)/i.test(underlyingScript)
+      );
       const isQuality = !isNestedAgentExec && !isDockerScout && !isDockerBuild && (
         /(?:typecheck|tsc|lint|check|build|test|vitest|jest)/i.test(cmdBasename) ||
         (args && args.some(a => /(?:typecheck|tsc|lint|check|build|test|vitest|jest)/i.test(a))) ||
         /(?:typecheck|tsc|lint|check|build|test|vitest|jest)/i.test(underlyingScript)
       );
-      const isKnownDeterministic = /(?:commit\.ts|get-git-history-json\.ts|backup-conversations\.ts)/i.test(cmdBasename) || (args && args.some(a => /(?:commit\.ts|get-git-history-json\.ts|backup-conversations\.ts)/i.test(a)));
       const isSearch = /(?:find|grep|rg|ls|tree)\b/i.test(cmdBasename) || (args && args.some(a => /(?:find|grep|rg|ls|tree)\b/i.test(a)));
       
       if (isDockerScout) {
@@ -556,7 +526,10 @@ export function systemInterceptor(ctx: ExecutionContext): void {
       } else if (isPlaywright || isDockerBuild) {
         defaultWslTimeout = 600000;
         payload.bypassInterceptors = true;
-      } else if (isQuality || isKnownDeterministic) {
+      } else if (isKnownDeterministic) {
+        defaultWslTimeout = 90000;
+        payload.bypassInterceptors = true;
+      } else if (isQuality) {
         const testFiles = args ? args.filter(a => /\.(?:test|spec)\.[a-zA-Z0-9]+$/i.test(a)) : [];
         const isMultiTest = testFiles.length > 1;
         const isTestDir = args ? args.some(a => /(?:tests?[/\\]\w+[/\\].*[/\\].*|tests?[/\\]$)/i.test(a) && !/\.[a-zA-Z0-9_-]+$/i.test(a)) : false;
@@ -583,12 +556,12 @@ export function systemInterceptor(ctx: ExecutionContext): void {
     if (payload.type === 'eval' || payload.type === 'script') {
       const codeOrScript = payload.type === 'eval' ? payload.code : (payload.scriptPath || '');
       const isInlineShellHallucination = payload.type === 'eval' && /^\s*(?:pwsh|powershell|cmd|bash|sh|wsl)(?:\.exe)?\b/i.test(codeOrScript);
-      const isPlaywright = !isInlineShellHallucination && Boolean(codeOrScript && /(?:playwright|cypress|\be2e\b|test:e2e)/i.test(codeOrScript));
-      const isCoverage = !isInlineShellHallucination && Boolean(codeOrScript && /(?:coverage|--coverage)/i.test(codeOrScript));
+      const isKnownDeterministic = !isInlineShellHallucination && Boolean(codeOrScript && /(?:commit\.ts|get-git-history-json\.ts|backup-conversations\.ts)/i.test(codeOrScript));
+      const isPlaywright = !isInlineShellHallucination && !isKnownDeterministic && Boolean(codeOrScript && /(?:playwright|cypress|\be2e\b|test:e2e)/i.test(codeOrScript));
+      const isCoverage = !isInlineShellHallucination && !isKnownDeterministic && Boolean(codeOrScript && /(?:coverage|--coverage)/i.test(codeOrScript));
       const isDocker = !isInlineShellHallucination && Boolean(codeOrScript && (((/(?:docker|docker-compose|podman)/i.test(codeOrScript) && /(?:build|scout)/i.test(codeOrScript)) || /recreate-ecosystem/i.test(codeOrScript))));
       const isChainedQuality = !isInlineShellHallucination && payload.type === 'eval' && Boolean(codeOrScript && /(?:typecheck|tsc|lint|check|build|test).*(?:&&|;).*(?:typecheck|tsc|lint|check|build|test)/i.test(codeOrScript));
       const hasQualityCheck = !isInlineShellHallucination && payload.type === 'eval' && Boolean(codeOrScript && /(?:(?:bun|pnpm|npm|yarn|npx|bunx|pnpx)\s+(?:run\s+)?(?:typecheck|tsc|lint|check|build|test)\b|\b(?:vitest|jest|tsc|eslint)\b)/i.test(codeOrScript));
-      const isKnownDeterministic = !isInlineShellHallucination && Boolean(codeOrScript && /(?:commit\.ts|get-git-history-json\.ts|backup-conversations\.ts)/i.test(codeOrScript));
       if (isPlaywright) {
         payload.timeoutMs = Math.max(payload.timeoutMs || 600000, 600000);
         payload.bypassInterceptors = true;
@@ -620,25 +593,32 @@ export function systemInterceptor(ctx: ExecutionContext): void {
         (args && args.some(a => /recreate-ecosystem/i.test(a))) ||
         /recreate-ecosystem/i.test(underlyingScript);
       const isDocker = (/(?:docker|docker-compose|podman)/i.test(cmdBasename) && (args && args.some(a => /(?:build|scout)/i.test(a)))) || isInfraOrchestration;
-      const isPlaywright = /(?:playwright|cypress)/i.test(cmdBasename) ||
+      const isKnownDeterministic = /(?:commit\.ts|get-git-history-json\.ts|backup-conversations\.ts)/i.test(cmdBasename) || (args && args.some(a => /(?:commit\.ts|get-git-history-json\.ts|backup-conversations\.ts)/i.test(a)));
+      const isPlaywright = !isKnownDeterministic && (
+        /(?:playwright|cypress)/i.test(cmdBasename) ||
         (args && args.some(a => /(?:playwright|cypress|\be2e\b|test:e2e|test-e2e)/i.test(a))) ||
-        /(?:playwright|cypress|\be2e\b)/i.test(underlyingScript);
-      const isCoverage = /(?:coverage)/i.test(cmdBasename) ||
+        /(?:playwright|cypress|\be2e\b)/i.test(underlyingScript)
+      );
+      const isCoverage = !isKnownDeterministic && (
+        /(?:coverage)/i.test(cmdBasename) ||
         (args && args.some(a => /(?:coverage|--coverage|test:coverage)/i.test(a))) ||
-        /(?:coverage|--coverage)/i.test(underlyingScript);
+        /(?:coverage|--coverage)/i.test(underlyingScript)
+      );
       const isQuality = !isNestedAgentExec && !isDocker && (
         /(?:typecheck|tsc|lint|check|build|test|vitest|jest)/i.test(cmdBasename) ||
         (args && args.some(a => /(?:typecheck|tsc|lint|check|build|test|vitest|jest)/i.test(a))) ||
         /(?:typecheck|tsc|lint|check|build|test|vitest|jest)/i.test(underlyingScript)
       );
-      const isKnownDeterministic = /(?:commit\.ts|get-git-history-json\.ts|backup-conversations\.ts)/i.test(cmdBasename) || (args && args.some(a => /(?:commit\.ts|get-git-history-json\.ts|backup-conversations\.ts)/i.test(a)));
       if (isPlaywright || isDocker) {
         if (isInfraOrchestration) {
           console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected ecosystem orchestration script ('recreate-ecosystem'). Auto-extending timeout to 600s... (Frictionless Recovery)`);
         }
         payload.timeoutMs = Math.max(payload.timeoutMs || 600000, 600000);
         payload.bypassInterceptors = true;
-      } else if (isQuality || isKnownDeterministic) {
+      } else if (isKnownDeterministic) {
+        payload.timeoutMs = Math.max(payload.timeoutMs || 240000, 240000);
+        payload.bypassInterceptors = true;
+      } else if (isQuality) {
         const testFiles = args ? args.filter(a => /\.(?:test|spec)\.[a-zA-Z0-9]+$/i.test(a)) : [];
         const isMultiTest = testFiles.length > 1;
         const isTestDir = args ? args.some(a => /(?:tests?[/\\]\w+[/\\].*[/\\].*|tests?[/\\]$)/i.test(a) && !/\.[a-zA-Z0-9_-]+$/i.test(a)) : false;
@@ -1016,45 +996,24 @@ export function systemInterceptor(ctx: ExecutionContext): void {
   runStructuralInterceptors(ctx, { cmd, cmdBasename, originalCmd, args, isCommand, hasInlineCmd, inlineFlag, innerCmdStr, positionalArgs, hasStdin, shells });
 
   const interpreterName = originalCmd.replace(/\.exe$/i, '').toLowerCase();
-  const inlineDetails = isCommand && ['node', 'bun', 'python', 'python3', 'tsx', 'ts-node'].includes(interpreterName)
-    ? getInlineScriptDetails(interpreterName, ctx.args)
-    : null;
-
-  if (inlineDetails) {
-    const { flagIdx, isPrint, scriptContent } = inlineDetails;
-    console.error(`\n   🛠️ AUTONOMOUS HEALING: Transparently rewriting inline ${interpreterName} script to a temporary file execution to avoid quoting bugs... (Frictionless Recovery)\x1b[0m`);
-    const ext = interpreterName.startsWith('python') ? 'py' : (['bun', 'tsx', 'ts-node'].includes(interpreterName) ? 'ts' : 'js');
-    const outDir = os.tmpdir();
-    const tmpFile = path.join(outDir, `.agent_inline_script_${Date.now()}.${ext}`);
-
+  if (isCommand && ['node', 'bun', 'python', 'python3', 'tsx', 'ts-node'].includes(interpreterName)) {
     const cwd = ctx.payload.cwd !== undefined && ctx.payload.cwd.length > 0
       ? path.resolve(ctx.payload.cwd)
-      : process.cwd();
-
-    let fileContent = interpreterName.startsWith('python')
-      ? `import sys; sys.path.insert(0, '')\n${scriptContent}`
-      : healStrippedSqlTemplateLiterals(healEvalCodePathHallucinations(scriptContent, cwd, ctx.payload.target));
-
-    if (isPrint) {
-      fileContent = `try {\n  const __res = eval(${JSON.stringify(fileContent)});\n  if (__res !== undefined) console.log(__res);\n} catch {\n  ${fileContent}\n}\n`;
-    }
-
-    fs.writeFileSync(tmpFile, fileContent, { mode: 0o600 });
-    process.on('exit', () => {
-      try {
-        if (fs.existsSync(tmpFile)) {
-          fs.unlinkSync(tmpFile);
-        }
-      } catch {
-        // ignore
-      }
+      : (ctx.cwd !== undefined && ctx.cwd.length > 0 ? path.resolve(ctx.cwd) : process.cwd());
+    const rewritten = rewriteInlineScriptToTempFile({
+      interpreterName,
+      args: ctx.args,
+      envOverrides: ctx.envOverrides,
+      cwd,
+      ...(ctx.payload.target !== undefined ? { target: ctx.payload.target } : {}),
+      ...(ctx.payload.env !== undefined ? { payloadEnv: ctx.payload.env } : {}),
     });
-
-    ctx.cmdBasename = interpreterName;
-    ctx.args.splice(flagIdx, 2, tmpFile);
-    if ('command' in ctx.payload) {
-      ctx.payload.command = interpreterName;
-      ctx.payload.args = ctx.args;
+    if (rewritten !== null) {
+      ctx.cmdBasename = interpreterName;
+      if ('command' in ctx.payload) {
+        ctx.payload.command = interpreterName;
+        ctx.payload.args = ctx.args;
+      }
     }
   }
 }

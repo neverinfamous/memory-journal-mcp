@@ -149,14 +149,21 @@ export function coerceNumericStringIds(
     return undefined
 }
 
-export function normalizeGenericFieldAliases(obj: Record<string, unknown>): void {
-    renameSimpleFieldAliases(obj)
+const AUDIT_LOG_USER_METHODS = new Set(['search_audit_log', 'searchAuditLog'])
+const GIT_SORT_BY_METHODS = new Set([
+    'get_commit_history', 'getCommitHistory', 'search_commits', 'searchCommits',
+])
+
+export function normalizeGenericFieldAliases(obj: Record<string, unknown>, methodName?: string): void {
+    renameSimpleFieldAliases(obj, methodName)
     renameScoreAliases(obj)
     normalizeValidationStatusAlias(obj)
     normalizeProjectAliases(obj)
 }
 
-function renameSimpleFieldAliases(obj: Record<string, unknown>): void {
+function renameSimpleFieldAliases(obj: Record<string, unknown>, methodName?: string): void {
+    const isAuditLog = methodName !== undefined && AUDIT_LOG_USER_METHODS.has(methodName)
+    const isGitSort = methodName !== undefined && GIT_SORT_BY_METHODS.has(methodName)
     // High H-2 fixed: delete obj['msg'] (not obj['message'])
     for (const [src, dst] of [
         ['user', 'target_user'],
@@ -169,6 +176,8 @@ function renameSimpleFieldAliases(obj: Record<string, unknown>): void {
         ['validation', 'validation_status'],
         ['validationStatus', 'validation_status'],
     ] as const) {
+        if (src === 'user' && isAuditLog) continue
+        if (dst === 'sort_by' && isGitSort) continue
         if (obj[src] !== undefined) {
             if (obj[dst] === undefined) obj[dst] = obj[src]
             Reflect.deleteProperty(obj, src)

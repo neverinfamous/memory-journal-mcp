@@ -282,9 +282,33 @@ function applyMiscToolInterceptions(
         const obj = { ...args[0] }
         args[0] = obj
         remapKeys(obj, ['keep'], 'limit')
+        remapKeys(obj, ['tool', 'action'], 'tool_name')
+        remapKeys(obj, ['success'], 'status')
+        remapKeys(obj, ['target_user'], 'user')
         if (typeof obj['limit'] === 'string') {
             const parsed = parseInt(obj['limit'], 10)
             if (!isNaN(parsed)) obj['limit'] = parsed
+        }
+    }
+
+    if (
+        ['get_entry_by_id', 'getEntryById', 'team_get_entry_by_id', 'teamGetEntryById'].includes(methodName) &&
+        args.length === 1 &&
+        isRecord(args[0])
+    ) {
+        const obj = { ...args[0] }
+        args[0] = obj
+        if (
+            obj['entry_id'] === undefined &&
+            obj['entryId'] === undefined &&
+            obj['id'] === undefined &&
+            typeof obj['uri'] === 'string'
+        ) {
+            const match = /^memory:\/\/(?:entries|entry)\/(\d+)$/i.exec(obj['uri'].trim())
+            if (match?.[1] !== undefined) {
+                obj['entry_id'] = Number(match[1])
+                delete obj['uri']
+            }
         }
     }
 

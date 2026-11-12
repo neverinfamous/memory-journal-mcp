@@ -29,6 +29,19 @@ export const SearchAuditLogSchema = z.preprocess(
                 obj['tool_name'] = obj['q']
                 delete obj['q']
             }
+            if (typeof obj['tool'] === 'string' && obj['tool_name'] === undefined) {
+                obj['tool_name'] = obj['tool']
+                delete obj['tool']
+            }
+            if (typeof obj['success'] === 'boolean' && obj['status'] === undefined) {
+                obj['status'] = obj['success']
+                delete obj['success']
+            }
+            if (typeof obj['target_user'] === 'string' && obj['user'] === undefined) {
+                obj['user'] = obj['target_user']
+                delete obj['target_user']
+            }
+            delete obj['workspace_id']
             return obj
         }
         return val

@@ -1,11 +1,12 @@
 // @ts-nocheck
-import { ExecPayload } from '../schema.js';
+import type { ExecPayload } from '../schema.js';
 
 export interface ExecutionContext {
   cmdBasename: string;
   args: string[];
   envOverrides: Record<string, string>;
   payload: ExecPayload;
+  cwd?: string;
 }
 
 export type Interceptor = (ctx: ExecutionContext) => void;

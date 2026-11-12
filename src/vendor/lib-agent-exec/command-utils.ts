@@ -623,7 +623,7 @@ export function healFragmentedQuotes(args: string[]): string[] {
     ) {
       // Look ahead for matching argument that completes the fragmented quoted expression
       let endIdx = -1;
-      let matchedType: 'pure-slash' | 'multi-quote' | 'escaped-paren' | 'slash-paren' | 'leading-slash' | 'internal-slash' | 'generic' = 'generic';
+      let matchedType: 'pure-slash' | 'multi-quote' | 'escaped-paren' | 'slash-paren' | 'leading-slash' | 'internal-slash' | 'internal-close' | 'generic' = 'generic';
       let internalWord = '';
       let internalRest = '';
 
@@ -660,43 +660,102 @@ export function healFragmentedQuotes(args: string[]): string[] {
           /^([^\\]+)\\(.*)$/.test(next)
         ) {
           const m = next.match(/^([^\\]+)\\(.*)$/);
-          if (m) {
+          if (m !== null && m[1] !== undefined && m[2] !== undefined) {
             internalWord = m[1];
             internalRest = m[2];
             endIdx = j;
             matchedType = 'multi-quote';
             break;
           }
+        } else if (
+          !isPathWithTrailingSlash(next) &&
+          /^([^\\]+)\\(\).*|[,;\]].*)$/.test(next)
+        ) {
+          const m = next.match(/^([^\\]+)\\(\).*|[,;\]].*)$/);
+          if (m !== null && m[1] !== undefined && m[2] !== undefined) {
+            internalWord = m[1];
+            internalRest = m[2];
+            endIdx = j;
+            matchedType = 'internal-close';
+            break;
+          }
         }
       }
 
-      if (endIdx !== -1 && currentArgs[endIdx] !== undefined) {
+      const lastArg = endIdx !== -1 ? currentArgs[endIdx] : undefined;
+      if (lastArg !== undefined) {
         const first = current.slice(0, -1);
-        const middle = currentArgs.slice(i + 1, endIdx);
-        const joinedMiddle = middle.length > 0 ? `${middle.join(' ')} ` : '';
-        const lastArg = currentArgs[endIdx]!;
+        const rawMiddle = currentArgs.slice(i + 1, endIdx);
+
+        // [INTENT]: Restore commas collapsed by PowerShell's array operator ('name, type' -> 'name type') and single quotes stripped around SQL LIKE patterns ('%audit%' -> '%audit%').
+        const sqlSelectKeywords = new Set([
+          'SELECT', 'DISTINCT', 'ALL', 'AS', 'FROM', 'INTO', 'CASE', 'WHEN',
+          'THEN', 'ELSE', 'END', 'CAST', 'NOT', 'NULL', 'AND', 'OR', 'IS', 'IN',
+        ]);
+        const healSqlTokenList = (tokens: readonly string[]): string[] => {
+          const firstTok = tokens[0]?.trim().toUpperCase() ?? '';
+          if (!/^(?:SELECT|INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|PRAGMA|WITH|EXPLAIN)$/.test(firstTok)) {
+            return [...tokens];
+          }
+          const fromIdx = firstTok === 'SELECT'
+            ? tokens.findIndex((t, idx) => idx > 0 && t.trim().toUpperCase() === 'FROM')
+            : -1;
+          return tokens.map((tok, idx) => {
+            if (
+              fromIdx > 1 &&
+              idx > 0 &&
+              idx < fromIdx &&
+              /\s/.test(tok)
+            ) {
+              const parts = tok.trim().split(/\s+/);
+              const allPlainIdentifiers = parts.length >= 2 && parts.every(
+                p => /^[a-zA-Z_][a-zA-Z0-9_.]*$/.test(p) && !sqlSelectKeywords.has(p.toUpperCase())
+              );
+              if (allPlainIdentifiers) {
+                return parts.join(', ');
+              }
+            }
+            const prevUpper = idx > 0 ? (tokens[idx - 1]?.trim().toUpperCase() ?? '') : '';
+            if (
+              (prevUpper === 'LIKE' || prevUpper === 'GLOB') &&
+              !tok.startsWith("'") &&
+              !tok.startsWith('"') &&
+              tok !== '?' &&
+              !tok.startsWith(':') &&
+              !tok.startsWith('$') &&
+              !tok.startsWith('@') &&
+              (tok.includes('%') || (prevUpper === 'GLOB' && tok.includes('*')))
+            ) {
+              return `'${tok}'`;
+            }
+            return tok;
+          });
+        };
 
         let reassembled: string;
         if (matchedType === 'pure-slash') {
           const last = lastArg.slice(0, -1);
-          reassembled = `${first}"${joinedMiddle}${last}"`;
-        } else if (matchedType === 'multi-quote') {
+          const healedTokens = healSqlTokenList([...rawMiddle, last]);
+          reassembled = `${first}"${healedTokens.join(' ')}"`;
+        } else if (matchedType === 'multi-quote' || matchedType === 'internal-slash' || matchedType === 'internal-close') {
           const healedRest = internalRest.replace(/\\([a-zA-Z0-9_.-]+)\\/g, '"$1"');
-          reassembled = `${first}"${joinedMiddle}${internalWord}"${healedRest}`;
+          const healedTokens = healSqlTokenList([...rawMiddle, internalWord]);
+          reassembled = `${first}"${healedTokens.join(' ')}"${healedRest}`;
         } else if (matchedType === 'escaped-paren') {
           const last = lastArg.slice(0, -2);
-          reassembled = `${first}"${joinedMiddle}${last}")`;
+          const healedTokens = healSqlTokenList([...rawMiddle, last]);
+          reassembled = `${first}"${healedTokens.join(' ')}")`;
         } else if (matchedType === 'slash-paren') {
           const last = lastArg.slice(0, -2);
-          reassembled = `${first}"${joinedMiddle}${last}/)`;
+          const healedTokens = healSqlTokenList([...rawMiddle, last]);
+          reassembled = `${first}"${healedTokens.join(' ')}/)`;
         } else if (matchedType === 'leading-slash') {
           const last = lastArg.slice(1);
-          reassembled = `${first}"${middle.join(' ')}"${last}`;
-        } else if (matchedType === 'internal-slash') {
-          const healedRest = internalRest.replace(/\\([a-zA-Z0-9_.-]+)\\/g, '"$1"');
-          reassembled = `${first}"${joinedMiddle}${internalWord}"${healedRest}`;
+          const healedTokens = healSqlTokenList(rawMiddle);
+          reassembled = `${first}"${healedTokens.join(' ')}"${last}`;
         } else {
-          reassembled = `${first}"${joinedMiddle}${lastArg}"`;
+          const healedTokens = healSqlTokenList([...rawMiddle, lastArg]);
+          reassembled = `${first}"${healedTokens.join(' ')}"`;
         }
 
         currentArgs.splice(i, endIdx - i + 1, reassembled);

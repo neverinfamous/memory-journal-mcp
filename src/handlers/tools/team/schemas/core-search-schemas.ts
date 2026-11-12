@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { healSortByField } from '../../schemas/hallucination-healer-fields.js'
 import {
     ENTRY_TYPES,
     SIGNIFICANCE_TYPES,
@@ -223,15 +224,24 @@ export const TeamCreateEntrySchemaMcp = z.preprocess(
         .strict()
 )
 
+function preprocessTeamSortByOnly(val: unknown): unknown {
+    if (typeof val !== 'object' || val === null || Array.isArray(val)) return val
+    const obj = { ...(val as Record<string, unknown>) }
+    return healSortByField(obj) ? obj : val
+}
+
 /** team_get_recent — strict */
-export const TeamGetRecentSchema = z.object({
-    limit: z.number().min(1).max(500).optional().default(10),
-    cursor: z.string().optional().describe('Cursor for pagination'),
-    project_number: StrictProjectNumberSchema.optional(),
-    workspace_id: z.string().optional(),
-    sort_by: z.enum(['timestamp', 'importance']).optional().default('timestamp').describe(SORT_BY_DESC),
-    include_archived: z.boolean().optional().default(false),
-})
+export const TeamGetRecentSchema = z.preprocess(
+    preprocessTeamSortByOnly,
+    z.object({
+        limit: z.number().min(1).max(500).optional().default(10),
+        cursor: z.string().optional().describe('Cursor for pagination'),
+        project_number: StrictProjectNumberSchema.optional(),
+        workspace_id: z.string().optional(),
+        sort_by: z.enum(['timestamp', 'importance']).optional().default('timestamp').describe(SORT_BY_DESC),
+        include_archived: z.boolean().optional().default(false),
+    })
+)
 
 /** team_get_recent — relaxed */
 export const TeamGetRecentSchemaMcp = z.object({

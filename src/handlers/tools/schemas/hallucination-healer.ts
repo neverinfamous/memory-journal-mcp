@@ -3,7 +3,12 @@
  */
 
 import { resolveProjectContext } from '../../../utils/workspace-resolver.js'
-import { healTitleAndAutoContext, healRelationshipFields } from './hallucination-healer-fields.js'
+import {
+    healTitleAndAutoContext,
+    healRelationshipFields,
+    healAnchorsField,
+    healSortByField,
+} from './hallucination-healer-fields.js'
 import {
     ENTRY_TYPES,
     SIGNIFICANCE_TYPES,
@@ -448,6 +453,8 @@ export function healAgentHallucinations(val: unknown): unknown {
 
     if (healTitleAndAutoContext(obj)) modified = true
     if (healRelationshipFields(obj)) modified = true
+    if (healAnchorsField(obj)) modified = true
+    if (healSortByField(obj)) modified = true
     if (healMetadataAndContextFields(obj)) modified = true
     if (healTagsAndEntryType(obj)) modified = true
     if (healWorkspaceAndProjectContext(obj)) modified = true

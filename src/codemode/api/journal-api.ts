@@ -271,6 +271,8 @@ export class JournalApi {
             this.admin['analyze'] = statsFn
         }
         if (this.core['getEntryById']) this.core['exists'] = this.core['getEntryById']
+        if (this.core['markAnchorsStale']) this.git['markAnchorsStale'] = this.core['markAnchorsStale']
+        if (this.git['checkEntryStaleness']) this.core['checkEntryStaleness'] = this.git['checkEntryStaleness']
     }
 
     private wireProjectAndTeamAliases(): void {
