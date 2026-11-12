@@ -89,7 +89,13 @@ describe('buildPriorAuditSection workspace scoping', () => {
             db as never,
             'code-quality-audit',
             'Prior code-quality audits',
-            { defaultWorkspaceId: 'other-repo' },
+            {
+                defaultWorkspaceId: 'other-repo',
+                projectRegistry: {
+                    'repo-a': { path: '/tmp/repo-a', project_number: 1 },
+                    'other-repo': { path: '/tmp/other-repo', project_number: 2 },
+                },
+            },
             'repo-a'
         )
         expect(section).toContain('#11')

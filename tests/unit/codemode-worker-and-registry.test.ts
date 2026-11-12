@@ -405,8 +405,9 @@ describe('Code Mode Worker Core & Project Registry Ops', () => {
             const getProjectFn = createGetProjectFn(listFn)
             const foundByNum = (await getProjectFn(20)) as Record<string, unknown>
             expect(foundByNum['name']).toBe('alpha-renamed')
-            const foundByName = (await getProjectFn({ name: 'alpha' })) as Record<string, unknown>
+            const foundByName = (await getProjectFn({ name: 'alpha-renamed' })) as Record<string, unknown>
             expect(foundByName['project_number']).toBe(20)
+            await expect(getProjectFn({ name: 'alpha' })).rejects.toThrow(/Project not found/)
             await expect(getProjectFn('does-not-exist')).rejects.toThrow(/Project not found/)
 
             const deleteFn = createDeleteProjectFn()

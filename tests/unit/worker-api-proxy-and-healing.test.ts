@@ -172,19 +172,23 @@ describe('Worker API Proxy (buildApiProxy)', () => {
         expect((await projects['register']!({ name: 'p' }))['method']).toBe('register_project')
         expect((await projects['update']!({ name: 'p' }))['method']).toBe('update_project')
         expect((await projects['delete']!({ name: 'p' }))['method']).toBe('delete_project')
-        expect((await projects['dynamicListAll']!())['method']).toBe('list_projects')
-        expect((await projects['dynamicFindOne']!('p'))['method']).toBe('get_project')
-        expect((await projects['dynamicAddProj']!({}))['method']).toBe('register_project')
-        expect((await projects['dynamicEditProj']!({}))['method']).toBe('update_project')
-        expect((await projects['dynamicRemoveProj']!({}))['method']).toBe('delete_project')
+        expect((await projects['getProjects']!())['method']).toBe('list_projects')
+        expect((await projects['deleteAll']!())['method']).toBe('delete_project')
+        expect(projects['dynamicListAll']).toBeUndefined()
+        expect(projects['dynamicFindOne']).toBeUndefined()
+        expect(projects['dynamicAddProj']).toBeUndefined()
+        expect(projects['dynamicEditProj']).toBeUndefined()
+        expect(projects['dynamicRemoveProj']).toBeUndefined()
 
         // Tags proxy
         const tags = mj['tags'] as Record<string, (...a: unknown[]) => Promise<Record<string, unknown>>> &
             (() => Promise<Record<string, unknown>>)
         expect((await tags())['method']).toBe('list_tags')
         expect((await tags['merge']!({ source_tag: 'a', target_tag: 'b' }))['method']).toBe('merge_tags')
-        expect((await tags['dynamicMerge']!({ source_tag: 'a', target_tag: 'b' }))['method']).toBe('merge_tags')
-        expect((await tags['dynamicSearchTags']!())['method']).toBe('list_tags')
+        expect((await tags['mergeTags']!({ source_tag: 'a', target_tag: 'b' }))['method']).toBe('merge_tags')
+        expect((await tags['search']!())['method']).toBe('list_tags')
+        expect(tags['dynamicMerge']).toBeUndefined()
+        expect(tags['dynamicSearchTags']).toBeUndefined()
 
         // System proxy
         const sys = mj['system'] as Record<string, () => Promise<Record<string, unknown>>> &
@@ -192,7 +196,8 @@ describe('Worker API Proxy (buildApiProxy)', () => {
         expect((await sys())['method']).toBe('get_statistics')
         expect((await sys['ping']!())['status']).toBe('pong')
         expect((await sys['version']!())['name']).toBe('memory-journal-mcp')
-        expect((await sys['customSysCheck']!())['method']).toBe('get_statistics')
+        expect((await sys['check']!())['method']).toBe('get_statistics')
+        expect(sys['customSysCheck']).toBeUndefined()
 
         // Context proxy
         const ctx = mj['context'] as Record<string, unknown> & ((k?: string) => Promise< unknown>)
