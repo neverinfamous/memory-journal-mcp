@@ -87,6 +87,6 @@ export function resolveTeamProjectNumber(
     const registry = activeProjectRegistry(context.config?.projectRegistry)
     const paired = pairStoredScope(trimmed, explicitProjectNumber, registry)
     if (paired.projectNumber !== undefined && paired.projectNumber !== null) return paired.projectNumber
-    if (trimmed.toLowerCase() === 'default') return undefined
+    // [INVARIANT] An omitted workspace that resolved to `default` keeps the configured project. A supplied number owned by another workspace is already rejected.
     return context.config?.defaultProjectNumber
 }
