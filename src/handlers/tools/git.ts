@@ -18,6 +18,29 @@ import { coerceNumber } from '../../utils/query-helpers.js'
 import { ErrorFieldsMixin } from './error-fields-mixin.js'
 import { relaxedNumber } from './schemas.js'
 import {
+    GitAnalyzePatternsOptionsSchema,
+    GitHistoryOptionsSchema,
+    GitHistoryOptionsSchemaMcp,
+    GitOutputSchema,
+    GitReleaseInfoOptionsSchema,
+    GitReleaseInfoOptionsSchemaMcp,
+    GitSearchOptionsSchema,
+    GitSearchOptionsSchemaMcp,
+    GitUnreleasedOptionsSchema,
+} from './git-schemas.js'
+
+export {
+    GitAnalyzePatternsOptionsSchema,
+    GitHistoryOptionsSchema,
+    GitHistoryOptionsSchemaMcp,
+    GitOutputSchema,
+    GitReleaseInfoOptionsSchema,
+    GitReleaseInfoOptionsSchemaMcp,
+    GitSearchOptionsSchema,
+    GitSearchOptionsSchemaMcp,
+    GitUnreleasedOptionsSchema,
+} from './git-schemas.js'
+import {
     RECORD_SEPARATOR,
     FIELD_SEPARATOR,
     buildGitBaseArgs,
@@ -26,75 +49,6 @@ import {
 import { parseGitRecord, processBatch } from '../../vendor/lib-git-history/parser.js'
 import type { CliArgs } from '../../vendor/lib-git-history/cli.js'
 import type { CommitEntry } from '../../vendor/lib-git-history/schema.js'
-
-// --- Schemas ---
-export const GitHistoryOptionsSchema = z.object({
-    ref: z.string().optional(), path: z.string().optional(), maxCount: z.number().optional(),
-    since: z.string().optional(), sortBy: z.enum(['date', 'impact']).optional(),
-    scope: z.string().optional(), techDebtAudit: z.boolean().optional(),
-    repo: z.string().optional(), workspace_id: z.string().optional(), workspaceId: z.string().optional(),
-    project_number: z.number().optional(), cwd: z.string().optional(),
-})
-
-export const GitHistoryOptionsSchemaMcp = z.object({
-    ref: z.string().optional().describe('Git reference (branch, tag, commit). Default: HEAD'),
-    path: z.string().optional().describe('Filter by specific file or directory path'),
-    maxCount: relaxedNumber().optional().describe('Maximum number of commits to return. Default: 50'),
-    max_count: relaxedNumber().optional(), limit: relaxedNumber().optional(),
-    repo: z.string().optional().describe('Target repository or workspace name'),
-    workspace_id: z.string().optional(), workspaceId: z.string().optional(),
-    project_number: relaxedNumber().optional(), cwd: z.string().optional(),
-    since: z.string().optional().describe('Show commits more recent than a specific date'),
-    sortBy: z.string().optional().describe('Sort commits by date or impact score'),
-    scope: z.string().optional().describe('Filter commits by a specific scope'),
-    techDebtAudit: z.boolean().optional().describe('Filter for high impact commits with low trust or missing validation'),
-}).transform((d) => ({ ...d, maxCount: d.maxCount ?? d.max_count ?? d.limit }))
-
-export const GitSearchOptionsSchema = z.object({
-    query: z.string().min(1), maxCount: z.number().optional(),
-    sortBy: z.enum(['date', 'impact']).optional(), scope: z.string().optional(),
-    techDebtAudit: z.boolean().optional(), repo: z.string().optional(),
-    workspace_id: z.string().optional(), workspaceId: z.string().optional(),
-    project_number: z.number().optional(), cwd: z.string().optional(),
-})
-
-export const GitSearchOptionsSchemaMcp = z.object({
-    query: z.string().optional().describe('Search query to match in commit messages'),
-    maxCount: relaxedNumber().optional().describe('Maximum number of commits to return. Default: 50'),
-    max_count: relaxedNumber().optional(), limit: relaxedNumber().optional(),
-    repo: z.string().optional().describe('Target repository or workspace name'),
-    workspace_id: z.string().optional(), workspaceId: z.string().optional(),
-    project_number: relaxedNumber().optional(), cwd: z.string().optional(),
-    sortBy: z.string().optional().describe('Sort commits by date or impact score'),
-    scope: z.string().optional().describe('Filter commits by a specific scope'),
-    techDebtAudit: z.boolean().optional().describe('Filter for high impact commits with low trust or missing validation'),
-}).transform((d) => ({ ...d, maxCount: d.maxCount ?? d.max_count ?? d.limit }))
-
-export const GitReleaseInfoOptionsSchema = z.object({
-    ref: z.string().optional(), repo: z.string().optional(), workspace_id: z.string().optional(), cwd: z.string().optional(),
-})
-
-export const GitReleaseInfoOptionsSchemaMcp = z.object({
-    ref: z.string().optional().describe('Git reference (branch, tag, commit). Default: HEAD'),
-    repo: z.string().optional().describe('Target repository or workspace name'),
-    workspace_id: z.string().optional(), cwd: z.string().optional(),
-})
-
-export const GitUnreleasedOptionsSchema = z.object({
-    repo: z.string().optional(), workspace_id: z.string().optional(), cwd: z.string().optional(),
-})
-
-export const GitAnalyzePatternsOptionsSchema = z.object({
-    maxCount: relaxedNumber().optional().default(50), repo: z.string().optional(),
-    workspace_id: z.string().optional(), cwd: z.string().optional(),
-})
-
-export const GitOutputSchema = z.object({
-    success: z.boolean(),
-    commits: z.array(z.unknown()).optional(),
-    changelog: z.unknown().optional(),
-    error: z.string().optional(),
-}).extend(ErrorFieldsMixin.shape)
 
 interface FetchCommitsInput {
     maxCount?: number
@@ -405,11 +359,14 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                     const defaultWs = resolveWorkspaceId(undefined, undefined, context.config)
                     const targetWorkspaces: string[] = []
 
-                    if (rawWs === '*') {
-                        if (resolvedEntryId !== undefined) {
-                            const entry = db.getEntryByIdIncludeDeleted(resolvedEntryId, '*')
-                            if (!entry) throw new ResourceNotFoundError('entry', String(resolvedEntryId))
-                            targetWorkspaces.push(entry.workspaceId ?? defaultWs)
+                        if (rawWs === '*') {
+                            if (resolvedEntryId !== undefined) {
+                                const entry = db.getEntryByIdIncludeDeleted(resolvedEntryId, '*')
+                                if (!entry) throw new ResourceNotFoundError('entry', String(resolvedEntryId))
+                                if (typeof rawProj === 'number' && entry.projectNumber !== rawProj) {
+                                    throw new ResourceNotFoundError('entry', String(resolvedEntryId))
+                                }
+                                targetWorkspaces.push(entry.workspaceId ?? defaultWs)
                         } else {
                             const registryKeys = Object.keys(registry ?? {})
                             targetWorkspaces.push(
@@ -442,7 +399,7 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                         const targets: { id: number; timestamp: string }[] = []
                         if (resolvedEntryId !== undefined) {
                             const entry = db.getEntryByIdIncludeDeleted(resolvedEntryId, rawWs === '*' ? '*' : wsId)
-                            if (!entry) {
+                            if (!entry || (typeof rawProj === 'number' && entry.projectNumber !== rawProj)) {
                                 if (rawWs !== '*') throw new ResourceNotFoundError('entry', String(resolvedEntryId))
                                 continue
                             }
@@ -486,6 +443,14 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                             results,
                             error: failureMessages.join('; '),
                             ...skipped,
+                        }
+                    }
+                    if (results.length === 0 && skippedWorkspaces.length > 0 && skippedWorkspaces.length === targetWorkspaces.length) {
+                        return {
+                            success: false,
+                            results,
+                            error: 'No anchor check ran because no workspace had a registered repository path.',
+                            skippedWorkspaces,
                         }
                     }
                     return { success: true, results, ...skipped }

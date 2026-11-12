@@ -375,9 +375,11 @@ describe('Git Tools Handler', () => {
             if (tool === undefined) throw new Error('check_entry_staleness missing')
             const res = (await tool.handler({ workspace_id: '*' })) as {
                 success: boolean
+                error?: string
                 skippedWorkspaces?: string[]
             }
-            expect(res.success).toBe(true)
+            expect(res.success).toBe(false)
+            expect(res.error).toContain('No anchor check ran')
             expect(res.skippedWorkspaces).toEqual(['alpha', 'beta'])
         })
     })

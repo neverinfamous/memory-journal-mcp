@@ -160,8 +160,14 @@ export class EntriesManager {
         return getRecentEntriesQuery(this.sharedContext, limit, sortBy, cursor, includeArchived, workspaceId, projectNumber, offset)
     }
 
-    getEntriesPage(offset: number, limit: number, order: 'asc' | 'desc' = 'desc', workspaceId = 'default'): { entries: JournalEntry[]; nextCursor?: string } {
-        return getEntriesPage(this.sharedContext, offset, limit, order, workspaceId)
+    getEntriesPage(
+        offset: number,
+        limit: number,
+        order: 'asc' | 'desc' = 'desc',
+        workspaceId = 'default',
+        projectNumber?: number
+    ): { entries: JournalEntry[]; nextCursor?: string } {
+        return getEntriesPage(this.sharedContext, offset, limit, order, workspaceId, projectNumber)
     }
 
     searchEntries(
@@ -237,9 +243,18 @@ export class EntriesManager {
         startDate?: string,
         endDate?: string,
         projectBreakdown?: boolean,
-        workspaceId?: string
+        workspaceId?: string,
+        projectNumber?: number
     ): Record<string, unknown> {
-        return getStatistics(this.sharedContext, timeframe, startDate, endDate, projectBreakdown, workspaceId)
+        return getStatistics(
+            this.sharedContext,
+            timeframe,
+            startDate,
+            endDate,
+            projectBreakdown,
+            workspaceId,
+            projectNumber
+        )
     }
 
     getEntryHistory(id: number, workspaceId?: string): EntryRevision[] {

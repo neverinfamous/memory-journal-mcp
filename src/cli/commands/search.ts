@@ -20,12 +20,14 @@ export async function searchAction(query: string | undefined, options: z.infer<t
     try {
         const mode = options.mode || 'auto'
         const limit = options.limit ?? 100
+        const requestedProject = options.defaultProject
         const workspaceId = resolveWorkspaceId(
             options.workspace,
-            options.defaultProject ?? serverOptions.defaultProjectNumber,
+            requestedProject ?? serverOptions.defaultProjectNumber,
             serverOptions
         )
         const workspaceFilter = workspaceId !== undefined ? { workspaceId } : {}
+        const projectFilter = requestedProject !== undefined ? { projectNumber: requestedProject } : {}
         let result: unknown
 
         if (mode === 'semantic') {
@@ -33,13 +35,14 @@ export async function searchAction(query: string | undefined, options: z.infer<t
             result = await vectorManager.search(finalQuery, limit, 0.25, workspaceId)
         } else if (mode === 'hybrid') {
             const vectorManager = new VectorSearchManager(db, { modelName: serverOptions.embeddingModel })
-            result = await hybridSearch(finalQuery, db, vectorManager, { limit, ...workspaceFilter })
+            result = await hybridSearch(finalQuery, db, vectorManager, { limit, ...workspaceFilter, ...projectFilter })
         } else {
             result = db.searchEntries(finalQuery, {
                 limit,
                 fuzzy_match: mode === 'auto',
                 auto_correct: mode === 'auto',
                 ...workspaceFilter,
+                ...projectFilter,
             })
         }
 

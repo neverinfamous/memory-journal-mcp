@@ -117,7 +117,7 @@ export async function rebuildIndex(
         pageSize?: number
         projectNumber?: number
     }
-): Promise<{ success: boolean; indexed: number; failed: number; firstError: string | null }> {
+): Promise<{ success: boolean; indexed: number; failed: number; firstError: string | null; warning?: string }> {
     const force = options?.force ?? false
     const batchSize = options?.batchSize ?? REBUILD_BATCH_SIZE
     const pageSize = options?.pageSize ?? REBUILD_PAGE_SIZE
@@ -163,18 +163,21 @@ export async function rebuildIndex(
         offset += pageSize
     }
 
+    let cleanupError: string | undefined
     if (stats.errorsCount === 0) {
         try {
             dbAdapter.cleanupStaleVectors()
         } catch (err) {
+            cleanupError = err instanceof Error ? err.message : String(err)
             logger.warning('Failed to cleanup stale vectors after rebuild', { error: err })
         }
     }
 
     return {
-        success: stats.errorsCount === 0,
+        success: stats.errorsCount === 0 && cleanupError === undefined,
         indexed: stats.indexed,
         failed: stats.errorsCount,
         firstError: stats.firstError,
+        ...(cleanupError !== undefined ? { warning: cleanupError } : {}),
     }
 }

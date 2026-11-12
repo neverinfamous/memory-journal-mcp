@@ -3,6 +3,7 @@ import {
     resolveProjectNumberFromPath,
     setActiveSessionProject,
 } from '../../../utils/workspace-resolver.js'
+import { exactRegistryKey, uniqueWorkspaceForProject } from '../../../utils/write-scope.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from '../shared.js'
 import { withPriority, ASSISTANT_FOCUSED } from '../../../utils/resource-annotations.js'
 
@@ -21,8 +22,15 @@ export function getAgentContextResource(): InternalResourceDef {
             const rawRepo = match?.[1] !== undefined ? decodeURIComponent(match[1]) : undefined
             const repo = rawRepo === 'default' ? undefined : rawRepo
 
+            const numericRepo = repo !== undefined ? /^#?(\d+)$/.exec(repo) : null
+            const exactRepo = repo !== undefined ? exactRegistryKey(repo, config?.projectRegistry) : undefined
+            const numericWorkspace =
+                numericRepo !== null
+                    ? uniqueWorkspaceForProject(Number(numericRepo[1]), config?.projectRegistry)
+                    : undefined
+            const namedRepo = exactRepo ?? numericWorkspace
             const resolved = resolveProjectContext(
-                repo !== undefined ? { workspace_id: repo } : {},
+                namedRepo !== undefined ? { workspace_id: namedRepo } : {},
                 {
                     ...config,
                     ...(context?.runtime !== undefined ? { runtime: context.runtime } : {}),

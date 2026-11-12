@@ -157,9 +157,10 @@ async function initializeGitHubIntegration(
     let githubPath = '.'
     if (options.projectRegistry && Object.keys(options.projectRegistry).length > 0) {
         if (options.defaultProjectNumber !== undefined) {
-            const defaultEntry = Object.values(options.projectRegistry).find(
+            const matches = Object.values(options.projectRegistry).filter(
                 (r) => r.project_number === options.defaultProjectNumber
             )
+            const defaultEntry = matches.length === 1 ? matches[0] : undefined
             if (defaultEntry?.path) {
                 githubPath = defaultEntry.path
             }

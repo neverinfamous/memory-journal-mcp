@@ -83,6 +83,7 @@ export class InsightsOperations {
         minEntries: number
         inactiveThresholdDays: number
         workspaceId?: string
+        projectNumber?: number
     }): ReturnType<typeof getCrossProjectInsights> {
         return getCrossProjectInsights(this.connection, options)
     }
@@ -94,6 +95,7 @@ export class InsightsOperations {
         depth: number
         limit: number
         workspaceId?: string
+        projectNumber?: number
     }): ReturnType<typeof visualizeRelationships> {
         return visualizeRelationships(this.connection, options)
     }

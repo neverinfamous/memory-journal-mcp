@@ -133,21 +133,26 @@ export function getEntriesPage(
     offset: number,
     limit: number,
     order: 'asc' | 'desc' = 'desc',
-    workspaceId = 'default'
+    workspaceId = 'default',
+    projectNumber?: number
 ): { entries: JournalEntry[]; nextCursor?: string } {
     const { db, tagsMgr } = context
     const scopeId = effectiveWorkspace(workspaceId)
 
     const sortDir = order === 'asc' ? 'ASC' : 'DESC'
     const scoped = scopeId !== '*'
+    const projectSql = projectNumber !== undefined ? ' AND project_number = ?' : ''
 
     const stmt = db.prepare(`
         SELECT ${ENTRY_COLUMNS} FROM memory_journal 
-        WHERE deleted_at IS NULL ${scoped ? 'AND workspace_id = ?' : ''}
+        WHERE deleted_at IS NULL ${scoped ? 'AND workspace_id = ?' : ''}${projectSql}
         ORDER BY timestamp ${sortDir}, id ${sortDir} 
         LIMIT ? OFFSET ?
     `)
-    const rows = scoped ? stmt.all([scopeId, limit, offset]) : stmt.all([limit, offset])
+    const projectParam = projectNumber !== undefined ? [projectNumber] : []
+    const rows = scoped
+        ? stmt.all([scopeId, ...projectParam, limit, offset])
+        : stmt.all([...projectParam, limit, offset])
     const entries = rowsToEntries(tagsMgr, rows)
 
     if (entries.length === limit && limit > 0) {

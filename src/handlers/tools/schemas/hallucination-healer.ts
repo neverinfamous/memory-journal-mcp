@@ -279,14 +279,14 @@ function inferWorkspaceAndProject(obj: Record<string, unknown>): boolean {
         if (
             resolved.workspaceId !== undefined &&
             resolved.workspaceId !== 'default' &&
-            (wsId === undefined || wsId === 'default')
+            wsId === undefined
         ) {
             obj['workspace_id'] = resolved.workspaceId
             modified = true
         } else if (
             process.env['MCP_WORKSPACE_ID'] !== undefined &&
             process.env['MCP_WORKSPACE_ID'].trim() !== '' &&
-            (wsId === undefined || wsId === 'default')
+            wsId === undefined
         ) {
             obj['workspace_id'] = process.env['MCP_WORKSPACE_ID'].trim()
             modified = true

@@ -8,6 +8,7 @@ import { ConfigurationError } from '../../types/errors.js'
 import { markUntrustedContent } from '../../utils/security-utils.js'
 import { logger } from '../../utils/logger.js'
 import { loadProjectRegistryFromConfig } from '../../utils/workspace-resolver.js'
+import { uniqueWorkspaceForProject } from '../../utils/write-scope.js'
 import type { BriefingConfig } from '../resources/shared.js'
 
 export const WORKFLOW_WORKSPACE_ARGUMENTS = [
@@ -50,13 +51,19 @@ export function buildExplicitAttributionArgs(
     briefingConfig?: Partial<BriefingConfig>,
     explicitProjectNumber?: number
 ): string {
-    if (workspaceId === 'default' || workspaceId === '') return ''
+    if (workspaceId === '') return ''
     const registry = briefingConfig?.projectRegistry ?? loadProjectRegistryFromConfig()
     const registryNumber = registry?.[workspaceId]?.project_number
-    const projNum =
-        explicitProjectNumber !== undefined && Number.isFinite(explicitProjectNumber)
-            ? explicitProjectNumber
-            : registryNumber
+    const owner =
+        explicitProjectNumber !== undefined
+            ? uniqueWorkspaceForProject(explicitProjectNumber, registry)
+            : undefined
+    const explicitMatches =
+        explicitProjectNumber !== undefined &&
+        Number.isFinite(explicitProjectNumber) &&
+        (owner === undefined || owner.toLowerCase() === workspaceId.toLowerCase()) &&
+        (registryNumber === undefined || explicitProjectNumber === registryNumber)
+    const projNum = explicitMatches ? explicitProjectNumber : registryNumber
     return `, workspace_id: "${workspaceId}"${projNum !== undefined ? `, project_number: ${String(projNum)}` : ''}`
 }
 

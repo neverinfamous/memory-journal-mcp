@@ -38,12 +38,8 @@ function checkUnassignedEntries(): void {
     const isStrict = process.argv.includes('--strict') || process.env['CI'] === 'true'
     if (!fs.existsSync(dbPath)) {
         const message = `Database file not found at '${dbPath}', skipping workspace isolation check.`
-        if (isStrict) {
-            console.error(message)
-            process.exit(1)
-        }
-        console.log(`ℹ️ ${message}`)
-        return
+        console.error(message)
+        process.exit(1)
     }
     let rawKey = process.env['MJ_DB_ENCRYPTION_KEY'] || process.env['DB_ENCRYPTION_KEY']
     let db: Database.Database
@@ -72,12 +68,8 @@ function checkUnassignedEntries(): void {
         }
     } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
-        if (isStrict || Boolean(rawKey)) {
-            console.error(`❌ Could not open database at '${dbPath}': ${msg}`)
-            process.exit(1)
-        }
-        console.log(`ℹ️ Could not open database at '${dbPath}' (encrypted or locked): ${msg}. Skipping workspace isolation check.`)
-        return
+        console.error(`❌ Could not open database at '${dbPath}': ${msg}`)
+        process.exit(1)
     }
 
     try {

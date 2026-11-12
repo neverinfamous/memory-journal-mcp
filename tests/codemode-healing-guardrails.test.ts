@@ -2580,7 +2580,9 @@ return { success: true, projectId };
                 workspace_id: '*'
             }, mockDb, undefined, undefined, mockConfig)) as Record<string, unknown>
 
-            expect(res['success']).toBe(true)
+            expect(res['success']).toBe(false)
+            expect(res['code']).not.toBe('VALIDATION_ERROR')
+            expect(String(res['error'])).toContain('No anchor check ran')
             expect(Array.isArray(res['results'])).toBe(true)
         })
 

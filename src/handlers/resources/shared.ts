@@ -17,6 +17,7 @@ import {
     loadProjectRegistryFromConfig,
     resolveProjectNumberFromPath,
 } from '../../utils/workspace-resolver.js'
+import { uniqueWorkspaceForProject } from '../../utils/write-scope.js'
 
 // ============================================================================
 // GitHub Resource Guard
@@ -274,11 +275,8 @@ export function resourceWorkspace(context: {
                 : resolveProjectNumberFromPath(process.cwd(), registry)) ??
             sessionCtx.projectNumber
         if (projNum !== undefined) {
-            for (const [key, entry] of Object.entries(registry)) {
-                if (entry.project_number === projNum) {
-                    return key
-                }
-            }
+            const unique = uniqueWorkspaceForProject(projNum, registry)
+            if (unique !== undefined) return unique
         }
     }
     if (sessionCtx.workspaceId !== undefined && sessionCtx.workspaceId.length > 0) {

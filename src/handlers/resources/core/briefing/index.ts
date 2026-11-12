@@ -18,6 +18,7 @@ import {
     loadProjectRegistryFromConfig,
     setActiveSessionProject,
 } from '../../../../utils/workspace-resolver.js'
+import { exactRegistryKey, uniqueWorkspaceForProject } from '../../../../utils/write-scope.js'
 import { DEFAULT_BRIEFING_CONFIG, resourceWorkspace } from '../../shared.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from '../../shared.js'
 import { buildGitHubSection } from './github-section.js'
@@ -76,14 +77,13 @@ export async function buildBriefingData(
 
     const registry = config.projectRegistry ?? loadProjectRegistryFromConfig()
     if (targetRepo) {
-        let resolvedRepo = targetRepo
-        if (!registry?.[resolvedRepo]) {
-            resolvedRepo = targetRepo.split(/[\\/]/).pop() ?? targetRepo
-        }
-        const canonicalKey = findCanonicalRegistryKey(resolvedRepo, registry)
-        if (canonicalKey !== undefined) {
-            resolvedRepo = canonicalKey
-        }
+        const numericTarget = /^#?(\d+)$/.exec(targetRepo)
+        const numericWorkspace =
+            numericTarget !== null
+                ? uniqueWorkspaceForProject(Number(numericTarget[1]), registry)
+                : undefined
+        const resolvedRepo = exactRegistryKey(targetRepo, registry) ?? numericWorkspace
+        if (resolvedRepo !== undefined) {
         activeWorkspaceId = resolvedRepo
 
         const registryEntry = registry?.[resolvedRepo]
@@ -95,6 +95,7 @@ export async function buildBriefingData(
                 activeProjectNumber = registryEntry.project_number
                 setActiveSessionProject(resolvedRepo, activeProjectNumber, context.runtime)
             }
+        }
         }
     } else if (activeWorkspaceId && activeWorkspaceId !== 'default' && activeWorkspaceId !== '*') {
         const canonicalKey = findCanonicalRegistryKey(activeWorkspaceId, registry) ?? activeWorkspaceId

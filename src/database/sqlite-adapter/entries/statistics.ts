@@ -16,7 +16,8 @@ interface PeriodRow {
 function buildDateFilter(
     workspaceId: string,
     startDate?: string,
-    endDate?: string
+    endDate?: string,
+    projectNumber?: number
 ): { dateFilter: string; dateParams: unknown[] } {
     let dateFilter = ''
     const dateParams: unknown[] = []
@@ -24,6 +25,10 @@ function buildDateFilter(
     if (workspaceId !== '*') {
         dateFilter += ' AND workspace_id = ?'
         dateParams.push(workspaceId)
+    }
+    if (projectNumber !== undefined) {
+        dateFilter += ' AND project_number = ?'
+        dateParams.push(projectNumber)
     }
 
     if (startDate) {
@@ -185,12 +190,13 @@ export function getStatistics(
     startDate?: string,
     endDate?: string,
     projectBreakdown?: boolean,
-    workspaceId = 'default'
+    workspaceId = 'default',
+    projectNumber?: number
 ): Record<string, unknown> {
     const { db } = context
     const scopeId = effectiveWorkspace(workspaceId)
 
-    const { dateFilter, dateParams } = buildDateFilter(scopeId, startDate, endDate)
+    const { dateFilter, dateParams } = buildDateFilter(scopeId, startDate, endDate, projectNumber)
 
     const { totalEntries, entriesByType } = getTypeCounts(db, dateFilter, dateParams)
 

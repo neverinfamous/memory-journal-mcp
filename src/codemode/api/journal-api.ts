@@ -124,7 +124,6 @@ export class JournalApi {
             if (
                 currentWs === undefined ||
                 currentWs === '' ||
-                currentWs === 'default' ||
                 (rec['project_number'] === undefined && rec['projectNumber'] === undefined)
             ) {
                 const projNum =
@@ -153,7 +152,7 @@ export class JournalApi {
                 if (
                     resolved.workspaceId !== undefined &&
                     resolved.workspaceId !== 'default' &&
-                    (currentWs === undefined || currentWs === '' || currentWs === 'default')
+                    (currentWs === undefined || currentWs === '')
                 ) {
                     rec['workspace_id'] = resolved.workspaceId
                     rec['workspaceId'] = resolved.workspaceId

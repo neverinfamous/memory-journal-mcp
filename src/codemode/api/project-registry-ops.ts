@@ -306,15 +306,6 @@ export function createGetProjectFn(
                         return false
                     })
                     if (exactMatch !== undefined) return exactMatch
-
-                    const substringMatch: unknown = projects.find((p: unknown) => {
-                        if (!isRecord(p)) return false
-                        if (typeof p['name'] === 'string' && strVal.length > 0) {
-                            return p['name'].toLowerCase().includes(strVal)
-                        }
-                        return false
-                    })
-                    if (substringMatch !== undefined) return substringMatch
                 }
             }
         } catch (err) {

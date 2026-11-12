@@ -150,8 +150,9 @@ describe('Code Mode Worker Proxies & Globals', () => {
             tables: string[]
             entries: Promise<string>
         }
-        await schemaShim()
-        expect(getStatsMock).toHaveBeenCalled()
+        const schemaResult = (await schemaShim()) as { group: string }
+        expect(schemaResult.group).toBe('schema')
+        expect(getStatsMock).not.toHaveBeenCalled()
         expect((await schemaShim.listTables()).tables).toContain('memory_journal')
         expect(schemaShim.tables).toContain('tags')
         expect(await schemaShim.entries).toBe('{ content: string }')

@@ -9,9 +9,10 @@ export const analyticsSchema = analyticsOptionsSchema
 export async function analyticsStatsAction(options: z.infer<typeof analyticsSchema>, command: Command): Promise<void> {
     const { db, serverOptions } = await getDb(options, command)
     try {
+        const requestedProject = options.defaultProject
         const workspaceId = resolveWorkspaceId(
             options.workspace,
-            options.defaultProject ?? serverOptions.defaultProjectNumber,
+            requestedProject ?? serverOptions.defaultProjectNumber,
             serverOptions
         )
         const result = db.getStatistics(
@@ -19,7 +20,8 @@ export async function analyticsStatsAction(options: z.infer<typeof analyticsSche
             undefined,
             undefined,
             undefined,
-            workspaceId
+            workspaceId,
+            requestedProject
         )
         process.stdout.write(JSON.stringify(result, null, 2) + '\n')
     } catch (e) {
@@ -33,15 +35,17 @@ export async function analyticsStatsAction(options: z.infer<typeof analyticsSche
 export async function analyticsInsightsAction(options: z.infer<typeof analyticsSchema>, command: Command): Promise<void> {
     const { db, serverOptions } = await getDb(options, command)
     try {
+        const requestedProject = options.defaultProject
         const workspaceId = resolveWorkspaceId(
             options.workspace,
-            options.defaultProject ?? serverOptions.defaultProjectNumber,
+            requestedProject ?? serverOptions.defaultProjectNumber,
             serverOptions
         )
         const result = db.getCrossProjectInsights({
             minEntries: 1,
             inactiveThresholdDays: 30,
             ...(workspaceId !== undefined ? { workspaceId } : {}),
+            ...(requestedProject !== undefined ? { projectNumber: requestedProject } : {}),
         })
         process.stdout.write(JSON.stringify(result, null, 2) + '\n')
     } catch (e) {

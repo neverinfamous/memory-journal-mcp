@@ -68,8 +68,13 @@ export class DatabaseAdapter extends AdapterDelegates implements IDatabaseAdapte
         )
     }
 
-    getEntriesPage(offset: number, limit: number, workspaceId = 'default'): { entries: JournalEntry[]; nextCursor?: string } {
-        return this.entriesMgr.getEntriesPage(offset, limit, 'desc', workspaceId)
+    getEntriesPage(
+        offset: number,
+        limit: number,
+        workspaceId = 'default',
+        projectNumber?: number
+    ): { entries: JournalEntry[]; nextCursor?: string } {
+        return this.entriesMgr.getEntriesPage(offset, limit, 'desc', workspaceId, projectNumber)
     }
 
     getActiveEntryCount(workspaceId?: string): number {
@@ -277,14 +282,16 @@ export class DatabaseAdapter extends AdapterDelegates implements IDatabaseAdapte
         startDate?: string,
         endDate?: string,
         projectBreakdown?: boolean,
-        workspaceId?: string
+        workspaceId?: string,
+        projectNumber?: number
     ): ReturnType<EntriesManager['getStatistics']> {
         return this.entriesMgr.getStatistics(
             groupBy,
             startDate,
             endDate,
             projectBreakdown,
-            workspaceId
+            workspaceId,
+            projectNumber
         )
     }
 

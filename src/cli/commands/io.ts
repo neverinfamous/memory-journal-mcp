@@ -26,11 +26,15 @@ export const exportMarkdownSchema = ioExportMarkdownOptionsSchema
 export const importMarkdownSchema = ioImportMarkdownOptionsSchema
 export const importExternalSchema = ioImportExternalOptionsSchema
 
-function fetchAllWorkspaceEntries(db: IDatabaseAdapter, workspaceId: string | undefined): JournalEntry[] {
+function fetchAllWorkspaceEntries(
+    db: IDatabaseAdapter,
+    workspaceId: string | undefined,
+    projectNumber?: number
+): JournalEntry[] {
     const PAGE_SIZE = 1000
     const entries: JournalEntry[] = []
     for (let offset = 0; ; offset += PAGE_SIZE) {
-        const page = db.getEntriesPage(offset, PAGE_SIZE, workspaceId).entries
+        const page = db.getEntriesPage(offset, PAGE_SIZE, workspaceId, projectNumber).entries
         entries.push(...page)
         if (page.length < PAGE_SIZE) break
     }
@@ -40,12 +44,13 @@ function fetchAllWorkspaceEntries(db: IDatabaseAdapter, workspaceId: string | un
 export async function exportJsonAction(options: z.infer<typeof exportJsonSchema>, command: Command): Promise<void> {
     const { db, serverOptions } = await getDb(options, command)
     try {
+        const requestedProject = options.defaultProject
         const workspaceId = resolveWorkspaceId(
             options.workspace,
-            options.defaultProject ?? serverOptions.defaultProjectNumber,
+            requestedProject ?? serverOptions.defaultProjectNumber,
             serverOptions
         )
-        const entries = fetchAllWorkspaceEntries(db, workspaceId)
+        const entries = fetchAllWorkspaceEntries(db, workspaceId, requestedProject)
 
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
         const defaultName = `journal_export_${timestamp}.json`
@@ -75,12 +80,13 @@ export async function exportMarkdownAction(options: z.infer<typeof exportMarkdow
         if (!options.dir) {
             throw new Error('--dir is required for markdown export')
         }
+        const requestedProject = options.defaultProject
         const workspaceId = resolveWorkspaceId(
             options.workspace,
-            options.defaultProject ?? serverOptions.defaultProjectNumber,
+            requestedProject ?? serverOptions.defaultProjectNumber,
             serverOptions
         )
-        const entries = fetchAllWorkspaceEntries(db, workspaceId)
+        const entries = fetchAllWorkspaceEntries(db, workspaceId, requestedProject)
         
         const exportable = entries.map(e => ({
             id: e.id,

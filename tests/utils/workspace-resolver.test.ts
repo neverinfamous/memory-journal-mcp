@@ -1,6 +1,13 @@
 import { describe, it, expect, vi } from 'vitest'
 import path from 'node:path'
-import { cwdMatchesRegistryPath, resolveProjectContext, resolveWorkspaceId } from '../../src/utils/workspace-resolver.js'
+import { ValidationError } from '../../src/types/errors.js'
+import {
+    clearActiveSessionProject,
+    cwdMatchesRegistryPath,
+    resolveProjectContext,
+    resolveWorkspaceId,
+    setActiveSessionProject,
+} from '../../src/utils/workspace-resolver.js'
 import type { ToolHandlerConfig } from '../../src/types/index.js'
 
 describe('workspace-resolver with keyword and tag inference', () => {
@@ -121,19 +128,19 @@ describe('workspace-resolver with keyword and tag inference', () => {
         }
     })
 
-    it('pairs an explicit workspace with its registry project and ignores a conflicting project_number and cwd', () => {
+    it('rejects an explicit workspace whose project_number belongs to a different registry workspace', () => {
         const spy = vi.spyOn(process, 'cwd').mockReturnValue('C:\\Users\\chris\\Desktop\\memory-journal-mcp\\src')
         try {
-            const res = resolveProjectContext(
-                {
-                    workspace_id: 'adamic',
-                    project_number: 5,
-                    content: 'sqlite notes that must not retarget adamic',
-                },
-                mockConfig
-            )
-            expect(res.workspaceId).toBe('adamic')
-            expect(res.projectNumber).toBe(16)
+            expect(() =>
+                resolveProjectContext(
+                    {
+                        workspace_id: 'adamic',
+                        project_number: 5,
+                        content: 'sqlite notes that must not retarget adamic',
+                    },
+                    mockConfig
+                )
+            ).toThrow(ValidationError)
         } finally {
             spy.mockRestore()
         }
@@ -182,42 +189,48 @@ describe('workspace-resolver with keyword and tag inference', () => {
         }
     })
 
-    it('resolves proper project instead of staying on "default" when workspace_id: "default" is passed alongside project_number, tags, content, or registered cwd', () => {
-        // 1. Explicit project_number overrides soft workspace_id: 'default'
+    it('keeps an explicit workspace of default instead of retargeting it from project, tags, content, or cwd', () => {
         const byProjectNum = resolveProjectContext(
             { workspace_id: 'default', project_number: 5, content: 'General entry' },
             mockConfig
         )
-        expect(byProjectNum.workspaceId).toBe('memory-journal-mcp')
+        expect(byProjectNum.workspaceId).toBe('default')
         expect(byProjectNum.projectNumber).toBe(5)
 
-        // 2. Tag inference overrides soft workspace_id: 'default'
         const byTag = resolveProjectContext(
             { workspace_id: 'default', content: 'General note', tags: ['memory-journal-mcp'] },
             mockConfig
         )
-        expect(byTag.workspaceId).toBe('memory-journal-mcp')
-        expect(byTag.projectNumber).toBe(5)
+        expect(byTag.workspaceId).toBe('default')
+        expect(byTag.projectNumber).toBeUndefined()
 
-        // 3. Content keyword inference overrides soft workspace_id: 'default'
-        const byContent = resolveProjectContext(
-            { workspace_id: 'default', content: 'Audit pass on memory-journal-mcp handlers' },
-            mockConfig
-        )
-        expect(byContent.workspaceId).toBe('memory-journal-mcp')
-        expect(byContent.projectNumber).toBe(5)
-
-        // 4. Registered process.cwd() overrides soft workspace_id: 'default'
         const spy = vi.spyOn(process, 'cwd').mockReturnValue('C:\\Users\\chris\\Desktop\\memory-journal-mcp\\src')
         try {
             const byCwd = resolveProjectContext(
                 { workspace_id: 'default', content: 'General commit note with no explicit repo keyword' },
                 mockConfig
             )
-            expect(byCwd.workspaceId).toBe('memory-journal-mcp')
-            expect(byCwd.projectNumber).toBe(5)
+            expect(byCwd.workspaceId).toBe('default')
+            expect(byCwd.projectNumber).toBeUndefined()
         } finally {
             spy.mockRestore()
+        }
+    })
+
+    it('binds a session project number before content keywords when the session workspace is missing', () => {
+        const runtime = {}
+        setActiveSessionProject(undefined, 5, runtime)
+        const spy = vi.spyOn(process, 'cwd').mockReturnValue('C:\\tmp\\unregistered-project')
+        try {
+            const res = resolveProjectContext(
+                { content: 'mysql-mcp notes', tags: ['mysql'] },
+                { ...mockConfig, runtime }
+            )
+            expect(res.workspaceId).toBe('memory-journal-mcp')
+            expect(res.projectNumber).toBe(5)
+        } finally {
+            spy.mockRestore()
+            clearActiveSessionProject()
         }
     })
 

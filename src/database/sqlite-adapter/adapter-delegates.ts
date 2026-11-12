@@ -316,6 +316,7 @@ export class AdapterDelegates {
         dryRun?: boolean
         excludeTags?: string[]
         workspaceId?: string
+        projectNumber?: number
     }): ReturnType<IDatabaseAdapter['executeDataLifecycle']> {
         return this.lifecycleOps.executeDataLifecycle(options)
     }
@@ -388,6 +389,7 @@ export class AdapterDelegates {
         minEntries: number
         inactiveThresholdDays: number
         workspaceId?: string
+        projectNumber?: number
     }): ReturnType<IDatabaseAdapter['getCrossProjectInsights']> {
         return this.insightsOps.getCrossProjectInsights(options)
     }
@@ -399,6 +401,7 @@ export class AdapterDelegates {
         depth: number
         limit: number
         workspaceId?: string
+        projectNumber?: number
     }): ReturnType<IDatabaseAdapter['visualizeRelationships']> {
         return this.insightsOps.visualizeRelationships(options)
     }

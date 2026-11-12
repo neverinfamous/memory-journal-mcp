@@ -189,7 +189,7 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                             recoverable: true,
                         }
                     }
-                    if (workspace_id !== '*' && fromEntry.projectNumber !== undefined && projectNumber !== undefined && fromEntry.projectNumber !== projectNumber) {
+                    if (fromEntry.projectNumber !== undefined && projectNumber !== undefined && fromEntry.projectNumber !== projectNumber) {
                         return {
                             success: false,
                             error: `Team entry ${String(from_entry_id)} does not belong to project ${String(projectNumber)}`,
@@ -213,7 +213,7 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                             recoverable: true,
                         }
                     }
-                    if (workspace_id !== '*' && toEntry.projectNumber !== undefined && projectNumber !== undefined && toEntry.projectNumber !== projectNumber) {
+                    if (toEntry.projectNumber !== undefined && projectNumber !== undefined && toEntry.projectNumber !== projectNumber) {
                         return {
                             success: false,
                             error: `Team entry ${String(to_entry_id)} does not belong to project ${String(projectNumber)}`,

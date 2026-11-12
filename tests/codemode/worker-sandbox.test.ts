@@ -174,10 +174,11 @@ describe('WorkerSandbox', () => {
         expect(r4.success).toBe(true)
         expect((r4.result as any).tables).toContain('memory_journal')
 
-        // Test 5: sqlite.schema() calls getStatistics
+        // Test 5: sqlite.schema() returns schema help and does not run getStatistics
         const r5 = await sandbox.execute('return await sqlite.schema();', bindings)
         expect(r5.success).toBe(true)
-        expect((r5.result as any).totalEntries).toBe(100)
+        expect((r5.result as any).group).toBe('schema')
+        expect((r5.result as any).tables).toContain('memory_journal')
 
         // Test 6: sqlite.schema.listTables()
         const r6 = await sandbox.execute('return await sqlite.schema.listTables();', bindings)

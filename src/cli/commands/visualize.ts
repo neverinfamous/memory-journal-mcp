@@ -70,15 +70,17 @@ function renderMermaid(graph: RelationshipGraph): string {
 export async function visualizeAction(options: z.infer<typeof visualizeSchema>, command: Command): Promise<void> {
     const { db, serverOptions } = await getDb(options, command)
     try {
+        const requestedProject = options.defaultProject
         const workspaceId = resolveWorkspaceId(
             options.workspace,
-            options.defaultProject ?? serverOptions.defaultProjectNumber,
+            requestedProject ?? serverOptions.defaultProjectNumber,
             serverOptions
         )
         const graph = db.visualizeRelationships({
             depth: 3,
             limit: 200,
             ...(workspaceId !== undefined ? { workspaceId } : {}),
+            ...(requestedProject !== undefined ? { projectNumber: requestedProject } : {}),
         })
 
         const mermaid = renderMermaid(graph)

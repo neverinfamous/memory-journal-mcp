@@ -1,5 +1,6 @@
 import { getGitHubIntegration } from '../github/github-integration/index.js'
 import type { ToolContext } from '../types/index.js'
+import { uniqueWorkspaceForProject } from './write-scope.js'
 
 /**
  * Resolve a GitHub issue URL dynamically based on project context.
@@ -19,28 +20,27 @@ export async function resolveIssueUrl(
     if (existingUrl) return existingUrl
     if (issueNumber === undefined) return undefined
 
-    // 1. Dynamic Project Registry Resolution
-    if (projectNumber !== undefined && context.config?.projectRegistry) {
-        const entry = Object.entries(context.config.projectRegistry).find(
-            ([_, v]) => v.project_number === projectNumber
+    // 1. Dynamic Project Registry Resolution. A supplied number that is missing
+    // or shared by more than one workspace does not borrow another repository.
+    if (projectNumber !== undefined) {
+        const registry = context.config?.projectRegistry
+        const workspaceId = uniqueWorkspaceForProject(projectNumber, registry)
+        const entry = workspaceId !== undefined ? registry?.[workspaceId] : undefined
+        if (entry?.path === undefined) return undefined
+        const targetGithub = getGitHubIntegration(
+            entry.path,
+            undefined,
+            process.env['GITHUB_TOKEN']
         )
-        if (entry) {
-            // Instantiate GitHubIntegration for the resolved path
-            // to extract the correct owner/repo directly from the target filesystem
-            const targetGithub = getGitHubIntegration(
-                entry[1].path,
-                undefined,
-                process.env['GITHUB_TOKEN']
-            )
-            const repoInfo = await targetGithub.getRepoInfo()
-            const host = process.env['GITHUB_HOST'] ?? 'github.com'
-            if (repoInfo.owner && repoInfo.repo) {
-                return `https://${host}/${repoInfo.owner}/${repoInfo.repo}/issues/${String(issueNumber)}`
-            }
+        const repoInfo = await targetGithub.getRepoInfo()
+        const host = process.env['GITHUB_HOST'] ?? 'github.com'
+        if (repoInfo.owner && repoInfo.repo) {
+            return `https://${host}/${repoInfo.owner}/${repoInfo.repo}/issues/${String(issueNumber)}`
         }
+        return undefined
     }
 
-    // 2. Fallback to globally repo info if available
+    // 2. Omitted project number may use the process repo cache.
     if (context.github) {
         const host = process.env['GITHUB_HOST'] ?? 'github.com'
         const cachedRepo =

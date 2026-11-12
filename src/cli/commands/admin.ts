@@ -95,9 +95,10 @@ export async function pruneAction(options: z.infer<typeof pruneSchema>, command:
             process.stdout.write(JSON.stringify(serverOptions, null, 2) + '\n')
             return
         }
+        const requestedProject = options.defaultProject
         const workspaceId = resolveWorkspaceId(
             options.workspace,
-            options.defaultProject ?? serverOptions.defaultProjectNumber,
+            requestedProject ?? serverOptions.defaultProjectNumber,
             serverOptions
         )
         const fromCli = (key: string): boolean => command.getOptionValueSource(key) === 'cli'
@@ -127,6 +128,7 @@ export async function pruneAction(options: z.infer<typeof pruneSchema>, command:
                 serverOptions.pruneDryRun === true,
             excludeTags: parsedExcludeTags,
             ...(workspaceId !== undefined ? { workspaceId } : {}),
+            ...(requestedProject !== undefined ? { projectNumber: requestedProject } : {}),
         })
         if (options.json === true) {
             process.stdout.write(JSON.stringify(result) + '\n')

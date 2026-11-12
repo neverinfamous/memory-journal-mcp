@@ -36,15 +36,38 @@ export function exactRegistryKey(
     return undefined
 }
 
+export function workspacesForProject(
+    projectNumber: number,
+    registry: ProjectRegistry | undefined
+): string[] {
+    if (registry === undefined) return []
+    const matches: string[] = []
+    for (const [key, entry] of Object.entries(registry)) {
+        if (entry.project_number === projectNumber) matches.push(key)
+    }
+    return matches
+}
+
+export function uniqueWorkspaceForProject(
+    projectNumber: number,
+    registry: ProjectRegistry | undefined
+): string | undefined {
+    const matches = workspacesForProject(projectNumber, registry)
+    return matches.length === 1 ? matches[0] : undefined
+}
+
 export function workspaceForProject(
     projectNumber: number,
     registry: ProjectRegistry | undefined
 ): string | undefined {
-    if (registry === undefined) return undefined
-    for (const [key, entry] of Object.entries(registry)) {
-        if (entry.project_number === projectNumber) return key
+    const matches = workspacesForProject(projectNumber, registry)
+    if (matches.length > 1) {
+        throw new ValidationError(
+            `project_number ${String(projectNumber)} is registered to more than one workspace.`,
+            { projectNumber }
+        )
     }
-    return undefined
+    return matches[0]
 }
 
 function suppliedProject(projectNumber: number | null | undefined): number | undefined {

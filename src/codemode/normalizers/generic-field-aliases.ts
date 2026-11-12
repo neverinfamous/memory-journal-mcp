@@ -303,17 +303,10 @@ export function resolveCreateEntryProjectContext(obj: Record<string, unknown>): 
     if (
         resolved.workspaceId !== undefined &&
         resolved.workspaceId !== '' &&
-        (obj['workspace_id'] === undefined ||
-            obj['workspace_id'] === '' ||
-            obj['workspace_id'] === 'default')
+        resolved.workspaceId !== 'default' &&
+        (obj['workspace_id'] === undefined || obj['workspace_id'] === '')
     ) {
-        if (resolved.workspaceId !== 'default') {
-            obj['workspace_id'] = resolved.workspaceId
-        } else if (process.env['MCP_WORKSPACE_ID'] !== undefined && process.env['MCP_WORKSPACE_ID'] !== '') {
-            obj['workspace_id'] = process.env['MCP_WORKSPACE_ID']
-        } else {
-            delete obj['workspace_id']
-        }
+        obj['workspace_id'] = resolved.workspaceId
     }
     const wsAfter = obj['workspace_id']
     const concreteAfter =

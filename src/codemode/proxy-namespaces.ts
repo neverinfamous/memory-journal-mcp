@@ -7,7 +7,6 @@ import { wrapResult } from './worker-result-proxy.js'
 import { wrapPromise } from './proxy-helpers.js'
 import { VERSION } from '../version.js'
 import { ENTRY_TYPES, SIGNIFICANCE_TYPES } from '../handlers/tools/schemas/constants-and-primitives.js'
-import { methodTokens } from './method-tokens.js'
 
 export type InvokeRpcFn = (group: string, method: string, args: unknown[]) => Promise<unknown>
 export type SafeRpcCallFn = (group: string, method: string, args: unknown[]) => Promise<unknown>
@@ -24,6 +23,56 @@ function unavailableTool(tool: string): Promise<unknown> {
         tool
     )
 }
+
+function compactMethodName(name: string): string {
+    return name.toLowerCase().replace(/[_-]/g, '')
+}
+
+const PROJECT_LIST_METHODS = new Set([
+    'list',
+    'listprojects',
+    'listproject',
+    'getprojects',
+    'all',
+    'getall',
+    'projects',
+])
+const PROJECT_GET_METHODS = new Set(['get', 'getproject', 'find', 'findproject'])
+const PROJECT_UPDATE_METHODS = new Set(['update', 'updateproject', 'edit', 'editproject'])
+const PROJECT_CREATE_METHODS = new Set(['create', 'createproject', 'register', 'registerproject', 'add', 'addproject'])
+const PROJECT_DELETE_METHODS = new Set([
+    'delete',
+    'deleteproject',
+    'deleteall',
+    'remove',
+    'removeproject',
+    'removeall',
+])
+const TAG_LIST_METHODS = new Set([
+    'list',
+    'listtags',
+    'get',
+    'gettags',
+    'all',
+    'search',
+    'find',
+    'tags',
+    'tag',
+])
+const TAG_MERGE_METHODS = new Set(['merge', 'mergetags'])
+const SYSTEM_STATS_METHODS = new Set([
+    'stats',
+    'status',
+    'health',
+    'info',
+    'check',
+    'sys',
+    'system',
+    'diagnostics',
+    'adapters',
+    'getstatistics',
+    'statistics',
+])
 
 const TABLES = [
     'memory_journal',
@@ -153,16 +202,12 @@ export function createProjectsProxy(
             if (typeof p === 'symbol' || p === 'then') return undefined
             if (p in t) return Reflect.get(t, p) as unknown
             if (typeof p === 'string') {
-                const tokens = methodTokens(p)
-                const has = (token: string): boolean => tokens.includes(token)
-                // [INVARIANT] deleteAll tokenizes to delete+all and must not hit the list handler.
-                if (has('list') || (has('all') && !has('delete') && !has('remove'))) return adminListProjects
-                if (has('get') || has('find')) return adminGetProject
-                if (has('update') || has('edit')) return adminUpdateProject
-                if (has('create') || has('register') || has('add')) return adminRegisterProject
-                if ((has('delete') || has('remove')) && !has('list') && !has('get')) {
-                    return adminDeleteProject
-                }
+                const compact = compactMethodName(p)
+                if (PROJECT_DELETE_METHODS.has(compact)) return adminDeleteProject
+                if (PROJECT_LIST_METHODS.has(compact)) return adminListProjects
+                if (PROJECT_GET_METHODS.has(compact)) return adminGetProject
+                if (PROJECT_UPDATE_METHODS.has(compact)) return adminUpdateProject
+                if (PROJECT_CREATE_METHODS.has(compact)) return adminRegisterProject
             }
             return Reflect.get(t, p) as unknown
         },
@@ -212,11 +257,9 @@ export function createTagsProxy(
             if (typeof p === 'symbol' || p === 'then') return undefined
             if (p in t) return Reflect.get(t, p) as unknown
             if (typeof p === 'string') {
-                const tokens = methodTokens(p)
-                if (tokens.includes('merge')) return adminMergeTags
-                if (tokens.some((tok) => ['list', 'get', 'all', 'search', 'find', 'tags', 'tag'].includes(tok))) {
-                    return coreListTags
-                }
+                const compact = compactMethodName(p)
+                if (TAG_MERGE_METHODS.has(compact)) return adminMergeTags
+                if (TAG_LIST_METHODS.has(compact)) return coreListTags
             }
             return Reflect.get(t, p) as unknown
         },
@@ -259,10 +302,7 @@ export function createSystemProxy(
             if (typeof p === 'symbol' || p === 'then') return undefined
             if (p in t) return Reflect.get(t, p) as unknown
             if (typeof p === 'string') {
-                const tokens = methodTokens(p)
-                if (tokens.some((tok) => ['stats', 'status', 'health', 'info', 'check', 'sys', 'system', 'diagnostics', 'adapters'].includes(tok))) {
-                    return getStats
-                }
+                if (SYSTEM_STATS_METHODS.has(compactMethodName(p))) return getStats
             }
             return Reflect.get(t, p) as unknown
         },

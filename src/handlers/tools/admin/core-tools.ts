@@ -15,6 +15,14 @@ import {
 import { ErrorFieldsMixin } from '../error-fields-mixin.js'
 import { relaxedNumber } from '../schemas.js'
 
+function wildcardProjectMismatch(
+    workspaceId: string | undefined,
+    projectNumber: number | undefined,
+    entryProject: number | null | undefined
+): boolean {
+    return workspaceId === '*' && projectNumber !== undefined && entryProject !== projectNumber
+}
+
 export function getCoreTools(context: ToolContext): ToolDefinition[] {
     const { db, vectorManager } = context;
     return [
@@ -156,6 +164,22 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
+                    if (workspace_id === '*' && project_number !== undefined) {
+                        const scoped = db.getEntryByIdIncludeDeleted(entry_id, '*')
+                        if (wildcardProjectMismatch(workspace_id, project_number, scoped?.projectNumber)) {
+                            return {
+                                success: false,
+                                entryId: entry_id,
+                                permanent,
+                                error: `Entry ${String(entry_id)} not found`,
+                                code: 'RESOURCE_NOT_FOUND',
+                                category: 'resource',
+                                suggestion: 'Verify the entry ID and project number, and try again',
+                                recoverable: true,
+                            }
+                        }
+                    }
+
                     const success = db.deleteEntry(entry_id, permanent, wsId)
 
                     if (!success) {
@@ -247,6 +271,20 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         const existingByPk = db.getEntryByIdIncludeDeleted(entry_id, '*')
                         if (existingByPk?.workspaceId !== undefined) {
                             wsId = existingByPk.workspaceId
+                        }
+                    }
+                    if (workspace_id === '*' && project_number !== undefined) {
+                        const scoped = db.getEntryByIdIncludeDeleted(entry_id, '*')
+                        if (wildcardProjectMismatch(workspace_id, project_number, scoped?.projectNumber)) {
+                            return {
+                                success: false,
+                                entryId: entry_id,
+                                error: `Entry ${String(entry_id)} not found or not deleted`,
+                                code: 'RESOURCE_NOT_FOUND',
+                                category: 'resource',
+                                suggestion: 'Verify the entry ID and project number',
+                                recoverable: true,
+                            }
                         }
                     }
                     const success = db.restoreEntry(entry_id, wsId)

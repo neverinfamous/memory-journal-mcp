@@ -12,6 +12,7 @@ interface LifecycleOptions {
     dryRun?: boolean
     excludeTags?: string[]
     workspaceId?: string
+    projectNumber?: number
 }
 
 interface LifecycleResult {
@@ -43,6 +44,7 @@ interface CandidateScope {
     excludeTags: string[]
     /** Undefined means database-wide (omitted workspaceId or '*'). */
     scopedWorkspace: string | undefined
+    scopedProject: number | undefined
 }
 
 const tagExclusionSql = (idColumn: string, tags: string[]): string =>
@@ -55,7 +57,7 @@ const tagExclusionSql = (idColumn: string, tags: string[]): string =>
         : ''
 
 function buildHardDeleteQuery(options: LifecycleOptions, scope: CandidateScope): CandidateQuery {
-    const { excludeTags, scopedWorkspace } = scope
+    const { excludeTags, scopedWorkspace, scopedProject } = scope
     const sql = `
             SELECT id, CAST((julianday('now') - julianday(deleted_at)) AS INTEGER) as age_days
             FROM memory_journal
@@ -63,11 +65,13 @@ function buildHardDeleteQuery(options: LifecycleOptions, scope: CandidateScope):
               AND julianday('now') - julianday(deleted_at) > ?
               ${tagExclusionSql('id', excludeTags)}
               ${scopedWorkspace !== undefined ? 'AND workspace_id = ?' : ''}
+              ${scopedProject !== undefined ? 'AND project_number = ?' : ''}
         `
     const params: unknown[] = [
         options.hardDeleteOlderThanDays,
         ...excludeTags,
         ...(scopedWorkspace !== undefined ? [scopedWorkspace] : []),
+        ...(scopedProject !== undefined ? [scopedProject] : []),
     ]
     return { sql, params }
 }
@@ -77,7 +81,7 @@ function buildPruneQuery(
     scope: CandidateScope,
     importanceExpr: string
 ): CandidateQuery {
-    const { excludeTags, scopedWorkspace } = scope
+    const { excludeTags, scopedWorkspace, scopedProject } = scope
     const sql = `
             SELECT e.id, ${importanceExpr} as importance_score
             FROM memory_journal e
@@ -91,12 +95,14 @@ function buildPruneQuery(
               AND COALESCE(rs.rel_count, 0) = 0
               ${tagExclusionSql('e.id', excludeTags)}
               ${scopedWorkspace !== undefined ? 'AND e.workspace_id = ?' : ''}
+              ${scopedProject !== undefined ? 'AND e.project_number = ?' : ''}
         `
     const params: unknown[] = [
         options.pruneOlderThanDays,
         options.importanceThreshold,
         ...excludeTags,
         ...(scopedWorkspace !== undefined ? [scopedWorkspace] : []),
+        ...(scopedProject !== undefined ? [scopedProject] : []),
     ]
     return { sql, params }
 }
@@ -106,7 +112,7 @@ function buildArchiveQuery(
     scope: CandidateScope,
     importanceExpr: string
 ): CandidateQuery {
-    const { excludeTags, scopedWorkspace } = scope
+    const { excludeTags, scopedWorkspace, scopedProject } = scope
     const sql = `
             SELECT e.id, ${importanceExpr} as importance_score
             FROM memory_journal e
@@ -117,12 +123,14 @@ function buildArchiveQuery(
             AND ${importanceExpr} < ?
             ${tagExclusionSql('e.id', excludeTags)}
             ${scopedWorkspace !== undefined ? 'AND e.workspace_id = ?' : ''}
+            ${scopedProject !== undefined ? 'AND e.project_number = ?' : ''}
         `
     const params: unknown[] = [
         options.archiveOlderThanDays,
         options.importanceThreshold,
         ...excludeTags,
         ...(scopedWorkspace !== undefined ? [scopedWorkspace] : []),
+        ...(scopedProject !== undefined ? [scopedProject] : []),
     ]
     return { sql, params }
 }
@@ -138,6 +146,7 @@ function buildCandidateQueries(options: LifecycleOptions): CandidateQueries {
             options.workspaceId !== undefined && options.workspaceId !== '*'
                 ? options.workspaceId
                 : undefined,
+        scopedProject: options.projectNumber,
     }
 
     return {
@@ -298,6 +307,7 @@ export class LifecycleOperations {
         dryRun?: boolean
         excludeTags?: string[]
         workspaceId?: string
+        projectNumber?: number
     }): {
         archivedCount: number
         prunedCount: number

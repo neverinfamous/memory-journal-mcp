@@ -53,8 +53,8 @@ export function resolveEntryAnchors(
 
         const registry = context.config?.projectRegistry ?? loadProjectRegistryFromConfig()
         const canonicalKey = findCanonicalRegistryKey(workspaceId, registry) ?? workspaceId
-        const repoPath =
-            (registry !== undefined ? registry[canonicalKey]?.path : undefined) ?? process.cwd()
+        const repoPath = registry !== undefined ? registry[canonicalKey]?.path : undefined
+        if (repoPath === undefined || repoPath.length === 0) return undefined
 
         const output = execFileSync(
             'git',

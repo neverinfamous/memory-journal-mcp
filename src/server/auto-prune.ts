@@ -61,6 +61,8 @@ export interface AutoPruneOptions {
     excludeTags?: string[]
     /** Optional workspace ID to scope auto-prune when configured */
     workspaceId?: string
+    /** When set, only rows with this project number are eligible. */
+    projectNumber?: number
 }
 
 export interface AutoPruneResult {
@@ -155,6 +157,7 @@ export async function runAutoPrune(
         dryRun,
         excludeTags,
         workspaceId,
+        projectNumber,
     } = options
 
     // ── Step 1: Safety backup ───────────────────────────────────────────
@@ -186,6 +189,7 @@ export async function runAutoPrune(
         dryRun,
         excludeTags,
         workspaceId,
+        ...(projectNumber !== undefined ? { projectNumber } : {}),
     })
 
     if (dryRun) {

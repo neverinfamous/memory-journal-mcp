@@ -2,6 +2,7 @@ import type { ProjectRegistryEntry, ToolHandlerConfig } from '../types/index.js'
 import * as os from 'node:os'
 import * as path from 'node:path'
 import * as fs from 'node:fs'
+import { ValidationError } from '../types/errors.js'
 import { logger } from './logger.js'
 
 export interface ResolutionInput {
@@ -248,7 +249,8 @@ function findWorkspaceByProjectNumber(
  * 5. Content / tag keywords, only when 1–4 did not resolve a project
  * 6. Configured default
  *
- * [INVARIANT] `*` and `default` are omitted here so reads can fall through.
+ * [INVARIANT] `*` is omitted so an explicit wildcard stays an admin override.
+ * A stored workspace of `default` is concrete. Only an omitted workspace falls through.
  * Write callers must reject `*` before they persist a row.
  */
 export function resolveProjectContext(
@@ -262,8 +264,7 @@ export function resolveProjectContext(
     const sanitizedWorkspaceId =
         trimmedWorkspaceId === undefined ||
         trimmedWorkspaceId === '' ||
-        trimmedWorkspaceId === '*' ||
-        trimmedWorkspaceId.toLowerCase() === 'default'
+        trimmedWorkspaceId === '*'
             ? undefined
             : trimmedWorkspaceId
 
@@ -275,7 +276,7 @@ export function resolveProjectContext(
             ? cwdMatch
             : undefined
 
-    // 1. Explicit workspace. Its registry project wins over a conflicting project_number and over cwd.
+    // 1. Explicit workspace, including `default`. A conflicting project_number is rejected.
     if (sanitizedWorkspaceId !== undefined) {
         let wsId = sanitizedWorkspaceId
         const canonicalKey = findCanonicalRegistryKey(wsId, registry)
@@ -283,6 +284,17 @@ export function resolveProjectContext(
         const registryProject = canonicalKey
             ? registry?.[canonicalKey]?.project_number
             : registry?.[wsId]?.project_number
+        if (
+            input.project_number !== undefined &&
+            input.project_number !== null &&
+            registryProject !== undefined &&
+            input.project_number !== registryProject
+        ) {
+            throw new ValidationError(
+                `project_number ${String(input.project_number)} does not match workspace '${wsId}', which uses project_number ${String(registryProject)}.`,
+                { workspaceId: wsId, projectNumber: input.project_number }
+            )
+        }
         const projectNumber = registryProject ?? input.project_number ?? undefined
         return { workspaceId: wsId, projectNumber }
     }
@@ -323,6 +335,16 @@ export function resolveProjectContext(
             registry?.[sessionCtx.workspaceId]?.project_number ??
             config?.defaultProjectNumber
         return { workspaceId: sessionCtx.workspaceId, projectNumber: sessionProject }
+    }
+    if (sessionCtx.projectNumber !== undefined) {
+        const sessionWorkspace = findWorkspaceByProjectNumber(sessionCtx.projectNumber, registry)
+        if (sessionWorkspace !== undefined) {
+            return { workspaceId: sessionWorkspace, projectNumber: sessionCtx.projectNumber }
+        }
+        return {
+            workspaceId: config?.defaultWorkspaceId ?? 'default',
+            projectNumber: sessionCtx.projectNumber,
+        }
     }
 
     // 5. Keywords only when no explicit scope, cwd, or session was available.

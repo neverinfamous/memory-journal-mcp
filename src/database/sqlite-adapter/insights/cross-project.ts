@@ -10,6 +10,7 @@ export function getCrossProjectInsights(
         minEntries: number
         inactiveThresholdDays: number
         workspaceId?: string
+        projectNumber?: number
     }
 ): {
     projects: Record<string, unknown>[]
@@ -18,11 +19,17 @@ export function getCrossProjectInsights(
     let where = 'WHERE deleted_at IS NULL AND project_number IS NOT NULL'
     const sqlParams: unknown[] = []
     const scopeId = effectiveWorkspace(options.workspaceId)
-    const wsFilter = scopeId !== '*' ? ' AND workspace_id = ?' : ''
+    let wsFilter = scopeId !== '*' ? ' AND workspace_id = ?' : ''
     const wsParams: unknown[] = scopeId !== '*' ? [scopeId] : []
 
     where += wsFilter
     sqlParams.push(...wsParams)
+    if (options.projectNumber !== undefined) {
+        where += ' AND project_number = ?'
+        sqlParams.push(options.projectNumber)
+        wsFilter += ' AND project_number = ?'
+        wsParams.push(options.projectNumber)
+    }
 
     if (options.startDate !== undefined && options.startDate.length > 0) {
         let start = options.startDate
@@ -151,17 +158,19 @@ function queryInactiveProjects(
 /** Select the entries to render in the relationship graph (by connected entry, tags, or all linked). */
 function queryGraphEntries(
     connection: NativeConnectionManager,
-    options: { entryId?: number; tags?: string[]; depth: number; limit: number },
+    options: { entryId?: number; tags?: string[]; depth: number; limit: number; projectNumber?: number },
     scopeId: string
 ): QueryResult[] {
     const wsFilter = scopeId !== '*' ? ' AND mj.workspace_id = ?' : ''
     const wsParam = scopeId !== '*' ? [scopeId] : []
+    const projSql = options.projectNumber !== undefined ? ' AND mj.project_number = ?' : ''
+    const projParam = options.projectNumber !== undefined ? [options.projectNumber] : []
 
     if (options.entryId !== undefined) {
         return connection.exec(
             `
             WITH RECURSIVE connected_entries(id, distance) AS (
-                SELECT id, 0 FROM memory_journal mj WHERE mj.id = ? AND mj.deleted_at IS NULL${wsFilter}
+                SELECT id, 0 FROM memory_journal mj WHERE mj.id = ? AND mj.deleted_at IS NULL${wsFilter}${projSql}
                 UNION
                 SELECT DISTINCT
                     CASE
@@ -176,10 +185,10 @@ function queryGraphEntries(
             SELECT DISTINCT mj.id, mj.entry_type, mj.content, mj.is_personal
             FROM memory_journal mj
             JOIN connected_entries ce ON mj.id = ce.id
-            WHERE mj.deleted_at IS NULL${wsFilter}
+            WHERE mj.deleted_at IS NULL${wsFilter}${projSql}
             LIMIT ?
         `,
-            [options.entryId, ...wsParam, options.depth, ...wsParam, options.limit]
+            [options.entryId, ...wsParam, ...projParam, options.depth, ...wsParam, ...projParam, options.limit]
         )
     }
     if (options.tags !== undefined && options.tags.length > 0) {
@@ -188,7 +197,7 @@ function queryGraphEntries(
             `
             SELECT DISTINCT mj.id, mj.entry_type, mj.content, mj.is_personal
             FROM memory_journal mj
-            WHERE mj.deleted_at IS NULL${wsFilter}
+            WHERE mj.deleted_at IS NULL${wsFilter}${projSql}
               AND mj.id IN (
                   SELECT et.entry_id FROM entry_tags et
                   JOIN tags t ON et.tag_id = t.id
@@ -196,14 +205,14 @@ function queryGraphEntries(
               )
             LIMIT ?
         `,
-            [...wsParam, ...options.tags, options.limit]
+            [...wsParam, ...projParam, ...options.tags, options.limit]
         )
     }
     return connection.exec(
         `
             SELECT DISTINCT mj.id, mj.entry_type, mj.content, mj.is_personal
             FROM memory_journal mj
-            WHERE mj.deleted_at IS NULL${wsFilter}
+            WHERE mj.deleted_at IS NULL${wsFilter}${projSql}
               AND mj.id IN (
                   SELECT DISTINCT from_entry_id FROM relationships
                   UNION
@@ -212,8 +221,8 @@ function queryGraphEntries(
             ORDER BY mj.id DESC
             LIMIT ?
         `,
-        [...wsParam, options.limit]
-    )
+            [...wsParam, ...projParam, options.limit]
+        )
 }
 
 export function visualizeRelationships(
@@ -225,6 +234,7 @@ export function visualizeRelationships(
         depth: number
         limit: number
         workspaceId?: string
+        projectNumber?: number
     }
 ): {
     nodes: {

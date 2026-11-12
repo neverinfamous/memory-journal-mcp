@@ -116,7 +116,7 @@ export function projectAliasTarget(name: string): 'get_project' | 'list_projects
 
 function isProjectAlias(name: string): boolean {
     return (
-        name.startsWith('mj.projects') ||
+        name === 'mj.projects' ||
         methodTokens(name).some((token) => token === 'project' || token === 'projects')
     )
 }

@@ -221,30 +221,11 @@ export const schemaHelpFn = (): Promise<unknown> =>
  * Creates the `schema` shim proxy for `shimMj`.
  */
 export function createSchemaShim(shimMj: Record<string, unknown>): object {
-    const getStatsFn = (): ((...args: unknown[]) => unknown) | undefined => {
-        const analyticsGroup = shimMj['analytics']
-        if (isTargetLike(analyticsGroup)) {
-            const fn = Reflect.get(analyticsGroup, 'getStatistics') as unknown
-            if (typeof fn === 'function') {
-                return fn as (...args: unknown[]) => unknown
-            }
-        }
-        return undefined
-    }
-
-    const schemaCallable = function (...args: unknown[]): unknown {
-        const fn = getStatsFn()
-        if (fn !== undefined) {
-            return fn(...args)
-        }
+    const schemaCallable = function (): unknown {
         return schemaHelpFn()
     }
     return new Proxy(schemaCallable, {
-        apply(_t, _thisArg, args: unknown[]): unknown {
-            const fn = getStatsFn()
-            if (fn !== undefined) {
-                return Reflect.apply(fn, undefined, args)
-            }
+        apply(): unknown {
             return schemaHelpFn()
         },
         get(_t, p: string | symbol): unknown {

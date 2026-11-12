@@ -92,7 +92,7 @@ export function getCmsSupervisorPromptDefinitions(): InternalPromptDef[] {
             handler: (args: Record<string, string> | undefined, db: IDatabaseAdapter) => {
                 const parsed = cmsSupervisorArgsSchema.safeParse(args ?? {})
                 const lookbackHours = parsed.success ? parsed.data.lookbackHours : 24
-                const autoRestore = parsed.success ? parsed.data.autoRestore : true
+                const autoRestore = parsed.success ? parsed.data.autoRestore : false
                 const latestNremSnippet = fetchLatestNremSnippet(db)
                 const deletedSnippet = fetchDeletedEntriesSnapshot(db)
 

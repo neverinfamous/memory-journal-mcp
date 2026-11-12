@@ -135,7 +135,7 @@ export interface IDatabaseAdapter {
         projectNumber?: number,
         offset?: number
     ): { entries: JournalEntry[]; nextCursor?: string }
-    getEntriesPage(offset: number, limit: number, workspaceId?: string): { entries: JournalEntry[]; nextCursor?: string }
+    getEntriesPage(offset: number, limit: number, workspaceId?: string, projectNumber?: number): { entries: JournalEntry[]; nextCursor?: string }
     getActiveEntryCount(workspaceId?: string): number
     updateEntry(
         id: number,
@@ -291,7 +291,8 @@ export interface IDatabaseAdapter {
         startDate?: string,
         endDate?: string,
         projectBreakdown?: boolean,
-        workspaceId?: string
+        workspaceId?: string,
+        projectNumber?: number
     ): Record<string, unknown>
     getAuthorStatistics(workspaceId?: string): { author: string; count: number }[]
     getAuthorsForEntries(entryIds: number[]): Map<number, string | null>
@@ -378,6 +379,7 @@ export interface IDatabaseAdapter {
         minEntries: number
         inactiveThresholdDays: number
         workspaceId?: string
+        projectNumber?: number
     }): {
         projects: Record<string, unknown>[]
         inactiveProjects: { project_number: number; last_entry_date: string }[]
@@ -390,6 +392,7 @@ export interface IDatabaseAdapter {
         depth: number
         limit: number
         workspaceId?: string
+        projectNumber?: number
     }): {
         nodes: {
             id: string | number
@@ -449,6 +452,7 @@ export interface IDatabaseAdapter {
         dryRun?: boolean
         excludeTags?: string[]
         workspaceId?: string
+        projectNumber?: number
     }): {
         archivedCount: number
         prunedCount: number
