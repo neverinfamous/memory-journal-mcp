@@ -169,6 +169,7 @@ describe('CMS-04 REM Self-Healing Regressions (agent-issues.jsonl & audit teleme
             user: 'alice',
             status: false,
             tool_name: 'delete_entry',
+            workspace_id: '*',
             limit: 20,
         })
     })

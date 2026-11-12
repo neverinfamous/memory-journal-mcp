@@ -387,7 +387,7 @@ describe('VectorSearchManager', () => {
         it('should return zero count when no db', async () => {
             const vmLocal = new VectorSearchManager(undefined as any)
             const stats = await vmLocal.getStats()
-            expect(stats.itemCount).toBe(0)
+            expect(stats.itemCount).toBeNull()
         })
 
         it('should return zero count on error', async () => {
@@ -397,7 +397,7 @@ describe('VectorSearchManager', () => {
             })
 
             const stats = await vm.getStats()
-            expect(stats.itemCount).toBe(0)
+            expect(stats.itemCount).toBeNull()
         })
     })
 
@@ -568,7 +568,7 @@ describe('VectorSearchManager', () => {
             } as any
             const freshVm = new VectorSearchManager(fakeAdapter)
             const stats = freshVm.getStats()
-            expect(stats.itemCount).toBe(0)
+            expect(stats.itemCount).toBeNull()
             expect(stats.dimensions).toBe(0)
         })
 
@@ -585,7 +585,7 @@ describe('VectorSearchManager', () => {
                 throw 'stats fail string error'
             })
             const stats = vm.getStats()
-            expect(stats.itemCount).toBe(0)
+            expect(stats.itemCount).toBeNull()
         })
     })
 })
