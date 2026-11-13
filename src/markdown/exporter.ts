@@ -88,7 +88,8 @@ function buildExportFileContent(entry: ExportableEntry, relationships: readonly 
         mj_id: entry.id,
         entry_type: entry.entryType,
         timestamp: entry.timestamp,
-        ...(entry.workspaceId !== undefined && entry.workspaceId !== 'default'
+        // [INVARIANT] Emit 'default' explicitly so round-trip imports cannot be re-scoped by CWD/keywords.
+        ...(entry.workspaceId !== undefined && entry.workspaceId.trim() !== ''
             ? { workspace_id: entry.workspaceId }
             : {}),
         ...(entry.projectNumber !== undefined ? { project_number: entry.projectNumber } : {}),

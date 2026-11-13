@@ -131,13 +131,13 @@ describe('Code Mode Worker Proxies & Globals', () => {
         expect(DB_TO_JOURNAL['describeTable']).toBeUndefined()
         expect(DB_TO_JOURNAL['count']).toEqual(['analytics', 'getStatistics'])
         expect(isDbMaintenanceCall('listTables')).toBe(true)
-        await expect(createMaintenanceUnavailableFn()()).resolves.toEqual({
+        await expect(createMaintenanceUnavailableFn('listTables')()).resolves.toEqual({
             success: false,
             code: 'VALIDATION_ERROR',
             error: "Schema operation 'listTables' did not run",
         })
         expect(isDbMaintenanceCall('describeTable')).toBe(true)
-        await expect(createMaintenanceUnavailableFn()()).resolves.toEqual({
+        await expect(createMaintenanceUnavailableFn('describeTable')()).resolves.toEqual({
             success: false,
             code: 'VALIDATION_ERROR',
             error: "Schema operation 'describeTable' did not run",

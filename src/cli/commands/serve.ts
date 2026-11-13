@@ -5,6 +5,7 @@ import { ConfigResolver } from '../../utils/config-resolver.js'
 import { buildServerOptions } from '../server-options-builder.js'
 import { type z } from 'zod'
 import { serverOptionsSchema } from '../schemas.js'
+import { dumpConfigAndExit } from '../dump-config.js'
 
 export const serveSchema = serverOptionsSchema
 
@@ -58,31 +59,7 @@ export async function serveAction(options: z.infer<typeof serveSchema>, command:
     }
 
     if (options.dumpConfig === true) {
-        const redactedOptions = JSON.parse(JSON.stringify(serverOptions)) as Record<
-            string,
-            unknown
-        >
-        const maskSensitive = (obj: Record<string, unknown>): void => {
-            for (const key of Object.keys(obj)) {
-                const lowerKey = key.toLowerCase()
-                if (
-                    typeof obj[key] === 'string' &&
-                    (lowerKey.includes('token') ||
-                        lowerKey.includes('secret') ||
-                        lowerKey.includes('issuer') ||
-                        lowerKey.includes('uri') ||
-                        lowerKey.includes('password') ||
-                        lowerKey.includes('key'))
-                ) {
-                    obj[key] = '[REDACTED]'
-                } else if (typeof obj[key] === 'object' && obj[key] !== null) {
-                    maskSensitive(obj[key] as Record<string, unknown>)
-                }
-            }
-        }
-        maskSensitive(redactedOptions)
-        process.stdout.write(JSON.stringify(redactedOptions, null, 2) + '\n')
-        process.exit(0)
+        dumpConfigAndExit(serverOptions)
     }
 
     logger.info('Starting Memory Journal MCP Server', {

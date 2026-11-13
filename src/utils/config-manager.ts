@@ -35,7 +35,7 @@ export class ConfigManager extends EventEmitter {
     private config: DynamicConfig
     private readonly initialCodemodeFullAccess: boolean
     private configFilePath?: string | undefined
-    private watcher?: fs.FSWatcher
+    private watcher: fs.FSWatcher | undefined
     private debounceTimer?: ReturnType<typeof setTimeout>
     private isWriting = false
     /** True when the current rawToolFilter originated from the config file (not CLI/env). */
@@ -109,14 +109,33 @@ export class ConfigManager extends EventEmitter {
             if (this.config.briefingConfig.workflowStatusBreakdown !== undefined) parsed['briefingWorkflowStatus'] = this.config.briefingConfig.workflowStatusBreakdown
             if (this.config.briefingConfig.copilotReviews !== undefined) parsed['briefingCopilot'] = this.config.briefingConfig.copilotReviews
 
+            let serialized: string
             if (this.configFilePath.endsWith('.json')) {
-                fs.writeFileSync(this.configFilePath, JSON.stringify(parsed, null, 2), 'utf-8')
+                serialized = JSON.stringify(parsed, null, 2)
             } else {
                 // To avoid destroying yaml comments, ideally we'd use a robust yaml editor.
                 // But this is just a best effort fallback for CLI config rewrites.
                 logger.warning('YAML file updates from update_configuration tool will drop comments.', { module: 'ConfigManager' })
-                const yamlStr = (stringifyYaml as (value: unknown) => string)(parsed)
-                fs.writeFileSync(this.configFilePath, yamlStr, 'utf-8')
+                serialized = (stringifyYaml as (value: unknown) => string)(parsed)
+            }
+            // [INVARIANT] Atomic temp+rename so a crash or concurrent reader never sees a truncated config.
+            const tmpPath = `${this.configFilePath}.${String(process.pid)}.${String(Date.now())}.tmp`
+            try {
+                fs.writeFileSync(tmpPath, serialized, 'utf-8')
+                fs.renameSync(tmpPath, this.configFilePath)
+            } catch (writeErr: unknown) {
+                try {
+                    fs.rmSync(tmpPath, { force: true })
+                } catch {
+                    // [SIDE-EFFECT] Best-effort temp cleanup; the original error is reported below.
+                }
+                throw writeErr
+            }
+            // [SIDE-EFFECT] rename replaces the inode, so re-arm the watcher on the new file.
+            if (this.watcher !== undefined) {
+                this.watcher.close()
+                this.watcher = undefined
+                this.watchFile()
             }
         } catch (e: unknown) {
             const message = e instanceof Error ? e.message : String(e)

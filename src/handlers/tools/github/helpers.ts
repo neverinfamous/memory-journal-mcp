@@ -226,6 +226,18 @@ export async function resolveOwnerRepo(
         } else {
             toolGithub = candidate
         }
+    } else if (input.workspace_id?.trim() === '*' && matchedRegistryKey === undefined) {
+        // [BOUNDARY] The read wildcard never silently binds to the server CWD repository.
+        return {
+            error: true,
+            response: {
+                success: false,
+                error: "workspace_id '*' cannot identify a GitHub repository. Provide repo (owner/repo), a concrete workspace_id, or a registered project_number.",
+                code: 'VALIDATION_ERROR',
+                category: 'validation',
+                recoverable: true,
+            },
+        }
     } else if (context.github && input.workspace_id?.trim().toLowerCase() !== 'default') {
         toolGithub = context.github
     }

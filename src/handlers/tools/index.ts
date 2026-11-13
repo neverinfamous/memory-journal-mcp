@@ -94,6 +94,18 @@ const MUTATING_DUMMY_TOOL_NAMES = new Set<string>([
 
 const EXEC_DUMMY_TOOL_NAMES = new Set<string>(DUMMY_SQL_EXECUTION_TOOL_NAMES)
 
+/** [INTENT] H5: map mutating dummy aliases to the real tool they execute so filters apply to it. */
+function dummyMutationTarget(name: string): string | undefined {
+    if (EXEC_DUMMY_TOOL_NAMES.has(name)) return 'mj_execute_code'
+    const lower = name.toLowerCase()
+    if (name === 'create_entry' || DUMMY_ENTRY_CREATION_TOOL_NAMES.includes(name) || /create_?entry/i.test(lower)) {
+        return 'create_entry'
+    }
+    if (/update_?entry/i.test(lower)) return 'update_entry'
+    if (/delete_?entry/i.test(lower)) return 'delete_entry'
+    return undefined
+}
+
 function isDummyToolAllowedByFilter(
     name: string,
     filterConfig: ToolFilterConfig,
@@ -102,22 +114,28 @@ function isDummyToolAllowedByFilter(
     if (!agentHealingEnabled || !DUMMY_HEALING_TOOL_NAMES.has(name)) {
         return false
     }
-    const rawFilter = filterConfig.raw.toLowerCase()
-    const isReadonlyFilter = rawFilter.includes('readonly') && !rawFilter.includes('-readonly')
+    // [INVARIANT] H5: tokenize the raw filter — substring matching let `-readonly` /
+    // `-create_entry_x` tokens be misread and let unrelated tokens bypass exclusions.
+    const tokens = new Set(
+        filterConfig.raw
+            .toLowerCase()
+            .split(/[\s,]+/)
+            .map((t) => t.trim())
+            .filter((t) => t !== '')
+    )
+    const isReadonlyFilter = tokens.has('readonly') || tokens.has('+readonly')
     if (isReadonlyFilter && MUTATING_DUMMY_TOOL_NAMES.has(name)) {
         return false
     }
-    if (EXEC_DUMMY_TOOL_NAMES.has(name) && !filterConfig.enabledTools.has('mj_execute_code')) {
+    if (tokens.has(`-${name.toLowerCase()}`)) {
         return false
     }
-    const isExplicitDisallow =
-        rawFilter.includes(`-${name.toLowerCase()}`) ||
-        (MUTATING_DUMMY_TOOL_NAMES.has(name) &&
-            !EXEC_DUMMY_TOOL_NAMES.has(name) &&
-            rawFilter.includes('-create_entry') &&
-            (name === 'create_entry' || DUMMY_ENTRY_CREATION_TOOL_NAMES.includes(name)))
-    if (isExplicitDisallow) {
-        return false
+    if (MUTATING_DUMMY_TOOL_NAMES.has(name)) {
+        const target = dummyMutationTarget(name)
+        // A mutating alias is only exposed when the tool it executes is itself enabled.
+        if (target === undefined || !filterConfig.enabledTools.has(target)) {
+            return false
+        }
     }
     return true
 }

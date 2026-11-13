@@ -10,6 +10,7 @@ import { logger } from '../../utils/logger.js'
 import { loadProjectRegistryFromConfig } from '../../utils/workspace-resolver.js'
 import { workspacesForProject } from '../../utils/write-scope.js'
 import type { BriefingConfig } from '../resources/shared.js'
+import { RELATIONSHIP_TYPES } from '../../types/entities.js'
 
 export const WORKFLOW_WORKSPACE_ARGUMENTS = [
     {
@@ -49,9 +50,13 @@ export function getProjectRegistryHint(briefingConfig?: Partial<BriefingConfig>)
 export function buildExplicitAttributionArgs(
     workspaceId: string,
     briefingConfig?: Partial<BriefingConfig>,
-    explicitProjectNumber?: number
+    explicitProjectNumber?: number,
+    explicitDefaultRequested = false
 ): string {
     if (workspaceId === '') return ''
+    // [INVARIANT] Generated snippets never hardcode `workspace_id: "default"` unless the caller
+    // explicitly asked for `default` (C8); omitting it lets the server resolve the project.
+    if (workspaceId.toLowerCase() === 'default' && !explicitDefaultRequested) return ''
     const registry = briefingConfig?.projectRegistry ?? loadProjectRegistryFromConfig()
     const registryNumber = registry?.[workspaceId]?.project_number
     let projNum = registryNumber
@@ -93,7 +98,8 @@ export function generateSummaryPrompt(
     target: 'personal' | 'team',
     workspaceId = 'default',
     briefingConfig?: Partial<BriefingConfig>,
-    projectNumber?: number
+    projectNumber?: number,
+    explicitDefaultRequested = false
 ): { messages: PromptMessage[] } {
     if (target === 'team' && !teamDb) {
         throw new ConfigurationError('Team database not configured')
@@ -120,7 +126,12 @@ export function generateSummaryPrompt(
             : '- No entries yet'
 
     const registryHint = getProjectRegistryHint(briefingConfig)
-    const attributionArgs = buildExplicitAttributionArgs(workspaceId, briefingConfig, projectNumber)
+    const attributionArgs = buildExplicitAttributionArgs(
+        workspaceId,
+        briefingConfig,
+        projectNumber,
+        explicitDefaultRequested
+    )
 
     return {
         messages: [
@@ -147,7 +158,7 @@ auto_context:
   pr: <number>
 relationships: 
   - target_id: 123
-    relation_type: "resolves" # 'resolves', 'depends_on', 'implements', 'relates_to'
+    relation_type: "resolved" # one of: ${RELATIONSHIP_TYPES.join(', ')}
 ---
 \`\`\`
 
@@ -193,10 +204,16 @@ export function generateEntryPrompt(
     target: 'personal' | 'team',
     workspaceId = 'default',
     briefingConfig?: Partial<BriefingConfig>,
-    projectNumber?: number
+    projectNumber?: number,
+    explicitDefaultRequested = false
 ): { messages: PromptMessage[] } {
     const registryHint = getProjectRegistryHint(briefingConfig)
-    const attributionArgs = buildExplicitAttributionArgs(workspaceId, briefingConfig, projectNumber)
+    const attributionArgs = buildExplicitAttributionArgs(
+        workspaceId,
+        briefingConfig,
+        projectNumber,
+        explicitDefaultRequested
+    )
 
     return {
         messages: [
@@ -210,7 +227,7 @@ export function generateEntryPrompt(
 At the top of your markdown file, include a YAML frontmatter block with the following keys:
 \`\`\`yaml
 ---
-type: "architecture" # MUST be "decision", "bug_fix", "milestone", or "architecture" (do NOT use "retrospective")
+type: "project_decision" # canonical entry_type, e.g. project_decision, bug_fix, milestone, technical_note, feature_implementation (do NOT use "retrospective")
 tags: ["domain-tag", "another-tag"]
 project: <Integer ID or repository name - OPTIONAL, auto-resolved from active workspace>
 impact: <Decimal score analyzing blast radius (e.g., 0.9+ for core architecture, 0.1 for docs)>
@@ -218,7 +235,7 @@ trust: <Decimal score analyzing testing rigor. 0.3-0.5 for unverified, 0.8-1.0 i
 validation_status: "passed" # or "none", or "failed"
 relationships: 
   - target_id: 123
-    relation_type: "resolves" # 'resolves', 'depends_on', 'implements', 'relates_to'
+    relation_type: "resolved" # one of: ${RELATIONSHIP_TYPES.join(', ')}
 ---
 \`\`\`
 
@@ -230,7 +247,7 @@ Just provide a concise markdown description of the specific architectural decisi
 ${registryHint}- If you lose track of your project number, workspace, or agent ID, read the \`memory://agent-context/{repo}\` resource to retrieve it instead of reloading the full briefing (which wastes tokens)
 
 **Execution:**
-- **Option 1 (Code Mode / MCP Tool - Recommended):** Execute directly via \`mj.core.createEntry({ content: "...", entry_type: "architecture", tags: ["tag1"]${attributionArgs}${target === 'team' ? ', share_with_team: true' : ''} })\`.
+- **Option 1 (Code Mode / MCP Tool - Recommended):** Execute directly via \`mj.core.createEntry({ content: "...", entry_type: "project_decision", tags: ["tag1"]${attributionArgs}${target === 'team' ? ', share_with_team: true' : ''} })\`.
 - **Option 2 (CLI Scratch File):** Write markdown file (with YAML frontmatter) to your scratch directory (e.g. \`<appDataDir>\\brain\\<conversation-id>\\scratch\\\`) then execute: \`memory-journal-mcp entry create ${target === 'team' ? '--team ' : ''}--file <scratch_dir>/entry.md\``,
                 },
             },
@@ -244,7 +261,8 @@ export function generateUpdateEntryPrompt(
     target: 'personal' | 'team',
     workspaceId = 'default',
     briefingConfig?: Partial<BriefingConfig>,
-    projectNumber?: number
+    projectNumber?: number,
+    explicitDefaultRequested = false
 ): { messages: PromptMessage[] } {
     const targetDb = target === 'team' && teamDb ? teamDb : db
     let entryContext = ''
@@ -279,7 +297,12 @@ ${markUntrustedContent(String(recent['content']))}
     }
 
     const registryHint = getProjectRegistryHint(briefingConfig)
-    const attributionArgs = buildExplicitAttributionArgs(workspaceId, briefingConfig, projectNumber)
+    const attributionArgs = buildExplicitAttributionArgs(
+        workspaceId,
+        briefingConfig,
+        projectNumber,
+        explicitDefaultRequested
+    )
     const cliWorkspaceFlag =
         workspaceId !== 'default' && workspaceId !== '' ? `--workspace ${workspaceId} ` : ''
 

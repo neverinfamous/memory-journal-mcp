@@ -254,7 +254,12 @@ export const DEFAULT_BRIEFING_CONFIG: BriefingConfig = {
 }
 
 /**
- * Resource context for handlers that need extended access
+ * Resolve the workspace a resource/prompt read should scope to.
+ * Priority: configured non-`default` workspace > configured project number (unless the
+ * configured workspace is `default`) > session workspace > session project > registered cwd
+ * > `default`.
+ * [INVARIANT] A configured `defaultWorkspaceId: 'default'` must not short-circuit session
+ * context (H1); session is consulted before cwd.
  */
 export function resourceWorkspace(context: {
     briefingConfig?: Partial<BriefingConfig>
@@ -262,28 +267,36 @@ export function resourceWorkspace(context: {
 }): string {
     const cfg = context.briefingConfig
     const id = cfg?.defaultWorkspaceId
-    if (id !== undefined && id.length > 0) {
-        if (id.toLowerCase() === 'default') return 'default'
+    if (id !== undefined && id.length > 0 && id.toLowerCase() !== 'default') {
         return id
     }
+    // [INTENT] A configured `default` is never rewritten from the configured project or cwd,
+    // but an active session still wins over it.
+    const configuredDefault = id?.toLowerCase() === 'default'
     const sessionCtx = getActiveSessionProject(context.runtime)
     const registry = cfg?.projectRegistry ?? loadProjectRegistryFromConfig()
-    if (registry !== undefined) {
-        const projNum =
-            cfg?.defaultProjectNumber ??
-            (process.env['NODE_ENV'] === 'test' || process.env['VITEST'] === 'true'
-                ? undefined
-                : resolveProjectNumberFromPath(process.cwd(), registry)) ??
-            sessionCtx.projectNumber
-        if (projNum !== undefined) {
-            const unique = uniqueWorkspaceForProject(projNum, registry)
-            if (unique !== undefined) return unique
-        }
-    }
+    const uniqueFor = (projNum: number | undefined): string | undefined =>
+        projNum !== undefined && registry !== undefined
+            ? uniqueWorkspaceForProject(projNum, registry)
+            : undefined
+
+    const byConfiguredProject = configuredDefault ? undefined : uniqueFor(cfg?.defaultProjectNumber)
+    if (byConfiguredProject !== undefined) return byConfiguredProject
     if (sessionCtx.workspaceId !== undefined && sessionCtx.workspaceId.length > 0) {
         return sessionCtx.workspaceId
     }
-    return id !== undefined && id.length > 0 ? id : 'default'
+    const bySessionProject = uniqueFor(sessionCtx.projectNumber)
+    if (bySessionProject !== undefined) return bySessionProject
+    if (
+        !configuredDefault &&
+        registry !== undefined &&
+        process.env['NODE_ENV'] !== 'test' &&
+        process.env['VITEST'] !== 'true'
+    ) {
+        const byCwd = uniqueFor(resolveProjectNumberFromPath(process.cwd(), registry))
+        if (byCwd !== undefined) return byCwd
+    }
+    return 'default'
 }
 
 export interface ResourceContext {

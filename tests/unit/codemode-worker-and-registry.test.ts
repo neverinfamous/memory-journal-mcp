@@ -183,20 +183,23 @@ describe('Code Mode Worker Core & Project Registry Ops', () => {
             })
             expect(readCbData).toBe('hello-from-context')
 
-            expect(fsShim.writeFileSync()).toBeUndefined()
-            await expect(fsShim.writeFile()).resolves.toBeUndefined()
-            expect(fsShim.mkdirSync()).toBeUndefined()
-            expect(fsShim.unlinkSync()).toBeUndefined()
+            // [H7] Disabled mutation shims reject with VALIDATION_ERROR instead of silently no-op'ing.
+            expect(() => fsShim.writeFileSync()).toThrow(/VALIDATION_ERROR/)
+            await expect(fsShim.writeFile()).rejects.toThrow(/VALIDATION_ERROR/)
+            expect(() => fsShim.mkdirSync()).toThrow(/VALIDATION_ERROR/)
+            expect(() => fsShim.unlinkSync()).toThrow(/VALIDATION_ERROR/)
             expect(fsShim.readdirSync()).toEqual([])
 
             const pStat = await fsShim.promises.stat()
             expect(pStat.isFile()).toBe(false)
             expect(pStat.isDirectory()).toBe(false)
             await expect(fsShim.promises.readFile()).resolves.toBe('hello-from-context')
-            await expect(fsShim.promises.writeFile()).resolves.toBeUndefined()
+            await expect(fsShim.promises.writeFile()).rejects.toThrow(/VALIDATION_ERROR/)
 
             expect(pathShim.join('a', 'b', 'c.txt')).toBe('a/b/c.txt')
+            expect(pathShim.join('a\\b', '..', 'c.txt')).toBe('a/c.txt')
             expect(pathShim.resolve('/root', 'sub')).toBe('/root/sub')
+            expect(pathShim.basename('C:\\a\\b\\file.md', '.md')).toBe('file')
             expect(pathShim.basename('/a/b/file.md', '.md')).toBe('file')
             expect(pathShim.dirname('/a/b/file.md')).toBe('/a/b')
             expect(pathShim.dirname('file.md')).toBe('.')
@@ -242,11 +245,11 @@ describe('Code Mode Worker Core & Project Registry Ops', () => {
                 '["tag1","tag2"]',
                 'Custom Title'
             )
+            // Positional binding: the surplus 3rd bind has no placeholder and is ignored.
             expect(mockUpdate).toHaveBeenCalledWith({
                 entry_id: 42,
                 content: 'Updated body',
                 tags: ['tag1', 'tag2'],
-                title: 'Custom Title',
             })
 
             const updateInlineStmt = createPreparedStatementShim(

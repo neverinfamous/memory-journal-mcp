@@ -139,14 +139,18 @@ export function createEntriesDomainProxy(target: Record<string, unknown>): unkno
         get(targetFn, p, receiver): unknown {
             if (p in targetFn) return Reflect.get(targetFn, p, receiver) as unknown
             if (typeof p === 'string') {
-                const methodOnCore = getGroupProp(target, 'core', p) ?? getGroupProp(target, 'search', p) ?? getGroupProp(target, 'admin', p)
-                if (typeof methodOnCore === 'function') return methodOnCore
+                // [M7] Exact aliases are checked before the fuzzy group-namespace fallback.
                 if (ENTRY_SEARCH_ALIASES.has(p) && typeof searchFn === 'function') return searchFn
                 if (ENTRY_CREATE_ALIASES.has(p) && typeof createFn === 'function') return createFn
                 if (ENTRY_GET_ALIASES.has(p) && typeof getFn === 'function') return getFn
                 if (ENTRY_UPDATE_ALIASES.has(p) && typeof updateFn === 'function') return updateFn
                 if (ENTRY_DELETE_ALIASES.has(p) && typeof deleteFn === 'function') return deleteFn
+                if (ENTRY_LIST_ALIASES.has(p)) return listFunc
                 if (p === 'listDeletedEntries' || p === 'list_deleted_entries') {
+                    const listDeleted =
+                        getGroupProp(target, 'search', 'list_deleted_entries') ??
+                        getGroupProp(target, 'search', 'listDeletedEntries')
+                    if (typeof listDeleted === 'function') return listDeleted
                     return () =>
                         Promise.resolve({
                             success: false,
@@ -154,7 +158,8 @@ export function createEntriesDomainProxy(target: Record<string, unknown>): unkno
                             code: 'VALIDATION_ERROR',
                         })
                 }
-                if (ENTRY_LIST_ALIASES.has(p)) return listFunc
+                const methodOnCore = getGroupProp(target, 'core', p) ?? getGroupProp(target, 'search', p) ?? getGroupProp(target, 'admin', p)
+                if (typeof methodOnCore === 'function') return methodOnCore
             }
             return Reflect.get(targetFn, p, receiver) as unknown
         },

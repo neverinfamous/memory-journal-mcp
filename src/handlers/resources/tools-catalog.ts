@@ -1,5 +1,6 @@
 import type { InternalResourceDef, ResourceContext } from './shared.js'
 import { getTools } from '../tools/index.js'
+import { TOOL_GROUPS } from '../../filtering/tool-constants.js'
 
 export function getToolsCatalogResourceDefinitions(): InternalResourceDef[] {
     return [
@@ -36,11 +37,15 @@ export function getToolsCatalogResourceDefinitions(): InternalResourceDef[] {
 
                 const activeFilterRaw = filterConfig?.raw ?? 'full'
                 
-                // Group tools
+                // [INTENT] Group by the canonical TOOL_GROUPS membership (M8); icon titles are
+                // display metadata and drift from group names.
+                const groupOf = new Map<string, string>()
+                for (const [groupName, names] of Object.entries(TOOL_GROUPS)) {
+                    for (const name of names) groupOf.set(name, groupName)
+                }
                 const toolsByGroup: Record<string, typeof allTools> = {}
                 for (const tool of allTools) {
-                    // Extract group from icon title as a fallback if needed
-                    const group = tool.icons?.title?.toLowerCase().replace('journal ', '') ?? 'other'
+                    const group = groupOf.get(tool.name) ?? 'other'
                     
                     toolsByGroup[group] ??= []
                     toolsByGroup[group]?.push(tool)

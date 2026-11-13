@@ -21,6 +21,19 @@ export function isInsideStringLiteral(code: string, offset: number): boolean {
                 isEscaped = false
             }
         } else {
+            // [M11] Comments are skipped so quotes inside them never open a fake string literal.
+            if (ch === '/' && code[i + 1] === '/') {
+                const nl = code.indexOf('\n', i)
+                if (nl === -1 || nl >= offset) return false
+                i = nl
+                continue
+            }
+            if (ch === '/' && code[i + 1] === '*') {
+                const end = code.indexOf('*/', i + 2)
+                if (end === -1 || end + 1 >= offset) return false
+                i = end + 1
+                continue
+            }
             if (ch === "'" || ch === '"' || ch === '`') {
                 inString = ch
             }

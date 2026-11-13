@@ -256,6 +256,7 @@ export const CreateGitHubIssueWithEntryOutputSchema = z
                     .object({
                         status: z.string(),
                         set: z.boolean(),
+                        error: z.string().optional(),
                     })
                     .optional(),
             })
@@ -267,6 +268,8 @@ export const CreateGitHubIssueWithEntryOutputSchema = z
             })
             .optional(),
         message: z.string().optional(),
+        warning: z.string().optional(),
+        projectItemError: z.string().optional(),
         error: z.string().optional(),
         requiresUserInput: z.boolean().optional(),
         instruction: z.string().optional(),

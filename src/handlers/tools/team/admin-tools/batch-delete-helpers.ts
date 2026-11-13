@@ -13,6 +13,7 @@ import { enforceEntryOwnership } from '../rbac.js'
 import { resolveWriteWorkspaceId } from '../../write-workspace.js'
 import type { TeamBatchUpdateEntriesSchema } from '../schemas.js'
 import { createBatchProgressReporter, sendProgress } from '../../../../utils/progress-utils.js'
+import { resolveAuthenticatedAuthor } from '../../../../utils/security-utils.js'
 
 export type TeamDbInstance = NonNullable<ToolContext['teamDb']>
 type TeamBatchUpdateInput = z.infer<typeof TeamBatchUpdateEntriesSchema>['updates'][number]
@@ -48,7 +49,7 @@ function buildSingleTeamUpdateItem(
         validationStatus: u.validation_status,
         sessionId: u.session_id,
         workspaceId: resolveWriteWorkspaceId(
-            explicitWs ?? existingWorkspaceId,
+            explicitWs === undefined || explicitWs === '*' ? existingWorkspaceId : explicitWs,
             projectNumber,
             context.config
         ),
@@ -74,16 +75,27 @@ export function buildValidatedTeamBatchUpdates(
     for (const u of rawUpdates) {
         const explicitWs = u.workspace_id ?? rootWorkspaceId
         const explicitPn = u.project_number ?? rootProjectNumber
+        // [INVARIANT] Never infer an existing entry's workspace from content/tags; explicit 'default' is preserved.
         let wsId =
             explicitWs === '*'
                 ? '*'
-                : resolveWriteWorkspaceId(explicitWs, explicitPn, context.config, u.content, u.tags)
+                : resolveWriteWorkspaceId(explicitWs, explicitPn, context.config)
         let existing = teamDb.getEntryById(u.entry_id, wsId)
         if (!existing && explicitWs === undefined && explicitPn === undefined) {
             existing = teamDb.getEntryById(u.entry_id, '*')
             if (existing?.workspaceId !== undefined) wsId = existing.workspaceId
-        } else if (existing?.workspaceId !== undefined && (wsId === '*' || wsId === 'default')) {
+        } else if (existing?.workspaceId !== undefined && (wsId === '*' || explicitWs === undefined)) {
             wsId = existing.workspaceId
+        }
+        if (
+            existing !== null &&
+            existing !== undefined &&
+            explicitWs === '*' &&
+            explicitPn !== undefined &&
+            existing.projectNumber !== explicitPn
+        ) {
+            notFound.push(u.entry_id)
+            continue
         }
         const projectNumber = resolveTeamProjectNumber(
             context,
@@ -130,6 +142,37 @@ export function buildValidatedTeamBatchUpdates(
     }
 
     return { updates, notFound }
+}
+
+/**
+ * Enforce single-entry team ownership. Returns a PERMISSION_DENIED response or null when allowed.
+ */
+export function checkSingleTeamOwnership(
+    teamDb: TeamDbInstance,
+    context: ToolContext,
+    entryId: number,
+    action: 'modify' | 'delete'
+): Record<string, unknown> | null {
+    if (context.config?.codemodeInternalFullAccess === true) return null
+    const author = fetchAuthor(teamDb, entryId)
+    const currentUser = resolveAuthenticatedAuthor()
+    const callerRole =
+        teamDb.isTeamRbacActive()
+            ? teamDb.resolveTeamRole(currentUser, context.config?.teamDefaultRole ?? 'denied')
+            : null
+    try {
+        enforceEntryOwnership(currentUser, author, callerRole)
+        return null
+    } catch {
+        return {
+            success: false,
+            error: `Permission Denied: Only the original author ("${author ?? 'none recorded'}") or a team admin can ${action} this team entry.`,
+            code: 'PERMISSION_DENIED',
+            category: 'auth',
+            suggestion: `You can only ${action === 'modify' ? 'update' : 'delete'} entries that you authored.`,
+            recoverable: false,
+        }
+    }
 }
 
 export function missingProjectNumberResponse(): Record<string, unknown> {

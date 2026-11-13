@@ -401,23 +401,26 @@ export class Scheduler {
 
     private resolveDefaultWorkspace(): string {
         const { defaultWorkspaceId, defaultProjectNumber, projectRegistry } = this.options
+        // [INVARIANT] Background jobs never inherit sticky per-session context (C1): no runtime.
         return resolveWorkspaceId(defaultWorkspaceId, defaultProjectNumber, {
             ...(defaultWorkspaceId !== undefined ? { defaultWorkspaceId } : {}),
             ...(defaultProjectNumber !== undefined ? { defaultProjectNumber } : {}),
             ...(projectRegistry !== undefined ? { projectRegistry } : {}),
-            ...(this.runtime !== undefined ? { runtime: this.runtime } : {}),
         })
     }
 
-    /** Update workspace resolution context after a hot-reloaded configuration change. */
+    /** Replace workspace context on hot reload. [INVARIANT] Absent fields are cleared. */
     updateWorkspaceContext(updates: {
         defaultWorkspaceId?: string
         defaultProjectNumber?: number
         projectRegistry?: ToolHandlerConfig['projectRegistry']
     }): void {
         if (updates.defaultWorkspaceId !== undefined) this.options.defaultWorkspaceId = updates.defaultWorkspaceId
+        else delete this.options.defaultWorkspaceId
         if (updates.defaultProjectNumber !== undefined) this.options.defaultProjectNumber = updates.defaultProjectNumber
+        else delete this.options.defaultProjectNumber
         if (updates.projectRegistry !== undefined) this.options.projectRegistry = updates.projectRegistry
+        else delete this.options.projectRegistry
     }
 
     /** Prune job: auto-prune low-importance old entries. */

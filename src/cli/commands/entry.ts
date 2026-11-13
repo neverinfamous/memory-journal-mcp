@@ -2,6 +2,7 @@ import type { Command } from 'commander'
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import type { RelationshipType, CreateEntryInput, ToolHandlerConfig } from '../../types/index.js'
 import { z } from 'zod'
+import { ValidationError } from '../../types/errors.js'
 import { createEntryOptionsSchema, updateEntryOptionsSchema } from '../schemas.js'
 import {
     getDb,
@@ -185,6 +186,13 @@ export async function createEntryAction(...args: unknown[]): Promise<void> {
         const { content, payload } = await loadCliEntryContentAndPayload(options, config)
 
         let resolvedWs = payload.workspaceId?.trim()
+        // [INVARIANT] `*` is an admin read override and can never be a write target (H4).
+        if (resolvedWs === '*') {
+            throw new ValidationError(
+                "workspace_id '*' cannot be used to create an entry. Pass a concrete workspace.",
+                { workspaceId: '*' }
+            )
+        }
         if (resolvedWs === undefined || resolvedWs === '' || resolvedWs.toLowerCase() === 'test') {
             resolvedWs = undefined
         }
@@ -274,11 +282,15 @@ export async function updateEntryAction(...args: unknown[]): Promise<void> {
         }
         if (payload.entryType !== undefined) updates.entryType = payload.entryType
         if (payload.tags !== undefined) updates.tags = payload.tags
+        // [INVARIANT] A cwd-derived project number is only backfilled onto an unnumbered entry
+        // that lives in a non-`default` workspace; `default` entries stay unnumbered unless the
+        // caller passed an explicit project (C2).
+        const existingIsDefault = existingEntry?.workspaceId?.toLowerCase() === 'default'
         if (
             payload.projectNumber !== undefined &&
             (payload.hasExplicitProject === true ||
-                existingEntry?.projectNumber == null ||
-                existingEntry.projectNumber === 0)
+                (!existingIsDefault &&
+                    (existingEntry?.projectNumber == null || existingEntry.projectNumber === 0)))
         ) {
             updates.projectNumber = payload.projectNumber
         }

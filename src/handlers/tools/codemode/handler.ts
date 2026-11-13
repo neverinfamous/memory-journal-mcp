@@ -202,6 +202,14 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                                 extractAndRecoverEntryCode(originalInput) ??
                                 extractAndRecoverJsonCode(originalInput)
                             if (recoveredCode !== null && recoveredCode !== executionCode) {
+                                // [BOUNDARY] Recovered code is re-validated before it ever runs.
+                                const retryValidation = securityManager.validateCode(recoveredCode)
+                                if (!retryValidation.valid) {
+                                    logger.warning('CODEMODE_RECOVERY_REJECTED', {
+                                        errors: retryValidation.errors,
+                                    })
+                                    return
+                                }
                                 logger.info('CODEMODE_AUTONOMOUS_RECOVERY', {
                                     originalError: execResult.error,
                                     recoveredCode,

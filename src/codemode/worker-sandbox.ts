@@ -17,8 +17,8 @@ import {
     type PoolOptions,
     type SandboxResult,
     type RpcRequest,
-    type RpcResponse,
 } from './types.js'
+import { handleRpcRequest } from './worker-rpc-handler.js'
 
 // =============================================================================
 // Worker Script Path Resolution
@@ -89,7 +89,8 @@ export class WorkerSandbox {
         this.worker.unref()
 
         this.worker.on('message', (msg: { type: string; id: number; result: SandboxResult }) => {
-            if (msg.type === 'RESULT' && this.currentExecution) {
+            // [INVARIANT] Ignore stale RESULT messages from a previous (timed-out) execution.
+            if (msg.type === 'RESULT' && this.currentExecution && msg.id === this.executionId) {
                 clearTimeout(this.currentExecution.timeoutHandle)
                 this.currentExecution.hostPort.close()
                 this.worker?.unref()
@@ -270,79 +271,40 @@ export class WorkerSandbox {
                 maxResultSize = 50 * 1024 * 1024 // Cap at 50MB
             }
 
-            this.worker?.postMessage(
-                {
-                    type: 'EXECUTE',
-                    id: this.executionId,
-                    code,
-                    methodList,
-                    schemaList: schemas,
-                    timeoutMs: effectiveTimeout,
-                    maxResultSize,
-                    rpcPort: workerPort,
-                    contextObj,
-                    readonlyMode,
-                },
-                [workerPort]
-            )
+            // [H7] A DataCloneError (non-cloneable context/bindings) must release ports, timer and isBusy.
+            try {
+                if (this.worker === null) throw new Error('Code mode worker is not available')
+                this.worker.postMessage(
+                    {
+                        type: 'EXECUTE',
+                        id: this.executionId,
+                        code,
+                        methodList,
+                        schemaList: schemas,
+                        timeoutMs: effectiveTimeout,
+                        maxResultSize,
+                        rpcPort: workerPort,
+                        contextObj,
+                        readonlyMode,
+                    },
+                    [workerPort]
+                )
+            } catch (err: unknown) {
+                clearTimeout(timeoutHandle)
+                hostPort.close()
+                workerPort.close()
+                this.worker?.unref()
+                this.currentExecution = null
+                this.isBusy = false
+                const detail = err instanceof Error ? err.message : String(err)
+                resolve({
+                    success: false,
+                    error: `Code Mode could not dispatch the execution (${detail}). Ensure \`context\` contains only JSON-serializable values.`,
+                    metrics: { wallTimeMs: Math.round(performance.now() - startTime), cpuTimeMs: 0, memoryUsedMb: 0 },
+                })
+            }
         })
     }
-}
-
-// =============================================================================
-// RPC Handler (Main Thread)
-// =============================================================================
-
-async function handleRpcRequest(
-    req: RpcRequest,
-    apiBindings: Record<string, unknown>,
-    hostPort: MessagePort,
-    methodList: Record<string, string[]>
-): Promise<void> {
-    if (typeof req !== 'object' || req === null || typeof req.id !== 'number') {
-        return
-    }
-    const response: RpcResponse = { id: req.id }
-
-    try {
-        if (typeof req.group !== 'string' || typeof req.method !== 'string') {
-            response.error = 'Malformed RPC request: group and method must be strings'
-            hostPort.postMessage(response)
-            return
-        }
-
-        const allowedMethods = Object.hasOwn(methodList, req.group)
-            ? methodList[req.group]
-            : undefined
-        if (!allowedMethods?.includes(req.method)) {
-            response.error = `Unauthorized method invocation: ${req.group}.${req.method}`
-            hostPort.postMessage(response)
-            return
-        }
-
-        const safeArgs = Array.isArray(req.args) ? req.args : []
-        let target: unknown
-        if (req.group === '_topLevel') {
-            target = Object.hasOwn(apiBindings, req.method) ? apiBindings[req.method] : undefined
-        } else if (Object.hasOwn(apiBindings, req.group)) {
-            const groupApi = apiBindings[req.group]
-            if (groupApi !== undefined && groupApi !== null && typeof groupApi === 'object') {
-                target = Object.hasOwn(groupApi, req.method)
-                    ? (Reflect.get(groupApi, req.method) as unknown)
-                    : undefined
-            }
-        }
-
-        if (typeof target === 'function') {
-            response.result = await (target as (...args: unknown[]) => Promise<unknown>)(...safeArgs)
-        } else {
-            response.error = `Unknown method: ${req.group}.${req.method}`
-        }
-    } catch (err) {
-        response.error = err instanceof Error ? err.message : String(err)
-    }
-
-    hostPort.postMessage(response)
 }
 
 // =============================================================================

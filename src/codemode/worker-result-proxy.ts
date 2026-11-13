@@ -107,7 +107,8 @@ function createFailedResultProxy(result: object): unknown {
                 return `[${codeVal}] ${errVal}`
             }
             if (prop in target) return Reflect.get(target, prop) as unknown
-            if (prop === 'length') return 0
+            // [H7] `.length === 0` on a failed result must not read as an empty success.
+            if (prop === 'length') throw new Error(failedResultMessage(target))
             if (typeof prop === 'string' && /^\d+$/.test(prop)) return undefined
             if (
                 prop === Symbol.iterator ||

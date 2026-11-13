@@ -14,6 +14,7 @@ import {
 import { CloseGitHubIssueWithEntryOutputSchema } from './schemas.js'
 import { resolveOwnerRepo, resolveProjectNumber } from './helpers.js'
 import { moveIssueToDone, type KanbanMoveResult } from './close-issue-kanban.js'
+import { detectScopeMismatch, scopeMismatchResponse } from './create-issue-tool.js'
 
 function concreteCallerWorkspace(workspaceId: string | undefined): string | undefined {
     if (workspaceId === undefined) return undefined
@@ -86,14 +87,20 @@ async function executeCloseIssueMutation(
     const canonicalRepo = resolved.repo
         ? (findCanonicalRegistryKey(resolved.repo, registry) ?? resolved.repo)
         : undefined
+    if (input.workspace_id?.trim() === '*') {
+        return scopeMismatchResponse(
+            "workspace_id '*' is a read-only wildcard and cannot be used to close issues and write journal entries."
+        )
+    }
+    const mismatch = detectScopeMismatch(registry, canonicalRepo, callerWorkspace, input.project_number)
+    if (mismatch !== undefined) return scopeMismatchResponse(mismatch)
+    // [INVARIANT] Entry scope derives from repo/workspace/project only, never from content/tag keywords.
     const resolvedCtx = resolveProjectContext(
         {
             workspace_id: callerWorkspace ?? canonicalRepo,
             ...(pairCallerWorkspace || entryProjectNumber === undefined
                 ? {}
                 : { project_number: entryProjectNumber }),
-            content: entryContent,
-            tags: input.tags,
         },
         context.config
     )

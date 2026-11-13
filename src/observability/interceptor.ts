@@ -18,6 +18,7 @@ import { estimatePayloadTokens } from './token-estimator.js'
 import type { MetricsAccumulator } from './metrics.js'
 import { logger } from '../utils/logger.js'
 import { logAgentIssue } from '../utils/issue-logger.js'
+import { getAuthContext } from '../auth/auth-context.js'
 
 // ============================================================================
 // Types
@@ -61,6 +62,16 @@ export function wrapWithMetrics(
         const start = performance.now()
         let result: unknown
         let isError: boolean
+
+        try {
+            const sub = getAuthContext()?.claims?.sub
+            if (sub !== undefined && sub !== '') accumulator.recordUser(sub)
+        } catch (err) {
+            logger.debug('Failed to record metrics user', {
+                module: 'Metrics',
+                error: err instanceof Error ? err.message : String(err),
+            })
+        }
 
         try {
             result = await handler(args)

@@ -53,7 +53,8 @@ function isForbiddenProjectKey(name: string): boolean {
 
 function isValidProjectPath(dirPath: string): boolean {
     if (dirPath.trim().length === 0) return false
-    if (dirPath.includes('\0') || dirPath.startsWith('\\\\') || dirPath.startsWith('//')) return false
+    // [H6] Reject UNC/network paths with any separator mix (`\\`, `//`, `\/`, `/\`).
+    if (dirPath.includes('\0') || /^[\\/]{2}/.test(dirPath)) return false
     if (!path.isAbsolute(dirPath)) return false
     // Reject any `..` segment so the registered path is the canonical location the caller named.
     return !dirPath.split(/[\\/]+/).includes('..')

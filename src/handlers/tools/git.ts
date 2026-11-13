@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../types/index.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
@@ -385,13 +386,15 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                     for (const wsId of targetWorkspaces) {
                         const canonicalWs = findCanonicalRegistryKey(wsId, registry) ?? wsId
                         const registryPath = registry?.[canonicalWs]?.path
-                        if (registryPath === undefined || registryPath.length === 0) {
+                        if (registryPath === undefined || registryPath.length === 0 || !existsSync(registryPath)) {
                             if (rawWs === '*') {
                                 skippedWorkspaces.push(wsId)
                                 continue
                             }
                             throw new ValidationError(
-                                `No registered repository path for workspace '${wsId}'. Register the project path before checking its anchors.`
+                                registryPath !== undefined && registryPath.length > 0
+                                    ? `Registered repository path for workspace '${wsId}' does not exist: ${registryPath}`
+                                    : `No registered repository path for workspace '${wsId}'. Register the project path before checking its anchors.`
                             )
                         }
                         const cwd = registryPath

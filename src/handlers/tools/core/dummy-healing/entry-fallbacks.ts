@@ -400,12 +400,16 @@ export function getEntryAndCodemodeFallbackToolDefinitions(
                         const tool = getAdminTools(context).find((t) => t.name === targetTool)
                         if (tool !== undefined) {
                             const res = await Promise.resolve(tool.handler(args))
-                            return typeof res === 'object' && res !== null
-                                ? {
-                                      ...(res as Record<string, unknown>),
-                                      _healing_note: `🛠️ AUTONOMOUS HEALING: '${name}' was routed to '${targetTool}' and executed successfully.`,
-                                  }
-                                : res
+                            if (typeof res !== 'object' || res === null) return res
+                            const resRecord = res as Record<string, unknown>
+                            // [INVARIANT] M5: never claim success for a failed routed call.
+                            return {
+                                ...resRecord,
+                                _healing_note:
+                                    resRecord['success'] !== false
+                                        ? `🛠️ AUTONOMOUS HEALING: '${name}' was routed to '${targetTool}' and executed successfully.`
+                                        : `🛠️ AUTONOMOUS HEALING: '${name}' was routed to '${targetTool}', but the operation did not succeed. See the reported error.`,
+                            }
                         }
                     }
                     return {

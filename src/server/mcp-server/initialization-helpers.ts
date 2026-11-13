@@ -20,10 +20,19 @@ import type { ServerOptions } from './types.js'
  * tool filter resolution, scheduler wiring, digest seeding). Behaviour is unchanged.
  */
 
-/** Auto-prune low-importance old entries if any retention threshold is configured. */
+/**
+ * Auto-prune low-importance old entries if any retention threshold is configured.
+ * [INVARIANT] Must run after the `--config` file is loaded so the prune is scoped to the
+ * effective default workspace/project (H3); `scope` carries those loaded values.
+ */
 export async function runStartupAutoPrune(
     db: IDatabaseAdapter,
-    options: ServerOptions
+    options: ServerOptions,
+    scope?: {
+        defaultWorkspaceId?: string
+        defaultProjectNumber?: number
+        projectRegistry?: ServerOptions['projectRegistry']
+    }
 ): Promise<void> {
     const hasAutoPrune =
         (options.archiveOlderThanDays ?? 0) > 0 ||
@@ -32,6 +41,9 @@ export async function runStartupAutoPrune(
 
     if (!hasAutoPrune) return
 
+    const defaultWorkspaceId = scope?.defaultWorkspaceId ?? options.defaultWorkspaceId
+    const defaultProjectNumber = scope?.defaultProjectNumber ?? options.defaultProjectNumber
+    const projectRegistry = scope?.projectRegistry ?? options.projectRegistry
     const pruneResult = await runAutoPrune(db, {
         archiveOlderThanDays: options.archiveOlderThanDays ?? 0,
         pruneOlderThanDays: options.pruneOlderThanDays ?? 0,
@@ -39,11 +51,12 @@ export async function runStartupAutoPrune(
         importanceThreshold: options.pruneImportanceThreshold ?? 0.15,
         dryRun: options.pruneDryRun,
         excludeTags: options.pruneExcludeTags,
-        workspaceId: resolveWorkspaceId(
-            options.defaultWorkspaceId,
-            options.defaultProjectNumber,
-            options
-        ),
+        workspaceId: resolveWorkspaceId(defaultWorkspaceId, defaultProjectNumber, {
+            ...(defaultWorkspaceId !== undefined ? { defaultWorkspaceId } : {}),
+            ...(defaultProjectNumber !== undefined ? { defaultProjectNumber } : {}),
+            ...(projectRegistry !== undefined ? { projectRegistry } : {}),
+        }),
+        ...(defaultProjectNumber !== undefined ? { projectNumber: defaultProjectNumber } : {}),
     })
     if (pruneResult.aborted === true) {
         throw new Error('Auto-prune aborted because the pre-prune backup failed')

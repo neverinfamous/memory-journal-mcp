@@ -69,12 +69,55 @@ const CORE_READ_VERBS = [
     'statistics',
     'find',
 ]
+const CORE_MUTATING_LEADING_VERBS = [
+    'set',
+    'mark',
+    'toggle',
+    'sync',
+    'reset',
+    'clear',
+    'write',
+    'save',
+    'put',
+    'patch',
+    'move',
+    'rename',
+    'share',
+    'close',
+    'apply',
+    'execute',
+    'run',
+    'send',
+    'upsert',
+    'insert',
+    'drop',
+    'purge',
+]
+
+/** Leading verb of a dotted/underscored Code Mode method (e.g. `mj.core.setStatus` -> `set`). */
+function leadingMethodVerb(toolName: string): string {
+    const method = toolName.replace(/^mj[._]core[._]/, '')
+    const match = /^[a-z]+/.exec(method.replace(/^_+/, ''))
+    return match !== null ? match[0].toLowerCase() : ''
+}
 
 function scopeForCoreMethod(toolName: string): StandardScope {
     if (CORE_ADMIN_VERBS.some((verb) => hasMethodToken(toolName, verb))) return SCOPES.ADMIN
     if (CORE_WRITE_VERBS.some((verb) => hasMethodToken(toolName, verb))) return SCOPES.WRITE
+    // [INVARIANT] An incidental read token (e.g. `setStatus`, `markStale`) must not downgrade a
+    // method whose leading verb mutates state to READ (H5).
+    if (CORE_MUTATING_LEADING_VERBS.includes(leadingMethodVerb(toolName))) return SCOPES.ADMIN
     if (CORE_READ_VERBS.some((verb) => hasMethodToken(toolName, verb))) return SCOPES.READ
     return SCOPES.ADMIN
+}
+
+/** Resource URIs that require a non-READ scope. */
+function scopeForResourceUri(uri: string): StandardScope {
+    if (uri.startsWith('memory://team/') || uri === 'memory://team') return SCOPES.TEAM
+    if (uri === 'memory://audit' || uri.startsWith('memory://audit/') || uri.startsWith('memory://audit?')) {
+        return SCOPES.AUDIT
+    }
+    return SCOPES.READ
 }
 
 export function getRequiredScope(toolName: string): StandardScope {
@@ -96,7 +139,10 @@ export function getRequiredScope(toolName: string): StandardScope {
     if (DUMMY_ENTRY_CREATE_SET.has(toolName)) {
         return SCOPES.WRITE
     }
-    if (DUMMY_HEALING_TOOL_NAMES.has(toolName) || toolName.startsWith('memory://')) {
+    if (toolName.startsWith('memory://')) {
+        return scopeForResourceUri(toolName)
+    }
+    if (DUMMY_HEALING_TOOL_NAMES.has(toolName)) {
         return SCOPES.READ
     }
 

@@ -246,6 +246,18 @@ export function assertSafeFilePath(filePath: string, providedRoots: string[]): v
     // First ensure the logical path is within boundaries
     assertSafeDirectoryPath(path.dirname(filePath), providedRoots)
 
+    // [BOUNDARY] The directory check never sees the basename; reject URL-encoded separators/traversal hidden in it.
+    const rawBase = path.basename(filePath)
+    let decodedBase: string
+    try {
+        decodedBase = decodeURIComponent(rawBase)
+    } catch {
+        throw new PathTraversalError(`Malformed URL-encoding in file name: ${rawBase}`)
+    }
+    if (/[\\/]/.test(decodedBase) || decodedBase === '..' || decodedBase === '.' || decodedBase.includes('\0')) {
+        throw new PathTraversalError(`File name escapes allowed sandbox boundaries: ${decodedBase}`)
+    }
+
     // Second, if the file exists, ensure it is not a symlink that could trick the system
     try {
         const stats = fs.lstatSync(filePath)

@@ -20,7 +20,12 @@ import { createShimMjProxy } from './worker/mj-shim-proxy.js'
 import { buildSandboxGlobals } from './worker/sandbox-globals.js'
 import { serializeAndEnforceEgress } from './worker/result-compactor.js'
 
-hardenOuterFunctionPrototypes()
+// [L4] Hardening failures are fatal: refuse to execute any user code in a half-hardened realm.
+const hardeningFailures = hardenOuterFunctionPrototypes()
+const hardeningError =
+    hardeningFailures.length > 0
+        ? `Code Mode worker prototype hardening failed: ${hardeningFailures.join(', ')}`
+        : null
 
 let activeExecutionId: number | null = null
 let resultSent = false
@@ -146,6 +151,9 @@ async function executeCode(
 ): Promise<SandboxResult> {
     const startCpu = process.cpuUsage()
     const startTime = performance.now()
+    if (hardeningError !== null) {
+        return { success: false, error: hardeningError, metrics: { wallTimeMs: 0, cpuTimeMs: 0, memoryUsedMb: 0 } }
+    }
     const activeTimers = new Set<NodeJS.Timeout>()
 
     const registryPayload = contextObj?.['__mj_project_registry']

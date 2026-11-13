@@ -73,7 +73,9 @@ export const PARAM_ALIASES: Record<string, string> = {
 }
 
 /**
- * Common hallucinated entry types -> canonical types
+ * Common hallucinated entry types -> canonical types.
+ * [INVARIANT] Single source of truth for Code Mode entry-type aliasing (key-normalizer and
+ * generic-field-aliases both consume this map).
  */
 export const ENTRY_TYPE_ALIASES: Record<string, string> = {
     'session-summary': 'retrospective',
@@ -83,9 +85,19 @@ export const ENTRY_TYPE_ALIASES: Record<string, string> = {
     'team session summary': 'retrospective',
     'summary': 'retrospective',
     'bug': 'bug_fix',
+    'bugfix': 'bug_fix',
+    'bug-fix': 'bug_fix',
+    'hotfix': 'bug_fix',
+    'defect': 'bug_fix',
     'feature': 'feature_implementation',
+    'meeting': 'meeting_notes',
     'note': 'technical_note',
     'technical-note': 'technical_note',
+    'technical': 'technical_note',
+    'documentation': 'technical_note',
+    'chore': 'technical_note',
+    'refactor': 'technical_note',
+    'fix': 'technical_note',
     'reflection': 'personal_reflection',
     'decision': 'project_decision',
     'review': 'code_review',
@@ -93,6 +105,7 @@ export const ENTRY_TYPE_ALIASES: Record<string, string> = {
     'coding': 'technical_note',
     'progress': 'development_note',
     'status': 'development_note',
+    'development': 'development_note',
     'update': 'development_note',
     'test': 'system_integration_test',
     'testing': 'system_integration_test',

@@ -1,4 +1,4 @@
-function splitSqlValueList(raw: string): string[] {
+export function splitSqlValueList(raw: string): string[] {
     const values: string[] = []
     let current = ''
     let quote: string | null = null

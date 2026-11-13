@@ -1,6 +1,5 @@
 import {
     resolveProjectContext,
-    resolveProjectNumberFromPath,
     setActiveSessionProject,
 } from '../../../utils/workspace-resolver.js'
 import { exactRegistryKey, uniqueWorkspaceForProject } from '../../../utils/write-scope.js'
@@ -39,6 +38,18 @@ export function getAgentContextResource(): InternalResourceDef {
                     ? uniqueWorkspaceForProject(Number(numericRepo[1]), config?.projectRegistry)
                     : undefined
             const namedRepo = exactRepo ?? numericWorkspace
+            // [INVARIANT] An explicit but unknown repo never falls back to cwd/session/first
+            // registry context (H1): report it as unresolved instead.
+            if (repo !== undefined && namedRepo === undefined) {
+                return {
+                    data: [
+                        `Project: ${repo}`,
+                        'Project Number: unresolved',
+                        'Workspace ID: unresolved',
+                        `Instructions: '${repo}' is not a registered project. Use list_projects (or the project registry) to find the correct repo, then re-read memory://agent-context/{repo}.`,
+                    ].join('\n'),
+                }
+            }
             const resolved = resolveProjectContext(
                 namedRepo !== undefined ? { workspace_id: namedRepo } : {},
                 {
@@ -47,22 +58,14 @@ export function getAgentContextResource(): InternalResourceDef {
                 }
             )
 
-            let projectNumber = resolved.projectNumber ?? -1
+            const projectNumber = resolved.projectNumber ?? -1
             const workspaceId = resolved.workspaceId
 
-            if (repo === undefined && projectNumber === -1) {
-                projectNumber =
-                    resolveProjectNumberFromPath(process.cwd(), config?.projectRegistry) ?? -1
-            }
-
-            if (
-                repo !== undefined &&
-                workspaceId !== 'default' &&
-                resolved.projectNumber !== undefined
-            ) {
+            if (repo !== undefined && workspaceId !== 'default') {
+                // [INTENT] `null` clears a stale project number when the repo is unnumbered.
                 setActiveSessionProject(
                     workspaceId,
-                    projectNumber > 0 ? projectNumber : undefined,
+                    projectNumber > 0 ? projectNumber : null,
                     context?.runtime
                 )
             }

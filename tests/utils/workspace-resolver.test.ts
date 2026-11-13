@@ -190,12 +190,20 @@ describe('workspace-resolver with keyword and tag inference', () => {
     })
 
     it('keeps an explicit workspace of default instead of retargeting it from project, tags, content, or cwd', () => {
+        // [H2] A project number owned by another registered workspace is foreign to 'default'.
+        expect(() =>
+            resolveProjectContext(
+                { workspace_id: 'default', project_number: 5, content: 'General entry' },
+                mockConfig
+            )
+        ).toThrow(/belongs to workspace/)
+
         const byProjectNum = resolveProjectContext(
-            { workspace_id: 'default', project_number: 5, content: 'General entry' },
+            { workspace_id: 'default', project_number: 987, content: 'General entry' },
             mockConfig
         )
         expect(byProjectNum.workspaceId).toBe('default')
-        expect(byProjectNum.projectNumber).toBe(5)
+        expect(byProjectNum.projectNumber).toBe(987)
 
         const byTag = resolveProjectContext(
             { workspace_id: 'default', content: 'General note', tags: ['memory-journal-mcp'] },

@@ -49,15 +49,17 @@ describe('CMS-04 REM Self-Healing Regressions (agent-issues.jsonl & audit teleme
         const parsed = MarkAnchorsStaleSchema.parse({
             anchors: [
                 { anchor_id: '12', status: 'active' },
-                { entry_id: 14, status: 'outdated' },
                 { id: 15, status: 'deleted' },
             ],
         })
         expect(parsed.updates).toEqual([
             { id: 12, status: 'valid' },
-            { id: 14, status: 'stale' },
             { id: 15, status: 'invalidated' },
         ])
+        // M2: entry_id is a journal entry ID, never aliased to entry_anchors.id
+        expect(() =>
+            MarkAnchorsStaleSchema.parse({ anchors: [{ entry_id: 14, status: 'outdated' }] })
+        ).toThrow()
     })
 
     it('heals string anchors and status: "active" in CreateEntrySchema and Code Mode interceptions', async () => {

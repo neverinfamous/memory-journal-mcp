@@ -12,58 +12,55 @@ import type { InternalPromptDef } from './index.js'
 import type { BriefingConfig } from '../resources/shared.js'
 import {
     planReviewArgsSchema,
-    auditArgsSchema,
     PLAN_REVIEW_ARGUMENTS,
-    AUDIT_ARGUMENTS,
     type ReviewDepth,
     buildDimensionsTable,
     buildCopilotStep,
-    sanitizeCopilotTarget,
     sanitizePromptTarget,
     buildPlanReviewPriorContextSection,
-    buildPriorAuditSection,
     buildSubagentProtocolGuidance,
 } from './adversarial-helpers.js'
+import { buildAuditPromptDefinition, buildStandardAuditClosing } from './adversarial-audit-factory.js'
+import { getCodeQualityAuditPromptDefinition } from './adversarial-code-quality.js'
 
-/**
- * Get adversarial planning prompt definitions
- */
-export function getAdversarialPromptDefinitions(): InternalPromptDef[] {
-    return [
-        {
-            name: 'adversarial-plan-review',
-            description:
-                'Bootstrap an adversarial planning workflow with structured review dimensions, scoring rubric, and prior plan context from the journal. Optional parameters: topic, depth, copilot, workspace_id.',
-            icons: [ICON_PROMPT],
-            arguments: PLAN_REVIEW_ARGUMENTS,
-            handler: (args: Record<string, string> | undefined, db: IDatabaseAdapter, _teamDb?: IDatabaseAdapter, _github?: unknown, briefingConfig?: BriefingConfig, runtime?: object | null) => {
-                const parsed = planReviewArgsSchema.parse(args ?? {})
-                const topic = sanitizePromptTarget(parsed.topic ?? '{topic}')
-                const depth: ReviewDepth = parsed.depth ?? 'standard'
-                const useCopilot = parsed.copilot === 'true'
+const TARGET_PREAMBLE = (kind: string): string =>
+    `If the target is '{target}', determine it from the user's request. If the user hasn't specified a target ${kind}, ask them for it now.`
 
-                const priorContextSection = buildPlanReviewPriorContextSection(
-                    db,
-                    topic,
-                    parsed.topic,
-                    briefingConfig,
-                    parsed.workspace_id,
-                    runtime
-                )
+function getPlanReviewPromptDefinition(): InternalPromptDef {
+    return {
+        name: 'adversarial-plan-review',
+        description:
+            'Bootstrap an adversarial planning workflow with structured review dimensions, scoring rubric, and prior plan context from the journal. Optional parameters: topic, depth, copilot, workspace_id.',
+        icons: [ICON_PROMPT],
+        arguments: PLAN_REVIEW_ARGUMENTS,
+        handler: (args: Record<string, string> | undefined, db: IDatabaseAdapter, _teamDb?: IDatabaseAdapter, _github?: unknown, briefingConfig?: BriefingConfig, runtime?: object | null) => {
+            const parsed = planReviewArgsSchema.parse(args ?? {})
+            const topic = sanitizePromptTarget(parsed.topic ?? '{topic}')
+            const depth: ReviewDepth = parsed.depth ?? 'standard'
+            const useCopilot = parsed.copilot === 'true'
 
-                const dimensionsTable = buildDimensionsTable(depth)
-                const copilotInstruction = buildCopilotStep(
-                    useCopilot,
-                    'gh copilot -- -p "Review the plan at <PATH> for correctness and edge cases. Explore the codebase to verify assumptions. When viewing or reading files, always provide the \'path\' parameter correctly. What did we miss?" --allow-all'
-                )
+            const priorContextSection = buildPlanReviewPriorContextSection(
+                db,
+                topic,
+                parsed.topic,
+                briefingConfig,
+                parsed.workspace_id,
+                runtime
+            )
 
-                return {
-                    messages: [
-                        {
-                            role: 'user',
-                            content: {
-                                type: 'text',
-                                text: `# Adversarial Plan Review: "${topic}"
+            const dimensionsTable = buildDimensionsTable(depth)
+            const copilotInstruction = buildCopilotStep(
+                useCopilot,
+                'gh copilot -- -p "Review the plan at <PATH> for correctness and edge cases. Explore the codebase to verify assumptions. When viewing or reading files, always provide the \'path\' parameter correctly. What did we miss?" --allow-all'
+            )
+
+            return {
+                messages: [
+                    {
+                        role: 'user',
+                        content: {
+                            type: 'text',
+                            text: `# Adversarial Plan Review: "${topic}"
 
 If the topic is '{topic}', determine it from the user's request. If the user hasn't specified a topic, ask them for it now.
 
@@ -118,145 +115,25 @@ ${copilotInstruction}
 Present the refined plan for approval with the final score, all disposition decisions, and Copilot feedback (if enabled).
 
 ${priorContextSection}`,
-                            },
                         },
-                    ],
-                }
-            },
-        },
-        {
-            name: 'adversarial-audit-code-quality',
-            description: 'Multi-pass adversarial code quality audit (dead code, type safety, silent failures, workspace isolation, complexity, file size). Optional parameters: target, copilot, workspace_id',
-            icons: [ICON_PROMPT],
-            arguments: AUDIT_ARGUMENTS,
-            handler: (args: Record<string, string> | undefined, db: IDatabaseAdapter, _teamDb?: IDatabaseAdapter, _github?: unknown, briefingConfig?: BriefingConfig, runtime?: object | null) => {
-                const parsed = auditArgsSchema.parse(args ?? {})
-                const target = sanitizePromptTarget(parsed.target ?? '{target}')
-                const copilotTarget = sanitizeCopilotTarget(target)
-                const copilotInstruction = buildCopilotStep(
-                    parsed.copilot === 'true',
-                    `gh copilot -- -p "Perform an exhaustive code quality audit on ${copilotTarget}. Focus on dead code, duplication, type safety, magic values, monkey-patching, and anti-patterns." --allow-all`
-                )
-                const priorAuditSection = buildPriorAuditSection(
-                    db,
-                    'code-quality-audit',
-                    'Prior code-quality audits',
-                    briefingConfig,
-                    parsed.workspace_id,
-                    parsed.target,
-                    runtime
-                )
-                return {
-                    messages: [{
-                        role: 'user',
-                        content: {
-                            type: 'text',
-                            text: `# Adversarial Code Quality Audit
-Prompt revision: 2026-11-12-audit-pass19.
-Target: ${target}
-
-If the target is '{target}', determine it from the user's request. If the user hasn't specified a target file or module, ask them for it now.
-
-This prompt is shared by every project. Audit the repository the user named. Do not assume that repository is memory-journal-mcp, and do not copy this server's directory layout, commit script, or parameter-normalizer filenames onto a different codebase. Discover those in the target.
-
-If \`memory://briefing/{repo}\` cannot be read, continue the audit. Bind \`workspace_id\` and \`project_number\` only from the registry entry for the repository the user named. If that pair is missing, do not call \`create_entry\`. Record the resource failure.
-
-1. Scan the target for dead code, duplication, type safety, magic values, complexity, boundary validation, monkey-patching, unused variables/exports, unhandled promises, and global scope pollution:
-   - **Evidence & Low-Severity Rules**: File dead code, duplication, magic values, unused exports, and floating promises only when you quote them, and count those as **Low**.
-   - **Subagent Orchestration**: For a large or full-repository audit, run step 2 first and pass the \`SCAN_OK\` result to parallel read-only subagents partitioned by subsystem (assigning each directory to one subagent). In Cursor use the Task tool (\`explore\` or \`generalPurpose\`); on any other host use that host's read-only subagent tool. Put the parent conversation id in every subagent prompt. If the host does not expose a conversation id, pass the audit date, repository name, and prompt revision. The audit is read-only for subagents: do not edit files, commit, or write journal entries. Instruct every subagent to read full function bodies (not only grep hits), treat a grep-only detector as \`not run\`, skip repeating step 2 file-size scans, and return one coverage line per detector (\`run\`, \`not run\`, or \`nothing found\`) plus findings (path, line number, raw one-line quote, severity, one-sentence fix). Detector 3 is parent-owned. Subagents mark it \`not run\` and must not spend their Moderate cap on length-only findings. The parent ranks length in a separate appendix. The parent runs any detector a subagent skipped before reporting it clean. Each subagent returns at most 8 Moderate and 5 Low findings, already ranked. The parent merges parallel copies of one pattern into one finding that cites both sites.
-   - **Severity Calibration**: Cross-workspace mutation is **Critical**; wrong-tool dispatch, false success, dropped isolation field, or a file over 500 lines is **High**; Function length and nesting are appendix-only and are not Moderate findings. A primary-key update that already rejects a workspace mismatch is **Moderate**. An explicit \`'*'\` that drives a mutation against a single repository root (e.g. \`process.cwd()\`) is **High**, whereas explicit \`'*'\` on multi-workspace DB queries/admin operations is an intentional admin override. A database-wide maintenance function with no scope parameter (or optional workspace kept database-wide on purpose) is a product note, not an automatic Critical. An omitted workspace is a product note only when the stored row uses that configured default. A query with no workspace predicate still selects every row and is a finding. A stored workspace id of \`default\` is a real workspace and must be pair-checked; only an omitted workspace means \`default\`. A \`pairStoredScope\` rejection is not a finding. Replacing an explicit \`project_number\` and still saving the row is Critical. Explicit \`'*'\` that drops a supplied \`project_number\` is High. Merge one pattern across call sites into one finding before ranking. Assign prompt and schema modules so they are not skipped.
-   - **Parent Verification & Caps**: The parent dedupes a handler that drops a field and the callee branch it reaches into one finding with both lines, re-reads every Critical/High citation (and any cross-workspace, authz, or false-success citation marked Moderate), strips one wrapping backtick pair, and drops any citation whose quote is not a substring of that one physical line. Cap Moderate at 8 and Low at 5 per subsystem (parent table max: 12 Moderate, 8 Low; never cap Critical or High). Record which directories were opened and which detectors found nothing.
-   - **Mandatory Deep-Quality Detectors**: Run detectors 1, 2, and 4 through 11 on every audit. Detector 3 is parent-owned and is listed here only so the parent does not skip it. Subagents mark detector 3 \`not run\`.
-     1. **Silent Catch Block Detector**: Find every \`catch\` in production source, including \`catch (e)\` and multiline catches. A catch is silent when its body does not log, rethrow, or return a structured error. Quote the body. Keep intentional best-effort fallbacks out of the table. Do not flag a catch that returns the project's structured handler error. Ignore catch blocks that exist only inside prompt template strings.
-     2. **Cross-Platform Path Separator Assumption Detector**: Flag filesystem prefix checks (\`startsWith\` / \`endsWith\` on a resolved path without a separator boundary) and hardcoded \`'\\\\'\` or \`'/'\` used to test real filesystem paths. Prefer \`path.relative()\` and \`path.sep\`. Ignore URL, route, glob, and SQL slashes. Ignore path examples that exist only inside prompt template strings. Case-fold only on Windows.
-     3. **Cognitive Complexity & Nesting Hotspot Scan**: This detector is parent-owned. Subagents mark it \`not run\` and must not spend their Moderate cap on length-only findings. The parent ranks length in a separate appendix. Flag functions over 80 lines or control-flow nesting deeper than 4. Measure function length and nesting with a script (for example the TypeScript compiler API via \`createRequire(path.join(process.cwd(), 'package.json'))('typescript')\` and \`path.join(process.cwd(), 'src')\`, skipping \`vendor\` and \`third_party\` directories, so execution proxies that rewrite inline \`bun -e\` scripts to a temp directory still resolve the target repo), not by eye, and report the measured line count. The measuring script must print \`COMPLEXITY_OK files=<n> over80=<n> nestgt4=<n>\`. A script that does not print that line failed. Count an else-if chain, and a chained conditional (\`a ? b : c ? d : e\`), as one decision, not as nested depth. Do not recommend splitting a registration factory whose body is a table of tool, prompt, resource, route, or schema definitions. If such a factory exceeds 450 lines, list it as a watch item because the next edit can cross 500. Measure the inner handlers and real helpers. A factory whose body is a table of prompt, tool, resource, route, or schema definitions stays a watch item even when the file exceeds 500 lines. Measure the inner handlers.
-     4. **Schema-to-Handler Parameter Drift Check**: Every input-schema property is consumed by the handler or rewritten by that project's own parameter-normalization layer. Do not assume a file named \`param-normalizer.ts\` exists. Quote the schema field and the handler or normalizer read. Ignore fields that are forwarded as a whole parsed object.
-     5. **Uncleaned Timer / EventListener Detector**: Flag \`setInterval\`, retained \`setTimeout\` handles, \`fs.watch\`, and \`process\` / server / filesystem / worker \`.on(\` registrations that lack \`unref()\`, \`clear*\`, or \`close()\` / \`finally\` cleanup. An awaited one-shot delay is not a leak.
-     6. **Type-safety Detector**: Flag \`any\`, \`as any\`, \`z.any()\` in Zod schemas (unless explicitly documented for arbitrary untrusted JSON passthrough), TypeScript postfix non-null assertions (\`value!\`), definite assignment (\`!:\`), and a double assertion (\`as unknown as\`) that reads a property the source type does not declare. Ignore GraphQL \`Type!\`, \`!=\`, and \`!condition\`. Leave SDK boundary casts, such as simple-git options, alone. Do not file every \`as\` on a database row.
-     7. **Fuzzy method dispatch**: Flag \`includes\`, \`startsWith\`, or \`endsWith\` on a method or tool name used to choose a handler. Quote the token and the name that would take the wrong branch, such as \`listDeletedEntries\` matching \`delete\`. Exact \`Map\` lookup is not fuzzy.
-     8. **Accepted-but-ignored parameters**: A schema field is ignored when the handler passes a literal \`undefined\` in its place, or copies the field into a bag that no callee reads. Quote both sites. A whole parsed object that is forwarded counts as consumed.
-     9. **False success**: Flag a \`success: true\` result, or a resolved promise of one, on a path that did not perform the requested operation. Leave out a documented discovery response, including a \`_healing_note\` that says the operation did not run. A success that silently drops a requested side effect (for example a relationship link or a vector write that failed inside a \`catch\`) without a warning field is a false success. A log line inside the catch does not make \`success: true\` valid. If the requested side effect did not run, return \`success: false\` or a warning field. Flag a \`success: true\` result with no healing note on a path that did not perform the operation. Ignore success flags that exist only inside prompt template strings. Flag a failed result whose collection reads (\`.entries\`, \`.items\`, \`.deleted\`, \`.issues\`, \`.pullRequests\`) return an empty array. Flag a filesystem shim that returns true from a substring match. An unmatched SQL translation is High only when it runs a different tool and has no healing note. Leave a mapped id lookup alone.
-    10. **Sentinel scope**: Apply each rule below on its own. Explicit workspace \`default\` is pair-checked; stripping it and saving another workspace or project number is Critical. A hot-reload listener must propagate \`projectRegistry\` updates to background schedulers and interceptors. Flag an omitted workspace that selects every row, and a supplied workspace or project number that is replaced or dropped (including \`resolveWorkspaceId\` callers that discard \`projectNumber\` or hot-reload listeners that fail to propagate \`projectRegistry\` updates to background schedulers or interceptors). An omission that becomes the server's configured default is a product note. Explicit \`'*'\` on multi-workspace DB queries is an intentional admin override; flag \`'*'\` when a fallback manufactures it after a miss or when it is passed to a single-root filesystem mutation. Lookup-then-narrow \`'*'\` inside \`delete_entry\` and \`update_entry\` (load by id, then use that row's own workspace) is the current protocol. The defect is dropping a \`workspace_id\` or \`project_number\` that the caller or healer already parsed before that lookup. Content or tag keywords that select a different registered project than the active session, the cwd, or an explicit project_number are a sentinel-scope finding. An omitted workspace that becomes the configured default stays a product note. An explicit \`'*'\` on an admin mutation stays an override, and a supplied project_number must still be applied. A later \`input.project_number\`, \`requestedProject\`, or \`explicitProject ?? resolved.projectNumber\` after \`resolveProjectContext\` has already paired the workspace is Critical. \`resolveProjectContext\` replacing a supplied \`project_number\` with the registry number, and every save of that resolved number, is the same Critical finding. The fix is to reject the pair. Replacing a stored workspace of \`default\` from cwd, keywords, or \`MCP_WORKSPACE_ID\` before \`pairStoredScope\` is Critical. A session project number counts even when the session workspace is missing or \`default\`, and it wins over tag and content aliases. Clearing or dropping a supplied \`project_number\`, or stripping workspace \`default\`, before \`resolveProjectContext\` or \`pairStoredScope\`, and then saving the fallback workspace or registry number, is the same Critical finding. The same substitution inside a generated \`createEntry\` argument list is Critical even when that helper does not insert the row. A resource that rewrites an explicit \`default\` workspace into the cwd project is High, because later writes copy that project number. A \`pairStoredScope\` or \`resolveProjectContext\` throw is not a finding. Do not file a caller that only forwards the original workspace and project into \`createEntry\`. A \`success: true\` result that includes a warning field naming the skipped side effect is not a false success.
-    11. **Safety gate**: Flag a \`catch\` that logs and then continues a destructive operation, such as a failed backup followed by a prune.
-2. **Scan for files exceeding 500 lines using two redundant methods.** Run both from the target repository root. Scope them to \`src\` and \`scripts\` when those directories exist. Skip test files and vendored or synced third-party trees in every detector, not only this count. Common vendored or build names are \`vendor\`, \`src/vendor\`, \`third_party\`, \`node_modules\`, \`dist\`, \`coverage\`, \`build\`, \`.next\`, and \`out\`. If \`scripts\` is absent, scan \`src\` only. Skip those directories by name before descending. Both methods must print \`SCAN_OK scanned=<n> over500=<n>\`. Also print \`WATCH <lines> <path>\` for each file of 451 to 500 lines. The SCAN_OK counts stay the same. A scan that does not print that line failed. A healer banner before SCAN_OK does not fail the scan. scanned=0 does. Do not treat that as zero files over 500 lines.
-   - **Method 1 (Native PowerShell)**:
-     \`\`\`powershell
-     $skip = @('vendor','third_party','node_modules','dist','coverage','build','.next','out')
-     $n = 0
-     $over = 0
-     function Walk($dir) {
-       if (-not (Test-Path -LiteralPath $dir)) { return }
-       foreach ($item in (Get-ChildItem -LiteralPath $dir -Force)) {
-         if ($skip -contains $item.Name) { continue }
-         if ($item.PSIsContainer) { Walk $item.FullName; continue }
-         if ($item.Name -cmatch '\\.(ts|tsx|js|mjs|cjs)$' -and $item.Name -cnotmatch '\\.(test|spec)\\.') {
-           $script:n++
-           $parts = [System.IO.File]::ReadAllText($item.FullName) -split '\\r?\\n'
-           $lines = $parts.Length
-           if ($lines -gt 0 -and $parts[$lines - 1] -eq '') { $lines-- }
-           if ($lines -gt 500) { $script:over++; Write-Output ($lines.ToString() + ' ' + $item.FullName) }
-          elseif ($lines -ge 451) { Write-Output ('WATCH ' + $lines.ToString() + ' ' + $item.FullName) }
-         }
-       }
-     }
-     Walk 'src'
-     Walk 'scripts'
-     Write-Output ('SCAN_OK scanned=' + $n + ' over500=' + $over)
-     \`\`\`
-   - **Method 2 (Bun file)**: Write the scanner below to a temporary \`.mjs\` outside the repository and run \`bun\` on that file with the repository as the working directory. Do not pass it to \`node\`, and do not pass it as an inline \`bun -e\` here-string: a Windows execution proxy rewrites that form and the script fails before \`SCAN_OK\`. If \`bun -e\` is rewritten and does not print \`SCAN_OK\`, method 2 is \`not run\` and method 1 stands. The walk can take more than 60 seconds. Both methods count lines by splitting on \`\\r?\\n\` and dropping one trailing empty segment, and both match extensions case-sensitively. Both methods must print the same \`scanned\` and \`over500\` counts. If \`bun\` is unavailable, stop and report that method 2 did not run.
-     \`\`\`javascript
-import {readdirSync as r,statSync as s,readFileSync as f} from 'fs';import {join as j} from 'path';const skip=new Set(['vendor','third_party','node_modules','dist','coverage','build','.next','out']);let n=0,over=0;function w(d){if(!s(d,{throwIfNoEntry:false}))return;for(const x of r(d)){if(skip.has(x))continue;const p=j(d,x);if(s(p).isDirectory())w(p);else if(/\\.(ts|tsx|js|mjs|cjs)$/.test(x)&&!/\\.(test|spec)\\./.test(x)){n++;const parts=f(p,'utf8').split(/\\r?\\n/);const l=parts.length>0&&parts[parts.length-1]===''?parts.length-1:parts.length;if(l>500){over++;console.log(l,p)}else if(l>=451)console.log('WATCH',l,p)}}}}w('src');w('scripts');console.log('SCAN_OK scanned='+n+' over500='+over);
-     \`\`\`
-
-> [!IMPORTANT]
-> **High Priority — File Size**: Any file exceeding 500 lines is a high-priority finding. Flag all such files in the findings table with severity **High**. List files of 451 to 500 lines as watch items in the appendix. They are not High findings. Function length and nesting belong in the appendix. They are not Moderate findings unless that nesting hides one of the defects above. Do not mark function length by itself as High. Do NOT begin refactoring automatically — present them to the user for approval.
-
-3. Group findings by category and severity (**Critical**, **High**, **Moderate**, **Low**). Files over 500 lines are **High**. Files of 451 to 500 lines are watch items in the appendix, not High findings.
-4. **External Validation (Copilot — Opt-In)**: ${copilotInstruction}
-5. Present a summary table to the user (incorporating Copilot findings if applicable) and await approval. Diagnostic scans in step 2, and read-only lint or typecheck when the target defines them, are part of the audit. **CRITICAL**: Do not edit project files, apply fixes, or commit until the user explicitly approves the implementation plan. Present the plan as markdown in the chat. Do not add an audit plan file to the repository. The plan must be readable in Cursor and in Antigravity.
-6. After approval, fix critical issues first, then run the target's lint and typecheck and the tests that cover the change.
-7. Commit with the target repository's own commit helper when one exists. Discover that helper. Do not invent a script path. Do not add an audit plan file to the repository.
-**Rule**: If you don't make changes, do not commit.
-
-Load prior code-quality audits by the tag \`code-quality-audit\`, not by a hybrid search for that phrase.
-
-${priorAuditSection}`
-                        }
-                    }]
-                }
+                    },
+                ],
             }
         },
-        {
-            name: 'adversarial-audit-security',
-            description: 'Multi-pass adversarial security audit (threat modeling, attack surfaces) Optional parameters: target, copilot, workspace_id',
-            icons: [ICON_PROMPT],
-            arguments: AUDIT_ARGUMENTS,
-            handler: (args: Record<string, string> | undefined, db: IDatabaseAdapter, _teamDb?: IDatabaseAdapter, _github?: unknown, briefingConfig?: BriefingConfig, runtime?: object | null) => {
-                const parsed = auditArgsSchema.parse(args ?? {})
-                const target = sanitizePromptTarget(parsed.target ?? '{target}')
-                const copilotTarget = sanitizeCopilotTarget(target)
-                const copilotInstruction = buildCopilotStep(
-                    parsed.copilot === 'true',
-                    `gh copilot -- -p "Perform a security audit on ${copilotTarget} looking for injection vectors, auth/authz gaps, data boundaries, and agent-specific risks like prompt injection, excessive agency, or tool poisoning." --allow-all`
-                )
-                const priorAuditSection = buildPriorAuditSection(
-                    db,
-                    'security-audit',
-                    'Prior security audits',
-                    briefingConfig,
-                    parsed.workspace_id,
-                    parsed.target,
-                    runtime
-                )
-                return {
-                    messages: [{
-                        role: 'user',
-                        content: {
-                            type: 'text',
-                            text: `# Adversarial Security Audit
+    }
+}
+
+const securityAudit = buildAuditPromptDefinition({
+    name: 'adversarial-audit-security',
+    description: 'Multi-pass adversarial security audit (threat modeling, attack surfaces) Optional parameters: target, copilot, workspace_id',
+    tag: 'security-audit',
+    heading: 'Prior security audits',
+    copilotCommand: (t) =>
+        `gh copilot -- -p "Perform a security audit on ${t} looking for injection vectors, auth/authz gaps, data boundaries, and agent-specific risks like prompt injection, excessive agency, or tool poisoning." --allow-all`,
+    body: ({ target, copilotInstruction, priorAuditSection }) => `# Adversarial Security Audit
 Target: ${target}
 
-If the target is '{target}', determine it from the user's request. If the user hasn't specified a target file or module, ask them for it now.
+${TARGET_PREAMBLE('file or module')}
 
 1. Perform a multi-pass security audit. For large targets or full-repository audits, spawn parallel read-only subagents by architectural domain. In Cursor use the Task tool with subagent type \`explore\` or \`generalPurpose\`. On any other host use that host's read-only subagent tool. Treat all external inputs as untrusted until verified. Depending on the target, evaluate:
    ${buildSubagentProtocolGuidance()}
@@ -269,49 +146,20 @@ If the target is '{target}', determine it from the user's request. If the user h
      3. **Multi-Tenant Parameter Threading Audit**: Trace \`workspace_id\` from tool input -> \`resolveProjectContext\` -> SQLite \`WHERE\` clauses AND Vector Index metadata filters across all read, write, delete, restore, and search paths.
      4. **Execution-Layer Filter Parity Check**: Verify \`--tool-filter\` and OAuth scopes are enforced identically across \`tools/list\`, direct \`tools/call\`, Code Mode \`mj.*\` dispatch, and dummy/hallucination-healing fallbacks.
      5. **Transitive Prompt-Injection Taint Trace**: Trace external strings (Git commits, GitHub issues/PRs/workflows/milestones, DB content) into MCP Resources and Prompts to ensure \`markUntrustedContent\` tags are applied and never stripped by downstream table formatters.
-2. **External Validation (Copilot — Opt-In)**: ${copilotInstruction}
-3. Present findings table (incorporating Copilot findings if applicable).
-4. Await approval before applying fixes. Diagnostic scans are part of the audit. Do not edit project files until the user approves the plan.
-5. Commit with the target repository's own commit helper when one exists. Discover that helper. Do not invent a script path. Do not add an audit plan file to the repository.
-**Rule**: If you don't make changes, do not commit.
+${buildStandardAuditClosing(copilotInstruction, priorAuditSection)}`,
+})
 
-${priorAuditSection}`
-                        }
-                    }]
-                }
-            }
-        },
-        {
-            name: 'adversarial-audit-performance',
-            description: 'Multi-pass adversarial performance audit (profiling, stress-testing) Optional parameters: target, copilot, workspace_id',
-            icons: [ICON_PROMPT],
-            arguments: AUDIT_ARGUMENTS,
-            handler: (args: Record<string, string> | undefined, db: IDatabaseAdapter, _teamDb?: IDatabaseAdapter, _github?: unknown, briefingConfig?: BriefingConfig, runtime?: object | null) => {
-                const parsed = auditArgsSchema.parse(args ?? {})
-                const target = sanitizePromptTarget(parsed.target ?? '{target}')
-                const copilotTarget = sanitizeCopilotTarget(target)
-                const copilotInstruction = buildCopilotStep(
-                    parsed.copilot === 'true',
-                    `gh copilot -- -p "Perform a performance audit on ${copilotTarget} looking for N+1 queries, unnecessary allocations, and hot-path bottlenecks." --allow-all`
-                )
-                const priorAuditSection = buildPriorAuditSection(
-                    db,
-                    'performance-audit',
-                    'Prior performance audits',
-                    briefingConfig,
-                    parsed.workspace_id,
-                    parsed.target,
-                    runtime
-                )
-                return {
-                    messages: [{
-                        role: 'user',
-                        content: {
-                            type: 'text',
-                            text: `# Adversarial Performance Audit
+const performanceAudit = buildAuditPromptDefinition({
+    name: 'adversarial-audit-performance',
+    description: 'Multi-pass adversarial performance audit (profiling, stress-testing) Optional parameters: target, copilot, workspace_id',
+    tag: 'performance-audit',
+    heading: 'Prior performance audits',
+    copilotCommand: (t) =>
+        `gh copilot -- -p "Perform a performance audit on ${t} looking for N+1 queries, unnecessary allocations, and hot-path bottlenecks." --allow-all`,
+    body: ({ target, copilotInstruction, priorAuditSection }) => `# Adversarial Performance Audit
 Target: ${target}
 
-If the target is '{target}', determine it from the user's request. If the user hasn't specified a target file or module, ask them for it now.
+${TARGET_PREAMBLE('file or module')}
 
 1. Perform a multi-pass performance audit looking for N+1 queries, unnecessary allocations, and hot-path bottlenecks. For large targets or full-repository audits, spawn parallel read-only subagents by architectural domain (for example Database and Query Plans, Vector and Sandbox Execution, Server Dispatch and Observability). In Cursor use the Task tool with subagent type \`explore\` or \`generalPurpose\`. On any other host use that host's read-only subagent tool.
    ${buildSubagentProtocolGuidance()}
@@ -329,92 +177,39 @@ If the target is '{target}', determine it from the user's request. If the user h
 6. Commit with the target repository's own commit helper when one exists. Discover that helper. Do not invent a script path. Do not add an audit plan file to the repository.
 **Rule**: If you don't make changes, do not commit.
 
-${priorAuditSection}`
-                        }
-                    }]
-                }
-            }
-        },
-        {
-            name: 'adversarial-audit-seo',
-            description: 'Adversarial SEO audit (technical, semantic HTML, ARIA, structured data, Core Web Vitals) Optional parameters: target, copilot, workspace_id',
-            icons: [ICON_PROMPT],
-            arguments: AUDIT_ARGUMENTS,
-            handler: (args: Record<string, string> | undefined, db: IDatabaseAdapter, _teamDb?: IDatabaseAdapter, _github?: unknown, briefingConfig?: BriefingConfig, runtime?: object | null) => {
-                const parsed = auditArgsSchema.parse(args ?? {})
-                const target = sanitizePromptTarget(parsed.target ?? '{target}')
-                const copilotTarget = sanitizeCopilotTarget(target)
-                const copilotInstruction = buildCopilotStep(
-                    parsed.copilot === 'true',
-                    `gh copilot -- -p "Perform an SEO and Core Web Vitals audit on ${copilotTarget}." --allow-all`
-                )
-                const priorAuditSection = buildPriorAuditSection(
-                    db,
-                    'seo-audit',
-                    'Prior SEO audits',
-                    briefingConfig,
-                    parsed.workspace_id,
-                    parsed.target,
-                    runtime
-                )
-                return {
-                    messages: [{
-                        role: 'user',
-                        content: {
-                            type: 'text',
-                            text: `# Adversarial SEO Audit
+${priorAuditSection}`,
+})
+
+const seoAudit = buildAuditPromptDefinition({
+    name: 'adversarial-audit-seo',
+    description: 'Adversarial SEO audit (technical, semantic HTML, ARIA, structured data, Core Web Vitals) Optional parameters: target, copilot, workspace_id',
+    tag: 'seo-audit',
+    heading: 'Prior SEO audits',
+    copilotCommand: (t) => `gh copilot -- -p "Perform an SEO and Core Web Vitals audit on ${t}." --allow-all`,
+    body: ({ target, copilotInstruction, priorAuditSection }) => `# Adversarial SEO Audit
 Target: ${target}
 
-If the target is '{target}', determine it from the user's request. If the user hasn't specified a target file or module, ask them for it now.
+${TARGET_PREAMBLE('file or module')}
 
 1. Perform a multi-pass audit. For a large site, spawn read-only subagents. In Cursor use the Task tool with subagent type \`explore\` or \`generalPurpose\`. Check:
    - Technical SEO (meta tags, Open Graph, canonicals, viewport).
    - Semantic HTML and accessibility (ARIA, alt text, structural hierarchy).
    - Core Web Vitals implications (DOM size, layout shifts, LCP elements).
    - Structured data (JSON-LD) and E-E-A-T signals.
-2. **External Validation (Copilot — Opt-In)**: ${copilotInstruction}
-3. Present findings table (incorporating Copilot findings if applicable).
-4. Await approval before applying fixes. Diagnostic scans are part of the audit. Do not edit project files until the user approves the plan.
-5. Commit with the target repository's own commit helper when one exists. Discover that helper. Do not invent a script path. Do not add an audit plan file to the repository.
-**Rule**: If you don't make changes, do not commit.
+${buildStandardAuditClosing(copilotInstruction, priorAuditSection)}`,
+})
 
-${priorAuditSection}`
-                        }
-                    }]
-                }
-            }
-        },
-        {
-            name: 'adversarial-audit-skill',
-            description: 'Multi-pass adversarial skill audit (research, evaluate triggers, stress-test) Optional parameters: target, copilot, workspace_id',
-            icons: [ICON_PROMPT],
-            arguments: AUDIT_ARGUMENTS,
-            handler: (args: Record<string, string> | undefined, db: IDatabaseAdapter, _teamDb?: IDatabaseAdapter, _github?: unknown, briefingConfig?: BriefingConfig, runtime?: object | null) => {
-                const parsed = auditArgsSchema.parse(args ?? {})
-                const target = sanitizePromptTarget(parsed.target ?? '{target}')
-                const copilotTarget = sanitizeCopilotTarget(target)
-                const copilotInstruction = buildCopilotStep(
-                    parsed.copilot === 'true',
-                    `gh copilot -- -p "Evaluate the agent skill at ${copilotTarget} for trigger reliability, safety gates, and frontmatter compliance. When viewing or reading files, always provide the 'path' parameter correctly." --allow-all`
-                )
-                const priorAuditSection = buildPriorAuditSection(
-                    db,
-                    'skill-audit',
-                    'Prior skill audits',
-                    briefingConfig,
-                    parsed.workspace_id,
-                    parsed.target,
-                    runtime
-                )
-                return {
-                    messages: [{
-                        role: 'user',
-                        content: {
-                            type: 'text',
-                            text: `# Adversarial Skill Audit
+const skillAudit = buildAuditPromptDefinition({
+    name: 'adversarial-audit-skill',
+    description: 'Multi-pass adversarial skill audit (research, evaluate triggers, stress-test) Optional parameters: target, copilot, workspace_id',
+    tag: 'skill-audit',
+    heading: 'Prior skill audits',
+    copilotCommand: (t) =>
+        `gh copilot -- -p "Evaluate the agent skill at ${t} for trigger reliability, safety gates, and frontmatter compliance. When viewing or reading files, always provide the 'path' parameter correctly." --allow-all`,
+    body: ({ target, copilotInstruction, priorAuditSection }) => `# Adversarial Skill Audit
 Target: ${target}
 
-If the target is '{target}', determine it from the user's request. If the user hasn't specified a target skill, ask them for it now.
+${TARGET_PREAMBLE('skill')}
 
 1. **Subagent Research Phase**: Use the host's web search tool for official docs, release notes, and credible write-ups of the latest practices and version changes for the target skill. In Cursor use the Task tool with subagent type \`explore\` or \`generalPurpose\` when the skill tree is large. Wait for those findings.
 2. **Gap Analysis**: Compare the subagent research findings against the current skill's contents to identify missing context, outdated information, or new version features.
@@ -425,56 +220,36 @@ If the target is '{target}', determine it from the user's request. If the user h
 7. Commit with the target repository's own commit helper when one exists. Discover that helper. Do not invent a script path. Do not add an audit plan file to the repository.
 **Rule**: If you don't make changes, do not commit.
 
-${priorAuditSection}`
-                        }
-                    }]
-                }
-            }
-        },
-        {
-            name: 'adversarial-audit-workflow',
-            description: 'Multi-pass adversarial workflow audit (clarity, safety gates, loop prevention) Optional parameters: target, copilot, workspace_id',
-            icons: [ICON_PROMPT],
-            arguments: AUDIT_ARGUMENTS,
-            handler: (args: Record<string, string> | undefined, db: IDatabaseAdapter, _teamDb?: IDatabaseAdapter, _github?: unknown, briefingConfig?: BriefingConfig, runtime?: object | null) => {
-                const parsed = auditArgsSchema.parse(args ?? {})
-                const target = sanitizePromptTarget(parsed.target ?? '{target}')
-                const copilotTarget = sanitizeCopilotTarget(target)
-                const copilotInstruction = buildCopilotStep(
-                    parsed.copilot === 'true',
-                    `gh copilot -- -p "Evaluate the workflow ${copilotTarget} for sequential clarity, human-in-the-loop safety gates, and infinite loop prevention." --allow-all`
-                )
-                const priorAuditSection = buildPriorAuditSection(
-                    db,
-                    'workflow-audit',
-                    'Prior workflow audits',
-                    briefingConfig,
-                    parsed.workspace_id,
-                    parsed.target,
-                    runtime
-                )
-                return {
-                    messages: [{
-                        role: 'user',
-                        content: {
-                            type: 'text',
-                            text: `# Adversarial Workflow Audit
+${priorAuditSection}`,
+})
+
+const workflowAudit = buildAuditPromptDefinition({
+    name: 'adversarial-audit-workflow',
+    description: 'Multi-pass adversarial workflow audit (clarity, safety gates, loop prevention) Optional parameters: target, copilot, workspace_id',
+    tag: 'workflow-audit',
+    heading: 'Prior workflow audits',
+    copilotCommand: (t) =>
+        `gh copilot -- -p "Evaluate the workflow ${t} for sequential clarity, human-in-the-loop safety gates, and infinite loop prevention." --allow-all`,
+    body: ({ target, copilotInstruction, priorAuditSection }) => `# Adversarial Workflow Audit
 Target: ${target}
 
-If the target is '{target}', determine it from the user's request. If the user hasn't specified a target workflow, ask them for it now.
+${TARGET_PREAMBLE('workflow')}
 
 1. Evaluate the workflow for sequential clarity, human-in-the-loop safety gates, and infinite loop prevention. For a large workflow tree, spawn read-only subagents. In Cursor use the Task tool with subagent type \`explore\` or \`generalPurpose\`.
-2. **External Validation (Copilot — Opt-In)**: ${copilotInstruction}
-3. Present findings table (incorporating Copilot findings if applicable).
-4. Await approval before applying fixes. Diagnostic scans are part of the audit. Do not edit project files until the user approves the plan.
-5. Commit with the target repository's own commit helper when one exists. Discover that helper. Do not invent a script path. Do not add an audit plan file to the repository.
-**Rule**: If you don't make changes, do not commit.
+${buildStandardAuditClosing(copilotInstruction, priorAuditSection)}`,
+})
 
-${priorAuditSection}`
-                        }
-                    }]
-                }
-            }
-        }
+/**
+ * Get adversarial planning prompt definitions
+ */
+export function getAdversarialPromptDefinitions(): InternalPromptDef[] {
+    return [
+        getPlanReviewPromptDefinition(),
+        getCodeQualityAuditPromptDefinition(),
+        securityAudit,
+        performanceAudit,
+        seoAudit,
+        skillAudit,
+        workflowAudit,
     ]
 }

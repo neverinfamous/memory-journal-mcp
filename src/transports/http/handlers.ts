@@ -83,7 +83,8 @@ export function handleRootInfo(_req: Request, res: Response): void {
 
 /**
  * Create a bearer token authentication middleware.
- * Bypasses /health and /metrics endpoints. Uses timing-safe comparison.
+ * Bypasses only /health. [INVARIANT] /metrics exposes per-tool/per-user telemetry and requires
+ * the bearer token like every other route (M6).
  */
 export function createAuthMiddleware(
     authToken: string
@@ -91,7 +92,7 @@ export function createAuthMiddleware(
     logger.info('Bearer token authentication enabled', { module: 'HTTP' })
 
     return (req: Request, res: Response, next: () => void): void => {
-        if (req.path === '/health' || req.path === '/metrics') {
+        if (req.path === '/health') {
             next()
             return
         }

@@ -158,10 +158,13 @@ export function getSearchFacets(
     }
 
     const useFts = queryStr.length > 0
+    const sanitizedQuery = useFts ? sanitizeFtsQuery(queryStr) : ''
+    // [BOUNDARY] An all-punctuation query sanitizes to '' and `MATCH ''` throws in FTS5.
+    if (useFts && sanitizedQuery === '') return { tags: [], entryTypes: [] }
 
     if (useFts) {
         conditions.push(`fts_content MATCH ?`)
-        params.push(sanitizeFtsQuery(queryStr))
+        params.push(sanitizedQuery)
     }
 
     appendFacetFilterConditions(conditions, params, options)

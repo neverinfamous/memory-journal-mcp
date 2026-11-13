@@ -70,7 +70,7 @@ export function getCrossProjectInsights(
         }
     }
 
-    attachTopTags(connection, projects, scopeId, wsParams)
+    attachTopTags(connection, projects, scopeId)
 
     const inactiveProjects = queryInactiveProjects(
         connection,
@@ -86,13 +86,15 @@ export function getCrossProjectInsights(
 function attachTopTags(
     connection: NativeConnectionManager,
     projects: Record<string, unknown>[],
-    scopeId: string,
-    wsParams: unknown[]
+    scopeId: string
 ): void {
     if (projects.length > 0) {
         const projectNumbers = projects.map((p) => p['project_number'] as number)
         const placeholders = projectNumbers.map(() => '?').join(',')
         const mjWsFilter = scopeId !== '*' ? ' AND mj.workspace_id = ?' : ''
+        // [INVARIANT] Bind only the workspace param here; project filtering is already
+        // expressed by the IN (...) list, so extra project params would overflow the binds.
+        const wsOnly: unknown[] = scopeId !== '*' ? [scopeId] : []
         const tagsResult = connection.exec(
             `
             SELECT mj.project_number, t.name, COUNT(*) as count
@@ -103,7 +105,7 @@ function attachTopTags(
             GROUP BY mj.project_number, t.name
             ORDER BY count DESC
             `,
-            [...projectNumbers, ...wsParams]
+            [...projectNumbers, ...wsOnly]
         )
         const tagMap = new Map<number, { name: string; count: number }[]>()
         if (tagsResult[0]) {
@@ -163,6 +165,8 @@ function queryGraphEntries(
 ): QueryResult[] {
     const wsFilter = scopeId !== '*' ? ' AND mj.workspace_id = ?' : ''
     const wsParam = scopeId !== '*' ? [scopeId] : []
+    // [INTENT] Traversal must not hop through soft-deleted or foreign-workspace entries.
+    const nxWsFilter = scopeId !== '*' ? ' AND nx.workspace_id = ?' : ''
     const projSql = options.projectNumber !== undefined ? ' AND mj.project_number = ?' : ''
     const projParam = options.projectNumber !== undefined ? [options.projectNumber] : []
 
@@ -180,7 +184,11 @@ function queryGraphEntries(
                     ce.distance + 1
                 FROM connected_entries ce
                 JOIN relationships r ON r.from_entry_id = ce.id OR r.to_entry_id = ce.id
-                WHERE ce.distance < ?
+                JOIN memory_journal nx ON nx.id = CASE
+                        WHEN r.from_entry_id = ce.id THEN r.to_entry_id
+                        ELSE r.from_entry_id
+                    END
+                WHERE ce.distance < ? AND nx.deleted_at IS NULL${nxWsFilter}
             )
             SELECT DISTINCT mj.id, mj.entry_type, mj.content, mj.is_personal
             FROM memory_journal mj
@@ -188,7 +196,7 @@ function queryGraphEntries(
             WHERE mj.deleted_at IS NULL${wsFilter}${projSql}
             LIMIT ?
         `,
-            [options.entryId, ...wsParam, ...projParam, options.depth, ...wsParam, ...projParam, options.limit]
+            [options.entryId, ...wsParam, ...projParam, options.depth, ...wsParam, ...wsParam, ...projParam, options.limit]
         )
     }
     if (options.tags !== undefined && options.tags.length > 0) {

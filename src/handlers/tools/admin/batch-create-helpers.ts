@@ -42,7 +42,10 @@ async function prepareBatchEntry(
         context.config
     )
     const wsId = resolved.workspaceId
-    const pNumber = resolved.projectNumber ?? requestedProject
+    // [INVARIANT] C3: only fall back to the requested (root) project when the item did not
+    // name its own workspace; never pair a foreign project with an explicit workspace/'default'.
+    const pNumber =
+        resolved.projectNumber ?? (e.workspace_id === undefined ? requestedProject : undefined)
 
     if (pNumber === undefined || pNumber <= 0) {
         throw new Error(

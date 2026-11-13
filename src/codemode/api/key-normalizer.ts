@@ -221,8 +221,11 @@ function resolveContentLikeKey(startKey: string, ctx: KeyContext): string {
         } else if (
             methodName !== undefined &&
             (hasMethodToken(methodName, 'create') || hasMethodToken(methodName, 'update')) &&
+            (hasMethodToken(methodName, 'entry') || hasMethodToken(methodName, 'entries')) &&
             !hasMethodToken(methodName, 'link')
         ) {
+            // [H6] Only entry mutations redirect name/message/... into `content`; project,
+            // milestone, member, or config mutations keep their own `name`/`description` keys.
             if (!('content' in obj) && !('content' in result)) {
                 snakeKey = 'content'
             } else if (snakeKey === 'name' || snakeKey === 'heading' || snakeKey === 'subject') {
@@ -274,7 +277,10 @@ function propagateBatchProjectNumber(result: Record<string, unknown>): void {
         if (!Array.isArray(list)) continue
         for (const item of list) {
             if (!isRecord(item)) continue
-            if (pn !== undefined && item['project_number'] === undefined) item['project_number'] = pn
+            const itemWs = item['workspace_id']
+            // [C3] Never pair the batch root project_number with an item naming another workspace.
+            const namesOtherWs = typeof itemWs === 'string' && itemWs !== '' && itemWs !== ws
+            if (pn !== undefined && item['project_number'] === undefined && !namesOtherWs) item['project_number'] = pn
             if (ws !== undefined && item['workspace_id'] === undefined) item['workspace_id'] = ws
         }
     }

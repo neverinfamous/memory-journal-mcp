@@ -98,10 +98,19 @@ export class JournalApi {
             fallbackWs?: unknown,
             fallbackProj?: unknown
         ): void => {
-            if (rec['workspace_id'] === undefined && rec['workspaceId'] === undefined && fallbackWs !== undefined) {
+            const itemWs = rec['workspace_id'] ?? rec['workspaceId']
+            const itemNamesOtherWs =
+                typeof itemWs === 'string' && itemWs !== '' && (itemWs !== fallbackWs || itemWs === 'default')
+            if (itemWs === undefined && fallbackWs !== undefined) {
                 rec['workspace_id'] = fallbackWs
             }
-            if (rec['project_number'] === undefined && rec['projectNumber'] === undefined && fallbackProj !== undefined) {
+            // [INVARIANT] Never propagate the batch root project_number onto an item that names another workspace.
+            if (
+                rec['project_number'] === undefined &&
+                rec['projectNumber'] === undefined &&
+                fallbackProj !== undefined &&
+                !itemNamesOtherWs
+            ) {
                 rec['project_number'] = fallbackProj
             }
             if (typeof rec['project_number'] === 'string') {
@@ -117,33 +126,19 @@ export class JournalApi {
                 }
             }
             const currentWs = rec['workspace_id'] ?? rec['workspaceId']
-            if (
-                currentWs === undefined ||
-                currentWs === '' ||
-                (rec['project_number'] === undefined && rec['projectNumber'] === undefined)
-            ) {
-                const projNum =
-                    typeof rec['project_number'] === 'number'
-                        ? rec['project_number']
-                        : typeof rec['projectNumber'] === 'number'
-                          ? rec['projectNumber']
-                          : undefined
-                const contentStr = typeof rec['content'] === 'string' ? rec['content'] : undefined
-                const tagsArr = Array.isArray(rec['tags'])
-                    ? rec['tags'].filter((t): t is string => typeof t === 'string')
-                    : undefined
-
+            const projNum =
+                typeof rec['project_number'] === 'number'
+                    ? rec['project_number']
+                    : typeof rec['projectNumber'] === 'number'
+                      ? rec['projectNumber']
+                      : undefined
+            const hasExplicitWs = typeof currentWs === 'string' && currentWs !== '' && currentWs !== '*'
+            // [INVARIANT] No content/tag/CWD guessing: only pair explicitly supplied scope values;
+            // the host dispatcher binds session scope when both are omitted.
+            if (hasExplicitWs || projNum !== undefined) {
                 const resolved = resolveProjectContext({
-                    ...(typeof currentWs === 'string' && currentWs !== ''
-                        ? { workspace_id: currentWs }
-                        : {}),
+                    ...(hasExplicitWs ? { workspace_id: currentWs } : {}),
                     ...(projNum !== undefined ? { project_number: projNum } : {}),
-                    ...(projNum !== undefined
-                        ? {}
-                        : {
-                              ...(contentStr !== undefined ? { content: contentStr } : {}),
-                              ...(tagsArr !== undefined ? { tags: tagsArr } : {}),
-                          }),
                 })
                 if (
                     resolved.workspaceId !== undefined &&

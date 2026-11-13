@@ -7,6 +7,11 @@ import { resolveWriteWorkspaceId } from '../write-workspace.js'
 import { resolveProjectContext } from '../../../utils/workspace-resolver.js'
 import { prepareBatchCreateInputs, shareBatchEntriesWithTeam } from './batch-create-helpers.js'
 import {
+    findWildcardProjectMismatches,
+    safeDeleteVectors,
+    vectorWarningField,
+} from './batch-vector-helpers.js'
+import {
     BatchCreateEntriesSchema,
     BatchCreateEntriesSchemaMcp,
     BatchCreateEntriesOutputSchema,
@@ -58,14 +63,16 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
                     )
                     for (let i = 0; i < results.length; i++) {
                         const createdEntry = results[i]
-                        const sourceEntry = input.entries[i]
-                        if (createdEntry) {
+                        // [INVARIANT] H8: results are compacted (failed items omitted), so map back
+                        // through createdIndexes to the originating input/prepared index.
+                        const sourceIndex = createdIndexes[i]
+                        if (createdEntry && sourceIndex !== undefined) {
                             relationshipWarnings.push(
                                 ...linkRequestedRelationships(
                                     db,
                                     createdEntry.id,
-                                    sourceEntry?.relationships,
-                                    prepared[i]?.input.workspaceId
+                                    input.entries[sourceIndex]?.relationships,
+                                    prepared[sourceIndex]?.input.workspaceId
                                 )
                             )
                         }
@@ -121,6 +128,24 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
             handler: async (params: unknown) => {
                 try {
                     const input = BatchUpdateEntriesSchema.parse(params)
+                    const wildcardMismatches = findWildcardProjectMismatches(
+                        db,
+                        input.updates,
+                        input.workspace_id,
+                        input.project_number
+                    )
+                    if (wildcardMismatches.length > 0) {
+                        return {
+                            success: false,
+                            error: `Batch update aborted because entries were not found in the requested project: ${wildcardMismatches.join(', ')}. No rows were updated.`,
+                            code: 'RESOURCE_NOT_FOUND',
+                            category: 'resource',
+                            recoverable: true,
+                            suggestion: 'Verify the entry identifiers and project number',
+                            count: 0,
+                            notFound: wildcardMismatches,
+                        }
+                    }
                     await sendProgress(progress, 0, 2, 'Updating entries...')
                     const updates = input.updates.map((u) => {
                         const explicitWs = u.workspace_id || input.workspace_id
@@ -175,7 +200,10 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
                             impactScore: u.impact_score,
                             trustScore: u.trust_score,
                             validationStatus: u.validation_status,
-                            targetWorkspaceId: u.target_workspace_id,
+                            targetWorkspaceId:
+                                u.target_workspace_id === undefined
+                                    ? undefined
+                                    : resolveWriteWorkspaceId(u.target_workspace_id, undefined, context.config),
                             sessionId: u.session_id,
                             workspaceId: resolvedWs,
                         }
@@ -276,6 +304,7 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
                         const deleted: number[] = []
                         const notFound: number[] = []
                         const errors: { id: number; error: Error }[] = []
+                        const vectorWarnings: string[] = []
                         for (const [groupWorkspace, ids] of groups) {
                             let groupResult: {
                                 deleted: number[]
@@ -302,9 +331,7 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
                             notFound.push(...groupResult.notFound)
                             errors.push(...groupResult.errors)
                             if (vectorManager) {
-                                for (const id of groupResult.deleted) {
-                                    db.deleteVector(id)
-                                }
+                                vectorWarnings.push(...safeDeleteVectors(db, groupResult.deleted))
                             }
                         }
 
@@ -336,6 +363,7 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
                             deleted,
                             notFound,
                             permanent: input.permanent,
+                            ...vectorWarningField(vectorWarnings),
                         }
                     }
 
@@ -378,11 +406,12 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
                     
                     await sendProgress(progress, 1, 2, `Deleted ${String(deleted.length)} entries...`)
                     
+                    const vectorWarnings: string[] = []
                     if (vectorManager) {
                         const reporter = createBatchProgressReporter(progress, deleted.length, 10)
                         for (let i = 0; i < deleted.length; i++) {
                             const id = deleted[i]
-                            if (id !== undefined) db.deleteVector(id)
+                            if (id !== undefined) vectorWarnings.push(...safeDeleteVectors(db, [id]))
                             await reporter(i + 1, `Updating index ${String(i + 1)}/${String(deleted.length)}...`)
                         }
                     } else {
@@ -409,7 +438,14 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    return { success: true, count: deleted.length, deleted, notFound, permanent: input.permanent }
+                    return {
+                        success: true,
+                        count: deleted.length,
+                        deleted,
+                        notFound,
+                        permanent: input.permanent,
+                        ...vectorWarningField(vectorWarnings),
+                    }
                 } catch (err) {
                     return formatHandlerError(err)
                 }

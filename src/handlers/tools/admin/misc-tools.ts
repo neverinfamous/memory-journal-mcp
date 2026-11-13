@@ -77,7 +77,7 @@ export function getMiscTools(context: ToolContext): ToolDefinition[] {
             outputSchema: MergeTagsOutputSchema,
             annotations: {
                 readOnlyHint: false,
-                destructiveHint: false,
+                destructiveHint: true,
                 idempotentHint: false,
                 openWorldHint: false,
             },
@@ -125,26 +125,20 @@ export function getMiscTools(context: ToolContext): ToolDefinition[] {
                     if (error instanceof z.ZodError || error instanceof ValidationError) {
                         return formatHandlerError(error)
                     }
-                    // Domain error from db.mergeTags — try to preserve schema shape
-                    try {
-                        const parsed = z
-                            .object({ source_tag: z.string(), target_tag: z.string() })
-                            .parse(params)
-                        return {
-                            success: false,
-                            sourceTag: parsed.source_tag,
-                            targetTag: parsed.target_tag,
-                            entriesUpdated: 0,
-                            sourceDeleted: false,
-                            message: 'Tag merge failed',
-                            error: error instanceof Error ? error.message : 'Unknown error',
-                            code: 'RESOURCE_NOT_FOUND',
-                            category: 'resource',
-                            suggestion: 'Verify the source tag exists using list_tags',
-                            recoverable: true,
-                        }
-                    } catch {
-                        return formatHandlerError(error)
+                    // [INTENT] L8: classify via formatHandlerError (never hardcode RESOURCE_NOT_FOUND)
+                    // while preserving the merge output shape when tag names are recoverable.
+                    const parsed = z
+                        .object({ source_tag: z.string(), target_tag: z.string() })
+                        .safeParse(params)
+                    if (!parsed.success) return formatHandlerError(error)
+                    return {
+                        ...formatHandlerError(error),
+                        success: false,
+                        sourceTag: parsed.data.source_tag,
+                        targetTag: parsed.data.target_tag,
+                        entriesUpdated: 0,
+                        sourceDeleted: false,
+                        message: 'Tag merge failed',
                     }
                 }
             },

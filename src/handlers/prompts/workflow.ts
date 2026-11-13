@@ -32,6 +32,8 @@ function resolveWorkflowPromptScope(args: Record<string, string> | undefined): {
     if (hasWorkspace) {
         scope.workspaceHint = rawWorkspace
     } else if (rawProject !== undefined && numericProject !== undefined) {
+        // [INVARIANT] A numeric project resolves through the registry only; an unmatched number
+        // falls through to session/config resolution, never a literal workspace name (C8).
         scope.workspaceHint = rawProject
     }
     if (numericProject !== undefined && Number.isFinite(numericProject)) {
@@ -71,7 +73,8 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
                     'personal',
                     ws,
                     briefingConfig,
-                    scope.projectNumber
+                    scope.projectNumber,
+                    scope.workspaceHint?.toLowerCase() === 'default'
                 )
             },
         },
@@ -101,7 +104,8 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
                     'team',
                     ws,
                     briefingConfig,
-                    scope.projectNumber
+                    scope.projectNumber,
+                    scope.workspaceHint?.toLowerCase() === 'default'
                 )
             },
         },
@@ -131,7 +135,8 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
                     'personal',
                     ws,
                     briefingConfig,
-                    scope.projectNumber
+                    scope.projectNumber,
+                    scope.workspaceHint?.toLowerCase() === 'default'
                 )
             },
         },
@@ -161,7 +166,8 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
                     'team',
                     ws,
                     briefingConfig,
-                    scope.projectNumber
+                    scope.projectNumber,
+                    scope.workspaceHint?.toLowerCase() === 'default'
                 )
             },
         },
@@ -191,7 +197,8 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
                     'personal',
                     ws,
                     briefingConfig,
-                    scope.projectNumber
+                    scope.projectNumber,
+                    scope.workspaceHint?.toLowerCase() === 'default'
                 )
             },
         },
@@ -221,7 +228,8 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
                     'team',
                     ws,
                     briefingConfig,
-                    scope.projectNumber
+                    scope.projectNumber,
+                    scope.workspaceHint?.toLowerCase() === 'default'
                 )
             },
         },

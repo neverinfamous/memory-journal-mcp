@@ -116,17 +116,18 @@ function createGroupNamespaceProxy(ctx: GroupProxyContext): object {
                 if (resolvedKey === 'projects' || resolvedKey === 'project' || key === 'projects' || key === 'project') {
                     return api['projects']
                 }
+                // [M7] semantic_search / get_vector_index_stats / list_deleted_entries are `search`-group tools.
                 if (resolvedKey === 'semanticSearch' || key === 'semantic_search') {
-                    return getPropOrSnake(api['semantic'], 'semantic_search', 'semanticSearch')
+                    return getPropOrSnake(api['search'], 'semantic_search', 'semanticSearch')
                 }
                 if (resolvedKey === 'vectorStats' || key === 'vector_stats') {
-                    return getPropOrSnake(api['semantic'], 'vector_stats', 'vectorStats')
+                    return getPropOrSnake(api['search'], 'get_vector_index_stats', 'getVectorIndexStats')
                 }
                 if (resolvedKey === 'searchAuditLog' || key === 'search_audit_log') {
                     return getPropOrSnake(api['admin'], 'search_audit_log', 'searchAuditLog')
                 }
                 if (resolvedKey === 'listDeletedEntries' || key === 'list_deleted_entries') {
-                    return getPropOrSnake(api['admin'], 'list_deleted_entries', 'listDeletedEntries')
+                    return getPropOrSnake(api['search'], 'list_deleted_entries', 'listDeletedEntries')
                 }
             }
 

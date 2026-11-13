@@ -80,10 +80,10 @@ export function rankByImportance(
 /** Run the vector search, apply metadata filters, merge team results and page the output. */
 export async function runSemanticSearch(
     params: SemanticSearchParams
-): Promise<{ page: EntryWithSource[]; nextCursor?: string }> {
+): Promise<{ page: EntryWithSource[]; nextCursor?: string; degraded: boolean }> {
     const { context, input, query, wsId, hasFilters, searchOptions } = params
     const { db, teamDb, vectorManager, teamVectorManager } = context
-    if (!vectorManager) return { page: [] }
+    if (!vectorManager) return { page: [], degraded: true }
 
     // Use semantic search with overfetching for filtering and cursor pagination reliability
     const needed = input.limit + cursorOffset(input.cursor)
@@ -115,13 +115,17 @@ export async function runSemanticSearch(
         })
     }
     let ranked = entries
+    let degraded = false
 
     if (searchOptions.includeTeam && input.is_personal !== true && teamDb !== undefined) {
+        // [SIDE-EFFECT] Without a team vector index, team results come from FTS; report it as degraded.
+        if (teamVectorManager === undefined) degraded = true
+        // [INVARIANT] Keep one row past the page so pageRows can emit next_cursor.
         const teamEntries = await collectTeamSearchEntries(query, teamDb, teamVectorManager, {
             ...searchOptions,
-            limit: needed,
+            limit: needed + 1,
         })
-        ranked = mergeAndDedup(ranked, teamEntries, needed, 'preserve')
+        ranked = mergeAndDedup(ranked, teamEntries, needed + 1, 'preserve')
     }
 
     // Post-fetch importance re-sort for vector results
@@ -129,5 +133,5 @@ export async function runSemanticSearch(
         ranked = rankByImportance(db, ranked, wsId, teamDb)
     }
 
-    return pageRows(ranked, input.cursor, input.limit)
+    return { ...pageRows(ranked, input.cursor, input.limit), degraded }
 }

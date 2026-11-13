@@ -23,7 +23,9 @@ export async function searchAction(query: string | undefined, options: z.infer<t
         const requestedProject = options.defaultProject
         const workspaceId = resolveWorkspaceId(
             options.workspace,
-            requestedProject ?? serverOptions.defaultProjectNumber,
+            // [INVARIANT] Only a CLI-supplied project is explicit; the configured default stays a
+            // fallback inside `serverOptions` so it cannot override cwd/workspace pairing (H4).
+            requestedProject,
             serverOptions
         )
         const workspaceFilter = workspaceId !== undefined ? { workspaceId } : {}

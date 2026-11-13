@@ -64,7 +64,7 @@ describe('enforceAccessBoundary', () => {
         expect(mockAuditLogger.logDenial).toHaveBeenCalledWith(
             'memory://audit',
             'Insufficient scope',
-            expect.objectContaining({ scope: 'audit', category: 'admin' })
+            expect.objectContaining({ scope: 'audit', category: 'audit' })
         )
     })
 

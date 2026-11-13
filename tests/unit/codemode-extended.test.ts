@@ -130,7 +130,7 @@ describe('Code Mode Extended Coverage', () => {
                 error: 'Invalid input',
             }) as Record<string, unknown>
             expect(failed['error']).toBe('[VALIDATION_ERROR] Invalid input')
-            expect(failed['length']).toBe(0)
+            expect(() => failed['length']).toThrow()
             expect(failed['0']).toBeUndefined()
             expect(() => failed['entries']).toThrow('Invalid input')
             expect(() => failed['items']).toThrow('Invalid input')

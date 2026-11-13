@@ -287,7 +287,7 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
             outputSchema: CleanupBackupsOutputSchema,
             annotations: {
                 readOnlyHint: false,
-                destructiveHint: false,
+                destructiveHint: true,
                 idempotentHint: false,
                 openWorldHint: false,
             },

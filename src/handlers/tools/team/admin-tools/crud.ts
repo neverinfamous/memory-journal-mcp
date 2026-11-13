@@ -6,10 +6,9 @@
 
 import type { ToolDefinition, ToolContext } from '../../../../types/index.js'
 import { formatHandlerError } from '../../../../utils/error-helpers.js'
-import { resolveAuthenticatedAuthor } from '../../../../utils/security-utils.js'
 import { resolveWriteWorkspaceId } from '../../write-workspace.js'
 import { TEAM_DB_ERROR_RESPONSE, fetchAuthor, triggerTeamNotifications, resolveTeamProjectNumber } from '../helpers.js'
-import { enforceEntryOwnership } from '../rbac.js'
+import { checkSingleTeamOwnership, missingProjectNumberResponse } from './batch-delete-helpers.js'
 import {
     TeamUpdateEntrySchema,
     TeamUpdateEntrySchemaMcp,
@@ -52,7 +51,7 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                 idempotentHint: false,
                 openWorldHint: false,
             },
-            handler: (params: unknown) => {
+            handler: async (params: unknown) => {
                 try {
                     if (!teamDb) {
                         return { ...TEAM_DB_ERROR_RESPONSE }
@@ -95,12 +94,28 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
+                    if (
+                        input.workspace_id === '*' &&
+                        input.project_number !== undefined &&
+                        existing.projectNumber !== input.project_number
+                    ) {
+                        return {
+                            success: false,
+                            error: `Team entry ${String(input.entry_id)} not found in project ${String(input.project_number)}`,
+                            code: 'RESOURCE_NOT_FOUND',
+                            category: 'resource',
+                            suggestion: 'Verify the team entry ID and project number',
+                            recoverable: true,
+                        }
+                    }
+
+                    // [INVARIANT] Existing entries keep their stored workspace; never re-infer scope from content/tags or pass '*' to the write resolver.
                     wsId = resolveWriteWorkspaceId(
-                        input.workspace_id ?? existing.workspaceId,
+                        input.workspace_id === undefined || input.workspace_id === '*'
+                            ? existing.workspaceId
+                            : input.workspace_id,
                         input.project_number,
-                        context.config,
-                        input.content,
-                        input.tags
+                        context.config
                     )
                     const projectNumber = resolveTeamProjectNumber(
                         context,
@@ -108,41 +123,12 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                         input.project_number ?? existing.projectNumber
                     )
                     if (projectNumber === undefined || projectNumber === null) {
-                        return {
-                            success: false,
-                            error: 'Missing project_number. You MUST provide a valid project_number (e.g., 1) or configure DEFAULT_PROJECT_NUMBER on the server.',
-                            code: 'VALIDATION_ERROR',
-                            category: 'validation',
-                            suggestion: 'Specify the project_number in your tool call, or ensure DEFAULT_PROJECT_NUMBER is configured on the server.',
-                            recoverable: true,
-                        }
+                        return missingProjectNumberResponse()
                     }
-
-
 
                     const author = fetchAuthor(teamDb, input.entry_id)
-
-                    const currentUser = resolveAuthenticatedAuthor()
-                    const codemodeBypass = context.config?.codemodeInternalFullAccess === true
-                    const callerRole =
-                        teamDb.isTeamRbacActive?.()
-                            ? teamDb.resolveTeamRole(currentUser, context.config?.teamDefaultRole ?? 'denied')
-                            : null
-
-                    if (!codemodeBypass) {
-                        try {
-                            enforceEntryOwnership(currentUser, author, callerRole)
-                        } catch {
-                            return {
-                                success: false,
-                                error: `Permission Denied: Only the original author ("${author ?? 'none recorded'}") or a team admin can modify this team entry.`,
-                                code: 'PERMISSION_DENIED',
-                                category: 'auth',
-                                suggestion: 'You can only update entries that you authored.',
-                                recoverable: false,
-                            }
-                        }
-                    }
+                    const denied = checkSingleTeamOwnership(teamDb, context, input.entry_id, 'modify')
+                    if (denied !== null) return denied
 
                     const updated = teamDb.updateEntry(input.entry_id, {
                         content: input.content,
@@ -169,11 +155,32 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                         sessionId: input.session_id,
                     })
 
+                    if (!updated) {
+                        return {
+                            success: false,
+                            error: `Team entry ${String(input.entry_id)} not found or not updated`,
+                            code: 'RESOURCE_NOT_FOUND',
+                            category: 'resource',
+                            suggestion: 'Verify the team entry ID and workspace_id.',
+                            recoverable: true,
+                        }
+                    }
+
+                    let indexError: string | undefined
+                    if (context.teamVectorManager !== undefined && input.content !== undefined) {
+                        try {
+                            await context.teamVectorManager.addEntry(updated)
+                        } catch (indexErr) {
+                            indexError = indexErr instanceof Error ? indexErr.message : String(indexErr)
+                        }
+                    }
+
                     triggerTeamNotifications(context)
 
                     return {
                         success: true,
                         entry: { ...updated, author },
+                        ...(indexError !== undefined ? { indexError } : {}),
                     }
                 } catch (err) {
                     return formatHandlerError(err)
@@ -223,17 +230,12 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                         existing?.projectNumber ??
                         resolveTeamProjectNumber(context, wsId, project_number)
                     if (projectNumber === undefined || projectNumber === null) {
-                        return {
-                            success: false,
-                            error: 'Missing project_number. You MUST provide a valid project_number (e.g., 1) or configure DEFAULT_PROJECT_NUMBER on the server.',
-                            code: 'VALIDATION_ERROR',
-                            category: 'validation',
-                            suggestion: 'Specify the project_number in your tool call, or ensure DEFAULT_PROJECT_NUMBER is configured on the server.',
-                            recoverable: true,
-                        }
+                        return missingProjectNumberResponse()
                     }
                     wsId = resolveWriteWorkspaceId(
-                        workspace_id ?? existing?.workspaceId,
+                        workspace_id === undefined || workspace_id === '*'
+                            ? existing?.workspaceId
+                            : workspace_id,
                         projectNumber,
                         context.config
                     )
@@ -262,29 +264,8 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    const author = fetchAuthor(teamDb, entry_id)
-
-                    const currentUser = resolveAuthenticatedAuthor()
-                    const codemodeBypass = context.config?.codemodeInternalFullAccess === true
-                    const callerRole =
-                        teamDb.isTeamRbacActive?.()
-                            ? teamDb.resolveTeamRole(currentUser, context.config?.teamDefaultRole ?? 'denied')
-                            : null
-
-                    if (!codemodeBypass) {
-                        try {
-                            enforceEntryOwnership(currentUser, author, callerRole)
-                        } catch {
-                            return {
-                                success: false,
-                                error: `Permission Denied: Only the original author ("${author ?? 'none recorded'}") or a team admin can delete this team entry.`,
-                                code: 'PERMISSION_DENIED',
-                                category: 'auth',
-                                suggestion: 'You can only delete entries that you authored.',
-                                recoverable: false,
-                            }
-                        }
-                    }
+                    const denied = checkSingleTeamOwnership(teamDb, context, entry_id, 'delete')
+                    if (denied !== null) return denied
 
                     const deleted = teamDb.deleteEntry(entry_id, false, wsId)
                     if (!deleted) {
@@ -349,17 +330,12 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                         existing?.projectNumber ??
                         resolveTeamProjectNumber(context, wsId, project_number)
                     if (projectNumber === undefined || projectNumber === null) {
-                        return {
-                            success: false,
-                            error: 'Missing project_number. You MUST provide a valid project_number (e.g., 1) or configure DEFAULT_PROJECT_NUMBER on the server.',
-                            code: 'VALIDATION_ERROR',
-                            category: 'validation',
-                            suggestion: 'Specify the project_number in your tool call, or ensure DEFAULT_PROJECT_NUMBER is configured on the server.',
-                            recoverable: true,
-                        }
+                        return missingProjectNumberResponse()
                     }
                     wsId = resolveWriteWorkspaceId(
-                        workspace_id ?? existing?.workspaceId,
+                        workspace_id === undefined || workspace_id === '*'
+                            ? existing?.workspaceId
+                            : workspace_id,
                         projectNumber,
                         context.config
                     )

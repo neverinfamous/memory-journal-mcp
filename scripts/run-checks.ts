@@ -35,7 +35,7 @@ function checkFileLengths(): boolean {
         }
         for (const entry of entries) {
             const fullPath = join(dir, entry.name)
-            if (/[/\\](vendor|node_modules|dist)[/\\]?/.test(fullPath)) continue
+            if (/[/\\](vendor|node_modules|dist|third_party|coverage|build|\.next|out)[/\\]?/.test(fullPath)) continue
             if (entry.isDirectory()) {
                 walk(fullPath)
             } else if (
@@ -44,7 +44,9 @@ function checkFileLengths(): boolean {
                 !/\.(test|spec)\./.test(entry.name)
             ) {
                 const content = readFileSync(fullPath, 'utf-8')
-                const lines = content.split(/\r?\n/).length
+                const segments = content.split(/\r?\n/)
+                // [INVARIANT] A trailing newline does not start a new line (parity with editor/PowerShell counts).
+                const lines = segments.at(-1) === '' ? segments.length - 1 : segments.length
                 if (lines > 500) {
                     violations.push({ path: fullPath, lines })
                 } else if (lines >= 450) {
@@ -130,9 +132,10 @@ if (!target) {
 }
 
 console.log(success ? 'Checks passed!' : 'Checks failed!')
+// [INVARIANT] `ok` reflects every tracked gate, so a partial run cannot mask a previously failed gate.
 writeFileSync(
     healthStatusFile,
-    JSON.stringify({ ok: success, lintOk, typecheckOk, timestamp: Date.now() }, null, 2)
+    JSON.stringify({ ok: success && lintOk && typecheckOk, lintOk, typecheckOk, timestamp: Date.now() }, null, 2)
 )
 
 if (!success) {

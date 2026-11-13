@@ -3,6 +3,7 @@
  */
 
 import { z } from 'zod'
+import * as path from 'node:path'
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import { markUntrustedContent } from '../../utils/security-utils.js'
 import { resourceWorkspace, type BriefingConfig } from '../resources/shared.js'
@@ -190,29 +191,29 @@ export function resolvePromptPriorWorkspace(
     const requested = workspaceId?.trim()
     if (requested !== undefined && requested !== '' && requested !== '*') {
         if (requested.toLowerCase() === 'default') return 'default'
-        if (/^#?\d+$/.test(requested) && registry !== undefined) {
+        if (/^#?\d+$/.test(requested)) {
+            // [INVARIANT] A numeric id resolves only through the registry; an unmatched number
+            // is never echoed back as a literal workspace name (C8). Falls through to fallback.
             const num = Number(requested.replace(/^#/, ''))
-            const matchByNum = uniqueWorkspaceForProject(num, registry)
+            const matchByNum =
+                registry !== undefined ? uniqueWorkspaceForProject(num, registry) : undefined
             if (matchByNum !== undefined) {
                 return sanitizePromptTarget(matchByNum).slice(0, MAX_WORKSPACE_ID_LENGTH)
             }
+        } else {
+            const canonical = exactRegistryKey(requested, registry)
+            if (canonical !== undefined) {
+                return sanitizePromptTarget(canonical).slice(0, MAX_WORKSPACE_ID_LENGTH)
+            }
             return sanitizePromptTarget(requested).slice(0, MAX_WORKSPACE_ID_LENGTH)
         }
-        const canonical = exactRegistryKey(requested, registry)
-        if (canonical !== undefined) {
-            return sanitizePromptTarget(canonical).slice(0, MAX_WORKSPACE_ID_LENGTH)
-        }
-        return sanitizePromptTarget(requested).slice(0, MAX_WORKSPACE_ID_LENGTH)
     }
 
     const cleanTarget = targetOrTopic?.trim()
-    if (
-        cleanTarget !== undefined &&
-        cleanTarget !== '' &&
-        cleanTarget !== '{target}' &&
-        cleanTarget !== '{topic}' &&
-        registry !== undefined
-    ) {
+    // [INTENT] Unfilled `{target}`/`{topic}` placeholders mean "no target": fall through to
+    // session/config resolution instead of forcing `default`.
+    const isPlaceholder = cleanTarget === '{target}' || cleanTarget === '{topic}'
+    if (cleanTarget !== undefined && cleanTarget !== '' && !isPlaceholder && registry !== undefined) {
         if (/^#?\d+$/.test(cleanTarget)) {
             const num = Number(cleanTarget.replace(/^#/, ''))
             const matchByNum = uniqueWorkspaceForProject(num, registry)
@@ -224,18 +225,22 @@ export function resolvePromptPriorWorkspace(
         if (exactMatch !== undefined) {
             return sanitizePromptTarget(exactMatch).slice(0, MAX_WORKSPACE_ID_LENGTH)
         }
-        const sortedEntries = Object.entries(registry).sort(
-            ([, a], [, b]) => (b.path?.length ?? 0) - (a.path?.length ?? 0)
-        )
-        for (const [key, data] of sortedEntries) {
-            if (data.path !== undefined && cwdMatchesRegistryPath(data.path, cleanTarget)) {
-                return sanitizePromptTarget(key).slice(0, MAX_WORKSPACE_ID_LENGTH)
+        // [BOUNDARY] Only absolute targets are path-matched; a relative target would otherwise
+        // resolve against the server's process.cwd(), not the caller's project.
+        if (path.isAbsolute(cleanTarget)) {
+            const sortedEntries = Object.entries(registry).sort(
+                ([, a], [, b]) => (b.path?.length ?? 0) - (a.path?.length ?? 0)
+            )
+            for (const [key, data] of sortedEntries) {
+                if (
+                    data.path !== undefined &&
+                    data.path.trim() !== '' &&
+                    cwdMatchesRegistryPath(data.path, cleanTarget)
+                ) {
+                    return sanitizePromptTarget(key).slice(0, MAX_WORKSPACE_ID_LENGTH)
+                }
             }
         }
-    }
-
-    if (cleanTarget === '{target}' || cleanTarget === '{topic}') {
-        return 'default'
     }
 
     const fallback = resourceWorkspace({
@@ -317,20 +322,14 @@ export function buildPriorAuditSection(
     )
     const registry = briefingConfig?.projectRegistry ?? loadProjectRegistryFromConfig()
     const priorProjectNumber = registry?.[priorWorkspace]?.project_number
-    // Tag-only lookup first: a text query on the tag name only matches entries that repeat it in the body.
-    let priorAudits: { id: number; entryType: string; content: string; timestamp: string }[] =
+    // [INTENT] Tag-only lookup: a text query restricted to the same tag/workspace can only
+    // return a subset, so no secondary search is needed (L8).
+    const priorAudits: { id: number; entryType: string; content: string; timestamp: string }[] =
         db.searchByDateRange('1970-01-01', '2999-12-31', {
             tags: [tag],
             limit: 5,
             workspaceId: priorWorkspace,
         }).entries
-    if (priorAudits.length === 0) {
-        priorAudits = db.searchEntries(tag, {
-            tags: [tag],
-            limit: 5,
-            workspaceId: priorWorkspace,
-        }).entries
-    }
     const scopeNote =
         priorAudits.length === 0
             ? priorWorkspace === 'default'

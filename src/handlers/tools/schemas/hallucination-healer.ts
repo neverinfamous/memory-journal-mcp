@@ -8,6 +8,7 @@ import {
     healRelationshipFields,
     healAnchorsField,
     healSortByField,
+    isUpdatePayload,
 } from './hallucination-healer-fields.js'
 import {
     ENTRY_TYPES,
@@ -57,8 +58,11 @@ function healMetadataAndContextFields(obj: Record<string, unknown>): boolean {
                     : toStr(obj[field])
             if (val !== '') {
                 const existingContent = toStr(obj['content'])
-                obj['content'] =
-                    existingContent !== '' ? `${existingContent}\n\n**${label}:** ${val}` : val
+                // [INVARIANT] H8: never synthesize a full-overwrite body on update payloads.
+                if (existingContent !== '' || !isUpdatePayload(obj)) {
+                    obj['content'] =
+                        existingContent !== '' ? `${existingContent}\n\n**${label}:** ${val}` : val
+                }
             }
             Reflect.deleteProperty(obj, field)
             modified = true
@@ -262,17 +266,13 @@ function inferWorkspaceAndProject(obj: Record<string, unknown>): boolean {
         typeof obj['project_number'] === 'number' && !Number.isNaN(obj['project_number'])
             ? obj['project_number']
             : undefined
-    const contentStr = typeof obj['content'] === 'string' ? obj['content'] : undefined
-    const tagsArr = Array.isArray(obj['tags'])
-        ? obj['tags'].filter((t): t is string => typeof t === 'string')
-        : undefined
 
     if (wsId === undefined || wsId === '' || wsId === 'default' || projNum === undefined) {
+        // [INVARIANT] C3: no content/tag keyword guessing here — scope is bound by explicit
+        // args or session/registry context only, so entry text cannot hijack the workspace.
         const resolved = resolveProjectContext({
             workspace_id: wsId,
             project_number: projNum,
-            content: contentStr,
-            tags: tagsArr,
         })
         if (
             resolved.workspaceId !== undefined &&
@@ -292,7 +292,11 @@ function inferWorkspaceAndProject(obj: Record<string, unknown>): boolean {
             obj['workspace_id'] = resolved.workspaceId ?? 'default'
             modified = true
         }
-        if (obj['project_number'] === undefined && resolved.projectNumber !== undefined) {
+        if (
+            obj['project_number'] === undefined &&
+            resolved.projectNumber !== undefined &&
+            wsId !== 'default'
+        ) {
             obj['project_number'] = resolved.projectNumber
             modified = true
         }

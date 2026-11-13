@@ -1,4 +1,5 @@
 import * as fs from 'node:fs'
+import * as path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { logger } from '../../utils/logger.js'
 
@@ -137,6 +138,7 @@ function clearStaleLock(lockDir: string): void {
 /** Acquire the OS lock directory for restore, reclaiming it if the existing lock is stale. */
 export function acquireRestoreLock(lockDir: string, lockFile: string, runtime: unknown): void {
     const nonce = randomUUID()
+    fs.mkdirSync(path.dirname(lockDir), { recursive: true })
     try {
         fs.mkdirSync(lockDir)
         writeLockFile(lockFile, nonce)
@@ -151,9 +153,18 @@ export function acquireRestoreLock(lockDir: string, lockFile: string, runtime: u
             )
         }
         clearStaleLock(lockDir)
-        // Retry acquiring the lock
-        if (!fs.existsSync(lockDir)) {
-            fs.mkdirSync(lockDir, { recursive: true })
+        // [INVARIANT] Retry with a non-recursive mkdir so a concurrent reclaimer loses with EEXIST
+        // instead of both processes believing they own the lock.
+        try {
+            fs.mkdirSync(lockDir)
+        } catch (retryError: unknown) {
+            if (hasErrorCode(retryError, 'EEXIST')) {
+                throw new Error(
+                    `Another process is currently holding the database lock at ${lockDir}. Backup restore cannot safely proceed.`,
+                    { cause: retryError }
+                )
+            }
+            throw retryError
         }
         writeLockFile(lockFile, nonce)
     }

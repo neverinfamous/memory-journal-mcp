@@ -4,6 +4,7 @@ import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import type { ServerOptions } from '../../server/mcp-server/types.js'
 import { ConfigResolver } from '../../utils/config-resolver.js'
 import { buildServerOptions } from '../server-options-builder.js'
+import { dumpConfigAndExit } from '../dump-config.js'
 
 export async function getCliCommandDb(
     options: Record<string, unknown> & { config?: string; team?: boolean },
@@ -26,6 +27,11 @@ export async function getCliCommandDb(
         process.stderr.write('Startup Configuration Errors:\n')
         configErrors.forEach((err) => process.stderr.write(` - ${err}\n`))
         process.exit(1)
+    }
+
+    // [INVARIANT] `--dump-config` is answered before any database is opened (H13).
+    if (options['dumpConfig'] === true) {
+        dumpConfigAndExit(serverOptions)
     }
 
     if (options.team && !teamDb) {

@@ -22,7 +22,9 @@ function healTitleField(obj: Record<string, unknown>): boolean {
                     obj['content'] === null ||
                     currentContent === ''
                 ) {
-                    if (!('query' in obj)) obj['content'] = `# ${cleanTitle}`
+                    // [INVARIANT] H8: update payloads (entry_id/id) fully overwrite content, so a
+                    // bare title must never synthesize a replacement body.
+                    if (!('query' in obj) && !isUpdatePayload(obj)) obj['content'] = `# ${cleanTitle}`
                 } else if (!currentContent.startsWith(`# ${cleanTitle}`)) {
                     obj['content'] = `# ${cleanTitle}\n\n${currentContent}`
                 }
@@ -109,10 +111,16 @@ const RELATION_KEY_MAP: Record<string, string> = {
     dependsOn: 'depends_on',
 }
 
+/** Update payloads identify an existing entry; their `content` replaces the stored body. */
+export function isUpdatePayload(obj: Record<string, unknown>): boolean {
+    return 'entry_id' in obj || 'entryId' in obj || 'id' in obj
+}
+
 function appendLabeledContent(obj: Record<string, unknown>, label: string, value: string): void {
     const trimmed = value.trim()
     if (trimmed === '') return
     const currentContent = safeString(obj['content']).trim()
+    if (currentContent === '' && isUpdatePayload(obj)) return
     obj['content'] = currentContent !== '' ? `${currentContent}\n\n**${label}:** ${trimmed}` : trimmed
 }
 

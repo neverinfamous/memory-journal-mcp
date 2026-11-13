@@ -332,6 +332,7 @@ export const TeamUpdateOutputSchema = z
     .object({
         success: z.boolean().optional(),
         entry: TeamEntryOutputSchema.optional(),
+        indexError: z.string().optional(),
         error: z.string().optional(),
     })
     .extend(ErrorFieldsMixin.shape)

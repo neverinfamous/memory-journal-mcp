@@ -50,7 +50,9 @@ export async function exportJsonAction(options: z.infer<typeof exportJsonSchema>
         const requestedProject = options.defaultProject
         const workspaceId = resolveWorkspaceId(
             options.workspace,
-            requestedProject ?? serverOptions.defaultProjectNumber,
+            // [INVARIANT] Only a CLI-supplied project is explicit; the configured default stays a
+            // fallback inside `serverOptions` so it cannot override cwd/workspace pairing (H4).
+            requestedProject,
             serverOptions
         )
         const entries = fetchAllWorkspaceEntries(db, workspaceId, requestedProject)
@@ -89,7 +91,9 @@ export async function exportMarkdownAction(options: z.infer<typeof exportMarkdow
         const requestedProject = options.defaultProject
         const workspaceId = resolveWorkspaceId(
             options.workspace,
-            requestedProject ?? serverOptions.defaultProjectNumber,
+            // [INVARIANT] Only a CLI-supplied project is explicit; the configured default stays a
+            // fallback inside `serverOptions` so it cannot override cwd/workspace pairing (H4).
+            requestedProject,
             serverOptions
         )
         const entries = fetchAllWorkspaceEntries(db, workspaceId, requestedProject)
@@ -174,13 +178,13 @@ function resolveImportWriteScope(
         return { workspaceId: resolved.workspaceId, projectNumber }
     }
 
+    // [INVARIANT] The configured default project is a fallback only (via `serverOptions`), never
+    // an explicit project paired against the directory's workspace (H4).
+    const explicitProject = options.defaultProject ?? dirMatch?.projectNumber
     const resolved = resolveProjectContext(
         {
-            workspace_id: dirMatch?.workspaceId,
-            project_number:
-                options.defaultProject ??
-                dirMatch?.projectNumber ??
-                serverOptions.defaultProjectNumber,
+            ...(dirMatch?.workspaceId !== undefined ? { workspace_id: dirMatch.workspaceId } : {}),
+            ...(explicitProject !== undefined ? { project_number: explicitProject } : {}),
         },
         serverOptions
     )

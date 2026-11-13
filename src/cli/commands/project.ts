@@ -113,7 +113,15 @@ export async function projectCreateAction(name: string, options: Record<string, 
         return
     }
 
-    const { serverOptions } = buildServerOptions(resolver, options, command, [])
+    const configErrors: string[] = []
+    const { serverOptions } = buildServerOptions(resolver, options, command, configErrors)
+    if (configErrors.length > 0) {
+        // [INVARIANT] Never initialize a database from a configuration that failed validation (H13).
+        process.stderr.write('\nInvalid configuration, skipping database initialization:\n')
+        configErrors.forEach((err) => process.stderr.write(` - ${err}\n`))
+        process.exitCode = 1
+        return
+    }
     const effectiveProjNum = projNum
 
     if (effectiveProjNum === undefined) {
@@ -201,8 +209,17 @@ export function projectUpdateAction(name: string, options: Record<string, unknow
         modified = true
     }
 
-    const targetName = (options['rename'] as string | undefined) ?? name
+    const targetName = (options['rename'] as string | undefined)?.trim() ?? name
+    if (targetName === '') {
+        process.stderr.write('--rename requires a non-empty project name.\n')
+        process.exit(1)
+    }
     if (targetName !== name) {
+        // [INVARIANT] Renaming must never silently overwrite another registered project (H13).
+        if (Object.prototype.hasOwnProperty.call(registry, targetName)) {
+            process.stderr.write(`Project '${targetName}' already exists; refusing to overwrite it.\n`)
+            process.exit(1)
+        }
         modified = true
     }
 

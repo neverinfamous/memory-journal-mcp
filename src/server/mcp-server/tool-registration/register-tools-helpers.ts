@@ -124,13 +124,21 @@ export function formatToolFailure(
     return errorResult
 }
 
-/** Merge live briefing config with server-level defaults for resource reads. */
+/**
+ * Merge live briefing config with server-level defaults.
+ * [INVARIANT] Sticky session context is only consulted when `sessionRuntime` is supplied
+ * (ephemeral, per-read resource/prompt resolution). Tool calls pass `undefined` so session
+ * state is never written onto the shared `customToolHandlerConfig` (C1).
+ * Explicit configured `defaultProjectNumber` wins over the registry-derived project.
+ */
 export function resolveActiveBriefingConfig(
     briefingConfig: typeof DEFAULT_BRIEFING_CONFIG,
     options: ServerOptions,
-    allowedIoRoots: string[]
+    allowedIoRoots: string[],
+    sessionRuntime?: object | null
 ): typeof DEFAULT_BRIEFING_CONFIG {
-    const sessionCtx = getActiveSessionProject()
+    const sessionCtx: { workspaceId?: string; projectNumber?: number } =
+        sessionRuntime !== undefined ? getActiveSessionProject(sessionRuntime) : {}
     const resolvedRegistry = briefingConfig.projectRegistry ?? options.projectRegistry
     const resolvedDefaultWs =
         briefingConfig.defaultWorkspaceId ??
@@ -143,9 +151,9 @@ export function resolveActiveBriefingConfig(
     const registryProject =
         canonicalWs !== undefined ? resolvedRegistry?.[canonicalWs]?.project_number : undefined
     const resolvedDefaultProj =
-        registryProject ??
         briefingConfig.defaultProjectNumber ??
         options.defaultProjectNumber ??
+        registryProject ??
         sessionCtx.projectNumber
     return {
         ...briefingConfig,

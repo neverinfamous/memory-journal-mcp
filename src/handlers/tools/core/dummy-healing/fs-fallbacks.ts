@@ -18,150 +18,9 @@ import { handleReadResource } from './mcp-fallbacks.js'
 
 const FLEXIBLE_PASSTHROUGH_SCHEMA = z.looseObject({ ...ErrorFieldsMixin.shape })
 
-export interface GrepMatch {
-    file: string
-    line: number
-    text: string
-}
-
-export interface SearchDirectoryOptions {
-    filePattern?: string | undefined
-    caseInsensitive?: boolean | undefined
-    isRegex?: boolean | undefined
-    maxResults?: number | undefined
-}
-
-const IGNORED_DIRS = new Set([
-    'node_modules', '.git', '.test-output', 'dist', '.cache', 'coverage', '.turbo',
-])
-
-function buildMatcher(query: string, options: SearchDirectoryOptions): RegExp {
-    const flags = options.caseInsensitive === true ? 'i' : ''
-    try {
-        if (options.isRegex === true) return new RegExp(query, flags)
-        return new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), flags)
-    } catch {
-        return new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), flags)
-    }
-}
-
-function matchesFilePattern(entryName: string, filePattern?: string): boolean {
-    if (filePattern === undefined || filePattern.length === 0) return true
-    const pattern = filePattern.toLowerCase()
-    const name = entryName.toLowerCase()
-    if (pattern.startsWith('*.')) return name.endsWith(pattern.slice(1))
-    if (!pattern.includes('*')) return name === pattern
-    const expression = `^${pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*')}$`
-    return new RegExp(expression).test(name)
-}
-
-function scanContentLines(
-    fullPath: string,
-    content: string,
-    matcher: RegExp,
-    results: GrepMatch[],
-    maxResults: number
-): void {
-    if (content.length > 2 * 1024 * 1024) return
-    const lines = content.split('\n')
-    for (let i = 0; i < lines.length; i++) {
-        if (results.length >= maxResults) break
-        const line = lines[i]
-        if (typeof line === 'string' && matcher.test(line)) {
-            results.push({ file: fullPath, line: i + 1, text: line.trimEnd() })
-        }
-    }
-}
-
-export async function searchDirectoryAsync(
-    dir: string,
-    query: string,
-    options: SearchDirectoryOptions
-): Promise<GrepMatch[]> {
-    const results: GrepMatch[] = []
-    const maxResults = typeof options.maxResults === 'number' ? options.maxResults : 500
-    const matcher = buildMatcher(query, options)
-
-    async function traverse(currentDir: string): Promise<void> {
-        if (results.length >= maxResults) return
-        let entries: fs.Dirent[]
-        try {
-            entries = await fs.promises.readdir(currentDir, { withFileTypes: true })
-        } catch {
-            return
-        }
-        for (const entry of entries) {
-            if (results.length >= maxResults) break
-            if (entry.isSymbolicLink()) continue
-            const fullPath = path.join(currentDir, entry.name)
-            if (entry.isDirectory()) {
-                if (!IGNORED_DIRS.has(entry.name)) await traverse(fullPath)
-            } else if (entry.isFile() && matchesFilePattern(entry.name, options.filePattern)) {
-                let handle: fs.promises.FileHandle | undefined
-                try {
-                    handle = await fs.promises.open(fullPath, fs.constants.O_RDONLY)
-                    const stat = await handle.stat()
-                    if (stat.size <= 2 * 1024 * 1024) {
-                        const content = await handle.readFile('utf-8')
-                        scanContentLines(fullPath, content, matcher, results, maxResults)
-                    }
-                } catch {
-                    // Skip unreadable or locked files
-                } finally {
-                    await handle?.close()
-                }
-            }
-        }
-    }
-
-    await traverse(dir)
-    return results
-}
-
-export function searchDirectory(
-    dir: string,
-    query: string,
-    options: SearchDirectoryOptions
-): GrepMatch[] {
-    const results: GrepMatch[] = []
-    const maxResults = typeof options.maxResults === 'number' ? options.maxResults : 500
-    const matcher = buildMatcher(query, options)
-
-    function traverse(currentDir: string): void {
-        if (results.length >= maxResults) return
-        let entries: fs.Dirent[]
-        try {
-            entries = fs.readdirSync(currentDir, { withFileTypes: true })
-        } catch {
-            return
-        }
-        for (const entry of entries) {
-            if (results.length >= maxResults) break
-            if (entry.isSymbolicLink()) continue
-            const fullPath = path.join(currentDir, entry.name)
-            if (entry.isDirectory()) {
-                if (!IGNORED_DIRS.has(entry.name)) traverse(fullPath)
-            } else if (entry.isFile() && matchesFilePattern(entry.name, options.filePattern)) {
-                let fd: number | undefined
-                try {
-                    fd = fs.openSync(fullPath, fs.constants.O_RDONLY)
-                    const stat = fs.fstatSync(fd)
-                    if (stat.size <= 2 * 1024 * 1024) {
-                        const content = fs.readFileSync(fd, 'utf-8')
-                        scanContentLines(fullPath, content, matcher, results, maxResults)
-                    }
-                } catch {
-                    // Skip unreadable or locked files
-                } finally {
-                    if (fd !== undefined) fs.closeSync(fd)
-                }
-            }
-        }
-    }
-
-    traverse(dir)
-    return results
-}
+export { searchDirectory, searchDirectoryAsync } from './directory-search.js'
+export type { GrepMatch, SearchDirectoryOptions } from './directory-search.js'
+import { searchDirectoryAsync } from './directory-search.js'
 
 function normalizeStrippedArgs(params: unknown): Record<string, unknown> {
     const raw =
@@ -202,6 +61,20 @@ export async function handleGrepSearch(
     const isRegex =
         rawArgs['is_regex'] === true || rawArgs['IsRegex'] === true || rawArgs['isRegex'] === true
 
+    if (isRegex) {
+        try {
+            new RegExp(query)
+        } catch (err) {
+            return {
+                success: false,
+                error: `Invalid regex pattern '${query}': ${err instanceof Error ? err.message : String(err)}`,
+                code: 'VALIDATION_ERROR',
+                category: 'validation',
+                recoverable: true,
+            }
+        }
+    }
+
     const allowedRoots = context?.config?.allowedIoRoots ?? []
     let searchPath = rawPath
     if (typeof searchPath === 'string' && searchPath.trim() !== '') {
@@ -228,6 +101,20 @@ export async function handleGrepSearch(
             stat = await fs.promises.stat(searchPath)
         } catch {
             stat = null
+        }
+        // [INVARIANT] M5: an explicit-but-missing search_path is an error, not a silent reroute.
+        if (stat === null) {
+            return {
+                success: false,
+                error: `Search path not found: '${searchPath}'`,
+                code: 'RESOURCE_NOT_FOUND',
+                category: 'resource',
+                recoverable: true,
+                matches: [],
+                totalMatches: 0,
+                suggestion: "Provide an existing 'search_path', or use 'search_entries' for journal search.",
+                _healing_note: `🛠️ AUTONOMOUS HEALING: '${toolName}' was not executed because the explicit search_path does not exist.`,
+            }
         }
         if (stat !== null) {
             try {

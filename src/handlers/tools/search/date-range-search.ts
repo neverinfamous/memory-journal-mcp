@@ -46,17 +46,23 @@ export function getDateRangeSearchTool(context: ToolContext): ToolDefinition[] {
 
                     let personalCursor = input.cursor
                     let teamCursor = input.cursor
+                    // [INVARIANT] A compound cursor with a missing side means that side is exhausted; never restart it at page 1.
+                    let personalExhausted = false
+                    let teamExhausted = false
                     if (input.cursor && input.include_team && input.is_personal !== true) {
                         const { decodeCompoundCursor } = await import('./fts.js')
                         const compound = decodeCompoundCursor(input.cursor)
                         if (compound) {
                             personalCursor = compound.p
                             teamCursor = compound.t
+                            personalExhausted = compound.p === undefined
+                            teamExhausted = compound.t === undefined
                         }
                     }
 
                     const perDbLimit = calcPerDbLimit(input.limit, !!teamDb)
-                    const personalEntries = db.searchByDateRange(input.start_date, input.end_date, {
+                    const emptyPage: ReturnType<typeof db.searchByDateRange> = { entries: [] }
+                    const personalEntries = personalExhausted ? emptyPage : db.searchByDateRange(input.start_date, input.end_date, {
                         entryType: input.entry_type,
                         tags: input.tags,
                         isPersonal: input.is_personal,
@@ -74,7 +80,7 @@ export function getDateRangeSearchTool(context: ToolContext): ToolDefinition[] {
                     // Cross-database merge when team DB is available
                     // Skip team DB when is_personal is explicitly true (team entries are never personal)
                     if (teamDb && input.include_team && input.is_personal !== true) {
-                        const teamEntries = teamDb.searchByDateRange(
+                        const teamEntries = teamExhausted ? emptyPage : teamDb.searchByDateRange(
                             input.start_date,
                             input.end_date,
                             {

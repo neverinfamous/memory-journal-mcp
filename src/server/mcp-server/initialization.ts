@@ -205,9 +205,6 @@ export async function initializeDependencies(options: ServerOptions): Promise<Se
 
     const db = DatabaseAdapterProxy.create(primaryDb, testDb)
 
-    // Auto-prune low-importance old entries if configured
-    await runStartupAutoPrune(db, options)
-
     // Initialize ServerRuntime (handles instance-scoped globals)
     const runtime = new ServerRuntime()
 
@@ -263,6 +260,26 @@ export async function initializeDependencies(options: ServerOptions): Promise<Se
 
     runtime.configManager = configManager
 
+    // [INVARIANT] Auto-prune runs only after `--config` is loaded so it is scoped to the
+    // effective default workspace/project (H3).
+    const loadedBriefing = configManager.getConfig().briefingConfig
+    try {
+        await runStartupAutoPrune(db, options, {
+            ...(loadedBriefing.defaultWorkspaceId !== undefined &&
+            loadedBriefing.defaultWorkspaceId !== 'default'
+                ? { defaultWorkspaceId: loadedBriefing.defaultWorkspaceId }
+                : {}),
+            ...(loadedBriefing.defaultProjectNumber !== undefined
+                ? { defaultProjectNumber: loadedBriefing.defaultProjectNumber }
+                : {}),
+            ...(loadedBriefing.projectRegistry !== undefined
+                ? { projectRegistry: loadedBriefing.projectRegistry }
+                : {}),
+        })
+    } catch (error: unknown) {
+        configManager.close()
+        throw error
+    }
     // Initialize scheduler (HTTP/SSE only) — must be before handleResourceRead
     // which captures scheduler in its closure.
     const scheduler: Scheduler | null = createSchedulerIfConfigured(options, db, vectorManager, runtime)

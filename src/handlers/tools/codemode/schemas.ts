@@ -2,6 +2,17 @@ import { z } from 'zod'
 
 import { relaxedNumber } from '../schemas.js'
 
+/**
+ * [M10] Null/empty/non-numeric/non-positive timeouts resolve to `undefined` (server default)
+ * instead of `z.coerce.number()` turning `null`/`""` into a 0ms timeout.
+ */
+const POSITIVE_TIMEOUT = z.preprocess((val) => {
+    if (val === undefined || val === null) return undefined
+    if (typeof val === 'string' && val.trim() === '') return undefined
+    const num = typeof val === 'number' ? val : typeof val === 'string' ? Number(val.trim()) : Number.NaN
+    return Number.isFinite(num) && num > 0 ? num : undefined
+}, z.number().positive().optional())
+
 // ============================================================================
 // Tool Classification Sets
 // ============================================================================
@@ -69,8 +80,8 @@ export const ExecuteCodeSchema = z.preprocess((val) => {
     repo: z.string().optional(),
     dry_run: z.boolean().optional().default(false),
     context: z.unknown().optional(),
-    timeout_ms: z.coerce.number().optional(),
-    timeout: z.coerce.number().optional(),
+    timeout_ms: POSITIVE_TIMEOUT,
+    timeout: POSITIVE_TIMEOUT,
     readonly: z.boolean().optional(),
     max_result_size: relaxedNumber().optional(),
     maxResultSize: relaxedNumber().optional(),
@@ -145,14 +156,7 @@ export const ExecuteCodeSchemaMcp = z.object({
         .describe(
             'If true, execution is restricted to read-only operations. Write tools will be filtered out of the API bridge.'
         ),
-    timeout: z.preprocess(
-        (val) => {
-            if (val === undefined || val === null) return undefined;
-            const num = Number(val);
-            return Number.isNaN(num) ? undefined : num;
-        },
-        z.number().optional()
-    ).describe(
+    timeout: POSITIVE_TIMEOUT.describe(
         'Maximum execution time in milliseconds before the sandbox forcibly terminates the script (max: 30000ms).'
     ),
     max_result_size: relaxedNumber()

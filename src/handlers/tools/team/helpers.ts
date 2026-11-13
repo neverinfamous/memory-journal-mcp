@@ -81,12 +81,12 @@ export function resolveTeamProjectNumber(
 ): number | null | undefined {
     const trimmed = wsId.trim()
     if (trimmed === '' || trimmed === '*') {
-        if (explicitProjectNumber !== undefined && explicitProjectNumber !== null) return explicitProjectNumber
-        return context.config?.defaultProjectNumber
+        // [INVARIANT] The wildcard never inherits the server default project; callers must supply or derive it from the stored entry.
+        return explicitProjectNumber
     }
     const registry = activeProjectRegistry(context.config?.projectRegistry)
     const paired = pairStoredScope(trimmed, explicitProjectNumber, registry)
     if (paired.projectNumber !== undefined && paired.projectNumber !== null) return paired.projectNumber
-    // [INVARIANT] An omitted workspace that resolved to `default` keeps the configured project. A supplied number owned by another workspace is already rejected.
-    return context.config?.defaultProjectNumber
+    // [INVARIANT] Only an omitted workspace that resolved to `default` keeps the configured project; unregistered named workspaces never inherit it.
+    return trimmed === 'default' ? context.config?.defaultProjectNumber : undefined
 }

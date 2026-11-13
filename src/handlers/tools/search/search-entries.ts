@@ -161,7 +161,7 @@ export function getSearchEntriesTool(context: ToolContext): ToolDefinition[] {
                                 entries: semanticPage.page,
                                 count: semanticPage.page.length,
                                 searchMode: isAuto ? 'semantic (auto)' : 'semantic',
-                                degraded: false,
+                                degraded: semanticPage.degraded,
                                 facets,
                                 ...(semanticPage.nextCursor !== undefined ? { next_cursor: semanticPage.nextCursor } : {}),
                             }

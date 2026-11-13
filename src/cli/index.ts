@@ -3,20 +3,20 @@
 import type { Command } from 'commander'
 import type { z } from 'zod'
 import { createProgram, addAgentInstructions, withGroup, withValidation, normalizeCliArgv } from './program.js'
-import { 
-    addServerOptions, addCoreOptions, addDatabaseOptions, 
-    addCodeModeOptions, addAuditOptions, addPruningOptions,
+import {
+    addServerOptions, addCoreOptions, addDatabaseOptions,
+    addCodeModeOptions, addAuditOptions,
     addWorkspaceOptions, addWorkspaceScopeOptions, addVectorOptions,
     addOutputOptions
 } from './option-groups.js'
 import { serveAction, serveSchema } from './commands/serve.js'
 import { execAction, execSchema } from './commands/exec.js'
-import { backupAction, restoreAction, vacuumAction, pruneAction, auditAction, rebuildIndexAction, backupSchema, restoreSchema, vacuumSchema, pruneSchema, auditSchema, rebuildIndexSchema } from './commands/admin.js'
-import { createEntryAction, updateEntryAction, createEntrySchema, updateEntrySchema } from './commands/entry.js'
 import { searchAction, searchSchema } from './commands/search.js'
 import { visualizeAction, visualizeSchema } from './commands/visualize.js'
 import { analyticsStatsAction, analyticsInsightsAction, analyticsSchema } from './commands/analytics.js'
 import { exportJsonAction, exportMarkdownAction, importMarkdownAction, importExternalAction, exportJsonSchema, exportMarkdownSchema, importMarkdownSchema, importExternalSchema } from './commands/io.js'
+import { registerAdminCommands, registerProjectCommands } from './register-admin-commands.js'
+import { registerEntryCommands } from './register-entry-commands.js'
 const program = createProgram()
 
 program
@@ -40,63 +40,12 @@ addAgentInstructions(program,
     `
 🤖 AI AGENT INSTRUCTIONS:
 - This is an agent-native CLI. 
-- ALWAYS use valid JSON strings for JSON arguments (e.g. \`--rel '[{"target_id":1,"relation_type":"relates_to"}]'\`).
+- ALWAYS use valid JSON strings for JSON arguments (e.g. \`--rel '[{"target_id":1,"relation_type":"references"}]'\`).
 - If you forget project details, DO NOT hallucinate. Query \`memory://agent-context/{+repo}\`.
 - 🛠️ AUTONOMOUS HEALING: DO NOT attempt to run \`node .../build/index.js\`. ALWAYS use the global \`memory-journal-mcp\` wrapper or \`bun src/cli/index.ts\`.`
 )
 
-import { projectCreateAction, projectListAction, projectUpdateAction, projectDeleteAction } from './commands/project.js'
-
-// Setup 'project' command group
-const projectCmd = program
-    .command('project')
-    .description('Manage projects in the memory-journal-mcp global registry')
-
-const projectListCmd = projectCmd
-    .command('list')
-    .description('List all registered projects')
-    .option('--json', 'Output as JSON')
-addCoreOptions(projectListCmd)
-projectListCmd.action(projectListAction)
-
-const projectCreateCmd = projectCmd
-    .command('create <name>')
-    .description('Register a new project in the global registry')
-withGroup(projectCreateCmd, 'Command Options', (cmd: Command) => {
-    cmd
-        .option('--path <path>', 'Absolute path to the local repository (required)')
-        .option('--number <number>', 'GitHub Project number (optional)')
-        .option('--skip-init', 'Skip automated database initialization entry')
-})
-addCoreOptions(projectCreateCmd)
-addDatabaseOptions(projectCreateCmd)
-addOutputOptions(projectCreateCmd)
-addAgentInstructions(projectCreateCmd,
-    `
-🤖 AI AGENT INSTRUCTIONS:
-- Run this command first when initializing a new codebase.
-- The command will AUTOMATICALLY initialize the project in the database. You no longer need to run a secondary 'entry create' command.`
-)
-projectCreateCmd.action(projectCreateAction)
-
-const projectUpdateCmd = projectCmd
-    .command('update <name>')
-    .description('Update an existing project in the registry')
-withGroup(projectUpdateCmd, 'Command Options', (cmd: Command) => {
-    cmd
-        .option('--path <path>', 'New absolute path to the local repository')
-        .option('--number <number>', 'New GitHub Project number')
-        .option('--rename <name>', 'Rename the project key')
-})
-addCoreOptions(projectUpdateCmd)
-projectUpdateCmd.action(projectUpdateAction)
-
-const projectDeleteCmd = projectCmd
-    .command('delete <name>')
-    .alias('remove')
-    .description('Remove a project from the global registry')
-addCoreOptions(projectDeleteCmd)
-projectDeleteCmd.action(projectDeleteAction)
+registerProjectCommands(program)
 
 // Setup 'exec' command
 const execCmd = program
@@ -119,230 +68,8 @@ addAgentInstructions(execCmd,
 )
 execCmd.action(withValidation(execSchema, execAction))
 
-// Setup 'admin' command group
-const adminCmd = program
-    .command('admin')
-    .description('Database administration utilities')
-addAgentInstructions(adminCmd,
-    `
-🤖 AI AGENT INSTRUCTIONS:
-- These are dangerous administrative utilities. ALWAYS verify the target database before executing.`
-)
-
-const backupCmd = adminCmd
-    .command('backup')
-    .description('Export the database to a timestamped backup file')
-
-withGroup(backupCmd, 'Command Options', (cmd: Command) => {
-    cmd.option('--dest <path>', 'Destination path or filename for the backup')
-})
-addOutputOptions(backupCmd)
-
-addCoreOptions(backupCmd)
-addDatabaseOptions(backupCmd)
-addAgentInstructions(backupCmd,
-    `
-🤖 AI AGENT INSTRUCTIONS:
-- If \`--dest\` is omitted, a timestamped backup will be created in the backups directory.`
-)
-backupCmd.action(withValidation(backupSchema, backupAction))
-
-const restoreCmd = adminCmd
-    .command('restore <file>')
-    .description('Restore the database from a backup file')
-
-addOutputOptions(restoreCmd)
-
-addCoreOptions(restoreCmd)
-addDatabaseOptions(restoreCmd)
-addAgentInstructions(restoreCmd,
-    `
-🤖 AI AGENT INSTRUCTIONS:
-- This will overwrite the CURRENT database. ALWAYS take a backup before running restore.`
-)
-restoreCmd.action(withValidation(restoreSchema, restoreAction))
-
-const vacuumCmd = adminCmd
-    .command('vacuum')
-    .description('Optimize database query planner and flush WAL')
-
-addOutputOptions(vacuumCmd)
-
-addCoreOptions(vacuumCmd)
-addDatabaseOptions(vacuumCmd)
-vacuumCmd.action(withValidation(vacuumSchema, vacuumAction))
-
-const pruneCmd = adminCmd
-    .command('prune')
-    .description('Run autonomous database pruning')
-
-withGroup(pruneCmd, 'Command Options', (cmd: Command) => {
-    cmd
-        .option('--dry-run', 'Log candidates without modifying the database')
-        .option('--exclude-tags <tags>', 'Comma-separated tags to exclude')
-})
-addOutputOptions(pruneCmd)
-
-addCoreOptions(pruneCmd)
-addDatabaseOptions(pruneCmd)
-addWorkspaceScopeOptions(pruneCmd)
-addPruningOptions(pruneCmd)
-addAgentInstructions(pruneCmd,
-    `
-🤖 AI AGENT INSTRUCTIONS:
-- ALWAYS run with \`--dry-run\` first to verify what will be pruned.`
-)
-pruneCmd.action(withValidation(pruneSchema, pruneAction))
-
-const auditCmd = adminCmd
-    .command('audit')
-    .description('Search operational telemetry audit logs')
-withGroup(auditCmd, 'Command Options', (cmd: Command) => {
-    cmd
-        .option('--limit <number>', 'Maximum number of results to return')
-        .option('--tool <string>', 'Filter by tool name')
-        .option('--user <string>', 'Filter by user')
-        .option('--category <string>', 'Filter by category')
-        .option('--status <string>', 'Filter by status (success|error)')
-})
-addOutputOptions(auditCmd)
-addCoreOptions(auditCmd)
-addDatabaseOptions(auditCmd)
-addAuditOptions(auditCmd)
-auditCmd.action(withValidation(auditSchema, auditAction))
-
-const rebuildIndexCmd = adminCmd
-    .command('rebuild-index')
-    .description('Rebuild semantic search vector index')
-withGroup(rebuildIndexCmd, 'Command Options', (cmd: Command) => {
-    cmd.option('--team', 'Rebuild index for team database')
-})
-addOutputOptions(rebuildIndexCmd)
-addCoreOptions(rebuildIndexCmd)
-addDatabaseOptions(rebuildIndexCmd)
-rebuildIndexCmd.action(withValidation(rebuildIndexSchema, rebuildIndexAction))
-
-// Setup 'entry' command group
-const entryCmd = program
-    .command('entry')
-    .description('Manage journal entries')
-
-const createEntryCmd = entryCmd
-    .command('create [args...]')
-    .description('Create a new journal entry directly in the database')
-
-withGroup(createEntryCmd, 'Command Options', (cmd: Command) => {
-    cmd
-        .option('-f, --file <path>', 'Load markdown content from a file')
-        .option('--content-file <file>', 'Alias for --file (Auto-healing agent hallucination)')
-        .option('-c, --content <string>', 'Raw markdown content string')
-        .option('--body <string>', 'Alias for --content (Auto-healing agent hallucination)')
-        .option('-s, --summary <summary>', 'Alias for --title (Auto-healing agent hallucination)')
-        .option('--title <title>', 'Optional title (will be prepended as an H1 to content if provided, for agent compatibility)')
-        .option('-t, --type <type>', 'Entry type (e.g., retrospective, personal_reflection)')
-        .option('--category <type>', 'Entry type (alias)')
-        .option('--tags <tags>', 'Comma-separated tags (e.g., session-summary)')
-        .option('--tag <tags>', 'Alias for --tags (Auto-healing agent hallucination)')
-        .option('-p, --project <number>', 'Project number (alias)')
-        .option('--project-number <number>', 'Project number')
-        .option('--project_number <number>', 'Project number (alias)')
-        .option('--trust, --trust-score <number>', 'Trust score (0.0 to 1.0)')
-        .option('--trust_score <number>', 'Trust score (0.0 to 1.0) (alias)')
-        .option('--confidence <number>', 'Trust score (0.0 to 1.0) (alias)')
-        .option('--impact, --impact-score <number>', 'Impact score (0.0 to 1.0)')
-        .option('--impact_score <number>', 'Impact score (0.0 to 1.0) (alias)')
-        .option('--validation-status <status>', 'Validation status (passed|none|failed)')
-        .option('--validation_status <status>', 'Validation status (passed|none|failed) (alias)')
-        .option('--validation <status>', 'Validation status (passed|none|failed) (alias)')
-        .option('-w, --workspace <id>', 'Workspace ID')
-        .option('--workspace-id <id>', 'Workspace ID (alias)')
-        .option('--workspace_id <id>', 'Workspace ID (alias)')
-        .option('--session, --session-id <id>', 'Session ID')
-        .option('--session_id <id>', 'Session ID (alias)')
-        .option('--related-to <ids>', 'Comma-separated entry IDs to relate to')
-        .option('--rel, --relationships <json>', 'JSON string of relationships')
-        .option('--rel-file <path>', 'Load relationships JSON from a file')
-        .option('--auto-context <json>', 'JSON string for auto context')
-        .option('--auto-context-file <path>', 'Load auto context JSON from a file')
-        .option('--metadata <path>', 'Load unified metadata JSON from a file (overrides individual flags)')
-        .option('--team', 'Route to team database')
-})
-addOutputOptions(createEntryCmd)
-
-addCoreOptions(createEntryCmd)
-addDatabaseOptions(createEntryCmd)
-addAgentInstructions(createEntryCmd,
-    `
-🤖 AI AGENT INSTRUCTIONS:
-- METADATA PAYLOAD: ALWAYS prefer using \`--metadata <path>\` to pass tags, scores, auto_context, and relationships in a single JSON file.
-- MULTI-LINE CONTENT: ALWAYS write long content to a scratch file and use \`-f <path>\` instead of \`-c\` to prevent shell quoting failures.
-- SNAKE_CASE FLAGS: Do not hallucinate snake_case CLI flags (like --project_number or --session_id). The CLI expects kebab-case (--project-number).`
-)
-createEntryCmd.action(withValidation(createEntrySchema, createEntryAction))
-
-const updateEntryCmd = entryCmd
-    .command('update [content]')
-    .description('Update an existing journal entry')
-
-withGroup(updateEntryCmd, 'Command Options', (cmd: Command) => {
-    cmd
-        .option('--id <number>', 'ID of the entry to update')
-        .option('--expected-version <number>', 'Expected version of the entry (for concurrent modification safety)')
-        .option('-f, --file <path>', 'Load new markdown content from a file')
-        .option('--content-file <file>', 'Alias for --file (Auto-healing agent hallucination)')
-        .option('-c, --content <string>', 'Raw new markdown content string')
-        .option('--body <string>', 'Alias for --content (Auto-healing agent hallucination)')
-        .option('-d, --description <string>', 'Alias for --content (Auto-healing agent hallucination)')
-        .option('--title <title>', 'Optional title (will be prepended as an H1 to content if provided, for agent compatibility)')
-        .option('-t, --type <type>', 'Entry type (e.g., retrospective, personal_reflection)')
-        .option('--category <type>', 'Entry type (alias)')
-        .option('--tags <tags>', 'Comma-separated tags (e.g., session-summary)')
-        .option('--tag <tags>', 'Alias for --tags (Auto-healing agent hallucination)')
-        .option('-p, --project <number>', 'Project number (alias)')
-        .option('--project-number <number>', 'Project number')
-        .option('--project_number <number>', 'Project number (alias)')
-        .option('--trust, --trust-score <number>', 'Trust score (0.0 to 1.0)')
-        .option('--trust_score <number>', 'Trust score (0.0 to 1.0) (alias)')
-        .option('--confidence <number>', 'Trust score (0.0 to 1.0) (alias)')
-        .option('--impact, --impact-score <number>', 'Impact score (0.0 to 1.0)')
-        .option('--impact_score <number>', 'Impact score (0.0 to 1.0) (alias)')
-        .option('--validation-status <status>', 'Validation status (passed|none|failed)')
-        .option('--validation_status <status>', 'Validation status (passed|none|failed) (alias)')
-        .option('--validation <status>', 'Validation status (passed|none|failed) (alias)')
-        .option('-w, --workspace <id>', 'Workspace ID')
-        .option('--workspace-id <id>', 'Workspace ID (alias)')
-        .option('--workspace_id <id>', 'Workspace ID (alias)')
-        .option('--session, --session-id <id>', 'Session ID')
-        .option('--session_id <id>', 'Session ID (alias)')
-        .option('--related-to <ids>', 'Comma-separated entry IDs to relate to')
-        .option('--rel, --relationships <json>', 'JSON string of relationships')
-        .option('--rel-file <path>', 'Load relationships JSON from a file')
-        .option('--auto-context <json>', 'JSON string for auto context')
-        .option('--auto-context-file <path>', 'Load auto context JSON from a file')
-        .option('--metadata <path>', 'Load unified metadata JSON from a file (overrides individual flags)')
-        .option('--team', 'Route to team database')
-})
-addOutputOptions(updateEntryCmd)
-
-addCoreOptions(updateEntryCmd)
-addDatabaseOptions(updateEntryCmd)
-addAgentInstructions(updateEntryCmd,
-    `
-🤖 AI AGENT INSTRUCTIONS:
-- METADATA PAYLOAD: ALWAYS prefer using \`--metadata <path>\` to pass tags, scores, auto_context, and relationships in a single JSON file.
-- MULTI-LINE CONTENT: ALWAYS write long content to a scratch file and use \`-f <path>\` instead of \`-c\` to prevent shell quoting failures.
-- SNAKE_CASE FLAGS: Do not hallucinate snake_case CLI flags (like --project_number or --session_id). The CLI expects kebab-case (--project-number).`
-)
-updateEntryCmd.action(withValidation(updateEntrySchema, updateEntryAction))
-
-// Setup agent healing for 'delete' hallucination
-entryCmd
-    .command('delete [args...]', { hidden: true })
-    .allowUnknownOption()
-    .action(() => {
-        process.stderr.write(`🛠️ AUTONOMOUS HEALING: The 'entry delete' command does not exist in the CLI. Deleting entries is an admin-level operation. Please use the MCP tool 'mj_execute_code' with 'mj.admin.batchDeleteEntries({ entry_ids: [...] })' instead.\n`);
-        process.exit(1);
-    });
+registerAdminCommands(program)
+registerEntryCommands(program)
 
 // Setup 'search' command
 const searchCmd = program

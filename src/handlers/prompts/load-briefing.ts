@@ -231,7 +231,8 @@ export function getLoadBriefingPromptDefinitions(): InternalPromptDef[] {
                     const primaryKey = firstResolvedUri.slice('memory://briefing/'.length)
                     if (primaryKey.length > 0) {
                         const primaryProjNum = getProjectNumber(registry[primaryKey])
-                        setActiveSessionProject(primaryKey, primaryProjNum, runtime)
+                        // [INTENT] `null` clears a stale project number on unnumbered repos (H1).
+                        setActiveSessionProject(primaryKey, primaryProjNum ?? null, runtime)
                     }
                 }
 

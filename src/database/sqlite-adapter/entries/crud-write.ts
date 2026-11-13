@@ -84,10 +84,11 @@ function insertEntryRow(context: EntriesSharedContext, input: CreateEntryInput):
         ]
         const nonEmpty = (s: string | null | undefined): string | null =>
             s !== undefined && s !== null && s !== '' ? s : null
-        const omittedWorkspace = input.workspaceId === undefined || input.workspaceId.length === 0
+        const trimmedWorkspace = input.workspaceId?.trim()
+        const omittedWorkspace = trimmedWorkspace === undefined || trimmedWorkspace.length === 0
         const resolved = resolveProjectContext(
             {
-                ...(omittedWorkspace ? {} : { workspace_id: input.workspaceId }),
+                ...(omittedWorkspace ? {} : { workspace_id: trimmedWorkspace }),
                 ...(input.projectNumber !== undefined ? { project_number: input.projectNumber } : {}),
                 content: input.content,
                 ...(input.tags !== undefined ? { tags: input.tags } : {}),
@@ -95,7 +96,7 @@ function insertEntryRow(context: EntriesSharedContext, input: CreateEntryInput):
             context.config
         )
         const paired = pairStoredScope(
-            omittedWorkspace ? resolved.workspaceId : input.workspaceId,
+            omittedWorkspace ? resolved.workspaceId : trimmedWorkspace,
             input.projectNumber ?? resolved.projectNumber,
             activeProjectRegistry(context.config?.projectRegistry)
         )
@@ -172,7 +173,7 @@ export function updateEntry(
     const updated = performUpdateEntry(context, id, input)
     if (!updated) return null
 
-    const readWs = effectiveWorkspace(input.targetWorkspaceId ?? input.workspaceId)
+    const readWs = '*' // [INVARIANT] ownership already enforced; destination may be registry-canonicalized
     return getEntryById(context, id, readWs)
 }
 

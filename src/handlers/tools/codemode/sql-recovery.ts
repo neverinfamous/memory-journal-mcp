@@ -2,8 +2,8 @@
  * SQL and prepared statement recovery helpers for Code Mode execution payloads.
  */
 
-import { scopeFromInsertLiterals, scopeFromSqlLiterals } from '../../../codemode/sql-literal-scope.js'
-import { isRecord } from '../../../codemode/normalizers/shared-utils.js'
+import { scopeFromSqlLiterals } from '../../../codemode/sql-literal-scope.js'
+import { parseSqlStatement } from '../../../codemode/sql-positional-binder.js'
 import { extractAndRecoverEntryCode } from './json-entry-recovery.js'
 
 /**
@@ -273,175 +273,15 @@ export function extractAndRecoverPreparedStatementCode(code: string): string | n
         }
     }
 
-    const cleanSql = rawSql.replace(/^--[^\n]*\n/gm, '').trim()
-    const isUpdate = /^UPDATE\b/i.test(cleanSql)
-    const isInsert = /^INSERT\b/i.test(cleanSql)
-    const isDelete = /^DELETE\b/i.test(cleanSql)
-    const isSelect = /^SELECT\b/i.test(cleanSql)
-
-    if (isUpdate) {
-        const recovered = recoverPreparedUpdate(cleanSql, parsedArgs)
-        if (recovered !== null) return recovered
-    }
-
-    if (isInsert) {
-        return recoverPreparedInsert(cleanSql, parsedArgs)
-    }
-
-    if (isDelete) {
-        const recovered = recoverPreparedDelete(cleanSql, parsedArgs)
-        if (recovered !== null) return recovered
-    }
-
-    if (isSelect) {
-        return recoverPreparedSelect(cleanSql, parsedArgs)
-    }
-
-    return null
+    const { action, params } = parseSqlStatement(rawSql, parsedArgs)
+    const target = PREPARED_ACTION_TARGETS[action]
+    if (target === undefined) return null
+    return `return await ${target}(${JSON.stringify(params)});`
 }
 
-/** Parse a JSON-array string argument into tags; returns undefined when it is not one. */
-function parseTagsArg(arg: string): string[] | undefined {
-    if (arg.trim().startsWith('[') && arg.trim().endsWith(']')) {
-        try {
-            const parsed: unknown = JSON.parse(arg)
-            if (Array.isArray(parsed)) return parsed.map(String)
-        } catch {
-            // ignore
-        }
-    }
-    return undefined
-}
-
-const ENTRY_ID_WHERE_PATTERN = /\bWHERE\s+[`"']?(?:id|entry_id)[`"']?\s*=\s*(?:\?|(\d+))/i
-
-/** Entry id from `WHERE id = N`, or the first numeric bind when the placeholder is `?`. */
-function extractEntryId(cleanSql: string, parsedArgs: unknown[]): number | undefined {
-    const idMatch = ENTRY_ID_WHERE_PATTERN.exec(cleanSql)
-    if (idMatch?.[1] !== undefined) return parseInt(idMatch[1], 10)
-    const whereUsesPlaceholder = idMatch !== null && idMatch[1] === undefined
-    if (!whereUsesPlaceholder) return undefined
-    for (const arg of parsedArgs) {
-        if (typeof arg === 'number') return arg
-    }
-    return undefined
-}
-
-function scopeFromRecordBinds(parsedArgs: unknown[]): Record<string, unknown> {
-    const scope: Record<string, unknown> = {}
-    for (const arg of parsedArgs) {
-        if (!isRecord(arg)) continue
-        const projNum = arg['project_number'] ?? arg['projectNumber']
-        if (typeof projNum === 'number') scope['project_number'] = projNum
-        const wsId = arg['workspace_id'] ?? arg['workspaceId']
-        if (typeof wsId === 'string' && wsId.trim() !== '') scope['workspace_id'] = wsId
-    }
-    return scope
-}
-
-function recoverPreparedUpdate(cleanSql: string, parsedArgs: unknown[]): string | null {
-    const payload: Record<string, unknown> = {}
-    const entryId = extractEntryId(cleanSql, parsedArgs)
-    if (entryId !== undefined) payload['entry_id'] = entryId
-
-    for (const arg of parsedArgs) {
-        if (typeof arg === 'string') {
-            const tags = parseTagsArg(arg)
-            if (tags !== undefined) {
-                payload['tags'] = tags
-            } else if (payload['content'] === undefined) payload['content'] = arg
-            else if (payload['title'] === undefined) payload['title'] = arg
-        } else if (Array.isArray(arg)) {
-            payload['tags'] = arg.map(String)
-        } else if (isRecord(arg)) {
-            if (typeof arg['entry_id'] === 'number') payload['entry_id'] = arg['entry_id']
-            if (typeof arg['id'] === 'number') payload['entry_id'] = arg['id']
-            if (typeof arg['content'] === 'string') payload['content'] = arg['content']
-            if (Array.isArray(arg['tags'])) payload['tags'] = arg['tags'].map(String)
-            const projNum = arg['project_number'] ?? arg['projectNumber']
-            if (typeof projNum === 'number') payload['project_number'] = projNum
-            const wsId = arg['workspace_id'] ?? arg['workspaceId']
-            if (typeof wsId === 'string' && wsId.trim() !== '') payload['workspace_id'] = wsId
-        }
-    }
-
-    if (payload['content'] === undefined) {
-        const setContentMatch = /\bSET\s+[\s\S]*?\bcontent\s*=\s*['"]([\s\S]*?)['"]/i.exec(cleanSql)
-        if (setContentMatch?.[1] !== undefined) {
-            payload['content'] = setContentMatch[1]
-        }
-    }
-
-    const sqlScope = scopeFromSqlLiterals(cleanSql)
-    if (payload['workspace_id'] === undefined && sqlScope['workspace_id'] !== undefined) {
-        payload['workspace_id'] = sqlScope['workspace_id']
-    }
-    if (payload['project_number'] === undefined && sqlScope['project_number'] !== undefined) {
-        payload['project_number'] = sqlScope['project_number']
-    }
-
-    if (payload['entry_id'] !== undefined) {
-        return `return await mj.admin.updateEntry(${JSON.stringify(payload)});`
-    }
-    return null
-}
-
-function recoverPreparedInsert(cleanSql: string, parsedArgs: unknown[]): string | null {
-    const payload: Record<string, unknown> = {
-        entry_type: 'technical_decision',
-    }
-    for (const arg of parsedArgs) {
-        if (typeof arg === 'string') {
-            const tags = parseTagsArg(arg)
-            if (tags !== undefined) {
-                payload['tags'] = tags
-            } else if (typeof payload['content'] !== 'string') payload['content'] = arg
-            else if (typeof payload['title'] !== 'string') payload['title'] = arg
-        } else if (Array.isArray(arg)) {
-            payload['tags'] = arg.map(String)
-        } else if (isRecord(arg)) {
-            if (typeof arg['content'] === 'string') payload['content'] = arg['content']
-            if (typeof arg['title'] === 'string') payload['title'] = arg['title']
-            if (Array.isArray(arg['tags'])) payload['tags'] = arg['tags'].map(String)
-            const projNum = arg['project_number'] ?? arg['projectNumber']
-            if (typeof projNum === 'number') payload['project_number'] = projNum
-            const wsId = arg['workspace_id'] ?? arg['workspaceId']
-            if (typeof wsId === 'string' && wsId.trim() !== '') payload['workspace_id'] = wsId
-        }
-    }
-    const sqlScope = { ...scopeFromSqlLiterals(cleanSql), ...scopeFromInsertLiterals(cleanSql) }
-    if (payload['workspace_id'] === undefined && sqlScope['workspace_id'] !== undefined) {
-        payload['workspace_id'] = sqlScope['workspace_id']
-    }
-    if (payload['project_number'] === undefined && sqlScope['project_number'] !== undefined) {
-        payload['project_number'] = sqlScope['project_number']
-    }
-    if (typeof payload['content'] !== 'string' || payload['content'] === '') return null
-    return `return await mj.core.createEntry(${JSON.stringify(payload)});`
-}
-
-function recoverPreparedDelete(cleanSql: string, parsedArgs: unknown[]): string | null {
-    const entryId = extractEntryId(cleanSql, parsedArgs)
-    if (entryId !== undefined) {
-        const payload = {
-            entry_id: entryId,
-            ...scopeFromSqlLiterals(cleanSql),
-            ...scopeFromRecordBinds(parsedArgs),
-        }
-        return `return await mj.admin.deleteEntry(${JSON.stringify(payload)});`
-    }
-    return null
-}
-
-function recoverPreparedSelect(cleanSql: string, parsedArgs: unknown[]): string | null {
-    const entryId = extractEntryId(cleanSql, parsedArgs)
-    if (entryId !== undefined) {
-        const payload = {
-            entry_id: entryId,
-            ...scopeFromSqlLiterals(cleanSql),
-            ...scopeFromRecordBinds(parsedArgs),
-        }
-        return `return await mj.core.getEntryById(${JSON.stringify(payload)});`
-    }
-    return null
+const PREPARED_ACTION_TARGETS: Partial<Record<string, string>> = {
+    update: 'mj.admin.updateEntry',
+    create: 'mj.core.createEntry',
+    delete: 'mj.admin.deleteEntry',
+    get_by_id: 'mj.core.getEntryById',
 }

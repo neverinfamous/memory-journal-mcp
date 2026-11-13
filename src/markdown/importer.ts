@@ -11,7 +11,7 @@ import { join } from 'node:path'
 import { constants } from 'node:fs'
 import type { IDatabaseAdapter } from '../database/core/interfaces.js'
 import type { VectorSearchManager } from '../vector/vector-search-manager/index.js'
-import type { EntryType, SignificanceType } from '../types/index.js'
+import type { EntryType, SignificanceType, ToolHandlerConfig } from '../types/index.js'
 import { ENTRY_TYPES } from '../types/index.js'
 import { linkImportedRelationships } from './import-relationships.js'
 import { parseFrontmatter } from './frontmatter.js'
@@ -41,6 +41,8 @@ export interface ImportOptions {
     project_number?: number
     /** Workspace isolation identifier */
     workspaceId?: string
+    /** Handler config (registry/session defaults) threaded into project resolution */
+    config?: ToolHandlerConfig
 }
 
 /** Result of an import operation */
@@ -234,10 +236,14 @@ function assertImportAuthorOwnership(
     }
 }
 
+/**
+ * [INVARIANT] An explicit caller workspace — including the real `default` workspace — locks
+ * ownership checks. Only `*` and blanks are unscoped.
+ */
 function concreteCallerWorkspace(workspaceId: string | undefined): string | undefined {
     if (workspaceId === undefined) return undefined
     const trimmed = workspaceId.trim()
-    if (trimmed === '' || trimmed === '*' || trimmed.toLowerCase() === 'default') return undefined
+    if (trimmed === '' || trimmed === '*') return undefined
     return trimmed
 }
 
@@ -278,12 +284,15 @@ function resolveImportedFileContext(
         }
     }
     const rawProjectNumber = options.project_number ?? fileProject
-    const resolved = resolveProjectContext({
-        workspace_id: rawWorkspaceId,
-        project_number: rawProjectNumber,
-        content: body,
-        tags: metadata.tags,
-    })
+    const resolved = resolveProjectContext(
+        {
+            workspace_id: rawWorkspaceId,
+            project_number: rawProjectNumber,
+            content: body,
+            tags: metadata.tags,
+        },
+        options.config
+    )
     const effectiveWsId = resolved.workspaceId
     const effectiveProjNum = resolved.projectNumber
     return { effectiveWsId, effectiveProjNum }
@@ -304,7 +313,7 @@ function upsertParsedFile(
         const existing = db.getEntryById(metadata.mj_id, effectiveWsId)
         if (existing) {
             assertImportAuthorOwnership(db, metadata.mj_id, author)
-            db.updateEntry(metadata.mj_id, {
+            const updated = db.updateEntry(metadata.mj_id, {
                 content: body,
                 entryType: toEntryType(metadata.entry_type),
                 tags: metadata.tags,
@@ -314,8 +323,12 @@ function upsertParsedFile(
                 ...(effectiveProjNum !== undefined && { projectNumber: effectiveProjNum }),
                 workspaceId: effectiveWsId,
             })
+            if (updated === null) {
+                throw new Error(`Entry ${String(metadata.mj_id)} could not be updated during import`)
+            }
             result.updated++
-            return { entryId: metadata.mj_id, workspaceId: effectiveWsId }
+            // [INTENT] Use the stored (canonical) workspace for relationship linking and vector indexing.
+            return { entryId: metadata.mj_id, workspaceId: updated.workspaceId ?? effectiveWsId }
         }
     }
 
@@ -333,7 +346,7 @@ function upsertParsedFile(
         workspaceId: effectiveWsId,
     })
     result.created++
-    return { entryId: newEntry.id, workspaceId: effectiveWsId }
+    return { entryId: newEntry.id, workspaceId: newEntry.workspaceId ?? effectiveWsId }
 }
 
 /**
@@ -345,7 +358,9 @@ export async function processImportBatch(
     options: ImportOptions = {},
     vectorManager: VectorSearchManager | undefined
 ): Promise<ImportResult> {
-    const { dry_run = false, workspaceId } = options
+    const { dry_run = false, workspaceId, limit } = options
+    // [BOUNDARY] Direct callers (e.g. team import) bypass the directory scan, so enforce limit here too.
+    const files = limit !== undefined && limit >= 0 ? parsedFiles.slice(0, limit) : parsedFiles
 
     const result: ImportResult = {
         success: true,
@@ -368,7 +383,7 @@ export async function processImportBatch(
             workspaceId: string | undefined
         }[] = []
 
-        for (const file of parsedFiles) {
+        for (const file of files) {
             const { filename, metadata } = file
 
             if (dry_run) {

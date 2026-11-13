@@ -388,7 +388,10 @@ export class VectorSearchManager {
 
             // searchVectors returns { entry_id: number; distance: number }[]
             const targetWs = effectiveWorkspace(workspaceId)
-            const results = this.dbAdapter.searchVectors(queryEmbedding, limit, targetWs)
+            // [INTENT] projectNumber is filtered post-KNN, so over-fetch candidates to avoid
+            // truncating results when the nearest neighbours belong to other projects.
+            const fetchLimit = projectNumber !== undefined ? Math.max(limit * 10, 100) : limit
+            const results = this.dbAdapter.searchVectors(queryEmbedding, fetchLimit, targetWs)
 
             const candidates = collectCandidates(results, threshold)
 

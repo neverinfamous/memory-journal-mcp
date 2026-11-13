@@ -33,24 +33,52 @@ if (fs.existsSync(outPath)) {
 
 console.log(`Encrypting ${inPath} -> ${outPath}...`)
 
+const SQLITE_PLAIN_HEADER = 'SQLite format 3\u0000'
+
+function applyKey(db: Database.Database, pragma: 'key' | 'rekey', secret: string): void {
+    if (secret.startsWith("x'") && secret.endsWith("'")) {
+        db.pragma(`${pragma} = "${secret.replace(/"/g, '""')}"`)
+    } else {
+        db.pragma(`${pragma} = '${secret.replace(/'/g, "''")}'`)
+    }
+}
+
 try {
+    // [INVARIANT] Fold pending WAL frames into the main file first; copying only the .db would silently drop them.
+    const source = new Database(inPath, { fileMustExist: true })
+    source.pragma('wal_checkpoint(TRUNCATE)')
+    source.close()
+
     // SQLite3 Multiple Ciphers uses PRAGMA rekey for in-place encryption
     // So we copy the database, open the copy, and apply the rekey PRAGMA.
     fs.copyFileSync(inPath, outPath)
-    
+
     const db = new Database(outPath)
-    
-    // Perform the encryption in-place on the copy
-    if (key.startsWith("x'") && key.endsWith("'")) {
-        db.pragma(`rekey = "${key.replace(/"/g, '""')}"`)
-    } else {
-        db.pragma(`rekey = '${key.replace(/'/g, "''")}'`)
-    }
-    
-    // Close to save
+    // [INVARIANT] rekey is unsupported in WAL mode; switch the copy to rollback journaling.
+    db.pragma('journal_mode = DELETE')
+    applyKey(db, 'rekey', key)
     db.close()
-    
-    console.log('✅ Database encrypted successfully.')
+
+    // Verify: the header must no longer be plaintext, and the key must open the database.
+    const header = Buffer.alloc(16)
+    const fd = fs.openSync(outPath, 'r')
+    try {
+        fs.readSync(fd, header, 0, 16, 0)
+    } finally {
+        fs.closeSync(fd)
+    }
+    if (header.toString('latin1') === SQLITE_PLAIN_HEADER) {
+        throw new Error('PRAGMA rekey had no effect: output still has a plaintext SQLite header (is SQLite3 Multiple Ciphers loaded?).')
+    }
+    const verify = new Database(outPath, { fileMustExist: true })
+    try {
+        applyKey(verify, 'key', key)
+        verify.prepare('SELECT count(*) FROM sqlite_master').get()
+    } finally {
+        verify.close()
+    }
+
+    console.log('✅ Database encrypted and verified successfully.')
     console.log('To use it, start the server with DB_ENCRYPTION_KEY=<your-key>')
     console.log(`and point the database configuration to ${outPath}.`)
 } catch (error) {

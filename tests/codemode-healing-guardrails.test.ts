@@ -84,7 +84,7 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
             expect(() => failedResult['deleted']).toThrow('Entry 9999 not found')
             expect(() => [...(failedResult as unknown as Iterable<unknown>)]).toThrow('Entry 9999 not found')
             expect(() => failedResult['projects']).toThrow('Entry 9999 not found')
-            expect(failedResult['length']).toBe(0)
+            expect(() => failedResult['length']).toThrow('Entry 9999 not found')
             expect(typeof failedResult['map']).toBe('function')
             expect(() => (failedResult['map'] as () => unknown)()).toThrow('Entry 9999 not found')
         })
@@ -2676,7 +2676,7 @@ return { success: true, projectId };
             expect(mockDb.getEntryById).not.toHaveBeenCalledWith(14463, '*')
         })
 
-        it('should accept workspace_id: "*" in link_entries for cross-workspace relationships', async () => {
+        it('should reject workspace_id: "*" in link_entries because links are scoped writes (H4)', async () => {
             const { callTool } = await import('../src/handlers/tools/index.js')
             const mockDb = {
                 getEntryById: vi.fn((id: number, _ws: string) => {
@@ -2700,8 +2700,9 @@ return { success: true, projectId };
                 workspace_id: '*'
             }, mockDb, undefined, undefined, mockConfig)) as Record<string, unknown>
 
-            expect(res['success']).toBe(true)
-            expect(mockDb.linkEntries).toHaveBeenCalledWith(14464, 14462, 'resolved', undefined, '*')
+            expect(res['success']).toBe(false)
+            expect(res['code']).toBe('VALIDATION_ERROR')
+            expect(mockDb.linkEntries).not.toHaveBeenCalled()
         })
 
         it('should reject cross-workspace linking in link_entries when workspace_id is omitted', async () => {

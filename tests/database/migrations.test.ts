@@ -19,13 +19,14 @@ describe('Database Migration Framework', () => {
             name: string
         }[]
 
-        expect(applied.length).toBe(14) // 1 to 6, plus 8 through 15 (7 is team-only)
+        expect(applied.length).toBe(15) // 1 to 6, plus 8 through 16 (7 is team-only)
         expect(applied[0].version).toBe(1)
         expect(applied[0].name).toBe('001-init')
         expect(applied[12].version).toBe(14)
         expect(applied[12].name).toBe('014-add-alias-workspace')
         expect(applied[13].version).toBe(15)
         expect(applied[13].name).toBe('015-alias-workspace-unique')
+        expect(applied[14].name).toBe('016-fts-soft-delete-triggers')
 
         // Verify tables exist
         const tables = db
@@ -68,7 +69,7 @@ describe('Database Migration Framework', () => {
             name: string
         }[]
 
-        expect(applied.length).toBe(15)
+        expect(applied.length).toBe(16)
         expect(applied[6].version).toBe(7)
         expect(applied[6].name).toBe('007-add-team-author')
 
@@ -161,7 +162,7 @@ describe('Database Migration Framework', () => {
             name: string
         }[]
 
-        expect(applied.length).toBe(14)
+        expect(applied.length).toBe(15)
         expect(applied[0].version).toBe(1)
         expect(applied[1].version).toBe(2)
         expect(applied[2].version).toBe(3) // applied in run
@@ -200,8 +201,35 @@ describe('Database Migration Framework', () => {
             c: number
         }).c
 
-        expect(count1).toBe(14)
-        expect(count2).toBe(14)
+        expect(count1).toBe(15)
+        expect(count2).toBe(15)
+
+        db.close()
+    })
+
+    it('Migration 016 keeps FTS in sync across soft-delete, restore, and hard-delete', () => {
+        const db = new DatabaseAdapter(':memory:')
+        MigrationManager.runMigrations(db, false)
+        const insert = db.prepare(
+            "INSERT INTO memory_journal (entry_type, content) VALUES ('technical_note', ?)"
+        )
+        const id = Number(insert.run('zebra quokka').lastInsertRowid)
+        const matches = (): number =>
+            (db.prepare("SELECT COUNT(*) as c FROM fts_content WHERE fts_content MATCH 'quokka'").get() as {
+                c: number
+            }).c
+
+        expect(matches()).toBe(1)
+        db.prepare('UPDATE memory_journal SET deleted_at = ? WHERE id = ?').run('2026-01-01', id)
+        expect(matches()).toBe(0)
+        // Updating content of a soft-deleted row must not corrupt the index
+        db.prepare('UPDATE memory_journal SET content = ? WHERE id = ?').run('zebra quokka wombat', id)
+        db.prepare('UPDATE memory_journal SET deleted_at = NULL WHERE id = ?').run(id)
+        expect(matches()).toBe(1)
+        db.prepare('UPDATE memory_journal SET deleted_at = ? WHERE id = ?').run('2026-01-02', id)
+        expect(() => db.prepare('DELETE FROM memory_journal WHERE id = ?').run(id)).not.toThrow()
+        expect(() => db.exec("INSERT INTO fts_content(fts_content) VALUES('integrity-check')")).not.toThrow()
+        expect(matches()).toBe(0)
 
         db.close()
     })

@@ -80,14 +80,17 @@ export function enforceAccessBoundary(
             })
 
             if (auditLogger) {
+                // [INTENT] Denial category mirrors the scope that was required (M6).
                 const category =
                     requiredScope === SCOPES.TEAM
                         ? 'team'
-                        : requiredScope === SCOPES.ADMIN ||
-                            requiredScope === SCOPES.FULL ||
-                            requiredScope === SCOPES.AUDIT
-                          ? 'admin'
-                          : 'read'
+                        : requiredScope === SCOPES.AUDIT
+                          ? 'audit'
+                          : requiredScope === SCOPES.WRITE
+                            ? 'write'
+                            : requiredScope === SCOPES.ADMIN || requiredScope === SCOPES.FULL
+                              ? 'admin'
+                              : 'read'
                 auditLogger.logDenial(targetName, 'Insufficient scope', {
                     user: auth.claims?.sub,
                     scopes: auth.claims?.scopes ?? [],

@@ -1236,10 +1236,12 @@ describe('GitHub Tool Handlers', () => {
                 project?: { added: boolean; initialStatus?: { set: boolean; error: string } }
             }
 
-            expect(result.success).toBe(true)
+            // [H11] An explicit initial_status that cannot be applied is surfaced, not a false success.
+            expect(result.success).toBe(false)
             expect(result.project?.added).toBe(true)
             expect(result.project?.initialStatus?.set).toBe(false)
             expect(result.project?.initialStatus?.error).toContain('not found')
+            expect((result as { projectItemError?: string }).projectItemError).toContain('not found')
         })
 
         it('should handle moveProjectItem failure for initial status', async () => {
@@ -1274,7 +1276,7 @@ describe('GitHub Tool Handlers', () => {
                 project?: { added: boolean; initialStatus?: { set: boolean; error: string } }
             }
 
-            expect(result.success).toBe(true)
+            expect(result.success).toBe(false)
             expect(result.project?.initialStatus?.set).toBe(false)
         })
 

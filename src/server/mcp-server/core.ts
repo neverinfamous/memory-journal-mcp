@@ -36,6 +36,7 @@ async function executeGracefulShutdown(params: {
     stopHttpTransport?: () => Promise<void>
     activeMetricsPath?: string
     closeDatabases: () => void
+    detachSignals?: () => void
 }): Promise<never> {
     const {
         label,
@@ -74,8 +75,11 @@ async function executeGracefulShutdown(params: {
     } catch (error: unknown) {
         logShutdownError(label, error)
     } finally {
+        params.detachSignals?.()
         closeDatabases()
-        process.exit(0)
+        // [INTENT] Preserve any non-zero exit code set earlier instead of forcing 0 (L6).
+        const code = typeof process.exitCode === 'number' ? process.exitCode : 0
+        process.exit(code)
     }
 }
 
@@ -156,17 +160,30 @@ export async function createServer(options: ServerOptions): Promise<void> {
         baseConfig.briefingConfig = nextBriefing
         customToolHandlerConfig.filterConfig = newConfig.toolFilterConfig
         customToolHandlerConfig.briefingConfig = nextBriefing
-        if (nextBriefing.defaultProjectNumber !== undefined) {
-            baseConfig.defaultProjectNumber = nextBriefing.defaultProjectNumber
-            customToolHandlerConfig.defaultProjectNumber = nextBriefing.defaultProjectNumber
-        }
-        if (nextBriefing.defaultWorkspaceId !== undefined) {
-            baseConfig.defaultWorkspaceId = nextBriefing.defaultWorkspaceId
-            customToolHandlerConfig.defaultWorkspaceId = nextBriefing.defaultWorkspaceId
-        }
-        if (nextBriefing.projectRegistry !== undefined) {
-            baseConfig.projectRegistry = nextBriefing.projectRegistry
-            customToolHandlerConfig.projectRegistry = nextBriefing.projectRegistry
+        // [INVARIANT] Mirror the reloaded config exactly, clearing removed fields (C1/H3).
+        for (const target of [baseConfig, customToolHandlerConfig]) {
+            if (nextBriefing.defaultProjectNumber !== undefined) {
+                target.defaultProjectNumber = nextBriefing.defaultProjectNumber
+            } else {
+                delete target.defaultProjectNumber
+            }
+            if (nextBriefing.defaultWorkspaceId !== undefined) {
+                target.defaultWorkspaceId = nextBriefing.defaultWorkspaceId
+            } else {
+                delete target.defaultWorkspaceId
+            }
+            if (nextBriefing.projectRegistry !== undefined) {
+                target.projectRegistry = nextBriefing.projectRegistry
+            } else {
+                delete target.projectRegistry
+            }
+            if (newConfig.codemodeInternalFullAccess !== undefined) {
+                target.codemodeInternalFullAccess = newConfig.codemodeInternalFullAccess
+            } else if (options.codemodeInternalFullAccess !== undefined) {
+                target.codemodeInternalFullAccess = options.codemodeInternalFullAccess
+            } else {
+                delete target.codemodeInternalFullAccess
+            }
         }
         scheduler?.updateWorkspaceContext({
             ...(nextBriefing.defaultWorkspaceId !== undefined
@@ -228,6 +245,10 @@ export async function createServer(options: ServerOptions): Promise<void> {
                 shutdownMetrics,
                 activeMetricsPath,
                 closeDatabases,
+                detachSignals: () => {
+                    process.off('SIGINT', handleStdioShutdown)
+                    process.off('SIGTERM', handleStdioShutdown)
+                },
             }).catch((error: unknown) => {
                 logShutdownError('stdio shutdown', error)
                 process.exit(1)
@@ -253,6 +274,10 @@ export async function createServer(options: ServerOptions): Promise<void> {
                 stopHttpTransport: () => httpTransport.stop(scheduler),
                 activeMetricsPath,
                 closeDatabases,
+                detachSignals: () => {
+                    process.off('SIGINT', handleHttpShutdown)
+                    process.off('SIGTERM', handleHttpShutdown)
+                },
             }).catch((error: unknown) => {
                 logShutdownError('HTTP shutdown', error)
                 process.exit(1)

@@ -55,6 +55,10 @@ export function normalizeAndAliasToolCall(
     reqParams.arguments = deepCamelToSnake(reqParams.arguments) as Record<string, unknown>
     const toolArgs = reqParams.arguments
 
+    // [INVARIANT] A `repo`/`project` string is only a lookup hint: `project_number` is assigned
+    // solely after it resolves to a valid positive integer (H3). Unresolved hints never leak
+    // into `project_number` as raw strings.
+    let repoHint: string | undefined
     if (toolArgs['project_number'] === undefined) {
         const repoStr =
             typeof toolArgs['repo'] === 'string'
@@ -62,14 +66,17 @@ export function normalizeAndAliasToolCall(
                 : typeof toolArgs['project'] === 'string'
                   ? toolArgs['project']
                   : undefined
-        if (repoStr !== undefined && repoStr !== '') toolArgs['project_number'] = repoStr
+        if (repoStr !== undefined && repoStr.trim() !== '') repoHint = repoStr
     }
+    const rawProject = toolArgs['project_number']
+    const strVal = typeof rawProject === 'string' ? rawProject : repoHint
 
-    if (typeof toolArgs['project_number'] === 'string') {
-        const strVal = toolArgs['project_number']
+    if (strVal !== undefined) {
         const parsed = Number(strVal)
         if (!Number.isNaN(parsed) && strVal.trim() !== '') {
-            toolArgs['project_number'] = parsed
+            if (repoHint === undefined || (Number.isInteger(parsed) && parsed > 0)) {
+                toolArgs['project_number'] = parsed
+            }
         } else {
             const registry = options.projectRegistry ?? loadProjectRegistryFromConfig()
             if (registry !== undefined) {

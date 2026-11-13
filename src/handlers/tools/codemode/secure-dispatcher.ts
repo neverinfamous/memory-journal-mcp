@@ -57,22 +57,33 @@ const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
 
 const UPPERCASE_RE = /[A-Z]/
 
-export function deepCamelToSnake(obj: unknown, depth = 0): unknown {
+/**
+ * Recursively converts camelCase keys to snake_case.
+ * [INVARIANT] `id -> entry_id` / `ids -> entry_ids` aliasing applies only to top-level keys
+ * and never when the target schema itself accepts `id`/`ids`, so nested
+ * payloads (anchors, relationships, auto_context) keep their own `id` fields intact.
+ */
+export function deepCamelToSnake(
+    obj: unknown,
+    depth = 0,
+    acceptsKey?: (key: string) => boolean
+): unknown {
     if (depth > 12) return obj
     if (Array.isArray(obj)) return obj.map((item) => deepCamelToSnake(item, depth + 1))
     if (isRecord(obj)) {
         const newObj: Record<string, unknown> = {}
+        const canAlias = (alias: string): boolean => depth === 0 && !(acceptsKey?.(alias) ?? false)
         for (const [k, v] of Object.entries(obj)) {
             if (FORBIDDEN_KEYS.has(k)) continue
             const snakeKey = UPPERCASE_RE.test(k)
                 ? k.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
                 : k
             if (FORBIDDEN_KEYS.has(snakeKey)) continue
-            if (snakeKey === 'id' && !('entry_id' in obj)) {
+            if (snakeKey === 'id' && !('entry_id' in obj) && canAlias('id')) {
                 newObj['entry_id'] = deepCamelToSnake(v, depth + 1)
                 continue
             }
-            if (snakeKey === 'ids' && !('entry_ids' in obj)) {
+            if (snakeKey === 'ids' && !('entry_ids' in obj) && canAlias('ids')) {
                 const vSnake = deepCamelToSnake(v, depth + 1)
                 newObj['entry_ids'] = Array.isArray(vSnake) ? vSnake : [vSnake]
                 continue
@@ -203,7 +214,7 @@ async function normalizeDispatchParams(
     ctx: DispatchParamContext
 ): Promise<{ params: unknown } | { errorResult: Record<string, unknown> }> {
     const { sessionContext, projectId, workspaceId } = ctx
-    const finalParams = deepCamelToSnake(toolParams)
+    const finalParams = deepCamelToSnake(toolParams, 0, (key) => checkSchemaAcceptsKey(tool.inputSchema, key))
     if (!isRecord(finalParams)) return { params: finalParams }
 
     const paramsObj = { ...finalParams }
@@ -253,12 +264,12 @@ async function normalizeDispatchParams(
     }
     const callerWorkspaceId =
         typeof paramsObj['workspace_id'] === 'string' ? paramsObj['workspace_id'] : undefined
+    // [INVARIANT] Explicit `workspace_id: 'default'` never inherits the session projectId.
     if (
         paramsObj['project_number'] === undefined &&
         projectId !== undefined &&
-        (callerWorkspaceId === undefined ||
-            callerWorkspaceId === 'default' ||
-            callerWorkspaceId === workspaceId) &&
+        (callerWorkspaceId === undefined || callerWorkspaceId === workspaceId) &&
+        callerWorkspaceId !== 'default' &&
         checkSchemaAcceptsKey(tool.inputSchema, 'project_number')
     ) {
         paramsObj['project_number'] = projectId

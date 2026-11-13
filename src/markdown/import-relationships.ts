@@ -4,6 +4,10 @@ import { RELATIONSHIP_TYPES } from '../types/index.js'
 
 const VALID_RELATIONSHIP_TYPES = new Set<string>(RELATIONSHIP_TYPES)
 
+function isRelationshipType(value: string): value is RelationshipType {
+    return VALID_RELATIONSHIP_TYPES.has(value)
+}
+
 export function linkImportedRelationships(
     db: IDatabaseAdapter,
     entryId: number,
@@ -20,8 +24,9 @@ export function linkImportedRelationships(
             : []
     const rejected: string[] = []
     for (const rel of relationships) {
-        if (!VALID_RELATIONSHIP_TYPES.has(rel.type)) {
-            rejected.push(rel.type)
+        const relType = rel.type
+        if (!isRelationshipType(relType)) {
+            rejected.push(relType)
             continue
         }
         const targetId = idRemap.get(rel.target_id) ?? rel.target_id
@@ -30,7 +35,7 @@ export function linkImportedRelationships(
             (r) =>
                 r.fromEntryId === entryId &&
                 r.toEntryId === targetId &&
-                r.relationshipType === rel.type
+                r.relationshipType === relType
         )
         if (alreadyExists) continue
         const targetExists = db.getEntryById(targetId, workspaceId)
@@ -39,15 +44,15 @@ export function linkImportedRelationships(
             continue
         }
         if (workspaceId !== undefined) {
-            db.linkEntries(entryId, targetId, rel.type as RelationshipType, undefined, workspaceId)
+            db.linkEntries(entryId, targetId, relType, undefined, workspaceId)
         } else {
-            db.linkEntries(entryId, targetId, rel.type as RelationshipType)
+            db.linkEntries(entryId, targetId, relType)
         }
         existingRels.push({
             id: 0,
             fromEntryId: entryId,
             toEntryId: targetId,
-            relationshipType: rel.type as RelationshipType,
+            relationshipType: relType,
             description: null,
             createdAt: '',
         })

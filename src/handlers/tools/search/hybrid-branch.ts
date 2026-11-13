@@ -47,7 +47,8 @@ export async function runHybridSearch(params: HybridBranchParams): Promise<Recor
     const hybridOffset = cursorOffset(input.cursor)
     const { entries: hybridEntries, degraded } = await hybridSearch(query, db, vectorManager, {
         ...searchOptions,
-        limit: input.limit + hybridOffset,
+        // [INVARIANT] Over-fetch one row past the page so pageRows can emit next_cursor.
+        limit: input.limit + hybridOffset + 1,
         ftsWeight: input.fts_weight,
         semanticWeight: input.semantic_weight,
         ...(teamDb !== undefined ? { teamDb } : {}),

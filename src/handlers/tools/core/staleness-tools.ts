@@ -98,7 +98,9 @@ function preprocessMarkAnchorsStale(val: unknown): unknown {
                 return rawItem
             }
             const item = { ...(rawItem as Record<string, unknown>) }
-            const rawId = item['id'] ?? item['anchor_id'] ?? item['anchorId'] ?? item['entry_id'] ?? item['entryId']
+            // [INVARIANT] M2: only anchor-ID aliases map to entry_anchors.id. entry_id/entryId are
+            // journal entry IDs and are left unmapped so the schema rejects them (missing `id`).
+            const rawId = item['id'] ?? item['anchor_id'] ?? item['anchorId']
             if (rawId !== undefined) {
                 const numId = typeof rawId === 'string' ? Number(rawId.trim()) : rawId
                 if (typeof numId === 'number' && !Number.isNaN(numId)) {
@@ -107,8 +109,6 @@ function preprocessMarkAnchorsStale(val: unknown): unknown {
             }
             delete item['anchor_id']
             delete item['anchorId']
-            delete item['entry_id']
-            delete item['entryId']
             const mappedStatus = coerceAnchorStatusAlias(item['status'])
             if (mappedStatus !== undefined) {
                 item['status'] = mappedStatus

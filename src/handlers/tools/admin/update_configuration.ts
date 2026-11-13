@@ -210,6 +210,11 @@ export function handleUpdateConfiguration(
         if (regProjNum !== undefined && args.project_number === undefined) {
             newBc.defaultProjectNumber = regProjNum
             config.defaultProjectNumber = regProjNum
+        } else if (args.project_number === undefined) {
+            // [INVARIANT] H3: switching to an unnumbered workspace must clear the stale default
+            // project so later writes are not paired with the previous project's number.
+            delete newBc.defaultProjectNumber
+            delete config.defaultProjectNumber
         }
         bcChanged = true
         updatedKeys.push('workspace_id')

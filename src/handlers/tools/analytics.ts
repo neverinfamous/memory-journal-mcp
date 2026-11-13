@@ -269,11 +269,14 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
                         project_number,
                     } = GetStatisticsSchema.parse(omitNonStrictStatisticsKeys(params))
                     const resolvedProjectNumber = coerceAnalyticsProjectNumber(project_number)
-                    const wsId = resolveWorkspaceId(
-                        workspace_id,
-                        resolvedProjectNumber,
-                        context.config
-                    )
+                    // [INTENT] M1: project_breakdown spans all registered projects, so default the
+                    // scope to '*' unless the caller named a workspace/project explicitly.
+                    const wsId =
+                        project_breakdown &&
+                        workspace_id === undefined &&
+                        resolvedProjectNumber === undefined
+                            ? '*'
+                            : resolveWorkspaceId(workspace_id, resolvedProjectNumber, context.config)
                     const stats = db.getStatistics(
                         group_by,
                         start_date,
@@ -305,11 +308,12 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
                 try {
                     const input = CrossProjectInsightsInputSchema.parse(params)
                     const resolvedProjectNumber = coerceAnalyticsProjectNumber(input.project_number)
-                    const wsId = resolveWorkspaceId(
-                        input.workspace_id,
-                        resolvedProjectNumber,
-                        context.config
-                    )
+                    // [INTENT] M1: cross-project insights are inherently multi-project; only narrow
+                    // the scope when the caller explicitly names a workspace.
+                    const wsId =
+                        input.workspace_id === undefined
+                            ? '*'
+                            : resolveWorkspaceId(input.workspace_id, resolvedProjectNumber, context.config)
 
                     const results = db.getCrossProjectInsights({
                         startDate: input.start_date,
@@ -342,9 +346,9 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
                         .slice(0, 5)
                         .map((p: Record<string, unknown>) => ({
                             project_number: p['project_number'] as number,
-                            percentage: (
-                                ((p['entry_count'] as number) / totalEntries) *
-                                100
+                            percentage: (totalEntries > 0
+                                ? ((p['entry_count'] as number) / totalEntries) * 100
+                                : 0
                             ).toFixed(1),
                         }))
 

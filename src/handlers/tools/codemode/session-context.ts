@@ -132,6 +132,9 @@ function injectProjectGithub(
     if (registryEntry?.path === undefined || registryEntry.path === '') return sessionContext
     const isSameAsCwd = comparablePath(registryEntry.path) === comparablePath(process.cwd())
     if (!fullAccess && !isSameAsCwd) return sessionContext
+    // [M11] Keep the context identity when the CWD GitHub integration already applies, so the
+    // per-context tool cache in singleton-state is not thrashed on every execution.
+    if (isSameAsCwd && sessionContext.github !== undefined) return sessionContext
     try {
         const injectedGithub = getGitHubIntegration(
             registryEntry.path,
@@ -161,16 +164,11 @@ export async function resolveCodeModeSessionContext(
     const effectiveRegistry = context.config?.projectRegistry ?? loadProjectRegistryFromConfig()
     let projectId = resolveSessionProjectId(context, input, effectiveRegistry)
     let numericProjectId = typeof projectId === 'number' ? projectId : undefined
-    const workspaceAlreadySet =
-        typeof input.workspace_id === 'string' &&
-        input.workspace_id !== '' &&
-        input.workspace_id !== '*' &&
-        input.workspace_id.toLowerCase() !== 'default'
+    // [C3] Session scope is never guessed from keywords inside the submitted code.
     const resolvedContext = resolveProjectContext(
         {
             workspace_id: input.workspace_id,
             project_number: numericProjectId,
-            ...(workspaceAlreadySet || numericProjectId !== undefined ? {} : { content: input.code }),
         },
         context.config
     )

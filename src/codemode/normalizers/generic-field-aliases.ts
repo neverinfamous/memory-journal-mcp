@@ -2,7 +2,7 @@ import type { ProjectRegistryEntry } from '../../types/index.js'
 import { loadProjectRegistryFromConfig, resolveProjectContext } from '../../utils/workspace-resolver.js'
 import { activeProjectRegistry as registryForScope, pairStoredScope } from '../../utils/write-scope.js'
 import { hasMethodToken } from '../method-tokens.js'
-import { isRecord, safeString } from './shared-utils.js'
+import { ENTRY_TYPE_ALIASES, isRecord, safeString } from './shared-utils.js'
 
 const NUMERIC_ID_KEYS = [
     'entry_id', 'entryId', 'id', 'from_entry_id', 'fromEntryId', 'to_entry_id', 'toEntryId',
@@ -22,12 +22,14 @@ export function readProjectRegistryPayload(value: unknown): Record<string, Proje
     for (const [key, entry] of Object.entries(value)) {
         if (!isRecord(entry)) continue
         const pathValue = entry['path']
-        if (typeof pathValue !== 'string' || pathValue.trim() === '') continue
         const projectNumber = entry['project_number']
-        const record: ProjectRegistryEntry = { path: pathValue }
-        if (typeof projectNumber === 'number' && !Number.isNaN(projectNumber)) {
-            record.project_number = projectNumber
-        }
+        const hasPath = typeof pathValue === 'string' && pathValue.trim() !== ''
+        const hasProject = typeof projectNumber === 'number' && !Number.isNaN(projectNumber)
+        // [H6] Pathless / `owner/repo`-keyed registry entries are preserved (path: '') so
+        // name -> project_number resolution keeps working inside the worker.
+        if (!hasPath && !hasProject) continue
+        const record: ProjectRegistryEntry = { path: hasPath ? pathValue : '' }
+        if (hasProject) record.project_number = projectNumber
         registry[key] = record
     }
     return Object.keys(registry).length > 0 ? registry : undefined
@@ -285,19 +287,14 @@ export function resolveCreateEntryProjectContext(obj: Record<string, unknown>): 
             delete obj['project_number']
         }
     }
-    const content = typeof obj['content'] === 'string' ? obj['content'] : undefined
-    const tags = Array.isArray(obj['tags']) ? obj['tags'].filter((t): t is string => typeof t === 'string') : undefined
+    // [INVARIANT] No content/tag/CWD guessing here: the host `secure-dispatcher` binds the
+    // session scope first. We only pair explicitly supplied workspace/project values.
     const wsRaw = typeof obj['workspace_id'] === 'string' ? obj['workspace_id'] : undefined
     const workspaceIsConcrete = wsRaw !== undefined && wsRaw !== '' && wsRaw !== '*'
+    if (!workspaceIsConcrete && projNum === undefined) return
     const resolved = resolveProjectContext({
         ...(wsRaw !== undefined ? { workspace_id: wsRaw } : {}),
         ...(projNum !== undefined ? { project_number: projNum } : {}),
-        ...(workspaceIsConcrete || projNum !== undefined
-            ? {}
-            : {
-                  ...(content !== undefined ? { content } : {}),
-                  ...(tags !== undefined ? { tags } : {}),
-              }),
     })
     if (
         resolved.workspaceId !== undefined &&
@@ -344,18 +341,6 @@ export function normalizeExecuteCodeAliases(obj: Record<string, unknown>): void 
             }
         }
     }
-}
-
-const ENTRY_TYPE_ALIASES: Record<string, string> = {
-    bug: 'bug_fix', bugfix: 'bug_fix', bug_fix: 'bug_fix', 'bug-fix': 'bug_fix', hotfix: 'bug_fix', defect: 'bug_fix',
-    progress: 'development_note', status: 'development_note', development: 'development_note',
-    feature: 'feature_implementation', meeting: 'meeting_notes',
-    task: 'technical_note', chore: 'technical_note', refactor: 'technical_note', fix: 'technical_note',
-    update: 'technical_note', technical: 'technical_note', note: 'technical_note',
-    documentation: 'technical_note', code: 'technical_note', coding: 'technical_note',
-    'session-summary': 'retrospective', session_summary: 'retrospective',
-    'team-session-summary': 'retrospective', team_session_summary: 'retrospective',
-    'team session summary': 'retrospective',
 }
 
 function canonicalizeEntryType(obj: Record<string, unknown>): void {

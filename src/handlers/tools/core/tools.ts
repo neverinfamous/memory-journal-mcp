@@ -168,9 +168,17 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                                 'Team sharing skipped: team database is not configured (set TEAM_DB_PATH).'
                             )
                         } else {
-                            author = shareCreatedEntryWithTeam(context, entryInput)
+                            // [INVARIANT] M5: the personal entry is already committed; a team-share
+                            // failure must surface as a warning, not fail (or silently drop) the create.
+                            try {
+                                author = shareCreatedEntryWithTeam(context, entryInput)
+                            } catch (shareErr) {
+                                relationshipWarnings.push(
+                                    `Team sharing failed: ${shareErr instanceof Error ? shareErr.message : String(shareErr)}`
+                                )
+                            }
                             sharedWithTeam = author !== undefined
-                            if (!sharedWithTeam) {
+                            if (!sharedWithTeam && relationshipWarnings.every((w) => !w.startsWith('Team sharing failed'))) {
                                 relationshipWarnings.push(
                                     'Team sharing skipped: author identity could not be resolved.'
                                 )

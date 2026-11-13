@@ -28,6 +28,8 @@ export const DEFAULT_QUERY_LIMIT = 100
 export function coerceNumber(val: unknown): unknown {
     if (typeof val === 'number') return val
     if (typeof val === 'string') {
+        // [INVARIANT] Empty/whitespace strings mean "not provided", never Number('') === 0.
+        if (val.trim() === '') return undefined
         const n = Number(val)
         return Number.isNaN(n) ? undefined : n
     }
@@ -63,6 +65,7 @@ export function coerceLimit(
     defaultLimit: number = DEFAULT_QUERY_LIMIT
 ): number | null {
     if (raw === undefined || raw === null) return defaultLimit
+    if (typeof raw === 'string' && raw.trim() === '') return defaultLimit
     const num = Number(raw)
     if (Number.isNaN(num)) return defaultLimit
     if (num === 0) return null

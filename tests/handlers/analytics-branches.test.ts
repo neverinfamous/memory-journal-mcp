@@ -74,7 +74,8 @@ describe('analytics tools — branch coverage', () => {
                 end_date: '2025-01-31',
                 project_breakdown: true,
             })
-            expect(db.getStatistics).toHaveBeenCalledWith('month', '2025-01-01', '2025-01-31', true, 'default')
+            // M1: project_breakdown without an explicit workspace spans all projects ('*')
+            expect(db.getStatistics).toHaveBeenCalledWith('month', '2025-01-01', '2025-01-31', true, '*')
         })
 
         it('should handle error with formatHandlerError', () => {
@@ -125,7 +126,7 @@ describe('analytics tools — branch coverage', () => {
                 endDate: '2025-03-31',
                 minEntries: 3,
                 inactiveThresholdDays: expect.any(Number),
-                workspaceId: 'default',
+                workspaceId: '*',
             })
         })
 

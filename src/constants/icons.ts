@@ -8,6 +8,7 @@
  */
 
 import type { McpIcon } from '../types/index.js'
+import type { ToolGroup } from '../types/filtering.js'
 
 // ============================================================================
 // Tool Group Icons
@@ -165,12 +166,18 @@ export const ICON_PROMPT: McpIcon = {
 }
 
 
+export const ICON_CODEMODE: McpIcon = {
+    src: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"%3E%3Cpath d="M16 18l6-6-6-6M8 6l-6 6 6 6"/%3E%3C/svg%3E',
+    mimeType: 'image/svg+xml',
+    sizes: ['24x24'],
+}
+
 // ============================================================================
 // Tool Group Icon Mapping
 // ============================================================================
 
-/** Map tool group name to icon */
-export const TOOL_GROUP_ICONS: Record<string, McpIcon> = {
+/** Map tool group name to icon — keyed by ToolGroup so new groups cannot be missed (L2). */
+export const TOOL_GROUP_ICONS: Record<ToolGroup, McpIcon> = {
     core: ICON_CORE,
     search: ICON_SEARCH,
     analytics: ICON_ANALYTICS,
@@ -181,12 +188,16 @@ export const TOOL_GROUP_ICONS: Record<string, McpIcon> = {
     git: ICON_GIT,
     backup: ICON_BACKUP,
     team: ICON_TEAM,
+    codemode: ICON_CODEMODE,
+}
+
+function isToolGroup(group: string): group is ToolGroup {
+    return Object.hasOwn(TOOL_GROUP_ICONS, group)
 }
 
 /**
  * Get icons array for a tool based on its group
  */
 export function getToolIcon(group: string): McpIcon[] | undefined {
-    const icon = TOOL_GROUP_ICONS[group]
-    return icon ? [icon] : undefined
+    return isToolGroup(group) ? [TOOL_GROUP_ICONS[group]] : undefined
 }

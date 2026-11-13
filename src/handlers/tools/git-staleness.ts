@@ -46,7 +46,12 @@ export function resolveGitWorkingDir(
         assertSafeDirectoryPath(input.cwd, roots)
         return input.cwd
     }
-    const target = input.repo ?? input.repo_name ?? input.workspace_id ?? input.workspaceId
+    const rawTarget = input.repo ?? input.repo_name ?? input.workspace_id ?? input.workspaceId
+    // [INVARIANT] Sentinel workspaces ('default', '*') never name a repository; fall through to project_number.
+    const target =
+        rawTarget !== undefined && ['default', '*'].includes(rawTarget.trim().toLowerCase())
+            ? undefined
+            : rawTarget
     if (target !== undefined && target !== '') {
         if (registry) {
             const canonicalKey = findCanonicalRegistryKey(target, registry)

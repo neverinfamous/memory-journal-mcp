@@ -4,6 +4,7 @@
  */
 
 import { isRecord } from '../../../codemode/normalizers/shared-utils.js'
+import { loadProjectRegistryFromConfig } from '../../../utils/workspace-resolver.js'
 
 interface PayloadSignals {
     hasContent: boolean
@@ -34,9 +35,9 @@ export function recoverStructuredJsonCode(code: string): string | null {
     if (!isRecord(parsed)) return null
 
     const target = unwrapPayloadTarget(parsed)
-    const toolCall = recoverNamedToolCall(target)
+    const toolCall = recoverNamedToolCall(target, parsed)
     if (toolCall !== null) return toolCall
-    const searchCall = recoverSearchCall(target)
+    const searchCall = recoverSearchCall(target, parsed)
     if (searchCall !== null) return searchCall
     return recoverEntryMutation(parsed, target)
 }
@@ -48,7 +49,10 @@ function unwrapPayloadTarget(parsed: Record<string, unknown>): Record<string, un
     return parsed
 }
 
-function recoverNamedToolCall(target: Record<string, unknown>): string | null {
+/** [BOUNDARY] Only plain `[mj.]group.method` identifiers may be spliced into recovered code. */
+const SAFE_TOOL_IDENTIFIER = /^(?:mj[._])?[A-Za-z_][\w]*(?:\.[A-Za-z_][\w]*)?$/
+
+function recoverNamedToolCall(target: Record<string, unknown>, original: Record<string, unknown>): string | null {
     const toolName =
         typeof target['tool'] === 'string'
             ? target['tool']
@@ -58,14 +62,16 @@ function recoverNamedToolCall(target: Record<string, unknown>): string | null {
                 ? target['function']
                 : undefined
     if (toolName === undefined || toolName === '') return null
+    if (!SAFE_TOOL_IDENTIFIER.test(toolName)) return null
     const toolParams: Record<string, unknown> = isRecord(target['params'])
         ? { ...target['params'] }
         : isRecord(target['args'])
           ? { ...target['args'] }
           : {}
     assignMissingScope(toolParams, target)
+    if (original !== target) assignMissingScope(toolParams, original)
     const cleanTool = toolName.replace(/^mj[._]/, '')
-    return `return await (mj.${cleanTool} || mj.core.${cleanTool} || mj.${toolName})(${JSON.stringify(toolParams)});`
+    return `return await (mj.${cleanTool} || mj.core.${cleanTool})(${JSON.stringify(toolParams)});`
 }
 
 function assignMissingScope(params: Record<string, unknown>, source: Record<string, unknown>): void {
@@ -90,11 +96,22 @@ function readProjectNumber(target: Record<string, unknown>): number | undefined 
 }
 
 function readWorkspaceId(target: Record<string, unknown>): string | undefined {
-    const raw = target['workspace_id'] ?? target['workspaceId'] ?? target['repo']
-    return typeof raw === 'string' && raw.trim() !== '' ? raw.trim() : undefined
+    const raw = target['workspace_id'] ?? target['workspaceId']
+    if (typeof raw === 'string' && raw.trim() !== '') return raw.trim()
+    return resolveRepoWorkspace(target['repo'])
 }
 
-function recoverSearchCall(target: Record<string, unknown>): string | null {
+/** Maps a `repo` / `owner/repo` value onto a registered workspace key; never copies it verbatim. */
+export function resolveRepoWorkspace(repo: unknown): string | undefined {
+    if (typeof repo !== 'string' || repo.trim() === '') return undefined
+    const name = repo.trim().split('/').pop()?.toLowerCase() ?? ''
+    if (name === '') return undefined
+    const registry = loadProjectRegistryFromConfig()
+    if (registry === undefined) return undefined
+    return Object.keys(registry).find((key) => key.toLowerCase() === name)
+}
+
+function recoverSearchCall(target: Record<string, unknown>, original: Record<string, unknown>): string | null {
     const isSearchAction =
         target['action'] === 'search' || target['operation'] === 'search' || target['op'] === 'search'
     const looksLikeQuery =
@@ -112,9 +129,9 @@ function recoverSearchCall(target: Record<string, unknown>): string | null {
               : ''
     const searchParams: Record<string, unknown> = { query: queryStr }
     if (typeof target['limit'] === 'number') searchParams['limit'] = target['limit']
-    const projNum = readProjectNumber(target)
+    const projNum = readProjectNumber(target) ?? readProjectNumber(original)
     if (projNum !== undefined) searchParams['project_number'] = projNum
-    const wsId = readWorkspaceId(target)
+    const wsId = readWorkspaceId(target) ?? readWorkspaceId(original)
     if (wsId !== undefined) searchParams['workspace_id'] = wsId
     return `return await mj.search.searchEntries(${JSON.stringify(searchParams)});`
 }

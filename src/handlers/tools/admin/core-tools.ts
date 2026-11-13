@@ -13,14 +13,27 @@ import {
     DeleteEntryOutputSchema,
 } from './schemas.js'
 import { ErrorFieldsMixin } from '../error-fields-mixin.js'
+import { resolveWriteWorkspaceId } from '../write-workspace.js'
 import { relaxedNumber } from '../schemas.js'
 
-function wildcardProjectMismatch(
-    workspaceId: string | undefined,
+/**
+ * [INVARIANT] When a caller supplies project_number, the target entry must belong to that
+ * project regardless of workspace_id (H4). Missing entries are treated as mismatches.
+ */
+export function projectOwnershipMismatch(
     projectNumber: number | undefined,
     entryProject: number | null | undefined
 ): boolean {
-    return workspaceId === '*' && projectNumber !== undefined && entryProject !== projectNumber
+    return projectNumber !== undefined && entryProject !== projectNumber
+}
+
+/** [INVARIANT] target_workspace_id must be a concrete, canonical workspace (never '*'). */
+export function canonicalTargetWorkspace(
+    target: string | undefined,
+    config: ToolContext['config']
+): string | undefined {
+    if (target === undefined) return undefined
+    return resolveWriteWorkspaceId(target, undefined, config)
 }
 
 export function getCoreTools(context: ToolContext): ToolDefinition[] {
@@ -72,6 +85,23 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                             wsId = existingByPk.workspaceId
                         }
                     }
+                    if (wsId === '*' && input.project_number !== undefined) {
+                        const scoped = db.getEntryById(input.entry_id, '*')
+                        if (projectOwnershipMismatch(input.project_number, scoped?.projectNumber)) {
+                            return {
+                                success: false,
+                                error: `Entry ${String(input.entry_id)} not found`,
+                                code: 'RESOURCE_NOT_FOUND',
+                                category: 'resource',
+                                suggestion: 'Verify the entry ID and project number, and try again',
+                                recoverable: true,
+                            }
+                        }
+                    }
+                    const targetWorkspaceId = canonicalTargetWorkspace(
+                        input.target_workspace_id,
+                        context.config
+                    )
                     const entry = db.updateEntry(input.entry_id, {
                         content: input.content,
                         entryType: input.entry_type,
@@ -93,7 +123,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         expectedVersion: input.expected_version,
                         autoContext: input.auto_context,
                         workspaceId: wsId,
-                        targetWorkspaceId: input.target_workspace_id,
+                        targetWorkspaceId,
                         impactScore: input.impact_score,
                         trustScore: input.trust_score,
                         validationStatus: input.validation_status,
@@ -164,9 +194,9 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    if (workspace_id === '*' && project_number !== undefined) {
+                    if (project_number !== undefined) {
                         const scoped = db.getEntryByIdIncludeDeleted(entry_id, '*')
-                        if (wildcardProjectMismatch(workspace_id, project_number, scoped?.projectNumber)) {
+                        if (projectOwnershipMismatch(project_number, scoped?.projectNumber)) {
                             return {
                                 success: false,
                                 entryId: entry_id,
@@ -238,14 +268,14 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                     workspace_id: z.string().optional(),
                 })
             ),
-            outputSchema: z.object({ success: z.boolean().optional(), entryId: z.number().optional(), error: z.string().optional() }).extend(ErrorFieldsMixin.shape),
+            outputSchema: z.object({ success: z.boolean().optional(), entryId: z.number().optional(), indexStatus: z.string().optional(), error: z.string().optional() }).extend(ErrorFieldsMixin.shape),
             annotations: {
                 readOnlyHint: false,
                 destructiveHint: false,
                 idempotentHint: false,
                 openWorldHint: false,
             },
-            handler: (params: unknown) => {
+            handler: async (params: unknown) => {
                 try {
                     const { entry_id, project_number, workspace_id } = z.preprocess(
                         (val: unknown) => {
@@ -273,9 +303,9 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                             wsId = existingByPk.workspaceId
                         }
                     }
-                    if (workspace_id === '*' && project_number !== undefined) {
+                    if (project_number !== undefined) {
                         const scoped = db.getEntryByIdIncludeDeleted(entry_id, '*')
-                        if (wildcardProjectMismatch(workspace_id, project_number, scoped?.projectNumber)) {
+                        if (projectOwnershipMismatch(project_number, scoped?.projectNumber)) {
                             return {
                                 success: false,
                                 entryId: entry_id,
@@ -299,7 +329,15 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                             recoverable: true,
                         }
                     }
-                    return { success, entryId: entry_id }
+                    // [SIDE-EFFECT] M4: soft-delete removed the vector; re-index on restore.
+                    const restored = db.getEntryById(entry_id, wsId)
+                    const indexStatus = await autoIndexEntry(
+                        vectorManager,
+                        db,
+                        entry_id,
+                        restored?.workspaceId ?? wsId
+                    )
+                    return { success, entryId: entry_id, indexStatus }
                 } catch (err) {
                     return formatHandlerError(err)
                 }

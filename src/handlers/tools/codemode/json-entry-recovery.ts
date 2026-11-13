@@ -58,20 +58,23 @@ export function extractAndRecoverEntryCode(code: string): string | null {
 
     if (content === undefined || content === '') return null
 
+    // [C4] Field regexes scan the code with the content body removed, so `project: 5` or
+    // `workspace_id: 'x'` text quoted inside the entry content can never re-scope the write.
+    const scanCode = code.split(content).join('')
     content = content.replace(/\\+'/g, "'").replace(/\\+"/g, '"').replace(/\\`/g, '`')
 
-    const typeMatch = /\b(?:entry_type|type)\s*:\s*['"]([^'"]+)['"]/i.exec(code)
+    const typeMatch = /\b(?:entry_type|type)\s*:\s*['"]([^'"]+)['"]/i.exec(scanCode)
     const titleMatch =
-        /\btitle\s*:\s*[`'"]([\s\S]*?)`['"](?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\)))/i.exec(code) ??
-        /\btitle\s*:\s*['"]([^'"]+)['"]/i.exec(code)
-    const projectMatch = /\b(?:project_number|projectNumber|project)\s*:\s*['"]?(\d+)['"]?/i.exec(code)
-    const workspaceMatch = /\b(?:workspace_id|workspaceId)\s*:\s*['"]([^'"]+)['"]/i.exec(code)
-    const sessionMatch = /\b(?:session_id|sessionId)\s*:\s*['"]([^'"]+)['"]/i.exec(code)
-    const impactMatch = /\bimpact\s*:\s*([0-9.]+)/i.exec(code)
-    const trustMatch = /\btrust\s*:\s*([0-9.]+)/i.exec(code)
-    const validationMatch = /\bvalidation_status\s*:\s*['"]([^'"]+)['"]/i.exec(code)
-    const tagsMatch = /\btags\s*:\s*\[([\s\S]*?)\]/i.exec(code)
-    const autoContextMatch = /\bauto_context\s*:\s*(\{[\s\S]*?\})(?=\s*,\s*\n|\s*\n\s*\})/i.exec(code)
+        /\btitle\s*:\s*[`'"]([\s\S]*?)`['"](?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\)))/i.exec(scanCode) ??
+        /\btitle\s*:\s*['"]([^'"]+)['"]/i.exec(scanCode)
+    const projectMatch = /\b(?:project_number|projectNumber|project)\s*:\s*['"]?(\d+)['"]?/i.exec(scanCode)
+    const workspaceMatch = /\b(?:workspace_id|workspaceId)\s*:\s*['"]([^'"]+)['"]/i.exec(scanCode)
+    const sessionMatch = /\b(?:session_id|sessionId)\s*:\s*['"]([^'"]+)['"]/i.exec(scanCode)
+    const impactMatch = /\bimpact\s*:\s*([0-9.]+)/i.exec(scanCode)
+    const trustMatch = /\btrust\s*:\s*([0-9.]+)/i.exec(scanCode)
+    const validationMatch = /\bvalidation_status\s*:\s*['"]([^'"]+)['"]/i.exec(scanCode)
+    const tagsMatch = /\btags\s*:\s*\[([\s\S]*?)\]/i.exec(scanCode)
+    const autoContextMatch = /\bauto_context\s*:\s*(\{[\s\S]*?\})(?=\s*,\s*\n|\s*\n\s*\})/i.exec(scanCode)
 
     const payload: Record<string, unknown> = {
         content,
@@ -81,7 +84,7 @@ export function extractAndRecoverEntryCode(code: string): string | null {
     const title = titleMatch?.[1]?.replace(/\\+'/g, "'").replace(/\\+"/g, '"').replace(/\\`/g, '`')
     if (title !== undefined && title !== '') payload['title'] = title
 
-    const entryIdMatch = /\b(?:entry_id|id)\s*:\s*(\d+)/i.exec(code)
+    const entryIdMatch = /\b(?:entry_id|id)\s*:\s*(\d+)/i.exec(scanCode)
     if (entryIdMatch?.[1] !== undefined) payload['entry_id'] = parseInt(entryIdMatch[1], 10)
     if (projectMatch?.[1] !== undefined) payload['project_number'] = parseInt(projectMatch[1], 10)
     if (workspaceMatch?.[1] !== undefined) payload['workspace_id'] = workspaceMatch[1]

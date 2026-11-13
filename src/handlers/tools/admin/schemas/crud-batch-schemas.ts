@@ -7,7 +7,6 @@ import {
     MAX_BATCH_SIZE,
     BatchResultOutputSchema,
     healAgentHallucinations,
-    safeString,
 } from '../../schemas.js'
 import { ErrorFieldsMixin } from '../../error-fields-mixin.js'
 import { CreateEntrySchema, CreateEntrySchemaMcp } from '../../core/index.js'
@@ -30,31 +29,8 @@ function preprocessUpdateEntry(val: unknown): unknown {
             delete obj['text']
             modified = true
         }
-        if ('title' in obj || 'heading' in obj || 'subject' in obj || 'name' in obj) {
-            const rawTitle = obj['title'] ?? obj['heading'] ?? obj['subject'] ?? obj['name']
-            if (rawTitle !== undefined && rawTitle !== null) {
-                const titleStr = safeString(rawTitle).trim()
-                if (titleStr !== '') {
-                    const cleanTitle = titleStr.replace(/^#+\s*/, '')
-                    const currentContent = safeString(obj['content']).trim()
-                    if (
-                        !('content' in obj) ||
-                        obj['content'] === undefined ||
-                        obj['content'] === null ||
-                        currentContent === ''
-                    ) {
-                        obj['content'] = `# ${cleanTitle}`
-                    } else if (!currentContent.startsWith(`# ${cleanTitle}`)) {
-                        obj['content'] = `# ${cleanTitle}\n\n${currentContent}`
-                    }
-                }
-            }
-            delete obj['title']
-            delete obj['heading']
-            delete obj['subject']
-            delete obj['name']
-            modified = true
-        }
+        // [AGENT-HINT] L7/H8: title/heading/subject/name are folded (or dropped on updates) by
+        // healAgentHallucinations → healTitleField; no duplicate handling here.
         return modified ? obj : healedVal
     }
     return healedVal
@@ -243,7 +219,15 @@ export function preprocessBatchCreateEntries(val: unknown): unknown {
             obj['entries'] = obj['entries'].map((e: unknown) => {
                 if (typeof e === 'object' && e !== null) {
                     const eObj = { ...(e as Record<string, unknown>) }
-                    if (eObj['project_number'] === undefined && rootProjectNum !== undefined) {
+                    // [INVARIANT] C3: never pair the root project with an item that names another workspace.
+                    const itemWs = eObj['workspace_id']
+                    const namesOtherWorkspace =
+                        itemWs !== undefined && itemWs !== rootWorkspaceId
+                    if (
+                        eObj['project_number'] === undefined &&
+                        rootProjectNum !== undefined &&
+                        !namesOtherWorkspace
+                    ) {
                         eObj['project_number'] = rootProjectNum
                     }
                     if (eObj['workspace_id'] === undefined && rootWorkspaceId !== undefined) {
@@ -301,6 +285,7 @@ function preprocessBatchUpdates(val: unknown, propagateRootProject: boolean): un
         }
         if (Array.isArray(updatesArr)) {
             const rootProjectNum = obj['project_number']
+            const rootWorkspaceId = obj['workspace_id']
             const newUpdates = updatesArr.map((u: unknown) => {
                 if (typeof u === 'object' && u !== null) {
                     const uObj = { ...(u as Record<string, unknown>) }
@@ -308,10 +293,12 @@ function preprocessBatchUpdates(val: unknown, propagateRootProject: boolean): un
                         uObj['entry_id'] = uObj['id']
                         delete uObj['id']
                     }
+                    const itemWs = uObj['workspace_id']
                     if (
                         propagateRootProject &&
                         uObj['project_number'] === undefined &&
-                        rootProjectNum !== undefined
+                        rootProjectNum !== undefined &&
+                        (itemWs === undefined || itemWs === rootWorkspaceId)
                     ) {
                         uObj['project_number'] = rootProjectNum
                     }

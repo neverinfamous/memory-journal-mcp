@@ -1,8 +1,13 @@
 import type { EntryType } from '../../../types/index.js'
 import type { EntriesSharedContext } from './shared.js'
 import { effectiveWorkspace } from '../../workspace-scope.js'
-import { ConflictError } from '../../../types/errors.js'
-import { activeProjectRegistry, pairStoredScope } from '../../../utils/write-scope.js'
+import { ConflictError, ValidationError } from '../../../types/errors.js'
+import {
+    activeProjectRegistry,
+    exactRegistryKey,
+    pairStoredScope,
+} from '../../../utils/write-scope.js'
+import type { ProjectRegistry } from '../../../utils/write-scope.js'
 import { snapshotAndEvictRevisions } from './revisions.js'
 
 /** Thrown inside the update transaction to roll back revision bookkeeping when no row matched. */
@@ -151,21 +156,55 @@ function buildUpdateSets(
     return { updates, values }
 }
 
-function withCanonicalMove(
+/**
+ * [INTENT] Pair the destination workspace with its project before writing.
+ * [INVARIANT] Moving to `default`/an unregistered workspace without an explicit project
+ * clears project_number so the old project's number never travels with the row; a
+ * registered numbered workspace can never be written with project_number NULL.
+ */
+function resolveUpdateScope(
+    id: number,
+    existing: ExistingEntryRow,
     input: UpdateEntryInput,
-    paired: { workspaceId: string | undefined; projectNumber: number | null | undefined }
+    registry: ProjectRegistry | undefined
 ): UpdateEntryInput {
-    const moving = input.targetWorkspaceId !== undefined && input.targetWorkspaceId !== '*'
-    const canonical = paired.workspaceId
-    return {
-        ...input,
-        ...(paired.projectNumber !== undefined && paired.projectNumber !== null
-            ? { projectNumber: paired.projectNumber }
-            : {}),
-        ...(moving && canonical !== undefined && canonical !== '' && canonical !== '*'
-            ? { targetWorkspaceId: canonical }
-            : {}),
+    let target: string | undefined
+    if (input.targetWorkspaceId !== undefined) {
+        target = input.targetWorkspaceId.trim()
+        if (target === '') {
+            throw new ValidationError('targetWorkspaceId cannot be blank.', { id })
+        }
     }
+    const moving = target !== undefined && target !== '*'
+    const destination = moving && target !== undefined ? target : existing.workspaceId
+    const paired = pairStoredScope(
+        destination,
+        input.projectNumber === null ? undefined : input.projectNumber,
+        registry
+    )
+    const registeredProject =
+        typeof paired.projectNumber === 'number' &&
+        exactRegistryKey(destination, registry) !== undefined
+    if (input.projectNumber === null && registeredProject) {
+        throw new ValidationError(
+            `Workspace '${String(paired.workspaceId)}' is registered to project_number ${String(paired.projectNumber)}; project_number cannot be cleared.`,
+            { id, workspaceId: paired.workspaceId }
+        )
+    }
+
+    const next: UpdateEntryInput = { ...input }
+    if (target !== undefined) next.targetWorkspaceId = target
+    if (input.projectNumber === null) return next
+    if (typeof paired.projectNumber === 'number' && (input.projectNumber !== undefined || moving)) {
+        next.projectNumber = paired.projectNumber
+    } else if (moving && input.projectNumber === undefined) {
+        next.projectNumber = null
+    }
+    const canonical = paired.workspaceId
+    if (moving && canonical !== undefined && canonical !== '' && canonical !== '*') {
+        next.targetWorkspaceId = canonical
+    }
+    return next
 }
 
 export function performUpdateEntry(
@@ -190,21 +229,7 @@ export function performUpdateEntry(
     assertUpdateAllowed(id, existing, callerWorkspace, input)
 
     const registry = activeProjectRegistry(context.config?.projectRegistry)
-    const destination =
-        input.targetWorkspaceId !== undefined && input.targetWorkspaceId !== '*'
-            ? input.targetWorkspaceId
-            : existing.workspaceId
-    let writeInput = input
-    if (input.projectNumber !== undefined && input.projectNumber !== null) {
-        writeInput = withCanonicalMove(input, pairStoredScope(destination, input.projectNumber, registry))
-    } else if (input.projectNumber === null) {
-        writeInput = input
-    } else if (input.targetWorkspaceId !== undefined && input.targetWorkspaceId !== '*') {
-        writeInput = withCanonicalMove(
-            input,
-            pairStoredScope(input.targetWorkspaceId, undefined, registry)
-        )
-    }
+    const writeInput = resolveUpdateScope(id, existing, input, registry)
 
     const { updates, values } = buildUpdateSets(id, existing, callerWorkspace, writeInput)
 

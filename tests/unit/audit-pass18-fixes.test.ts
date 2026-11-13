@@ -22,7 +22,8 @@ describe('Pass 18 audit fixes', () => {
 
     it('keeps an unknown prompt workspace instead of substituting default', () => {
         expect(resolvePromptPriorWorkspace({ projectRegistry: registry }, 'not-a-repo')).toBe('not-a-repo')
-        expect(resolvePromptPriorWorkspace({ projectRegistry: registry }, '#99')).toBe('#99')
+        // [C8 pass 20] An unmatched numeric id is never echoed back as a literal workspace name.
+        expect(resolvePromptPriorWorkspace({ projectRegistry: registry }, '#99')).not.toBe('#99')
     })
 
     it('returns the default workspace from agent-context/default', () => {

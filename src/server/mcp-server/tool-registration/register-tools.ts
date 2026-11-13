@@ -193,16 +193,24 @@ function registerAllToolsOnServer(
                     )
                     customToolHandlerConfig.filterConfig = currentConfig.toolFilterConfig
                     customToolHandlerConfig.briefingConfig = nextBriefing
+                    // [INVARIANT] Mirror config exactly (clearing removed fields) so a prior
+                    // value never lingers on the shared handler config across calls (C1).
                     if (nextBriefing.defaultProjectNumber !== undefined) {
                         customToolHandlerConfig.defaultProjectNumber =
                             nextBriefing.defaultProjectNumber
+                    } else {
+                        delete customToolHandlerConfig.defaultProjectNumber
                     }
                     if (nextBriefing.defaultWorkspaceId !== undefined) {
                         customToolHandlerConfig.defaultWorkspaceId =
                             nextBriefing.defaultWorkspaceId
+                    } else {
+                        delete customToolHandlerConfig.defaultWorkspaceId
                     }
                     if (nextBriefing.projectRegistry !== undefined) {
                         customToolHandlerConfig.projectRegistry = nextBriefing.projectRegistry
+                    } else {
+                        delete customToolHandlerConfig.projectRegistry
                     }
 
                     const toolArgs =
@@ -228,8 +236,11 @@ function registerAllToolsOnServer(
                         (result as Record<string, unknown>)['success'] === true
 
                     if (isSuccess) {
+                        // [INTENT] Any tool that declares `readOnlyHint: false` (merge, link,
+                        // import, Code Mode, ...) notifies subscribers, not just a fixed list (L5).
                         const isMutation =
                             MUTATING_TOOLS.has(tool.name) ||
+                            readOnlyHintOf(tool) === false ||
                             (tool.name.startsWith('team_') && readOnlyHintOf(tool) !== true)
 
                         if (isMutation) {
@@ -298,7 +309,8 @@ function attachResourceAndSubscriptionHandlers(
         const activeBriefingConfig = resolveActiveBriefingConfig(
             currentConfig.briefingConfig,
             options,
-            allowedIoRoots
+            allowedIoRoots,
+            runtime
         )
 
         try {
@@ -401,7 +413,8 @@ export function createServerInstance(
         resolveActiveBriefingConfig(
             configManager.getConfig().briefingConfig,
             options,
-            allowedIoRoots
+            allowedIoRoots,
+            runtime
         )
     registerPrompts(
         server,

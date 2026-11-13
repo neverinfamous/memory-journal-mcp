@@ -21,6 +21,53 @@ function concreteCallerWorkspace(workspaceId: string | undefined): string | unde
     return trimmed
 }
 
+type Registry = ReturnType<typeof loadProjectRegistryFromConfig>
+
+/**
+ * Detect `(repo, workspace_id, project_number)` combinations that point at different registered projects.
+ */
+export function detectScopeMismatch(
+    registry: Registry,
+    canonicalRepo: string | undefined,
+    callerWorkspace: string | undefined,
+    projectNumber: number | undefined
+): string | undefined {
+    if (registry === undefined || registry === null) return undefined
+    const wsKey =
+        callerWorkspace !== undefined && callerWorkspace.toLowerCase() !== 'default'
+            ? findCanonicalRegistryKey(callerWorkspace, registry)
+            : undefined
+    const repoKey =
+        canonicalRepo !== undefined && Object.prototype.hasOwnProperty.call(registry, canonicalRepo)
+            ? canonicalRepo
+            : undefined
+    if (wsKey !== undefined && repoKey !== undefined && wsKey !== repoKey) {
+        return `workspace_id "${callerWorkspace ?? ''}" does not match repository "${canonicalRepo ?? ''}".`
+    }
+    const ownerKey = wsKey ?? repoKey
+    const registered = ownerKey !== undefined ? registry[ownerKey]?.project_number : undefined
+    if (
+        projectNumber !== undefined &&
+        registered !== undefined &&
+        registered !== null &&
+        registered !== projectNumber
+    ) {
+        return `project_number ${String(projectNumber)} does not belong to workspace "${ownerKey ?? ''}" (registered project ${String(registered)}).`
+    }
+    return undefined
+}
+
+export function scopeMismatchResponse(error: string): Record<string, unknown> {
+    return {
+        success: false,
+        error,
+        code: 'VALIDATION_ERROR',
+        category: 'validation',
+        suggestion: 'Provide a consistent repo, workspace_id, and project_number for a single registered project.',
+        recoverable: true,
+    }
+}
+
 const CreateIssueHandlerInputSchema = z.object({
     title: z.string().min(1),
     body: z.string().optional(),
@@ -91,6 +138,11 @@ export function getCreateGitHubIssueTool(context: ToolContext): ToolDefinition {
         handler: async (params: unknown) => {
             try {
                 const input = CreateIssueHandlerInputSchema.parse(params)
+                if (input.workspace_id?.trim() === '*') {
+                    return scopeMismatchResponse(
+                        "workspace_id '*' is a read-only wildcard and cannot be used to create issues and journal entries."
+                    )
+                }
 
                 const resolved = await resolveOwnerRepo(context, input)
                 if ('error' in resolved) return resolved.response
@@ -109,14 +161,15 @@ export function getCreateGitHubIssueTool(context: ToolContext): ToolDefinition {
                 const canonicalRepo = resolved.repo
                     ? (findCanonicalRegistryKey(resolved.repo, registry) ?? resolved.repo)
                     : undefined
+                const mismatch = detectScopeMismatch(registry, canonicalRepo, callerWorkspace, input.project_number)
+                if (mismatch !== undefined) return scopeMismatchResponse(mismatch)
+                // [INVARIANT] Entry scope derives from repo/workspace/project only, never from content/tag keywords.
                 const resolvedCtx = resolveProjectContext(
                     {
                         workspace_id: callerWorkspace ?? canonicalRepo,
                         ...(pairCallerWorkspace || entryProjectNumber === undefined
                             ? {}
                             : { project_number: entryProjectNumber }),
-                        content: input.entry_content,
-                        tags: input.tags,
                     },
                     context.config
                 )
@@ -212,9 +265,17 @@ export function getCreateGitHubIssueTool(context: ToolContext): ToolDefinition {
                         ? (projectResult.error ??
                           'Issue was created but it was not added to the project.')
                         : undefined
+                const statusError =
+                    input.initial_status !== undefined && projectResult?.initialStatus?.set !== true
+                        ? (projectResult?.initialStatus?.error ??
+                          `Initial status "${input.initial_status}" could not be applied.`)
+                        : undefined
+                const projectItemError = projectWarning ?? statusError
                 return {
-                    success: projectWarning === undefined,
-                    ...(projectWarning !== undefined ? { warning: projectWarning } : {}),
+                    success: projectItemError === undefined,
+                    ...(projectItemError !== undefined
+                        ? { warning: projectItemError, projectItemError }
+                        : {}),
                     issue: {
                         number: issue.number,
                         title: issue.title,

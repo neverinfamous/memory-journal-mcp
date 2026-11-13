@@ -54,6 +54,19 @@ export function transformAutoReturn(code: string): string {
                 isEscaped = false
             }
         } else {
+            // [M11] Skip comments so apostrophes/quotes inside them never open a fake string.
+            if (ch === '/' && trimmed[i + 1] === '/') {
+                const nl = trimmed.indexOf('\n', i)
+                if (nl === -1) break
+                i = nl - 1
+                continue
+            }
+            if (ch === '/' && trimmed[i + 1] === '*') {
+                const end = trimmed.indexOf('*/', i + 2)
+                if (end === -1) break
+                i = end + 1
+                continue
+            }
             if (ch === "'" || ch === '"' || ch === '`') {
                 inString = ch
             } else if (ch === '{' || ch === '[' || ch === '(') {

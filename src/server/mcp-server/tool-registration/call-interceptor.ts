@@ -23,6 +23,7 @@ import {
     projectAliasTarget,
 } from '../../../handlers/tools/core/dummy-healing.js'
 import { resolveActiveBriefingConfig } from './register-tools-helpers.js'
+import { runFallbackWithInterceptors } from './fallback-interceptors.js'
 import {
     ALL_KNOWN_GROUP_TOOLS,
     formatSuccessPayload,
@@ -231,16 +232,22 @@ async function handleUnknownTool(
     )
 
     if (healingEnabled) {
-        const fallbackResponse = await tryAutonomousUnknownToolFallback(
+        const fallbackResponse = await runFallbackWithInterceptors(
             requestedTool,
             toolArgs,
-            matchingPrompt,
-            prompts,
-            context,
-            options,
-            allTools,
-            allToolNames,
-            customToolHandlerConfig
+            context.runtime,
+            () =>
+                tryAutonomousUnknownToolFallback(
+                    requestedTool,
+                    toolArgs,
+                    matchingPrompt,
+                    prompts,
+                    context,
+                    options,
+                    allTools,
+                    allToolNames,
+                    customToolHandlerConfig
+                )
         )
         if (fallbackResponse !== undefined) return fallbackResponse
     }

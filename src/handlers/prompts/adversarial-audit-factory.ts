@@ -1,0 +1,91 @@
+/**
+ * Memory Journal MCP Server - Shared factory for `adversarial-audit-*` prompt definitions.
+ * [INTENT] Every audit prompt shares argument parsing, target sanitization, the opt-in Copilot
+ * step, and the prior-audit section; only the name, tag, Copilot command, and body differ (L1).
+ */
+
+import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
+import { ICON_PROMPT } from '../../constants/icons.js'
+import type { InternalPromptDef } from './index.js'
+import type { BriefingConfig } from '../resources/shared.js'
+import {
+    auditArgsSchema,
+    AUDIT_ARGUMENTS,
+    buildCopilotStep,
+    buildPriorAuditSection,
+    sanitizeCopilotTarget,
+    sanitizePromptTarget,
+} from './adversarial-helpers.js'
+
+export interface AuditPromptBodyContext {
+    target: string
+    copilotInstruction: string
+    priorAuditSection: string
+}
+
+export interface AuditPromptSpec {
+    name: string
+    description: string
+    /** Journal tag used to load prior audits (e.g. `security-audit`). */
+    tag: string
+    /** Heading of the prior-audit section. */
+    heading: string
+    /** Builds the opt-in `gh copilot` command for the sanitized target. */
+    copilotCommand: (copilotTarget: string) => string
+    body: (ctx: AuditPromptBodyContext) => string
+}
+
+export function buildAuditPromptDefinition(spec: AuditPromptSpec): InternalPromptDef {
+    return {
+        name: spec.name,
+        description: spec.description,
+        icons: [ICON_PROMPT],
+        arguments: AUDIT_ARGUMENTS,
+        handler: (
+            args: Record<string, string> | undefined,
+            db: IDatabaseAdapter,
+            _teamDb?: IDatabaseAdapter,
+            _github?: unknown,
+            briefingConfig?: BriefingConfig,
+            runtime?: object | null
+        ) => {
+            const parsed = auditArgsSchema.parse(args ?? {})
+            const target = sanitizePromptTarget(parsed.target ?? '{target}')
+            const copilotInstruction = buildCopilotStep(
+                parsed.copilot === 'true',
+                spec.copilotCommand(sanitizeCopilotTarget(target))
+            )
+            const priorAuditSection = buildPriorAuditSection(
+                db,
+                spec.tag,
+                spec.heading,
+                briefingConfig,
+                parsed.workspace_id,
+                parsed.target,
+                runtime
+            )
+            return {
+                messages: [
+                    {
+                        role: 'user',
+                        content: {
+                            type: 'text',
+                            text: spec.body({ target, copilotInstruction, priorAuditSection }),
+                        },
+                    },
+                ],
+            }
+        },
+    }
+}
+
+/** Shared closing steps for the lighter audit prompts (approval gate + commit rule). */
+export function buildStandardAuditClosing(copilotInstruction: string, priorAuditSection: string): string {
+    return `2. **External Validation (Copilot — Opt-In)**: ${copilotInstruction}
+3. Present findings table (incorporating Copilot findings if applicable).
+4. Await approval before applying fixes. Diagnostic scans are part of the audit. Do not edit project files until the user approves the plan.
+5. Commit with the target repository's own commit helper when one exists. Discover that helper. Do not invent a script path. Do not add an audit plan file to the repository.
+**Rule**: If you don't make changes, do not commit.
+
+${priorAuditSection}`
+}

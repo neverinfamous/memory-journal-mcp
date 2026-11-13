@@ -18,26 +18,17 @@ export const DB_TO_JOURNAL: Record<string, [string, string]> = {
 const DB_MAINTENANCE_CALLS = new Set(['vacuum', 'integrityCheck'])
 const SCHEMA_OPS_NOT_RUN = new Set(['listTables', 'describeTable'])
 
-// [INVARIANT] The shim proxy calls isDbMaintenanceCall and then createMaintenanceUnavailableFn
-// in the same turn. The pending name selects the schema-operation error for those two names.
-let pendingUnavailableName: string | undefined
-
 export function isDbMaintenanceCall(name: string): boolean {
-    if (SCHEMA_OPS_NOT_RUN.has(name) || DB_MAINTENANCE_CALLS.has(name)) {
-        pendingUnavailableName = name
-        return true
-    }
-    return false
+    return SCHEMA_OPS_NOT_RUN.has(name) || DB_MAINTENANCE_CALLS.has(name)
 }
 
-export function createMaintenanceUnavailableFn(): () => Promise<{
+/** [L3] The call name is passed explicitly; no module-global state is shared between calls. */
+export function createMaintenanceUnavailableFn(name: string): () => Promise<{
     success: false
     error: string
     code: string
 }> {
-    const name = pendingUnavailableName
-    pendingUnavailableName = undefined
-    if (name !== undefined && SCHEMA_OPS_NOT_RUN.has(name)) {
+    if (SCHEMA_OPS_NOT_RUN.has(name)) {
         return () =>
             Promise.resolve({
                 success: false,

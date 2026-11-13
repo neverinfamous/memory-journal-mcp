@@ -310,7 +310,7 @@ export function createShimMjProxy(options: CreateShimMjOptions): Record<string, 
             if (typeof prop === 'string' && prop.includes('_')) {
                 const camelProp = prop.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase())
                 if (camelProp !== prop) {
-                    if (isDbMaintenanceCall(camelProp)) return createMaintenanceUnavailableFn()
+                    if (isDbMaintenanceCall(camelProp)) return createMaintenanceUnavailableFn(camelProp)
                     const mapping = DB_TO_JOURNAL[camelProp]
                     if (mapping !== undefined) {
                         const [group, method] = mapping
@@ -321,7 +321,7 @@ export function createShimMjProxy(options: CreateShimMjOptions): Record<string, 
             }
 
             if (typeof prop === 'string') {
-                if (isDbMaintenanceCall(prop)) return createMaintenanceUnavailableFn()
+                if (isDbMaintenanceCall(prop)) return createMaintenanceUnavailableFn(prop)
                 const mapping = DB_TO_JOURNAL[prop]
                 if (mapping !== undefined) {
                     const [group, method] = mapping

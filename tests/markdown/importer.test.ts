@@ -31,7 +31,7 @@ describe('importMarkdownEntries', () => {
     const mockDb = {
         getEntryById: vi.fn(),
         createEntry: vi.fn(),
-        updateEntry: vi.fn(),
+        updateEntry: vi.fn((id: number) => ({ id, workspaceId: 'default' })),
         getOrCreateTag: vi.fn(),
         linkEntries: vi.fn(),
         executeInTransaction: vi.fn((cb) => cb()),

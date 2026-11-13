@@ -117,7 +117,17 @@ export class DatabaseAdapter extends AdapterDelegates implements IDatabaseAdapte
         return this.executeInTransaction(() => {
             const success = this.entriesMgr.deleteEntry(id, permanent, workspaceId)
             if (success) {
-                this.deleteVector(id)
+                // [INVARIANT] A vector-store failure must not roll back the entry delete;
+                // orphaned vectors are reaped by cleanupStaleVectors on the next rebuild.
+                try {
+                    this.deleteVector(id)
+                } catch (err) {
+                    logger.warning('Failed to delete vector for deleted entry', {
+                        module: 'SqliteAdapter',
+                        entryId: id,
+                        error: err instanceof Error ? err.message : String(err),
+                    })
+                }
             }
             return success
         })
