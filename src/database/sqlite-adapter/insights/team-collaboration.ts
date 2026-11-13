@@ -76,14 +76,35 @@ export function getAuthorsForEntries(
     return authorMap
 }
 
+/** Workspace/project filter shared by collaboration queries. */
+interface CollabScope {
+    workspaceId: string | undefined
+    projectNumber: number | undefined
+}
+
+/** [INTENT] Build `AND alias.workspace_id = ? AND alias.project_number = ?` fragments for a scope. */
+function scopeClause(alias: string, scope: CollabScope): { sql: string; params: unknown[] } {
+    let sql = ''
+    const params: unknown[] = []
+    if (scope.workspaceId !== undefined) {
+        sql += ` AND ${alias}.workspace_id = ?`
+        params.push(scope.workspaceId)
+    }
+    if (scope.projectNumber !== undefined) {
+        sql += ` AND ${alias}.project_number = ?`
+        params.push(scope.projectNumber)
+    }
+    return { sql, params }
+}
+
 /** Author activity heatmap bucketed by week, quarter or month. */
 function queryAuthorActivity(
     connection: NativeConnectionManager,
-    workspaceId: string | undefined,
+    scope: CollabScope,
     limit: number,
     period: string
 ): { author: string; period: string; entryCount: number }[] {
-    const scoped = workspaceId !== undefined
+    const clause = scopeClause('mj', scope)
 
     const dateExpression =
         period === 'week'
@@ -99,11 +120,11 @@ function queryAuthorActivity(
             COUNT(*) AS entry_count
         FROM memory_journal mj
         LEFT JOIN author_aliases aa ON LOWER(mj.author) = LOWER(aa.alias) AND (aa.workspace_id IS NULL OR aa.workspace_id = mj.workspace_id)
-        WHERE mj.deleted_at IS NULL${scoped ? ' AND mj.workspace_id = ?' : ''}
+        WHERE mj.deleted_at IS NULL${clause.sql}
         GROUP BY COALESCE(aa.canonical_author, mj.author, 'unknown'), period
         ORDER BY period DESC, entry_count DESC
         LIMIT ?`,
-        scoped ? [workspaceId, limit * 10] : [limit * 10]
+        [...clause.params, limit * 10]
     )
     const authorActivity =
         activityResult[0]?.values.map((row: unknown[]) => ({
@@ -118,10 +139,11 @@ function queryAuthorActivity(
 /** Links between entries written by different (alias-resolved) authors. */
 function queryCrossAuthorLinks(
     connection: NativeConnectionManager,
-    workspaceId: string | undefined,
+    scope: CollabScope,
     limit: number
 ): { fromAuthor: string; toAuthor: string; linkCount: number }[] {
-    const scoped = workspaceId !== undefined
+    const c1 = scopeClause('m1', scope)
+    const c2 = scopeClause('m2', scope)
     const crossLinkResult = connection.exec(
         `SELECT
             COALESCE(aa1.canonical_author, m1.author, 'unknown') AS from_author,
@@ -132,12 +154,12 @@ function queryCrossAuthorLinks(
         JOIN memory_journal m2 ON r.to_entry_id = m2.id
         LEFT JOIN author_aliases aa1 ON LOWER(m1.author) = LOWER(aa1.alias) AND (aa1.workspace_id IS NULL OR aa1.workspace_id = m1.workspace_id)
         LEFT JOIN author_aliases aa2 ON LOWER(m2.author) = LOWER(aa2.alias) AND (aa2.workspace_id IS NULL OR aa2.workspace_id = m2.workspace_id)
-        WHERE m1.deleted_at IS NULL AND m2.deleted_at IS NULL${scoped ? ' AND m1.workspace_id = ? AND m2.workspace_id = ?' : ''}
+        WHERE m1.deleted_at IS NULL AND m2.deleted_at IS NULL${c1.sql}${c2.sql}
             AND COALESCE(aa1.canonical_author, m1.author, 'unknown') != COALESCE(aa2.canonical_author, m2.author, 'unknown')
         GROUP BY from_author, to_author
         ORDER BY link_count DESC
         LIMIT ?`,
-        scoped ? [workspaceId, workspaceId, limit] : [limit]
+        [...c1.params, ...c2.params, limit]
     )
     const crossAuthorLinks =
         crossLinkResult[0]?.values.map((row: unknown[]) => ({
@@ -152,10 +174,10 @@ function queryCrossAuthorLinks(
 /** Authors ranked by inbound links. */
 function queryImpactFactor(
     connection: NativeConnectionManager,
-    workspaceId: string | undefined,
+    scope: CollabScope,
     limit: number
 ): { author: string; inboundLinks: number }[] {
-    const scoped = workspaceId !== undefined
+    const clause = scopeClause('m2', scope)
     const impactResult = connection.exec(
         `SELECT
             COALESCE(aa2.canonical_author, m2.author, 'unknown') AS author,
@@ -163,11 +185,11 @@ function queryImpactFactor(
         FROM relationships r
         JOIN memory_journal m2 ON r.to_entry_id = m2.id
         LEFT JOIN author_aliases aa2 ON LOWER(m2.author) = LOWER(aa2.alias) AND (aa2.workspace_id IS NULL OR aa2.workspace_id = m2.workspace_id)
-        WHERE m2.deleted_at IS NULL${scoped ? ' AND m2.workspace_id = ?' : ''}
+        WHERE m2.deleted_at IS NULL${clause.sql}
         GROUP BY COALESCE(aa2.canonical_author, m2.author, 'unknown')
         ORDER BY inbound_links DESC
         LIMIT ?`,
-        scoped ? [workspaceId, limit] : [limit]
+        [...clause.params, limit]
     )
     const impactFactor =
         impactResult[0]?.values.map((row: unknown[]) => ({
@@ -181,17 +203,17 @@ function queryImpactFactor(
 /** Distinct author and entry totals. */
 function queryCollaborationTotals(
     connection: NativeConnectionManager,
-    workspaceId: string | undefined
+    scope: CollabScope
 ): { totalAuthors: number; totalEntries: number } {
-    const scoped = workspaceId !== undefined
+    const clause = scopeClause('mj', scope)
     const totalsResult = connection.exec(
         `SELECT
             COUNT(DISTINCT COALESCE(aa.canonical_author, mj.author, 'unknown')) AS total_authors,
             COUNT(*) AS total_entries
         FROM memory_journal mj
         LEFT JOIN author_aliases aa ON LOWER(mj.author) = LOWER(aa.alias) AND (aa.workspace_id IS NULL OR aa.workspace_id = mj.workspace_id)
-        WHERE mj.deleted_at IS NULL${scoped ? ' AND mj.workspace_id = ?' : ''}`,
-        scoped ? [workspaceId] : []
+        WHERE mj.deleted_at IS NULL${clause.sql}`,
+        clause.params
     )
     const totalAuthors = (totalsResult[0]?.values[0]?.[0] as number | undefined) ?? 0
     const totalEntries = (totalsResult[0]?.values[0]?.[1] as number | undefined) ?? 0
@@ -200,7 +222,7 @@ function queryCollaborationTotals(
 
 export function getTeamCollaborationMetrics(
     connection: NativeConnectionManager,
-    options: { period: string; limit: number; workspaceId?: string }
+    options: { period: string; limit: number; workspaceId?: string; projectNumber?: number }
 ): {
     totalAuthors: number
     totalEntries: number
@@ -209,12 +231,15 @@ export function getTeamCollaborationMetrics(
     impactFactor: { author: string; inboundLinks: number }[]
 } {
     const scopeId = effectiveWorkspace(options.workspaceId)
-    const workspaceId = scopeId !== '*' ? scopeId : undefined
+    const scope: CollabScope = {
+        workspaceId: scopeId !== '*' ? scopeId : undefined,
+        projectNumber: options.projectNumber,
+    }
 
-    const authorActivity = queryAuthorActivity(connection, workspaceId, options.limit, options.period)
-    const crossAuthorLinks = queryCrossAuthorLinks(connection, workspaceId, options.limit)
-    const impactFactor = queryImpactFactor(connection, workspaceId, options.limit)
-    const { totalAuthors, totalEntries } = queryCollaborationTotals(connection, workspaceId)
+    const authorActivity = queryAuthorActivity(connection, scope, options.limit, options.period)
+    const crossAuthorLinks = queryCrossAuthorLinks(connection, scope, options.limit)
+    const impactFactor = queryImpactFactor(connection, scope, options.limit)
+    const { totalAuthors, totalEntries } = queryCollaborationTotals(connection, scope)
 
     return {
         totalAuthors,

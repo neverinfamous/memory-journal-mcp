@@ -104,6 +104,7 @@ export class InsightsOperations {
         period: string
         limit: number
         workspaceId?: string
+        projectNumber?: number
     }): ReturnType<typeof getTeamCollaborationMetrics> {
         return getTeamCollaborationMetrics(this.connection, options)
     }

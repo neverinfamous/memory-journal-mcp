@@ -105,6 +105,18 @@ describe('Cross-Team Search Handler', () => {
         )
     })
 
+    it('forwards project_number as projectNumber filter to each adapter', async () => {
+        const adapterA = createMockAdapter([])
+        vi.mocked(DatabaseAdapterFactory.create).mockImplementation(async () => adapterA as any)
+
+        await handleCrossTeamSearch(
+            CrossTeamSearchSchema.parse({ query: 'x', limit: 5, team_dbs: ['team-a'], project_number: 7 }),
+            mockContext
+        )
+
+        expect(adapterA.searchEntries).toHaveBeenCalledWith('x', expect.objectContaining({ projectNumber: 7 }))
+    })
+
     it('searches the primary team database when context.teamDb is provided', async () => {
         const primaryAdapter = createMockAdapter([
             { id: 1, content: 'Primary result', timestamp: '2026-01-04T10:00:00Z' },

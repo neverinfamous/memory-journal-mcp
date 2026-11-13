@@ -306,6 +306,17 @@ describe('Team Analytics Tool Handlers', () => {
             expect(result.crossAuthorLinks).toBeDefined()
         })
 
+        it('should filter collaboration matrix by project_number', async () => {
+            const call = (args: Record<string, unknown>) =>
+                callTool('team_get_collaboration_matrix', args, personalDb, undefined, undefined, undefined, undefined, teamDb) as Promise<any>
+            const all = await call({ period: 'month', workspace_id: 'default' })
+            const beta = await call({ period: 'month', workspace_id: 'default', project_number: 202 })
+
+            expect(beta.success).toBe(true)
+            expect(beta.totalEntries).toBe(1)
+            expect(all.totalEntries).toBeGreaterThan(beta.totalEntries)
+        })
+
         it('should return error if team DB is not configured', async () => {
             const result = (await callTool(
                 'team_get_collaboration_matrix',

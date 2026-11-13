@@ -410,6 +410,7 @@ export class AdapterDelegates {
         period: string
         limit: number
         workspaceId?: string
+        projectNumber?: number
     }): ReturnType<IDatabaseAdapter['getTeamCollaborationMatrix']> {
         return this.insightsOps.getTeamCollaborationMatrix(options)
     }

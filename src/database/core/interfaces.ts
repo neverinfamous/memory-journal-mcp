@@ -403,7 +403,7 @@ export interface IDatabaseAdapter {
         edges: { from: string | number; to: string | number; label: string; type: string }[]
     }
 
-    getTeamCollaborationMatrix(options: { period: string; limit: number; workspaceId?: string }): {
+    getTeamCollaborationMatrix(options: { period: string; limit: number; workspaceId?: string; projectNumber?: number }): {
         totalAuthors: number
         totalEntries: number
         authorActivity: { author: string; period: string; entryCount: number }[]
