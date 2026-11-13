@@ -126,13 +126,24 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                     baseBranch: string
                 } | null = null
 
-                if (context.github) {
+                const prWorkspace = resourceWorkspace(context)
+                const prRegistry = context.briefingConfig?.projectRegistry
+                const prTarget =
+                    prRegistry !== undefined && Object.prototype.hasOwnProperty.call(prRegistry, prWorkspace)
+                        ? prWorkspace
+                        : undefined
+                if (context.github || prTarget !== undefined) {
                     try {
-                        const repoInfo = await context.github.getRepoInfo()
-                        if (repoInfo.owner && repoInfo.repo) {
-                            const pr = await context.github.getPullRequest(
-                                repoInfo.owner,
-                                repoInfo.repo,
+                        const resolvedRepo = await resolveGitHubRepo(
+                            context.github,
+                            context.briefingConfig,
+                            prTarget,
+                            context.runtime
+                        )
+                        if (!isResourceError(resolvedRepo)) {
+                            const pr = await resolvedRepo.github.getPullRequest(
+                                resolvedRepo.owner,
+                                resolvedRepo.repo,
                                 prNumber
                             )
                             if (pr) {

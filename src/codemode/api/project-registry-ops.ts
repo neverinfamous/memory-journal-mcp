@@ -8,7 +8,7 @@ import * as path from 'node:path'
 import { isRecord, safeString } from '../normalizers/shared-utils.js'
 import { readProjectRegistryFile } from '../../utils/registry-config-file.js'
 import { mcpLogger } from '../../utils/mcp-logger.js'
-import { parseProjectRegistry, type GroupApiRecord } from './types.js'
+import { parseProjectRegistry, type GroupApiRecord, type ProjectRegistryProvider } from './types.js'
 
 function getConfigPath(): string {
     return (
@@ -34,13 +34,23 @@ function registryError(err: unknown): string {
 function saveRegistryConfig(configPath: string, config: Record<string, unknown>): void {
     fs.mkdirSync(path.dirname(configPath), { recursive: true })
     fs.writeFileSync(configPath, JSON.stringify(config, null, 4), 'utf-8')
-    process.env['PROJECT_REGISTRY'] = JSON.stringify(config['projectRegistry'])
 }
 
-export function createGetConfigFn(): () => Promise<{ PROJECT_REGISTRY: unknown[] | undefined; dbPath: string }> {
+/** Live registry first (config provider), then the startup PROJECT_REGISTRY snapshot. */
+function resolveRegistry(provider?: ProjectRegistryProvider): unknown[] | undefined {
+    if (provider !== undefined) {
+        const live = provider()
+        if (live !== undefined && live !== null) return parseProjectRegistry(live)
+    }
+    return parseProjectRegistry()
+}
+
+export function createGetConfigFn(
+    provider?: ProjectRegistryProvider
+): () => Promise<{ PROJECT_REGISTRY: unknown[] | undefined; dbPath: string }> {
     return (): Promise<{ PROJECT_REGISTRY: unknown[] | undefined; dbPath: string }> =>
         Promise.resolve({
-            PROJECT_REGISTRY: parseProjectRegistry(),
+            PROJECT_REGISTRY: resolveRegistry(provider),
             dbPath: 'memory://internal',
         })
 }
@@ -213,15 +223,11 @@ export function createDeleteProjectFn(): (...args: unknown[]) => Promise<{
     }
 }
 
-export function createListProjectsFn(): () => Promise<unknown> {
+export function createListProjectsFn(provider?: ProjectRegistryProvider): () => Promise<unknown> {
     return (): Promise<unknown> => {
-        try {
-            const registry = parseProjectRegistry()
-            if (registry !== undefined && registry.length > 0) return Promise.resolve(registry)
-        } catch (err) {
-            mcpLogger.warning('codemode', 'Registry parse failed; falling back to config registry', {
-                error: registryError(err),
-            })
+        if (provider !== undefined) {
+            const live = resolveRegistry(provider)
+            if (live !== undefined && live.length > 0) return Promise.resolve(live)
         }
 
         try {
@@ -250,6 +256,8 @@ export function createListProjectsFn(): () => Promise<unknown> {
                 code: 'REGISTRY_UNAVAILABLE',
             })
         }
+        const startup = parseProjectRegistry()
+        if (startup !== undefined && startup.length > 0) return Promise.resolve(startup)
         return Promise.resolve({
             success: false,
             error: 'Project registry is unavailable',

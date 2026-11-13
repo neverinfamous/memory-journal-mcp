@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { z } from 'zod'
-import type { EntryType } from '../../types/index.js'
+import type { EntryType, RelationshipType } from '../../types/index.js'
+import { ENTRY_TYPES, RELATIONSHIP_TYPES } from '../../types/entities.js'
 import type { createEntryOptionsSchema } from '../schemas.js'
 
 /**
@@ -68,32 +69,40 @@ export function resolveAutoContext(
 /** Relationships declared inside a metadata array; invalid targets/types are dropped. */
 export function relationshipsFromMetadata(
     raw: unknown[]
-): { target_id: number; relation_type: string }[] {
-    return raw
-        .map((r: unknown) => {
-            const rec = r != null ? z.record(z.string(), z.unknown()).parse(r) : null
-            return {
-                target_id: Number(rec?.['target_id']),
-                relation_type: String(rec?.['relation_type']),
-            }
-        })
-        .filter(
-            (r) =>
-                !isNaN(r.target_id) && Boolean(r.relation_type) && r.relation_type !== 'undefined'
-        )
+): { target_id: number; relation_type: RelationshipType }[] {
+    return raw.flatMap((r: unknown) => {
+        const rec = r != null ? z.record(z.string(), z.unknown()).parse(r) : null
+        const targetId = Number(rec?.['target_id'])
+        const relType = relationTypeSchema.safeParse(rec?.['relation_type'])
+        return !isNaN(targetId) && relType.success
+            ? [{ target_id: targetId, relation_type: relType.data }]
+            : []
+    })
 }
+
+export const relationTypeSchema = z.enum(RELATIONSHIP_TYPES)
+export const entryTypeSchema = z.enum(ENTRY_TYPES)
 
 export function resolveEntryTypeAndTags(
     options: z.infer<typeof createEntryOptionsSchema>,
     metadata: Record<string, unknown>
 ): { entryType: EntryType | undefined; tags: string[] | undefined } {
-    const entryTypeStr =
+    const entryTypeStr: unknown =
         options.type ??
         options.category ??
         metadata['type'] ??
         metadata['entry_type'] ??
         metadata['entryType']
-    const entryType = entryTypeStr as EntryType | undefined
+    let entryType: EntryType | undefined
+    if (entryTypeStr !== undefined && entryTypeStr !== null) {
+        const parsed = entryTypeSchema.safeParse(entryTypeStr)
+        if (!parsed.success) {
+            throw new Error(
+                `Invalid entry_type '${typeof entryTypeStr === 'string' ? entryTypeStr : JSON.stringify(entryTypeStr)}'. Expected one of: ${ENTRY_TYPES.join(', ')}`
+            )
+        }
+        entryType = parsed.data
+    }
 
     const tagsStr = options.tags
     let tags: string[] | undefined

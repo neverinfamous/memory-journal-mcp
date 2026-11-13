@@ -40,7 +40,7 @@ export const CreateEntrySchema = z.preprocess(
         pr_status: z.enum(['draft', 'open', 'merged', 'closed']).optional(),
         workflow_run_id: z.number().optional(),
         workflow_name: z.string().optional(),
-        workflow_status: z.string().optional(),
+        workflow_status: z.enum(['queued', 'in_progress', 'completed']).optional(),
         impact_score: z.number().min(0).max(1).optional(),
         trust_score: z.number().min(0).max(1).optional(),
         validation_status: z.enum(['passed', 'none', 'failed']).optional(),

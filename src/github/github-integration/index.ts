@@ -220,11 +220,18 @@ export class GitHubIntegration {
         return this.repositoryManager.getWorkflowRuns(owner, repo, limit, abortSignal)
     }
 
-    async getRepoContext(abortSignal?: AbortSignal): Promise<ProjectContext> {
-        const cached = this.client.getCached('context:repo') as ProjectContext | undefined
+    async getRepoContext(
+        abortSignal?: AbortSignal,
+        target?: { owner: string; repo: string }
+    ): Promise<ProjectContext> {
+        const detected = await this.repositoryManager.getRepoInfo()
+        // [INVARIANT] An explicit target overrides the detected repo; cache is keyed per target.
+        const repoInfo =
+            target !== undefined ? { ...detected, owner: target.owner, repo: target.repo } : detected
+        const cacheKey =
+            target !== undefined ? `context:repo:${target.owner}/${target.repo}` : 'context:repo'
+        const cached = this.client.getCached(cacheKey) as ProjectContext | undefined
         if (cached) return cached
-
-        const repoInfo = await this.repositoryManager.getRepoInfo()
 
         const context: ProjectContext = {
             repoName: repoInfo.repo,
@@ -299,7 +306,7 @@ export class GitHubIntegration {
             context.degraded = degraded
         }
 
-        this.client.setCache('context:repo', context)
+        this.client.setCache(cacheKey, context)
         return context
     }
 

@@ -150,7 +150,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                         dryRun: input.dry_run,
                     })
 
-                    const journalApi = createJournalApi(tools, secureDispatcher)
+                    const journalApi = createJournalApi(tools, secureDispatcher, () => context.config?.projectRegistry)
                     const apiBindings = journalApi.createSandboxBindings(sessionContext.progress)
                     const schemas = journalApi.createSandboxSchemas()
 

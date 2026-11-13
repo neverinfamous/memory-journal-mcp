@@ -101,16 +101,34 @@ async function routeNamedTargetTool(
     }
 }
 
+/** Namespace prefixes stripped before exact alias lookup (`mj.core.getProjects` -> `get_projects`). */
+const PROJECT_ALIAS_PREFIX_TOKENS = new Set(['mj', 'core', 'admin', 'search'])
+
+/**
+ * [INVARIANT] Exact alias sets — no fuzzy token matching, so names like `delete_projects`,
+ * `update_projects`, `get_cross_project_insights`, `get_project_kanban` are never misrouted.
+ */
+const GET_PROJECT_ALIASES = new Set(['get_project', 'find_project', 'project_get', 'projects_get', 'projects_find', 'project_find'])
+const LIST_PROJECTS_ALIASES = new Set([
+    'projects',
+    'get_projects',
+    'list_projects',
+    'list_project',
+    'find_projects',
+    'all_projects',
+    'get_all_projects',
+    'list_all_projects',
+    'projects_list',
+    'projects_all',
+])
+
 export function projectAliasTarget(name: string): 'get_project' | 'list_projects' | undefined {
     const tokens = methodTokens(name)
-    const has = (token: string): boolean => tokens.includes(token)
-    if (has('archive') || has('settings')) return undefined
-    if (has('project') && !has('projects') && (has('get') || has('find'))) return 'get_project'
-    const lastToken = tokens[tokens.length - 1]
-    if (has('projects') && !has('list') && (lastToken === 'get' || lastToken === 'find')) return 'get_project'
-    if (name === 'mj.projects' || (has('projects') && (has('list') || has('get') || has('all') || tokens.length <= 2))) {
-        return 'list_projects'
-    }
+    let start = 0
+    while (start < tokens.length - 1 && PROJECT_ALIAS_PREFIX_TOKENS.has(tokens[start] ?? '')) start++
+    const key = tokens.slice(start).join('_')
+    if (GET_PROJECT_ALIASES.has(key)) return 'get_project'
+    if (LIST_PROJECTS_ALIASES.has(key)) return 'list_projects'
     return undefined
 }
 

@@ -297,8 +297,8 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
                         .object({ keep_count: relaxedNumber().default(5) }).strict()
                         .parse(params)
 
-                    const keepCountNum = typeof keep_count === 'string' ? parseInt(keep_count, 10) : keep_count
-                    if (isNaN(keepCountNum) || keepCountNum < 1) {
+                    const keepCountNum = typeof keep_count === 'string' && keep_count.trim() !== '' ? Number(keep_count) : keep_count
+                    if (typeof keepCountNum !== 'number' || !Number.isInteger(keepCountNum) || keepCountNum < 1) {
                         throw new ValidationError('keep_count must be a positive integer')
                     }
 

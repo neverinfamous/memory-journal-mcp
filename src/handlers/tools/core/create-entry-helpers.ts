@@ -36,7 +36,7 @@ export function buildCreateEntryInput(
         prStatus: input.pr_status,
         workflowRunId: input.workflow_run_id,
         workflowName: input.workflow_name,
-        workflowStatus: input.workflow_status as 'queued' | 'in_progress' | 'completed' | undefined,
+        workflowStatus: input.workflow_status,
         autoContext: input.auto_context,
         workspaceId: resolved.workspaceId,
         impactScore: input.impact_score,

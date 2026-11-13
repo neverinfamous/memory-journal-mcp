@@ -44,6 +44,11 @@ export function startMetricsServer(runtime: ServerRuntime, metricsPort?: number)
 
     return () => {
         return new Promise<void>((resolve, reject) => {
+            if (!server.listening) {
+                resolve();
+                return;
+            }
+            server.closeAllConnections();
             server.close((err) => {
                 if (err) {
                     logger.error('Failed to close metrics server', { error: err.message, module: 'MetricsServer' });

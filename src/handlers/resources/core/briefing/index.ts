@@ -91,10 +91,8 @@ export async function buildBriefingData(
                 const repoPath = registryEntry.path
                 activeRepoPath = repoPath
                 activeGithub = getGitHubIntegration(repoPath, context.runtime)
-                if (registryEntry.project_number !== undefined) {
-                    activeProjectNumber = registryEntry.project_number
-                    setActiveSessionProject(resolvedRepo, activeProjectNumber, context.runtime)
-                }
+                activeProjectNumber = registryEntry.project_number
+                setActiveSessionProject(resolvedRepo, activeProjectNumber ?? null, context.runtime)
             }
         } else if (targetRepo.trim().toLowerCase() === 'default') {
             activeWorkspaceId = 'default'
@@ -117,7 +115,11 @@ export async function buildBriefingData(
 
     // Build all sections
     const journal = buildJournalContext(context, config, activeProjectNumber, activeWorkspaceId)
-    const github = await buildGitHubSection(activeGithub, config)
+    const github = await buildGitHubSection(
+        activeGithub,
+        config,
+        activeRepoPath !== undefined ? activeWorkspaceId : undefined
+    )
     const team = buildTeamContext(context, config, activeProjectNumber, activeWorkspaceId)
     const insights = buildInsightsSection(context, activeWorkspaceId)
     const graphStats = buildGraphContext(context, journal.workspaceId)

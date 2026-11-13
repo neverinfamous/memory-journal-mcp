@@ -246,25 +246,39 @@ export function createSessionCreator(state: McpRouteState): SessionCreator {
             )
         }
 
-        server.connect(transport).catch((err: unknown) =>
-            logger.error('Error connecting server to transport', {
-                error: String(err),
-            })
-        )
-
-        if (transport instanceof LegacySSEServerTransport) {
-            transport.handleSseRequest(req, res)
-        } else {
-            transport.handleRequest(req, res, req.body).catch((err: unknown) => {
-                logger.error('Error handling transport request', {
-                    error: String(err),
-                    ...(err instanceof Error && err.stack !== undefined
-                        ? { stack: err.stack }
-                        : {}),
+        // [INVARIANT] The server must be connected before the transport handles the first request.
+        server
+            .connect(transport)
+            .then(() => {
+                if (transport instanceof LegacySSEServerTransport) {
+                    transport.handleSseRequest(req, res)
+                    return
+                }
+                transport.handleRequest(req, res, req.body).catch((err: unknown) => {
+                    logger.error('Error handling transport request', {
+                        error: String(err),
+                        ...(err instanceof Error && err.stack !== undefined
+                            ? { stack: err.stack }
+                            : {}),
+                    })
+                    next(err)
                 })
-                next(err)
             })
-        }
+            .catch((err: unknown) => {
+                logger.error('Error connecting server to transport', {
+                    error: String(err),
+                })
+                activeServers.delete(server)
+                sseTransports.delete(sessionId)
+                forgetSession(state, sessionId)
+                if (!res.headersSent) {
+                    res.status(500).json({
+                        jsonrpc: '2.0',
+                        error: { code: -32603, message: 'Failed to initialize session' },
+                        id: null,
+                    })
+                }
+            })
     }
 }
 

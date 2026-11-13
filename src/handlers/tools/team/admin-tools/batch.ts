@@ -297,7 +297,8 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                         progress: context.progress,
                         vectorManager: context.teamVectorManager,
                         db: teamDb,
-                        autoIndex: input.auto_index,
+                        // [INVARIANT] Content edits always resync existing team vectors, matching team_update_entry.
+                        autoIndex: input.auto_index || contentUpdatedIds.size > 0,
                         entryIds: entries.map((e) => e.id),
                         errorPrefix: 'Team entry',
                         doneMessage: 'Team batch update complete',

@@ -264,6 +264,17 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                 try {
                     if (!teamDb) return { ...TEAM_IO_NOT_CONFIGURED }
                     const input = TeamExportMarkdownSchema.parse(params)
+                    if (input.workspace_id?.trim() === '*') {
+                        // [BOUNDARY] Per-file export cannot attribute a mixed-workspace batch to one output tree.
+                        return {
+                            success: false,
+                            error: "workspace_id '*' is not supported by team_export_markdown. Export each workspace separately.",
+                            code: 'VALIDATION_ERROR',
+                            category: 'validation',
+                            suggestion: 'Pass a concrete workspace_id or project_number.',
+                            recoverable: true,
+                        }
+                    }
                     const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
                     const projectNumber =
                         resolveTeamProjectNumber(context, wsId, input.project_number) ?? undefined

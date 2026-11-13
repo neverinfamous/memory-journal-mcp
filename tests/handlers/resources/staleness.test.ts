@@ -96,7 +96,8 @@ describe('Staleness Resources', () => {
             }
 
             const context = {
-                db: mockDb
+                db: mockDb,
+                briefingConfig: { projectRegistry: { 'repo-123': { path: '/tmp/repo-123', project_number: 123 } } },
             } as unknown as ResourceContext
 
             const definitions = getStalenessResourceDefinitions()

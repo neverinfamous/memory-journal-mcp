@@ -136,6 +136,7 @@ export function registerAdminCommands(program: Command): void {
         cmd
             .option('--dry-run', 'Log candidates without modifying the database')
             .option('--exclude-tags <tags>', 'Comma-separated tags to exclude')
+            .option('--importance-threshold <n>', 'Importance score below which entries are prunable')
     })
     addOutputOptions(pruneCmd)
     addCoreOptions(pruneCmd)
@@ -157,7 +158,7 @@ export function registerAdminCommands(program: Command): void {
             .option('--limit <number>', 'Maximum number of results to return')
             .option('--tool <string>', 'Filter by tool name')
             .option('--user <string>', 'Filter by user')
-            .option('--category <string>', 'Filter by category')
+            .option('--category <string>', 'Filter by category (read|write|admin|team|audit)')
             .option('--status <string>', 'Filter by status (success|error)')
     })
     addOutputOptions(auditCmd)

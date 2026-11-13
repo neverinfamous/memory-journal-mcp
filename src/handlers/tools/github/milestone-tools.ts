@@ -17,7 +17,7 @@ import {
     UpdateMilestoneOutputSchema,
     DeleteMilestoneOutputSchema,
 } from './schemas.js'
-import { resolveOwnerRepo } from './helpers.js'
+import { githubScopeInputFields, githubScopeParseFields, resolveOwnerRepo } from './helpers.js'
 
 // ============================================================================
 // Tool Definitions
@@ -32,6 +32,7 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
                 'List GitHub milestones for the repository with completion percentages and due dates.',
             group: 'github',
             inputSchema: z.object({
+                ...githubScopeInputFields,
                 state: z
                     .string()
                     .optional()
@@ -59,6 +60,7 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
                             limit: z.number().optional().default(20),
                             owner: z.string().optional(),
                             repo: z.string().optional(),
+                            ...githubScopeParseFields,
                         })
                         .parse(params)
 
@@ -103,6 +105,7 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
                 'Get detailed information about a specific GitHub milestone including progress and linked issue counts.',
             group: 'github',
             inputSchema: z.object({
+                ...githubScopeInputFields,
                 milestone_number: relaxedNumber().optional().describe('Milestone number'),
                 owner: z.string().optional().describe('LEAVE EMPTY to auto-detect from git'),
                 repo: z.string().optional().describe('LEAVE EMPTY to auto-detect from git'),
@@ -121,6 +124,7 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
                             milestone_number: z.number(),
                             owner: z.string().optional(),
                             repo: z.string().optional(),
+                            ...githubScopeParseFields,
                         })
                         .parse(params)
 
@@ -175,6 +179,7 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
                 'Create a new GitHub milestone for tracking progress toward a project goal.',
             group: 'github',
             inputSchema: z.object({
+                ...githubScopeInputFields,
                 title: z.string().optional().describe('Milestone title'),
                 description: z.string().optional().describe('Milestone description'),
                 due_on: z.string().optional().describe('Due date in YYYY-MM-DD format (optional)'),
@@ -197,6 +202,7 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
                             due_on: z.string().optional(),
                             owner: z.string().optional(),
                             repo: z.string().optional(),
+                            ...githubScopeParseFields,
                         })
                         .parse(params)
 
@@ -248,6 +254,7 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
                 'Update a GitHub milestone (title, description, due date, or state). Use state "closed" to close a completed milestone.',
             group: 'github',
             inputSchema: z.object({
+                ...githubScopeInputFields,
                 milestone_number: relaxedNumber()
                     .optional()
                     .describe('Milestone number to update'),
@@ -276,6 +283,7 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
                             state: z.enum(['open', 'closed']).optional(),
                             owner: z.string().optional(),
                             repo: z.string().optional(),
+                            ...githubScopeParseFields,
                         })
                         .parse(params)
 
@@ -337,6 +345,7 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
                 'Permanently delete a GitHub milestone. Issues assigned to the milestone will be un-assigned but not deleted.',
             group: 'github',
             inputSchema: z.object({
+                ...githubScopeInputFields,
                 milestone_number: relaxedNumber()
                     .optional()
                     .describe('Milestone number to delete'),
@@ -359,6 +368,7 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
                             confirm: z.literal(true),
                             owner: z.string().optional(),
                             repo: z.string().optional(),
+                            ...githubScopeParseFields,
                         })
                         .parse(params)
 

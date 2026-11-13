@@ -351,7 +351,10 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             description: 'List all unique tags used across all entries',
             group: 'core',
             inputSchema: z.object({
-                project_number: z.coerce.number().int().optional(),
+                project_number: z.preprocess(
+                                (v: unknown) => (v === null || v === '' ? undefined : v),
+                                z.coerce.number().int().positive().optional()
+                            ),
                 workspace_id: z.string().optional(),
             }),
             outputSchema: TagsListOutputSchema,
@@ -365,7 +368,10 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                 try {
                     const input = z
                         .object({
-                            project_number: z.coerce.number().int().optional(),
+                            project_number: z.preprocess(
+                                (v: unknown) => (v === null || v === '' ? undefined : v),
+                                z.coerce.number().int().positive().optional()
+                            ),
                             workspace_id: z.string().optional(),
                         })
                         .parse(params ?? {})

@@ -13,7 +13,7 @@ import { getAuthContext } from '../../../auth/auth-context.js'
 import { resolveIssueUrl } from '../../../utils/github-helpers.js'
 import { autoIndexEntry } from '../../../utils/vector-index-helpers.js'
 import { resolveWorkspaceId, resolveProjectContext } from '../../../utils/workspace-resolver.js'
-import { activeProjectRegistry, pairStoredScope } from '../../../utils/write-scope.js'
+import { activeProjectRegistry, alignedProjectFilter, pairStoredScope } from '../../../utils/write-scope.js'
 import {
     TEAM_DB_ERROR_RESPONSE,
     batchFetchAuthors,
@@ -185,6 +185,14 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                         trustScore: input.trust_score,
                         validationStatus: input.validation_status,
                         sessionId: input.session_id,
+                        ...(input.anchors !== undefined
+                            ? {
+                                  anchors: input.anchors.map((a) => ({
+                                      anchorPath: a.anchor_path,
+                                      anchorType: a.anchor_type,
+                                  })),
+                              }
+                            : {}),
                     })
 
                     const relationshipWarnings = linkRequestedRelationships(
@@ -387,7 +395,10 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                         input.project_number,
                         context.config
                     )
-                    const rawTags = teamDb.listTags(wsId, input.project_number)
+                    const rawTags = teamDb.listTags(
+                        wsId,
+                        alignedProjectFilter(wsId, input.project_number, context.config?.projectRegistry)
+                    )
                     const tags = rawTags.map((t) => ({ name: t.name, count: t.usageCount }))
                     return { success: true, tags, count: tags.length }
                 } catch (err) {

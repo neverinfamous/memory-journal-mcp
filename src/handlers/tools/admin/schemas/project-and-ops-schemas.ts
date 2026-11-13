@@ -169,7 +169,7 @@ export const DeleteProjectSchemaMcp = z
 export const GetProjectSchemaMcp = z.preprocess(
     (val: unknown) => {
         if (typeof val === 'object' && val !== null) {
-            const obj = { ...(val as Record<string, unknown>) }
+            const obj: Record<string, unknown> = { ...val }
             if (!('name' in obj)) {
                 if ('project_name' in obj && typeof obj['project_name'] === 'string') {
                     obj['name'] = obj['project_name']
@@ -187,6 +187,12 @@ export const GetProjectSchemaMcp = z.preprocess(
                 ) {
                     obj['name'] = String(obj['id'])
                 }
+            }
+            // [INVARIANT] Strip alias keys once resolved so .strict() doesn't reject them.
+            if ('name' in obj) {
+                delete obj['project_name']
+                delete obj['project']
+                delete obj['id']
             }
             return obj
         }

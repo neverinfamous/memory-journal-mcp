@@ -43,6 +43,13 @@ describe('audit pass 2 fixes', () => {
         expect(projectAliasTarget('mj.core.getProject')).toBe('get_project')
         expect(projectAliasTarget('get_project')).toBe('get_project')
         expect(projectAliasTarget('mj.projects.get')).toBe('get_project')
+        expect(projectAliasTarget('mj.projects')).toBe('list_projects')
+    })
+
+    it('does not misroute non-alias project tools (M7)', () => {
+        for (const name of ['delete_projects', 'update_projects', 'get_cross_project_insights', 'get_project_kanban']) {
+            expect(projectAliasTarget(name)).toBeUndefined()
+        }
     })
 
     it('returns the statement result instead of a fake success', async () => {

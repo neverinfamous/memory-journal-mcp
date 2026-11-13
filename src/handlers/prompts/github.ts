@@ -197,7 +197,7 @@ ${JSON.stringify(formatPromptEntries(entries), null, 2)}`,
             icons: [ICON_PROMPT],
             arguments: [{ name: 'project_number', description: 'GitHub Project Number', required: true }],
             handler: (args: Record<string, string> | undefined, _db: IDatabaseAdapter) => {
-                const projectNumber = args?.['project_number'] ?? '{project_number}'
+                const projectNumber = formatPositiveIntOrPlaceholder(args?.['project_number'], '{project_number}')
                 return {
                     messages: [
                         {
@@ -226,7 +226,7 @@ Please provide:
             icons: [ICON_PROMPT],
             arguments: [{ name: 'project_number', description: 'GitHub Project Number', required: true }],
             handler: (args: Record<string, string> | undefined, _db: IDatabaseAdapter) => {
-                const projectNumber = args?.['project_number'] ?? '{project_number}'
+                const projectNumber = formatPositiveIntOrPlaceholder(args?.['project_number'], '{project_number}')
                 return {
                     messages: [
                         {
@@ -255,7 +255,7 @@ Please provide:
             icons: [ICON_PROMPT],
             arguments: [{ name: 'pr_number', description: 'Pull Request Number', required: true }],
             handler: (args: Record<string, string> | undefined, _db: IDatabaseAdapter) => {
-                const prNumber = args?.['pr_number'] ?? '{pr_number}'
+                const prNumber = formatPositiveIntOrPlaceholder(args?.['pr_number'], '{pr_number}')
                 return {
                     messages: [
                         {
@@ -285,7 +285,7 @@ Please provide:
             icons: [ICON_PROMPT],
             arguments: [{ name: 'pr_number', description: 'Pull Request Number', required: true }],
             handler: (args: Record<string, string> | undefined, _db: IDatabaseAdapter) => {
-                const prNumber = args?.['pr_number'] ?? '{pr_number}'
+                const prNumber = formatPositiveIntOrPlaceholder(args?.['pr_number'], '{pr_number}')
                 return {
                     messages: [
                         {
@@ -315,7 +315,7 @@ Please provide:
             icons: [ICON_PROMPT],
             arguments: [{ name: 'pr_number', description: 'Pull Request Number', required: true }],
             handler: (args: Record<string, string> | undefined, _db: IDatabaseAdapter) => {
-                const prNumber = args?.['pr_number'] ?? '{pr_number}'
+                const prNumber = formatPositiveIntOrPlaceholder(args?.['pr_number'], '{pr_number}')
                 return {
                     messages: [
                         {

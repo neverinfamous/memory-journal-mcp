@@ -142,9 +142,12 @@ export const TeamStatisticsOutputSchema = z
         entryTypes: z.record(z.string(), z.number()).optional(),
         topTags: z.array(z.object({ name: z.string(), count: z.number() })).optional(),
         authors: z.array(z.object({ author: z.string(), count: z.number() })).optional(),
+        warning: z.string().optional(),
         error: z.string().optional(),
     })
     .extend(ErrorFieldsMixin.shape)
+    // [INTENT] getStatistics emits group-dependent keys (periods, breakdowns); keep them instead of stripping.
+    .catchall(z.unknown())
 
 export const TeamLinkEntriesOutputSchema = z
     .object({

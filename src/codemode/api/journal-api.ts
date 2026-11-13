@@ -10,7 +10,7 @@ import type { ToolGroup } from '../../types/filtering.js'
 import type { ProgressContext } from '../../utils/progress-utils.js'
 import { METHOD_ALIASES } from '../api-constants.js'
 import { getZodTypeString } from '../type-generator.js'
-import type { ToolDispatcher, GroupApiRecord } from './types.js'
+import type { ToolDispatcher, GroupApiRecord, ProjectRegistryProvider } from './types.js'
 import { resolveProjectContext } from '../../utils/workspace-resolver.js'
 import { activeProjectRegistry, pairStoredScope } from '../../utils/write-scope.js'
 import { createGroupApi, toolNameToMethodName } from './group-factory.js'
@@ -47,7 +47,10 @@ export class JournalApi {
     private readonly toolsByGroup: Map<string, ToolDefinition[]>
     private readonly groupApiMap: Record<string, GroupApiRecord>
 
-    constructor(tools: ToolDefinition[], dispatcher?: ToolDispatcher) {
+    private readonly registryProvider: ProjectRegistryProvider | undefined
+
+    constructor(tools: ToolDefinition[], dispatcher?: ToolDispatcher, registryProvider?: ProjectRegistryProvider) {
+        this.registryProvider = registryProvider
         this.toolsByGroup = new Map()
         for (const tool of tools) {
             if (tool.group === 'codemode') continue
@@ -265,7 +268,7 @@ export class JournalApi {
     }
 
     private wireProjectAndTeamAliases(): void {
-        const getConfigFn = createGetConfigFn()
+        const getConfigFn = createGetConfigFn(this.registryProvider)
         this.admin['getConfig'] = getConfigFn
         this.core['getConfig'] = getConfigFn
 
@@ -313,7 +316,7 @@ export class JournalApi {
             }
         }
 
-        const listProjectsFn = createListProjectsFn()
+        const listProjectsFn = createListProjectsFn(this.registryProvider)
         const getProjectFn = createGetProjectFn(listProjectsFn)
 
         for (const grp of [this.core, this.search, this.admin]) {
@@ -403,6 +406,10 @@ export class JournalApi {
     }
 }
 
-export function createJournalApi(tools: ToolDefinition[], dispatcher?: ToolDispatcher): JournalApi {
-    return new JournalApi(tools, dispatcher)
+export function createJournalApi(
+    tools: ToolDefinition[],
+    dispatcher?: ToolDispatcher,
+    registryProvider?: ProjectRegistryProvider
+): JournalApi {
+    return new JournalApi(tools, dispatcher, registryProvider)
 }

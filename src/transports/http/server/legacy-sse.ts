@@ -15,7 +15,7 @@ export class LegacySSEServerTransport implements Transport {
     public sessionId: string
     public onclose?: () => void
     public onerror?: (error: Error) => void
-    public onmessage?: (message: JSONRPCMessage) => void
+    public onmessage?: Transport['onmessage']
 
     constructor(private messagesEndpoint: string, sessionId?: string) {
         this.sessionId = sessionId ?? randomUUID()

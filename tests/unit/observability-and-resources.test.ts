@@ -198,7 +198,9 @@ describe('Observability, SSE Transport, Utils & Catalog Resource', () => {
                 { body: { jsonrpc: '2.0', id: 1, method: 'tools/list' } } as unknown as Request,
                 postResMock
             )
-            expect(onMessageSpy).toHaveBeenCalledWith({ jsonrpc: '2.0', id: 1, method: 'tools/list' })
+            expect(onMessageSpy).toHaveBeenCalledWith(
+                { jsonrpc: '2.0', id: 1, method: 'tools/list' }
+            )
             expect(postResMock.status).toHaveBeenCalledWith(202)
 
             // Handle POST message (invalid body)

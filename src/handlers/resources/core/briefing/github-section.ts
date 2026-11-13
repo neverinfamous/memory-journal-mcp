@@ -102,11 +102,12 @@ export interface BriefingGitHub {
 export async function buildGitHubSection(
     github: GitHubIntegration | null | undefined,
     config: BriefingConfig,
+    targetRepo?: string,
 ): Promise<BriefingGitHub | null> {
     if (!github) return null
 
     try {
-        const resolved = await resolveBriefingRepo(github, config)
+        const resolved = await resolveBriefingRepo(github, config, targetRepo)
         if (!resolved) return null
         const { owner, repo } = resolved
         const [

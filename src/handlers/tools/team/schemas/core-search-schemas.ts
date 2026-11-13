@@ -54,6 +54,18 @@ export const TeamCreateEntrySchema = z.preprocess(
             trust_score: z.number().min(0).max(1).optional(),
             validation_status: z.enum(['passed', 'none', 'failed']).optional(),
             session_id: z.string().optional(),
+            anchors: z
+                .array(
+                    z.object({
+                        anchor_path: z.string(),
+                        anchor_type: z.string(),
+                        status: z
+                            .enum(['pending', 'valid', 'stale', 'invalidated', 'unresolvable'])
+                            .optional()
+                            .default('pending'),
+                    })
+                )
+                .optional(),
             relationships: z
                 .array(
                     z.preprocess(
@@ -206,6 +218,16 @@ export const TeamCreateEntrySchemaMcp = z.preprocess(
                 .string()
                 .optional()
                 .describe('Agent session ID for thread isolation (usually conversation ID).'),
+            anchors: z
+                .array(
+                    z.object({
+                        anchor_path: z.string(),
+                        anchor_type: z.string(),
+                        status: z.string().optional().default('pending'),
+                    })
+                )
+                .optional()
+                .describe('Files or lines of code that this entry is anchored to.'),
             relationships: z
                 .array(
                     z.preprocess(
@@ -398,6 +420,10 @@ export const TeamCreateOutputSchema = z
         author: z.string().optional(),
         error: z.string().optional(),
         relationshipWarnings: z.array(z.string()).optional(),
+        vectorIndex: z.string().optional(),
+        warning: z.string().optional(),
+        degraded: z.boolean().optional(),
+        relationshipsLinked: z.number().optional(),
     })
     .extend(ErrorFieldsMixin.shape)
 
@@ -416,6 +442,8 @@ export const TeamEntriesListOutputSchema = z
             .describe('The corrected query when auto_correct=true and a confident match was found'),
         success: z.boolean().optional(),
         error: z.string().optional(),
+        degraded: z.boolean().optional(),
+        warning: z.string().optional(),
     })
     .extend(ErrorFieldsMixin.shape)
 

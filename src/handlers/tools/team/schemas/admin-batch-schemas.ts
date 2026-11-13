@@ -333,6 +333,8 @@ export const TeamUpdateOutputSchema = z
         success: z.boolean().optional(),
         entry: TeamEntryOutputSchema.optional(),
         indexError: z.string().optional(),
+        vectorIndex: z.string().optional(),
+        warning: z.string().optional(),
         error: z.string().optional(),
     })
     .extend(ErrorFieldsMixin.shape)
@@ -367,12 +369,17 @@ export const TeamBatchCreateEntriesOutputSchema = BatchResultOutputSchema.extend
     entries: z.array(TeamEntryOutputSchema).optional(),
     indexStatuses: z.array(z.string()).optional(),
     relationshipWarnings: z.array(z.string()).optional(),
+    relationshipsLinked: z.number().optional(),
+    vectorsIndexed: z.number().optional(),
+    warning: z.string().optional(),
 })
 
 export const TeamBatchUpdateEntriesOutputSchema = BatchResultOutputSchema.extend({
     updated: z.array(TeamEntryOutputSchema).optional(),
     notFound: z.array(z.number()).optional(),
     indexStatuses: z.array(z.string()).optional(),
+    vectorsIndexed: z.number().optional(),
+    warning: z.string().optional(),
 })
 
 export const TeamBatchDeleteEntriesOutputSchema = BatchResultOutputSchema.extend({

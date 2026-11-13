@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import type { Command } from 'commander'
 import { DatabaseAdapterFactory } from '../../database/adapter-factory.js'
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
-import type { EntryType, ToolHandlerConfig } from '../../types/index.js'
+import type { EntryType, RelationshipType, ToolHandlerConfig } from '../../types/index.js'
 import { ConfigResolver } from '../../utils/config-resolver.js'
 import { resolveProjectContext } from '../../utils/workspace-resolver.js'
 import { activeProjectRegistry, pairStoredScope } from '../../utils/write-scope.js'
@@ -14,6 +14,7 @@ import * as yaml from 'yaml'
 import type { BaseEntryOptionsSchema, createEntryOptionsSchema } from '../schemas.js'
 import {
     relationshipsFromMetadata,
+    relationTypeSchema,
     resolveAutoContext,
     resolveEntryTypeAndTags,
     resolveExplicitProjectAndWorkspace,
@@ -35,7 +36,7 @@ export interface EntryPayload {
     validationStatus: 'passed' | 'failed' | 'none' | undefined
     sessionId: string | undefined
     autoContextStr: string | undefined
-    relationships: { target_id: number; relation_type: string }[]
+    relationships: { target_id: number; relation_type: RelationshipType }[]
     relatedIds: number[]
 }
 
@@ -206,7 +207,7 @@ export function parseRelatedTo(relatedToStr: unknown): number[] {
 export function parseRelationships(
     relationshipsStr: unknown,
     relFileStr: unknown
-): { target_id: number; relation_type: string }[] {
+): { target_id: number; relation_type: RelationshipType }[] {
     let str = relationshipsStr
     if (typeof relFileStr === 'string') {
         try {
@@ -232,19 +233,19 @@ export function parseRelationships(
     if (!Array.isArray(parsed)) {
         throw new Error('Failed to parse relationships JSON: expected a JSON array')
     }
-    return parsed
-        .map((r: unknown) => {
-            if (typeof r !== 'object' || r === null) return null
-            const rec = z.record(z.string(), z.unknown()).parse(r)
-            return {
-                target_id: Number(rec['target_id']),
-                relation_type: String(rec['relation_type']),
-            }
-        })
-        .filter(
-            (r): r is { target_id: number; relation_type: string } =>
-                r !== null && !isNaN(r.target_id) && Boolean(r.relation_type)
-        )
+    return parsed.flatMap((r: unknown) => {
+        if (typeof r !== 'object' || r === null) return []
+        const rec = z.record(z.string(), z.unknown()).parse(r)
+        const targetId = Number(rec['target_id'])
+        if (isNaN(targetId)) return []
+        const relType = relationTypeSchema.safeParse(rec['relation_type'])
+        if (!relType.success) {
+            throw new Error(
+                `Invalid relation_type '${String(rec['relation_type'])}'. Expected one of: ${relationTypeSchema.options.join(', ')}`
+            )
+        }
+        return [{ target_id: targetId, relation_type: relType.data }]
+    })
 }
 
 export function parseMetadata(metadataFile: unknown): Record<string, unknown> {
@@ -306,7 +307,7 @@ export function buildEntryPayload(
         metadata
     )
 
-    let relationships: { target_id: number; relation_type: string }[]
+    let relationships: { target_id: number; relation_type: RelationshipType }[]
     if (
         metadata['relationships'] !== undefined &&
         metadata['relationships'] !== null &&

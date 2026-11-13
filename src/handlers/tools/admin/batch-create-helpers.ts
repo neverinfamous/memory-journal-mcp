@@ -74,7 +74,7 @@ async function prepareBatchEntry(
             prStatus: e.pr_status,
             workflowRunId: e.workflow_run_id,
             workflowName: e.workflow_name,
-            workflowStatus: e.workflow_status as 'queued' | 'in_progress' | 'completed' | undefined,
+            workflowStatus: e.workflow_status,
             impactScore: e.impact_score,
             trustScore: e.trust_score,
             validationStatus: e.validation_status,

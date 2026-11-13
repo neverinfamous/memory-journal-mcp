@@ -184,6 +184,8 @@ export const adminVacuumOptionsSchema = coreOptionsSchema
     .extend(outputOptionsSchema.shape)
 
 export const adminPruneOptionsSchema = pruningOptionsSchema
+    // [INTENT] One-shot prune ignores the scheduler interval; do not accept it as a validated input.
+    .omit({ autoPruneInterval: true })
     .extend(coreOptionsSchema.shape)
     .extend(databaseOptionsSchema.shape)
     .extend(workspaceOptionsSchema.shape)
@@ -284,7 +286,7 @@ export const adminAuditSearchOptionsSchema = z.object({
     limit: z.coerce.number().optional(),
     tool: z.string().optional(),
     user: z.string().optional(),
-    category: z.string().optional(),
+    category: z.enum(['read', 'write', 'admin', 'team', 'audit']).optional(),
     status: z.enum(['success', 'error']).optional()
 }).extend(coreOptionsSchema.shape).extend(databaseOptionsSchema.shape).extend(auditOptionsSchema.shape).extend(outputOptionsSchema.shape)
 

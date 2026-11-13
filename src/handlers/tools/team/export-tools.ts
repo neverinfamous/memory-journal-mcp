@@ -8,6 +8,7 @@ import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { sendProgress } from '../../../utils/progress-utils.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
+import { alignedProjectFilter } from '../../../utils/write-scope.js'
 import { DATE_MIN_SENTINEL, DATE_MAX_SENTINEL } from '../schemas.js'
 import { TEAM_DB_ERROR_RESPONSE, batchFetchAuthors } from './helpers.js'
 import {
@@ -59,6 +60,11 @@ export function getTeamExportTools(context: ToolContext): ToolDefinition[] {
                     await sendProgress(progress, 1, 3, 'Fetching team entries...')
 
                     const wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
+                    const alignedProject = alignedProjectFilter(
+                        wsId,
+                        project_number,
+                        context.config?.projectRegistry
+                    )
 
                     // When entry_type or tags filters are active, fetch a larger
                     // batch so post-filtering doesn't silently return too few results.
@@ -66,7 +72,8 @@ export function getTeamExportTools(context: ToolContext): ToolDefinition[] {
                     const hasTagFilter = tags && tags.length > 0
                     const fetchLimit = hasTypeFilter || hasTagFilter ? 500 : limit
 
-                    const projectFilter = project_number !== undefined ? { projectNumber: project_number } : {}
+                    const projectFilter =
+                        alignedProject !== undefined ? { projectNumber: alignedProject } : {}
 
                     // Fetch entries with optional filters
                     let entries
@@ -99,7 +106,7 @@ export function getTeamExportTools(context: ToolContext): ToolDefinition[] {
                             undefined,
                             undefined,
                             wsId,
-                            project_number
+                            alignedProject
                         ).entries
                     }
 
@@ -145,21 +152,35 @@ export function getTeamExportTools(context: ToolContext): ToolDefinition[] {
                     let data: string
                     if (format === 'markdown') {
                         const lines: string[] = ['# Team Journal Export', '']
+                        // [INTENT] Partition wildcard exports so entries from different workspaces never interleave.
+                        const groups = new Map<string, typeof enriched>()
                         for (const entry of enriched) {
-                            lines.push(`## Entry #${String(entry.id)}`)
-                            lines.push(`**Date:** ${entry.timestamp}`)
-                            lines.push(`**Type:** ${entry.entryType}`)
-                            if (entry.author) {
-                                lines.push(`**Author:** ${entry.author}`)
+                            const key = entry.workspaceId ?? wsId
+                            const bucket = groups.get(key) ?? []
+                            bucket.push(entry)
+                            groups.set(key, bucket)
+                        }
+                        const partitioned = groups.size > 1 || wsId.trim() === '*'
+                        for (const [groupWs, groupEntries] of groups) {
+                            if (partitioned) {
+                                lines.push(`# Workspace: ${groupWs}`, '')
                             }
-                            if (entry.tags !== undefined && entry.tags.length > 0) {
-                                lines.push(`**Tags:** ${entry.tags.join(', ')}`)
+                            for (const entry of groupEntries) {
+                                lines.push(`## Entry #${String(entry.id)}`)
+                                lines.push(`**Date:** ${entry.timestamp}`)
+                                lines.push(`**Type:** ${entry.entryType}`)
+                                if (entry.author) {
+                                    lines.push(`**Author:** ${entry.author}`)
+                                }
+                                if (entry.tags !== undefined && entry.tags.length > 0) {
+                                    lines.push(`**Tags:** ${entry.tags.join(', ')}`)
+                                }
+                                lines.push('')
+                                lines.push(entry.content)
+                                lines.push('')
+                                lines.push('---')
+                                lines.push('')
                             }
-                            lines.push('')
-                            lines.push(entry.content)
-                            lines.push('')
-                            lines.push('---')
-                            lines.push('')
                         }
                         data = lines.join('\n')
                     } else {

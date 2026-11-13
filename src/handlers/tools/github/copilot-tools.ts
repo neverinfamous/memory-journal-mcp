@@ -9,7 +9,7 @@ import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { CopilotReviewsOutputSchema } from './schemas.js'
 import { relaxedNumber } from '../schemas.js'
-import { resolveOwnerRepo } from './helpers.js'
+import { githubScopeInputFields, githubScopeParseFields, resolveOwnerRepo } from './helpers.js'
 
 // ============================================================================
 // Tool Definitions
@@ -24,6 +24,7 @@ export function getCopilotReviewTools(context: ToolContext): ToolDefinition[] {
                 'Get Copilot\'s code review findings for a pull request. Returns review state (approved/changes_requested/commented/none) and file-level comments with paths and line numbers. Use to learn from Copilot\'s review patterns and create journal entries with tag "copilot-finding".',
             group: 'github',
             inputSchema: z.object({
+                ...githubScopeInputFields,
                 pr_number: relaxedNumber().describe('Pull request number'),
                 owner: z.string().optional().describe('LEAVE EMPTY to auto-detect from git'),
                 repo: z.string().optional().describe('LEAVE EMPTY to auto-detect from git'),
@@ -42,6 +43,7 @@ export function getCopilotReviewTools(context: ToolContext): ToolDefinition[] {
                             pr_number: z.number(),
                             owner: z.string().optional(),
                             repo: z.string().optional(),
+                            ...githubScopeParseFields,
                         })
                         .parse(params)
 

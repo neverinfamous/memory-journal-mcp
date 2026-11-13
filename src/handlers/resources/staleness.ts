@@ -5,7 +5,6 @@ import type {
     ResourceContext,
     ResourceResult,
 } from './shared.js'
-import { resourceWorkspace } from './shared.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
 import { loadProjectRegistryFromConfig } from '../../utils/workspace-resolver.js'
 
@@ -153,11 +152,22 @@ export function getStalenessResourceDefinitions(): InternalResourceDef[] {
                         context.briefingConfig?.projectRegistry ??
                         loadProjectRegistryFromConfig() ??
                         {}
-                    let resolvedWorkspace = resourceWorkspace(context)
+                    let resolvedWorkspace: string | undefined
                     for (const [key, entry] of Object.entries(registry)) {
                         if (entry.project_number === projectNumber) {
                             resolvedWorkspace = key
                             break
+                        }
+                    }
+                    // [INVARIANT] Unregistered project numbers must not borrow the active workspace.
+                    if (resolvedWorkspace === undefined) {
+                        return {
+                            data: {
+                                project_number: projectNumber,
+                                status: 'unresolved',
+                                error: `Project number ${String(projectNumber)} is not registered`,
+                                hint: 'Add the project to PROJECT_REGISTRY to compute staleness.',
+                            },
                         }
                     }
 

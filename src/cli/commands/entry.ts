@@ -127,7 +127,7 @@ function linkCliEntryRelationships(
         ...payload.relatedIds.map((targetId) => ({ targetId, type: 'references' as const })),
         ...payload.relationships.map((rel) => ({
             targetId: rel.target_id,
-            type: rel.relation_type as RelationshipType,
+            type: rel.relation_type,
         })),
     ]
     for (const request of linkRequests) {

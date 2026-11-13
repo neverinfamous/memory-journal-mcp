@@ -7,6 +7,7 @@
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
+import { alignedProjectFilter } from '../../../utils/write-scope.js'
 import { logger } from '../../../utils/logger.js'
 import { TEAM_DB_ERROR_RESPONSE } from './helpers.js'
 import {
@@ -54,13 +55,18 @@ export function getTeamAnalyticsTools(context: ToolContext): ToolDefinition[] {
 
                     const { group_by, project_number, workspace_id } = TeamGetStatisticsSchema.parse(params)
                     const wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
+                    const alignedProject = alignedProjectFilter(
+                        wsId,
+                        project_number,
+                        context.config?.projectRegistry
+                    )
                     const stats = teamDb.getStatistics(
                         group_by,
                         undefined,
                         undefined,
                         undefined,
                         wsId,
-                        project_number
+                        alignedProject
                     )
 
                     let authors: { author: string; count: number }[] = []
@@ -107,6 +113,11 @@ export function getTeamAnalyticsTools(context: ToolContext): ToolDefinition[] {
 
                     const input = TeamCrossProjectInsightsSchema.parse(params)
                     const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
+                    const alignedProject = alignedProjectFilter(
+                        wsId,
+                        input.project_number,
+                        context.config?.projectRegistry
+                    )
 
                     const insights = teamDb.getCrossProjectInsights({
                         startDate: input.start_date,
@@ -114,6 +125,7 @@ export function getTeamAnalyticsTools(context: ToolContext): ToolDefinition[] {
                         minEntries: input.min_entries,
                         inactiveThresholdDays: INACTIVE_THRESHOLD_DAYS,
                         workspaceId: wsId,
+                        ...(alignedProject !== undefined ? { projectNumber: alignedProject } : {}),
                     })
 
                     if (insights.projects.length === 0) {

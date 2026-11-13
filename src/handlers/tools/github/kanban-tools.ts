@@ -13,7 +13,13 @@ import {
     AddKanbanItemOutputSchema,
     DeleteKanbanItemOutputSchema,
 } from './schemas.js'
-import { resolveOwner, resolveOwnerRepo, resolveProjectNumber } from './helpers.js'
+import {
+    githubScopeInputFields,
+    githubScopeParseFields,
+    resolveOwner,
+    resolveOwnerRepo,
+    resolveProjectNumber,
+} from './helpers.js'
 
 const MISSING_PROJECT_NUMBER_ERROR = {
     success: false,
@@ -32,6 +38,7 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                 'View a GitHub Project v2 as a Kanban board with items grouped by Status column. Returns all columns with their items.',
             group: 'github',
             inputSchema: z.object({
+                ...githubScopeInputFields,
                 project_number: z.number()
                     .optional()
                     .describe('GitHub Project number (optional if repo is registered)'),
@@ -68,6 +75,7 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                             project_number: z.number().optional(),
                             owner: z.string().optional(),
                             repo: z.string().optional(),
+                            workspace_id: githubScopeParseFields.workspace_id,
                             summary_only: z.boolean().optional().default(false),
                             item_limit: z.number().max(100).optional().default(25),
                         })
@@ -78,7 +86,8 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                         input.owner,
                         input.repo,
                         undefined,
-                        input.project_number
+                        input.project_number,
+                        input.workspace_id
                     )
                     if ('error' in resolved) return resolved.response
 
@@ -171,6 +180,7 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                 'Move a Kanban item to a different status column. Requires the project board to have a Status field.',
             group: 'github',
             inputSchema: z.object({
+                ...githubScopeInputFields,
                 project_number: z.number()
                     .optional()
                     .describe('GitHub Project number (optional if repo is registered)'),
@@ -200,6 +210,7 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                             target_status: z.string(),
                             owner: z.string().optional(),
                             repo: z.string().optional(),
+                            workspace_id: githubScopeParseFields.workspace_id,
                         })
                         .parse(params)
 
@@ -208,7 +219,8 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                         input.owner,
                         input.repo,
                         undefined,
-                        input.project_number
+                        input.project_number,
+                        input.workspace_id
                     )
                     if ('error' in resolved) return resolved.response
 
@@ -280,6 +292,7 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                 'Add an existing GitHub Issue or Pull Request to a Kanban board (GitHub Project v2). Returns the project item ID on success.',
             group: 'github',
             inputSchema: z.object({
+                ...githubScopeInputFields,
                 project_number: z.number()
                     .optional()
                     .describe('GitHub Project number (optional if repo is registered)'),
@@ -310,6 +323,7 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                             issue_number: z.number(),
                             owner: z.string().optional(),
                             repo: z.string().optional(),
+                            workspace_id: githubScopeParseFields.workspace_id,
                         })
                         .parse(params)
 
@@ -379,6 +393,7 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                 'Remove an item from a GitHub Kanban board cleanly. This untethers it from the project but does NOT close or delete the underlying Issue/PR.',
             group: 'github',
             inputSchema: z.object({
+                ...githubScopeInputFields,
                 project_number: z.number()
                     .optional()
                     .describe('GitHub Project number (optional if repo is registered)'),
@@ -406,6 +421,7 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                             item_id: z.string(),
                             owner: z.string().optional(),
                             repo: z.string().optional(),
+                            workspace_id: githubScopeParseFields.workspace_id,
                         })
                         .parse(params)
 
@@ -414,7 +430,8 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                         input.owner,
                         input.repo,
                         undefined,
-                        input.project_number
+                        input.project_number,
+                        input.workspace_id
                     )
                     if ('error' in resolved) return resolved.response
 

@@ -8,7 +8,7 @@ import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { RepoInsightsOutputSchema } from './schemas.js'
-import { resolveOwnerRepo } from './helpers.js'
+import { githubScopeInputFields, githubScopeParseFields, resolveOwnerRepo } from './helpers.js'
 
 // ============================================================================
 // Tool Definitions
@@ -23,6 +23,7 @@ export function getGitHubInsightsTools(context: ToolContext): ToolDefinition[] {
                 'Get repository insights: stars, forks, traffic (clones/views), referrers, and popular paths. Use "sections" to control token usage: stars (~50 tokens), traffic (~100), referrers (~100), paths (~100), or all (~350).',
             group: 'github',
             inputSchema: z.object({
+                ...githubScopeInputFields,
                 sections: z
                     .union([
                         z.enum(['stars', 'traffic', 'referrers', 'paths', 'all']),
@@ -63,6 +64,7 @@ export function getGitHubInsightsTools(context: ToolContext): ToolDefinition[] {
                                 .default('stars'),
                             owner: z.string().optional(),
                             repo: z.string().optional(),
+                            ...githubScopeParseFields,
                         })
                         .parse(params)
 

@@ -16,7 +16,7 @@ import {
 } from '../schemas.js'
 
 import { AuditLogger } from '../../audit/audit-logger.js'
-import type { AuditCategory, AuditEntry } from '../../audit/types.js'
+import type { AuditEntry } from '../../audit/types.js'
 import { DEFAULT_AUDIT_LOG_MAX_SIZE_BYTES } from '../../audit/types.js'
 import { VectorSearchManager } from '../../vector/vector-search-manager/index.js'
 
@@ -211,7 +211,7 @@ export async function auditAction(options: z.infer<typeof auditSchema>, command:
             limit: options.limit,
             tool_name: options.tool,
             user: options.user,
-            category: options.category as AuditCategory | undefined,
+            category: options.category,
             status: statusFilter
         })
 

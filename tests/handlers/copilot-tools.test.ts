@@ -25,7 +25,8 @@ vi.mock('../../src/utils/error-helpers.js', () => ({
     })),
 }))
 
-vi.mock('../../src/handlers/tools/github/helpers.js', () => ({
+vi.mock('../../src/handlers/tools/github/helpers.js', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('../../src/handlers/tools/github/helpers.js')>()),
     resolveOwnerRepo: mockResolveOwnerRepo,
 }))
 

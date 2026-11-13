@@ -32,6 +32,7 @@ import {
     SUPPORTED_SCOPES,
 } from '../../../auth/index.js'
 import type { TokenClaims } from '../../../auth/index.js'
+import { AuthorizationServerDiscovery } from '../../../auth/authorization-server-discovery.js'
 import type { AuthRequest } from '../../../auth/middleware.js'
 import { hostHeaderValidation, localhostHostValidation } from '@modelcontextprotocol/express'
 import { runWithAuthContext as propagateCtx } from '../../../auth/auth-context.js'
@@ -121,9 +122,20 @@ export class HttpTransport {
 
         this.installBodyParsing()
         this.installRateLimiting()
-        await this.installAuthentication(host, port, authToken, isLocalhost)
-        this.installRoutes(serverFactory, runtime)
-        await this.listen(port, host, scheduler)
+        try {
+            await this.installAuthentication(host, port, authToken, isLocalhost)
+            this.installRoutes(serverFactory, runtime)
+            await this.listen(port, host, scheduler)
+        } catch (error) {
+            // [SIDE-EFFECT] Release timers so a failed start does not keep the process alive.
+            if (this.rateLimitCleanupTimer !== null) {
+                clearInterval(this.rateLimitCleanupTimer)
+                this.rateLimitCleanupTimer = null
+            }
+            this.stopSessionSweep?.()
+            this.stopSessionSweep = null
+            throw error
+        }
     }
 
     /** Install the body-size guard, JSON parser and body-parser error responses. */
@@ -213,6 +225,23 @@ export class HttpTransport {
 
     }
 
+    /** Resolve jwks_uri via RFC 8414 discovery, falling back to the conventional issuer path. */
+    private async discoverJwksUri(issuer: string): Promise<string> {
+        const fallback = `${issuer.replace(/\/+$/, '')}/.well-known/jwks.json`
+        try {
+            const discovery = new AuthorizationServerDiscovery({ authServerUrl: issuer })
+            await discovery.discover()
+            return discovery.getJwksUri()
+        } catch (error) {
+            logger.warning('Authorization server discovery failed; using default JWKS path', {
+                module: 'HTTP',
+                operation: 'oauth-discovery',
+                error: error instanceof Error ? error.message : String(error),
+            })
+            return fallback
+        }
+    }
+
     /** Validate OAuth configuration and install OAuth or static bearer-token authentication. */
     private async installAuthentication(
         host: string,
@@ -266,7 +295,7 @@ export class HttpTransport {
             }
 
             const jwksUri =
-                this.config.oauthJwksUri ?? `${this.config.oauthIssuer}/.well-known/jwks.json`
+                this.config.oauthJwksUri ?? (await this.discoverJwksUri(this.config.oauthIssuer))
 
             const tokenValidator = createTokenValidator({
                 jwksUri,

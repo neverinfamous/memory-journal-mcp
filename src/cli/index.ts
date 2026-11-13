@@ -197,6 +197,9 @@ const sessionCmd = program
     .description('Search for session summaries (Alias for search "session summary")')
 withGroup(sessionCmd, 'Command Options', (cmd: Command) => {
     cmd
+        .option('-q, --query <string>', 'Additional session search terms')
+        .option('--term <string>', 'Additional session search terms (alias)')
+        .option('--keyword <string>', 'Additional session search terms (alias)')
         .option('--mode <mode>', 'Search mode: auto, fts, semantic, hybrid', 'auto')
         .option('--limit <number>', 'Maximum number of results to return', '50')
         .option('--team', 'Search team database')
@@ -211,8 +214,11 @@ addAgentInstructions(sessionCmd,
 - This is a convenience alias. It behaves exactly like the 'search' command, but prepends 'session ' to your query if arguments are provided, or defaults to 'session summary'.`
 )
 sessionCmd.action(withValidation(searchSchema, async (args: string[], options: ReturnType<typeof searchSchema.parse>, command: Command) => {
-    const query = args.length > 0 ? "session " + args.join(" ") : "session summary";
-    await searchAction(query, options, command);
+    const { query: optQuery, term, keyword, ...rest } = options;
+    const extra = optQuery ?? term ?? keyword;
+    const terms = [...args, ...(extra !== undefined && extra !== '' ? [extra] : [])];
+    const query = terms.length > 0 ? "session " + terms.join(" ") : "session summary";
+    await searchAction(query, rest, command);
 }))
 
 program.parse(normalizeCliArgv(process.argv))

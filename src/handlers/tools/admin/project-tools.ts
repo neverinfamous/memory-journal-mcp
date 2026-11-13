@@ -1,4 +1,5 @@
-import type { ToolDefinition, ToolContext } from '../../../types/index.js'
+import type { ToolDefinition, ToolContext, ProjectRegistryEntry } from '../../../types/index.js'
+import { ConfigManager } from '../../../utils/config-manager.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import {
     RegisterProjectSchemaMcp,
@@ -50,17 +51,48 @@ function loadConfig(): Record<string, unknown> {
     return readProjectRegistryFile(getRegistryConfigPath()).config
 }
 
-function saveConfig(config: Record<string, unknown>, context?: ToolContext): void {
+/** Describes a rename (`to` set) or delete (`to` omitted) of a registry key, for active-default cleanup. */
+interface RegistryKeyChange {
+    from: string
+    to?: string
+}
+
+/** Rewrites/clears session defaults that pointed at a renamed/deleted project. */
+function applyDefaultsChange(
+    target: { defaultWorkspaceId?: string; defaultProjectNumber?: number },
+    change: RegistryKeyChange | undefined
+): void {
+    if (change === undefined || target.defaultWorkspaceId !== change.from) return
+    if (change.to !== undefined) {
+        target.defaultWorkspaceId = change.to
+    } else {
+        delete target.defaultWorkspaceId
+        delete target.defaultProjectNumber
+    }
+}
+
+/**
+ * [INTENT] Persist the registry file and propagate it through in-process config (ToolContext +
+ * ConfigManager) instead of mutating process.env, so hot-reload listeners observe the change.
+ */
+function saveConfig(config: Record<string, unknown>, context?: ToolContext, change?: RegistryKeyChange): void {
     const configPath = getRegistryConfigPath()
     fs.mkdirSync(path.dirname(configPath), { recursive: true })
     fs.writeFileSync(configPath, JSON.stringify(config, null, 4), 'utf-8')
-    process.env['PROJECT_REGISTRY'] = JSON.stringify(config['projectRegistry'])
-    if (context?.config !== undefined && typeof config['projectRegistry'] === 'object' && config['projectRegistry'] !== null) {
-        const reg = config['projectRegistry'] as Record<string, { path: string; project_number?: number }>
-        context.config.projectRegistry = reg
-        if (context.config.briefingConfig !== undefined) {
-            context.config.briefingConfig.projectRegistry = reg
-        }
+    const rawReg = config['projectRegistry']
+    if (context?.config === undefined || typeof rawReg !== 'object' || rawReg === null) return
+    const reg = rawReg as Record<string, ProjectRegistryEntry>
+    context.config.projectRegistry = reg
+    applyDefaultsChange(context.config, change)
+    if (context.config.briefingConfig !== undefined) {
+        context.config.briefingConfig.projectRegistry = reg
+        applyDefaultsChange(context.config.briefingConfig, change)
+    }
+    const manager = context.config.runtime?.configManager
+    if (manager instanceof ConfigManager) {
+        const briefingConfig = { ...manager.getConfig().briefingConfig, projectRegistry: reg }
+        applyDefaultsChange(briefingConfig, change)
+        manager.updateConfig({ briefingConfig })
     }
 }
 
@@ -71,7 +103,11 @@ function coerceRegistryProjectNumber(raw: number | string | undefined): number |
             : typeof raw === 'string' && raw.trim() !== ''
               ? Number(raw)
               : undefined
-    return num !== undefined && !Number.isNaN(num) ? num : undefined
+    return num !== undefined && Number.isInteger(num) && num > 0 ? num : undefined
+}
+
+function invalidProjectNumber(raw: number | string | undefined): boolean {
+    return raw !== undefined && coerceRegistryProjectNumber(raw) === undefined
 }
 
 export function getProjectTools(context: ToolContext): ToolDefinition[] {
@@ -93,6 +129,9 @@ export function getProjectTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     const parsed = RegisterProjectSchemaMcp.parse(params)
+                    if (invalidProjectNumber(parsed.project_number)) {
+                        return Promise.resolve({ success: false, error: 'project_number must be a positive integer' })
+                    }
                     if (isForbiddenProjectKey(parsed.name)) {
                         return Promise.resolve({ success: false, error: `Invalid project name: '${parsed.name}'` })
                     }
@@ -138,6 +177,9 @@ export function getProjectTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     const parsed = UpdateProjectSchemaMcp.parse(params)
+                    if (invalidProjectNumber(parsed.project_number)) {
+                        return Promise.resolve({ success: false, error: 'project_number must be a positive integer' })
+                    }
                     if (isForbiddenProjectKey(parsed.name) || (parsed.new_name && isForbiddenProjectKey(parsed.new_name))) {
                         return Promise.resolve({ success: false, error: `Invalid project name.` })
                     }
@@ -166,7 +208,7 @@ export function getProjectTools(context: ToolContext): ToolDefinition[] {
                     
                     const updatedRegistry = config['projectRegistry'] as Record<string, { path: string, project_number?: number }>
                     updatedRegistry[targetName] = project
-                    saveConfig(config, context)
+                    saveConfig(config, context, targetName !== parsed.name ? { from: parsed.name, to: targetName } : undefined)
                     
                     return Promise.resolve({ success: true, message: `Project '${targetName}' updated.`, project: { name: targetName, ...updatedRegistry[targetName] } })
                 } catch (err) {
@@ -203,7 +245,7 @@ export function getProjectTools(context: ToolContext): ToolDefinition[] {
                     
                     const rest = Object.fromEntries(Object.entries(registry).filter(([key]) => key !== parsed.name))
                     config['projectRegistry'] = rest
-                    saveConfig(config, context)
+                    saveConfig(config, context, { from: parsed.name })
                     
                     return Promise.resolve({ success: true, message: `Project '${parsed.name}' deleted.` })
                 } catch (err) {

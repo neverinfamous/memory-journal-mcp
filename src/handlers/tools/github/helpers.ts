@@ -9,6 +9,27 @@ import {
     findCanonicalRegistryKey,
     loadProjectRegistryFromConfig,
 } from '../../../utils/workspace-resolver.js'
+import { z } from 'zod'
+import { relaxedNumber } from '../schemas.js'
+
+/**
+ * [INTENT] Registry scope selectors shared by GitHub tools so `resolveOwnerRepo` can target the
+ * registered repository instead of the server CWD. Spread first so tool-specific fields win.
+ */
+export const githubScopeInputFields = {
+    workspace_id: z
+        .string()
+        .optional()
+        .describe('Registered workspace (repo name) used to resolve owner/repo when repo is omitted'),
+    project_number: relaxedNumber()
+        .optional()
+        .describe('Registered project number used to resolve owner/repo when repo is omitted'),
+}
+
+export const githubScopeParseFields = {
+    workspace_id: z.string().optional(),
+    project_number: z.number().optional(),
+}
 
 function parseRepoSlug(repo?: string): { owner?: string; repo?: string } {
     if (!repo) return {}

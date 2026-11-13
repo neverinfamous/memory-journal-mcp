@@ -16,7 +16,7 @@ import {
     GitHubPRResultOutputSchema,
     GitHubContextOutputSchema,
 } from './schemas.js'
-import { resolveOwnerRepo } from './helpers.js'
+import { githubScopeInputFields, githubScopeParseFields, resolveOwnerRepo } from './helpers.js'
 import type { GitHubIntegration } from '../../../github/github-integration/index.js'
 import { markUntrustedContent } from '../../../utils/security-utils.js'
 
@@ -33,6 +33,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                 'List issues from a GitHub repository. IMPORTANT: Do NOT guess owner/repo values - leave them empty to auto-detect from the current git repository.',
             group: 'github',
             inputSchema: z.object({
+                ...githubScopeInputFields,
                 owner: z
                     .string()
                     .optional()
@@ -61,6 +62,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                         .object({
                             owner: z.string().optional(),
                             repo: z.string().optional(),
+                            ...githubScopeParseFields,
                             state: z.enum(['open', 'closed', 'all']).optional().default('open'),
                             limit: z.number().max(MAX_QUERY_LIMIT).optional().default(20),
                         })
@@ -100,6 +102,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                 'List pull requests from a GitHub repository. IMPORTANT: Do NOT guess owner/repo values - leave them empty to auto-detect from the current git repository.',
             group: 'github',
             inputSchema: z.object({
+                ...githubScopeInputFields,
                 owner: z
                     .string()
                     .optional()
@@ -128,6 +131,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                         .object({
                             owner: z.string().optional(),
                             repo: z.string().optional(),
+                            ...githubScopeParseFields,
                             state: z.enum(['open', 'closed', 'all']).optional().default('open'),
                             limit: z.number().max(MAX_QUERY_LIMIT).optional().default(20),
                         })
@@ -167,6 +171,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                 'Get detailed information about a specific GitHub issue. IMPORTANT: Do NOT guess owner/repo values - leave them empty to auto-detect from the current git repository.',
             group: 'github',
             inputSchema: z.object({
+                ...githubScopeInputFields,
                 issue_number: relaxedNumber().optional(),
                 owner: z.string().optional().describe('LEAVE EMPTY to auto-detect from git'),
                 repo: z.string().optional().describe('LEAVE EMPTY to auto-detect from git'),
@@ -196,6 +201,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                             issue_number: z.number(),
                             owner: z.string().optional(),
                             repo: z.string().optional(),
+                            ...githubScopeParseFields,
                             truncate_body: z.number().optional().default(800),
                             include_comments: z.boolean().optional().default(false),
                         })
@@ -280,6 +286,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                 'Get detailed information about a specific GitHub pull request, including live prStatus. IMPORTANT: Do NOT guess owner/repo values - leave them empty to auto-detect from the current git repository.',
             group: 'github',
             inputSchema: z.object({
+                ...githubScopeInputFields,
                 pr_number: relaxedNumber().optional(),
                 owner: z.string().optional().describe('LEAVE EMPTY to auto-detect from git'),
                 repo: z.string().optional().describe('LEAVE EMPTY to auto-detect from git'),
@@ -304,6 +311,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                             pr_number: z.number(),
                             owner: z.string().optional(),
                             repo: z.string().optional(),
+                            ...githubScopeParseFields,
                             truncate_body: z.number().optional().default(800),
                         })
                         .parse(params)
@@ -371,6 +379,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                 'Get current repository context including branch, open issues, and open PRs. IMPORTANT: Leave owner/repo empty to auto-detect from git, OR specify the repository name if working in a multi-project registry.',
             group: 'github',
             inputSchema: z.object({
+                ...githubScopeInputFields,
                 owner: z.string().optional().describe('Repository owner'),
                 repo: z
                     .string()
@@ -390,6 +399,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                         .object({
                             owner: z.string().optional(),
                             repo: z.string().optional(),
+                            ...githubScopeParseFields,
                         })
                         .parse(params)
 
@@ -400,18 +410,23 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                     )
 
                     let targetGithub: GitHubIntegration
-                    const callerSuppliedOwner = input.owner !== undefined
-                    const callerSuppliedRepo = input.repo !== undefined
+                    let target: { owner: string; repo: string } | undefined
+                    const callerScoped =
+                        input.owner !== undefined ||
+                        input.repo !== undefined ||
+                        input.workspace_id !== undefined ||
+                        input.project_number !== undefined
                     if ('error' in resolved) {
-                        if (callerSuppliedOwner || callerSuppliedRepo || context.github === undefined) {
+                        if (callerScoped || context.github === undefined) {
                             return resolved.response
                         }
                         targetGithub = context.github
                     } else {
                         targetGithub = resolved.github
+                        target = { owner: resolved.owner, repo: resolved.repo }
                     }
 
-                    const ctx = await targetGithub.getRepoContext()
+                    const ctx = await targetGithub.getRepoContext(undefined, target)
                     return {
                         repoName: ctx.repoName,
                         branch: ctx.branch,
