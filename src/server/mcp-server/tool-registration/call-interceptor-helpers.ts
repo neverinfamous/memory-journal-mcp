@@ -82,9 +82,11 @@ export function normalizeAndAliasToolCall(
         } else {
             const registry = options.projectRegistry ?? loadProjectRegistryFromConfig()
             if (registry !== undefined) {
-                const candidate = strVal.includes('/')
-                    ? (strVal.split('/').pop() ?? strVal)
-                    : strVal
+                const trimmedPath = strVal.replace(/[\\/]+$/, '')
+                const candidate =
+                    trimmedPath.includes('/') || trimmedPath.includes('\\')
+                        ? (trimmedPath.split(/[\\/]/).pop() ?? strVal)
+                        : trimmedPath || strVal
                 const canonicalKey = findCanonicalRegistryKey(candidate, registry) ?? candidate
                 const entry = registry[canonicalKey] ?? registry[strVal]
                 const rawWorkspace = toolArgs['workspace_id']
@@ -172,7 +174,7 @@ export function toValidationFailureResponse(
         error: errorMessage,
     })
 
-    return formatTokenEstimatedError(errorResult, false)
+    return formatTokenEstimatedError(errorResult, true)
 }
 
 export function toThrownValidationResponse(
@@ -359,6 +361,20 @@ export function resolveSingleProjectFromRegistry(
  * Resolve omitted `workspace_id` for direct MCP `create_entry` / `batch_create_entries` calls
  * using live server configuration before `inputSchema` (`CreateEntrySchemaMcp`) runs.
  */
+function parsePositiveProjectNumber(value: unknown): number | undefined {
+    if (typeof value === 'number' && Number.isInteger(value) && value > 0) {
+        return value
+    }
+    if (typeof value === 'string') {
+        const trimmed = value.trim().replace(/^#/, '')
+        if (/^[1-9]\d*$/.test(trimmed)) {
+            const parsed = Number.parseInt(trimmed, 10)
+            if (Number.isInteger(parsed) && parsed > 0) return parsed
+        }
+    }
+    return undefined
+}
+
 export function resolveMcpCreateWorkspaceScope(
     toolName: string | undefined,
     toolArgs: Record<string, unknown>,
@@ -366,12 +382,11 @@ export function resolveMcpCreateWorkspaceScope(
 ): void {
     if (toolName === 'create_entry') {
         if (toolArgs['workspace_id'] !== undefined) return
+        const parsedProj = parsePositiveProjectNumber(toolArgs['project_number'])
         try {
             const resolved = resolveProjectContext(
                 {
-                    ...(typeof toolArgs['project_number'] === 'number'
-                        ? { project_number: toolArgs['project_number'] }
-                        : {}),
+                    ...(parsedProj !== undefined ? { project_number: parsedProj } : {}),
                     ...(typeof toolArgs['content'] === 'string'
                         ? { content: toolArgs['content'] }
                         : {}),
@@ -395,23 +410,33 @@ export function resolveMcpCreateWorkspaceScope(
         return
     }
     if (toolName === 'batch_create_entries' && Array.isArray(toolArgs['entries'])) {
-        const rootWs =
+        const rawRootWs =
             typeof toolArgs['workspace_id'] === 'string' && toolArgs['workspace_id'].trim() !== ''
-                ? toolArgs['workspace_id']
+                ? toolArgs['workspace_id'].trim()
                 : undefined
-        const rootProj =
-            typeof toolArgs['project_number'] === 'number' ? toolArgs['project_number'] : undefined
+        if (rawRootWs === '*') {
+            for (const entry of toolArgs['entries']) {
+                if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) continue
+                const item = entry as Record<string, unknown>
+                if (item['workspace_id'] === undefined) {
+                    item['workspace_id'] = '*'
+                }
+            }
+            return
+        }
+        const rootProj = parsePositiveProjectNumber(toolArgs['project_number'])
         for (const entry of toolArgs['entries']) {
             if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) continue
             const item = entry as Record<string, unknown>
             if (item['workspace_id'] !== undefined) continue
+            const itemProj = parsePositiveProjectNumber(item['project_number'])
             try {
                 const resolved = resolveProjectContext(
                     {
-                        ...(rootWs !== undefined ? { workspace_id: rootWs } : {}),
-                        ...(typeof item['project_number'] === 'number'
-                            ? { project_number: item['project_number'] }
-                            : rootWs === undefined && rootProj !== undefined
+                        ...(rawRootWs !== undefined ? { workspace_id: rawRootWs } : {}),
+                        ...(itemProj !== undefined
+                            ? { project_number: itemProj }
+                            : rawRootWs === undefined && rootProj !== undefined
                               ? { project_number: rootProj }
                               : {}),
                         ...(typeof item['content'] === 'string'
@@ -429,7 +454,9 @@ export function resolveMcpCreateWorkspaceScope(
                 )
                 item['workspace_id'] = resolved.workspaceId
             } catch {
-                // Defer validation errors to the tool handler.
+                if (rawRootWs !== undefined && item['workspace_id'] === undefined) {
+                    item['workspace_id'] = rawRootWs
+                }
             }
         }
     }

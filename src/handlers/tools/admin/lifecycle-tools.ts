@@ -1,6 +1,7 @@
 
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
+import { resolveAutoPruneScope } from '../../../utils/workspace-resolver.js'
 import { RunAutoPruneSchema, RunAutoPruneSchemaMcp, RunAutoPruneOutputSchema } from './schemas.js'
 import { runAutoPrune } from '../../../server/auto-prune.js'
 
@@ -42,6 +43,32 @@ export function getLifecycleTools(context: ToolContext): ToolDefinition[] {
                         context.config?.pruneImportanceThreshold ??
                         0.15
 
+                    const explicitWs = parsed.workspace_id?.trim()
+                    const explicitProj = parsed.project_number
+                    let pruneScope: { workspaceId: string; projectNumber?: number }
+                    if (explicitWs === '*') {
+                        pruneScope = {
+                            workspaceId: '*',
+                            ...(explicitProj !== undefined ? { projectNumber: explicitProj } : {}),
+                        }
+                    } else {
+                        const targetWs =
+                            explicitWs !== undefined && explicitWs !== ''
+                                ? explicitWs
+                                : explicitProj === undefined
+                                  ? context.config?.defaultWorkspaceId
+                                  : undefined
+                        const targetProj =
+                            explicitProj ??
+                            (explicitWs === undefined ? context.config?.defaultProjectNumber : undefined)
+                        pruneScope = resolveAutoPruneScope(
+                            targetWs,
+                            targetProj,
+                            context.config?.projectRegistry,
+                            { runtime: context.config?.runtime }
+                        )
+                    }
+
                     const excludeTags = context.config?.pruneExcludeTags
                     const pruneResult = await runAutoPrune(db, {
                         archiveOlderThanDays: archiveDays,
@@ -50,6 +77,10 @@ export function getLifecycleTools(context: ToolContext): ToolDefinition[] {
                         importanceThreshold: threshold,
                         dryRun: parsed.dry_run,
                         ...(excludeTags !== undefined ? { excludeTags } : {}),
+                        workspaceId: pruneScope.workspaceId,
+                        ...(pruneScope.projectNumber !== undefined
+                            ? { projectNumber: pruneScope.projectNumber }
+                            : {}),
                     })
 
                     if (pruneResult.aborted === true) {

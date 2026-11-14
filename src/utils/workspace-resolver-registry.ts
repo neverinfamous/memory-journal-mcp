@@ -87,8 +87,12 @@ function matchKeyCaseInsensitive(
     registry: Record<string, RegistryEntry>
 ): string | undefined {
     const candidateLower = candidate.toLowerCase()
+    const candidateSlug = candidateLower.replace(/_/g, '-')
     for (const key of Object.keys(registry)) {
-        if (key.toLowerCase() === candidateLower) return key
+        const keyLower = key.toLowerCase()
+        if (keyLower === candidateLower || keyLower.replace(/_/g, '-') === candidateSlug) {
+            return key
+        }
     }
     return undefined
 }
@@ -108,15 +112,19 @@ function matchAliasInTable(
 
 export function findCanonicalRegistryKey(
     aliasOrKey: string,
-    registry?: Record<string, RegistryEntry>
+    registry?: Record<string, RegistryEntry>,
+    options?: { allowKeywordAliases?: boolean }
 ): string | undefined {
     const lower = aliasOrKey.toLowerCase().trim()
-    if (registry === undefined) return undefined
+    if (registry === undefined || lower === '') return undefined
 
     const direct = matchKeyCaseInsensitive(lower, registry)
     if (direct !== undefined) return direct
 
-    return matchAliasInTable(lower, registry)
+    if (options?.allowKeywordAliases === true) {
+        return matchAliasInTable(lower, registry)
+    }
+    return undefined
 }
 
 function collectAliasesForKey(key: string): string[] {

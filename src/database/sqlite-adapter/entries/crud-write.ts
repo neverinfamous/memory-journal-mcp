@@ -1,6 +1,7 @@
 import type { JournalEntry } from '../../../types/index.js'
 import type { CreateEntryInput } from '../../core/interfaces.js'
 import type { EntriesSharedContext } from './shared.js'
+import { ValidationError } from '../../../types/errors.js'
 import { effectiveWorkspace } from '../../workspace-scope.js'
 import { resolveProjectContext } from '../../../utils/workspace-resolver.js'
 import { activeProjectRegistry, pairStoredScope } from '../../../utils/write-scope.js'
@@ -102,6 +103,11 @@ function insertEntryRow(context: EntriesSharedContext, input: CreateEntryInput):
         )
         const finalProjNum = paired.projectNumber ?? null
         const finalWsId = effectiveWorkspace(paired.workspaceId)
+        if (finalWsId === '*') {
+            throw new ValidationError(
+                "Wildcard workspace_id '*' cannot be used when creating entries. Specify a concrete workspace_id."
+            )
+        }
         const values = [
             input.entryType ?? 'personal_reflection',
             input.content,

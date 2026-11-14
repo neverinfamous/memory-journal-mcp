@@ -12,41 +12,18 @@ import {
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
-import { assertSafeDirectoryPath } from '../../../utils/security-utils.js'
+import {
+    findCaseInsensitiveKeyConflict,
+    findProjectNumberConflict,
+    isForbiddenProjectKey,
+    isValidProjectPath,
+} from '../../../utils/project-registry-guards.js'
 import { readProjectRegistryFile } from '../../../utils/registry-config-file.js'
 import {
     clearActiveSessionProject,
     getActiveSessionProject,
     setActiveSessionProject,
 } from '../../../utils/workspace-resolver-session.js'
-
-const FORBIDDEN_PROJECT_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
-
-function isForbiddenProjectKey(key: string): boolean {
-    return FORBIDDEN_PROJECT_KEYS.has(key)
-}
-
-function isValidProjectPath(p: string, allowedRoots?: string[]): boolean {
-    if (!p || p.includes('\0') || p.startsWith('\\\\') || p.startsWith('//')) {
-        return false
-    }
-    const slashSplit = p.replace(/\\/g, '/').split('/')
-    const normalizedSplit = path.normalize(p).split(path.sep)
-    if (slashSplit.includes('..') || normalizedSplit.includes('..')) {
-        return false
-    }
-    if (!path.isAbsolute(p)) {
-        return false
-    }
-    if (allowedRoots && allowedRoots.length > 0) {
-        try {
-            assertSafeDirectoryPath(p, allowedRoots)
-        } catch {
-            return false
-        }
-    }
-    return true
-}
 
 function getRegistryConfigPath(): string {
     return process.env['MEMORY_JOURNAL_CONFIG'] ?? path.resolve(os.homedir(), '.gemini', 'config', 'memory-journal.config.json')
@@ -178,19 +155,37 @@ export function getProjectTools(context: ToolContext): ToolDefinition[] {
                     const config = loadConfig()
                     config['projectRegistry'] ??= {}
                     const registry = config['projectRegistry'] as Record<string, { path: string, project_number?: number }>
-                    
+
+                    const keyConflict = findCaseInsensitiveKeyConflict(registry, parsed.name, parsed.name)
+                    if (keyConflict !== undefined) {
+                        return Promise.resolve({
+                            success: false,
+                            error: `Project '${keyConflict}' already exists (conflicts with '${parsed.name}').`,
+                        })
+                    }
+
+                    const coercedNum = coerceRegistryProjectNumber(parsed.project_number)
+                    if (coercedNum !== undefined) {
+                        const numConflict = findProjectNumberConflict(registry, coercedNum, [parsed.name])
+                        if (numConflict !== undefined) {
+                            return Promise.resolve({
+                                success: false,
+                                error: `Project number ${String(coercedNum)} is already assigned to project '${numConflict}'.`,
+                            })
+                        }
+                    }
+
                     const projectRef = Object.hasOwn(registry, parsed.name)
-                        ? (registry[parsed.name] ?? { path: parsed.absolute_path })
+                        ? { ...(registry[parsed.name] ?? { path: parsed.absolute_path }) }
                         : { path: parsed.absolute_path }
                     projectRef.path = parsed.absolute_path
-                    const coercedNum = coerceRegistryProjectNumber(parsed.project_number)
                     if (coercedNum !== undefined) {
                         projectRef.project_number = coercedNum
                     }
                     registry[parsed.name] = projectRef
-                    
+
                     saveConfig(config, context)
-                    
+
                     const message = `Project '${parsed.name}' registered successfully.`
                     return Promise.resolve({ success: true, message, project: { name: parsed.name, ...registry[parsed.name] } })
                 } catch (err) {
@@ -217,7 +212,7 @@ export function getProjectTools(context: ToolContext): ToolDefinition[] {
                     if (invalidProjectNumber(parsed.project_number)) {
                         return Promise.resolve({ success: false, error: 'project_number must be a positive integer' })
                     }
-                    if (isForbiddenProjectKey(parsed.name) || (parsed.new_name && isForbiddenProjectKey(parsed.new_name))) {
+                    if (isForbiddenProjectKey(parsed.name) || (parsed.new_name !== undefined && isForbiddenProjectKey(parsed.new_name))) {
                         return Promise.resolve({ success: false, error: `Invalid project name.` })
                     }
                     if (parsed.absolute_path && !isValidProjectPath(parsed.absolute_path, allowedRoots)) {
@@ -226,23 +221,55 @@ export function getProjectTools(context: ToolContext): ToolDefinition[] {
                     const config = loadConfig()
                     config['projectRegistry'] ??= {}
                     const registry = config['projectRegistry'] as Record<string, { path: string, project_number?: number }>
-                    
+
                     if (!Object.hasOwn(registry, parsed.name) || !registry[parsed.name]) {
                         return { success: false, error: `🛠️ AUTONOMOUS HEALING: Project not found: '${parsed.name}'` }
                     }
-                    
-                    const project = registry[parsed.name] ?? { path: '' }
-                    if (parsed.absolute_path) project.path = parsed.absolute_path
+
+                    const targetName = parsed.new_name !== undefined ? parsed.new_name.trim() : parsed.name
+                    if (isForbiddenProjectKey(targetName)) {
+                        return Promise.resolve({ success: false, error: 'Invalid target project name.' })
+                    }
+                    if (targetName !== parsed.name) {
+                        if (Object.hasOwn(registry, targetName)) {
+                            return Promise.resolve({
+                                success: false,
+                                error: `Project '${targetName}' already exists; refusing to overwrite it.`,
+                            })
+                        }
+                        const renameConflict = findCaseInsensitiveKeyConflict(registry, targetName, parsed.name)
+                        if (renameConflict !== undefined) {
+                            return Promise.resolve({
+                                success: false,
+                                error: `Project '${renameConflict}' already exists (conflicts with '${targetName}'); refusing to overwrite it.`,
+                            })
+                        }
+                    }
+
                     const coercedUpdateNum = coerceRegistryProjectNumber(parsed.project_number)
+                    if (coercedUpdateNum !== undefined) {
+                        const numConflict = findProjectNumberConflict(registry, coercedUpdateNum, [
+                            parsed.name,
+                            targetName,
+                        ])
+                        if (numConflict !== undefined) {
+                            return Promise.resolve({
+                                success: false,
+                                error: `Project number ${String(coercedUpdateNum)} is already assigned to project '${numConflict}'.`,
+                            })
+                        }
+                    }
+
+                    const project = { ...(registry[parsed.name] ?? { path: '' }) }
+                    if (parsed.absolute_path) project.path = parsed.absolute_path
                     if (coercedUpdateNum !== undefined) project.project_number = coercedUpdateNum
-                    
-                    const targetName = parsed.new_name ?? parsed.name
-                    if (parsed.new_name && parsed.new_name !== parsed.name) {
+
+                    if (targetName !== parsed.name) {
                         config['projectRegistry'] = Object.fromEntries(
                             Object.entries(registry).filter(([key]) => key !== parsed.name)
                         )
                     }
-                    
+
                     const updatedRegistry = config['projectRegistry'] as Record<string, { path: string, project_number?: number }>
                     updatedRegistry[targetName] = project
                     const keyChange: RegistryKeyChange | undefined =
@@ -256,7 +283,7 @@ export function getProjectTools(context: ToolContext): ToolDefinition[] {
                               }
                             : undefined
                     saveConfig(config, context, keyChange)
-                    
+
                     return Promise.resolve({ success: true, message: `Project '${targetName}' updated.`, project: { name: targetName, ...updatedRegistry[targetName] } })
                 } catch (err) {
                     return Promise.resolve(formatHandlerError(err))

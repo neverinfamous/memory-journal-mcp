@@ -357,7 +357,7 @@ export function attachCallToolInterceptor(
                             input: toolArgs,
                             error: (errorResult['error'] as string) ?? 'Validation Error',
                         })
-                        return formatTokenEstimatedError(errorResult, false)
+                        return formatTokenEstimatedError(errorResult, true)
                     }
                     const normalizedArgs = intercept.args?.[0]
                     if (

@@ -14,7 +14,12 @@ import { parseDigestSnapshot, type DigestSnapshot } from '../database/sqlite-ada
 import type { ServerRuntime } from '../utils/maintenance-lock.js'
 import { deliverReport, formatDigestReport, type ReportDeliveryOptions } from './digest-reporter.js'
 import { runAutoPrune } from './auto-prune.js'
-import { resolveAutoPruneScope, resolveWorkspaceId } from '../utils/workspace-resolver.js'
+import {
+    applySchedulerWorkspaceUpdates,
+    resolveSchedulerDefaultWorkspace,
+    resolveSchedulerPruneScope,
+    type SchedulerWorkspaceScope,
+} from './scheduler-scope.js'
 import { VERSION } from '../version.js'
 
 // ============================================================================
@@ -400,36 +405,18 @@ export class Scheduler {
     // ========================================================================
 
     private resolveDefaultWorkspace(): string {
-        const { defaultWorkspaceId, defaultProjectNumber, projectRegistry } = this.options
-        // [INVARIANT] Background jobs never inherit sticky per-session context (C1): no runtime.
-        return resolveWorkspaceId(defaultWorkspaceId, defaultProjectNumber, {
-            ...(defaultWorkspaceId !== undefined ? { defaultWorkspaceId } : {}),
-            ...(defaultProjectNumber !== undefined ? { defaultProjectNumber } : {}),
-            ...(projectRegistry !== undefined ? { projectRegistry } : {}),
-        })
+        // [INVARIANT] Background jobs never inherit sticky per-session context (C3): no runtime.
+        return resolveSchedulerDefaultWorkspace(this.options)
     }
 
     /** Replace workspace context on hot reload. [INVARIANT] Absent fields are cleared. */
-    updateWorkspaceContext(updates: {
-        defaultWorkspaceId?: string
-        defaultProjectNumber?: number
-        projectRegistry?: ToolHandlerConfig['projectRegistry']
-    }): void {
-        if (updates.defaultWorkspaceId !== undefined) this.options.defaultWorkspaceId = updates.defaultWorkspaceId
-        else delete this.options.defaultWorkspaceId
-        if (updates.defaultProjectNumber !== undefined) this.options.defaultProjectNumber = updates.defaultProjectNumber
-        else delete this.options.defaultProjectNumber
-        if (updates.projectRegistry !== undefined) this.options.projectRegistry = updates.projectRegistry
-        else delete this.options.projectRegistry
+    updateWorkspaceContext(updates: SchedulerWorkspaceScope): void {
+        applySchedulerWorkspaceUpdates(this.options, updates)
     }
 
     /** Prune job: auto-prune low-importance old entries. */
     private async runPrune(): Promise<void> {
-        const pruneScope = resolveAutoPruneScope(
-            this.options.defaultWorkspaceId,
-            this.options.defaultProjectNumber,
-            this.options.projectRegistry
-        )
+        const pruneScope = resolveSchedulerPruneScope(this.options)
         const pruneResult = await runAutoPrune(this.db, {
             archiveOlderThanDays: this.options.archiveOlderThanDays ?? 0,
             pruneOlderThanDays: this.options.pruneOlderThanDays ?? 0,

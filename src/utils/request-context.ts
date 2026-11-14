@@ -4,6 +4,7 @@ export interface RequestContext {
     ip?: string | undefined
     sessionId?: string | undefined
     useTestDb?: boolean | undefined
+    ephemeralSessionProject?: { workspaceId?: string; projectNumber?: number } | undefined
 }
 
 export const requestContextStorage = new AsyncLocalStorage<RequestContext>()

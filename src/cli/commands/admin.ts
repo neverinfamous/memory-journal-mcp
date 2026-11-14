@@ -6,7 +6,7 @@ import { ConfigResolver } from '../../utils/config-resolver.js'
 import { buildServerOptions } from '../server-options-builder.js'
 import { dumpConfigAndExit } from '../dump-config.js'
 import { getCliCommandDb as getDb } from './db-helper.js'
-import { resolveWorkspaceId } from '../../utils/workspace-resolver.js'
+import { resolveAutoPruneScope } from '../../utils/workspace-resolver.js'
 import { 
     adminBackupOptionsSchema, 
     adminRestoreOptionsSchema, 
@@ -92,14 +92,31 @@ export async function pruneAction(options: z.infer<typeof pruneSchema>, command:
                   .map((tag) => tag.trim())
                   .filter((tag) => tag !== '')
             : (serverOptions.pruneExcludeTags ?? [])
+        const requestedWs = options.workspace?.trim()
         const requestedProject = options.defaultProject
-        const workspaceId = resolveWorkspaceId(
-            options.workspace,
-            // [INVARIANT] Only a CLI-supplied project is explicit; the configured default stays a
-            // fallback inside `serverOptions` so it cannot override cwd/workspace pairing (H4).
-            requestedProject,
-            serverOptions
-        )
+        let pruneScope: { workspaceId: string; projectNumber?: number }
+        if (requestedWs === '*') {
+            if (options.allWorkspaces !== true) {
+                throw new Error(
+                    "Refusing wildcard '--workspace *' in prune without explicit confirmation. Pass --all-workspaces alongside --workspace '*' to prune all workspaces."
+                )
+            }
+            pruneScope = {
+                workspaceId: '*',
+                ...(requestedProject !== undefined ? { projectNumber: requestedProject } : {}),
+            }
+        } else {
+            const targetWs =
+                requestedWs !== undefined && requestedWs !== ''
+                    ? requestedWs
+                    : requestedProject === undefined
+                      ? serverOptions.defaultWorkspaceId
+                      : undefined
+            const targetProj =
+                requestedProject ??
+                (requestedWs === undefined ? serverOptions.defaultProjectNumber : undefined)
+            pruneScope = resolveAutoPruneScope(targetWs, targetProj, serverOptions.projectRegistry)
+        }
         const fromCli = (key: string): boolean => command.getOptionValueSource(key) === 'cli'
         const result = await runAutoPrune(db, {
             archiveOlderThanDays:
@@ -126,8 +143,10 @@ export async function pruneAction(options: z.infer<typeof pruneSchema>, command:
                 (fromCli('pruneDryRun') && options.pruneDryRun === true) ||
                 serverOptions.pruneDryRun === true,
             excludeTags: parsedExcludeTags,
-            ...(workspaceId !== undefined ? { workspaceId } : {}),
-            ...(requestedProject !== undefined ? { projectNumber: requestedProject } : {}),
+            workspaceId: pruneScope.workspaceId,
+            ...(pruneScope.projectNumber !== undefined
+                ? { projectNumber: pruneScope.projectNumber }
+                : {}),
         })
         if (options.json === true) {
             process.stdout.write(JSON.stringify(result) + '\n')
@@ -227,14 +246,30 @@ export async function auditAction(options: z.infer<typeof auditSchema>, command:
 }
 
 export async function rebuildIndexAction(options: z.infer<typeof rebuildIndexSchema>, command: Command): Promise<void> {
+    const explicitWs = options.workspace?.trim()
+    if (explicitWs === '*') {
+        process.stderr.write(
+            "Refusing wildcard '--workspace *' in rebuild-index. Omit --workspace or pass a concrete workspace name.\n"
+        )
+        process.exit(1)
+    }
     const { db, serverOptions } = await getDb(options, command)
     try {
         const vectorManager = new VectorSearchManager(db, { modelName: serverOptions.embeddingModel })
+        const targetWs =
+            explicitWs !== undefined && explicitWs !== ''
+                ? explicitWs
+                : serverOptions.defaultWorkspaceId
+        const targetProj =
+            options.defaultProject ??
+            (explicitWs === undefined ? serverOptions.defaultProjectNumber : undefined)
 
-        process.stderr.write('Rebuilding vector index...\n')
+        if (options.json !== true) {
+            process.stderr.write('Rebuilding vector index...\n')
+        }
         const result = await vectorManager.rebuildIndex(undefined, {
-            ...(options.workspace !== undefined ? { workspaceId: options.workspace } : {}),
-            ...(options.defaultProject !== undefined ? { projectNumber: options.defaultProject } : {}),
+            ...(targetWs !== undefined ? { workspaceId: targetWs } : {}),
+            ...(targetProj !== undefined ? { projectNumber: targetProj } : {}),
         })
         const stats = vectorManager.getStats()
 

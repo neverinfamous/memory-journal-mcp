@@ -71,6 +71,13 @@ export const RunAutoPruneSchema = z
         prune_older_than_days: z.number().min(0).optional(),
         hard_delete_older_than_days: z.number().min(0).optional(),
         importance_threshold: z.number().min(0).max(1).optional(),
+        workspace_id: z.string().optional(),
+        project_number: z
+            .preprocess(
+                (v) => (typeof v === 'string' && /^\d+$/.test(v.trim()) ? Number(v.trim()) : v),
+                z.number().int().positive()
+            )
+            .optional(),
     })
     .strict()
 
@@ -96,6 +103,15 @@ export const RunAutoPruneSchemaMcp = z
             .describe(
                 'Override the importance score threshold (0.0 - 1.0) below which entries are eligible for pruning.'
             ),
+        workspace_id: z
+            .string()
+            .optional()
+            .describe(
+                "Optional workspace ID to scope pruning (defaults to active/configured workspace; pass '*' to prune all workspaces)."
+            ),
+        project_number: relaxedNumber()
+            .optional()
+            .describe('Optional project number to scope pruning.'),
     })
     .strict()
 

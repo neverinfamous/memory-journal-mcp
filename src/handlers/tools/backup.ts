@@ -81,7 +81,7 @@ const CleanupBackupsOutputSchema = z
 // ============================================================================
 
 export function getBackupTools(context: ToolContext): ToolDefinition[] {
-    const { db, progress, config } = context
+    const { db, progress, config, vectorManager } = context
     return [
         {
             name: 'backup_journal',
@@ -209,6 +209,17 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
+                    if (
+                        input.filename.includes('..') ||
+                        input.filename.includes('/') ||
+                        input.filename.includes('\\') ||
+                        input.filename.includes('\0')
+                    ) {
+                        throw new ValidationError('Invalid backup filename', {
+                            filename: input.filename,
+                        })
+                    }
+
                     // Capture progress context values BEFORE any async operations
                     const progressServer = progress?.server
                     const progressTokenValue = progress?.progressToken
@@ -220,12 +231,36 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
                     if (config?.runtime?.maintenanceManager) {
                         await config.runtime.maintenanceManager.acquireMaintenanceLock()
                     }
+                    let preRestoreBackup
                     let result
                     try {
+                        // [INVARIANT] C10: Create an automatic pre-restore backup inside the
+                        // maintenance lock before replacing database contents; abort if it fails.
+                        preRestoreBackup = await db.exportToFile(
+                            `pre_restore_${String(Date.now())}`
+                        )
                         result = await db.restoreFromFile(input.filename, config?.runtime)
                     } finally {
                         if (config?.runtime?.maintenanceManager) {
                             config.runtime.maintenanceManager.releaseMaintenanceLock()
+                        }
+                    }
+
+                    let vectorWarningSuffix = ''
+                    if (vectorManager?.isInitialized() === true) {
+                        try {
+                            await vectorManager.rebuildIndex()
+                        } catch (vectorErr: unknown) {
+                            const msg =
+                                vectorErr instanceof Error
+                                    ? vectorErr.message
+                                    : String(vectorErr)
+                            logger.warning('Failed to rebuild vector index after restore', {
+                                module: 'TOOL',
+                                operation: 'restore-backup',
+                                error: msg,
+                            })
+                            vectorWarningSuffix = ` Vector index rebuild failed (${msg}); run rebuild_vector_index manually.`
                         }
                     }
 
@@ -250,14 +285,16 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
+                    const backupLabel = preRestoreBackup?.filename ?? 'pre-restore backup'
+
                     return {
                         success: true,
-                        message: `Database restored from ${input.filename}`,
+                        message: `Database restored from ${input.filename} (pre-restore backup: ${backupLabel})`,
                         restoredFrom: result.restoredFrom,
                         previousEntryCount: result.previousEntryCount,
                         newEntryCount: result.newEntryCount,
                         warning:
-                            'A pre-restore backup was automatically created. Any changes made since this backup (including tag merges, new entries, and relationships) have been reverted.',
+                            `A pre-restore backup (${backupLabel}) was automatically created. Any changes made since this backup (including tag merges, new entries, and relationships) have been reverted.${vectorWarningSuffix}`,
                         revertedChanges: {
                             tagMerges:
                                 'Any merge_tags operations since this backup are reverted. Previously merged tags will reappear as separate tags.',

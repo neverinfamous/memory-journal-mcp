@@ -117,9 +117,19 @@ function resolveDefaultWorkspaceIdOption(
 ): string | undefined {
     return catchConfig(() => {
         const ws = resolver.resolve<string>('workspace')
-        if (ws !== undefined && ws.trim() !== '') return ws.trim()
+        const trimmedWs = ws !== undefined ? ws.trim() : undefined
+        if (trimmedWs === '*') {
+            throw new Error("Invalid workspace '*': default workspace cannot be a wildcard.")
+        }
+        if (trimmedWs !== undefined && trimmedWs !== '') return trimmedWs
         const defWs = resolver.resolve<string>('defaultWorkspaceId', 'DEFAULT_WORKSPACE_ID')
-        return defWs !== undefined && defWs.trim() !== '' ? defWs.trim() : undefined
+        const trimmedDefWs = defWs !== undefined ? defWs.trim() : undefined
+        if (trimmedDefWs === '*') {
+            throw new Error(
+                "Invalid defaultWorkspaceId '*': default workspace cannot be a wildcard."
+            )
+        }
+        return trimmedDefWs !== undefined && trimmedDefWs !== '' ? trimmedDefWs : undefined
     }, undefined)
 }
 

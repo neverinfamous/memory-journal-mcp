@@ -115,8 +115,9 @@ export function pairStoredScope(
     }
 
     const pairedProject = supplied ?? registryProject
+    const trimmedWs = workspaceId !== undefined ? workspaceId.trim() : undefined
     return {
-        workspaceId: key ?? workspaceId,
+        workspaceId: key ?? trimmedWs,
         projectNumber: pairedProject ?? projectNumber,
     }
 }

@@ -145,10 +145,21 @@ export function resolveActiveBriefingConfig(
         resolvedDefaultWs !== undefined
             ? (findCanonicalRegistryKey(resolvedDefaultWs, resolvedRegistry) ?? resolvedDefaultWs)
             : undefined
+    const canonicalConfigWs =
+        briefingConfig.defaultWorkspaceId !== undefined
+            ? (findCanonicalRegistryKey(briefingConfig.defaultWorkspaceId, resolvedRegistry) ??
+              briefingConfig.defaultWorkspaceId)
+            : undefined
+    const briefingDefaultApplies =
+        canonicalConfigWs === undefined ||
+        canonicalConfigWs.toLowerCase() === canonicalWs?.toLowerCase()
     const registryProject =
         canonicalWs !== undefined ? resolvedRegistry?.[canonicalWs]?.project_number : undefined
+    const applicableDefaultProj = briefingDefaultApplies
+        ? briefingConfig.defaultProjectNumber
+        : undefined
     const candidateProj =
-        briefingConfig.defaultProjectNumber ?? registryProject ?? sessionCtx.projectNumber
+        applicableDefaultProj ?? registryProject ?? sessionCtx.projectNumber
     const projClaimedElsewhere =
         candidateProj !== undefined &&
         canonicalWs !== undefined &&

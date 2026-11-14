@@ -26,7 +26,11 @@ export async function execAction(scriptPath: string, options: z.infer<typeof exe
     }
 
     const { serverOptions } = buildServerOptions(resolver, options, command, configErrors)
-    
+
+    if (options.workspace?.trim() === '*' || options.defaultWorkspaceId?.trim() === '*') {
+        configErrors.push("Wildcard '*' is not allowed for --workspace or --default-workspace-id.")
+    }
+
     if (configErrors.length > 0) {
         process.stderr.write('Startup Configuration Errors:\n')
         configErrors.forEach((err) => process.stderr.write(` - ${err}\n`))
@@ -88,7 +92,10 @@ export async function execAction(scriptPath: string, options: z.infer<typeof exe
         callTool(name, args, db, vectorManager, github, customToolHandlerConfig, undefined, teamDb ?? undefined, teamVectorManager ?? undefined)
     customToolHandlerConfig.dispatch = dispatch
 
-    const execWorkspaceId = options.workspace ?? options.defaultWorkspaceId
+    const execWorkspaceId =
+        options.workspace !== undefined && options.workspace.trim() !== ''
+            ? options.workspace.trim()
+            : undefined
     let exitCode = 0
     try {
         const result = await callTool(

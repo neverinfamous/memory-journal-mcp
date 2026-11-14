@@ -33,8 +33,8 @@ export function assertAdditionalTeamDbIsNotSymlink(
     }
 }
 
-/** Validate and normalise PROJECT_REGISTRY; also mirrors the validated value into process.env. */
-export function parseProjectRegistryOption(
+/** Validate and normalise a project registry object without mutating process.env. */
+export function validateProjectRegistryObject(
     raw: unknown
 ): Record<string, ProjectRegistryEntry> | undefined {
     if (raw === undefined || raw === null || raw === '') return undefined
@@ -60,11 +60,21 @@ export function parseProjectRegistryOption(
             }
             entry.path = resolvedPath
         }
-        process.env['PROJECT_REGISTRY'] = JSON.stringify(validated)
         return validated
     } catch (e: unknown) {
         throw new Error(`Failed to parse PROJECT_REGISTRY: ${e instanceof Error ? e.message : String(e)}`, { cause: e })
     }
+}
+
+/** Validate and normalise PROJECT_REGISTRY; also mirrors the validated value into process.env. */
+export function parseProjectRegistryOption(
+    raw: unknown
+): Record<string, ProjectRegistryEntry> | undefined {
+    const validated = validateProjectRegistryObject(raw)
+    if (validated !== undefined) {
+        process.env['PROJECT_REGISTRY'] = JSON.stringify(validated)
+    }
+    return validated
 }
 
 /** Validate ADDITIONAL_TEAM_DBS (label -> absolute path, no symlinks). */

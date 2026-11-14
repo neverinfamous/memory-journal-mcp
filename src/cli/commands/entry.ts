@@ -4,6 +4,7 @@ import type { RelationshipType, CreateEntryInput, ToolHandlerConfig } from '../.
 import { z } from 'zod'
 import { ValidationError } from '../../types/errors.js'
 import { activeProjectRegistry, pairStoredScope } from '../../utils/write-scope.js'
+import { resolveWorkspaceId } from '../../utils/workspace-resolver.js'
 import { createEntryOptionsSchema, updateEntryOptionsSchema } from '../schemas.js'
 import {
     getDb,
@@ -241,7 +242,42 @@ export async function updateEntryAction(...args: unknown[]): Promise<void> {
             process.exit(1)
         }
 
+        if (options.workspace?.trim() === '*') {
+            throw new ValidationError(
+                "workspace_id '*' cannot be used to update an entry. Pass a concrete workspace.",
+                { workspaceId: '*' }
+            )
+        }
+
         const existingEntry = db.getEntryById(entryId, '*')
+        const implicitWorkspace =
+            options.workspace === undefined
+                ? resolveWorkspaceId(undefined, undefined, {
+                      runtime: null,
+                      ...(config.defaultWorkspaceId !== undefined
+                          ? { defaultWorkspaceId: config.defaultWorkspaceId }
+                          : {}),
+                      ...(config.projectRegistry !== undefined
+                          ? { projectRegistry: config.projectRegistry }
+                          : {}),
+                  })
+                : undefined
+        if (
+            existingEntry !== null &&
+            implicitWorkspace !== undefined &&
+            implicitWorkspace !== 'default' &&
+            existingEntry.workspaceId !== undefined &&
+            existingEntry.workspaceId.toLowerCase() !== implicitWorkspace.toLowerCase()
+        ) {
+            throw new ValidationError(
+                `Entry #${String(entryId)} belongs to workspace '${existingEntry.workspaceId}', not active workspace '${implicitWorkspace}'. Pass --workspace '${existingEntry.workspaceId}' explicitly to update it.`,
+                {
+                    entryId,
+                    entryWorkspaceId: existingEntry.workspaceId,
+                    activeWorkspaceId: implicitWorkspace,
+                }
+            )
+        }
         const { content, payload } = await loadCliEntryContentAndPayload(
             options,
             config,

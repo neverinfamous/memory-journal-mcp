@@ -8,6 +8,13 @@ const configPath = path.resolve(os.homedir(), '.gemini', 'config', 'memory-journ
 import { DatabaseAdapterFactory } from '../../database/adapter-factory.js'
 import { ConfigResolver } from '../../utils/config-resolver.js'
 import { readProjectRegistryFile } from '../../utils/registry-config-file.js'
+import {
+    findCaseInsensitiveKeyConflict,
+    findProjectNumberConflict,
+    isForbiddenProjectKey,
+    isValidProjectPath,
+} from '../../utils/project-registry-guards.js'
+import { validateProjectRegistryObject } from '../server-options-parsers.js'
 import { buildServerOptions } from '../server-options-builder.js'
 import { dumpConfigAndExit } from '../dump-config.js'
 
@@ -78,8 +85,8 @@ export function projectListAction(options: Record<string, unknown>, command: Com
 
 export async function projectCreateAction(name: string, options: Record<string, unknown>, command: Command): Promise<void> {
     handleProjectDumpConfig(options, command)
-    if (!name || name.trim() === '') {
-        process.stderr.write('Project name is required.\n')
+    if (!name || name.trim() === '' || isForbiddenProjectKey(name)) {
+        process.stderr.write('Invalid project name.\n')
         process.exit(1)
     }
 
@@ -88,19 +95,73 @@ export async function projectCreateAction(name: string, options: Record<string, 
         process.exit(1)
     }
 
+    const absPath = path.resolve(process.cwd(), options['path'] as string)
+    if (!isValidProjectPath(absPath)) {
+        process.stderr.write(`Invalid or unsafe project path: '${absPath}'.\n`)
+        process.exit(1)
+    }
+
     const config = loadConfig(options)
     config['projectRegistry'] ??= {}
 
     const registry = config['projectRegistry'] as Record<string, { path: string, project_number?: number }>
-    
-    const absPath = path.resolve(process.cwd(), options['path'] as string)
-
-    registry[name] = {
-        path: absPath
+    const keyConflict = findCaseInsensitiveKeyConflict(registry, name)
+    if (keyConflict !== undefined) {
+        process.stderr.write(`Project '${keyConflict}' already exists (conflicts with '${name}').\n`)
+        process.exit(1)
     }
 
+    const newEntry: { path: string; project_number?: number } = { path: absPath }
     if (options['number'] != null) {
-        registry[name].project_number = parsePositiveCliProjectNumber(options['number'])
+        const projNum = parsePositiveCliProjectNumber(options['number'])
+        const numConflict = findProjectNumberConflict(registry, projNum, [name])
+        if (numConflict !== undefined) {
+            process.stderr.write(
+                `Project number ${String(projNum)} is already assigned to project '${numConflict}'.\n`
+            )
+            process.exit(1)
+        }
+        newEntry.project_number = projNum
+    }
+    registry[name] = newEntry
+
+    try {
+        validateProjectRegistryObject(config['projectRegistry'])
+    } catch (e: unknown) {
+        process.stderr.write(
+            `Invalid project registry entry: ${e instanceof Error ? e.message : String(e)}\n`
+        )
+        process.exit(1)
+    }
+
+    const cliConfigPath = (options['config'] as string | undefined) ?? process.env['MEMORY_JOURNAL_CONFIG']
+    const existingCliConfig =
+        cliConfigPath !== undefined && fs.existsSync(path.resolve(cliConfigPath))
+            ? cliConfigPath
+            : undefined
+
+    let resolver: ConfigResolver
+    try {
+        resolver = new ConfigResolver(command, options, existingCliConfig)
+    } catch (e) {
+        process.stderr.write(
+            `\nInvalid configuration, refusing to register project: ${e instanceof Error ? e.message : String(e)}\n`
+        )
+        process.stderr.write(
+            `Fix the configuration and run 'memory-journal-mcp entry create' manually.\n`
+        )
+        process.exitCode = 1
+        return
+    }
+
+    const configErrors: string[] = []
+    const { serverOptions } = buildServerOptions(resolver, options, command, configErrors)
+    if (configErrors.length > 0) {
+        // [INVARIANT] Never persist or initialize a database from a configuration that failed validation (H13/H16).
+        process.stderr.write('\nInvalid configuration, refusing to register project:\n')
+        configErrors.forEach((err) => process.stderr.write(` - ${err}\n`))
+        process.exitCode = 1
+        return
     }
 
     saveConfig(config, options)
@@ -122,35 +183,7 @@ export async function projectCreateAction(name: string, options: Record<string, 
         return
     }
 
-    // Reuse the already-validated project number (NaN was rejected above)
-    const projNum = registry[name].project_number
-
-    // Perform database initialization natively
-    let resolver: ConfigResolver
-    const cliConfigPath = (options['config'] as string | undefined) ?? process.env['MEMORY_JOURNAL_CONFIG']
-    try {
-        resolver = new ConfigResolver(command, options, cliConfigPath)
-    } catch (e) {
-        process.stderr.write(
-            `\nInvalid configuration, skipping database initialization: ${e instanceof Error ? e.message : String(e)}\n`
-        )
-        process.stderr.write(
-            `Fix the configuration and run 'memory-journal-mcp entry create' manually.\n`
-        )
-        process.exitCode = 1
-        return
-    }
-
-    const configErrors: string[] = []
-    const { serverOptions } = buildServerOptions(resolver, options, command, configErrors)
-    if (configErrors.length > 0) {
-        // [INVARIANT] Never initialize a database from a configuration that failed validation (H13).
-        process.stderr.write('\nInvalid configuration, skipping database initialization:\n')
-        configErrors.forEach((err) => process.stderr.write(` - ${err}\n`))
-        process.exitCode = 1
-        return
-    }
-    const effectiveProjNum = projNum
+    const effectiveProjNum = newEntry.project_number
 
     if (effectiveProjNum === undefined) {
         if (isJson) {
@@ -207,8 +240,8 @@ export async function projectCreateAction(name: string, options: Record<string, 
 
 export function projectUpdateAction(name: string, options: Record<string, unknown>, command: Command): void {
     handleProjectDumpConfig(options, command)
-    if (!name || name.trim() === '') {
-        process.stderr.write('Project name is required.\n')
+    if (!name || name.trim() === '' || isForbiddenProjectKey(name)) {
+        process.stderr.write('Invalid project name.\n')
         process.exit(1)
     }
 
@@ -220,30 +253,50 @@ export function projectUpdateAction(name: string, options: Record<string, unknow
         process.exit(1)
     }
 
-    const project = registry[name] ?? { path: '' }
+    const project = { ...(registry[name] ?? { path: '' }) }
     let modified = false
 
     if (options['path'] != null) {
-        project.path = path.resolve(process.cwd(), options['path'] as string)
-        modified = true
-    }
-
-    if (options['number'] != null) {
-        project.project_number = parsePositiveCliProjectNumber(options['number'])
+        const absPath = path.resolve(process.cwd(), options['path'] as string)
+        if (!isValidProjectPath(absPath)) {
+            process.stderr.write(`Invalid or unsafe project path: '${absPath}'.\n`)
+            process.exit(1)
+        }
+        project.path = absPath
         modified = true
     }
 
     const targetName = (options['rename'] as string | undefined)?.trim() ?? name
-    if (targetName === '') {
-        process.stderr.write('--rename requires a non-empty project name.\n')
+    if (targetName === '' || isForbiddenProjectKey(targetName)) {
+        process.stderr.write('--rename requires a valid non-empty project name.\n')
         process.exit(1)
     }
     if (targetName !== name) {
-        // [INVARIANT] Renaming must never silently overwrite another registered project (H13).
+        // [INVARIANT] Renaming must never silently overwrite another registered project (H13/H16).
         if (Object.prototype.hasOwnProperty.call(registry, targetName)) {
             process.stderr.write(`Project '${targetName}' already exists; refusing to overwrite it.\n`)
             process.exit(1)
         }
+        const renameConflict = findCaseInsensitiveKeyConflict(registry, targetName, name)
+        if (renameConflict !== undefined) {
+            process.stderr.write(
+                `Project '${renameConflict}' already exists (conflicts with '${targetName}'); refusing to overwrite.\n`
+            )
+            process.exit(1)
+        }
+        modified = true
+    }
+
+    if (options['number'] != null) {
+        const nextNum = parsePositiveCliProjectNumber(options['number'])
+        const numConflict = findProjectNumberConflict(registry, nextNum, [name, targetName])
+        if (numConflict !== undefined) {
+            process.stderr.write(
+                `Project number ${String(nextNum)} is already assigned to project '${numConflict}'.\n`
+            )
+            process.exit(1)
+        }
+        project.project_number = nextNum
         modified = true
     }
 

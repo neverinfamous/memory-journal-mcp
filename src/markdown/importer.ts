@@ -242,6 +242,11 @@ function upsertParsedFile(
     const { body, metadata } = file
     const { author } = options
     const { effectiveWsId, effectiveProjNum } = resolveImportedFileContext(file, options)
+    if (effectiveWsId?.trim() === '*') {
+        throw new ValidationError(
+            "Wildcard workspace_id '*' cannot be used when importing entries. Specify a concrete workspace_id."
+        )
+    }
     const entryType: EntryType = toEntryType(metadata.entry_type) ?? 'personal_reflection'
 
     if (metadata.mj_id !== undefined) {

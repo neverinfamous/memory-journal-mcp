@@ -6,6 +6,8 @@ import { getAuthContext } from '../../../auth/auth-context.js'
 import { globalSubscriptionManager } from '../../../server/subscription-manager.js'
 import type { McpServerFactory } from '../../../server/mcp-server/index.js'
 import { logger } from '../../../utils/logger.js'
+import { getRequestContext, requestContextStorage } from '../../../utils/request-context.js'
+import { clearHttpSessionProject } from '../../../utils/workspace-resolver-session.js'
 import type { HttpTransportConfig } from '../types.js'
 import { SESSION_TIMEOUT_MS, SESSION_SWEEP_INTERVAL_MS } from '../types.js'
 import { LegacySSEServerTransport } from './legacy-sse.js'
@@ -107,6 +109,7 @@ function forgetSession(state: McpRouteState, sid: string): void {
     state.sessionOwners.delete(sid)
     state.sessionLastActivity.delete(sid)
     globalSubscriptionManager.unregisterServer(sid)
+    clearHttpSessionProject(sid)
 }
 
 export function createStatelessHandler(
@@ -211,74 +214,77 @@ export function createSessionCreator(state: McpRouteState): SessionCreator {
               })
 
         const sessionId = sid
-        const server = serverFactory()
+        const existingCtx = getRequestContext()
+        requestContextStorage.run({ ...existingCtx, sessionId }, () => {
+            const server = serverFactory()
 
-        const callerSubject = resolveRequestSubject()
-        if (callerSubject !== undefined) {
-            sessionOwners.set(sessionId, callerSubject)
-        }
-        sessionLastActivity.set(sessionId, Date.now())
+            const callerSubject = resolveRequestSubject()
+            if (callerSubject !== undefined) {
+                sessionOwners.set(sessionId, callerSubject)
+            }
+            sessionLastActivity.set(sessionId, Date.now())
 
-        const authLog = callerSubject !== undefined ? ` as ${callerSubject}` : ''
-        logger.info(`New MCP stateful session initialized${authLog}`, {
-            module: 'HTTP',
-            sessionId,
-            ...(callerSubject !== undefined ? { subject: callerSubject } : {}),
-        })
-
-        activeServers.add(server)
-        globalSubscriptionManager.registerServer(sessionId, server)
-
-        const originalClose = server.close.bind(server)
-        server.close = async () => {
-            activeServers.delete(server)
-            forgetSession(state, sessionId)
-            return originalClose()
-        }
-
-        sseTransports.set(sessionId, transport)
-
-        transport.onclose = () => {
-            server.close().catch((err: unknown) =>
-                logger.error('Error closing server on transport close', {
-                    error: String(err),
-                })
-            )
-        }
-
-        // [INVARIANT] The server must be connected before the transport handles the first request.
-        server
-            .connect(transport)
-            .then(() => {
-                if (transport instanceof LegacySSEServerTransport) {
-                    transport.handleSseRequest(req, res)
-                    return
-                }
-                transport.handleRequest(req, res, req.body).catch((err: unknown) => {
-                    logger.error('Error handling transport request', {
-                        error: String(err),
-                        ...(err instanceof Error && err.stack !== undefined
-                            ? { stack: err.stack }
-                            : {}),
-                    })
-                    next(err)
-                })
+            const authLog = callerSubject !== undefined ? ` as ${callerSubject}` : ''
+            logger.info(`New MCP stateful session initialized${authLog}`, {
+                module: 'HTTP',
+                sessionId,
+                ...(callerSubject !== undefined ? { subject: callerSubject } : {}),
             })
-            .catch((err: unknown) => {
-                logger.error('Error connecting server to transport', {
-                    error: String(err),
-                })
+
+            activeServers.add(server)
+            globalSubscriptionManager.registerServer(sessionId, server)
+
+            const originalClose = server.close.bind(server)
+            server.close = async () => {
                 activeServers.delete(server)
-                sseTransports.delete(sessionId)
                 forgetSession(state, sessionId)
-                if (!res.headersSent) {
-                    res.status(500).json({
-                        jsonrpc: '2.0',
-                        error: { code: -32603, message: 'Failed to initialize session' },
-                        id: null,
+                return originalClose()
+            }
+
+            sseTransports.set(sessionId, transport)
+
+            transport.onclose = () => {
+                server.close().catch((err: unknown) =>
+                    logger.error('Error closing server on transport close', {
+                        error: String(err),
                     })
-                }
-            })
+                )
+            }
+
+            // [INVARIANT] The server must be connected before the transport handles the first request.
+            server
+                .connect(transport)
+                .then(() => {
+                    if (transport instanceof LegacySSEServerTransport) {
+                        transport.handleSseRequest(req, res)
+                        return
+                    }
+                    transport.handleRequest(req, res, req.body).catch((err: unknown) => {
+                        logger.error('Error handling transport request', {
+                            error: String(err),
+                            ...(err instanceof Error && err.stack !== undefined
+                                ? { stack: err.stack }
+                                : {}),
+                        })
+                        next(err)
+                    })
+                })
+                .catch((err: unknown) => {
+                    logger.error('Error connecting server to transport', {
+                        error: String(err),
+                    })
+                    activeServers.delete(server)
+                    sseTransports.delete(sessionId)
+                    forgetSession(state, sessionId)
+                    if (!res.headersSent) {
+                        res.status(500).json({
+                            jsonrpc: '2.0',
+                            error: { code: -32603, message: 'Failed to initialize session' },
+                            id: null,
+                        })
+                    }
+                })
+        })
     }
 }
 
@@ -371,8 +377,12 @@ export function createPostHandler(
                     method: req.method,
                     path: req.path,
                 })
-                statelessMcpHandler(req, res, req.body).catch((err: unknown) => {
-                    next(err)
+                const currentCtx = { ...(getRequestContext() ?? {}) }
+                delete currentCtx.sessionId
+                requestContextStorage.run({ ...currentCtx, ephemeralSessionProject: {} }, () => {
+                    statelessMcpHandler(req, res, req.body).catch((err: unknown) => {
+                        next(err)
+                    })
                 })
             }
         }

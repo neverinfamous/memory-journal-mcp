@@ -137,6 +137,7 @@ export function registerAdminCommands(program: Command): void {
             .option('--dry-run', 'Log candidates without modifying the database')
             .option('--exclude-tags <tags>', 'Comma-separated tags to exclude')
             .option('--importance-threshold <n>', 'Importance score below which entries are prunable')
+            .option('--all-workspaces', 'Explicitly confirm pruning across all workspaces when using --workspace "*"')
     })
     addOutputOptions(pruneCmd)
     addCoreOptions(pruneCmd)

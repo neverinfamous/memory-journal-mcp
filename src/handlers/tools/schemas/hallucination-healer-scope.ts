@@ -2,7 +2,9 @@
  * Scope, Project Alias, and Score/Validation Healing Helpers
  */
 
+import type { ProjectRegistryEntry } from '../../../types/index.js'
 import {
+    findCanonicalRegistryKey,
     loadProjectRegistryFromConfig,
     resolveProjectContext,
 } from '../../../utils/workspace-resolver.js'
@@ -14,8 +16,12 @@ import {
 } from './constants-and-primitives.js'
 
 /** Normalise `project_name` / string `project_number` aliases into numeric or workspace fields. */
-export function normalizeProjectFields(obj: Record<string, unknown>): boolean {
+export function normalizeProjectFields(
+    obj: Record<string, unknown>,
+    projectRegistry?: Record<string, ProjectRegistryEntry>
+): boolean {
     let modified = false
+    const registry = projectRegistry ?? loadProjectRegistryFromConfig()
 
     if (obj['workspace_id'] === undefined && typeof obj['workspaceId'] === 'string') {
         obj['workspace_id'] = obj['workspaceId']
@@ -31,7 +37,11 @@ export function normalizeProjectFields(obj: Record<string, unknown>): boolean {
         typeof obj['workspace_id'] === 'string' && obj['workspace_id'].trim() !== ''
             ? obj['workspace_id'].trim()
             : undefined
-    const rawProjName = obj['project_name'] ?? obj['projectName']
+    const rawProjectProp =
+        typeof obj['project'] === 'string' || typeof obj['project'] === 'number'
+            ? obj['project']
+            : undefined
+    const rawProjName = obj['project_name'] ?? obj['projectName'] ?? rawProjectProp
     if (rawProjName !== undefined) {
         const strVal =
             typeof rawProjName === 'string' || typeof rawProjName === 'number'
@@ -45,28 +55,41 @@ export function normalizeProjectFields(obj: Record<string, unknown>): boolean {
             } else if (!('project_number' in obj) || obj['project_number'] === undefined) {
                 obj['project_number'] = num
             }
+        } else if (strVal === '*') {
+            conflicting = true
         } else if (strVal !== '') {
-            const byName = resolveProjectContext({ workspace_id: strVal })
-            if (
-                existingWs !== undefined &&
-                existingWs.toLowerCase() !== byName.workspaceId.toLowerCase()
-            ) {
+            const canonicalKey = findCanonicalRegistryKey(strVal, registry)
+            const matchedWs =
+                canonicalKey ?? (strVal.toLowerCase() === 'default' ? 'default' : undefined)
+            if (matchedWs === undefined) {
                 conflicting = true
-            } else if (
-                typeof obj['project_number'] === 'number' &&
-                byName.projectNumber !== undefined &&
-                obj['project_number'] !== byName.projectNumber
-            ) {
-                conflicting = true
-            } else if (existingWs === undefined) {
-                obj['workspace_id'] = strVal
+            } else {
+                const matchedProject =
+                    canonicalKey !== undefined
+                        ? registry?.[canonicalKey]?.project_number
+                        : undefined
+                if (
+                    existingWs !== undefined &&
+                    existingWs.toLowerCase() !== matchedWs.toLowerCase()
+                ) {
+                    conflicting = true
+                } else if (
+                    typeof obj['project_number'] === 'number' &&
+                    matchedProject !== undefined &&
+                    obj['project_number'] !== matchedProject
+                ) {
+                    conflicting = true
+                } else if (existingWs === undefined) {
+                    obj['workspace_id'] = matchedWs
+                }
             }
         }
         if (!conflicting) {
             delete obj['project_name']
             delete obj['projectName']
+            if (rawProjectProp !== undefined) delete obj['project']
+            modified = true
         }
-        modified = true
     }
 
     if ('project_number' in obj && typeof obj['project_number'] === 'string') {
@@ -78,15 +101,20 @@ export function normalizeProjectFields(obj: Record<string, unknown>): boolean {
         if (!Number.isNaN(num) && cleaned !== '') {
             obj['project_number'] = num
             modified = true
-        } else if (
-            cleaned !== '' &&
-            (obj['workspace_id'] === undefined ||
-                obj['workspace_id'] === null ||
-                obj['workspace_id'] === '')
-        ) {
-            obj['workspace_id'] = cleaned
-            delete obj['project_number']
-            modified = true
+        } else if (cleaned !== '' && cleaned !== '*') {
+            const canonicalKey = findCanonicalRegistryKey(cleaned, registry)
+            const matchedWs =
+                canonicalKey ?? (cleaned.toLowerCase() === 'default' ? 'default' : undefined)
+            if (
+                matchedWs !== undefined &&
+                (obj['workspace_id'] === undefined ||
+                    obj['workspace_id'] === null ||
+                    obj['workspace_id'] === '')
+            ) {
+                obj['workspace_id'] = matchedWs
+                delete obj['project_number']
+                modified = true
+            }
         }
     }
 
@@ -94,8 +122,12 @@ export function normalizeProjectFields(obj: Record<string, unknown>): boolean {
 }
 
 /** Fill in `workspace_id` / `project_number` from explicit scope or env without synthesizing `'default'`. */
-export function inferWorkspaceAndProject(obj: Record<string, unknown>): boolean {
+export function inferWorkspaceAndProject(
+    obj: Record<string, unknown>,
+    projectRegistry?: Record<string, ProjectRegistryEntry>
+): boolean {
     let modified = false
+    const registry = projectRegistry ?? loadProjectRegistryFromConfig()
     const rawWs = typeof obj['workspace_id'] === 'string' ? obj['workspace_id'].trim() : undefined
     const wsId = rawWs !== undefined && rawWs !== '' ? rawWs : undefined
     const isDefaultWs = wsId?.toLowerCase() === 'default'
@@ -121,13 +153,16 @@ export function inferWorkspaceAndProject(obj: Record<string, unknown>): boolean 
         effectiveWs !== undefined && effectiveWs !== '' && effectiveWs.toLowerCase() !== 'default'
     if (projNum !== undefined && !hasConcreteWs && effectiveWs?.toLowerCase() !== 'default') {
         // [INVARIANT] H2: only look up registered workspaces for project_number; never fall back to disk CWD.
-        const matchedWs = uniqueWorkspaceForProject(projNum, loadProjectRegistryFromConfig())
+        const matchedWs = uniqueWorkspaceForProject(projNum, registry)
         if (matchedWs !== undefined && matchedWs !== 'default') {
             obj['workspace_id'] = matchedWs
             modified = true
         }
     } else if (projNum === undefined && hasConcreteWs && !isDefaultWs && effectiveWs !== '*') {
-        const resolved = resolveProjectContext({ workspace_id: effectiveWs })
+        const resolved = resolveProjectContext(
+            { workspace_id: effectiveWs },
+            registry !== undefined ? { projectRegistry: registry } : undefined
+        )
         if (resolved.projectNumber !== undefined) {
             obj['project_number'] = resolved.projectNumber
             modified = true

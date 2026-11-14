@@ -198,7 +198,8 @@ export const adminPruneOptionsSchema = pruningOptionsSchema
         importanceThreshold: z.coerce.number().optional(),
         pruneImportanceThreshold: z.coerce.number().optional(),
         dryRun: z.boolean().optional(),
-        excludeTags: z.string().optional()
+        excludeTags: z.string().optional(),
+        allWorkspaces: z.boolean().optional(),
     })
 
 export const baseEntryOptionsSchema = z.object({

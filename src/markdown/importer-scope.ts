@@ -105,8 +105,14 @@ export function resolveImportedFileContext(
         options.config
     )
     const paired = pairStoredScope(resolved.workspaceId, resolved.projectNumber, effectiveRegistry)
+    const effectiveWsId = (paired.workspaceId ?? resolved.workspaceId).trim()
+    if (effectiveWsId === '*') {
+        throw new ValidationError(
+            "Wildcard workspace_id '*' cannot be used when importing entries. Specify a concrete workspace_id."
+        )
+    }
     return {
-        effectiveWsId: paired.workspaceId ?? resolved.workspaceId,
+        effectiveWsId,
         effectiveProjNum: paired.projectNumber ?? undefined,
     }
 }

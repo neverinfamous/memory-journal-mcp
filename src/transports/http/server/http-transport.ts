@@ -16,7 +16,6 @@ import {
     setSecurityHeaders,
     setCorsHeaders,
     checkRateLimit,
-    getClientIp,
 } from '../security.js'
 import {
     handleHealthCheck,
@@ -31,16 +30,13 @@ import {
     oauthErrorHandler,
     SUPPORTED_SCOPES,
 } from '../../../auth/index.js'
-import type { TokenClaims } from '../../../auth/index.js'
 import { AuthorizationServerDiscovery } from '../../../auth/authorization-server-discovery.js'
-import type { AuthRequest } from '../../../auth/middleware.js'
 import { hostHeaderValidation, localhostHostValidation } from '@modelcontextprotocol/express'
-import { runWithAuthContext as propagateCtx } from '../../../auth/auth-context.js'
-import { requestContextStorage, getRequestContext } from '../../../utils/request-context.js'
 import type { ServerRuntime } from '../../../utils/maintenance-lock.js'
 import type { LegacySSEServerTransport } from './legacy-sse.js'
 import { registerMcpProtocolRoutes } from './protocol-handlers.js'
-import { extractSessionId, assertHttpBindIsSafe } from './protocol-route-handlers.js'
+import { assertHttpBindIsSafe } from './protocol-route-handlers.js'
+import { createPropagateContextMiddleware } from './context-middleware.js'
 
 /**
  * HTTP Transport for Memory Journal MCP Server
@@ -337,57 +333,7 @@ export class HttpTransport {
 
     /** Register context propagation, health/metrics/root endpoints, MCP protocol routes and the 404 handler. */
     private installRoutes(serverFactory: McpServerFactory, runtime: ServerRuntime): void {
-        const propagateContextMiddleware: RequestHandler = (req: AuthRequest, _res, next) => {
-            const tokenClaims = req.tokenClaims
-            const authInfo = req.auth as
-                | (Partial<TokenClaims> & { subject?: string; clientId?: string })
-                | undefined
-            const sessionId = extractSessionId(req)
-            const ip = getClientIp(req)
-            const runWithReqCtx = (fn: () => void): void => {
-                const existing = getRequestContext()
-                requestContextStorage.run(
-                    {
-                        ...existing,
-                        ip,
-                        ...(sessionId !== undefined && sessionId !== '' ? { sessionId } : {}),
-                    },
-                    fn
-                )
-            }
-
-            if (tokenClaims !== undefined && tokenClaims !== null) {
-                runWithReqCtx(() =>
-                    propagateCtx(
-                        { authenticated: true, claims: tokenClaims, scopes: tokenClaims.scopes },
-                        next
-                    )
-                )
-            } else if (authInfo !== undefined && authInfo !== null) {
-                const sub =
-                    authInfo.sub ??
-                    (typeof authInfo.subject === 'string' ? authInfo.subject : undefined) ??
-                    authInfo.clientId ??
-                    'unknown'
-                const normalizedClaims: TokenClaims = {
-                    ...authInfo,
-                    sub,
-                    scopes: Array.isArray(authInfo.scopes) ? authInfo.scopes : [],
-                    exp: typeof authInfo.exp === 'number' ? authInfo.exp : 0,
-                    iat: typeof authInfo.iat === 'number' ? authInfo.iat : 0,
-                }
-                runWithReqCtx(() =>
-                    propagateCtx(
-                        { authenticated: true, claims: normalizedClaims, scopes: normalizedClaims.scopes },
-                        next
-                    )
-                )
-            } else {
-                runWithReqCtx(next)
-            }
-        }
-
-        /* codeql[js/missing-rate-limiting] */ this.app.use(propagateContextMiddleware)
+        /* codeql[js/missing-rate-limiting] */ this.app.use(createPropagateContextMiddleware())
 
         this.app.get('/health', handleHealthCheck)
 
