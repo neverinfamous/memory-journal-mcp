@@ -4,7 +4,7 @@ version: 2.1.0
 tags:
   - "agent-skill"
 description: >-
-  Guidelines and Code Mode contracts for memory-journal-mcp: multi-repo briefing/agent-context, graph-first hybrid recall, 7-dimension entries, relationships, and CMS-04 summaries.
+  Guidelines and Code Mode contracts for Memory Journal MCP (memory-journal-mcp): multi-repo briefing/agent-context, graph-first hybrid recall, 7-dimension entries, relationships, and CMS-04 summaries.
 ---
 # Memory Journal MCP Guidelines (`v9.1.0+`)
 
