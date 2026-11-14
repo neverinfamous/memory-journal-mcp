@@ -296,7 +296,7 @@ Content`
 
     it('throws ValidationError when frontmatter workspace_id or project_number conflicts with caller options or uses "*"', async () => {
         vi.mocked(fs.readFile).mockResolvedValueOnce(
-            '---\n{"workspace_id":"adamic"}\n---\nConflicting workspace body'
+            '---\n{"workspace_id":"core-platform"}\n---\nConflicting workspace body'
         )
         await expect(
             importMarkdownEntries(

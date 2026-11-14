@@ -7,8 +7,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 import fs from 'fs';
-if (fs.existsSync('C:/Users/chris/Desktop/adamic/secrets.env')) {
-  const envConfig = fs.readFileSync('C:/Users/chris/Desktop/adamic/secrets.env', 'utf-8');
+const secretsEnvPath = process.env.SECRETS_ENV_PATH || new URL('../../../.env', import.meta.url);
+if (fs.existsSync(secretsEnvPath)) {
+  const envConfig = fs.readFileSync(secretsEnvPath, 'utf-8');
   envConfig.split('\n').forEach(line => {
     const match = line.match(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/);
     if (match) {

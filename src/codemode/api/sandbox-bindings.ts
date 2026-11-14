@@ -57,9 +57,6 @@ export function createHandleReadResource(api: SandboxBindingsSource): (uri?: str
             if (isResourceUri(uri, 'memory://recent') && typeof api.core['getRecentEntries'] === 'function') return api.core['getRecentEntries']()
             if (isResourceUri(uri, 'memory://statistics') && typeof api.analytics['getStatistics'] === 'function') return api.analytics['getStatistics']()
             if (isResourceUri(uri, 'memory://tags') && typeof api.core['listTags'] === 'function') return api.core['listTags']()
-            if (isResourceUri(uri, 'memory://flags') && typeof api.team['teamListFlags'] === 'function') {
-                return api.team['teamListFlags']({ status: 'active' })
-            }
             if (isResourceUri(uri, 'memory://insights') && typeof api.analytics['getCrossProjectInsights'] === 'function') {
                 return api.analytics['getCrossProjectInsights']()
             }
@@ -68,7 +65,6 @@ export function createHandleReadResource(api: SandboxBindingsSource): (uri?: str
             'memory://recent': 'mj.core.getRecentEntries()',
             'memory://statistics': 'mj.analytics.getStatistics()',
             'memory://tags': 'mj.core.listTags()',
-            'memory://flags': 'mj.team.teamListFlags({ status: "active" })',
             'memory://significant': 'mj.search.searchEntries({ sort_by: "importance" })',
             'memory://insights': 'mj.analytics.getCrossProjectInsights()',
         }

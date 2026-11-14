@@ -46,9 +46,9 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                 'For session summaries, use entry_type "retrospective" ' +
                 'with tag "session-summary" and structure content as: ' +
                 '## Accomplished, ## Unfinished / Blocked, ## Context for Next Session, ## Commits. ' +
-                'REQUIRED: You MUST include project_number. Extract this by querying memory://agent-context/<repo>. ' +
+                'REQUIRED: You MUST include project_number. Extract this by querying memory://agent-context/{+repo} (or memory://briefing/{+repo} at session start). ' +
                 'REQUIRED: You MUST include impact_score, trust_score, and validation_status. ' +
-                'REQUIRED: You MUST use related_to to anchor the entry to a session summary or nearby context.',
+                'REQUIRED: Pass relationships: [{ targetId, relationType }] to link the entry to a session summary or related entry.',
             group: 'core',
             inputSchema: CreateEntrySchemaMcp,
             outputSchema: CreateEntryOutputSchema,

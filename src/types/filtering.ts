@@ -24,7 +24,7 @@ export type ToolGroup =
 export type MetaGroup =
     | 'starter' // core + search + codemode
     | 'essential' // core + codemode
-    | 'full' // all 11 groups (115 tools)
+    | 'full' // all 11 groups (108 tools)
     | 'readonly' // core + search + analytics + relationships + io + git + codemode
 
 /**

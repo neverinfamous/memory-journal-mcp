@@ -125,7 +125,7 @@ describe('Anti-Hallucination Fixes', () => {
                 success: true,
                 project: {
                     name: 'mysql-mcp',
-                    path: 'C:/Users/chris/Desktop/mysql-mcp',
+                    path: 'C:/workspace/mysql-mcp',
                     project_number: 2,
                     id: 2,
                 },
@@ -134,7 +134,7 @@ describe('Anti-Hallucination Fixes', () => {
 
             expect(wrapped.project_number).toBe(2)
             expect(wrapped.name).toBe('mysql-mcp')
-            expect(wrapped.path).toBe('C:/Users/chris/Desktop/mysql-mcp')
+            expect(wrapped.path).toBe('C:/workspace/mysql-mcp')
         })
     })
 
@@ -181,16 +181,16 @@ describe('Anti-Hallucination Fixes', () => {
     describe('Context Proxy camelCase-to-snake_case Fallback', () => {
         it('should resolve camelCase property reads and context.get() against snake_case keys normalized by MCP', async () => {
             const proxy = createContextProxy({
-                adamic_arch_content: '# Architecture Decision',
+                platform_arch_content: '# Architecture Decision',
                 directKey: 'exact',
             })
 
-            expect(proxy['adamicArchContent']).toBe('# Architecture Decision')
-            expect(proxy['adamic_arch_content']).toBe('# Architecture Decision')
+            expect(proxy['platformArchContent']).toBe('# Architecture Decision')
+            expect(proxy['platform_arch_content']).toBe('# Architecture Decision')
             expect(proxy['directKey']).toBe('exact')
 
             const getFn = proxy['get'] as (key?: string) => Promise<unknown>
-            await expect(getFn('adamicArchContent')).resolves.toBe('# Architecture Decision')
+            await expect(getFn('platformArchContent')).resolves.toBe('# Architecture Decision')
         })
     })
 })

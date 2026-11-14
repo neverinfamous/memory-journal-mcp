@@ -19,7 +19,7 @@
 These scripts test features that require separate server processes — they **cannot** be run via MCP tool calls. All scripts are Node.js (`.mjs`), require no dependencies beyond Node.js, and exit with code 0 on success.
 
 > [!IMPORTANT]
-> Always `npm run build` before running these scripts — they execute `dist/cli.js` directly.
+> Always `pnpm run build` before running these scripts — they execute `dist/cli.js` directly.
 
 ### Script Reference
 
@@ -34,8 +34,8 @@ These scripts test features that require separate server processes — they **ca
 ### Quick Run
 
 ```powershell
-cd C:\Users\chris\Desktop\memory-journal-mcp
-npm run build
+cd /path/to/memory-journal-mcp
+pnpm run build
 
 # Phase 1.3A — Instruction levels
 node test-server/scripts/test-instruction-levels.mjs
@@ -135,7 +135,7 @@ _(The identical fallback pattern applies to `--team-db` / `TEAM_DB_PATH` which d
 
 ### Automated Test Artifacts
 
-When you run automated testing (e.g., `npm run test:e2e` or `vitest`), the test suites generate isolated database artifacts into the `.test-output/` directory (gitignored):
+When you run automated testing (e.g., `pnpm run test:e2e` or `vitest`), the test suites generate isolated database artifacts into the `.test-output/` directory (gitignored):
 
 - `.test-output/e2e/test-e2e.db`
 - `.test-output/e2e/test-e2e-auth.db`

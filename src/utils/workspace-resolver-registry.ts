@@ -71,15 +71,6 @@ export const PROJECT_KEYWORD_ALIASES: Record<string, string[]> = {
     'mysql-mcp': ['mysql', 'mysql-mcp', 'mysql_mcp', 'mariadb', 'mysqlsh', 'proxysql', 'mysql-router', 'mysqlrouter', 'innodb'],
     'postgres-mcp': ['postgres', 'postgresql', 'postgres-mcp', 'postgres_mcp', 'pgvector'],
     'memory-journal-mcp': ['memory-journal', 'memory-journal-mcp', 'memory_journal', 'memory_journal_mcp', 'memoryjournal'],
-    'kv-manager': ['kv-manager', 'kv_manager', 'cloudflare-kv', 'workers-kv'],
-    'R2-Manager-Worker': ['r2-manager', 'r2_manager', 'r2-manager-worker', 'r2_manager_worker', 'cloudflare-r2'],
-    'd1-manager': ['d1-manager', 'd1_manager', 'cloudflare-d1'],
-    'do-manager': ['do-manager', 'do_manager', 'durable-objects', 'durable_objects'],
-    'do-manager-admin-hooks': ['do-manager-admin-hooks', 'do_manager_admin_hooks', 'admin-hooks', 'admin_hooks'],
-    'adamic': ['adamic'],
-    'adamic-blog': ['adamic-blog', 'adamic_blog'],
-    'wiki-search-worker': ['wiki-search', 'wiki_search', 'wiki-search-worker', 'wiki_search_worker'],
-    'do-test-worker': ['do-test-worker', 'do_test_worker'],
 }
 
 function matchKeyCaseInsensitive(
@@ -129,16 +120,24 @@ export function findCanonicalRegistryKey(
 
 function collectAliasesForKey(key: string): string[] {
     const keyLower = key.toLowerCase()
-    const directAliases = PROJECT_KEYWORD_ALIASES[key] ?? []
-    let matchedAliases = [keyLower, ...directAliases.map((a) => a.toLowerCase())]
-    for (const [canonicalKey, aliases] of Object.entries(PROJECT_KEYWORD_ALIASES)) {
-        if (canonicalKey.toLowerCase() === keyLower) {
-            matchedAliases = Array.from(
-                new Set([...matchedAliases, ...aliases.map((a) => a.toLowerCase())])
-            )
+    const derived = [keyLower, keyLower.replace(/_/g, '-'), keyLower.replace(/-/g, '_')]
+    for (const suffix of ['-worker', '_worker']) {
+        if (keyLower.endsWith(suffix) && keyLower.length > suffix.length) {
+            const stem = keyLower.slice(0, -suffix.length)
+            derived.push(stem, stem.replace(/_/g, '-'), stem.replace(/-/g, '_'))
         }
     }
-    return matchedAliases.sort((a, b) => b.length - a.length)
+    const directAliases = PROJECT_KEYWORD_ALIASES[key] ?? []
+    const matchedAliases = new Set<string>([
+        ...derived,
+        ...directAliases.map((a) => a.toLowerCase()),
+    ])
+    for (const [canonicalKey, aliases] of Object.entries(PROJECT_KEYWORD_ALIASES)) {
+        if (canonicalKey.toLowerCase() === keyLower) {
+            for (const alias of aliases) matchedAliases.add(alias.toLowerCase())
+        }
+    }
+    return Array.from(matchedAliases).sort((a, b) => b.length - a.length)
 }
 
 function contentMatchesAnyAlias(contentLower: string, sortedAliases: readonly string[]): boolean {

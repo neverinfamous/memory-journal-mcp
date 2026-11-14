@@ -9,7 +9,7 @@ import type { ToolContext, ToolDefinition } from '../../src/types/index.js'
 import { createPreparedStatementShim } from '../../src/codemode/worker/node-shims.js'
 
 const registry = {
-    adamic: { project_number: 16 },
+    'core-platform': { project_number: 16 },
     'memory-journal-mcp': { project_number: 5 },
 }
 
@@ -36,22 +36,22 @@ describe('Pass 18 audit fixes', () => {
 
     it('copies INSERT and SELECT SQL scope literals into the recovered call', () => {
         const inserted = extractAndRecoverPreparedStatementCode(
-            `db.prepare("INSERT INTO memory_journal (content, workspace_id, project_number) VALUES (?, 'adamic', 16)").run("hello")`
+            `db.prepare("INSERT INTO memory_journal (content, workspace_id, project_number) VALUES (?, 'core-platform', 16)").run("hello")`
         )
-        expect(inserted).toContain('"workspace_id":"adamic"')
+        expect(inserted).toContain('"workspace_id":"core-platform"')
         expect(inserted).toContain('"project_number":16')
 
         const selected = extractAndRecoverPreparedStatementCode(
-            `db.prepare("SELECT * FROM memory_journal WHERE id = 4 AND workspace_id = 'adamic' AND project_number = 16").get()`
+            `db.prepare("SELECT * FROM memory_journal WHERE id = 4 AND workspace_id = 'core-platform' AND project_number = 16").get()`
         )
-        expect(selected).toContain('"workspace_id":"adamic"')
+        expect(selected).toContain('"workspace_id":"core-platform"')
         expect(selected).toContain('"project_number":16')
     })
 
     it('does not expose a dead list action from the prepared-statement shim', async () => {
         const calls: string[] = []
         const shim = createPreparedStatementShim(
-            "SELECT * FROM memory_journal WHERE id = 1 AND workspace_id = 'adamic'",
+            "SELECT * FROM memory_journal WHERE id = 1 AND workspace_id = 'core-platform'",
             {
                 core: {
                     getEntryById: (params: unknown) => {
@@ -98,7 +98,7 @@ describe('Pass 18 audit fixes', () => {
         await expect(
             dispatch(
                 'create_entry',
-                { workspace_id: 'memory-journal-mcp', project_number: 'adamic', content: 'note' },
+                { workspace_id: 'memory-journal-mcp', project_number: 'core-platform', content: 'note' },
                 true
             )
         ).rejects.toThrow(ValidationError)

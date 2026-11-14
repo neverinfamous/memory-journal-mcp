@@ -15,18 +15,18 @@ describe('AliasManager', () => {
     })
 
     it('adds and resolves an alias', () => {
-        const alias = aliasMgr.addAlias('chris', 'christopher', 'admin')
-        expect(alias.alias).toBe('chris')
-        expect(alias.canonicalAuthor).toBe('christopher')
+        const alias = aliasMgr.addAlias('alex', 'alexander', 'admin')
+        expect(alias.alias).toBe('alex')
+        expect(alias.canonicalAuthor).toBe('alexander')
 
-        const resolved = aliasMgr.resolveAuthor('chris')
-        expect(resolved).toBe('christopher')
+        const resolved = aliasMgr.resolveAuthor('alex')
+        expect(resolved).toBe('alexander')
     })
 
     it('resolves case-insensitively', () => {
-        aliasMgr.addAlias('Chris', 'christopher')
-        expect(aliasMgr.resolveAuthor('chris')).toBe('christopher')
-        expect(aliasMgr.resolveAuthor('CHRIS')).toBe('christopher')
+        aliasMgr.addAlias('Alex', 'alexander')
+        expect(aliasMgr.resolveAuthor('alex')).toBe('alexander')
+        expect(aliasMgr.resolveAuthor('ALEX')).toBe('alexander')
     })
 
     it('returns raw author if no alias exists', () => {
@@ -35,35 +35,35 @@ describe('AliasManager', () => {
 
     it('prevents self-aliasing', () => {
         expect(() => {
-            aliasMgr.addAlias('christopher', 'christopher')
+            aliasMgr.addAlias('alexander', 'alexander')
         }).toThrow(QueryError)
         expect(() => {
-            aliasMgr.addAlias('christopher', 'Christopher')
+            aliasMgr.addAlias('alexander', 'Alexander')
         }).toThrow(QueryError)
     })
 
     it('prevents duplicate aliases', () => {
-        aliasMgr.addAlias('chris', 'christopher')
+        aliasMgr.addAlias('alex', 'alexander')
         expect(() => {
-            aliasMgr.addAlias('chris', 'other')
+            aliasMgr.addAlias('alex', 'other')
         }).toThrow(/already exists/)
     })
 
     it('allows multiple aliases to same canonical', () => {
-        aliasMgr.addAlias('chris', 'christopher')
-        aliasMgr.addAlias('neverinfamous', 'christopher')
+        aliasMgr.addAlias('alex', 'alexander')
+        aliasMgr.addAlias('alex-gh', 'alexander')
 
-        expect(aliasMgr.resolveAuthor('chris')).toBe('christopher')
-        expect(aliasMgr.resolveAuthor('neverinfamous')).toBe('christopher')
+        expect(aliasMgr.resolveAuthor('alex')).toBe('alexander')
+        expect(aliasMgr.resolveAuthor('alex-gh')).toBe('alexander')
     })
 
     it('removes an alias', () => {
-        aliasMgr.addAlias('chris', 'christopher')
-        expect(aliasMgr.resolveAuthor('chris')).toBe('christopher')
+        aliasMgr.addAlias('alex', 'alexander')
+        expect(aliasMgr.resolveAuthor('alex')).toBe('alexander')
 
-        const removed = aliasMgr.removeAlias('chris')
+        const removed = aliasMgr.removeAlias('alex')
         expect(removed).toBe(true)
-        expect(aliasMgr.resolveAuthor('chris')).toBe('chris')
+        expect(aliasMgr.resolveAuthor('alex')).toBe('alex')
     })
 
     it('returns false when removing non-existent alias', () => {
@@ -71,28 +71,28 @@ describe('AliasManager', () => {
     })
 
     it('lists aliases with and without filter', () => {
-        aliasMgr.addAlias('chris', 'christopher')
-        aliasMgr.addAlias('neverinfamous', 'christopher')
+        aliasMgr.addAlias('alex', 'alexander')
+        aliasMgr.addAlias('alex-gh', 'alexander')
         aliasMgr.addAlias('bob', 'robert')
 
         const all = aliasMgr.listAliases()
         expect(all).toHaveLength(3)
 
-        const filtered = aliasMgr.listAliases('christopher')
+        const filtered = aliasMgr.listAliases('alexander')
         expect(filtered).toHaveLength(2)
-        expect(filtered.map(a => a.alias).sort()).toEqual(['chris', 'neverinfamous'])
+        expect(filtered.map(a => a.alias).sort()).toEqual(['alex', 'alex-gh'])
     })
 
     it('consolidates authors only in the requested workspace', () => {
-        aliasMgr.addAlias('chris', 'christopher', undefined, 'alpha')
+        aliasMgr.addAlias('alex', 'alexander', undefined, 'alpha')
         connection.run(
-            `INSERT INTO memory_journal (entry_type, content, author, workspace_id) VALUES ('note', 'alpha', 'chris', 'alpha')`
+            `INSERT INTO memory_journal (entry_type, content, author, workspace_id) VALUES ('note', 'alpha', 'alex', 'alpha')`
         )
         connection.run(
-            `INSERT INTO memory_journal (entry_type, content, author, workspace_id) VALUES ('note', 'beta', 'chris', 'beta')`
+            `INSERT INTO memory_journal (entry_type, content, author, workspace_id) VALUES ('note', 'beta', 'alex', 'beta')`
         )
 
-        const updated = aliasMgr.consolidateAuthors('christopher', 'alpha')
+        const updated = aliasMgr.consolidateAuthors('alexander', 'alpha')
         expect(updated).toBe(1)
 
         const rows = connection.exec(
@@ -100,17 +100,17 @@ describe('AliasManager', () => {
         )
         const values = rows[0]?.values ?? []
         expect(values).toEqual([
-            ['alpha', 'christopher'],
-            ['beta', 'chris'],
+            ['alpha', 'alexander'],
+            ['beta', 'alex'],
         ])
     })
 
     it('resolves batch of authors', () => {
-        aliasMgr.addAlias('chris', 'christopher')
+        aliasMgr.addAlias('alex', 'alexander')
         aliasMgr.addAlias('bob', 'robert')
 
-        const batch = aliasMgr.resolveAuthors(['chris', 'bob', 'unknown'])
-        expect(batch.get('chris')).toBe('christopher')
+        const batch = aliasMgr.resolveAuthors(['alex', 'bob', 'unknown'])
+        expect(batch.get('alex')).toBe('alexander')
         expect(batch.get('bob')).toBe('robert')
         expect(batch.get('unknown')).toBe('unknown')
     })

@@ -395,8 +395,13 @@ export function createServerInstance(
             : {}),
     })
 
+    const readOnlyHints = new Map<string, boolean | undefined>()
+    for (const tool of allTools) {
+        readOnlyHints.set(tool.name, readOnlyHintOf(tool))
+    }
+
     const getInstructions = (): string =>
-        buildServerInstructions(context, options, prompts, allToolNames)
+        buildServerInstructions(context, options, prompts, allToolNames, readOnlyHints)
 
     const server = new McpServer(
         { name: 'memory-journal-mcp', version: VERSION },
@@ -439,10 +444,6 @@ export function createServerInstance(
 
     const requestHandlers = getRequestHandlers(server.server)
 
-    const readOnlyHints = new Map<string, boolean | undefined>()
-    for (const tool of allTools) {
-        readOnlyHints.set(tool.name, readOnlyHintOf(tool))
-    }
     attachListToolsInterceptor(requestHandlers, configManager, allToolNames, readOnlyHints)
     attachCallToolInterceptor(
         requestHandlers,

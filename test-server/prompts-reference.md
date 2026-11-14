@@ -15,7 +15,7 @@ These prompts are used to initialize sessions, manage entries, and handle core j
 ### `load-briefing`
 **Description**: Load one or more project briefings to initialize your session context. Pass project names or leave blank to see the full list and choose interactively.
 - **Arguments**:
-  - `projects` (optional) - Comma-separated project names or numbers (e.g., `memory-journal-mcp`, `adamic,1`, `5`)
+  - `projects` (optional) - Comma-separated project names or numbers (e.g., `memory-journal-mcp`, `db-mcp,1`, `5`)
 - **Behavior**:
   - **No args**: Returns a formatted markdown table of all registered projects and instructs the agent to ask the user which to load.
   - **With args**: Resolves the requested projects (exact match > case-insensitive exact > project number > partial match) and instructs the agent to call `read_resource` on the corresponding URIs.

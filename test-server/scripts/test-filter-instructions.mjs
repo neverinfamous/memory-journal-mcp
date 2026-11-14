@@ -7,7 +7,7 @@
  * reflects the enabled groups.
  *
  * Usage:
- *   npm run build && node test-server/scripts/test-filter-instructions.mjs
+ *   pnpm run build && node test-server/scripts/test-filter-instructions.mjs
  */
 
 import { spawn } from 'child_process'
@@ -84,7 +84,7 @@ const TEST_CONFIGS = [
         expectedGroups: ALL_GROUPS
     },
     {
-        label: 'readonly (core+search+analytics+relationships+io+codemode)',
+        label: 'readonly (core+search+analytics+relationships+io+git+codemode)',
         filter: 'readonly',
         expect: { CORE: true, CODE_MODE: true, HELP_POINTERS: true },
         expectedGroups: ALL_GROUPS
@@ -93,7 +93,18 @@ const TEST_CONFIGS = [
 
 function runConfig(config) {
     return new Promise((resolve, reject) => {
-        const args = ['dist/cli.js', 'serve', '--db', ':memory:', '--team-db', ':memory:']
+        const args = [
+            'dist/cli.js',
+            'serve',
+            '--config',
+            'test-server/scripts/test-server-config.json',
+            '--transport',
+            'stdio',
+            '--db',
+            ':memory:',
+            '--team-db',
+            ':memory:',
+        ]
         if (config.filter) args.push('--tool-filter', config.filter)
 
         const proc = spawn('node', args, {
@@ -112,6 +123,8 @@ function runConfig(config) {
         let buffer = ''
         let instructions = ''
         let availableGroups = []
+        let totalTools = 0
+        let timeoutId
 
         proc.stdout.on('data', (chunk) => {
             buffer += chunk.toString()
@@ -143,15 +156,18 @@ function runConfig(config) {
                             const content = msg.result.contents[0].text
                             const parsed = JSON.parse(content)
                             availableGroups = parsed.groups.map(g => g.name)
+                            totalTools = parsed.totalTools ?? 0
                         } catch {
                             // parse error
                         }
+                        clearTimeout(timeoutId)
                         proc.kill()
-                        resolve({ instructions, availableGroups })
+                        resolve({ instructions, availableGroups, totalTools })
                     } else if (msg.id === 2 && msg.error) {
                          console.error('Resource read error:', msg.error)
+                         clearTimeout(timeoutId)
                          proc.kill()
-                         resolve({ instructions, availableGroups: [] })
+                         resolve({ instructions, availableGroups: [], totalTools: 0 })
                     }
                 } catch {
                     // Incomplete JSON, keep buffering
@@ -174,10 +190,10 @@ function runConfig(config) {
             }) + '\n'
         )
 
-        setTimeout(() => {
+        timeoutId = setTimeout(() => {
             proc.kill()
             reject(new Error('Timeout'))
-        }, 10000)
+        }, 25000)
     })
 }
 
@@ -231,21 +247,25 @@ async function main() {
             continue
         }
 
-        const { instructions, availableGroups } = result
+        const { instructions, availableGroups, totalTools } = result
         const chars = instructions.length
         const tokens = tokenEstimate(instructions)
         const sectionResults = checkSections(instructions, config.expect)
         const groupResults = checkGroups(availableGroups, config.expectedGroups, config.label)
+        const countPass = totalTools > 0 && totalTools <= 108
 
         const sectionFailures = Object.entries(sectionResults).filter(([, r]) => !r.pass)
-        const allPass = sectionFailures.length === 0 && groupResults.pass
+        const allPass = sectionFailures.length === 0 && groupResults.pass && countPass
 
         if (allPass) {
-            console.log(`✅ (${chars} chars, ~${tokens} tokens)`)
+            console.log(`✅ (${chars} chars, ~${tokens} tokens, ${totalTools} tools)`)
             totalPassed++
         } else {
-            console.log(`❌ (${chars} chars, ~${tokens} tokens)`)
+            console.log(`❌ (${chars} chars, ~${tokens} tokens, ${totalTools} tools)`)
             totalFailed++
+            if (!countPass) {
+                console.log(`      [INVALID COUNT] totalTools=${totalTools} (expected 1..108)`)
+            }
             for (const [section, r] of sectionFailures) {
                 const action = r.expected ? 'MISSING' : 'UNEXPECTED'
                 console.log(`      [${action}] SECTION ${section}`)

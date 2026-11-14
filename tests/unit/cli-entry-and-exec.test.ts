@@ -299,7 +299,7 @@ describe('CLI Entry & Exec Commands', () => {
                 'Baseline entry for update guard test',
                 {
                     db: dbPath,
-                    workspace: 'adamic',
+                    workspace: 'core-platform',
                     project: 16,
                     json: true,
                 },
@@ -336,7 +336,7 @@ describe('CLI Entry & Exec Commands', () => {
                     cfgFile,
                     JSON.stringify({
                         projectRegistry: {
-                            adamic: { path: path.join(tmpDir, 'adamic'), project_number: 16 },
+                            'core-platform': { path: path.join(tmpDir, 'core-platform'), project_number: 16 },
                             'memory-journal-mcp': { path: path.join(tmpDir, 'mj'), project_number: 5 },
                         },
                     }),
@@ -373,28 +373,28 @@ describe('CLI Entry & Exec Commands', () => {
         })
 
         it('should attribute CLI buildEntryPayload and createEntryAction to registered CWD repo instead of hijacking on keyword aliases like "sqlite"', async () => {
-            const adamicDir = path.join(tmpDir, 'adamic')
+            const platformDir = path.join(tmpDir, 'core-platform')
             const dbMcpDir = path.join(tmpDir, 'db-mcp')
-            fs.mkdirSync(adamicDir, { recursive: true })
+            fs.mkdirSync(platformDir, { recursive: true })
             fs.mkdirSync(dbMcpDir, { recursive: true })
 
             const registry = {
                 'db-mcp': { path: dbMcpDir, project_number: 15 },
-                adamic: { path: adamicDir, project_number: 16 },
+                'core-platform': { path: platformDir, project_number: 16 },
             }
 
-            const cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue(adamicDir)
+            const cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue(platformDir)
             const savedRegistryEnv = process.env['PROJECT_REGISTRY']
             delete process.env['PROJECT_REGISTRY']
             try {
-                // 1. Direct buildEntryPayload check: CWD ('adamic' #16) beats 'sqlite' keyword ('db-mcp' #15)
+                // 1. Direct buildEntryPayload check: CWD ('core-platform' #16) beats 'sqlite' keyword ('db-mcp' #15)
                 const payload = buildEntryPayload(
                     { tags: 'sqlite,skills' },
                     {},
                     { projectRegistry: registry },
-                    'Refined sqlite PRAGMA rules in adamic skill'
+                    'Refined sqlite PRAGMA rules in core-platform skill'
                 )
-                expect(payload.workspaceId).toBe('adamic')
+                expect(payload.workspaceId).toBe('core-platform')
                 expect(payload.projectNumber).toBe(16)
                 expect(payload.hasExplicitProject).toBe(false)
                 expect(payload.hasExplicitWorkspace).toBe(false)
@@ -404,7 +404,7 @@ describe('CLI Entry & Exec Commands', () => {
                     { project: 15, tags: 'sqlite' },
                     {},
                     { projectRegistry: registry },
-                    'Explicitly targeting db-mcp from adamic CWD'
+                    'Explicitly targeting db-mcp from core-platform CWD'
                 )
                 expect(explicitPayload.workspaceId).toBe('db-mcp')
                 expect(explicitPayload.projectNumber).toBe(15)
@@ -424,7 +424,7 @@ describe('CLI Entry & Exec Commands', () => {
 
                 stdoutOutput = []
                 await createEntryAction(
-                    'Documented sqlite connection pooling rules inside adamic',
+                    'Documented sqlite connection pooling rules inside core-platform',
                     {
                         db: dbPath,
                         config: cfgFile,
@@ -442,9 +442,9 @@ describe('CLI Entry & Exec Commands', () => {
 
                 const db = new DatabaseAdapter(dbPath)
                 await db.initialize()
-                const stored = db.getEntryById(created.id, 'adamic')
+                const stored = db.getEntryById(created.id, 'core-platform')
                 expect(stored).not.toBeNull()
-                expect(stored?.workspaceId).toBe('adamic')
+                expect(stored?.workspaceId).toBe('core-platform')
                 expect(stored?.projectNumber).toBe(16)
                 db.close()
             } finally {

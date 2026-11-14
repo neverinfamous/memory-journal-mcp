@@ -30,6 +30,7 @@ describe('server-instructions generation', () => {
         const text = generateCodeModeInstructions(tools, [])
         expect(text).toContain('## Quick Access')
         expect(text).toContain('## Code Mode')
+        expect(text).not.toContain('## Active Tools')
         // Inject the full reference
         expect(text).toContain('# Code Mode API Reference')
         expect(text).toContain('### `mj.core`')
@@ -41,6 +42,7 @@ describe('server-instructions generation', () => {
         const text = generateStandardInstructions(tools, [])
         
         expect(text).toContain('Read `memory://help/gotchas` for gotchas and critical usage patterns.')
+        expect(text).toContain('Read `memory://help/templates`')
         expect(text).toMatch(/Read `memory:\/\/help\/\{group\}` for:.*github/i)
         expect(text).not.toContain('codemode')
     })

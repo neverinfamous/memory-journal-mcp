@@ -1,6 +1,6 @@
 {
   "author_handle": "admin@adamic.tech",
-  "author_name": "Christopher David LeRoux",
+  "author_name": "Adamic.tech",
   "created_at": "2026-07-19T06:24:43.774855Z",
   "description": "AI Efficiency metrics for memory-journal-mcp server (Opus 4.8 Standard pricing)\n\n*Note: Datadog automatically formats values less than 0.01 in scientific notation. During low-traffic periods, micro-costs may appear in scientific format (e.g., 5e-5 $) until the accumulated cost exceeds $0.01.*",
   "id": "79q-b3r-jhu",
@@ -653,7 +653,7 @@
     {
       "definition": {
         "check": "proxysql.can_connect",
-        "group": "proxysql_port:6032,proxysql_server:localhost,host:adamic-wsl2",
+        "group": "proxysql_port:6032,proxysql_server:localhost,host:memory-journal-local",
         "group_by": [
           "proxysql_server",
           "proxysql_port"

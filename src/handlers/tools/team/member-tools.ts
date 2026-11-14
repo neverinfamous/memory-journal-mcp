@@ -138,7 +138,7 @@ export function getTeamMemberTools(context: ToolContext): ToolDefinition[] {
         {
             name: 'team_add_member',
             title: 'Add Team Member',
-            description: 'Add a new member to the team with a specific role. Bootstraps the first user as admin if table is empty. Requires TEAM_DB_PATH.',
+            description: 'Add a new member to the team with a specific role. On an empty member table, the first call must assign role: "admin" to the caller (author) to bootstrap admin access. Requires TEAM_DB_PATH.',
             group: 'team',
             inputSchema: TeamAddMemberSchemaMcp,
             outputSchema: z.object({

@@ -38,20 +38,20 @@
 | Test                   | Command/Action                                                                                                             | Expected Result                        |
 | ---------------------- | -------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
 | Setup temp dir         | Use run_command or write_to_file to ensure a temp test folder exists (`test_export`)                                       | Temporary directory is ready           |
-| Basic Export Map       | `export_markdown(output_dir: "C:\Users\chris\Desktop\memory-journal-mcp\test-server\standard\test_export", limit: 5)`      | Outputs `exportedCount` matches limit |
+| Basic Export Map       | `export_markdown(output_dir: "/workspace/memory-journal-mcp/test-server/standard/test_export", limit: 5)`      | Outputs `exportedCount` matches limit |
 | View Exported Node     | `run_command` (cat/get-content) on one of the exported files in `test_export`                                              | Validates JSON frontmatter generated   |
-| Import Dry Run         | `import_markdown(source_dir: "C:\Users\chris\Desktop\memory-journal-mcp\test-server\standard\test_export", dry_run: true)` | Returns structured count of items      |
+| Import Dry Run         | `import_markdown(source_dir: "/workspace/memory-journal-mcp/test-server/standard/test_export", dry_run: true)` | Returns structured count of items      |
 | Create Invalid File    | Use `write_to_file` to create `invalid.md` in `test_export` with `type: "invalid_type"` in its YAML frontmatter.     | File created successfully              |
-| Import Aggregated Error| `import_markdown(source_dir: "C:\Users\chris\Desktop\memory-journal-mcp\test-server\standard\test_export", dry_run: false)`| Returns structured ErrorResponse with `code: AGGREGATE_ERROR` and an `aggregatedErrors` array of objects (containing `message` and optionally `name`) for each item failure |
+| Import Aggregated Error| `import_markdown(source_dir: "/workspace/memory-journal-mcp/test-server/standard/test_export", dry_run: false)`| Returns structured ErrorResponse with `code: AGGREGATE_ERROR` and an `aggregatedErrors` array of objects (containing `message` and optionally `name`) for each item failure |
 | Path Traversal Defense | `export_markdown(output_dir: "../../etc/passwd")`                                                                          | Structured error rejecting `..` paths  |
 
 ### 3. External Tool Orchestration (`import_external`)
 
 | Test                   | Command/Action                                                                                                             | Expected Result                        |
 | ---------------------- | -------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
-| Import External Notion | `import_external(source_dir: "C:\Users\chris\Desktop\memory-journal-mcp\test-server\standard\test_export", source_format: "notion", dry_run: true)` | Returns structured count of items      |
-| Import External Obsidian| `import_external(source_dir: "C:\Users\chris\Desktop\memory-journal-mcp\test-server\standard\test_export", source_format: "obsidian", dry_run: true)` | Returns structured count of items      |
-| Import External Logseq | `import_external(source_dir: "C:\Users\chris\Desktop\memory-journal-mcp\test-server\standard\test_export", source_format: "logseq", dry_run: true)` | Returns structured count of items      |
+| Import External Notion | `import_external(source_dir: "/workspace/memory-journal-mcp/test-server/standard/test_export", source_format: "notion", dry_run: true)` | Returns structured count of items      |
+| Import External Obsidian| `import_external(source_dir: "/workspace/memory-journal-mcp/test-server/standard/test_export", source_format: "obsidian", dry_run: true)` | Returns structured count of items      |
+| Import External Logseq | `import_external(source_dir: "/workspace/memory-journal-mcp/test-server/standard/test_export", source_format: "logseq", dry_run: true)` | Returns structured count of items      |
 
 ---
 

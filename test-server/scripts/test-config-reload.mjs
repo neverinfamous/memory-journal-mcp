@@ -1,8 +1,10 @@
 import { spawn } from 'child_process'
 import * as fs from 'fs'
 import * as path from 'path'
+import { fileURLToPath } from 'url'
 
-const PROJECT_DIR = 'C:\\Users\\chris\\Desktop\\memory-journal-mcp'
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const PROJECT_DIR = path.resolve(__dirname, '..', '..')
 const CONFIG_FILE = path.join(PROJECT_DIR, 'test-mcp-config.json')
 
 const initialConfig = {

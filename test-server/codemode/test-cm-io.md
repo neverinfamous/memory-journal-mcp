@@ -62,7 +62,7 @@ return {
 
 ```javascript
 // Test code:
-const MOCK_DIR = 'c:/Users/chris/Desktop/memory-journal-mcp/test-server/codemode/cm_test_export'
+const MOCK_DIR = '/workspace/memory-journal-mcp/test-server/codemode/cm_test_export'
 
 // Export 5 entries to temporary directory
 const exportResult = await mj.io.exportMarkdown({
@@ -107,7 +107,7 @@ return {
 
 ```javascript
 // Test code:
-const MOCK_DIR = 'c:/Users/chris/Desktop/memory-journal-mcp/test-server/codemode/cm_test_export'
+const MOCK_DIR = '/workspace/memory-journal-mcp/test-server/codemode/cm_test_export'
 
 // Note: Test depends on some files existing in the mock dir
 const externalResult = await mj.io.importExternal({

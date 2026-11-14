@@ -1,5 +1,5 @@
 import { parseArgs } from 'util';
-import { readFileSync, writeFileSync, cpSync, mkdirSync, existsSync } from 'fs';
+import { readFileSync, writeFileSync, cpSync, mkdirSync, existsSync, readdirSync } from 'fs';
 import { join, dirname, resolve } from 'path';
 import { execSync } from 'child_process';
 import { builtinModules } from 'module';
@@ -36,10 +36,30 @@ function extractRelativeImports(source: string): string[] {
   return specifiers;
 }
 
+function resolveUpstreamRoot(cwd: string, explicit?: string): string {
+  const configured = explicit ?? process.env['VENDOR_UPSTREAM_ROOT'];
+  if (configured !== undefined && configured.trim() !== '') {
+    return resolve(cwd, configured);
+  }
+  const parentDir = resolve(cwd, '..');
+  if (existsSync(parentDir)) {
+    for (const entry of readdirSync(parentDir, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const candidate = join(parentDir, entry.name);
+      if (existsSync(join(candidate, '.agents', 'scripts', 'lib-agent-exec', 'agent-exec.ts'))) {
+        return candidate;
+      }
+    }
+  }
+  throw new Error(
+    'Upstream vendor repository not found. Pass --upstream-root <path> or set VENDOR_UPSTREAM_ROOT.'
+  );
+}
+
 const args = parseArgs({
   options: {
     lib: { type: 'string' },
-    'adamic-root': { type: 'string', default: '../adamic' },
+    'upstream-root': { type: 'string' },
     test: { type: 'boolean', default: false },
     check: { type: 'boolean', default: false },
   },
@@ -49,11 +69,9 @@ const cwd = process.cwd();
 const vendorJsonPath = join(cwd, 'src', 'vendor', 'VENDOR.json');
 const vendorData = JSON.parse(readFileSync(vendorJsonPath, 'utf8'));
 
-const adamicRoot = resolve(cwd, args.values['adamic-root'] as string);
-
 try {
-  // Check if adamicRoot exists
-  const headSha = execSync('git rev-parse HEAD', { cwd: adamicRoot, encoding: 'utf8' }).trim();
+  const upstreamRoot = resolveUpstreamRoot(cwd, args.values['upstream-root'] as string | undefined);
+  const headSha = execSync('git rev-parse HEAD', { cwd: upstreamRoot, encoding: 'utf8' }).trim();
 
   let libsToSync = Object.keys(vendorData.libs);
   if (args.values.lib) {
@@ -68,7 +86,7 @@ try {
     const libConfig = vendorData.libs[lib];
     console.log(`\nSyncing ${lib}...`);
     
-    const sourceDir = join(adamicRoot, libConfig.source);
+    const sourceDir = join(upstreamRoot, libConfig.source);
     const destDir = join(cwd, 'src', 'vendor', lib);
     
     mkdirSync(destDir, { recursive: true });
@@ -87,7 +105,7 @@ try {
       
       if (file.endsWith('.ts')) {
         const content = readFileSync(srcFile, 'utf8');
-        // Vendor files are standalone scripts synced from adamic; prepend @ts-nocheck for app tsc
+        // Vendor files are standalone scripts synced from upstream tooling; prepend @ts-nocheck for app tsc
         const cleanContent = content.startsWith('// @ts-nocheck') ? content : '// @ts-nocheck\n' + content;
         writeFileSync(destFile, cleanContent);
       } else {
@@ -118,17 +136,17 @@ try {
       for (const name of Object.keys(section)) declared.add(name);
     }
   }
-  let adamicDeps: Record<string, string> = {};
+  let upstreamDeps: Record<string, string> = {};
   try {
-    const adamicPkg = JSON.parse(readFileSync(join(adamicRoot, 'package.json'), 'utf8')) as Record<string, unknown>;
+    const upstreamPkg = JSON.parse(readFileSync(join(upstreamRoot, 'package.json'), 'utf8')) as Record<string, unknown>;
     for (const field of ['dependencies', 'devDependencies']) {
-      const section = adamicPkg[field];
+      const section = upstreamPkg[field];
       if (typeof section === 'object' && section !== null) {
-        adamicDeps = { ...adamicDeps, ...(section as Record<string, string>) };
+        upstreamDeps = { ...upstreamDeps, ...(section as Record<string, string>) };
       }
     }
   } catch {
-    // adamic package.json is only used to suggest version ranges
+    // Upstream package.json is only used to suggest version ranges
   }
 
   const missing = new Map<string, Set<string>>();
@@ -167,10 +185,10 @@ try {
   if (missing.size > 0) {
     console.error('\nVendored code imports packages that are not declared in package.json:');
     for (const [pkg, users] of missing) {
-      const range = adamicDeps[pkg];
-      console.error(`  - ${pkg}${range !== undefined ? ` (adamic uses ${range})` : ''}  <- ${[...users].slice(0, 3).join(', ')}`);
+      const range = upstreamDeps[pkg];
+      console.error(`  - ${pkg}${range !== undefined ? ` (upstream uses ${range})` : ''}  <- ${[...users].slice(0, 3).join(', ')}`);
     }
-    console.error(`\nAdd them, e.g.: pnpm add -D ${[...missing.keys()].map((pkg) => (adamicDeps[pkg] !== undefined ? `${pkg}@${adamicDeps[pkg]}` : pkg)).join(' ')}`);
+    console.error(`\nAdd them, e.g.: pnpm add -D ${[...missing.keys()].map((pkg) => (upstreamDeps[pkg] !== undefined ? `${pkg}@${upstreamDeps[pkg]}` : pkg)).join(' ')}`);
   }
 
   if (unresolved.size > 0 || missing.size > 0) {

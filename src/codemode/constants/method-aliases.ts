@@ -190,6 +190,9 @@ export const METHOD_ALIASES: Record<string, Record<string, string>> = {
         deleteProject: 'deleteProject',
         removeProject: 'deleteProject',
         delete_project: 'deleteProject',
+        prune: 'runAutoPrune',
+        autoPrune: 'runAutoPrune',
+        auto_prune: 'runAutoPrune',
     },
     github: {
         issues: 'getGithubIssues',

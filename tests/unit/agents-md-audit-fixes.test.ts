@@ -243,7 +243,7 @@ describe('AGENTS.md Ecosystem Audit Regressions', () => {
                         {},
                         {
                             projectRegistry: {
-                                adamic: { path: '/nonexistent/adamic', project_number: 16 },
+                                'core-platform': { path: '/nonexistent/core-platform', project_number: 16 },
                                 'memory-journal-mcp': { path: '/nonexistent/mj', project_number: 5 },
                             },
                         }
@@ -255,11 +255,11 @@ describe('AGENTS.md Ecosystem Audit Regressions', () => {
                         {},
                         {
                             projectRegistry: {
-                                adamic: { path: '/nonexistent/adamic', project_number: 16 },
+                                'core-platform': { path: '/nonexistent/core-platform', project_number: 16 },
                             },
                         }
                     )
-                ).toThrow(/Registered repositories: adamic/)
+                ).toThrow(/Registered repositories: core-platform/)
             } finally {
                 cwdSpy.mockRestore()
             }

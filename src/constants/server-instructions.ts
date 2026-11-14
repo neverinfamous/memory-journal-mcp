@@ -58,7 +58,7 @@ export interface LatestEntrySnapshot {
 /**
  * All help keys that have content (for dynamic help pointer generation).
  */
-const HELP_GROUP_KEYS: readonly string[] = ["core", "search", "analytics", "relationships", "io", "admin", "github", "git", "backup", "team", "codemode", "templates"];
+const HELP_GROUP_KEYS: readonly string[] = ["core", "search", "analytics", "relationships", "io", "admin", "github", "git", "backup", "team", "codemode"];
 
 /**
  * Build dynamic help pointers listing only the enabled groups.
@@ -68,10 +68,14 @@ function buildHelpPointers(groups: Set<ToolGroup>): string {
         return groups.has(k as ToolGroup)
     })
     if (enabledHelpGroups.length === 0) {
-        return '\n\nRead `memory://help/gotchas` for gotchas and critical usage patterns.'
+        return (
+            '\n\nRead `memory://help/gotchas` for gotchas and critical usage patterns.\n' +
+            'Read `memory://help/templates` for required entry content templates.'
+        )
     }
     return '\n\n## Available Help\n\n' +
         'Read `memory://help/gotchas` for gotchas and critical usage patterns.\n' +
+        'Read `memory://help/templates` for required entry content templates.\n' +
         'Read `memory://help/{group}` for: ' + enabledHelpGroups.join(', ') + '.'
 }
 
@@ -176,9 +180,12 @@ export function generateCodeModeInstructions(
     enabledGroups?: Set<ToolGroup>,
     config?: { defaultWorkspaceId?: string; instructionLevel?: InstructionLevel }
 ): string {
-    const standard = generateStandardInstructions(enabledTools, prompts, latestEntry, enabledGroups, config)
-    if (config?.instructionLevel === 'essential') return standard
-    return standard + '\n\n' + HELP_CONTENT.get('codemode')
+    const resolvedGroups = enabledGroups ?? getEnabledGroups(enabledTools)
+    if (config?.instructionLevel === 'essential') {
+        return generateStandardInstructions(enabledTools, prompts, latestEntry, resolvedGroups, config)
+    }
+    const standard = generateStandardInstructions(new Set<string>(), prompts, latestEntry, resolvedGroups, config)
+    return standard + '\n\n' + (HELP_CONTENT.get('codemode') ?? '')
 }
 
 /**

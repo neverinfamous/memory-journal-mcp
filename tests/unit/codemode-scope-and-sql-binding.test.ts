@@ -22,8 +22,8 @@ describe('SQL positional binding (C4)', () => {
     })
 
     it('maps WHERE scope binds positionally for DELETE', () => {
-        const parsed = parseSqlStatement('DELETE FROM memory_journal WHERE workspace_id = ? AND id = ?', ['adamic', 7])
-        expect(parsed).toEqual({ action: 'delete', params: { entry_id: 7, workspace_id: 'adamic' } })
+        const parsed = parseSqlStatement('DELETE FROM memory_journal WHERE workspace_id = ? AND id = ?', ['core-platform', 7])
+        expect(parsed).toEqual({ action: 'delete', params: { entry_id: 7, workspace_id: 'core-platform' } })
     })
 
     it('refuses to guess when placeholders outnumber binds', () => {
@@ -34,10 +34,10 @@ describe('SQL positional binding (C4)', () => {
     it('binds INSERT column lists positionally including scope columns', () => {
         const parsed = parseSqlStatement(
             'INSERT INTO memory_journal (workspace_id, project_number, content) VALUES (?, ?, ?)',
-            ['adamic', 9, 'body']
+            ['core-platform', 9, 'body']
         )
         expect(parsed.action).toBe('create')
-        expect(parsed.params).toMatchObject({ workspace_id: 'adamic', project_number: 9, content: 'body' })
+        expect(parsed.params).toMatchObject({ workspace_id: 'core-platform', project_number: 9, content: 'body' })
     })
 
     it('host recovery uses the same positional binder', () => {
@@ -52,7 +52,7 @@ describe('SQL positional binding (C4)', () => {
 
 describe('Code Mode scope isolation (C3/H6)', () => {
     it('does not infer workspace from content keywords in worker normalizers', () => {
-        const obj: Record<string, unknown> = { content: 'Worked on memory-journal-mcp and adamic today', tags: ['adamic'] }
+        const obj: Record<string, unknown> = { content: 'Worked on memory-journal-mcp and core-platform today', tags: ['core-platform'] }
         resolveCreateEntryProjectContext(obj)
         expect(obj['workspace_id']).toBeUndefined()
         expect(obj['project_number']).toBeUndefined()
@@ -72,9 +72,9 @@ describe('Code Mode scope isolation (C3/H6)', () => {
 
     it('preserves outer scope when unwrapping a nested payload tool call', () => {
         const recovered = recoverStructuredJsonCode(
-            JSON.stringify({ workspace_id: 'adamic', project_number: 3, payload: { tool: 'core.getRecentEntries', params: {} } })
+            JSON.stringify({ workspace_id: 'core-platform', project_number: 3, payload: { tool: 'core.getRecentEntries', params: {} } })
         )
-        expect(recovered).toContain('"workspace_id":"adamic"')
+        expect(recovered).toContain('"workspace_id":"core-platform"')
         expect(recovered).toContain('"project_number":3')
     })
 
@@ -90,14 +90,14 @@ describe('Code Mode scope isolation (C3/H6)', () => {
         const db = new DatabaseAdapter(':memory:')
         const config = {
             projectRegistry: {
-                adamic: { path: '/workspace/adamic', project_number: 16 },
+                'core-platform': { path: '/workspace/core-platform', project_number: 16 },
                 'memory-journal-mcp': { path: '/workspace/mj', project_number: 5 },
             },
             defaultProjectNumber: 5,
         }
         const conflictRes = await resolveCodeModeSessionContext(
             { db, config },
-            { code: 'return 1', workspace_id: 'adamic', repo: 'memory-journal-mcp' }
+            { code: 'return 1', workspace_id: 'core-platform', repo: 'memory-journal-mcp' }
         )
         expect('errorResponse' in conflictRes).toBe(true)
         if ('errorResponse' in conflictRes) {

@@ -1,6 +1,7 @@
 // @ts-nocheck
 import path from 'node:path';
 import fs from 'node:fs';
+import os from 'node:os';
 import crypto from 'node:crypto';
 import type { ExecPayload } from './schema.js';
 
@@ -424,10 +425,11 @@ export function buildWslEnvArgs(payloadEnv?: Record<string, unknown>, envOverrid
   }
 
   if (!hasExplicitPath) {
+    const wslUser = (process.env.WSL_USER ?? path.basename(os.homedir())).trim() || 'ubuntu';
     const defaultWslPathsList = [
-      '/home/chris/.bun/bin',
-      '/home/chris/.cargo/bin',
-      '/home/chris/.local/bin',
+      `/home/${wslUser}/.bun/bin`,
+      `/home/${wslUser}/.cargo/bin`,
+      `/home/${wslUser}/.local/bin`,
       '/root/.bun/bin',
       '/root/.cargo/bin',
       '/root/.local/bin',
@@ -441,7 +443,7 @@ export function buildWslEnvArgs(payloadEnv?: Record<string, unknown>, envOverrid
     if (process.env.APPDATA !== undefined && process.env.APPDATA.length > 0) {
       defaultWslPathsList.push(convertToWslPath(path.join(process.env.APPDATA, 'npm')));
     } else {
-      defaultWslPathsList.push('/mnt/c/Users/chris/AppData/Roaming/npm');
+      defaultWslPathsList.push(convertToWslPath(path.join(os.homedir(), 'AppData', 'Roaming', 'npm')));
     }
     const defaultWslPaths = defaultWslPathsList.join(':');
     wslEnvArgs.push(`PATH=${defaultWslPaths}`);

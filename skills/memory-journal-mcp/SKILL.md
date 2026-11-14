@@ -15,7 +15,7 @@ Static operational anchor for `memory-journal-mcp` Code Mode (`mj_execute_code`)
 - **Dynamic Server Help:** Read `memory://help` for the tool-group index, `memory://help/gotchas` for anti-hallucination rules, and `memory://help/{group}` for group references (`core`, `search`, `admin`, `codemode`, `github`, `git`, `templates`, `team`, `analytics`, `backup`, `io`, `relationships`).
 - **Session Start Briefing:** Read `memory://briefing/{+repo}` **once** at session start to ingest `project_number`, active state, and recent context. **NEVER** autonomously execute tasks surfaced in the briefing without user instruction.
 - **Mid-Task Context Recovery (`memory://agent-context/{+repo}`):**
-  - **[WHEN]** missing `project_number` or `workspace_id` mid-task -> **[NEVER]** re-query `memory://briefing` and **[NEVER]** query bare `memory://agent-id` (which aliases to `memory://agent-context/default` and pins sticky server state to `'default'`).
+  - **[WHEN]** missing `project_number` or `workspace_id` mid-task -> **[NEVER]** re-query `memory://briefing/{+repo}` and **[NEVER]** query bare `memory://agent-id` (which reads `'default'` or previously pinned server scope rather than resolving your current repo; `memory://agent-context/default` pins sticky `'default'` scope).
   - **[ALWAYS]** query repo-scoped **`memory://agent-context/{repo_name}`** (e.g., `memory://agent-context/my-repo`).
 
 ## 2. Code Mode (`mj_execute_code`) Contract & Graph-First Hybrid Recall
@@ -28,6 +28,7 @@ Static operational anchor for `memory-journal-mcp` Code Mode (`mj_execute_code`)
   - **Execution Guards & Introspection:** Pass `readonly: true` for read-only audits, `dry_run: true` to preview mutations, `max_result_size` to bound large outputs, and `await mj.<group>.<method>.schema()` to inspect unfamiliar parameter schemas at runtime.
 - **Unbiased Pre-Planning Hybrid & Graph Recall:** Omit `sort_by: 'importance'` (or use `sort_by: 'blended'`) and exclude commit noise so architectural decisions rank by relevance before expanding the graph:
   ```javascript
+  // Quote hyphenated tokens in FTS queries (e.g., '"memory-journal-mcp"') so '-' is not split as separate words
   const hits = await mj.search.searchEntries({
     query: 'search sanitizer regression',
     mode: 'hybrid',

@@ -1,4 +1,9 @@
-import { getAllToolNames, getEnabledGroups } from '../../../filtering/tool-filter.js'
+import {
+    getAllToolNames,
+    getEnabledGroups,
+    isReadonlyMetaActive,
+    isToolVisibleForFilter,
+} from '../../../filtering/tool-filter.js'
 import {
     generateStandardInstructions,
     generateCodeModeInstructions,
@@ -18,11 +23,33 @@ export const instructionsResource: InternalResourceDef = {
     mimeType: 'text/markdown',
     icons: [ICON_BRIEFING],
     annotations: withPriority(0.95, ASSISTANT_FOCUSED),
-    handler: (_uri: string, context: ResourceContext): ResourceResult => {
+    handler: async (_uri: string, context: ResourceContext): Promise<ResourceResult> => {
         const allToolNames = new Set(getAllToolNames())
-        const enabledTools = context.filterConfig?.enabledTools ?? allToolNames
+        const filterRaw = context.filterConfig?.raw
+        let enabledTools = context.filterConfig?.enabledTools ?? allToolNames
+        let readOnlyHints: Map<string, boolean | undefined> | undefined
+
+        if (isReadonlyMetaActive(filterRaw)) {
+            const { getTools } = await import('../../tools/index.js')
+            const toolDefs = getTools(
+                context.db,
+                null,
+                context.vectorManager,
+                context.github ?? undefined,
+                context.runtime !== undefined ? { runtime: context.runtime } : undefined,
+                context.teamDb,
+                undefined
+            ).filter((t) => allToolNames.has(t.name))
+            readOnlyHints = new Map(toolDefs.map((t) => [t.name, t.annotations?.readOnlyHint]))
+            enabledTools = new Set(
+                [...enabledTools].filter((name) =>
+                    isToolVisibleForFilter(name, readOnlyHints?.get(name), filterRaw)
+                )
+            )
+        }
+
         const enabledGroups = context.filterConfig
-            ? getEnabledGroups(context.filterConfig.enabledTools)
+            ? getEnabledGroups(enabledTools)
             : undefined
 
         const prompts = getPrompts().flatMap((p) => {
@@ -34,15 +61,20 @@ export const instructionsResource: InternalResourceDef = {
             return [{ name: p.name, ...(desc !== undefined ? { description: desc } : {}) }]
         })
 
-        const isCodeModeOnly = enabledTools.size === 1 && enabledTools.has('mj_execute_code')
-        const generatorFn = (isCodeModeOnly || context.filterConfig?.raw === 'codemode') 
-            ? generateCodeModeInstructions 
-            : generateStandardInstructions;
+        const isCodeModeOnly =
+            filterRaw?.trim() === 'codemode' ||
+            (enabledTools.has('mj_execute_code') &&
+                [...enabledTools].every(
+                    (t) => t === 'mj_execute_code' || t === 'update_configuration'
+                ))
+        const generatorFn = isCodeModeOnly
+            ? generateCodeModeInstructions
+            : generateStandardInstructions
 
         let finalEnabledTools = enabledTools
         let finalEnabledGroups = enabledGroups
 
-        if (isCodeModeOnly || context.filterConfig?.raw === 'codemode') {
+        if (isCodeModeOnly) {
             const rawMgr = context.runtime?.configManager
             if (
                 rawMgr !== null &&
@@ -59,10 +91,23 @@ export const instructionsResource: InternalResourceDef = {
                     'codemodeInternalFullAccess' in currentConfig &&
                     currentConfig.codemodeInternalFullAccess === true
                 ) {
-                    finalEnabledTools = allToolNames
-                    finalEnabledGroups = new Set<ToolGroup>(
-                        Object.keys(TOOL_GROUPS).filter((k): k is ToolGroup => k in TOOL_GROUPS)
-                    )
+                    finalEnabledTools =
+                        isReadonlyMetaActive(filterRaw) && readOnlyHints !== undefined
+                            ? new Set(
+                                  [...allToolNames].filter((name) =>
+                                      isToolVisibleForFilter(
+                                          name,
+                                          readOnlyHints?.get(name),
+                                          filterRaw
+                                      )
+                                  )
+                              )
+                            : allToolNames
+                    finalEnabledGroups = isReadonlyMetaActive(filterRaw)
+                        ? getEnabledGroups(finalEnabledTools)
+                        : new Set<ToolGroup>(
+                              Object.keys(TOOL_GROUPS).filter((k): k is ToolGroup => k in TOOL_GROUPS)
+                          )
                 }
             }
         }

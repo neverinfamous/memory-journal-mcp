@@ -1,16 +1,19 @@
 # Core Operations
-- **Workspace Isolation**: When creating or reading entries, consider the `workspace_id` parameter. If a default workspace is active, entries are automatically scoped to it unless explicitly overridden.
+- **Workspace & Project Isolation**: Always pass explicit `workspace_id` and `project_number` on writes (read `memory://briefing/{+repo}` at session start or `memory://agent-context/{+repo}` mid-task). `mj.core.createEntry` / `create_entry` indexes HNSW vector embeddings and `anchors` immediately; set `share_with_team: true` on reusable cross-repo patterns.
 
 ### Session Summaries
 
-Use the `memory-journal-mcp entry create` terminal command to record session summaries. You MUST provide the markdown content via `--content "<string>"` or `--file <path>` (or pipe to stdin). Required fields:
+Prefer `mj.core.createEntry` / `create_entry` (or `memory-journal-mcp entry create` in the terminal with `--type retrospective --tags session-summary`). Requirements:
 
-- `--type retrospective`
-- `--tags session-summary` (plus relevant domain/activity tags, comma-separated)
-- `--project` from the briefing
-- `--impact-score`, `--trust-score`, and `--validation-status` MUST be evaluated and populated.
-- `--related-to` MUST be populated with IDs of related tasks, architectural plans, or preceding summaries.
-- `--auto-context` MUST be populated with a concise JSON payload representing the context (e.g. `{ "commits": ["abc1234", "def5678"] }`)
+- `entry_type: "retrospective"` and `tags: ["session-summary", ...]`
+- Content MUST contain **only** these 4 exact H2 headers (no extra or duplicate H2 sections):
+  - `## Accomplished`
+  - `## Unfinished / Blocked`
+  - `## Context for Next Session`
+  - `## Commits`
+- `workspace_id`, `project_number`, `session_id`, `impact_score`, `trust_score`, and `validation_status`
+- `relationships: [{ targetId, relationType }]` (or `--related-to` / `--rel` in CLI) linking related tasks, decisions, or preceding summaries
+- `auto_context: { commits: ["<sha>"] }` (`--auto-context` in CLI) **when commits occurred during the session**; **omit `auto_context` on zero-commit sessions**
 
 Do NOT create session summaries for testing passes where everything passed and no code changes were made. Only summarize sessions with substantive work.
 
@@ -91,7 +94,7 @@ Do NOT mark routine session summaries or pass-only testing results as significan
 
 ### Link Entries
 
-Create relationships to build traversable context chains:
+Create relationships via `relationships: [{ targetId, relationType }]` (prefer causal types `resolved`, `caused`, `blocked_by`, which carry 20% of the importance score; never use `'caused_by'` — invert source/target or use `'resolved'`/`'evolves_from'`):
 
 - `implements` — implementation→spec, remediation→audit findings
 - `resolved` — bugfix→issue that reported the bug
@@ -104,6 +107,7 @@ Create relationships to build traversable context chains:
 
 Only link truly related entries. Do NOT create bulk relationships between unrelated entries that happen to share tags.
 - **Opportunistic Superseding (Awake Contradiction Resolution)**: When creating a `project_decision`, `bug_fix`, or `technical_note` that invalidates or replaces an earlier entry surfaced in your briefing or search results, immediately link the new entry to the superseded entry via `evolves_from` or `resolved` so the knowledge graph reflects the superseding chain in real time.
+- **File & Symbol Anchors**: Attach `anchors: [{ file_path, symbol_name?, commit_sha? }]` when entries document specific files or symbols, and manage stale anchors with `mark_anchors_stale({ updates: [{ id, status }] })`.
 
 ### Git Commit Standards
 

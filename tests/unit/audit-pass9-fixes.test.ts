@@ -14,19 +14,19 @@ import { formatPositiveIntOrPlaceholder } from '../../src/handlers/prompts/githu
 
 describe('Pass 9 Audit Fixes — Workspace Routing & Normalizers', () => {
     const sampleRegistry = {
-        adamic: {
-            path: path.resolve('/workspace/adamic'),
+        'core-platform': {
+            path: path.resolve('/workspace/core-platform'),
             project_number: 6,
         },
         'memory-journal-mcp': {
-            path: path.resolve('/workspace/adamic/repos/memory-journal-mcp'),
+            path: path.resolve('/workspace/core-platform/repos/memory-journal-mcp'),
             project_number: 5,
         },
     }
 
     describe('resolveWorkspaceFromFilePath', () => {
         it('selects the most specific (longest) matching registered project path', () => {
-            const subFile = path.resolve('/workspace/adamic/repos/memory-journal-mcp/src/index.ts')
+            const subFile = path.resolve('/workspace/core-platform/repos/memory-journal-mcp/src/index.ts')
             const resolved = resolveWorkspaceFromFilePath(subFile, {
                 projectRegistry: sampleRegistry,
             })
@@ -37,12 +37,12 @@ describe('Pass 9 Audit Fixes — Workspace Routing & Normalizers', () => {
         })
 
         it('does not match a sibling prefix directory such as memory-journal-mcp.wiki', () => {
-            const wikiFile = path.resolve('/workspace/adamic/repos/memory-journal-mcp.wiki/Home.md')
+            const wikiFile = path.resolve('/workspace/core-platform/repos/memory-journal-mcp.wiki/Home.md')
             const resolved = resolveWorkspaceFromFilePath(wikiFile, {
                 projectRegistry: sampleRegistry,
             })
             expect(resolved).toEqual({
-                workspaceId: 'adamic',
+                workspaceId: 'core-platform',
                 projectNumber: 6,
             })
         })
@@ -51,7 +51,7 @@ describe('Pass 9 Audit Fixes — Workspace Routing & Normalizers', () => {
     describe('resolvePromptPriorWorkspace & buildPriorAuditSection', () => {
         it('resolves a subdirectory inside a registered project to that project instead of parent or default', () => {
             const targetSubdir = path.resolve(
-                '/workspace/adamic/repos/memory-journal-mcp/src/handlers/prompts'
+                '/workspace/core-platform/repos/memory-journal-mcp/src/handlers/prompts'
             )
             const ws = resolvePromptPriorWorkspace(
                 {
@@ -78,7 +78,7 @@ describe('Pass 9 Audit Fixes — Workspace Routing & Normalizers', () => {
                     projectRegistry: sampleRegistry,
                 },
                 undefined,
-                path.resolve('/workspace/adamic/repos/memory-journal-mcp')
+                path.resolve('/workspace/core-platform/repos/memory-journal-mcp')
             )
             expect(section).toContain('workspace_id: "memory-journal-mcp"')
             expect(section).toContain('project_number: 5')
@@ -191,11 +191,11 @@ describe('Pass 9 Audit Fixes — Workspace Routing & Normalizers', () => {
 
         it('keeps workspace scope on healed DELETE and does not let a later number replace a literal id', () => {
             const deleted = extractAndRecoverSqlCode(
-                "DELETE FROM memory_journal WHERE id = 12 AND workspace_id = 'adamic'"
+                "DELETE FROM memory_journal WHERE id = 12 AND workspace_id = 'core-platform'"
             )
             expect(deleted).toContain('mj.admin.deleteEntry')
             expect(deleted).toContain('"entry_id":12')
-            expect(deleted).toContain('"workspace_id":"adamic"')
+            expect(deleted).toContain('"workspace_id":"core-platform"')
 
             const updated = extractAndRecoverPreparedStatementCode(
                 'db.prepare("UPDATE memory_journal SET content = ? WHERE id = 44").run("hello", 9);'

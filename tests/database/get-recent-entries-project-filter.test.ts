@@ -17,7 +17,7 @@ describe('DatabaseAdapter getRecentEntries Project Filtering', () => {
         // Seed entries across different project numbers and workspaces
         db.createEntry({ content: 'Project 9 entry A', workspaceId: 'mysql-mcp', projectNumber: 9 })
         db.createEntry({ content: 'Project 9 entry B', workspaceId: 'mysql-mcp', projectNumber: 9 })
-        db.createEntry({ content: 'Project 16 entry A', workspaceId: 'adamic', projectNumber: 16 })
+        db.createEntry({ content: 'Project 16 entry A', workspaceId: 'core-platform', projectNumber: 16 })
         db.createEntry({ content: 'Project 5 entry A', workspaceId: 'memory-journal-mcp', projectNumber: 5 })
     })
 
@@ -55,7 +55,7 @@ describe('DatabaseAdapter getRecentEntries Project Filtering', () => {
         const matched = db.getRecentEntries(10, undefined, 'timestamp', undefined, undefined, 'mysql-mcp', 9)
         expect(matched.entries.length).toBe(2)
 
-        const mismatched = db.getRecentEntries(10, undefined, 'timestamp', undefined, undefined, 'adamic', 9)
+        const mismatched = db.getRecentEntries(10, undefined, 'timestamp', undefined, undefined, 'core-platform', 9)
         expect(mismatched.entries.length).toBe(0)
     })
 })

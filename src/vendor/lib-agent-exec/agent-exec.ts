@@ -10,6 +10,7 @@ import { buildEnvironment } from './environment.js';
 import { PayloadSchema, agentExecCliArgsSchema, normalizeTarget } from './schema.js';
 import { showHelp, showUsageError } from './help.js';
 import { convertToWindowsPath } from './command-utils.js';
+import { AGENT_EXEC_README_URL } from './interceptors/utils.js';
 
 const DEFAULT_MAX_PAYLOAD_SIZE = 10 * 1024 * 1024;
 let payloadPath: string;
@@ -55,7 +56,7 @@ try {
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     if (msg.includes('Unknown option')) {
-       fatalError(`\n   \x1b[38;5;208m🛠️ AUTONOMOUS HEALING: You passed a CLI flag to 'agent-exec.ts' (${msg}).\n   'agent-exec.ts' ONLY accepts a JSON payload file. Put your command and arguments INSIDE the JSON payload file.\n   Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+       fatalError(`\n   \x1b[38;5;208m🛠️ AUTONOMOUS HEALING: You passed a CLI flag to 'agent-exec.ts' (${msg}).\n   'agent-exec.ts' ONLY accepts a JSON payload file. Put your command and arguments INSIDE the JSON payload file.\n   Ref: [AGENT_README.md](${AGENT_EXEC_README_URL})\x1b[0m`);
     }
     throw err;
   }

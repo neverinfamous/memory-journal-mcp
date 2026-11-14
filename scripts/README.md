@@ -19,10 +19,10 @@
 | `test-import.ts` | Lightweight diagnostic script to verify that tool, resource, and prompt handlers load correctly without server startup. | `pnpm exec tsx scripts/test-import.ts` |
 | `encrypt-db.ts` | Utility to encrypt an existing plaintext SQLite database into a new SQLCipher-encrypted copy via `PRAGMA rekey` (uses `--key` or `DB_ENCRYPTION_KEY`). | `pnpm run encrypt-db -- --in <src.db> --out <enc.db> [--key <secret>]` |
 | `check-orphans.mjs` | Diagnostic script to identify entries missing a strict `project_number`. Falls back to default `data/memory_journal.db` if no arg provided. | `node scripts/check-orphans.mjs [path]` |
-| `sync-vendor.ts` | Synchronizes and updates vendor libraries from the main adamic repository into `src/vendor/` and verifies dependency declarations (supports `--check`, `--lib <name>`, `--adamic-root <path>`, and `--test`; executed via `bun`). | `pnpm run sync:vendor` / `pnpm run check:vendor-deps` / `bun scripts/sync-vendor.ts` |
+| `sync-vendor.ts` | Synchronizes and updates vendor libraries from the upstream tooling repository into `src/vendor/` and verifies dependency declarations (supports `--check`, `--lib <name>`, `--upstream-root <path>`, and `--test`; executed via `bun`). | `pnpm run sync:vendor` / `pnpm run check:vendor-deps` / `bun scripts/sync-vendor.ts` |
 | `print-summary.ts` | Utility to test the `session-summary` prompt generation output using the current repository context. | `pnpm exec tsx scripts/print-summary.ts` |
 
 ## Best Practices
 
-1. **Working Directory:** Always execute scripts from the root directory (`C:\Users\chris\Desktop\memory-journal-mcp`) unless a specific script documents otherwise.
+1. **Working Directory:** Always execute scripts from the repository root (`<repo-root>`) unless a specific script documents otherwise.
 2. **Environment Variables:** Some scripts may require `.env` or `secrets.env` (e.g., database keys). Ensure context is loaded if modifying these scripts.

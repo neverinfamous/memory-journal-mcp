@@ -49,7 +49,7 @@ function updateCodeMap() {
     // Generate Tools Markdown
     // getTools requires a DB context, but the definitions are built inside closures
     // so we can safely pass dummy objects to get the metadata arrays.
-    const rawTools = getTools(toolCatalogAdapter(), null)
+    const rawTools = getTools(toolCatalogAdapter(), null, undefined, undefined, { agentHealing: false })
     
     // Group tools by their icon title to provide a clean, human-readable grouping
     const toolsByGroup = new Map<string, Set<string>>()

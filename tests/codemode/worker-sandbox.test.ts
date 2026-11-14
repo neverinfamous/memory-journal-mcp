@@ -211,14 +211,14 @@ describe('WorkerSandbox', () => {
         }
         const code = `
             const journalClient = await MemoryJournal.getInstance();
-            const searchRes = await journalClient.searchEntries({ query: 'project briefing adamic' });
+            const searchRes = await journalClient.searchEntries({ query: 'project briefing core-platform' });
             const directSearch = await searchEntries({ query: 'direct search test' });
             return { searchRes, directSearch };
         `
         const result = await sandbox.execute(code, bindings)
         expect(result.success).toBe(true)
         const res = result.result as any
-        expect(res.searchRes.entries[0].content).toContain('project briefing adamic')
+        expect(res.searchRes.entries[0].content).toContain('project briefing core-platform')
         expect(res.directSearch.entries[0].content).toContain('direct search test')
     })
 

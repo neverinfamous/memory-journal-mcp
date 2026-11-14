@@ -1,9 +1,9 @@
 export const GIT_HELP = `# Git History Mining
 
-- **Commit Discovery**: Use \`get_commit_history\` to fetch sequential logs and \`search_commits\` to find specific changes by message or author.
-- **Release Tracking**: Use \`get_release_info\` to retrieve tag details and \`get_unreleased_commits\` to track work pending release.
-- **Analytics**: Use \`analyze_commit_patterns\` to identify file hotspots and active contributors within a timeframe.
-- **Performance**: Deep searches can take time. Cap your search ranges when possible.
+- **Commit Discovery**: Use \`get_commit_history\` to fetch sequential commit logs and \`search_commits({ query })\` to search commit **messages** by regular expression (does not filter by author).
+- **Release Tracking**: Use \`get_release_info({ ref })\` to summarize the 10 commits at \`ref\` and \`get_unreleased_commits\` to list commits since the latest SemVer tag.
+- **Commit Analytics**: Use \`analyze_commit_patterns({ max_count })\` (default \`50\`) for author and entry-type breakdowns across recent commits.
+- **Anchor Staleness Checks**: \`check_entry_staleness({ entry_id?, workspace_id?, project_number? })\` verifies \`entry_anchors\` against current git history (mutates staleness status; requires a registered \`projectRegistry\` entry \`path\` matching the target workspace — does not accept \`repo\` or \`cwd\`).
 - **Code Mode**: These tools are exposed under the \`mj.git.*\` namespace (e.g., \`mj.git.getCommitHistory()\`).
 
 ## Available Tools

@@ -29,7 +29,7 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
                 '## Context for Next Session',
                 '- The repository is completely up to date, typechecked, linted, and ready for deployment.',
                 '- The next session will focus on deploying the new version.',
-                '- Remember to configure the custom logo URL using \\`https://d1.adamic.tech/favicon.svg\\` once deployed.`,',
+                '- Remember to configure the custom logo URL using \\`https://example.com/favicon.svg\\` once deployed.`,',
                 '    project_number: 1,',
                 '    session_id: "2026-08-19-maintenance"',
                 '})'
@@ -247,9 +247,9 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
                 '../src/handlers/tools/codemode/sql-recovery.js'
             )
             const deleted = extractAndRecoverSqlCode(
-                "DELETE FROM memory_journal WHERE id = 12 AND workspace_id = 'adamic'"
+                "DELETE FROM memory_journal WHERE id = 12 AND workspace_id = 'core-platform'"
             )
-            expect(deleted).toContain('"workspace_id":"adamic"')
+            expect(deleted).toContain('"workspace_id":"core-platform"')
             expect(deleted).toContain('"entry_id":12')
 
             const updated = extractAndRecoverPreparedStatementCode(
@@ -274,7 +274,7 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
         it('should auto-heal better-sqlite3 require and constructor calls into safe execution', () => {
             const sqliteCode = [
                 'const sqlite3 = require("better-sqlite3");',
-                'const db = new sqlite3("C:/Users/chris/Desktop/db-mcp/data/test-backup.db");',
+                'const db = new sqlite3("C:/workspace/db-mcp/data/test-backup.db");',
                 'db.exec("CREATE TABLE test (id INT); INSERT INTO test VALUES (1);");',
                 'db.close();',
                 'return { success: true };',
@@ -311,7 +311,7 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
         it('should auto-heal child_process require and execSync calls into safe execution', () => {
             const cpCode = [
                 "const cp = require('child_process');",
-                'cp.execSync(\'sqlite3 C:/Users/chris/Desktop/db-mcp/data/test-backup.db "CREATE TABLE test (id INT); INSERT INTO test VALUES (1);"\');',
+                'cp.execSync(\'sqlite3 C:/workspace/db-mcp/data/test-backup.db "CREATE TABLE test (id INT); INSERT INTO test VALUES (1);"\');',
                 'return { success: true };',
             ].join('\n')
 
@@ -387,8 +387,8 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
             const dictResult = {
                 success: true,
                 projects: {
-                    'db-mcp': { path: 'C:/Users/chris/Desktop/db-mcp', project_number: 1 },
-                    'memory-journal-mcp': { path: 'C:/Users/chris/Desktop/memory-journal-mcp', project_number: 2 },
+                    'db-mcp': { path: 'C:/workspace/db-mcp', project_number: 1 },
+                    'memory-journal-mcp': { path: 'C:/workspace/memory-journal-mcp', project_number: 2 },
                 },
             }
             const wrapped = wrapResult(dictResult) as Record<string, unknown>
@@ -426,8 +426,8 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
             const listResult = {
                 success: true,
                 projects: {
-                    'db-mcp': { path: 'C:/Users/chris/Desktop/db-mcp', project_number: 15 },
-                    'memory-journal-mcp': { path: 'C:/Users/chris/Desktop/memory-journal-mcp', project_number: 5 },
+                    'db-mcp': { path: 'C:/workspace/db-mcp', project_number: 15 },
+                    'memory-journal-mcp': { path: 'C:/workspace/memory-journal-mcp', project_number: 5 },
                 },
             }
             const wrapped = wrapResult(listResult) as Record<string, unknown>
@@ -518,11 +518,11 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
             const mockConfig = {
                 projectRegistry: {
                     'db-mcp': {
-                        path: 'C:/Users/chris/Desktop/db-mcp',
+                        path: 'C:/workspace/db-mcp',
                         project_number: 15
                     },
                     'memory-journal-mcp': {
-                        path: 'C:/Users/chris/Desktop/memory-journal-mcp',
+                        path: 'C:/workspace/memory-journal-mcp',
                         project_number: 5
                     }
                 }
@@ -560,15 +560,15 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
             const mockConfig = {
                 projectRegistry: {
                     'db-mcp': {
-                        path: 'C:/Users/chris/Desktop/db-mcp',
+                        path: 'C:/workspace/db-mcp',
                         project_number: 15
                     },
-                    'adamic': {
-                        path: 'C:/Users/chris/Desktop/adamic',
+                    'core-platform': {
+                        path: 'C:/workspace/core-platform',
                         project_number: 16
                     },
-                    'adamic-blog': {
-                        path: 'C:/Users/chris/Desktop/adamic-blog',
+                    'core-platform-blog': {
+                        path: 'C:/workspace/core-platform-blog',
                         project_number: 22
                     }
                 }
@@ -591,16 +591,16 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
 
             // Compound project names should be evaluated by length descending
             const res3 = resolveProjectContext({
-                content: "Updated adamic-blog to latest version"
+                content: "Updated core-platform-blog to latest version"
             }, mockConfig as unknown as import('../src/types/index.js').ToolHandlerConfig)
-            expect(res3.workspaceId).toBe('adamic-blog')
+            expect(res3.workspaceId).toBe('core-platform-blog')
             expect(res3.projectNumber).toBe(22)
 
             // Shorter project name should still match if only it is present
             const res4 = resolveProjectContext({
-                content: "Updated adamic to latest version"
+                content: "Updated core-platform to latest version"
             }, mockConfig as unknown as import('../src/types/index.js').ToolHandlerConfig)
-            expect(res4.workspaceId).toBe('adamic')
+            expect(res4.workspaceId).toBe('core-platform')
             expect(res4.projectNumber).toBe(16)
             cwdSpy.mockRestore()
         })
@@ -658,7 +658,7 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
         it('should auto-heal name and type in CreateEntrySchema (agent-issues.jsonl Record 5 regression)', async () => {
             const { CreateEntrySchema } = await import('../src/handlers/tools/core/schemas.js')
             const rawPayload = {
-                content: 'Fix duplicate error message in `sqlite.json.validatePath` tool handler.\n- Removed redundant `!path.startsWith("$")` check in `C:\\Users\\chris\\Desktop\\db-mcp\\src\\adapters\\sqlite\\tools\\json-helpers\\read.ts` since `validateJsonPath` already performs this validation and throws an appropriate `ValidationError` containing the exact same message.',
+                content: 'Fix duplicate error message in `sqlite.json.validatePath` tool handler.\n- Removed redundant `!path.startsWith("$")` check in `C:\\workspace\\db-mcp\\src\\adapters\\sqlite\\tools\\json-helpers\\read.ts` since `validateJsonPath` already performs this validation and throws an appropriate `ValidationError` containing the exact same message.',
                 name: 'db-mcp_json_validatePath_duplicate_error_fix',
                 type: 'concept'
             }
@@ -1174,7 +1174,7 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
 
             const rawAgentCode = `const fs = await import('fs');
 const path = await import('path');
-const dbPath = 'C:\\\\Users\\\\chris\\\\Desktop\\\\memory-journal-mcp\\\\memory.db';
+const dbPath = 'C:\\\\workspace\\\\memory-journal-mcp\\\\memory.db';
 let stat = null;
 if (fs.existsSync(dbPath)) {
   stat = fs.statSync(dbPath);
@@ -2312,7 +2312,7 @@ return { success: true, projectId };
             const { callTool } = await import('../src/handlers/tools/index.js')
             const mockDb = {
                 getEntryById: vi.fn((id: number, wsId: string) => {
-                    if (wsId === '*') return { id: 14051, workspaceId: 'adamic', content: 'test' }
+                    if (wsId === '*') return { id: 14051, workspaceId: 'core-platform', content: 'test' }
                     return null
                 }),
                 getRelationships: vi.fn().mockReturnValue([]),
@@ -2514,7 +2514,7 @@ return { success: true, projectId };
                 getEntryById: vi.fn().mockImplementation((id: number, wsId: string) => {
                     // Fail if searching specifically in local workspace, succeed if wildcard
                     if (wsId === '*') {
-                        return { id, workspaceId: 'adamic', deletedAt: null, content: 'Test entry' }
+                        return { id, workspaceId: 'core-platform', deletedAt: null, content: 'Test entry' }
                     }
                     return null
                 }),
@@ -2595,8 +2595,8 @@ return { success: true, projectId };
             const mockDb = {
                 getEntryById: vi.fn((id: number, ws: string) => {
                     if (ws === 'memory-journal-mcp') return null
-                    if (ws === '*') return { id: 14463, title: 'Test Entry', workspaceId: 'adamic' }
-                    if (ws === 'adamic') return { id: 14463, title: 'Test Entry', workspaceId: 'adamic' }
+                    if (ws === '*') return { id: 14463, title: 'Test Entry', workspaceId: 'core-platform' }
+                    if (ws === 'core-platform') return { id: 14463, title: 'Test Entry', workspaceId: 'core-platform' }
                     return null
                 }),
                 getRelationships: vi.fn().mockReturnValue([]),
@@ -2663,8 +2663,8 @@ return { success: true, projectId };
             const mockDb = {
                 getEntryById: vi.fn((id: number, ws: string) => {
                     if (ws === 'memory-journal-mcp') return null
-                    if (ws === '*') return { id: 14463, title: 'Test Entry', workspaceId: 'adamic' }
-                    if (ws === 'adamic') return { id: 14463, title: 'Test Entry', workspaceId: 'adamic' }
+                    if (ws === '*') return { id: 14463, title: 'Test Entry', workspaceId: 'core-platform' }
+                    if (ws === 'core-platform') return { id: 14463, title: 'Test Entry', workspaceId: 'core-platform' }
                     return null
                 }),
                 getRelationships: vi.fn().mockReturnValue([]),
@@ -2719,8 +2719,8 @@ return { success: true, projectId };
                             : null
                     }
                     if (id === 14463) {
-                        return ws === 'adamic' || ws === '*'
-                            ? { id: 14463, workspaceId: 'adamic' }
+                        return ws === 'core-platform' || ws === '*'
+                            ? { id: 14463, workspaceId: 'core-platform' }
                             : null
                     }
                     return null
@@ -2750,7 +2750,7 @@ return { success: true, projectId };
         it('should heal evolves_from parameter in CreateEntrySchema into relationships array (agent-issues.jsonl regression)', async () => {
             const { CreateEntrySchema } = await import('../src/handlers/tools/core/schemas.js')
             const parsed = CreateEntrySchema.parse({
-                workspace_id: 'adamic',
+                workspace_id: 'core-platform',
                 project_number: 16,
                 session_id: 'c019df63-1145-4e67-b34c-d42dad4ed8db',
                 entry_type: 'maintenance',

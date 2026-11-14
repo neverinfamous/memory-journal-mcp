@@ -1,5 +1,11 @@
 // @ts-nocheck
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { match, P } from 'ts-pattern';
+
+export const AGENT_EXEC_README_URL = pathToFileURL(
+  resolve(dirname(fileURLToPath(import.meta.url)), '..', 'AGENT_README.md')
+).href;
 
 /**
  * Safely strips quoted parts using a ts-pattern state machine

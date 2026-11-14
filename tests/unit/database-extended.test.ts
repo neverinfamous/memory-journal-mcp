@@ -95,40 +95,40 @@ describe('SQLite Database Extended Operations', () => {
             expect(db.resolveAuthors([]).size).toBe(0)
 
             // Self-alias throws
-            expect(() => db.addAuthorAlias('Chris', 'chris')).toThrow(/themselves/i)
+            expect(() => db.addAuthorAlias('Alex', 'alex')).toThrow(/themselves/i)
 
             // Add aliases
-            const alias1 = db.addAuthorAlias('chris-laptop', 'chris-canonical', 'admin')
-            expect(alias1.alias).toBe('chris-laptop')
-            expect(alias1.canonicalAuthor).toBe('chris-canonical')
+            const alias1 = db.addAuthorAlias('alex-laptop', 'alex-canonical', 'admin')
+            expect(alias1.alias).toBe('alex-laptop')
+            expect(alias1.canonicalAuthor).toBe('alex-canonical')
 
-            db.addAuthorAlias('chris-ci', 'chris-canonical')
+            db.addAuthorAlias('alex-ci', 'alex-canonical')
 
             // Duplicate alias throws
-            expect(() => db.addAuthorAlias('chris-laptop', 'other')).toThrow(/already exists/i)
+            expect(() => db.addAuthorAlias('alex-laptop', 'other')).toThrow(/already exists/i)
 
             // List all and filtered by canonicalAuthor
             expect(db.listAuthorAliases().length).toBe(2)
-            expect(db.listAuthorAliases('chris-canonical').length).toBe(2)
+            expect(db.listAuthorAliases('alex-canonical').length).toBe(2)
             expect(db.listAuthorAliases('nobody').length).toBe(0)
 
             // Resolve single and batch
-            expect(db.resolveAuthor('CHRIS-LAPTOP')).toBe('chris-canonical')
-            const batchMap = db.resolveAuthors(['CHRIS-LAPTOP', 'unmapped-user'])
-            expect(batchMap.get('CHRIS-LAPTOP')).toBe('chris-canonical')
+            expect(db.resolveAuthor('ALEX-LAPTOP')).toBe('alex-canonical')
+            const batchMap = db.resolveAuthors(['ALEX-LAPTOP', 'unmapped-user'])
+            expect(batchMap.get('ALEX-LAPTOP')).toBe('alex-canonical')
             expect(batchMap.get('unmapped-user')).toBe('unmapped-user')
 
             // Create entries with alias author and consolidate
             db.createEntry({
                 content: 'Entry from laptop alias',
-                author: 'chris-laptop',
+                author: 'alex-laptop',
             })
-            const consolidated = db.consolidateAuthors('chris-canonical')
+            const consolidated = db.consolidateAuthors('alex-canonical')
             expect(consolidated).toBe(1)
 
             // Remove alias
             expect(db.removeAuthorAlias('nonexistent')).toBe(false)
-            expect(db.removeAuthorAlias('chris-laptop')).toBe(true)
+            expect(db.removeAuthorAlias('alex-laptop')).toBe(true)
         })
     })
 

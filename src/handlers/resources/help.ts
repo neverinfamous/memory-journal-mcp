@@ -13,7 +13,7 @@ import { ICON_BRIEFING } from '../../constants/icons.js'
 import { HELP_CONTENT } from '../../constants/server-instructions.js'
 import { ASSISTANT_FOCUSED } from '../../utils/resource-annotations.js'
 import { logger } from '../../utils/logger.js'
-import { getToolGroup } from '../../filtering/tool-filter.js'
+import { getAllToolNames, getToolGroup, isToolVisibleForFilter } from '../../filtering/tool-filter.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from './shared.js'
 import type { getTools } from '../../handlers/tools/index.js'
 import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server'
@@ -22,14 +22,16 @@ import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server'
 // Group Metadata
 // ============================================================================
 
+const CANONICAL_TOOL_NAMES = new Set(getAllToolNames())
+
 /** Human-readable descriptions for each tool group */
 const GROUP_DESCRIPTIONS: Record<string, string> = {
-    core: 'Create, read, update, delete journal entries and manage recent activity',
+    core: 'Journal entries, tags, entry history, and anchor staleness marking',
     search: 'Full-text search, semantic search, date range queries, and vector index stats',
     analytics: 'Entry analytics, importance scoring, and productivity trends',
     relationships: 'Link and visualize relationships between journal entries',
-    io: 'Import and export journal data — JSON export, Markdown round-trip (export/import)',
-    admin: 'Update entries, rebuild indexes, and manage the vector search index',
+    io: 'Markdown & external knowledge-base import/export (JSON frontmatter, Notion/Obsidian/Logseq)',
+    admin: 'Runtime config, entry mutations, batch operations, auto-pruning, project registry, and audit logs',
     github: 'GitHub integration — issues, PRs, milestones, workflow runs, Kanban boards',
     git: 'Git history mining — commit search, release tracking, pattern analysis, and entry anchor staleness checks',
     backup: 'Create and restore database backups',
@@ -207,12 +209,16 @@ export function getHelpResourceDefinitions(): InternalResourceDef[] {
 
                 // Filter out tools disabled by --tool-filter, UNLESS codemode is enabled.
                 // Code Mode exposes the full API surface area via the sandbox,
-                // so we must register all help resources for the agent to reference.
-                const hasCodeMode = context.filterConfig?.enabledTools.has('mj_execute_code') ?? false;
-                const tools = rawTools.filter(t => {
-                    if (!context.filterConfig || hasCodeMode) return true;
-                    return context.filterConfig.enabledTools.has(t.name);
-                });
+                // while readonly meta-filter always restricts mutating tools.
+                const hasCodeMode = context.filterConfig?.enabledTools.has('mj_execute_code') ?? false
+                const filterRaw = context.filterConfig?.raw
+                const tools = rawTools.filter((t) => {
+                    if (!isToolVisibleForFilter(t.name, t.annotations?.readOnlyHint, filterRaw)) {
+                        return false
+                    }
+                    if (!context.filterConfig || hasCodeMode) return true
+                    return context.filterConfig.enabledTools.has(t.name)
+                })
 
                 // Group tools by their group field
                 const groups = new Map<string, { names: string[]; readOnly: boolean }>()
@@ -244,8 +250,9 @@ export function getHelpResourceDefinitions(): InternalResourceDef[] {
                 const data = {
                     totalTools: tools.length,
                     totalGroups: groupList.length,
+                    staticTopics: ['gotchas', 'templates'],
                     groups: groupList,
-                    hint: 'Read memory://help/{group} for detailed parameter info on each tool.',
+                    hint: 'Read memory://help/{group} for detailed parameter info on each tool, or memory://help/gotchas / memory://help/templates.',
                 }
                 const tokenEstimate = Math.ceil(JSON.stringify(data).length / 4)
                 return {
@@ -264,7 +271,8 @@ export function getHelpResourceDefinitions(): InternalResourceDef[] {
             annotations: ASSISTANT_FOCUSED,
             handler: async (uri: string, context: ResourceContext): Promise<ResourceResult> => {
                 const match = /memory:\/\/help\/([a-z][a-z0-9-]*)/.exec(uri)
-                const groupName = match?.[1]
+                const rawGroupName = match?.[1]
+                const groupName = rawGroupName === 'export' ? 'io' : rawGroupName
 
                 if (!groupName) {
                     throw new ProtocolError(ProtocolErrorCode.InvalidParams,  'Invalid group name in URI. Read memory://help for a list of available groups.')
@@ -272,11 +280,15 @@ export function getHelpResourceDefinitions(): InternalResourceDef[] {
 
                 // Resolve dynamic tool data for this group
                 const rawTools = await getAllToolDefinitionsAsync(context)
-                const hasCodeMode = context.filterConfig?.enabledTools.has('mj_execute_code') ?? false;
-                const tools = rawTools.filter(t => {
-                    if (!context.filterConfig || hasCodeMode) return true;
-                    return context.filterConfig.enabledTools.has(t.name);
-                });
+                const hasCodeMode = context.filterConfig?.enabledTools.has('mj_execute_code') ?? false
+                const filterRaw = context.filterConfig?.raw
+                const tools = rawTools.filter((t) => {
+                    if (!isToolVisibleForFilter(t.name, t.annotations?.readOnlyHint, filterRaw)) {
+                        return false
+                    }
+                    if (!context.filterConfig || hasCodeMode) return true
+                    return context.filterConfig.enabledTools.has(t.name)
+                })
                 const groupTools = tools.filter((t) => t.group === groupName)
 
                 // Check for static help content (codemode, github, etc.)
@@ -284,14 +296,22 @@ export function getHelpResourceDefinitions(): InternalResourceDef[] {
 
                 // If the group has dynamic tools, always return JSON (with optional helpContent)
                 if (groupTools.length > 0) {
+                    const enabledSet = context.filterConfig?.enabledTools
                     const isCodemodeOnly =
-                        context.filterConfig &&
-                        context.filterConfig.enabledTools.has('mj_execute_code') &&
-                        !context.filterConfig.enabledTools.has('create_entry')
+                        filterRaw?.trim() === 'codemode' ||
+                        (enabledSet !== undefined &&
+                            enabledSet.has('mj_execute_code') &&
+                            [...enabledSet].every(
+                                (t) => t === 'mj_execute_code' || t === 'update_configuration'
+                            ))
 
                     const toolDetails = groupTools.map((tool) => {
                         let displayName = tool.name
-                        if (isCodemodeOnly) {
+                        if (
+                            isCodemodeOnly &&
+                            tool.name !== 'mj_execute_code' &&
+                            tool.name !== 'update_configuration'
+                        ) {
                             const camelCase = tool.name.replace(
                                 /_([a-z])/g,
                                 (_: string, letter: string) => letter.toUpperCase()
@@ -394,21 +414,23 @@ async function getAllToolDefinitionsAsync(context: ResourceContext): Promise<Min
             context.teamDb,
             undefined
         )
-        return tools.map((t) => {
-            const regWithGroup = t as typeof t & { group?: string }
-            return {
-                name: t.name,
-                title: t.title ?? t.name,
-                description: t.description,
-                group:
-                    typeof regWithGroup.group === 'string' && regWithGroup.group.length > 0
-                        ? regWithGroup.group
-                        : inferGroupFromName(t.name),
-                inputSchema: t.inputSchema,
-                outputSchema: t.outputSchema,
-                annotations: t.annotations,
-            }
-        })
+        return tools
+            .filter((t) => CANONICAL_TOOL_NAMES.has(t.name))
+            .map((t) => {
+                const regWithGroup = t as typeof t & { group?: string }
+                return {
+                    name: t.name,
+                    title: t.title ?? t.name,
+                    description: t.description,
+                    group:
+                        typeof regWithGroup.group === 'string' && regWithGroup.group.length > 0
+                            ? regWithGroup.group
+                            : inferGroupFromName(t.name),
+                    inputSchema: t.inputSchema,
+                    outputSchema: t.outputSchema,
+                    annotations: t.annotations,
+                }
+            })
     } catch (e: unknown) {
         const message = e instanceof Error ? e.message : String(e)
         logger.error('HELP_LOAD_TOOLS_FAILED', { error: message })

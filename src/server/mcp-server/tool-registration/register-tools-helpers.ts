@@ -1,4 +1,8 @@
-import { getEnabledGroups } from '../../../filtering/tool-filter.js'
+import {
+    getEnabledGroups,
+    isReadonlyMetaActive,
+    isToolVisibleForFilter,
+} from '../../../filtering/tool-filter.js'
 import {
     generateStandardInstructions,
     generateCodeModeInstructions,
@@ -35,15 +39,27 @@ export function buildServerInstructions(
     context: ServerContext,
     options: ServerOptions,
     prompts: PromptDefinition[],
-    allToolNames: Set<string>
+    allToolNames: Set<string>,
+    readOnlyHints?: ReadonlyMap<string, boolean | undefined>
 ): string {
     const currentConfig = context.configManager.getConfig()
-    const enabledSet = currentConfig.toolFilterConfig?.enabledTools ?? allToolNames
-    const groups = currentConfig.toolFilterConfig
-        ? getEnabledGroups(currentConfig.toolFilterConfig.enabledTools)
-        : undefined
+    const filterRaw = currentConfig.toolFilterConfig?.raw
+    let enabledSet = currentConfig.toolFilterConfig?.enabledTools ?? allToolNames
+    if (isReadonlyMetaActive(filterRaw) && readOnlyHints !== undefined) {
+        enabledSet = new Set(
+            [...enabledSet].filter((name) =>
+                isToolVisibleForFilter(name, readOnlyHints.get(name), filterRaw)
+            )
+        )
+    }
+    const groups = currentConfig.toolFilterConfig ? getEnabledGroups(enabledSet) : undefined
 
-    const isCodeModeOnly = enabledSet.size === 1 && enabledSet.has('mj_execute_code')
+    const isCodeModeOnly =
+        filterRaw?.trim() === 'codemode' ||
+        (enabledSet.has('mj_execute_code') &&
+            [...enabledSet].every(
+                (t) => t === 'mj_execute_code' || t === 'update_configuration'
+            ))
     const mappedPrompts = prompts.map((p) => {
         const prompt = p as { name: string; description?: string }
         return {
@@ -59,13 +75,23 @@ export function buildServerInstructions(
             : {}),
     }
 
-    if (isCodeModeOnly || currentConfig.toolFilterConfig?.raw === 'codemode') {
+    if (isCodeModeOnly) {
+        const rawFinalEnabled =
+            currentConfig.codemodeInternalFullAccess === true ? allToolNames : enabledSet
+        const finalEnabledTools =
+            isReadonlyMetaActive(filterRaw) && readOnlyHints !== undefined
+                ? new Set(
+                      [...rawFinalEnabled].filter((name) =>
+                          isToolVisibleForFilter(name, readOnlyHints.get(name), filterRaw)
+                      )
+                  )
+                : rawFinalEnabled
         const finalGroups =
             currentConfig.codemodeInternalFullAccess === true
-                ? new Set(Object.keys(TOOL_GROUPS) as ToolGroup[])
+                ? isReadonlyMetaActive(filterRaw)
+                    ? getEnabledGroups(finalEnabledTools)
+                    : new Set(Object.keys(TOOL_GROUPS) as ToolGroup[])
                 : groups
-        const finalEnabledTools =
-            currentConfig.codemodeInternalFullAccess === true ? allToolNames : enabledSet
 
         return generateCodeModeInstructions(
             finalEnabledTools,

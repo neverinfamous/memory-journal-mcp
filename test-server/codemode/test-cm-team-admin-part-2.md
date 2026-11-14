@@ -37,7 +37,7 @@ const mdExport = await mj.team.teamExportEntries({
   limit: 5,
 })
 
-const MOCK_DIR = 'c:/Users/chris/Desktop/memory-journal-mcp/test-server/codemode/cm_team_export'
+const MOCK_DIR = '/workspace/memory-journal-mcp/test-server/codemode/cm_team_export'
 
 const ioExport = await mj.team.teamExportMarkdown({
   output_dir: MOCK_DIR,

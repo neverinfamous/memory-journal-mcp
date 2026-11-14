@@ -146,7 +146,7 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
             title: 'Export to Markdown Files',
             description:
                 'Export journal entries as individual frontmattered Markdown files (.md). ' +
-                'Each file contains YAML frontmatter (mj_id, entry_type, tags, relationships) ' +
+                'Each file contains JSON frontmatter (mj_id, entry_type, tags, relationships) ' +
                 'and the entry content. Files can be edited externally and re-imported via import_markdown.',
             group: 'io',
             inputSchema: ExportMarkdownSchemaMcp,

@@ -16,15 +16,15 @@ describe('workspace-resolver with keyword and tag inference', () => {
         defaultProjectNumber: 1,
         projectRegistry: {
             'mysql-mcp': {
-                path: 'C:\\Users\\chris\\Desktop\\mysql-mcp',
+                path: 'C:\\workspace\\mysql-mcp',
                 project_number: 9
             },
             'memory-journal-mcp': {
-                path: 'C:\\Users\\chris\\Desktop\\memory-journal-mcp',
+                path: 'C:\\workspace\\memory-journal-mcp',
                 project_number: 5
             },
-            'adamic': {
-                path: 'C:\\Users\\chris\\Desktop\\adamic',
+            'core-platform': {
+                path: 'C:\\workspace\\core-platform',
                 project_number: 16
             }
         }
@@ -37,8 +37,8 @@ describe('workspace-resolver with keyword and tag inference', () => {
     })
 
     it('resolves explicit workspace_id and looks up project_number', () => {
-        const res = resolveProjectContext({ workspace_id: 'adamic' }, mockConfig)
-        expect(res.workspaceId).toBe('adamic')
+        const res = resolveProjectContext({ workspace_id: 'core-platform' }, mockConfig)
+        expect(res.workspaceId).toBe('core-platform')
         expect(res.projectNumber).toBe(16)
     })
 
@@ -129,14 +129,14 @@ describe('workspace-resolver with keyword and tag inference', () => {
     })
 
     it('rejects an explicit workspace whose project_number belongs to a different registry workspace', () => {
-        const spy = vi.spyOn(process, 'cwd').mockReturnValue('C:\\Users\\chris\\Desktop\\memory-journal-mcp\\src')
+        const spy = vi.spyOn(process, 'cwd').mockReturnValue('C:\\workspace\\memory-journal-mcp\\src')
         try {
             expect(() =>
                 resolveProjectContext(
                     {
-                        workspace_id: 'adamic',
+                        workspace_id: 'core-platform',
                         project_number: 5,
-                        content: 'sqlite notes that must not retarget adamic',
+                        content: 'sqlite notes that must not retarget core-platform',
                     },
                     mockConfig
                 )
@@ -165,8 +165,8 @@ describe('workspace-resolver with keyword and tag inference', () => {
     })
 
     it('does not treat a prefixed sibling directory as the registered project', () => {
-        const root = path.join('C:\\Users\\chris\\Desktop', 'memory-journal-mcp')
-        const wiki = path.join('C:\\Users\\chris\\Desktop', 'memory-journal-mcp.wiki')
+        const root = path.join('C:\\workspace', 'memory-journal-mcp')
+        const wiki = path.join('C:\\workspace', 'memory-journal-mcp.wiki')
         const child = path.join(root, 'src')
         expect(cwdMatchesRegistryPath(root, wiki)).toBe(false)
         expect(cwdMatchesRegistryPath(root, child)).toBe(true)
@@ -180,10 +180,10 @@ describe('workspace-resolver with keyword and tag inference', () => {
                 undefined,
                 undefined,
                 mockConfig,
-                'Working on adamic codebase enhancements',
+                'Working on core-platform codebase enhancements',
                 ['dev']
             )
-            expect(wsId).toBe('adamic')
+            expect(wsId).toBe('core-platform')
         } finally {
             spy.mockRestore()
         }
@@ -212,7 +212,7 @@ describe('workspace-resolver with keyword and tag inference', () => {
         expect(byTag.workspaceId).toBe('default')
         expect(byTag.projectNumber).toBeUndefined()
 
-        const spy = vi.spyOn(process, 'cwd').mockReturnValue('C:\\Users\\chris\\Desktop\\memory-journal-mcp\\src')
+        const spy = vi.spyOn(process, 'cwd').mockReturnValue('C:\\workspace\\memory-journal-mcp\\src')
         try {
             const byCwd = resolveProjectContext(
                 { workspace_id: 'default', content: 'General commit note with no explicit repo keyword' },
@@ -274,7 +274,7 @@ describe('workspace-resolver with keyword and tag inference', () => {
     })
 
     it('prioritizes registered CWD over content/tag keywords when preferCwdOverKeywords is true (CLI mode)', () => {
-        const adamicRoot = path.resolve('workspace-roots', 'adamic')
+        const platformRoot = path.resolve('workspace-roots', 'core-platform')
         const dbMcpRoot = path.resolve('workspace-roots', 'db-mcp')
         const cliRegistryConfig: ToolHandlerConfig = {
             defaultWorkspaceId: 'default',
@@ -283,14 +283,14 @@ describe('workspace-resolver with keyword and tag inference', () => {
                     path: dbMcpRoot,
                     project_number: 15,
                 },
-                adamic: {
-                    path: adamicRoot,
+                'core-platform': {
+                    path: platformRoot,
                     project_number: 16,
                 },
             },
         }
 
-        const spy = vi.spyOn(process, 'cwd').mockReturnValue(path.join(adamicRoot, 'skills'))
+        const spy = vi.spyOn(process, 'cwd').mockReturnValue(path.join(platformRoot, 'skills'))
         try {
             // Registered cwd wins over the sqlite alias in both MCP and CLI mode.
             const mcpResolved = resolveProjectContext(
@@ -300,7 +300,7 @@ describe('workspace-resolver with keyword and tag inference', () => {
                 },
                 cliRegistryConfig
             )
-            expect(mcpResolved.workspaceId).toBe('adamic')
+            expect(mcpResolved.workspaceId).toBe('core-platform')
             expect(mcpResolved.projectNumber).toBe(16)
 
             const cliResolved = resolveProjectContext(
@@ -311,14 +311,14 @@ describe('workspace-resolver with keyword and tag inference', () => {
                 },
                 cliRegistryConfig
             )
-            expect(cliResolved.workspaceId).toBe('adamic')
+            expect(cliResolved.workspaceId).toBe('core-platform')
             expect(cliResolved.projectNumber).toBe(16)
 
             // Explicit workspace_id or project_number still overrides CWD in CLI mode
             const explicitProject = resolveProjectContext(
                 {
                     project_number: 15,
-                    content: 'Cross-repo note logged from adamic CWD',
+                    content: 'Cross-repo note logged from core-platform CWD',
                     preferCwdOverKeywords: true,
                 },
                 cliRegistryConfig

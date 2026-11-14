@@ -1,10 +1,10 @@
 /**
  * Generates src/constants/instructions/*.ts from per-group markdown files.
  *
- * Reads server-instructions/*.md, escapes for template literals, and exports them
- * as constants in their respective .ts files.
+ * Reads src/constants/instructions/markdown/*.md, escapes for template literals,
+ * and exports them as constants in their respective .ts files.
  *
- * Usage: npx tsx scripts/generate-instructions.ts
+ * Usage: pnpm run generate:instructions (or pnpm exec tsx scripts/generate-instructions.ts)
  */
 
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'

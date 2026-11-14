@@ -53,7 +53,6 @@ const RESOURCE_SUGGESTIONS: Record<string, string> = {
     'memory://recent': 'mj.core.getRecentEntries()',
     'memory://statistics': 'mj.analytics.getStatistics()',
     'memory://tags': 'mj.core.listTags()',
-    'memory://flags': 'mj.team.teamListFlags({ status: "active" })',
     'memory://significant': 'mj.search.searchEntries({ sort_by: "importance" })',
     'memory://insights': 'mj.analytics.getCrossProjectInsights()',
 }

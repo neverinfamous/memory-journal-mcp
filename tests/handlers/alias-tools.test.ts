@@ -29,24 +29,24 @@ describe('Team Alias Tools', () => {
         it('successfully adds an alias', async () => {
             mockContext.teamDb!.addAuthorAlias = vi.fn().mockReturnValue({
                 id: 1,
-                alias: 'chris',
-                canonicalAuthor: 'christopher',
+                alias: 'alex',
+                canonicalAuthor: 'alexander',
                 createdAt: '2026-06-06',
                 createdBy: 'test_admin'
             })
             const tool = getTool('team_add_author_alias')
-            const result = await tool.handler({ alias: 'chris', canonical_author: 'christopher' }) as any
+            const result = await tool.handler({ alias: 'alex', canonical_author: 'alexander' }) as any
 
             expect(result.success).toBe(true)
-            expect(result.alias.canonicalAuthor).toBe('christopher')
-            expect(mockContext.teamDb!.addAuthorAlias).toHaveBeenCalledWith('chris', 'christopher', 'test-author', 'default')
+            expect(result.alias.canonicalAuthor).toBe('alexander')
+            expect(mockContext.teamDb!.addAuthorAlias).toHaveBeenCalledWith('alex', 'alexander', 'test-author', 'default')
         })
 
         it('rejects if alias is an existing member role', async () => {
             mockContext.teamDb!.getTeamMember = vi.fn().mockReturnValue({ author: 'existing_user', role: 'viewer' })
             const tool = getTool('team_add_author_alias')
 
-            const result = await tool.handler({ alias: 'existing_user', canonical_author: 'christopher' }) as any
+            const result = await tool.handler({ alias: 'existing_user', canonical_author: 'alexander' }) as any
             expect(result.success).toBe(false)
             expect(result.error).toMatch(/Cannot alias 'existing_user' because it is an existing team member/)
         })
@@ -56,10 +56,10 @@ describe('Team Alias Tools', () => {
         it('successfully removes an alias', async () => {
             mockContext.teamDb!.removeAuthorAlias = vi.fn().mockReturnValue(true)
             const tool = getTool('team_remove_author_alias')
-            const result = await tool.handler({ alias: 'chris' }) as any
+            const result = await tool.handler({ alias: 'alex' }) as any
 
             expect(result.success).toBe(true)
-            expect(mockContext.teamDb!.removeAuthorAlias).toHaveBeenCalledWith('chris', 'default')
+            expect(mockContext.teamDb!.removeAuthorAlias).toHaveBeenCalledWith('alex', 'default')
         })
 
         it('returns RESOURCE_NOT_FOUND if alias does not exist', async () => {
@@ -75,33 +75,33 @@ describe('Team Alias Tools', () => {
     describe('team_list_author_aliases', () => {
         it('successfully lists aliases', async () => {
             mockContext.teamDb!.listAuthorAliases = vi.fn().mockReturnValue([
-                { alias: 'chris', canonicalAuthor: 'christopher' }
+                { alias: 'alex', canonicalAuthor: 'alexander' }
             ])
             const tool = getTool('team_list_author_aliases')
             const result = await tool.handler({}) as any
 
             expect(result.aliases).toHaveLength(1)
-            expect(result.aliases[0].alias).toBe('chris')
+            expect(result.aliases[0].alias).toBe('alex')
         })
     })
 
     describe('team_resolve_author', () => {
         it('successfully resolves an author', async () => {
-            mockContext.teamDb!.resolveAuthor = vi.fn().mockReturnValue('christopher')
+            mockContext.teamDb!.resolveAuthor = vi.fn().mockReturnValue('alexander')
             const tool = getTool('team_resolve_author')
-            const result = await tool.handler({ author: 'chris' }) as any
+            const result = await tool.handler({ author: 'alex' }) as any
 
-            expect(result.original_author).toBe('chris')
-            expect(result.canonical_author).toBe('christopher')
+            expect(result.original_author).toBe('alex')
+            expect(result.canonical_author).toBe('alexander')
             expect(result.is_aliased).toBe(true)
         })
 
         it('returns false for is_aliased if author is not aliased', async () => {
-            mockContext.teamDb!.resolveAuthor = vi.fn().mockReturnValue('chris')
+            mockContext.teamDb!.resolveAuthor = vi.fn().mockReturnValue('alex')
             const tool = getTool('team_resolve_author')
-            const result = await tool.handler({ author: 'chris' }) as any
+            const result = await tool.handler({ author: 'alex' }) as any
 
-            expect(result.canonical_author).toBe('chris')
+            expect(result.canonical_author).toBe('alex')
             expect(result.is_aliased).toBe(false)
         })
     })
@@ -110,11 +110,11 @@ describe('Team Alias Tools', () => {
         it('successfully consolidates authors', async () => {
             mockContext.teamDb!.consolidateAuthors = vi.fn().mockReturnValue(42)
             const tool = getTool('team_consolidate_authors')
-            const result = await tool.handler({ canonical_author: 'christopher' }) as any
+            const result = await tool.handler({ canonical_author: 'alexander' }) as any
 
             expect(result.success).toBe(true)
             expect(result.updated_count).toBe(42)
-            expect(mockContext.teamDb!.consolidateAuthors).toHaveBeenCalledWith('christopher', 'default')
+            expect(mockContext.teamDb!.consolidateAuthors).toHaveBeenCalledWith('alexander', 'default')
         })
 
         it('passes a concrete workspace into consolidateAuthors', async () => {
@@ -123,11 +123,11 @@ describe('Team Alias Tools', () => {
             mockContext.config = { projectRegistry: {} }
             const tool = getTool('team_consolidate_authors')
             const result: unknown = await tool.handler({
-                canonical_author: 'christopher',
+                canonical_author: 'alexander',
                 workspace_id: 'alpha',
             })
 
-            expect(consolidate).toHaveBeenCalledWith('christopher', 'alpha')
+            expect(consolidate).toHaveBeenCalledWith('alexander', 'alpha')
             if (typeof result !== 'object' || result === null || !('success' in result)) {
                 throw new Error('consolidate handler did not return a result')
             }

@@ -4,7 +4,7 @@ import { match, P } from 'ts-pattern';
 import path from 'node:path';
 import fs from 'node:fs';
 import { convertToWslPath, getPositionalArgs, healFragmentedQuotes, escapeUnixArg, getUnderlyingPackageScript } from '../command-utils.js';
-import { getUnquoted, splitFirstShellSegment } from './utils.js';
+import { AGENT_EXEC_README_URL, getUnquoted, splitFirstShellSegment } from './utils.js';
 import { findEcosystemScript } from '../utils.js';
 import { runMutatingInterceptors } from './mutating-interceptors.js';
 import { runStructuralInterceptors } from './structural-interceptors.js';
@@ -353,12 +353,12 @@ export function systemInterceptor(ctx: ExecutionContext): void {
     }
 
     if ((AGENT_NATIVE_TOOLS as readonly string[]).includes(trimmedCode)) {
-      console.error(`\n   💡 AGENT HINT: '${trimmedCode}' is an agent-native tool, NOT executable code or a shell script. Please invoke the '${trimmedCode}' tool directly.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: '${trimmedCode}' is an agent-native tool, NOT executable code or a shell script. Please invoke the '${trimmedCode}' tool directly.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](${AGENT_EXEC_README_URL})\x1b[0m`);
       process.exit(1);
     }
     const matchedMcpTool = (ECOSYSTEM_MCP_TOOLS as readonly string[]).find(t => trimmedCode === t || trimmedCode.startsWith(`${t}(`) || trimmedCode.startsWith(`${t} `));
     if (matchedMcpTool !== undefined) {
-      console.error(`\n   💡 AGENT HINT: '${matchedMcpTool}' is an MCP tool, NOT executable code or a shell script. Please call the '${matchedMcpTool}' MCP tool via call_mcp_tool.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Call MCP tool. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: '${matchedMcpTool}' is an MCP tool, NOT executable code or a shell script. Please call the '${matchedMcpTool}' MCP tool via call_mcp_tool.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Call MCP tool. Ref: [AGENT_README.md](${AGENT_EXEC_README_URL})\x1b[0m`);
       process.exit(1);
     }
   }
@@ -1048,7 +1048,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
         .otherwise(() => false);
     });
     if (hasUnsafe) {
-      console.error(`\n   💡 AGENT HINT: Standalone shell operators (|, >, <, &&, ||, ;) detected in arguments.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](file:///C:/Users/chris/Desktop/adamic/.agents/scripts/lib-agent-exec/AGENT_README.md)\x1b[0m`);
+      console.error(`\n   💡 AGENT HINT: Standalone shell operators (|, >, <, &&, ||, ;) detected in arguments.\n\x1b[38;5;208m   🛠️ AUTONOMOUS HEALING: Execution blocked. Fix parameters, use native tool, or spawn /heal-infrastructure. Ref: [AGENT_README.md](${AGENT_EXEC_README_URL})\x1b[0m`);
       console.error(`   Because 'agent-exec.ts' uses \`shell: false\`, these operators are treated as literal strings and will fail.`);
       console.error(`   To use shell features, please use a 'script' payload type or pipe natively in PowerShell.`);
       process.exit(1);

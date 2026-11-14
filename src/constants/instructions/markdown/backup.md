@@ -1,7 +1,7 @@
 # Backup Operations
-- **Snapshots**: Create on-demand snapshot backups of the database. Useful before performing destructive administrative operations like batch deletions.
-- **Restore**: Restore the entire database state from a specific backup snapshot.
-- **Cleanup**: Remove old or unnecessary backups to save disk space.
+- **Snapshots**: `backup_journal({ name? })` creates an on-demand SQLite snapshot of the personal journal database before destructive maintenance (use `team_backup` for the shared team database).
+- **Listing & Restore**: `list_backups()` lists available snapshots; `restore_backup({ filename, confirm: true })` automatically takes a `pre_restore_*` safety backup first, restores the database, and rebuilds the vector search index.
+- **Cleanup**: `cleanup_backups({ keep_count = 5 })` prunes older snapshots while retaining the newest `keep_count` backups.
 
 ## Available Tools
 

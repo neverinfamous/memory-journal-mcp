@@ -124,7 +124,7 @@ services:
     environment:
       - DD_API_KEY=${DD_API_KEY}
       - DD_SITE=datadoghq.com
-      - DD_HOSTNAME=adamic-wsl2
+      - DD_HOSTNAME=${DD_HOSTNAME:-memory-journal-local}
       - DD_TAGS=env:development source:wsl2
       # Logs
       - DD_LOGS_ENABLED=true

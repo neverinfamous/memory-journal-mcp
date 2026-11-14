@@ -167,41 +167,41 @@ describe('Extended Tool Handlers (Team, IO, Admin, Core)', () => {
 
             // Add alias using alias keys ('from' -> 'alias', 'to' -> 'canonical_author')
             const addRes = (await findTool(tools, 'team_add_author_alias').handler({
-                from: 'chris-dev',
-                to: 'chris-main',
+                from: 'alex-dev',
+                to: 'alex-main',
             })) as { success: boolean }
             expect(addRes.success).toBe(true)
 
             // List aliases using search key ('q')
             const listRes = (await findTool(tools, 'team_list_author_aliases').handler({
-                q: 'chris-main',
+                q: 'alex-main',
             })) as { success: boolean; aliases: unknown[] }
             expect(listRes.success).toBe(true)
             expect(listRes.aliases.length).toBe(1)
 
             // Resolve author
             const resAuthor = (await findTool(tools, 'team_resolve_author').handler({
-                author: 'chris-dev',
+                author: 'alex-dev',
             })) as { canonical_author: string; is_aliased: boolean }
-            expect(resAuthor.canonical_author).toBe('chris-main')
+            expect(resAuthor.canonical_author).toBe('alex-main')
             expect(resAuthor.is_aliased).toBe(true)
 
             // Consolidate authors
-            teamDb.createEntry({ content: 'Team entry by alias', author: 'chris-dev' })
+            teamDb.createEntry({ content: 'Team entry by alias', author: 'alex-dev' })
             const consRes = (await findTool(tools, 'team_consolidate_authors').handler({
-                target: 'chris-main',
+                target: 'alex-main',
             })) as { success: boolean; updated_count: number }
             expect(consRes.success).toBe(true)
             expect(consRes.updated_count).toBe(1)
 
             // Remove alias (found vs not found)
             const remRes = (await findTool(tools, 'team_remove_author_alias').handler({
-                name: 'chris-dev',
+                name: 'alex-dev',
             })) as { success: boolean }
             expect(remRes.success).toBe(true)
 
             const remMissing = (await findTool(tools, 'team_remove_author_alias').handler({
-                alias: 'chris-dev',
+                alias: 'alex-dev',
             })) as { error?: string }
             expect(remMissing.error).toBeDefined()
         })
@@ -315,7 +315,7 @@ describe('Extended Tool Handlers (Team, IO, Admin, Core)', () => {
 
             // 1. create_entry with share_with_team and relationships
             const prevAuthor = process.env['TEAM_AUTHOR']
-            process.env['TEAM_AUTHOR'] = 'chris-tester'
+            process.env['TEAM_AUTHOR'] = 'alex-tester'
             let createdId: number
             try {
                 const createRes = (await findTool(coreTools, 'create_entry').handler({

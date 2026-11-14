@@ -1,6 +1,9 @@
 import type { InternalResourceDef, ResourceContext } from './shared.js'
 import { getTools } from '../tools/index.js'
 import { TOOL_GROUPS } from '../../filtering/tool-constants.js'
+import { getAllToolNames, isToolVisibleForFilter } from '../../filtering/tool-filter.js'
+
+const CANONICAL_TOOL_NAMES = new Set(getAllToolNames())
 
 export function getToolsCatalogResourceDefinitions(): InternalResourceDef[] {
     return [
@@ -24,7 +27,7 @@ export function getToolsCatalogResourceDefinitions(): InternalResourceDef[] {
                 const { db, vectorManager, github, teamDb, filterConfig } = context
 
                 // Pass null for filterConfig to get ALL tools regardless of active filter.
-                // We use type casting for teamVectorManager and config since they aren't directly on ResourceContext.
+                // Exclude unregistered hallucination-trap dummy tools from the catalog.
                 const allTools = getTools(
                     db,
                     null,
@@ -33,7 +36,7 @@ export function getToolsCatalogResourceDefinitions(): InternalResourceDef[] {
                     undefined,
                     teamDb,
                     undefined
-                )
+                ).filter((t) => CANONICAL_TOOL_NAMES.has(t.name))
 
                 const activeFilterRaw = filterConfig?.raw ?? 'full'
                 
@@ -63,7 +66,10 @@ export function getToolsCatalogResourceDefinitions(): InternalResourceDef[] {
                     // Determine how many tools in this group are enabled
                     let enabledCount = 0
                     for (const tool of toolsInGroup) {
-                        if (!filterConfig || filterConfig.enabledTools.has(tool.name)) {
+                        const isEnabled =
+                            (!filterConfig || filterConfig.enabledTools.has(tool.name)) &&
+                            isToolVisibleForFilter(tool.name, tool.annotations?.readOnlyHint, filterConfig?.raw)
+                        if (isEnabled) {
                             enabledCount++
                         }
                     }
@@ -74,7 +80,9 @@ export function getToolsCatalogResourceDefinitions(): InternalResourceDef[] {
                     md += `### ${group} (${toolsInGroup.length} tools) ${statusEmoji}\n`
                     
                     for (const tool of toolsInGroup) {
-                        const isEnabled = !filterConfig || filterConfig.enabledTools.has(tool.name)
+                        const isEnabled =
+                            (!filterConfig || filterConfig.enabledTools.has(tool.name)) &&
+                            isToolVisibleForFilter(tool.name, tool.annotations?.readOnlyHint, filterConfig?.raw)
                         const toolStatus = isEnabled ? '' : ' (disabled)'
                         md += `- ${tool.name}: ${tool.description}${toolStatus}\n`
                     }
