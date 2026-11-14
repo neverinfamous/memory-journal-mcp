@@ -39,11 +39,38 @@ export function detectScopeMismatch(
             ? findCanonicalRegistryKey(callerWorkspace, registry)
             : undefined
     const repoKey =
-        canonicalRepo !== undefined && Object.prototype.hasOwnProperty.call(registry, canonicalRepo)
-            ? canonicalRepo
+        canonicalRepo !== undefined
+            ? findCanonicalRegistryKey(canonicalRepo, registry)
             : undefined
-    if (callerWorkspace !== undefined && repoKey !== undefined && wsKey !== repoKey) {
-        return `workspace_id "${callerWorkspace}" does not match repository "${canonicalRepo ?? ''}".`
+    if (
+        callerWorkspace !== undefined &&
+        canonicalRepo !== undefined &&
+        (wsKey ?? callerWorkspace).toLowerCase() !== (repoKey ?? canonicalRepo).toLowerCase()
+    ) {
+        return `workspace_id "${callerWorkspace}" does not match repository "${canonicalRepo}".`
+    }
+    if (projectNumber !== undefined) {
+        const owners = Object.entries(registry)
+            .filter(([, entry]) => entry.project_number === projectNumber)
+            .map(([key]) => key)
+        if (owners.length > 1) {
+            return `project_number ${String(projectNumber)} is registered to more than one workspace.`
+        }
+        const projectOwner = owners[0]
+        if (
+            projectOwner !== undefined &&
+            callerWorkspace !== undefined &&
+            (wsKey ?? callerWorkspace).toLowerCase() !== projectOwner.toLowerCase()
+        ) {
+            return `project_number ${String(projectNumber)} belongs to workspace "${projectOwner}", not "${callerWorkspace}".`
+        }
+        if (
+            projectOwner !== undefined &&
+            canonicalRepo !== undefined &&
+            (repoKey ?? canonicalRepo).toLowerCase() !== projectOwner.toLowerCase()
+        ) {
+            return `project_number ${String(projectNumber)} belongs to workspace "${projectOwner}", not repository "${canonicalRepo}".`
+        }
     }
     const ownerKey = wsKey ?? repoKey
     const registered = ownerKey !== undefined ? registry[ownerKey]?.project_number : undefined
@@ -132,9 +159,21 @@ export function resolveIssueEntryScope(
         candidateProj,
         effectiveRegistry
     )
+    const finalWorkspaceId = paired.workspaceId ?? candidateWs
+    const finalProjectNumber = paired.projectNumber ?? undefined
+    if (
+        finalWorkspaceId === 'default' &&
+        (finalProjectNumber === undefined || finalProjectNumber <= 0)
+    ) {
+        return {
+            errorResponse: scopeMismatchResponse(
+                "Cannot record issue journal entry in workspace 'default' without a valid project_number."
+            ),
+        }
+    }
     return {
-        workspaceId: paired.workspaceId ?? candidateWs,
-        projectNumber: paired.projectNumber ?? undefined,
+        workspaceId: finalWorkspaceId,
+        projectNumber: finalProjectNumber,
     }
 }
 

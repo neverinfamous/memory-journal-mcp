@@ -47,7 +47,7 @@ function runBatchTransaction(
 
 
 export function validateEntryInput(input: CreateEntryInput): { normalizedTimestamp: string } {
-    if (input.workspaceId === '*') {
+    if (input.workspaceId?.trim() === '*') {
         throw new Error(
             "workspace_id '*' is a read-only cross-workspace selector and cannot be used to create an entry. Pass a specific workspace_id."
         )

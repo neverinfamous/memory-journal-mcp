@@ -41,7 +41,7 @@ export function getNonEmptyString(primary: Record<string, unknown>, secondary: R
 /** Explicit workspace_id, else a registry-resolved `repo` (never a verbatim `owner/repo`). */
 export function readWorkspaceField(primary: Record<string, unknown>, secondary: Record<string, unknown>): string | undefined {
     return (
-        getNonEmptyString(primary, secondary, ['workspace_id', 'workspaceId']) ??
+        getNonEmptyString(primary, secondary, ['workspace_id', 'workspaceId', 'workspace']) ??
         resolveRepoWorkspace(primary['repo'] ?? secondary['repo'])
     )
 }
@@ -53,8 +53,16 @@ export function parseProjectNumberField(
     const raw =
         primary['project_number'] ??
         primary['projectNumber'] ??
+        primary['project_id'] ??
+        primary['projectId'] ??
+        primary['project_name'] ??
+        primary['projectName'] ??
         secondary['project_number'] ??
         secondary['projectNumber'] ??
+        secondary['project_id'] ??
+        secondary['projectId'] ??
+        secondary['project_name'] ??
+        secondary['projectName'] ??
         primary['project'] ??
         secondary['project']
     if (typeof raw === 'number' && !Number.isNaN(raw)) return raw

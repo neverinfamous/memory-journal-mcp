@@ -136,7 +136,7 @@ export interface IDatabaseAdapter {
         offset?: number
     ): { entries: JournalEntry[]; nextCursor?: string }
     getEntriesPage(offset: number, limit: number, workspaceId?: string, projectNumber?: number): { entries: JournalEntry[]; nextCursor?: string }
-    getActiveEntryCount(workspaceId?: string): number
+    getActiveEntryCount(workspaceId?: string, projectNumber?: number): number
     updateEntry(
         id: number,
         updates: {
@@ -294,7 +294,7 @@ export interface IDatabaseAdapter {
         workspaceId?: string,
         projectNumber?: number
     ): Record<string, unknown>
-    getAuthorStatistics(workspaceId?: string): { author: string; count: number }[]
+    getAuthorStatistics(workspaceId?: string, projectNumber?: number): { author: string; count: number }[]
     getAuthorsForEntries(entryIds: number[]): Map<number, string | null>
 
     // Tags Manager

@@ -176,5 +176,6 @@ export function registerAdminCommands(program: Command): void {
     addOutputOptions(rebuildIndexCmd)
     addCoreOptions(rebuildIndexCmd)
     addDatabaseOptions(rebuildIndexCmd)
+    addWorkspaceScopeOptions(rebuildIndexCmd)
     rebuildIndexCmd.action(withValidation(rebuildIndexSchema, rebuildIndexAction))
 }

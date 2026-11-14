@@ -77,8 +77,8 @@ export class DatabaseAdapter extends AdapterDelegates implements IDatabaseAdapte
         return this.entriesMgr.getEntriesPage(offset, limit, 'desc', workspaceId, projectNumber)
     }
 
-    getActiveEntryCount(workspaceId?: string): number {
-        return this.entriesMgr.getActiveEntryCount(workspaceId)
+    getActiveEntryCount(workspaceId?: string, projectNumber?: number): number {
+        return this.entriesMgr.getActiveEntryCount(workspaceId, projectNumber)
     }
 
     updateEntry(

@@ -109,7 +109,7 @@ export async function buildGitHubSection(
     try {
         const resolved = await resolveBriefingRepo(github, config, targetRepo)
         if (!resolved) return null
-        const { owner, repo } = resolved
+        const { owner, repo, github: repoGithub } = resolved
         const [
             ciStatusResult,
             issuesAndPrsResult,
@@ -118,12 +118,12 @@ export async function buildGitHubSection(
             copilotReviewsResult,
             localGitStatusResult,
         ] = await Promise.allSettled([
-            fetchCiStatus(github, owner, repo, config),
-            fetchIssuesAndPrs(github, owner, repo, config),
-            fetchMilestones(github, owner, repo, config.milestoneCount ?? 3),
-            fetchInsights(github, owner, repo),
-            config.copilotReviews ? fetchCopilotReviews(github, owner, repo) : Promise.resolve(undefined),
-            github.getLocalGitStatus(),
+            fetchCiStatus(repoGithub, owner, repo, config),
+            fetchIssuesAndPrs(repoGithub, owner, repo, config),
+            fetchMilestones(repoGithub, owner, repo, config.milestoneCount ?? 3),
+            fetchInsights(repoGithub, owner, repo),
+            config.copilotReviews ? fetchCopilotReviews(repoGithub, owner, repo) : Promise.resolve(undefined),
+            repoGithub.getLocalGitStatus(),
         ])
         const unpacked = unpackGitHubFetches({
             ciStatusResult,
@@ -137,7 +137,7 @@ export async function buildGitHubSection(
         const localBranch =
             'branch' in unpacked.localGitStatus ? unpacked.localGitStatus.branch : undefined
         const activePr = await loadActivePr(
-            github,
+            repoGithub,
             owner,
             repo,
             unpacked.issuesAndPrs.allPrs,

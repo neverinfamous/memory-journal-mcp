@@ -188,7 +188,7 @@ describe('Team Admin Tool Handlers', () => {
                 'team_update_entry',
                 {
                     entry_id: entryId,
-                    project_number: 99,
+                    project_number: 1,
                     significance_type: 'decision',
                     issue_number: 42,
                     pr_number: 7,
@@ -203,7 +203,7 @@ describe('Team Admin Tool Handlers', () => {
             )) as any
 
             expect(updateResult.success).toBe(true)
-            expect(updateResult.entry.projectNumber).toBe(99)
+            expect(updateResult.entry.projectNumber).toBe(1)
             expect(updateResult.entry.significanceType).toBe('decision')
             expect(updateResult.entry.issueNumber).toBe(42)
             expect(updateResult.entry.prNumber).toBe(7)
@@ -300,10 +300,11 @@ describe('Team Admin Tool Handlers', () => {
             expect(result.entry.projectNumber).toBe(1)
         })
 
-        it('should successfully change the project number of an entry', async () => {
+        it('should reject changing the project number of an entry to a conflicting project', async () => {
             const createResult = (await callTool(
                 'team_create_entry',
-                { workspace_id: 'default', 
+                {
+                    workspace_id: 'default',
                     project_number: 1,
                     content: 'project 1 entry',
                 },
@@ -330,8 +331,8 @@ describe('Team Admin Tool Handlers', () => {
                 teamDb
             )) as any
 
-            expect(result.success).toBe(true)
-            expect(result.entry.projectNumber).toBe(2)
+            expect(result.success).toBe(false)
+            expect(result.code).toBe('RESOURCE_NOT_FOUND')
         })
     })
 

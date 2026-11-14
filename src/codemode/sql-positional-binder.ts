@@ -204,11 +204,30 @@ function parseUpdate(cleanSql: string, args: unknown[]): ParsedSql {
     }
 
     const payload: Record<string, unknown> = { ...setFields }
+    if (typeof payload['workspace_id'] === 'string' && payload['workspace_id'] !== '') {
+        payload['target_workspace_id'] ??= payload['workspace_id']
+        Reflect.deleteProperty(payload, 'workspace_id')
+    }
     if (!mergeRecordBinds(payload, args)) return UNMAPPED
+    const whereClause = /\bWHERE\b[\s\S]*$/i.exec(cleanSql)?.[0] ?? ''
+    const whereLiteralScope = scopeFromSqlLiterals(whereClause)
+    const whereProj =
+        typeof where['project_number'] === 'number'
+            ? where['project_number']
+            : typeof whereLiteralScope['project_number'] === 'number'
+              ? whereLiteralScope['project_number']
+              : undefined
+    if (
+        setFields['project_number'] !== undefined &&
+        whereProj !== undefined &&
+        Number(setFields['project_number']) !== whereProj
+    ) {
+        return UNMAPPED
+    }
     if (where['entry_id'] !== undefined) payload['entry_id'] = where['entry_id']
     if (where['workspace_id'] !== undefined) payload['workspace_id'] ??= where['workspace_id']
     if (where['project_number'] !== undefined) payload['project_number'] ??= where['project_number']
-    applyWhereScope(payload, cleanSql)
+    applyWhereScope(payload, whereClause)
     if (payload['entry_id'] === undefined) return UNMAPPED
     return { action: 'update', params: payload }
 }

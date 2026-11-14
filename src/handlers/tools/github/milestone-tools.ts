@@ -199,7 +199,7 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
                         .object({
                             title: z.string().min(1),
                             description: z.string().optional(),
-                            due_on: z.string().optional(),
+                            due_on: z.string().nullable().optional(),
                             owner: z.string().optional(),
                             repo: z.string().optional(),
                             ...githubScopeParseFields,
@@ -213,11 +213,12 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
                     )
                     if ('error' in resolved) return resolved.response
 
-                    const dueOn = input.due_on
-                        ? input.due_on.includes('T')
-                            ? input.due_on
-                            : `${input.due_on}T08:00:00Z`
-                        : undefined
+                    const dueOn =
+                        input.due_on !== null && input.due_on !== undefined && input.due_on !== ''
+                            ? input.due_on.includes('T')
+                                ? input.due_on
+                                : `${input.due_on}T08:00:00Z`
+                            : undefined
                     const milestone = await resolved.github.createMilestone(
                         resolved.owner,
                         resolved.repo,
@@ -260,7 +261,7 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
                     .describe('Milestone number to update'),
                 title: z.string().optional().describe('New title'),
                 description: z.string().optional().describe('New description'),
-                due_on: z.string().optional().describe('New due date in YYYY-MM-DD format'),
+                due_on: z.string().nullable().optional().describe('New due date in YYYY-MM-DD format (or null to clear)'),
                 state: z.string().optional().describe('Set to "closed" to close the milestone'),
                 owner: z.string().optional().describe('LEAVE EMPTY to auto-detect'),
                 repo: z.string().optional().describe('LEAVE EMPTY to auto-detect'),
@@ -279,7 +280,7 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
                             milestone_number: z.number(),
                             title: z.string().optional(),
                             description: z.string().optional(),
-                            due_on: z.string().optional(),
+                            due_on: z.string().nullable().optional(),
                             state: z.enum(['open', 'closed']).optional(),
                             owner: z.string().optional(),
                             repo: z.string().optional(),
@@ -294,11 +295,14 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
                     )
                     if ('error' in resolved) return resolved.response
 
-                    const dueOn = input.due_on
-                        ? input.due_on.includes('T')
-                            ? input.due_on
-                            : `${input.due_on}T08:00:00Z`
-                        : undefined
+                    const dueOn =
+                        input.due_on === null
+                            ? null
+                            : input.due_on !== undefined && input.due_on !== ''
+                              ? input.due_on.includes('T')
+                                  ? input.due_on
+                                  : `${input.due_on}T08:00:00Z`
+                              : undefined
                     const milestone = await resolved.github.updateMilestone(
                         resolved.owner,
                         resolved.repo,

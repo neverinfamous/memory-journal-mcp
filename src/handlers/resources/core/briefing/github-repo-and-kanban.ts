@@ -21,13 +21,14 @@ export async function resolveBriefingRepo(
     github: GitHubIntegration,
     config: BriefingConfig,
     targetRepo?: string
-): Promise<{ owner: string; repo: string; branch: string | null } | null> {
+): Promise<{ owner: string; repo: string; branch: string | null; github: GitHubIntegration } | null> {
     const resolved = await resolveGitHubRepo(github, config, targetRepo)
     if (isResourceError(resolved)) return null
     return {
         owner: resolved.owner,
         repo: resolved.repo,
         branch: resolved.branch ?? null,
+        github: resolved.github ?? github,
     }
 }
 

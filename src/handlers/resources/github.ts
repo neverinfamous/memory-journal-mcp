@@ -17,7 +17,12 @@ import type {
     GitHubMilestone,
 } from '../../types/index.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from './shared.js'
-import { resolveGitHubRepo, isResourceError, milestoneCompletionPct } from './shared.js'
+import {
+    resolveScopedGitHubRepo,
+    isResourceError,
+    milestoneCompletionPct,
+    resourceWorkspace,
+} from './shared.js'
 import { markUntrustedContentInline } from '../../utils/security-utils.js'
 import { logger } from '../../utils/logger.js'
 
@@ -105,26 +110,33 @@ async function handleGitHubStatusResource(
 ): Promise<ResourceResult> {
     const match = /memory:\/\/github\/status\/?(.*)?/.exec(uri)
     const targetRepo = match?.[1] ? decodeURIComponent(match[1]) : undefined
-    const resolved = await resolveGitHubRepo(
-        context.github,
-        context.briefingConfig,
-        targetRepo,
-        context.runtime
-    )
+    const resolved = await resolveScopedGitHubRepo(context, targetRepo)
     if (isResourceError(resolved)) return resolved
     const { owner, repo, branch, lastModified, github } = resolved
 
     const registry = context.briefingConfig?.projectRegistry
-    const canonicalRepo =
+    const activeWs =
         targetRepo !== undefined && targetRepo !== ''
-            ? findCanonicalRegistryKey(targetRepo, registry)
-            : undefined
-    const repoProject =
-        canonicalRepo !== undefined ? registry?.[canonicalRepo]?.project_number : undefined
-    const kanbanProject =
-        targetRepo !== undefined && targetRepo !== ''
-            ? repoProject
-            : context.briefingConfig?.defaultProjectNumber
+            ? targetRepo
+            : resourceWorkspace(context)
+    const canonicalRepo = findCanonicalRegistryKey(activeWs, registry) ?? activeWs
+    const repoProject = registry?.[canonicalRepo]?.project_number
+    const defaultProj = context.briefingConfig?.defaultProjectNumber
+    const defaultWs = context.briefingConfig?.defaultWorkspaceId
+    const claimedElsewhere =
+        defaultProj !== undefined &&
+        registry !== undefined &&
+        Object.entries(registry).some(
+            ([k, v]) =>
+                v.project_number === defaultProj &&
+                k.toLowerCase() !== canonicalRepo.toLowerCase()
+        )
+    const canUseDefaultProj =
+        defaultProj !== undefined &&
+        !claimedElsewhere &&
+        (defaultWs === undefined ||
+            defaultWs.toLowerCase() === canonicalRepo.toLowerCase())
+    const kanbanProject = repoProject ?? (canUseDefaultProj ? defaultProj : undefined)
 
     const [repoContextResult, kanbanResult] = await Promise.allSettled([
         withGithubTimeout((s) => github.getRepoContext(s), 10000, 'getRepoContext'),
@@ -269,12 +281,7 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
             handler: async (uri: string, context: ResourceContext): Promise<ResourceResult> => {
                 const match = /memory:\/\/github\/milestones\/?(.*)?/.exec(uri)
                 const targetRepo = match?.[1] ? decodeURIComponent(match[1]) : undefined
-                const resolved = await resolveGitHubRepo(
-                    context.github,
-                    context.briefingConfig,
-                    targetRepo,
-                    context.runtime
-                )
+                const resolved = await resolveScopedGitHubRepo(context, targetRepo)
                 if (isResourceError(resolved)) return resolved
                 const { owner, repo, lastModified, github } = resolved
 
@@ -335,12 +342,7 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
                     }
                 }
 
-                const resolved = await resolveGitHubRepo(
-                    context.github,
-                    context.briefingConfig,
-                    targetRepo,
-                    context.runtime
-                )
+                const resolved = await resolveScopedGitHubRepo(context, targetRepo)
                 if (isResourceError(resolved)) return resolved
                 const { owner, repo, github } = resolved
 

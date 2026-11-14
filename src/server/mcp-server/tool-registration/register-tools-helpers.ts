@@ -133,33 +133,47 @@ export function formatToolFailure(
  */
 export function resolveActiveBriefingConfig(
     briefingConfig: typeof DEFAULT_BRIEFING_CONFIG,
-    options: ServerOptions,
+    _options: ServerOptions,
     allowedIoRoots: string[],
     sessionRuntime?: object | null
 ): typeof DEFAULT_BRIEFING_CONFIG {
     const sessionCtx: { workspaceId?: string; projectNumber?: number } =
         sessionRuntime !== undefined ? getActiveSessionProject(sessionRuntime) : {}
-    const resolvedRegistry = briefingConfig.projectRegistry ?? options.projectRegistry
-    const resolvedDefaultWs =
-        briefingConfig.defaultWorkspaceId ??
-        options.defaultWorkspaceId ??
-        sessionCtx.workspaceId
+    const resolvedRegistry = briefingConfig.projectRegistry
+    const resolvedDefaultWs = briefingConfig.defaultWorkspaceId ?? sessionCtx.workspaceId
     const canonicalWs =
         resolvedDefaultWs !== undefined
             ? (findCanonicalRegistryKey(resolvedDefaultWs, resolvedRegistry) ?? resolvedDefaultWs)
             : undefined
     const registryProject =
         canonicalWs !== undefined ? resolvedRegistry?.[canonicalWs]?.project_number : undefined
+    const candidateProj =
+        briefingConfig.defaultProjectNumber ?? registryProject ?? sessionCtx.projectNumber
+    const projClaimedElsewhere =
+        candidateProj !== undefined &&
+        canonicalWs !== undefined &&
+        resolvedRegistry !== undefined &&
+        Object.entries(resolvedRegistry).some(
+            ([k, v]) =>
+                v.project_number === candidateProj &&
+                k.toLowerCase() !== canonicalWs.toLowerCase()
+        )
     const resolvedDefaultProj =
-        briefingConfig.defaultProjectNumber ??
-        options.defaultProjectNumber ??
-        registryProject ??
-        sessionCtx.projectNumber
-    return {
+        projClaimedElsewhere ||
+        (canonicalWs === 'default' &&
+            registryProject === undefined &&
+            briefingConfig.defaultWorkspaceId !== 'default')
+            ? registryProject
+            : candidateProj
+    const nextConfig: typeof DEFAULT_BRIEFING_CONFIG = {
         ...briefingConfig,
-        ...(resolvedDefaultProj !== undefined ? { defaultProjectNumber: resolvedDefaultProj } : {}),
-        ...(resolvedRegistry !== undefined ? { projectRegistry: resolvedRegistry } : {}),
-        ...(resolvedDefaultWs !== undefined ? { defaultWorkspaceId: resolvedDefaultWs } : {}),
         allowedIoRoots,
     }
+    if (resolvedDefaultProj !== undefined) nextConfig.defaultProjectNumber = resolvedDefaultProj
+    else delete nextConfig.defaultProjectNumber
+    if (resolvedRegistry !== undefined) nextConfig.projectRegistry = resolvedRegistry
+    else delete nextConfig.projectRegistry
+    if (resolvedDefaultWs !== undefined) nextConfig.defaultWorkspaceId = resolvedDefaultWs
+    else delete nextConfig.defaultWorkspaceId
+    return nextConfig
 }

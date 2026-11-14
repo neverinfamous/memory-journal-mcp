@@ -14,7 +14,7 @@ import { parseDigestSnapshot, type DigestSnapshot } from '../database/sqlite-ada
 import type { ServerRuntime } from '../utils/maintenance-lock.js'
 import { deliverReport, formatDigestReport, type ReportDeliveryOptions } from './digest-reporter.js'
 import { runAutoPrune } from './auto-prune.js'
-import { resolveWorkspaceId } from '../utils/workspace-resolver.js'
+import { resolveAutoPruneScope, resolveWorkspaceId } from '../utils/workspace-resolver.js'
 import { VERSION } from '../version.js'
 
 // ============================================================================
@@ -425,6 +425,11 @@ export class Scheduler {
 
     /** Prune job: auto-prune low-importance old entries. */
     private async runPrune(): Promise<void> {
+        const pruneScope = resolveAutoPruneScope(
+            this.options.defaultWorkspaceId,
+            this.options.defaultProjectNumber,
+            this.options.projectRegistry
+        )
         const pruneResult = await runAutoPrune(this.db, {
             archiveOlderThanDays: this.options.archiveOlderThanDays ?? 0,
             pruneOlderThanDays: this.options.pruneOlderThanDays ?? 0,
@@ -432,9 +437,9 @@ export class Scheduler {
             importanceThreshold: this.options.pruneImportanceThreshold ?? 0.15,
             dryRun: this.options.pruneDryRun,
             excludeTags: this.options.pruneExcludeTags,
-            workspaceId: this.resolveDefaultWorkspace(),
-            ...(this.options.defaultProjectNumber !== undefined
-                ? { projectNumber: this.options.defaultProjectNumber }
+            workspaceId: pruneScope.workspaceId,
+            ...(pruneScope.projectNumber !== undefined
+                ? { projectNumber: pruneScope.projectNumber }
                 : {}),
         })
         if (pruneResult.aborted === true) {

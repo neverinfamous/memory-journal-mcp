@@ -8,14 +8,15 @@ import { resolveProjectContext } from '../../utils/workspace-resolver.js'
 import { activeProjectRegistry, pairStoredScope } from '../../utils/write-scope.js'
 import { logger } from '../../utils/logger.js'
 import { buildServerOptions } from '../server-options-builder.js'
+import { dumpConfigAndExit } from '../dump-config.js'
 import { z } from 'zod'
 import * as p from '@clack/prompts'
 import * as yaml from 'yaml'
 import type { BaseEntryOptionsSchema } from '../schemas.js'
 import {
     applyCliEntryFlagAliases,
+    parseRelationshipArray,
     relationshipsFromMetadata,
-    relationTypeSchema,
     resolveAutoContext,
     resolveEntryTypeAndTags,
     resolveExplicitProjectAndWorkspace,
@@ -63,6 +64,10 @@ export async function getDb(
         process.stderr.write('Startup Configuration Errors:\n')
         configErrors.forEach((err) => process.stderr.write(` - ${err}\n`))
         process.exit(1)
+    }
+
+    if (options.dumpConfig === true) {
+        dumpConfigAndExit(serverOptions)
     }
 
     const useTeamDb = options.team === true
@@ -211,6 +216,7 @@ export function parseRelationships(
     relFileStr: unknown
 ): { target_id: number; relation_type: RelationshipType }[] {
     let str = relationshipsStr
+    const source = typeof relFileStr === 'string' ? '--rel-file' : '--relationships'
     if (typeof relFileStr === 'string') {
         try {
             str = readFileSync(relFileStr, 'utf-8')
@@ -235,19 +241,7 @@ export function parseRelationships(
     if (!Array.isArray(parsed)) {
         throw new Error('Failed to parse relationships JSON: expected a JSON array')
     }
-    return parsed.flatMap((r: unknown) => {
-        if (typeof r !== 'object' || r === null) return []
-        const rec = z.record(z.string(), z.unknown()).parse(r)
-        const targetId = Number(rec['target_id'])
-        if (isNaN(targetId)) return []
-        const relType = relationTypeSchema.safeParse(rec['relation_type'])
-        if (!relType.success) {
-            throw new Error(
-                `Invalid relation_type '${String(rec['relation_type'])}'. Expected one of: ${relationTypeSchema.options.join(', ')}`
-            )
-        }
-        return [{ target_id: targetId, relation_type: relType.data }]
-    })
+    return parseRelationshipArray(parsed, source)
 }
 
 export function parseMetadata(metadataFile: unknown): Record<string, unknown> {

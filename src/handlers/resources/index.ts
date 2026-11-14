@@ -212,8 +212,8 @@ function generateResourceAliases(resources: InternalResourceDef[]): InternalReso
                 ...canonical,
                 uri: aliasUri,
                 name: `${canonical.name} (alias)`,
-                // Delegate to canonical handler with the canonical URI
-                handler: (_uri, context) => canonical.handler(canonicalUri, context),
+                // Delegate to canonical handler with caller's URI so bare aliases resolve context without forcing `/default` (H17)
+                handler: (uri, context) => canonical.handler(uri, context),
             })
         }
     }

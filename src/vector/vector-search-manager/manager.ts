@@ -189,7 +189,7 @@ export class VectorSearchManager {
                 lastError = pipelineErr
                 if (attempt < maxAttempts && isTransientFileLockError(pipelineErr)) {
                     transformersModule.env.allowRemoteModels = true
-                    await new Promise((r) => setTimeout(r, MODEL_LOAD_RETRY_DELAY_MS * attempt))
+                    await new Promise((r) => setTimeout(r, MODEL_LOAD_RETRY_DELAY_MS * attempt).unref())
                     continue
                 }
                 throw pipelineErr

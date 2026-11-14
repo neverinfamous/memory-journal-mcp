@@ -292,6 +292,6 @@ export const adminAuditSearchOptionsSchema = z.object({
 
 export const adminRebuildIndexOptionsSchema = z.object({
     team: z.boolean().optional()
-}).extend(coreOptionsSchema.shape).extend(databaseOptionsSchema.shape).extend(outputOptionsSchema.shape)
+}).extend(coreOptionsSchema.shape).extend(databaseOptionsSchema.shape).extend(workspaceOptionsSchema.shape).extend(outputOptionsSchema.shape)
 
 

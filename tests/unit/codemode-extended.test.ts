@@ -77,10 +77,15 @@ describe('Code Mode Extended Coverage', () => {
 
             const batchUpdateParsed = BatchUpdateEntriesSchemaMcp.parse({
                 project_number: 5,
-                updates: [{ entry_id: 1, target_workspace_id: 'ws-b' }],
+                updates: [
+                    { entry_id: 1, target_workspace_id: 'ws-b' },
+                    { entry_id: 2, content: 'Same workspace update' },
+                ],
             })
-            expect(batchUpdateParsed.updates?.[0]?.project_number).toBe(5)
+            expect(batchUpdateParsed.project_number).toBe(5)
+            expect(batchUpdateParsed.updates?.[0]?.project_number).toBeUndefined()
             expect(batchUpdateParsed.updates?.[0]?.target_workspace_id).toBe('ws-b')
+            expect(batchUpdateParsed.updates?.[1]?.project_number).toBe(5)
 
             expect(
                 BatchDeleteEntriesSchemaMcp.safeParse({

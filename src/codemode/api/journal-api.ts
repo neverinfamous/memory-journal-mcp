@@ -137,27 +137,20 @@ export class JournalApi {
                     : typeof rec['projectNumber'] === 'number'
                       ? rec['projectNumber']
                       : undefined
-            const hasExplicitWs = typeof currentWs === 'string' && currentWs !== '' && currentWs !== '*'
-            // [INVARIANT] No content/tag/CWD guessing: only pair explicitly supplied scope values;
-            // the host dispatcher binds session scope when both are omitted.
-            if (hasExplicitWs || projNum !== undefined) {
+            const hasExplicitWs =
+                typeof currentWs === 'string' && currentWs.trim() !== '' && currentWs.trim() !== '*'
+            // [INVARIANT] No content/tag/CWD guessing: defer project-only workspace resolution
+            // to `secure-dispatcher` so session scope pair-checking runs first.
+            if (hasExplicitWs) {
+                const trimmedWs = currentWs.trim()
                 const resolved = resolveProjectContext({
-                    ...(hasExplicitWs ? { workspace_id: currentWs } : {}),
+                    workspace_id: trimmedWs,
                     ...(projNum !== undefined ? { project_number: projNum } : {}),
                 })
-                if (
-                    resolved.workspaceId !== undefined &&
-                    resolved.workspaceId !== 'default' &&
-                    (currentWs === undefined || currentWs === '')
-                ) {
-                    rec['workspace_id'] = resolved.workspaceId
-                    rec['workspaceId'] = resolved.workspaceId
-                }
-                const ws = rec['workspace_id'] ?? rec['workspaceId']
-                const workspaceIsConcrete = typeof ws === 'string' && ws !== '' && ws !== '*'
-                if (projNum !== undefined && workspaceIsConcrete) {
-                    pairStoredScope(ws, projNum, activeProjectRegistry())
+                if (projNum !== undefined) {
+                    pairStoredScope(trimmedWs, projNum, activeProjectRegistry())
                 } else if (
+                    trimmedWs.toLowerCase() !== 'default' &&
                     rec['project_number'] === undefined &&
                     rec['projectNumber'] === undefined &&
                     resolved.projectNumber !== undefined

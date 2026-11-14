@@ -43,6 +43,7 @@ export interface ISearchFilters {
     includeTeam?: boolean
     includeArchived?: boolean
     workspaceId?: string
+    similarityThreshold?: number
 }
 
 // ============================================================================
@@ -199,7 +200,7 @@ export async function collectTeamSearchEntries(
             const hits = await teamVectorManager.search(
                 query,
                 limit,
-                0.15,
+                options.similarityThreshold ?? 0.15,
                 options.workspaceId,
                 options.projectNumber
             )
@@ -218,20 +219,23 @@ export async function collectTeamSearchEntries(
         }
     }
 
-    const fts = teamDb.searchEntries(query, {
-        limit,
-        ...(options.projectNumber !== undefined ? { projectNumber: options.projectNumber } : {}),
-        ...(options.issueNumber !== undefined ? { issueNumber: options.issueNumber } : {}),
-        ...(options.prNumber !== undefined ? { prNumber: options.prNumber } : {}),
-        ...(options.prStatus !== undefined ? { prStatus: options.prStatus } : {}),
-        ...(options.workflowRunId !== undefined ? { workflowRunId: options.workflowRunId } : {}),
-        ...(options.tags !== undefined ? { tags: options.tags } : {}),
-        ...(options.entryType !== undefined ? { entryType: options.entryType as JournalEntry['entryType'] } : {}),
-        ...(options.startDate !== undefined ? { startDate: options.startDate } : {}),
-        ...(options.endDate !== undefined ? { endDate: options.endDate } : {}),
-        ...(options.includeArchived !== undefined ? { includeArchived: options.includeArchived } : {}),
-        ...(options.workspaceId !== undefined ? { workspaceId: options.workspaceId } : {}),
-    })
-    for (const entry of fts.entries) pushEntry(entry)
+    if (options.similarityThreshold === undefined || teamVectorManager === undefined) {
+        const fts = teamDb.searchEntries(query, {
+            limit,
+            ...(options.projectNumber !== undefined ? { projectNumber: options.projectNumber } : {}),
+            ...(options.issueNumber !== undefined ? { issueNumber: options.issueNumber } : {}),
+            ...(options.prNumber !== undefined ? { prNumber: options.prNumber } : {}),
+            ...(options.prStatus !== undefined ? { prStatus: options.prStatus } : {}),
+            ...(options.workflowRunId !== undefined ? { workflowRunId: options.workflowRunId } : {}),
+            ...(options.tags !== undefined ? { tags: options.tags } : {}),
+            ...(options.entryType !== undefined ? { entryType: options.entryType as JournalEntry['entryType'] } : {}),
+            ...(options.startDate !== undefined ? { startDate: options.startDate } : {}),
+            ...(options.endDate !== undefined ? { endDate: options.endDate } : {}),
+            ...(options.includeArchived !== undefined ? { includeArchived: options.includeArchived } : {}),
+            ...(options.workspaceId !== undefined ? { workspaceId: options.workspaceId } : {}),
+        })
+        const fallbackSimilarity = options.similarityThreshold !== undefined ? 0 : undefined
+        for (const entry of fts.entries) pushEntry(entry, fallbackSimilarity)
+    }
     return ranked
 }

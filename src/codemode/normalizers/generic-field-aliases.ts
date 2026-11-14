@@ -139,7 +139,7 @@ export function coerceNumericStringIds(
             } else if (key === 'project_number' || key === 'projectNumber') {
                 const preserved = obj[key]
                 Reflect.deleteProperty(obj, key)
-                if (!applyProjectNameAlias(strVal, obj)) {
+                if (applyProjectNameAlias(strVal, obj) !== 'applied') {
                     obj[key] = preserved
                     return validationError(
                         `project_number '${strVal}' is not a number and does not match a registered project`,
@@ -156,11 +156,14 @@ const GIT_SORT_BY_METHODS = new Set([
     'get_commit_history', 'getCommitHistory', 'search_commits', 'searchCommits',
 ])
 
-export function normalizeGenericFieldAliases(obj: Record<string, unknown>, methodName?: string): void {
+export function normalizeGenericFieldAliases(
+    obj: Record<string, unknown>,
+    methodName?: string
+): { error: Record<string, unknown> } | undefined {
     renameSimpleFieldAliases(obj, methodName)
     renameScoreAliases(obj)
     normalizeValidationStatusAlias(obj)
-    normalizeProjectAliases(obj)
+    return normalizeProjectAliases(obj)
 }
 
 function renameSimpleFieldAliases(obj: Record<string, unknown>, methodName?: string): void {
@@ -217,41 +220,61 @@ function normalizeValidationStatusAlias(obj: Record<string, unknown>): void {
     }
 }
 
-function applyProjectNameAlias(rawVal: unknown, obj: Record<string, unknown>): boolean {
+type ProjectNameAliasResult = 'applied' | 'unregistered' | { conflict: string }
+
+function formatScalarOrJson(val: unknown): string {
+    return typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean'
+        ? String(val)
+        : (JSON.stringify(val) ?? typeof val)
+}
+
+function applyProjectNameAlias(rawVal: unknown, obj: Record<string, unknown>): ProjectNameAliasResult {
     const existingProj = obj['project_number'] ?? obj['projectNumber']
     const num = Number(rawVal)
     const strVal = typeof rawVal === 'string' || typeof rawVal === 'number' ? String(rawVal) : ''
     if (!Number.isNaN(num) && strVal.trim() !== '') {
         if (existingProj !== undefined) {
-            return Number(existingProj) === num
+            if (Number(existingProj) !== num) {
+                return {
+                    conflict: `Project alias '${strVal.trim()}' conflicts with project_number '${formatScalarOrJson(existingProj)}'`,
+                }
+            }
+            return 'applied'
         }
         obj['project_number'] = num
-        return true
+        return 'applied'
     }
-    if (typeof rawVal !== 'string' || rawVal.trim() === '') return true
+    if (typeof rawVal !== 'string' || rawVal.trim() === '') return 'applied'
     const name = rawVal.trim()
     const registry = activeProjectRegistry ?? loadProjectRegistryFromConfig()
     const matchedKey =
         registry === undefined
             ? undefined
             : Object.keys(registry).find((key) => key.toLowerCase() === name.toLowerCase())
-    if (matchedKey === undefined || registry === undefined) return false
     const existingWs = obj['workspace_id'] ?? obj['workspaceId'] ?? obj['workspace']
-    if (typeof existingWs === 'string' && existingWs.trim() !== '' && existingWs.trim().toLowerCase() !== matchedKey.toLowerCase()) {
-        return false
+    if (typeof existingWs === 'string' && existingWs.trim() !== '') {
+        const expectedWs = matchedKey ?? name
+        if (existingWs.trim().toLowerCase() !== expectedWs.toLowerCase()) {
+            return {
+                conflict: `Project alias '${name}' conflicts with workspace_id '${existingWs.trim()}'`,
+            }
+        }
     }
+    if (matchedKey === undefined || registry === undefined) return 'unregistered'
     const projectNumber = registry[matchedKey]?.project_number
     if (existingProj !== undefined && projectNumber !== undefined && Number(existingProj) !== projectNumber) {
-        return false
+        return {
+            conflict: `Project alias '${name}' (project #${String(projectNumber)}) conflicts with project_number '${formatScalarOrJson(existingProj)}'`,
+        }
     }
     if (projectNumber !== undefined && obj['project_number'] === undefined) {
         obj['project_number'] = projectNumber
     }
     if (obj['workspace_id'] === undefined) obj['workspace_id'] = matchedKey
-    return true
+    return 'applied'
 }
 
-function normalizeProjectAliases(obj: Record<string, unknown>): void {
+function normalizeProjectAliases(obj: Record<string, unknown>): { error: Record<string, unknown> } | undefined {
     if (obj['workspace_id'] === undefined) {
         if (typeof obj['workspaceId'] === 'string') {
             obj['workspace_id'] = obj['workspaceId']
@@ -265,14 +288,17 @@ function normalizeProjectAliases(obj: Record<string, unknown>): void {
         obj['project_number'] = obj['projectNumber']
         Reflect.deleteProperty(obj, 'projectNumber')
     }
-    for (const projAlias of ['project_name', 'projectName'] as const) {
-        if (obj[projAlias] !== undefined && applyProjectNameAlias(obj[projAlias], obj)) {
+    for (const projAlias of ['project_name', 'projectName', 'project'] as const) {
+        if (obj[projAlias] === undefined) continue
+        const res = applyProjectNameAlias(obj[projAlias], obj)
+        if (typeof res === 'object') {
+            return validationError(res.conflict)
+        }
+        if (res === 'applied') {
             Reflect.deleteProperty(obj, projAlias)
         }
     }
-    if (obj['project'] !== undefined && applyProjectNameAlias(obj['project'], obj)) {
-        delete obj['project']
-    }
+    return undefined
 }
 
 export function resolveCreateEntryProjectContext(obj: Record<string, unknown>): void {
@@ -293,45 +319,38 @@ export function resolveCreateEntryProjectContext(obj: Record<string, unknown>): 
             projNum = parsedNum
             obj['project_number'] = parsedNum
         } else if (cleaned !== '') {
-            delete obj['project_number']
-            if (applyProjectNameAlias(cleaned, obj)) {
+            const preserved = obj['project_number']
+            Reflect.deleteProperty(obj, 'project_number')
+            if (applyProjectNameAlias(cleaned, obj) === 'applied') {
                 projNum = typeof obj['project_number'] === 'number' ? obj['project_number'] : undefined
-            } else if (obj['workspace_id'] === undefined || obj['workspace_id'] === null || obj['workspace_id'] === '') {
-                obj['workspace_id'] = cleaned
             } else {
-                obj['project_number'] = cleaned
+                obj['project_number'] = preserved
             }
         } else {
             obj['project_number'] = cleaned
         }
     }
     // [INVARIANT] No content/tag/CWD guessing here: the host `secure-dispatcher` binds the
-    // session scope first. We only pair explicitly supplied workspace/project values.
+    // session scope first. Only validate/pair when workspace_id was explicitly provided.
     const wsRaw = typeof obj['workspace_id'] === 'string' ? obj['workspace_id'] : undefined
     const wsTrimmed = wsRaw?.trim()
     const workspaceIsConcrete = wsTrimmed !== undefined && wsTrimmed !== '' && wsTrimmed !== '*'
-    if (!workspaceIsConcrete && projNum === undefined) return
+    if (!workspaceIsConcrete) return
     const effectiveRegistry = activeProjectRegistry ?? loadProjectRegistryFromConfig()
     const resolved = resolveProjectContext(
         {
-            ...(wsTrimmed !== undefined ? { workspace_id: wsTrimmed } : {}),
+            workspace_id: wsTrimmed,
             ...(projNum !== undefined ? { project_number: projNum } : {}),
         },
         effectiveRegistry !== undefined ? { projectRegistry: effectiveRegistry } : undefined
     )
-    if (
-        resolved.workspaceId !== undefined &&
-        resolved.workspaceId !== '' &&
-        resolved.workspaceId !== 'default' &&
-        (obj['workspace_id'] === undefined || obj['workspace_id'] === '')
+    if (projNum !== undefined) {
+        pairStoredScope(wsTrimmed, projNum, effectiveRegistry)
+    } else if (
+        wsTrimmed.toLowerCase() !== 'default' &&
+        obj['project_number'] === undefined &&
+        resolved.projectNumber !== undefined
     ) {
-        obj['workspace_id'] = resolved.workspaceId
-    }
-    const wsAfter = obj['workspace_id']
-    const concreteAfter = typeof wsAfter === 'string' && wsAfter !== '' && wsAfter !== '*'
-    if (projNum !== undefined && concreteAfter) {
-        pairStoredScope(wsAfter, projNum, effectiveRegistry)
-    } else if (obj['project_number'] === undefined && resolved.projectNumber !== undefined) {
         obj['project_number'] = resolved.projectNumber
     }
 }

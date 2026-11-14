@@ -389,29 +389,12 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                         input.workspace_id === '*'
                             ? '*'
                             : resolveWriteWorkspaceId(input.workspace_id, input.project_number, context.config)
-                    let inferredProjectNum: number | undefined
-                    if (
-                        input.workspace_id === undefined &&
-                        input.project_number === undefined
-                    ) {
-                        for (const id of input.entry_ids) {
-                            const existing = teamDb.getEntryByIdIncludeDeleted(id, '*')
-                            if (existing !== null) {
-                                if (existing.workspaceId !== undefined) wsId = existing.workspaceId
-                                if (existing.projectNumber !== null && existing.projectNumber !== undefined) {
-                                    inferredProjectNum = existing.projectNumber
-                                }
-                                break
-                            }
-                        }
-                    }
-                    const projectNumber =
-                        input.workspace_id !== undefined
-                            ? (resolveTeamProjectNumber(context, wsId, input.project_number) ??
-                              inferredProjectNum)
-                            : (input.project_number ??
-                              inferredProjectNum ??
-                              resolveTeamProjectNumber(context, wsId, undefined))
+                    const projectNumber = resolveTeamProjectNumber(
+                        context,
+                        wsId,
+                        input.project_number,
+                        input.workspace_id
+                    )
                     if (projectNumber === undefined || projectNumber === null) {
                         return missingProjectNumberResponse()
                     }

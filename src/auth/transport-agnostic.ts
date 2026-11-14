@@ -141,13 +141,16 @@ export function formatOAuthError(error: unknown): {
     }
 
     if (error instanceof InsufficientScopeError) {
-        const required = error.details?.['requiredScope'] as string[] | undefined
+        const rawRequired = error.details?.['requiredScope']
+        const required = Array.isArray(rawRequired)
+            ? rawRequired.filter((s): s is string => typeof s === 'string')
+            : undefined
         return {
             status: 403,
             body: {
                 error: 'insufficient_scope',
                 error_description: error.message,
-                scope: required ? required.join(' ') : undefined,
+                scope: required !== undefined && required.length > 0 ? required.join(' ') : undefined,
             },
         }
     }

@@ -211,7 +211,9 @@ function resolveImportWriteScope(
     )
     return {
         workspaceId:
-            dirMatch !== undefined || projectOwner !== undefined ? resolved.workspaceId : undefined,
+            dirMatch !== undefined || projectOwner !== undefined || options.defaultProject !== undefined
+                ? resolved.workspaceId
+                : undefined,
         projectNumber: explicitProject !== undefined ? (resolved.projectNumber ?? explicitProject) : undefined,
     }
 }

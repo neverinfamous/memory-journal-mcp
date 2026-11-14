@@ -384,6 +384,26 @@ export function createServerInstance(
 ): McpServer {
     const { configManager, db, teamDb, allowedIoRoots, runtime } = context
 
+    const initialBriefing = configManager.getConfig().briefingConfig
+    if (
+        options.defaultProjectNumber !== undefined &&
+        initialBriefing.defaultProjectNumber === undefined
+    ) {
+        initialBriefing.defaultProjectNumber = options.defaultProjectNumber
+    }
+    if (
+        options.defaultWorkspaceId !== undefined &&
+        initialBriefing.defaultWorkspaceId === undefined
+    ) {
+        initialBriefing.defaultWorkspaceId = options.defaultWorkspaceId
+    }
+    if (
+        options.projectRegistry !== undefined &&
+        initialBriefing.projectRegistry === undefined
+    ) {
+        initialBriefing.projectRegistry = options.projectRegistry
+    }
+
     const getInstructions = (): string =>
         buildServerInstructions(context, options, prompts, allToolNames)
 

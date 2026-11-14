@@ -138,18 +138,44 @@ export function resolveAutoContext(
     return autoContextStr
 }
 
-/** Relationships declared inside a metadata array; invalid targets/types are dropped. */
+/** Parse and validate relationship objects (`target_id` / `targetId` + `relation_type`). */
+export function parseRelationshipArray(
+    raw: unknown[],
+    source: string
+): { target_id: number; relation_type: RelationshipType }[] {
+    return raw.map((r: unknown, index: number) => {
+        if (typeof r !== 'object' || r === null || Array.isArray(r)) {
+            throw new ValidationError(
+                `Invalid relationship at index ${String(index)} in ${source}: expected an object with target_id and relation_type.`
+            )
+        }
+        const rec = z.record(z.string(), z.unknown()).parse(r)
+        const rawTarget = rec['target_id'] ?? rec['targetId']
+        const targetId =
+            typeof rawTarget === 'number' ||
+            (typeof rawTarget === 'string' && rawTarget.trim() !== '')
+                ? Number(rawTarget)
+                : Number.NaN
+        if (!Number.isInteger(targetId) || targetId < 1) {
+            throw new ValidationError(
+                `Invalid relationship target_id '${String(rawTarget)}' at index ${String(index)} in ${source}: expected a positive integer.`
+            )
+        }
+        const relType = relationTypeSchema.safeParse(rec['relation_type'])
+        if (!relType.success) {
+            throw new ValidationError(
+                `Invalid relation_type '${String(rec['relation_type'])}' at index ${String(index)} in ${source}. Expected one of: ${relationTypeSchema.options.join(', ')}`
+            )
+        }
+        return { target_id: targetId, relation_type: relType.data }
+    })
+}
+
+/** Relationships declared inside a metadata array; throws ValidationError on invalid targets/types. */
 export function relationshipsFromMetadata(
     raw: unknown[]
 ): { target_id: number; relation_type: RelationshipType }[] {
-    return raw.flatMap((r: unknown) => {
-        const rec = r != null ? z.record(z.string(), z.unknown()).parse(r) : null
-        const targetId = Number(rec?.['target_id'])
-        const relType = relationTypeSchema.safeParse(rec?.['relation_type'])
-        return !isNaN(targetId) && relType.success
-            ? [{ target_id: targetId, relation_type: relType.data }]
-            : []
-    })
+    return parseRelationshipArray(raw, '--metadata relationships')
 }
 
 export const relationTypeSchema = z.enum(RELATIONSHIP_TYPES)

@@ -9,11 +9,15 @@
 import { ICON_ISSUE, ICON_PR } from '../../constants/icons.js'
 import { ASSISTANT_FOCUSED, MEDIUM_PRIORITY } from '../../utils/resource-annotations.js'
 import type { InternalResourceDef, ResourceContext } from './shared.js'
-import { resolveGitHubRepo, isResourceError, resourceWorkspace } from './shared.js'
+import { resolveScopedGitHubRepo, isResourceError, resourceWorkspace } from './shared.js'
 import { parseSessionCommitContext } from '../../types/auto-context.js'
 import { enrichCommits } from '../../github/commit-references/index.js'
 import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server'
-import { resolveProjectScope, collectUniqueCommits } from './template-helpers.js'
+import {
+    resolveProjectScope,
+    collectUniqueCommits,
+    resolveCommitGithub,
+} from './template-helpers.js'
 
 /**
  * Get template resource definitions
@@ -37,7 +41,14 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
 
                 const scope = resolveProjectScope(context, projectNumber)
                 if (scope.hint !== undefined) {
-                    return { projectNumber, entries: [], count: 0, hint: scope.hint }
+                    return {
+                        projectNumber,
+                        status: 'unresolved',
+                        error: scope.hint,
+                        entries: [],
+                        count: 0,
+                        hint: scope.hint,
+                    }
                 }
                 const { entries } = context.db.searchEntries('', { workspaceId: scope.workspaceId,  projectNumber, limit: 50 })
                 const data = { projectNumber, entries, count: entries.length }
@@ -126,42 +137,29 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                     baseBranch: string
                 } | null = null
 
-                const prWorkspace = resourceWorkspace(context)
-                const prRegistry = context.briefingConfig?.projectRegistry
-                const prTarget =
-                    prRegistry !== undefined && Object.prototype.hasOwnProperty.call(prRegistry, prWorkspace)
-                        ? prWorkspace
-                        : undefined
-                if (context.github || prTarget !== undefined) {
-                    try {
-                        const resolvedRepo = await resolveGitHubRepo(
-                            context.github,
-                            context.briefingConfig,
-                            prTarget,
-                            context.runtime
+                try {
+                    const resolvedRepo = await resolveScopedGitHubRepo(context)
+                    if (!isResourceError(resolvedRepo)) {
+                        const pr = await resolvedRepo.github.getPullRequest(
+                            resolvedRepo.owner,
+                            resolvedRepo.repo,
+                            prNumber
                         )
-                        if (!isResourceError(resolvedRepo)) {
-                            const pr = await resolvedRepo.github.getPullRequest(
-                                resolvedRepo.owner,
-                                resolvedRepo.repo,
-                                prNumber
-                            )
-                            if (pr) {
-                                prMetadata = {
-                                    title: pr.title,
-                                    state: pr.state,
-                                    draft: pr.draft,
-                                    mergedAt: pr.mergedAt,
-                                    closedAt: pr.closedAt,
-                                    author: pr.author,
-                                    headBranch: pr.headBranch,
-                                    baseBranch: pr.baseBranch,
-                                }
+                        if (pr) {
+                            prMetadata = {
+                                title: pr.title,
+                                state: pr.state,
+                                draft: pr.draft,
+                                mergedAt: pr.mergedAt,
+                                closedAt: pr.closedAt,
+                                author: pr.author,
+                                headBranch: pr.headBranch,
+                                baseBranch: pr.baseBranch,
                             }
                         }
-                    } catch {
-                        // GitHub not available, proceed without metadata
                     }
+                } catch {
+                    // GitHub not available, proceed without metadata
                 }
 
                 const { entries } = context.db.searchEntries('', { workspaceId: resourceWorkspace(context),  prNumber, limit: 100 })
@@ -210,7 +208,16 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
 
                 const scope = resolveProjectScope(context, projectNumber)
                 if (scope.hint !== undefined) {
-                    return { projectNumber, commits: [], metadata: [], enrichedCommits: [], count: 0, hint: scope.hint }
+                    return {
+                        projectNumber,
+                        status: 'unresolved',
+                        error: scope.hint,
+                        commits: [],
+                        metadata: [],
+                        enrichedCommits: [],
+                        count: 0,
+                        hint: scope.hint,
+                    }
                 }
                 const { entries } = context.db.searchEntries('', { workspaceId: scope.workspaceId,  projectNumber, limit: 200 })
 
@@ -242,7 +249,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                     enrichedCommits = await enrichCommits(
                         cwd,
                         uniqueCommits,
-                        context.github ?? undefined
+                        resolveCommitGithub(context, scope)
                     )
                 }
 
@@ -274,7 +281,13 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
 
                 const scope = resolveProjectScope(context, projectNumber)
                 if (scope.hint !== undefined) {
-                    return { projectNumber, issues: [], hint: scope.hint }
+                    return {
+                        projectNumber,
+                        status: 'unresolved',
+                        error: scope.hint,
+                        issues: [],
+                        hint: scope.hint,
+                    }
                 }
                 const { entries } = context.db.searchEntries('', { workspaceId: scope.workspaceId,  projectNumber, limit: 200 })
                 const uniqueCommits = collectUniqueCommits(entries)
@@ -292,7 +305,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                     const enrichedCommits = await enrichCommits(
                         cwd,
                         uniqueCommits,
-                        context.github ?? undefined
+                        resolveCommitGithub(context, scope)
                     )
 
                     for (const commit of enrichedCommits) {
@@ -340,7 +353,13 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
 
                 const scope = resolveProjectScope(context, projectNumber)
                 if (scope.hint !== undefined) {
-                    return { projectNumber, pullRequests: [], hint: scope.hint }
+                    return {
+                        projectNumber,
+                        status: 'unresolved',
+                        error: scope.hint,
+                        pullRequests: [],
+                        hint: scope.hint,
+                    }
                 }
                 const { entries } = context.db.searchEntries('', { workspaceId: scope.workspaceId,  projectNumber, limit: 200 })
                 const uniqueCommits = collectUniqueCommits(entries)
@@ -357,7 +376,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                     const enrichedCommits = await enrichCommits(
                         cwd,
                         uniqueCommits,
-                        context.github ?? undefined
+                        resolveCommitGithub(context, scope)
                     )
 
                     for (const commit of enrichedCommits) {
@@ -404,12 +423,22 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                     throw new ProtocolError(ProtocolErrorCode.InvalidParams,  'Invalid project number')
                 }
 
-                const resolved = await resolveGitHubRepo(
-                    context.github,
-                    context.briefingConfig,
-                    targetRepo,
-                    context.runtime
-                )
+                const projScope =
+                    targetRepo === undefined ? resolveProjectScope(context, projectNumber) : undefined
+                if (projScope?.hint !== undefined) {
+                    return {
+                        projectNumber,
+                        status: 'unresolved',
+                        error: projScope.hint,
+                        hint: projScope.hint,
+                    }
+                }
+                const kanbanTarget =
+                    targetRepo ??
+                    (projScope !== undefined && projScope.workspaceId !== 'default'
+                        ? projScope.workspaceId
+                        : undefined)
+                const resolved = await resolveScopedGitHubRepo(context, kanbanTarget)
                 if (isResourceError(resolved)) return resolved.data
                 const { owner, repo, github } = resolved
 

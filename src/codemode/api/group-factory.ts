@@ -14,6 +14,7 @@ import {
 } from '../api-constants.js'
 import type { ToolDispatcher, GroupApiRecord } from './types.js'
 import { normalizeParams } from './param-normalizer.js'
+import { isRecord } from '../normalizers/shared-utils.js'
 
 /**
  * Convert tool name to camelCase method name.
@@ -72,8 +73,8 @@ export function createGroupApi(
                 return {
                     success: false,
                     error: error instanceof Error ? error.message : String(error),
-                    code: typeof (error as Record<string, unknown>)['code'] === 'string'
-                        ? (error as Record<string, unknown>)['code']
+                    code: isRecord(error) && typeof error['code'] === 'string'
+                        ? error['code']
                         : (error as Error)?.name
                 }
             }

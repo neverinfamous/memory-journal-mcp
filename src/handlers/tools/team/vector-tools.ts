@@ -301,13 +301,12 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
+                    const wsId =
+                        parsed.workspace_id?.trim() === '*'
+                            ? '*'
+                            : resolveWorkspaceId(parsed.workspace_id, undefined, context.config)
                     const { success, indexed, failed, firstError } =
-                        await teamVectorManager.rebuildIndex(
-                            progress,
-                            parsed.workspace_id !== undefined
-                                ? { workspaceId: parsed.workspace_id }
-                                : undefined
-                        )
+                        await teamVectorManager.rebuildIndex(progress, { workspaceId: wsId })
 
                     if (!success && firstError) {
                         logger.warning(`Team vector index rebuild had errors: ${firstError}`)
@@ -364,23 +363,14 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     let wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
-                    let entry = teamDb.getEntryById(entry_id, wsId)
-                    if (
-                        !entry &&
-                        workspace_id === undefined &&
-                        project_number === undefined
-                    ) {
-                        entry = teamDb.getEntryById(entry_id, '*')
-                        if (entry?.workspaceId !== undefined) {
-                            wsId = entry.workspaceId
-                        }
-                    } else if (entry?.workspaceId !== undefined && wsId === '*') {
+                    const entry = teamDb.getEntryById(entry_id, wsId)
+                    if (entry?.workspaceId !== undefined && wsId === '*') {
                         wsId = entry.workspaceId
                     }
                     const projectNumber =
                         project_number ??
                         entry?.projectNumber ??
-                        resolveTeamProjectNumber(context, wsId, project_number)
+                        resolveTeamProjectNumber(context, wsId, project_number, workspace_id)
                     if (projectNumber === undefined || projectNumber === null) {
                         return {
                             success: false,

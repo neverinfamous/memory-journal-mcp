@@ -919,8 +919,8 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
             expect(serverInfoTool).toBeDefined()
             if (serverInfoTool) {
                 const result = (await serverInfoTool.handler({})) as Record<string, unknown>
-                expect(result['success']).toBe(true)
-                expect(result['status']).toBe('healthy')
+                expect(result['success']).toBe(false)
+                expect(result['status']).toBe('degraded')
                 expect(result['server']).toBeDefined()
                 const serverObj = result['server'] as Record<string, unknown>
                 expect(serverObj['name']).toBe('memory-journal-mcp')
@@ -937,8 +937,8 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
             expect(serverHealthTool).toBeDefined()
             if (serverHealthTool) {
                 const result = (await serverHealthTool.handler({})) as Record<string, unknown>
-                expect(result['success']).toBe(true)
-                expect(result['status']).toBe('healthy')
+                expect(result['success']).toBe(false)
+                expect(result['status']).toBe('degraded')
                 expect(result['_healing_note']).toContain('🛠️ AUTONOMOUS HEALING')
             }
         })
@@ -2494,9 +2494,14 @@ return { success: true, projectId };
                 getSearchFacets: vi.fn().mockReturnValue({ tags: [], entryTypes: [] })
             } as any
 
-            // Default workspace without query is rejected to prevent unbounded scans
+            // Unfiltered bare search (no workspace_id, no query) is rejected to prevent unbounded scans
+            const resBare = (await callTool('search_entries', { limit: 10 }, mockDb, undefined, undefined, mockConfig)) as Record<string, unknown>
+            expect(resBare['code']).toBe('VALIDATION_ERROR')
+
+            // Explicit default or named workspace_id without query is treated as an intentional filter
             const resDefault = (await callTool('search_entries', { workspace_id: 'default', limit: 10 }, mockDb, undefined, undefined, mockConfig)) as Record<string, unknown>
-            expect(resDefault['code']).toBe('VALIDATION_ERROR')
+            expect(resDefault['error']).toBeUndefined()
+            expect(resDefault['entries']).toBeDefined()
 
             // Specific non-default workspace without query is treated as an intentional filter
             const resSpecific = (await callTool('search_entries', { workspace_id: 'alpha', limit: 10 }, mockDb, undefined, undefined, mockConfig)) as Record<string, unknown>

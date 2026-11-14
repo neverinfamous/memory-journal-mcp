@@ -42,8 +42,8 @@ export class InsightsOperations {
         return getRecentGraphRelationships(this.connection, limit, workspaceId)
     }
 
-    getAuthorStatistics(workspaceId?: string): { author: string; count: number }[] {
-        return getAuthorStatistics(this.connection, workspaceId)
+    getAuthorStatistics(workspaceId?: string, projectNumber?: number): { author: string; count: number }[] {
+        return getAuthorStatistics(this.connection, workspaceId, projectNumber)
     }
 
     getAuthorsForEntries(entryIds: number[]): Map<number, string | null> {

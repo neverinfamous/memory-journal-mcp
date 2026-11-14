@@ -7,6 +7,7 @@ import type {
 } from './shared.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
 import { loadProjectRegistryFromConfig } from '../../utils/workspace-resolver.js'
+import { workspacesForProject } from '../../utils/write-scope.js'
 
 const emptyStringToUndefined = (val: unknown): unknown =>
     typeof val === 'string' && val.trim() === '' ? undefined : val
@@ -152,13 +153,18 @@ export function getStalenessResourceDefinitions(): InternalResourceDef[] {
                         context.briefingConfig?.projectRegistry ??
                         loadProjectRegistryFromConfig() ??
                         {}
-                    let resolvedWorkspace: string | undefined
-                    for (const [key, entry] of Object.entries(registry)) {
-                        if (entry.project_number === projectNumber) {
-                            resolvedWorkspace = key
-                            break
+                    const matchingWorkspaces = workspacesForProject(projectNumber, registry)
+                    if (matchingWorkspaces.length > 1) {
+                        return {
+                            data: {
+                                project_number: projectNumber,
+                                status: 'ambiguous',
+                                error: `Project number ${String(projectNumber)} is registered to multiple workspaces (${matchingWorkspaces.join(', ')})`,
+                                hint: 'Ensure each workspace has a unique project_number in PROJECT_REGISTRY.',
+                            },
                         }
                     }
+                    const resolvedWorkspace = matchingWorkspaces[0]
                     // [INVARIANT] Unregistered project numbers must not borrow the active workspace.
                     if (resolvedWorkspace === undefined) {
                         return {

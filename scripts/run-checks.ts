@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process'
 import { writeFileSync, mkdirSync, readFileSync, readdirSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, sep } from 'node:path'
 
 const testOutputDir = join(process.cwd(), '.test-output')
 const healthStatusFile = join(testOutputDir, 'health-status.json')
@@ -53,7 +53,7 @@ function checkFileLengths(): boolean {
                     warnings.push({ path: fullPath, lines })
                 }
                 if (
-                    dir.startsWith('src') &&
+                    (dir === 'src' || dir.startsWith(`src${sep}`)) &&
                     /(?:realpathSync|path\.resolve)\([^)]*\)(?:(?!path\.relative)[\s\S]){0,120}\.startsWith\((?!['"]\.\.['"])/.test(
                         content
                     )

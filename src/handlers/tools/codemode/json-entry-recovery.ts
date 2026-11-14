@@ -68,12 +68,17 @@ export function extractAndRecoverEntryCode(code: string): string | null {
         /\btitle\s*:\s*[`'"]([\s\S]*?)`['"](?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\)))/i.exec(scanCode) ??
         /\btitle\s*:\s*['"]([^'"]+)['"]/i.exec(scanCode)
     const projectMatch =
-        /\b(?:project_number|projectNumber|project)\s*:\s*(?:(\d+)|['"]([^'"]+)['"])/i.exec(scanCode)
-    const workspaceMatch = /\b(?:workspace_id|workspaceId)\s*:\s*['"]([^'"]+)['"]/i.exec(scanCode)
-    const sessionMatch = /\b(?:session_id|sessionId)\s*:\s*['"]([^'"]+)['"]/i.exec(scanCode)
-    const impactMatch = /\bimpact\s*:\s*([0-9.]+)/i.exec(scanCode)
-    const trustMatch = /\btrust\s*:\s*([0-9.]+)/i.exec(scanCode)
-    const validationMatch = /\bvalidation_status\s*:\s*['"]([^'"]+)['"]/i.exec(scanCode)
+        /\b(?:project_number|projectNumber|project_id|projectId|project_name|projectName|project)\s*:\s*(?:(\d+)|(['"`])([^'"`]+)\2)/i.exec(scanCode)
+    const workspaceMatch = /\b(?:workspace_id|workspaceId|workspace)\s*:\s*(['"`])([^'"`]+)\1/i.exec(scanCode)
+    const sessionMatch = /\b(?:session_id|sessionId)\s*:\s*(['"`])([^'"`]+)\1/i.exec(scanCode)
+    const impactMatch = /\b(?:impact_score|impactScore|impact)\s*:\s*([0-9.]+)/i.exec(scanCode)
+    const trustMatch = /\b(?:trust_score|trustScore|trust)\s*:\s*([0-9.]+)/i.exec(scanCode)
+    const validationMatch = /\b(?:validation_status|validationStatus)\s*:\s*(['"`])([^'"`]+)\1/i.exec(scanCode)
+    const sigMatch = /\b(?:significance_type|significanceType)\s*:\s*(['"`])([^'"`]+)\1/i.exec(scanCode)
+    const isPersonalMatch = /\b(?:is_personal|isPersonal)\s*:\s*(true|false)\b/i.exec(scanCode)
+    const shareTeamMatch = /\b(?:share_with_team|shareWithTeam)\s*:\s*(true|false)\b/i.exec(scanCode)
+    const relationshipsMatch = /\brelationships\s*:\s*(\[[\s\S]*?\])/i.exec(scanCode)
+    const anchorsMatch = /\banchors\s*:\s*(\[[\s\S]*?\])/i.exec(scanCode)
     const tagsMatch = /\btags\s*:\s*\[([\s\S]*?)\]/i.exec(scanCode)
     const autoContextMatch = /\bauto_context\s*:\s*(\{[\s\S]*?\})(?=\s*,\s*\n|\s*\n\s*\})/i.exec(scanCode)
 
@@ -89,14 +94,37 @@ export function extractAndRecoverEntryCode(code: string): string | null {
     if (entryIdMatch?.[1] !== undefined) payload['entry_id'] = parseInt(entryIdMatch[1], 10)
     if (projectMatch?.[1] !== undefined) {
         payload['project_number'] = parseInt(projectMatch[1], 10)
-    } else if (projectMatch?.[2] !== undefined && projectMatch[2].trim() !== '') {
-        payload['project_number'] = projectMatch[2].trim()
+    } else if (projectMatch?.[3] !== undefined && projectMatch[3].trim() !== '') {
+        payload['project_number'] = projectMatch[3].trim()
     }
-    if (workspaceMatch?.[1] !== undefined) payload['workspace_id'] = workspaceMatch[1]
-    if (sessionMatch?.[1] !== undefined) payload['session_id'] = sessionMatch[1]
-    if (impactMatch?.[1] !== undefined) payload['impact'] = parseFloat(impactMatch[1])
-    if (trustMatch?.[1] !== undefined) payload['trust'] = parseFloat(trustMatch[1])
-    if (validationMatch?.[1] !== undefined) payload['validation_status'] = validationMatch[1]
+    if (workspaceMatch?.[2] !== undefined) payload['workspace_id'] = workspaceMatch[2]
+    if (sessionMatch?.[2] !== undefined) payload['session_id'] = sessionMatch[2]
+    if (impactMatch?.[1] !== undefined) payload['impact_score'] = parseFloat(impactMatch[1])
+    if (trustMatch?.[1] !== undefined) payload['trust_score'] = parseFloat(trustMatch[1])
+    if (validationMatch?.[2] !== undefined) payload['validation_status'] = validationMatch[2]
+    if (sigMatch?.[2] !== undefined) payload['significance_type'] = sigMatch[2]
+    if (isPersonalMatch?.[1] !== undefined) payload['is_personal'] = isPersonalMatch[1].toLowerCase() === 'true'
+    if (shareTeamMatch?.[1] !== undefined) payload['share_with_team'] = shareTeamMatch[1].toLowerCase() === 'true'
+    for (const [key, rawArr] of [
+        ['relationships', relationshipsMatch?.[1]],
+        ['anchors', anchorsMatch?.[1]],
+    ] as const) {
+        if (rawArr === undefined) continue
+        try {
+            const parsedArr: unknown = JSON.parse(rawArr)
+            if (Array.isArray(parsedArr)) payload[key] = parsedArr
+        } catch {
+            try {
+                const normalizedArr = rawArr
+                    .replace(/'([^']*)'/g, '"$1"')
+                    .replace(/([{,]\s*)([a-zA-Z0-9_$]+)\s*:/g, '$1"$2":')
+                const parsedArr: unknown = JSON.parse(normalizedArr)
+                if (Array.isArray(parsedArr)) payload[key] = parsedArr
+            } catch {
+                // Ignore unparseable literal arrays
+            }
+        }
+    }
 
     const rawTags = tagsMatch?.[1]
     if (rawTags !== undefined) {

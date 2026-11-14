@@ -26,7 +26,7 @@ async function prepareBatchEntry(
     context: ToolContext,
     rootWorkspaceId?: string
 ): Promise<PreparedBatchEntry> {
-    if (e.workspace_id === '*') {
+    if (e.workspace_id?.trim() === '*') {
         throw new ValidationError(
             "workspace_id '*' is a read-only wildcard and cannot be used for write operations. Specify a concrete workspace_id or project_number."
         )

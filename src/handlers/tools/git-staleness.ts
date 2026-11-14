@@ -5,6 +5,7 @@ import type { AnchorStatus, ToolHandlerConfig } from '../../types/index.js'
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import { mcpLogger } from '../../utils/mcp-logger.js'
 import { assertSafeDirectoryPath } from '../../utils/security-utils.js'
+import { ValidationError } from '../../types/errors.js'
 import {
     loadProjectRegistryFromConfig,
     findCanonicalRegistryKey,
@@ -47,11 +48,49 @@ export function resolveGitWorkingDir(
         return input.cwd
     }
     const rawTarget = input.repo ?? input.repo_name ?? input.workspace_id ?? input.workspaceId
+    const trimmedRawTarget = rawTarget?.trim()
     // [INVARIANT] Sentinel workspaces ('default', '*') never name a repository; fall through to project_number.
     const target =
-        rawTarget !== undefined && ['default', '*'].includes(rawTarget.trim().toLowerCase())
+        trimmedRawTarget !== undefined && ['default', '*'].includes(trimmedRawTarget.toLowerCase())
             ? undefined
-            : rawTarget
+            : trimmedRawTarget
+    const pNum =
+        typeof input.project_number === 'string' ? Number(input.project_number) : input.project_number
+    if (registry && pNum !== undefined && !Number.isNaN(pNum) && trimmedRawTarget !== undefined && trimmedRawTarget !== '' && trimmedRawTarget !== '*') {
+        const owners = Object.entries(registry)
+            .filter(([, entry]) => entry.project_number === pNum)
+            .map(([key]) => key)
+        if (trimmedRawTarget.toLowerCase() === 'default' && owners.length > 0) {
+            throw new ValidationError(
+                `project_number ${String(pNum)} belongs to workspace '${owners[0] ?? ''}', not 'default'.`
+            )
+        }
+        if (target !== undefined && target !== '') {
+            const matchedKey =
+                findCanonicalRegistryKey(target, registry) ??
+                (Object.prototype.hasOwnProperty.call(registry, target) ? target : undefined) ??
+                Object.entries(registry).find(
+                    ([, entry]) => Boolean(entry.path) && cwdMatchesRegistryPath(entry.path, target)
+                )?.[0]
+            if (matchedKey !== undefined) {
+                const registeredProj = registry[matchedKey]?.project_number
+                if (registeredProj !== undefined && registeredProj !== pNum) {
+                    throw new ValidationError(
+                        `project_number ${String(pNum)} does not match registered project ${String(registeredProj)} for workspace '${matchedKey}'.`
+                    )
+                }
+                if (owners.length > 0 && !owners.some((o) => o.toLowerCase() === matchedKey.toLowerCase())) {
+                    throw new ValidationError(
+                        `project_number ${String(pNum)} belongs to workspace '${owners[0] ?? ''}', not '${matchedKey}'.`
+                    )
+                }
+            } else if (owners.length > 0) {
+                throw new ValidationError(
+                    `project_number ${String(pNum)} belongs to workspace '${owners[0] ?? ''}', not '${target}'.`
+                )
+            }
+        }
+    }
     if (target !== undefined && target !== '') {
         if (registry) {
             const canonicalKey = findCanonicalRegistryKey(target, registry)
@@ -76,7 +115,6 @@ export function resolveGitWorkingDir(
         }
         throw new Error(`Git repository '${target}' did not resolve to an existing path`)
     }
-    const pNum = typeof input.project_number === 'string' ? Number(input.project_number) : input.project_number
     if (pNum !== undefined && !Number.isNaN(pNum)) {
         if (registry) {
             for (const entry of Object.values(registry)) {

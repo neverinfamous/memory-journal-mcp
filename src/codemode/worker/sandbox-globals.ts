@@ -236,7 +236,11 @@ export function buildSandboxGlobals(
         util: shimMj,
         crypto: shimMj,
         buffer: shimMj,
-        execSync: (..._args: unknown[]) => '',
+        execSync: (..._args: unknown[]) => {
+            const err = new Error('VALIDATION_ERROR: child_process.execSync is disabled inside Code Mode.')
+            err.name = 'VALIDATION_ERROR'
+            throw err
+        },
         spawnSync: () => ({
             status: 1,
             stdout: '',
@@ -260,11 +264,32 @@ export function buildSandboxGlobals(
                 }
             }
         },
-        spawn: () => {
+        spawn: (_cmd?: unknown, cbOrOptions?: unknown, maybeCb?: unknown) => {
+            const cb =
+                typeof cbOrOptions === 'function'
+                    ? (cbOrOptions as (...args: unknown[]) => unknown)
+                    : typeof maybeCb === 'function'
+                      ? (maybeCb as (...args: unknown[]) => unknown)
+                      : undefined
+            if (cb !== undefined) {
+                try {
+                    cb(new Error('spawn is disabled in the sandbox'), '', '')
+                } catch {
+                    // Ignore user callback errors on no-op child_process shim
+                }
+            }
             const noop = (): void => {
                 // Dummy event listener
             }
-            return { on: noop, stdout: { on: noop }, stderr: { on: noop } }
+            return {
+                on: noop,
+                stdout: { on: noop },
+                stderr: { on: noop },
+                kill: () => false,
+                status: 1,
+                output: ['', '', 'spawn is disabled in the sandbox'],
+                error: new Error('spawn is disabled in the sandbox'),
+            }
         },
         postgres: shimMj,
         mysql: shimMj,

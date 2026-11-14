@@ -7,6 +7,8 @@
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import { ICON_PROMPT } from '../../constants/icons.js'
 import type { InternalPromptDef } from './index.js'
+import type { BriefingConfig } from '../resources/shared.js'
+import { loadProjectRegistryFromConfig } from '../../utils/workspace-resolver.js'
 import { markUntrustedContent } from '../../utils/security-utils.js'
 import { z } from 'zod'
 import { coerceNumber } from '../../utils/query-helpers.js'
@@ -89,10 +91,18 @@ export function getCmsSupervisorPromptDefinitions(): InternalPromptDef[] {
                     required: false,
                 },
             ],
-            handler: (args: Record<string, string> | undefined, db: IDatabaseAdapter) => {
+            handler: (
+                args: Record<string, string> | undefined,
+                db: IDatabaseAdapter,
+                _teamDb?: IDatabaseAdapter,
+                _github?: unknown,
+                briefingConfig?: Partial<BriefingConfig>
+            ) => {
                 const parsed = cmsSupervisorArgsSchema.safeParse(args ?? {})
                 const lookbackHours = parsed.success ? parsed.data.lookbackHours : 24
                 const autoRestore = parsed.success ? parsed.data.autoRestore : false
+                const registry = briefingConfig?.projectRegistry ?? loadProjectRegistryFromConfig()
+                const mjProjectNumber = registry?.['memory-journal-mcp']?.project_number ?? 5
                 const latestNremSnippet = fetchLatestNremSnippet(db)
                 const deletedSnippet = fetchDeletedEntriesSnapshot(db)
 
@@ -165,8 +175,8 @@ ${markUntrustedContent(deletedSnippet)}
 
 ### Phase D — Telemetry Cleanup & Supervisor Journal Entry
 1. If \`logs/agent-issues.jsonl\` contained issues that were resolved and validated in Phase C, clear \`logs/agent-issues.jsonl\`.
-2. Log the completed supervisor run in \`memory-journal-mcp\` (project #5) using \`mj.core.createEntry\` with:
-   - \`workspace_id: 'memory-journal-mcp'\`, \`project_number: 5\`
+2. Log the completed supervisor run in \`memory-journal-mcp\` (project #${String(mjProjectNumber)}) using \`mj.core.createEntry\` with:
+   - \`workspace_id: 'memory-journal-mcp'\`, \`project_number: ${String(mjProjectNumber)}\`
    - \`entry_type: 'maintenance'\`
    - \`significance_type: 'milestone'\`
    - \`tags: ['cms', 'cms-04-rem-supervisor', 'meta-learning', 'maintenance']\`

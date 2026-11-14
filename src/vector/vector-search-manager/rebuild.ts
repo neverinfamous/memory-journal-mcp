@@ -123,13 +123,13 @@ export async function rebuildIndex(
     const force = options?.force ?? false
     const batchSize = options?.batchSize ?? REBUILD_BATCH_SIZE
     const pageSize = options?.pageSize ?? REBUILD_PAGE_SIZE
-    const wsScope = effectiveWorkspace(options?.workspaceId)
+    const wsScope = options?.workspaceId !== undefined ? effectiveWorkspace(options.workspaceId) : '*'
 
     const stats: RebuildStats = { indexed: 0, skipped: 0, errorsCount: 0, firstError: null }
 
     let totalEntries: number
     try {
-        totalEntries = dbAdapter.getActiveEntryCount(wsScope)
+        totalEntries = dbAdapter.getActiveEntryCount(wsScope, options?.projectNumber)
     } catch (err) {
         const errorMessage = err instanceof Error ? err.message : String(err)
         logger.error('Failed to count entries for vector indexing', { error: err })

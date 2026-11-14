@@ -72,16 +72,9 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                               )
 
                     // Verify entry exists
-                    let existing = teamDb.getEntryById(input.entry_id, wsId)
-                    if (
-                        !existing &&
-                        input.workspace_id === undefined &&
-                        input.project_number === undefined
-                    ) {
-                        existing = teamDb.getEntryById(input.entry_id, '*')
-                        if (existing?.workspaceId !== undefined) {
-                            wsId = existing.workspaceId
-                        }
+                    const existing = teamDb.getEntryById(input.entry_id, wsId)
+                    if (existing?.workspaceId !== undefined && wsId === '*') {
+                        wsId = existing.workspaceId
                     }
                     if (!existing) {
                         return {
@@ -95,8 +88,9 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     if (
-                        input.workspace_id !== undefined &&
                         input.project_number !== undefined &&
+                        existing.projectNumber !== null &&
+                        existing.projectNumber !== undefined &&
                         existing.projectNumber !== input.project_number
                     ) {
                         return {
@@ -120,7 +114,8 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                     const projectNumber = resolveTeamProjectNumber(
                         context,
                         wsId,
-                        input.project_number ?? existing.projectNumber
+                        input.project_number ?? existing.projectNumber,
+                        input.workspace_id
                     )
                     if (projectNumber === undefined || projectNumber === null) {
                         return missingProjectNumberResponse()
@@ -213,22 +208,15 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                         workspace_id === '*'
                             ? '*'
                             : resolveWriteWorkspaceId(workspace_id, project_number, context.config)
-                    let existing = teamDb.getEntryByIdIncludeDeleted(entry_id, wsId)
-                    if (
-                        !existing &&
-                        workspace_id === undefined &&
-                        project_number === undefined
-                    ) {
-                        existing = teamDb.getEntryByIdIncludeDeleted(entry_id, '*')
-                        if (existing?.workspaceId !== undefined) {
-                            wsId = existing.workspaceId
-                        }
+                    const existing = teamDb.getEntryByIdIncludeDeleted(entry_id, wsId)
+                    if (existing?.workspaceId !== undefined && wsId === '*') {
+                        wsId = existing.workspaceId
                     }
 
                     const projectNumber =
                         project_number ??
                         existing?.projectNumber ??
-                        resolveTeamProjectNumber(context, wsId, project_number)
+                        resolveTeamProjectNumber(context, wsId, project_number, workspace_id)
                     if (projectNumber === undefined || projectNumber === null) {
                         return missingProjectNumberResponse()
                     }
@@ -321,21 +309,14 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                         workspace_id === '*'
                             ? '*'
                             : resolveWriteWorkspaceId(workspace_id, project_number, context.config)
-                    let existing = teamDb.getEntryByIdIncludeDeleted(entry_id, wsId)
-                    if (
-                        !existing &&
-                        workspace_id === undefined &&
-                        project_number === undefined
-                    ) {
-                        existing = teamDb.getEntryByIdIncludeDeleted(entry_id, '*')
-                        if (existing?.workspaceId !== undefined) {
-                            wsId = existing.workspaceId
-                        }
+                    const existing = teamDb.getEntryByIdIncludeDeleted(entry_id, wsId)
+                    if (existing?.workspaceId !== undefined && wsId === '*') {
+                        wsId = existing.workspaceId
                     }
                     const projectNumber =
                         project_number ??
                         existing?.projectNumber ??
-                        resolveTeamProjectNumber(context, wsId, project_number)
+                        resolveTeamProjectNumber(context, wsId, project_number, workspace_id)
                     if (projectNumber === undefined || projectNumber === null) {
                         return missingProjectNumberResponse()
                     }
@@ -417,7 +398,7 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                     const scopedProject =
                         wsId === '*'
                             ? project_number
-                            : resolveTeamProjectNumber(context, wsId, project_number)
+                            : resolveTeamProjectNumber(context, wsId, project_number, workspace_id)
                     const result = teamDb.mergeTags(
                         source_tag,
                         target_tag,

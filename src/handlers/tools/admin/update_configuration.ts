@@ -186,11 +186,14 @@ export function handleUpdateConfiguration(
     }
     if (args.project_number !== undefined) {
         nextProjectNumber = args.project_number
-        if (registry !== undefined && args.workspace_id === undefined) {
-            for (const [key, entry] of Object.entries(registry)) {
-                if (entry.project_number === args.project_number) {
-                    nextWorkspaceId = key
-                    break
+        if (args.workspace_id === undefined) {
+            nextWorkspaceId = undefined
+            if (registry !== undefined) {
+                for (const [key, entry] of Object.entries(registry)) {
+                    if (entry.project_number === args.project_number) {
+                        nextWorkspaceId = key
+                        break
+                    }
                 }
             }
         }
@@ -227,8 +230,13 @@ export function handleUpdateConfiguration(
             nextProjectNumber,
             activeProjectRegistry(registry)
         )
-        newBc.defaultWorkspaceId = paired.workspaceId
-        config.defaultWorkspaceId = paired.workspaceId
+        if (paired.workspaceId !== undefined) {
+            newBc.defaultWorkspaceId = paired.workspaceId
+            config.defaultWorkspaceId = paired.workspaceId
+        } else {
+            delete newBc.defaultWorkspaceId
+            delete config.defaultWorkspaceId
+        }
         if (typeof paired.projectNumber === 'number') {
             newBc.defaultProjectNumber = paired.projectNumber
             config.defaultProjectNumber = paired.projectNumber

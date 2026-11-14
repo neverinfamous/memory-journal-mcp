@@ -273,8 +273,7 @@ export async function initializeDependencies(options: ServerOptions): Promise<Se
     const loadedBriefing = configManager.getConfig().briefingConfig
     try {
         await runStartupAutoPrune(db, options, {
-            ...(loadedBriefing.defaultWorkspaceId !== undefined &&
-            loadedBriefing.defaultWorkspaceId !== 'default'
+            ...(loadedBriefing.defaultWorkspaceId !== undefined
                 ? { defaultWorkspaceId: loadedBriefing.defaultWorkspaceId }
                 : {}),
             ...(loadedBriefing.defaultProjectNumber !== undefined

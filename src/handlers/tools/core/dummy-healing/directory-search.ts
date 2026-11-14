@@ -4,6 +4,7 @@
 
 import * as fs from 'node:fs'
 import * as path from 'node:path'
+import { logger } from '../../../../utils/logger.js'
 
 export interface GrepMatch {
     file: string
@@ -74,7 +75,12 @@ export async function searchDirectoryAsync(
         let entries: fs.Dirent[]
         try {
             entries = await fs.promises.readdir(currentDir, { withFileTypes: true })
-        } catch {
+        } catch (err) {
+            logger.debug('Skipping unreadable directory during search', {
+                module: 'DirectorySearch',
+                dir: currentDir,
+                error: err instanceof Error ? err.message : String(err),
+            })
             return
         }
         for (const entry of entries) {
@@ -92,8 +98,12 @@ export async function searchDirectoryAsync(
                         const content = await handle.readFile('utf-8')
                         scanContentLines(fullPath, content, matcher, results, maxResults)
                     }
-                } catch {
-                    // Skip unreadable or locked files
+                } catch (err) {
+                    logger.debug('Skipping unreadable or locked file during search', {
+                        module: 'DirectorySearch',
+                        file: fullPath,
+                        error: err instanceof Error ? err.message : String(err),
+                    })
                 } finally {
                     await handle?.close()
                 }
@@ -137,8 +147,12 @@ export function searchDirectory(
                         const content = fs.readFileSync(fd, 'utf-8')
                         scanContentLines(fullPath, content, matcher, results, maxResults)
                     }
-                } catch {
-                    // Skip unreadable or locked files
+                } catch (err) {
+                    logger.debug('Skipping unreadable or locked file during search', {
+                        module: 'DirectorySearch',
+                        file: fullPath,
+                        error: err instanceof Error ? err.message : String(err),
+                    })
                 } finally {
                     if (fd !== undefined) fs.closeSync(fd)
                 }

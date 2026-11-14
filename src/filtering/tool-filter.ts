@@ -113,9 +113,15 @@ function applyInclude(enabledTools: Set<string>, name: string): Set<string> {
     return new Set([...enabledTools, name])
 }
 
-/** Remove a group or single tool from the set in place. */
+/** Remove a meta-group, group, or single tool from the set in place. */
 function applyExclude(enabledTools: Set<string>, name: string): void {
-    if (isGroup(name)) {
+    if (isMetaGroup(name)) {
+        for (const group of META_GROUPS[name]) {
+            for (const tool of TOOL_GROUPS[group]) {
+                enabledTools.delete(tool)
+            }
+        }
+    } else if (isGroup(name)) {
         const resolved = resolveGroupAlias(name) as ToolGroup
         for (const tool of TOOL_GROUPS[resolved]) {
             enabledTools.delete(tool)
@@ -145,8 +151,7 @@ export function parseToolFilter(filterString: string): ToolFilterConfig {
     // Determine if we're in whitelist or blacklist mode
     // If first item has no prefix and is a group/metagroup, we're in whitelist mode
     let enabledTools = new Set<string>()
-    let isWhitelistMode = false
-    if (parts[0]?.startsWith('+')) {
+    if (parts[0]?.startsWith('+') === true || parts[0]?.startsWith('-') === true) {
         enabledTools = new Set(getAllToolNames())
     }
 
@@ -160,8 +165,6 @@ export function parseToolFilter(filterString: string): ToolFilterConfig {
 
         if (i === 0 && !isAdd && !isRemove) {
             // First item without prefix - whitelist mode
-            isWhitelistMode = true
-
             enabledTools = applyInclude(enabledTools, name)
 
             rules.push({
@@ -170,13 +173,13 @@ export function parseToolFilter(filterString: string): ToolFilterConfig {
                 isGroup: isGroup(name) || isMetaGroup(name),
             })
         } else if (isRemove) {
-            // Remove group or tool
+            // Remove meta-group, group, or tool
             applyExclude(enabledTools, name)
 
             rules.push({
                 type: 'exclude',
                 target: name,
-                isGroup: isGroup(name),
+                isGroup: isGroup(name) || isMetaGroup(name),
             })
         } else {
             // Add group or tool (with or without + prefix)
@@ -187,17 +190,6 @@ export function parseToolFilter(filterString: string): ToolFilterConfig {
                 target: name,
                 isGroup: isGroup(name) || isMetaGroup(name),
             })
-        }
-    }
-
-    // If no filter specified or starting with removal, start with all tools
-    if (!isWhitelistMode && rules.length > 0 && rules[0]?.type === 'exclude') {
-        enabledTools = new Set(getAllToolNames())
-        // Re-apply rules
-        for (const rule of rules) {
-            if (rule.type === 'exclude') {
-                applyExclude(enabledTools, rule.target)
-            }
         }
     }
 

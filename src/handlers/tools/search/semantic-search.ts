@@ -171,6 +171,7 @@ export function getSemanticSearchTool(context: ToolContext): ToolDefinition[] {
                         const teamEntries = await collectTeamSearchEntries(input.query, teamDb, teamVectorManager, {
                             ...filterOptions,
                             limit: input.limit,
+                            similarityThreshold: input.similarity_threshold ?? 0.25,
                         })
                         entries = mergeAndDedup(personalEntries, teamEntries, input.limit, 'similarity')
                     } else {

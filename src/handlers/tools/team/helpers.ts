@@ -78,7 +78,8 @@ export function triggerTeamNotifications(context: ToolContext): void {
 export function resolveTeamProjectNumber(
     context: ToolContext,
     wsId: string,
-    explicitProjectNumber: number | null | undefined
+    explicitProjectNumber: number | null | undefined,
+    explicitWorkspaceId?: string
 ): number | null | undefined {
     const trimmed = wsId.trim()
     if (trimmed === '' || trimmed === '*') {
@@ -88,8 +89,10 @@ export function resolveTeamProjectNumber(
     const registry = activeProjectRegistry(context.config?.projectRegistry)
     const paired = pairStoredScope(trimmed, explicitProjectNumber, registry)
     if (paired.projectNumber !== undefined && paired.projectNumber !== null) return paired.projectNumber
-    // [INVARIANT] Only an omitted workspace that resolved to `default` keeps the configured project; unregistered named workspaces or defaults colliding with a registered workspace's project never inherit it.
-    if (trimmed === 'default') {
+    // [INVARIANT] Only an omitted workspace that resolved to `default` keeps the configured project;
+    // explicit `workspace_id: 'default'` or unregistered named workspaces never inherit `defaultProjectNumber`.
+    const explicitlyRequestedDefault = explicitWorkspaceId?.trim().toLowerCase() === 'default'
+    if (trimmed.toLowerCase() === 'default' && !explicitlyRequestedDefault) {
         const defaultProj = context.config?.defaultProjectNumber
         if (defaultProj === undefined) return undefined
         return findWorkspaceByProjectNumber(defaultProj, registry) === undefined

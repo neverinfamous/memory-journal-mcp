@@ -80,6 +80,22 @@ function recoverCodeFromParamsRecord(params: Record<string, unknown>): string | 
         if (wsVal !== undefined) payload['workspace_id'] = wsVal
         const sessVal = getNonEmptyString(entryObj, params, ['session_id', 'sessionId'])
         if (sessVal !== undefined) payload['session_id'] = sessVal
+        const impactVal = entryObj['impact_score'] ?? entryObj['impactScore'] ?? entryObj['impact'] ?? params['impact_score'] ?? params['impactScore'] ?? params['impact']
+        if (typeof impactVal === 'number') payload['impact_score'] = impactVal
+        const trustVal = entryObj['trust_score'] ?? entryObj['trustScore'] ?? entryObj['trust'] ?? params['trust_score'] ?? params['trustScore'] ?? params['trust']
+        if (typeof trustVal === 'number') payload['trust_score'] = trustVal
+        const valStatus = getNonEmptyString(entryObj, params, ['validation_status', 'validationStatus', 'validation'])
+        if (valStatus !== undefined) payload['validation_status'] = valStatus
+        const sigType = getNonEmptyString(entryObj, params, ['significance_type', 'significanceType'])
+        if (sigType !== undefined) payload['significance_type'] = sigType
+        const isPersonal = entryObj['is_personal'] ?? entryObj['isPersonal'] ?? params['is_personal'] ?? params['isPersonal']
+        if (typeof isPersonal === 'boolean') payload['is_personal'] = isPersonal
+        const shareTeam = entryObj['share_with_team'] ?? entryObj['shareWithTeam'] ?? params['share_with_team'] ?? params['shareWithTeam']
+        if (typeof shareTeam === 'boolean') payload['share_with_team'] = shareTeam
+        const rels = Array.isArray(entryObj['relationships']) ? entryObj['relationships'] : Array.isArray(params['relationships']) ? params['relationships'] : undefined
+        if (rels !== undefined) payload['relationships'] = rels
+        const anchors = Array.isArray(entryObj['anchors']) ? entryObj['anchors'] : Array.isArray(params['anchors']) ? params['anchors'] : undefined
+        if (anchors !== undefined) payload['anchors'] = anchors
         return `return await mj.createEntry(${JSON.stringify(payload)});`
     }
 

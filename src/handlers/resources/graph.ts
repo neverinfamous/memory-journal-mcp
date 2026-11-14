@@ -8,7 +8,11 @@ import { ICON_GITHUB } from '../../constants/icons.js'
 // removed ENTRY_COLUMNS
 import { ASSISTANT_FOCUSED } from '../../utils/resource-annotations.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from './shared.js'
-import { resolveGitHubRepo, isResourceError, resourceWorkspace } from './shared.js'
+import {
+    resolveScopedGitHubRepo,
+    isResourceError,
+    resourceWorkspace,
+} from './shared.js'
 import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server'
 
 /**
@@ -29,12 +33,7 @@ export function getGraphResourceDefinitions(): InternalResourceDef[] {
                 const targetRepo = match?.[1] ? decodeURIComponent(match[1]) : undefined
 
                 try {
-                    const resolved = await resolveGitHubRepo(
-                        context.github,
-                        context.briefingConfig,
-                        targetRepo,
-                        context.runtime
-                    )
+                    const resolved = await resolveScopedGitHubRepo(context, targetRepo)
 
                     if (!isResourceError(resolved)) {
                         const { owner, repo, github } = resolved

@@ -160,10 +160,13 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                     if (!fromEntry && workspace_id === '*' && project_number === undefined) {
                         fromEntry = teamDb.getEntryById(from_entry_id, '*')
                     }
+                    const explicitOrResolvedPn =
+                        wsId !== '*'
+                            ? resolveTeamProjectNumber(context, wsId, project_number, workspace_id)
+                            : project_number
                     const resolvedPn =
-                        project_number ??
-                        (fromEntry?.projectNumber !== null ? fromEntry?.projectNumber : undefined) ??
-                        (wsId !== '*' ? resolveTeamProjectNumber(context, wsId, project_number) : undefined)
+                        explicitOrResolvedPn ??
+                        (fromEntry?.projectNumber !== null ? fromEntry?.projectNumber : undefined)
                     const projectNumber = resolvedPn !== null ? resolvedPn : undefined
                     if (workspace_id !== '*' && projectNumber === undefined) {
                         return {
@@ -259,7 +262,7 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                         to_entry_id,
                         relationship_type,
                         description,
-                        wsId
+                        wsId === '*' ? fromEntry.workspaceId : wsId
                     )
 
                     triggerTeamNotifications(context)
@@ -297,23 +300,16 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                     const { entry_id, tag, depth, project_number, workspace_id } =
                         TeamVisualizeRelationshipsSchema.parse(params)
                     let wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
-                    const resolvedProject = resolveTeamProjectNumber(context, wsId, project_number)
+                    const resolvedProject = resolveTeamProjectNumber(context, wsId, project_number, workspace_id)
                     const projectNumber = typeof resolvedProject === 'number' ? resolvedProject : undefined
 
                     // Collect entry IDs to visualize
                     let entryIds: number[] = []
 
                     if (entry_id !== undefined) {
-                        let fromEntry = teamDb.getEntryById(entry_id, wsId)
-                        if (
-                            !fromEntry &&
-                            workspace_id === undefined &&
-                            project_number === undefined
-                        ) {
-                            fromEntry = teamDb.getEntryById(entry_id, '*')
-                            if (fromEntry?.workspaceId !== undefined) {
-                                wsId = fromEntry.workspaceId
-                            }
+                        const fromEntry = teamDb.getEntryById(entry_id, wsId)
+                        if (fromEntry?.workspaceId !== undefined && wsId === '*') {
+                            wsId = fromEntry.workspaceId
                         }
                         if (!fromEntry || (projectNumber !== undefined && fromEntry.projectNumber !== projectNumber)) {
                             return {

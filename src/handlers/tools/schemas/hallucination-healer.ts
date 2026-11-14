@@ -2,7 +2,6 @@
  * Shared Preprocessor to Heal Common LLM Hallucinations in Payloads Before Zod Validation
  */
 
-import { resolveProjectContext } from '../../../utils/workspace-resolver.js'
 import {
     healTitleAndAutoContext,
     healRelationshipFields,
@@ -11,18 +10,32 @@ import {
     isUpdatePayload,
 } from './hallucination-healer-fields.js'
 import {
+    normalizeProjectFields,
+    inferWorkspaceAndProject,
+    healValidationAndScoreFields,
+} from './hallucination-healer-scope.js'
+import {
     ENTRY_TYPES,
     SIGNIFICANCE_TYPES,
     coerceSignificanceAlias,
     KEY_ALIAS_MAP,
     CONTENT_ALIASES,
-    PASSED_VALIDATION_ALIASES,
-    FAILED_VALIDATION_ALIASES,
-    NONE_VALIDATION_ALIASES,
     SESSION_SUMMARY_TAG_ALIASES,
     TECHNICAL_NOTE_ALIASES,
     BUG_FIX_ALIASES,
 } from './constants-and-primitives.js'
+
+function appendHealedTag(obj: Record<string, unknown>, tag: string): void {
+    if (Array.isArray(obj['tags'])) {
+        if (!obj['tags'].includes(tag)) obj['tags'].push(tag)
+        return
+    }
+    // [INVARIANT] M7: never synthesize `tags: [...]` onto update payloads when `tags` was omitted,
+    // or updateEntry will overwrite and wipe existing entry tags.
+    if (!isUpdatePayload(obj) && (obj['tags'] === undefined || obj['tags'] === null)) {
+        obj['tags'] = [tag]
+    }
+}
 
 function toStr(v: unknown): string {
     if (typeof v === 'string') return v
@@ -75,8 +88,10 @@ function healMetadataAndContextFields(obj: Record<string, unknown>): boolean {
                 .map((a) => (typeof a === 'string' ? a : JSON.stringify(a)))
                 .join(', ')
             const existingContent = toStr(obj['content'])
-            obj['content'] =
-                existingContent !== '' ? `${existingContent}\n\n**Artifacts:** ${artStr}` : artStr
+            if (existingContent !== '' || !isUpdatePayload(obj)) {
+                obj['content'] =
+                    existingContent !== '' ? `${existingContent}\n\n**Artifacts:** ${artStr}` : artStr
+            }
         }
         Reflect.deleteProperty(obj, 'artifacts')
         modified = true
@@ -84,9 +99,7 @@ function healMetadataAndContextFields(obj: Record<string, unknown>): boolean {
 
     if ('category' in obj) {
         if (typeof obj['category'] === 'string' && obj['category'].trim() !== '') {
-            const cat = obj['category'].trim()
-            obj['tags'] ??= []
-            if (Array.isArray(obj['tags']) && !obj['tags'].includes(cat)) obj['tags'].push(cat)
+            appendHealedTag(obj, obj['category'].trim())
         }
         Reflect.deleteProperty(obj, 'category')
         modified = true
@@ -129,20 +142,14 @@ function healTagsAndEntryType(obj: Record<string, unknown>): boolean {
         const etLower = obj['entry_type'].toLowerCase()
         if (etLower === 'session-summary' || SESSION_SUMMARY_TAG_ALIASES.has(etLower)) {
             obj['entry_type'] = 'retrospective'
-            obj['tags'] ??= []
-            if (Array.isArray(obj['tags']) && !obj['tags'].includes('session-summary')) {
-                obj['tags'].push('session-summary')
-            }
+            appendHealedTag(obj, 'session-summary')
             modified = true
         } else if (etLower === 'progress' || etLower === 'status' || etLower === 'development') {
             obj['entry_type'] = 'development_note'
             modified = true
         } else if (TECHNICAL_NOTE_ALIASES.has(etLower)) {
             obj['entry_type'] = 'technical_note'
-            obj['tags'] ??= []
-            if (Array.isArray(obj['tags']) && !obj['tags'].includes(etLower)) {
-                obj['tags'].push(etLower)
-            }
+            appendHealedTag(obj, etLower)
             modified = true
         } else if (BUG_FIX_ALIASES.has(etLower)) {
             obj['entry_type'] = 'bug_fix'
@@ -154,11 +161,8 @@ function healTagsAndEntryType(obj: Record<string, unknown>): boolean {
             obj['entry_type'] = 'meeting_notes'
             modified = true
         } else if (!ENTRY_TYPES.some((t) => t === obj['entry_type'])) {
-            obj['tags'] ??= []
             const cleanedTag = etLower.replace(/^[^a-z0-9]+/, '').replace(/_/g, '-')
-            if (Array.isArray(obj['tags']) && cleanedTag.length > 0 && !obj['tags'].includes(cleanedTag)) {
-                obj['tags'].push(cleanedTag)
-            }
+            if (cleanedTag.length > 0) appendHealedTag(obj, cleanedTag)
             obj['entry_type'] = 'other'
             modified = true
         }
@@ -171,8 +175,7 @@ function healTagsAndEntryType(obj: Record<string, unknown>): boolean {
         if (typeof obj['significance_type'] === 'string') {
             if (!SIGNIFICANCE_TYPES.some((t) => t === obj['significance_type'])) {
                 const badSig = obj['significance_type'].toLowerCase().trim()
-                obj['tags'] ??= []
-                if (Array.isArray(obj['tags'])) obj['tags'].push(`significance:${badSig}`)
+                appendHealedTag(obj, `significance:${badSig}`)
                 delete obj['significance_type']
             }
         }
@@ -205,165 +208,6 @@ function healWorkspaceAndProjectContext(obj: Record<string, unknown>): boolean {
 
     const inferred = inferWorkspaceAndProject(obj)
     return normalized || inferred
-}
-
-/** Normalise `project_name` / string `project_number` aliases into numeric or workspace fields. */
-function normalizeProjectFields(obj: Record<string, unknown>): boolean {
-    let modified = false
-
-    if (obj['workspace_id'] === undefined && typeof obj['workspaceId'] === 'string') {
-        obj['workspace_id'] = obj['workspaceId']
-        delete obj['workspaceId']
-        modified = true
-    } else if (obj['workspace_id'] === undefined && typeof obj['workspace'] === 'string') {
-        obj['workspace_id'] = obj['workspace']
-        delete obj['workspace']
-        modified = true
-    }
-
-    const existingWs =
-        typeof obj['workspace_id'] === 'string' && obj['workspace_id'].trim() !== ''
-            ? obj['workspace_id'].trim()
-            : undefined
-    const rawProjName = obj['project_name'] ?? obj['projectName']
-    if (rawProjName !== undefined) {
-        const strVal =
-            typeof rawProjName === 'string' || typeof rawProjName === 'number'
-                ? String(rawProjName).trim()
-                : ''
-        const num = Number(strVal)
-        let conflicting = false
-        if (!Number.isNaN(num) && strVal !== '') {
-            if (typeof obj['project_number'] === 'number' && obj['project_number'] !== num) {
-                conflicting = true
-            } else if (!('project_number' in obj) || obj['project_number'] === undefined) {
-                obj['project_number'] = num
-            }
-        } else if (strVal !== '') {
-            const byName = resolveProjectContext({ workspace_id: strVal })
-            if (
-                existingWs !== undefined &&
-                existingWs.toLowerCase() !== byName.workspaceId.toLowerCase()
-            ) {
-                conflicting = true
-            } else if (
-                typeof obj['project_number'] === 'number' &&
-                byName.projectNumber !== undefined &&
-                obj['project_number'] !== byName.projectNumber
-            ) {
-                conflicting = true
-            } else if (existingWs === undefined) {
-                obj['workspace_id'] = strVal
-            }
-        }
-        if (!conflicting) {
-            delete obj['project_name']
-            delete obj['projectName']
-        }
-        modified = true
-    }
-
-    if ('project_number' in obj && typeof obj['project_number'] === 'string') {
-        const cleaned = obj['project_number'].trim()
-        let num = Number(cleaned)
-        if (Number.isNaN(num) && /^p-?\d+$/i.test(cleaned)) {
-            num = Number(cleaned.replace(/^p-?/i, ''))
-        }
-        if (!Number.isNaN(num) && cleaned !== '') {
-            obj['project_number'] = num
-            modified = true
-        } else if (
-            cleaned !== '' &&
-            (obj['workspace_id'] === undefined ||
-                obj['workspace_id'] === null ||
-                obj['workspace_id'] === '')
-        ) {
-            obj['workspace_id'] = cleaned
-            delete obj['project_number']
-            modified = true
-        }
-    }
-
-    return modified
-}
-
-/** Fill in `workspace_id` / `project_number` from explicit scope or env without synthesizing `'default'`. */
-function inferWorkspaceAndProject(obj: Record<string, unknown>): boolean {
-    let modified = false
-    const rawWs = typeof obj['workspace_id'] === 'string' ? obj['workspace_id'].trim() : undefined
-    const wsId = rawWs !== undefined && rawWs !== '' ? rawWs : undefined
-    const isDefaultWs = wsId?.toLowerCase() === 'default'
-    const projNum =
-        typeof obj['project_number'] === 'number' && !Number.isNaN(obj['project_number'])
-            ? obj['project_number']
-            : undefined
-
-    // [INVARIANT] C1/C3: Never stamp 'default' or disk-CWD scope onto an omitted workspace_id in
-    // this config-free preprocessor; let the handler/interceptor resolve with full server config.
-    if (wsId === undefined && process.env['MCP_WORKSPACE_ID'] !== undefined && process.env['MCP_WORKSPACE_ID'].trim() !== '') {
-        obj['workspace_id'] = process.env['MCP_WORKSPACE_ID'].trim()
-        modified = true
-    }
-
-    const effectiveWs = typeof obj['workspace_id'] === 'string' ? obj['workspace_id'].trim() : undefined
-    const hasConcreteWs = effectiveWs !== undefined && effectiveWs !== '' && effectiveWs.toLowerCase() !== 'default'
-    if (projNum !== undefined && !hasConcreteWs && effectiveWs?.toLowerCase() !== 'default') {
-        const resolved = resolveProjectContext({ project_number: projNum })
-        if (resolved.workspaceId !== undefined && resolved.workspaceId !== 'default') {
-            obj['workspace_id'] = resolved.workspaceId
-            modified = true
-        }
-    } else if (projNum === undefined && hasConcreteWs && !isDefaultWs && effectiveWs !== '*') {
-        const resolved = resolveProjectContext({ workspace_id: effectiveWs })
-        if (resolved.projectNumber !== undefined) {
-            obj['project_number'] = resolved.projectNumber
-            modified = true
-        }
-    }
-
-    return modified
-}
-
-function healValidationAndScoreFields(obj: Record<string, unknown>): boolean {
-    let modified = false
-
-    for (const numField of ['trust_score', 'impact_score'] as const) {
-        if (numField in obj && typeof obj[numField] === 'string') {
-            const n = Number(obj[numField])
-            if (!Number.isNaN(n)) {
-                obj[numField] = n
-                modified = true
-            }
-        }
-    }
-
-    if (
-        'validation_status' in obj &&
-        obj['validation_status'] !== undefined &&
-        obj['validation_status'] !== null
-    ) {
-        const rawVs = obj['validation_status']
-        const vsStr =
-            typeof rawVs === 'string'
-                ? rawVs.trim().toLowerCase()
-                : typeof rawVs === 'number' || typeof rawVs === 'boolean'
-                  ? String(rawVs)
-                  : ''
-        if (rawVs === true || PASSED_VALIDATION_ALIASES.has(vsStr)) {
-            obj['validation_status'] = 'passed'
-            modified = true
-        } else if (rawVs === false || FAILED_VALIDATION_ALIASES.has(vsStr)) {
-            obj['validation_status'] = 'failed'
-            modified = true
-        } else if (NONE_VALIDATION_ALIASES.has(vsStr)) {
-            obj['validation_status'] = 'none'
-        } else if (typeof rawVs === 'string' && !['passed', 'none', 'failed'].includes(vsStr)) {
-            obj['validation_status'] = 'none'
-            modified = true
-        }
-    }
-
-    return modified
 }
 
 function healNestedContainersAndEntryIds(obj: Record<string, unknown>): boolean {

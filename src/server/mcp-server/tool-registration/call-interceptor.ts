@@ -330,18 +330,15 @@ export function attachCallToolInterceptor(
 
             if (req.params !== undefined && healingEnabled) {
                 req.params.arguments ??= {}
-                normalizeAndAliasToolCall(req.params, {
-                    ...options,
-                    ...(liveRegistry !== undefined
-                        ? { projectRegistry: liveRegistry }
-                        : {}),
-                    ...(liveDefaultProj !== undefined
-                        ? { defaultProjectNumber: liveDefaultProj }
-                        : {}),
-                    ...(liveDefaultWs !== undefined
-                        ? { defaultWorkspaceId: liveDefaultWs }
-                        : {}),
-                })
+                const healerOptions: ServerOptions = { ...options }
+                if (liveRegistry !== undefined) healerOptions.projectRegistry = liveRegistry
+                else delete healerOptions.projectRegistry
+                if (liveDefaultProj !== undefined)
+                    healerOptions.defaultProjectNumber = liveDefaultProj
+                else delete healerOptions.defaultProjectNumber
+                if (liveDefaultWs !== undefined) healerOptions.defaultWorkspaceId = liveDefaultWs
+                else delete healerOptions.defaultWorkspaceId
+                normalizeAndAliasToolCall(req.params, healerOptions)
                 const toolArgs = req.params.arguments
 
                 if (req.params.name !== undefined && req.params.name !== '') {

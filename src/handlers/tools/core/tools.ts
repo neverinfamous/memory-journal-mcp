@@ -61,7 +61,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                 try {
                     coerceSignificanceAlias(params)
                     const input = CreateEntrySchema.parse(params)
-                    if (input.workspace_id === '*') {
+                    if (input.workspace_id?.trim() === '*') {
                         return {
                             success: false,
                             error: "workspace_id '*' is a read-only wildcard and cannot be used to create an entry. Pass a specific workspace_id or project_number.",

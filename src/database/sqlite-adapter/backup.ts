@@ -284,9 +284,15 @@ export class BackupManager {
             try {
                 // Attempt atomic swap of new DB into place
                 await fs.promises.rename(tempDbPath, this.ctx.getDbPath())
-            } catch {
+            } catch (renameErr) {
                 // Fallback to copyFile if atomic rename fails (e.g., Windows EBUSY or cross-device links)
+                logger.debug('Atomic rename failed during restore swap; falling back to copyFile', {
+                    module: 'SqliteAdapter',
+                    operation: 'restoreFromFile',
+                    error: renameErr instanceof Error ? renameErr.message : String(renameErr),
+                })
                 await fs.promises.copyFile(tempDbPath, this.ctx.getDbPath())
+                await unlinkBestEffort(tempDbPath)
             }
 
             await unlinkBestEffort(`${this.ctx.getDbPath()}-wal`)

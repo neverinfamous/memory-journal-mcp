@@ -13,7 +13,7 @@ export function resolveWriteWorkspaceId(
     content?: string,
     tags?: string[]
 ): string {
-    if (explicitWorkspaceId === '*') {
+    if (explicitWorkspaceId?.trim() === '*') {
         throw new ValidationError(
             "workspace_id '*' is a read-only wildcard and cannot be used for write operations. Specify a concrete workspace_id or project_number."
         )

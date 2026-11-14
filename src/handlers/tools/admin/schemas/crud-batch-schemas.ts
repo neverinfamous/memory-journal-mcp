@@ -249,8 +249,7 @@ function inheritRootBatchScope(
         itemTargetWs !== undefined &&
         (typeof itemTargetWs.value !== 'string' || itemTargetWs.value.trim() !== '')
     const namesOtherWorkspace =
-        differsFromRoot(itemWs) ||
-        (rootWs !== undefined && hasConcreteTargetWs && differsFromRoot(itemTargetWs))
+        differsFromRoot(itemWs) || (hasConcreteTargetWs && differsFromRoot(itemTargetWs))
     if (inheritProject && itemProj === undefined && rootProj !== undefined && !namesOtherWorkspace) {
         itemObj[rootProj.key] = rootProj.value
     }

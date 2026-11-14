@@ -220,6 +220,7 @@ export async function resolveCodeModeSessionContext(
             `Invalid project_number '${String(input.project_number)}'. Expected a positive integer or registered project name.`
         )
     }
+    const isWildcardWorkspace = rawWsTrimmed === '*'
     let numericProjectId = typeof projectId === 'number' ? projectId : undefined
     // [C3] Session scope is never guessed from keywords inside the submitted code.
     const resolvedContext = resolveProjectContext(
@@ -230,10 +231,14 @@ export async function resolveCodeModeSessionContext(
         },
         context.config
     )
-    const workspaceId = resolvedContext.workspaceId
-    if (numericProjectId !== undefined) {
+    const workspaceId = isWildcardWorkspace ? '*' : resolvedContext.workspaceId
+    if (numericProjectId !== undefined && workspaceId !== '*') {
         pairStoredScope(workspaceId, numericProjectId, activeProjectRegistry(context.config?.projectRegistry))
-    } else if (!explicitDefaultWithoutProject && resolvedContext.projectNumber !== undefined) {
+    } else if (
+        !isWildcardWorkspace &&
+        !explicitDefaultWithoutProject &&
+        resolvedContext.projectNumber !== undefined
+    ) {
         numericProjectId = resolvedContext.projectNumber
         projectId = resolvedContext.projectNumber
     }

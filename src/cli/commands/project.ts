@@ -9,6 +9,27 @@ import { DatabaseAdapterFactory } from '../../database/adapter-factory.js'
 import { ConfigResolver } from '../../utils/config-resolver.js'
 import { readProjectRegistryFile } from '../../utils/registry-config-file.js'
 import { buildServerOptions } from '../server-options-builder.js'
+import { dumpConfigAndExit } from '../dump-config.js'
+
+function handleProjectDumpConfig(options: Record<string, unknown>, command: Command): void {
+    if (options['dumpConfig'] !== true) return
+    let resolver: ConfigResolver
+    const cliConfigPath = (options['config'] as string | undefined) ?? process.env['MEMORY_JOURNAL_CONFIG']
+    const configErrors: string[] = []
+    try {
+        resolver = new ConfigResolver(command, options, cliConfigPath)
+    } catch (err) {
+        configErrors.push(err instanceof Error ? err.message : String(err))
+        resolver = new ConfigResolver(command, {}, undefined)
+    }
+    const { serverOptions } = buildServerOptions(resolver, options, command, configErrors)
+    if (configErrors.length > 0) {
+        process.stderr.write('Startup Configuration Errors:\n')
+        configErrors.forEach((err) => process.stderr.write(` - ${err}\n`))
+        process.exit(1)
+    }
+    dumpConfigAndExit(serverOptions)
+}
 
 function getConfigPath(options?: Record<string, unknown>): string {
     const custom = (options?.['config'] as string | undefined) ?? process.env['MEMORY_JOURNAL_CONFIG']
@@ -35,7 +56,8 @@ function parsePositiveCliProjectNumber(raw: unknown): number {
     return num
 }
 
-export function projectListAction(options: Record<string, unknown>, _command: Command): void {
+export function projectListAction(options: Record<string, unknown>, command: Command): void {
+    handleProjectDumpConfig(options, command)
     const config = loadConfig(options)
     const registry = (config['projectRegistry'] ?? {}) as Record<string, { path: string, project_number?: number }>
     
@@ -55,6 +77,7 @@ export function projectListAction(options: Record<string, unknown>, _command: Co
 }
 
 export async function projectCreateAction(name: string, options: Record<string, unknown>, command: Command): Promise<void> {
+    handleProjectDumpConfig(options, command)
     if (!name || name.trim() === '') {
         process.stderr.write('Project name is required.\n')
         process.exit(1)
@@ -182,7 +205,8 @@ export async function projectCreateAction(name: string, options: Record<string, 
     }
 }
 
-export function projectUpdateAction(name: string, options: Record<string, unknown>, _command: Command): void {
+export function projectUpdateAction(name: string, options: Record<string, unknown>, command: Command): void {
+    handleProjectDumpConfig(options, command)
     if (!name || name.trim() === '') {
         process.stderr.write('Project name is required.\n')
         process.exit(1)
@@ -236,7 +260,8 @@ export function projectUpdateAction(name: string, options: Record<string, unknow
     process.stdout.write(`Project '${targetName}' successfully updated.\n`)
 }
 
-export function projectDeleteAction(name: string, options: Record<string, unknown>, _command: Command): void {
+export function projectDeleteAction(name: string, options: Record<string, unknown>, command: Command): void {
+    handleProjectDumpConfig(options, command)
     if (!name || name.trim() === '') {
         process.stderr.write('Project name is required.\n')
         process.exit(1)

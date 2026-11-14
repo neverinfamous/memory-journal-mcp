@@ -7,6 +7,7 @@ import { globalSubscriptionManager } from '../../server/subscription-manager.js'
 import type { ToolHandlerConfig } from '../../types/index.js'
 import { ConfigResolver } from '../../utils/config-resolver.js'
 import { buildServerOptions } from '../server-options-builder.js'
+import { dumpConfigAndExit } from '../dump-config.js'
 import { type z } from 'zod'
 import { execOptionsSchema } from '../schemas.js'
 
@@ -30,6 +31,10 @@ export async function execAction(scriptPath: string, options: z.infer<typeof exe
         process.stderr.write('Startup Configuration Errors:\n')
         configErrors.forEach((err) => process.stderr.write(` - ${err}\n`))
         process.exit(1)
+    }
+
+    if (options.dumpConfig === true) {
+        dumpConfigAndExit(serverOptions)
     }
 
     // Override config-sourced test databases for exec unless explicitly passed on the CLI

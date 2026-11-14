@@ -5,6 +5,10 @@
 import type { JournalEntry } from '../../types/index.js'
 import { parseSessionCommitContext } from '../../types/auto-context.js'
 import { loadProjectRegistryFromConfig } from '../../utils/workspace-resolver.js'
+import {
+    getGitHubIntegration,
+    type GitHubIntegration,
+} from '../../github/github-integration/index.js'
 import type { ResourceContext } from './shared.js'
 import { resourceWorkspace } from './shared.js'
 
@@ -16,21 +20,29 @@ import { resourceWorkspace } from './shared.js'
 export function resolveProjectScope(
     context: ResourceContext,
     projectNumber: number
-): { workspaceId: string; cwd: string; hint?: string } {
+): { workspaceId: string; cwd: string; repoPath?: string; hasRegistry: boolean; hint?: string } {
     const registry = context.briefingConfig?.projectRegistry ?? loadProjectRegistryFromConfig()
     if (registry !== undefined && Object.keys(registry).length > 0) {
         for (const [key, entry] of Object.entries(registry)) {
             if (entry.project_number === projectNumber) {
-                return { workspaceId: key, cwd: entry.path ?? process.cwd() }
+                const entryPath =
+                    entry.path !== undefined && entry.path.trim() !== '' ? entry.path : undefined
+                return {
+                    workspaceId: key,
+                    cwd: entryPath ?? process.cwd(),
+                    ...(entryPath !== undefined ? { repoPath: entryPath } : {}),
+                    hasRegistry: true,
+                }
             }
         }
         return {
             workspaceId: resourceWorkspace(context),
             cwd: process.cwd(),
+            hasRegistry: true,
             hint: `Project #${String(projectNumber)} is not in the project registry, so no workspace or repository could be resolved for it.`,
         }
     }
-    return { workspaceId: resourceWorkspace(context), cwd: process.cwd() }
+    return { workspaceId: resourceWorkspace(context), cwd: process.cwd(), hasRegistry: false }
 }
 
 /** Unique commit SHAs referenced by session-summary / commit-narrative entries. */
@@ -45,4 +57,18 @@ export function collectUniqueCommits(entries: JournalEntry[]): string[] {
         }
     }
     return Array.from(new Set(commits))
+}
+
+/** Resolve the GitHub integration scoped to a project registry path (H20). */
+export function resolveCommitGithub(
+    context: ResourceContext,
+    scope: { repoPath?: string; hasRegistry: boolean }
+): GitHubIntegration | undefined {
+    if (scope.repoPath !== undefined) {
+        return getGitHubIntegration(scope.repoPath, context.runtime)
+    }
+    if (scope.hasRegistry) {
+        return undefined
+    }
+    return context.github ?? undefined
 }

@@ -181,6 +181,71 @@ export function sanitizePromptTarget(target: string): string {
         .slice(0, MAX_PROMPT_TARGET_LENGTH)
 }
 
+function resolveRegistryMatchForTarget(
+    registry: NonNullable<BriefingConfig['projectRegistry']>,
+    cleanTarget: string
+): string | undefined {
+    if (/^#?\d{1,10}$/.test(cleanTarget)) {
+        const num = Number(cleanTarget.replace(/^#/, ''))
+        const matchByNum =
+            Number.isSafeInteger(num) && num > 0
+                ? uniqueWorkspaceForProject(num, registry)
+                : undefined
+        if (matchByNum !== undefined) return matchByNum
+    }
+    const exactMatch = exactRegistryKey(cleanTarget, registry)
+    if (exactMatch !== undefined) return exactMatch
+    // [BOUNDARY] Only absolute targets are path-matched; a relative target would otherwise
+    // resolve against the server's process.cwd(), not the caller's project.
+    if (path.isAbsolute(cleanTarget)) {
+        const sortedEntries = Object.entries(registry).sort(
+            ([, a], [, b]) => (b.path?.length ?? 0) - (a.path?.length ?? 0)
+        )
+        for (const [key, data] of sortedEntries) {
+            if (
+                data.path !== undefined &&
+                data.path.trim() !== '' &&
+                cwdMatchesRegistryPath(data.path, cleanTarget)
+            ) {
+                return key
+            }
+        }
+    }
+    return undefined
+}
+
+export function hasExplicitPromptTarget(
+    briefingConfig?: Partial<BriefingConfig>,
+    workspaceId?: string,
+    targetOrTopic?: string
+): boolean {
+    const registry = briefingConfig?.projectRegistry ?? loadProjectRegistryFromConfig()
+    const requested = workspaceId?.trim()
+    if (
+        requested !== undefined &&
+        requested !== '' &&
+        requested !== '*' &&
+        requested.toLowerCase() !== 'default'
+    ) {
+        if (/^#?\d{1,10}$/.test(requested)) {
+            const num = Number(requested.replace(/^#/, ''))
+            return (
+                Number.isSafeInteger(num) &&
+                num > 0 &&
+                registry !== undefined &&
+                uniqueWorkspaceForProject(num, registry) !== undefined
+            )
+        }
+        return true
+    }
+    const cleanTarget = targetOrTopic?.trim()
+    const isPlaceholder = cleanTarget === '{target}' || cleanTarget === '{topic}'
+    if (cleanTarget !== undefined && cleanTarget !== '' && !isPlaceholder && registry !== undefined) {
+        return resolveRegistryMatchForTarget(registry, cleanTarget) !== undefined
+    }
+    return false
+}
+
 export function resolvePromptPriorWorkspace(
     briefingConfig?: Partial<BriefingConfig>,
     workspaceId?: string,
@@ -193,15 +258,15 @@ export function resolvePromptPriorWorkspace(
         if (requested.toLowerCase() === 'default') return 'default'
         if (/^#?\d{1,10}$/.test(requested)) {
             // [INVARIANT] A numeric id resolves only through the registry; an unmatched number
-            // is never echoed back as a literal workspace name (C8). Falls through to fallback.
+            // returns `default` instead of leaking cwd/session context (C13).
             const num = Number(requested.replace(/^#/, ''))
             const matchByNum =
                 Number.isSafeInteger(num) && num > 0 && registry !== undefined
                     ? uniqueWorkspaceForProject(num, registry)
                     : undefined
-            if (matchByNum !== undefined) {
-                return sanitizePromptTarget(matchByNum).slice(0, MAX_WORKSPACE_ID_LENGTH)
-            }
+            return matchByNum !== undefined
+                ? sanitizePromptTarget(matchByNum).slice(0, MAX_WORKSPACE_ID_LENGTH)
+                : 'default'
         } else {
             const canonical = exactRegistryKey(requested, registry)
             if (canonical !== undefined) {
@@ -216,35 +281,9 @@ export function resolvePromptPriorWorkspace(
     // session/config resolution instead of forcing `default`.
     const isPlaceholder = cleanTarget === '{target}' || cleanTarget === '{topic}'
     if (cleanTarget !== undefined && cleanTarget !== '' && !isPlaceholder && registry !== undefined) {
-        if (/^#?\d{1,10}$/.test(cleanTarget)) {
-            const num = Number(cleanTarget.replace(/^#/, ''))
-            const matchByNum =
-                Number.isSafeInteger(num) && num > 0
-                    ? uniqueWorkspaceForProject(num, registry)
-                    : undefined
-            if (matchByNum !== undefined) {
-                return sanitizePromptTarget(matchByNum).slice(0, MAX_WORKSPACE_ID_LENGTH)
-            }
-        }
-        const exactMatch = exactRegistryKey(cleanTarget, registry)
-        if (exactMatch !== undefined) {
-            return sanitizePromptTarget(exactMatch).slice(0, MAX_WORKSPACE_ID_LENGTH)
-        }
-        // [BOUNDARY] Only absolute targets are path-matched; a relative target would otherwise
-        // resolve against the server's process.cwd(), not the caller's project.
-        if (path.isAbsolute(cleanTarget)) {
-            const sortedEntries = Object.entries(registry).sort(
-                ([, a], [, b]) => (b.path?.length ?? 0) - (a.path?.length ?? 0)
-            )
-            for (const [key, data] of sortedEntries) {
-                if (
-                    data.path !== undefined &&
-                    data.path.trim() !== '' &&
-                    cwdMatchesRegistryPath(data.path, cleanTarget)
-                ) {
-                    return sanitizePromptTarget(key).slice(0, MAX_WORKSPACE_ID_LENGTH)
-                }
-            }
+        const matched = resolveRegistryMatchForTarget(registry, cleanTarget)
+        if (matched !== undefined) {
+            return sanitizePromptTarget(matched).slice(0, MAX_WORKSPACE_ID_LENGTH)
         }
     }
 
@@ -276,6 +315,7 @@ export function buildPlanReviewPriorContextSection(
         rawTopic,
         runtime
     )
+    const hasExplicitTarget = hasExplicitPromptTarget(briefingConfig, workspaceId, rawTopic)
     const registry = briefingConfig?.projectRegistry ?? loadProjectRegistryFromConfig()
     const canonicalKey = exactRegistryKey(priorWorkspace, registry) ?? priorWorkspace
     const priorProjectNumber = registry?.[canonicalKey]?.project_number
@@ -297,7 +337,7 @@ export function buildPlanReviewPriorContextSection(
           })
 
     const attributionRule =
-        priorWorkspace !== 'default'
+        priorWorkspace !== 'default' && hasExplicitTarget
             ? `When logging plan-review entries or session summaries for this topic, always pass \`workspace_id: "${priorWorkspace}"\`${priorProjectNumber !== undefined ? ` and \`project_number: ${String(priorProjectNumber)}\`` : ''} so entries route to their proper project instead of \`default\`.`
             : "Never log plan-review entries or session summaries to workspace `default`. Resolve and pass the target project's `workspace_id` and `project_number` explicitly."
 
@@ -326,6 +366,7 @@ export function buildPriorAuditSection(
         target,
         runtime
     )
+    const hasExplicitTarget = hasExplicitPromptTarget(briefingConfig, workspaceId, target)
     const registry = briefingConfig?.projectRegistry ?? loadProjectRegistryFromConfig()
     const canonicalKey = exactRegistryKey(priorWorkspace, registry) ?? priorWorkspace
     const priorProjectNumber = registry?.[canonicalKey]?.project_number
@@ -348,7 +389,7 @@ export function buildPriorAuditSection(
             ? ` (project \`#${String(priorProjectNumber)}\`)`
             : ''
     const loggingDirective =
-        priorWorkspace !== 'default'
+        priorWorkspace !== 'default' && hasExplicitTarget
             ? `\n**Journal Attribution Rule**: When logging new audit entries or session summaries for this target, always pass \`workspace_id: "${priorWorkspace}"\`${priorProjectNumber !== undefined ? ` and \`project_number: ${String(priorProjectNumber)}\`` : ''} so entries route to their proper project instead of \`default\`.\n`
             : `\n**Journal Attribution Rule**: Never log audit entries or session summaries to workspace \`default\`. Before calling \`create_entry\` or \`mj_execute_code\`, bind \`workspace_id\` and \`project_number\` only from the registry entry for the repository the user named. If that pair is missing, do not call \`create_entry\`.\n`
     return `## ${heading}

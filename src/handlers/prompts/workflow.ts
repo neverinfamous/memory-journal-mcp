@@ -22,21 +22,32 @@ import {
 function resolveWorkflowPromptScope(args: Record<string, string> | undefined): {
     workspaceHint?: string
     projectNumber?: number
+    explicitDefaultRequested: boolean
 } {
     const rawWorkspace = args?.['workspace_id']?.trim()
     const rawProject = args?.['project_number']?.trim()
-    const hasWorkspace = rawWorkspace !== undefined && rawWorkspace.length > 0
+    const hasWorkspace = rawWorkspace !== undefined && rawWorkspace.length > 0 && rawWorkspace !== '*'
+    const projMatch = rawProject !== undefined ? /^#?(\d+)$/.exec(rawProject) : null
+    const parsedNum = projMatch !== null ? Number(projMatch[1]) : undefined
     const numericProject =
-        rawProject !== undefined && /^\d+$/.test(rawProject) ? Number(rawProject) : undefined
-    const scope: { workspaceHint?: string; projectNumber?: number } = {}
+        parsedNum !== undefined && Number.isSafeInteger(parsedNum) && parsedNum > 0
+            ? parsedNum
+            : undefined
+    const scope: {
+        workspaceHint?: string
+        projectNumber?: number
+        explicitDefaultRequested: boolean
+    } = {
+        explicitDefaultRequested: rawWorkspace?.toLowerCase() === 'default',
+    }
     if (hasWorkspace) {
         scope.workspaceHint = rawWorkspace
-    } else if (rawProject !== undefined && numericProject !== undefined) {
+    } else if (numericProject !== undefined) {
         // [INVARIANT] A numeric project resolves through the registry only; an unmatched number
-        // falls through to session/config resolution, never a literal workspace name (C8).
-        scope.workspaceHint = rawProject
+        // resolves to `default` (without explicitDefaultRequested) instead of cwd/session (C13).
+        scope.workspaceHint = `#${String(numericProject)}`
     }
-    if (numericProject !== undefined && Number.isFinite(numericProject)) {
+    if (numericProject !== undefined) {
         scope.projectNumber = numericProject
     }
     return scope
@@ -74,7 +85,7 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
                     ws,
                     briefingConfig,
                     scope.projectNumber,
-                    scope.workspaceHint?.toLowerCase() === 'default'
+                    scope.explicitDefaultRequested
                 )
             },
         },
@@ -105,7 +116,7 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
                     ws,
                     briefingConfig,
                     scope.projectNumber,
-                    scope.workspaceHint?.toLowerCase() === 'default'
+                    scope.explicitDefaultRequested
                 )
             },
         },
@@ -136,7 +147,7 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
                     ws,
                     briefingConfig,
                     scope.projectNumber,
-                    scope.workspaceHint?.toLowerCase() === 'default'
+                    scope.explicitDefaultRequested
                 )
             },
         },
@@ -167,7 +178,7 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
                     ws,
                     briefingConfig,
                     scope.projectNumber,
-                    scope.workspaceHint?.toLowerCase() === 'default'
+                    scope.explicitDefaultRequested
                 )
             },
         },
@@ -198,7 +209,7 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
                     ws,
                     briefingConfig,
                     scope.projectNumber,
-                    scope.workspaceHint?.toLowerCase() === 'default'
+                    scope.explicitDefaultRequested
                 )
             },
         },
@@ -229,7 +240,7 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
                     ws,
                     briefingConfig,
                     scope.projectNumber,
-                    scope.workspaceHint?.toLowerCase() === 'default'
+                    scope.explicitDefaultRequested
                 )
             },
         },

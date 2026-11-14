@@ -7,6 +7,9 @@
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import { ICON_PROMPT } from '../../constants/icons.js'
 import type { InternalPromptDef } from './index.js'
+import type { BriefingConfig } from '../resources/shared.js'
+import { loadProjectRegistryFromConfig } from '../../utils/workspace-resolver.js'
+import { sanitizePromptTarget } from './adversarial-helpers.js'
 import { markUntrustedContent } from '../../utils/security-utils.js'
 import { z } from 'zod'
 import { coerceNumber } from '../../utils/query-helpers.js'
@@ -67,7 +70,8 @@ function buildExecutionBanner(isAutonomousFull: boolean): string {
 
 function buildOptimizeStandardsAndScripts(
     targetProject: string | undefined,
-    scanLoopCondition: string
+    scanLoopCondition: string,
+    mjProjectNumber: number
 ): string {
     return `## Standard of a Complete Entry (7 Core Quality Dimensions)
 An entry is considered incomplete and worthy of auditing/enrichment if it lacks any of the following:
@@ -87,7 +91,7 @@ An entry is considered incomplete and worthy of auditing/enrichment if it lacks 
 3. **ALWAYS** call \`backup_journal\` (and \`cleanup_backups\` with \`keep_count: 15\`) before any batch mutation/delete. Abort if backup fails.
 4. **NEVER** delete entries with \`significance_type\` set.
 5. Max batch size: 50 entries per mutation pass.
-6. **Log operations**: Create a journal entry with \`entry_type: 'maintenance'\`, \`workspace_id: 'memory-journal-mcp'\`, \`project_number: 5\`, and tags \`['cms', 'cms-02-nrem-consolidation', 'database-optimizer', 'maintenance']\`.
+6. **Log operations**: Create a journal entry with \`entry_type: 'maintenance'\`, \`workspace_id: 'memory-journal-mcp'\`, \`project_number: ${String(mjProjectNumber)}\`, and tags \`['cms', 'cms-02-nrem-consolidation', 'database-optimizer', 'maintenance']\`.
 7. **Execution Scope**: Systematically process entries across registered projects in \`PROJECT_REGISTRY\` (or restricted to \`${targetProject !== undefined && targetProject !== '' ? targetProject : 'all'}\` if specified).
 
 ---
@@ -251,10 +255,20 @@ export function getOptimizerPromptDefinitions(): InternalPromptDef[] {
                     required: false,
                 },
             ],
-            handler: (args: Record<string, string> | undefined, db: IDatabaseAdapter) => {
+            handler: (
+                args: Record<string, string> | undefined,
+                db: IDatabaseAdapter,
+                _teamDb?: unknown,
+                _github?: unknown,
+                briefingConfig?: Partial<BriefingConfig>
+            ) => {
                 const parsed = optimizeJournalArgsSchema.safeParse(args ?? {})
                 const lookback = parsed.success ? parsed.data.lookback : 10
-                const targetProject = parsed.success ? parsed.data.project : undefined
+                const rawTargetProject = parsed.success ? parsed.data.project : undefined
+                const targetProject =
+                    rawTargetProject !== undefined && rawTargetProject !== ''
+                        ? sanitizePromptTarget(rawTargetProject)
+                        : undefined
                 const autoRun = parsed.success ? parsed.data.autoRun : false
                 const mode = parsed.success ? parsed.data.mode : 'quick'
                 const targetDimension = parsed.success ? parsed.data.targetDimension : 'all'
@@ -285,9 +299,13 @@ export function getOptimizerPromptDefinitions(): InternalPromptDef[] {
                         ? 'for (let _page = 0; _page < 200; _page++)'
                         : `while (processed < ${String(entryLimit)})`
 
+                const registry = briefingConfig?.projectRegistry ?? loadProjectRegistryFromConfig()
+                const mjProjectNumber = registry?.['memory-journal-mcp']?.project_number ?? 5
+
                 const standardsAndScripts = buildOptimizeStandardsAndScripts(
                     targetProject,
-                    scanLoopCondition
+                    scanLoopCondition,
+                    mjProjectNumber
                 )
                 const workflowOptions = buildOptimizeWorkflowOptionsSection(
                     targetDimension,

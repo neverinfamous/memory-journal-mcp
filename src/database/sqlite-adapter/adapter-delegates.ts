@@ -355,8 +355,8 @@ export class AdapterDelegates {
         return this.insightsOps.getRecentGraphRelationships(limit, workspaceId)
     }
 
-    getAuthorStatistics(workspaceId?: string): { author: string; count: number }[] {
-        return this.insightsOps.getAuthorStatistics(workspaceId)
+    getAuthorStatistics(workspaceId?: string, projectNumber?: number): { author: string; count: number }[] {
+        return this.insightsOps.getAuthorStatistics(workspaceId, projectNumber)
     }
 
     getAuthorsForEntries(entryIds: number[]): Map<number, string | null> {

@@ -13,6 +13,7 @@ import { getGitHubIntegration } from '../../github/github-integration/index.js'
 import type { Scheduler } from '../../server/scheduler.js'
 import type { ServerRuntime } from '../../utils/maintenance-lock.js'
 import {
+    findCanonicalRegistryKey,
     getActiveSessionProject,
     loadProjectRegistryFromConfig,
     resolveProjectNumberFromPath,
@@ -180,6 +181,60 @@ export async function resolveGitHubRepo(
     }
 
     return { owner, repo, branch: repoInfo.branch ?? null, lastModified, github: activeGithub }
+}
+
+/**
+ * [INVARIANT] Resource-scoped wrapper around `resolveGitHubRepo` (H21):
+ * when `targetRepo` is omitted in multi-project setups or when `defaultWorkspaceId: 'default'`
+ * has no registered path, resolve via `resourceWorkspace(context)` instead of leaking
+ * the server process CWD's `context.github`.
+ */
+export async function resolveScopedGitHubRepo(
+    context: ResourceContext,
+    targetRepo?: string
+): Promise<GitHubRepoResolved | ResourceResult> {
+    const lastModified = new Date().toISOString()
+    if (targetRepo !== undefined && targetRepo !== '') {
+        return resolveGitHubRepo(context.github, context.briefingConfig, targetRepo, context.runtime)
+    }
+    const ws = resourceWorkspace(context)
+    const reg = context.briefingConfig?.projectRegistry ?? loadProjectRegistryFromConfig()
+    const hasRegistry = reg !== undefined && Object.keys(reg).length > 0
+    const canonicalWs = ws !== 'default' ? findCanonicalRegistryKey(ws, reg) : undefined
+    const defaultHasPath = reg?.['default']?.path !== undefined && reg['default'].path.trim() !== ''
+    const effectiveTarget =
+        canonicalWs ?? (ws === 'default' && defaultHasPath ? 'default' : undefined)
+
+    if (effectiveTarget !== undefined) {
+        const entryPath = reg?.[effectiveTarget]?.path
+        if (entryPath !== undefined && entryPath.trim() !== '') {
+            return resolveGitHubRepo(
+                context.github,
+                context.briefingConfig,
+                effectiveTarget,
+                context.runtime
+            )
+        }
+        return {
+            data: {
+                error: 'GitHub integration not available',
+                hint: `Workspace '${effectiveTarget}' does not have a registered repository path.`,
+            },
+            annotations: { lastModified },
+        }
+    }
+    const configuredDefault =
+        context.briefingConfig?.defaultWorkspaceId?.trim().toLowerCase() === 'default'
+    if (hasRegistry || configuredDefault || (ws !== 'default' && ws !== '*')) {
+        return {
+            data: {
+                error: 'GitHub integration not available',
+                hint: `Workspace '${ws}' does not have a registered repository path.`,
+            },
+            annotations: { lastModified },
+        }
+    }
+    return resolveGitHubRepo(context.github, context.briefingConfig, undefined, context.runtime)
 }
 
 /**

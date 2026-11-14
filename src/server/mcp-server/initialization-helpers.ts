@@ -9,7 +9,8 @@ import {
 } from '../../filtering/tool-filter.js'
 import { Scheduler } from '../scheduler.js'
 import { runAutoPrune } from '../auto-prune.js'
-import { resolveWorkspaceId } from '../../utils/workspace-resolver.js'
+import { resolveAutoPruneScope, resolveWorkspaceId } from '../../utils/workspace-resolver.js'
+export { resolveAutoPruneScope }
 import type { ServerRuntime } from '../../utils/maintenance-lock.js'
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import type { ToolFilterConfig } from '../../filtering/tool-filter.js'
@@ -44,6 +45,11 @@ export async function runStartupAutoPrune(
     const defaultWorkspaceId = scope?.defaultWorkspaceId ?? options.defaultWorkspaceId
     const defaultProjectNumber = scope?.defaultProjectNumber ?? options.defaultProjectNumber
     const projectRegistry = scope?.projectRegistry ?? options.projectRegistry
+    const pruneScope = resolveAutoPruneScope(
+        defaultWorkspaceId,
+        defaultProjectNumber,
+        projectRegistry
+    )
     const pruneResult = await runAutoPrune(db, {
         archiveOlderThanDays: options.archiveOlderThanDays ?? 0,
         pruneOlderThanDays: options.pruneOlderThanDays ?? 0,
@@ -51,12 +57,10 @@ export async function runStartupAutoPrune(
         importanceThreshold: options.pruneImportanceThreshold ?? 0.15,
         dryRun: options.pruneDryRun,
         excludeTags: options.pruneExcludeTags,
-        workspaceId: resolveWorkspaceId(defaultWorkspaceId, defaultProjectNumber, {
-            ...(defaultWorkspaceId !== undefined ? { defaultWorkspaceId } : {}),
-            ...(defaultProjectNumber !== undefined ? { defaultProjectNumber } : {}),
-            ...(projectRegistry !== undefined ? { projectRegistry } : {}),
-        }),
-        ...(defaultProjectNumber !== undefined ? { projectNumber: defaultProjectNumber } : {}),
+        workspaceId: pruneScope.workspaceId,
+        ...(pruneScope.projectNumber !== undefined
+            ? { projectNumber: pruneScope.projectNumber }
+            : {}),
     })
     if (pruneResult.aborted === true) {
         throw new Error('Auto-prune aborted because the pre-prune backup failed')

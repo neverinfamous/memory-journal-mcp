@@ -7,28 +7,24 @@
  * on the team database and preserve the author field.
  */
 
-import * as fs from 'node:fs/promises'
-import { constants as fsConstants } from 'node:fs'
-import * as path from 'node:path'
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { sendProgress } from '../../../utils/progress-utils.js'
-import { resolveWorkspaceFromFilePath } from '../../../utils/workspace-resolver.js'
-import { activeProjectRegistry, uniqueWorkspaceForProject } from '../../../utils/write-scope.js'
 import { resolveWriteWorkspaceId } from '../write-workspace.js'
 import { AggregateMcpError } from '../../../types/errors.js'
-import {
-    resolveAuthenticatedAuthor,
-    assertSafeDirectoryPath,
-    assertSafeFilePath,
-} from '../../../utils/security-utils.js'
+import { resolveAuthenticatedAuthor } from '../../../utils/security-utils.js'
 import { exportEntriesToMarkdown } from '../../../markdown/index.js'
-import { importMarkdownEntries, processImportBatch, convertFile } from '../../../markdown/index.js'
-import type { ExportableEntry, ParsedFile } from '../../../markdown/index.js'
+import { importMarkdownEntries, processImportBatch } from '../../../markdown/index.js'
+import type { ExportableEntry } from '../../../markdown/index.js'
 import { ErrorFieldsMixin } from '../error-fields-mixin.js'
-import { MAX_IMPORT_FILE_BYTES } from '../io/tools.js'
 import { batchFetchAuthors, triggerTeamNotifications, resolveTeamProjectNumber } from './helpers.js'
+import {
+    TEAM_IO_NOT_CONFIGURED,
+    MISSING_PROJECT_NUMBER_IO_ERROR,
+    resolveTeamImportScope,
+    readAndConvertExternalMarkdownFiles,
+} from './io-scope-helpers.js'
 import {
     DATE_FORMAT_REGEX,
     DATE_FORMAT_MESSAGE,
@@ -146,112 +142,6 @@ const TeamImportExternalSchemaMcp = z.object({
 
 const TeamImportExternalOutputSchema = TeamImportMarkdownOutputSchema
 
-const TEAM_IO_NOT_CONFIGURED = {
-    success: false,
-    error: 'Team collaboration is not configured. Set TEAM_DB_PATH to enable.',
-}
-
-const MISSING_PROJECT_NUMBER_IO_ERROR = {
-    success: false,
-    error: 'Missing project_number. You MUST provide a valid project_number (e.g., 1) or configure DEFAULT_PROJECT_NUMBER on the server.',
-    code: 'VALIDATION_ERROR',
-    category: 'validation',
-    suggestion:
-        'Specify the project_number in your tool call, or ensure DEFAULT_PROJECT_NUMBER is configured on the server.',
-    recoverable: true,
-}
-
-function resolveTeamImportScope(
-    sourceDir: string,
-    explicitWs: string | undefined,
-    explicitPn: number | undefined,
-    context: ToolContext
-): {
-    wsId: string
-    projectNumber: number | undefined
-    lockedWsId: string | undefined
-    lockedProject: number | undefined
-} {
-    const trimmedWs = explicitWs?.trim()
-    const hasExplicitWs = trimmedWs !== undefined && trimmedWs !== '' && trimmedWs !== '*'
-    const dirMatch =
-        !hasExplicitWs && explicitPn === undefined
-            ? resolveWorkspaceFromFilePath(sourceDir, context.config)
-            : undefined
-    const effectiveRegistry = activeProjectRegistry(context.config?.projectRegistry)
-    const projectOwner =
-        !hasExplicitWs && dirMatch === undefined && explicitPn !== undefined
-            ? uniqueWorkspaceForProject(explicitPn, effectiveRegistry)
-            : undefined
-    const wsId = resolveWriteWorkspaceId(
-        explicitWs ?? dirMatch?.workspaceId,
-        explicitPn ?? dirMatch?.projectNumber,
-        context.config
-    )
-    const lockedWsId = (hasExplicitWs ? trimmedWs : undefined) ?? dirMatch?.workspaceId ?? projectOwner
-    const lockedProject = explicitPn ?? dirMatch?.projectNumber
-    const projectNumber =
-        resolveTeamProjectNumber(context, wsId, explicitPn ?? dirMatch?.projectNumber) ??
-        undefined
-    return { wsId, projectNumber, lockedWsId, lockedProject }
-}
-
-async function readAndConvertExternalMarkdownFiles(
-    sourceDir: string,
-    limit: number,
-    sourceFormat: z.infer<typeof TeamImportExternalSchema>['source_format'],
-    defaultEntryType: z.infer<typeof TeamImportExternalSchema>['default_entry_type'],
-    allowedRoots: string[],
-    progress: ToolContext['progress']
-): Promise<{ parsedFiles: ParsedFile[]; errors: { file: string; error: string }[] }> {
-    assertSafeDirectoryPath(sourceDir, allowedRoots)
-    const mdFiles: string[] = []
-    const dir = await fs.opendir(sourceDir)
-    for await (const dirent of dir) {
-        if (dirent.isFile() && dirent.name.endsWith('.md')) {
-            mdFiles.push(dirent.name)
-            if (mdFiles.length >= limit) break
-        }
-    }
-
-    await sendProgress(progress, 1, 3, 'Converting external formats...')
-    const parsedFiles: ParsedFile[] = []
-    const errors: { file: string; error: string }[] = []
-
-    for (const filename of mdFiles) {
-        let handle
-        try {
-            const filepath = path.join(sourceDir, filename)
-            assertSafeFilePath(filepath, allowedRoots)
-            handle = await fs.open(filepath, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW)
-            const stats = await handle.stat()
-            if (stats.size > MAX_IMPORT_FILE_BYTES) {
-                throw new Error(
-                    `File exceeds maximum size limit of ${String(MAX_IMPORT_FILE_BYTES / (1024 * 1024))}MB (${stats.size} bytes)`
-                )
-            }
-            const content = await handle.readFile('utf-8')
-            const converted = convertFile(content, filename, sourceFormat, defaultEntryType)
-            if (converted.body.trim()) {
-                parsedFiles.push({
-                    filename,
-                    body: converted.body,
-                    metadata: converted.metadata,
-                })
-            }
-        } catch (err) {
-            errors.push({
-                file: filename,
-                error: err instanceof Error ? err.message : String(err),
-            })
-        } finally {
-            if (handle) await handle.close()
-        }
-    }
-
-    return { parsedFiles, errors }
-}
-
 // ============================================================================
 // Tool Definitions
 // ============================================================================
@@ -292,7 +182,7 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                     }
                     const wsId = resolveWriteWorkspaceId(input.workspace_id, input.project_number, context.config)
                     const projectNumber =
-                        resolveTeamProjectNumber(context, wsId, input.project_number) ?? undefined
+                        resolveTeamProjectNumber(context, wsId, input.project_number, input.workspace_id) ?? undefined
                     if (projectNumber === undefined) {
                         return { ...MISSING_PROJECT_NUMBER_IO_ERROR }
                     }
@@ -369,7 +259,7 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                 try {
                     if (!teamDb) return { ...TEAM_IO_NOT_CONFIGURED }
                     const input = TeamImportMarkdownSchema.parse(params)
-                    const { projectNumber, lockedWsId, lockedProject } = resolveTeamImportScope(
+                    const { projectNumber, lockedWsId } = resolveTeamImportScope(
                         input.source_dir,
                         input.workspace_id,
                         input.project_number,
@@ -391,9 +281,7 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                             dry_run: input.dry_run,
                             limit: input.limit,
                             author,
-                            ...(lockedProject !== undefined
-                                ? { project_number: lockedProject }
-                                : {}),
+                            project_number: projectNumber,
                             ...(lockedWsId !== undefined ? { workspaceId: lockedWsId } : {}),
                             ...(context.config !== undefined ? { config: context.config } : {}),
                         },
@@ -429,7 +317,7 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                 try {
                     if (!teamDb) return { ...TEAM_IO_NOT_CONFIGURED }
                     const input = TeamImportExternalSchema.parse(params)
-                    const { projectNumber, lockedWsId, lockedProject } = resolveTeamImportScope(
+                    const { projectNumber, lockedWsId } = resolveTeamImportScope(
                         input.source_dir,
                         input.workspace_id,
                         input.project_number,
@@ -460,9 +348,7 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                             dry_run: input.dry_run,
                             limit: input.limit,
                             author,
-                            ...(lockedProject !== undefined
-                                ? { project_number: lockedProject }
-                                : {}),
+                            project_number: projectNumber,
                             ...(lockedWsId !== undefined ? { workspaceId: lockedWsId } : {}),
                             ...(context.config !== undefined ? { config: context.config } : {}),
                         },

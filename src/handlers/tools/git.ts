@@ -369,12 +369,16 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                                 }
                                 targetWorkspaces.push(entry.workspaceId ?? defaultWs)
                         } else {
-                            const registryKeys = Object.keys(registry ?? {})
-                            targetWorkspaces.push(
-                                ...(registryKeys.length > 0
-                                    ? Array.from(new Set(registryKeys))
-                                    : [defaultWs])
+                            const registryKeys = Object.keys(registry ?? {}).filter(
+                                (key) =>
+                                    typeof rawProj !== 'number' ||
+                                    registry?.[key]?.project_number === rawProj
                             )
+                            if (registryKeys.length > 0) {
+                                targetWorkspaces.push(...Array.from(new Set(registryKeys)))
+                            } else if (typeof rawProj !== 'number') {
+                                targetWorkspaces.push(defaultWs)
+                            }
                         }
                     } else {
                         targetWorkspaces.push(resolveWorkspaceId(rawWs, rawProj, context.config))

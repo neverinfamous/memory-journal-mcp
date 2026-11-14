@@ -17,11 +17,7 @@ import { ValidationError } from '../types/errors.js'
 import { linkImportedRelationships } from './import-relationships.js'
 import { parseFrontmatter } from './frontmatter.js'
 import { assertSafeDirectoryPath, assertSafeFilePath } from '../utils/security-utils.js'
-import {
-    findCanonicalRegistryKey,
-    resolveProjectContext,
-} from '../utils/workspace-resolver.js'
-import { activeProjectRegistry, pairStoredScope } from '../utils/write-scope.js'
+import { resolveImportedFileContext } from './importer-scope.js'
 
 /** Maximum size (5 MB) permitted for a single markdown file during import. */
 const MAX_IMPORT_FILE_SIZE_BYTES = 5 * 1024 * 1024
@@ -237,82 +233,6 @@ function assertImportAuthorOwnership(
     }
 }
 
-/**
- * [INVARIANT] An explicit caller workspace — including the real `default` workspace — locks
- * ownership checks. Only `*` and blanks are unscoped.
- */
-function concreteCallerWorkspace(workspaceId: string | undefined): string | undefined {
-    if (workspaceId === undefined) return undefined
-    const trimmed = workspaceId.trim()
-    if (trimmed === '' || trimmed === '*') return undefined
-    return trimmed
-}
-
-function sameRegistryWorkspace(
-    left: string,
-    right: string,
-    registry: Parameters<typeof findCanonicalRegistryKey>[1]
-): boolean {
-    const leftKey = findCanonicalRegistryKey(left, registry) ?? left
-    const rightKey = findCanonicalRegistryKey(right, registry) ?? right
-    return leftKey.toLowerCase() === rightKey.toLowerCase()
-}
-
-function resolveImportedFileContext(
-    file: ParsedFile,
-    options: ImportOptions
-): { effectiveWsId: string | undefined; effectiveProjNum: number | undefined } {
-    const { metadata } = file
-    const rawWorkspaceId = options.workspaceId ?? metadata.workspace_id
-    if (rawWorkspaceId?.trim() === '*' || metadata.workspace_id?.trim() === '*') {
-        throw new ValidationError("Workspace '*' cannot be used for import writes")
-    }
-    const effectiveRegistry = activeProjectRegistry(options.config?.projectRegistry)
-    const lockedWorkspace = concreteCallerWorkspace(options.workspaceId)
-    const fileWorkspace = concreteCallerWorkspace(metadata.workspace_id)
-    if (lockedWorkspace !== undefined && fileWorkspace !== undefined && !sameRegistryWorkspace(lockedWorkspace, fileWorkspace, effectiveRegistry)) {
-        throw new ValidationError(
-            `Frontmatter workspace_id '${fileWorkspace}' conflicts with target workspace '${lockedWorkspace}'.`
-        )
-    }
-    const fileProject = metadata.project_number
-    if (options.project_number !== undefined && fileProject !== undefined && options.project_number !== fileProject) {
-        throw new ValidationError(
-            `Frontmatter project_number ${String(fileProject)} conflicts with target project_number ${String(options.project_number)}.`
-        )
-    }
-    if (lockedWorkspace !== undefined && fileProject !== undefined && effectiveRegistry !== undefined) {
-        const owner = Object.entries(effectiveRegistry).find(([, entry]) => entry.project_number === fileProject)?.[0]
-        if (owner !== undefined && !sameRegistryWorkspace(lockedWorkspace, owner, effectiveRegistry)) {
-            throw new ValidationError(
-                `project_number ${String(fileProject)} belongs to workspace '${owner}', not '${lockedWorkspace}'.`
-            )
-        }
-        const canonicalLocked = findCanonicalRegistryKey(lockedWorkspace, effectiveRegistry)
-        const lockedRegisteredProject =
-            canonicalLocked !== undefined ? effectiveRegistry[canonicalLocked]?.project_number : undefined
-        if (lockedRegisteredProject !== undefined && lockedRegisteredProject !== fileProject) {
-            throw new ValidationError(
-                `project_number ${String(fileProject)} does not match registered project ${String(lockedRegisteredProject)} for workspace '${lockedWorkspace}'.`
-            )
-        }
-        pairStoredScope(lockedWorkspace, fileProject, effectiveRegistry)
-    }
-    const rawProjectNumber = options.project_number ?? fileProject
-    const resolved = resolveProjectContext(
-        {
-            workspace_id: rawWorkspaceId,
-            project_number: rawProjectNumber,
-        },
-        options.config
-    )
-    const paired = pairStoredScope(resolved.workspaceId, resolved.projectNumber, effectiveRegistry)
-    return {
-        effectiveWsId: paired.workspaceId ?? resolved.workspaceId,
-        effectiveProjNum: paired.projectNumber ?? undefined,
-    }
-}
-
 function upsertParsedFile(
     file: ParsedFile,
     db: IDatabaseAdapter,
@@ -327,6 +247,16 @@ function upsertParsedFile(
     if (metadata.mj_id !== undefined) {
         const existing = db.getEntryById(metadata.mj_id, effectiveWsId)
         if (existing) {
+            if (
+                existing.projectNumber !== undefined &&
+                existing.projectNumber !== null &&
+                effectiveProjNum !== undefined &&
+                existing.projectNumber !== effectiveProjNum
+            ) {
+                throw new ValidationError(
+                    `Entry ${String(metadata.mj_id)} belongs to project #${String(existing.projectNumber)}, not project #${String(effectiveProjNum)}.`
+                )
+            }
             assertImportAuthorOwnership(db, metadata.mj_id, author)
             const updated = db.updateEntry(metadata.mj_id, {
                 content: body,

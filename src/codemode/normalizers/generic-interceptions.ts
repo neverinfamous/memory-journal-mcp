@@ -86,7 +86,8 @@ export function applyGenericInterceptions(
     extractMetadataContextAliases(obj)
     const idError = coerceNumericStringIds(obj)
     if (idError !== undefined) return idError
-    normalizeGenericFieldAliases(obj, methodName)
+    const aliasError = normalizeGenericFieldAliases(obj, methodName)
+    if (aliasError !== undefined) return aliasError
 
     if (CREATE_ENTRY_METHODS.has(methodName)) {
         resolveCreateEntryProjectContext(obj)
@@ -106,7 +107,11 @@ export function applyGenericInterceptions(
                     batchError = itemError
                     return rawItem
                 }
-                normalizeGenericFieldAliases(item, 'create_entry')
+                const itemAliasError = normalizeGenericFieldAliases(item, 'create_entry')
+                if (itemAliasError !== undefined) {
+                    batchError = itemAliasError
+                    return rawItem
+                }
                 const rawItemWs = item['workspace_id'] ?? item['workspaceId']
                 const itemWs = typeof rawItemWs === 'string' ? rawItemWs.trim() : undefined
                 const itemNamesSameOrNoWs =

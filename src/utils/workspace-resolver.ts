@@ -247,3 +247,46 @@ export function resolveWorkspaceId(
     )
     return res.workspaceId
 }
+
+/**
+ * Resolve `(workspaceId, projectNumber)` together for startup and scheduled auto-prune,
+ * preserving explicit `default` while ensuring foreign or conflicting `defaultProjectNumber`
+ * values are not passed alongside an unrelated or `'default'` workspace.
+ */
+export function resolveAutoPruneScope(
+    defaultWorkspaceId: string | undefined,
+    defaultProjectNumber: number | undefined,
+    projectRegistry: ToolHandlerConfig['projectRegistry']
+): { workspaceId: string; projectNumber?: number } {
+    const effectiveRegistry = projectRegistry ?? loadProjectRegistryFromConfig()
+    const scopeConfig: ToolHandlerConfig = {
+        ...(defaultWorkspaceId !== undefined ? { defaultWorkspaceId } : {}),
+        ...(defaultProjectNumber !== undefined ? { defaultProjectNumber } : {}),
+        ...(effectiveRegistry !== undefined ? { projectRegistry: effectiveRegistry } : {}),
+    }
+    const workspaceId = resolveWorkspaceId(
+        defaultWorkspaceId,
+        defaultWorkspaceId === undefined ? defaultProjectNumber : undefined,
+        scopeConfig
+    )
+    const canonicalWs = findCanonicalRegistryKey(workspaceId, effectiveRegistry) ?? workspaceId
+    const regProj = effectiveRegistry?.[canonicalWs]?.project_number
+    const projClaimedElsewhere =
+        defaultProjectNumber !== undefined &&
+        effectiveRegistry !== undefined &&
+        Object.entries(effectiveRegistry).some(
+            ([k, v]) =>
+                v.project_number === defaultProjectNumber &&
+                k.toLowerCase() !== canonicalWs.toLowerCase()
+        )
+    const projectNumber =
+        regProj ??
+        (!projClaimedElsewhere &&
+        (canonicalWs !== 'default' || defaultWorkspaceId === 'default')
+            ? defaultProjectNumber
+            : undefined)
+    return {
+        workspaceId,
+        ...(projectNumber !== undefined ? { projectNumber } : {}),
+    }
+}

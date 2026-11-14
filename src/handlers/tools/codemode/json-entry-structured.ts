@@ -86,7 +86,14 @@ function assignMissingScope(params: Record<string, unknown>, source: Record<stri
 }
 
 function readProjectNumber(target: Record<string, unknown>): number | string | undefined {
-    const raw = target['project_number'] ?? target['projectNumber'] ?? target['project']
+    const raw =
+        target['project_number'] ??
+        target['projectNumber'] ??
+        target['project_id'] ??
+        target['projectId'] ??
+        target['project_name'] ??
+        target['projectName'] ??
+        target['project']
     if (typeof raw === 'number' && !Number.isNaN(raw)) return raw
     if (typeof raw === 'string' && raw.trim() !== '') {
         const trimmed = raw.trim()
@@ -99,7 +106,7 @@ function readProjectNumber(target: Record<string, unknown>): number | string | u
 }
 
 function readWorkspaceId(target: Record<string, unknown>): string | undefined {
-    const raw = target['workspace_id'] ?? target['workspaceId']
+    const raw = target['workspace_id'] ?? target['workspaceId'] ?? target['workspace']
     if (typeof raw === 'string' && raw.trim() !== '') return raw.trim()
     return resolveRepoWorkspace(target['repo'])
 }
@@ -176,11 +183,16 @@ function recoverEntryMutation(
     if (!hasJournalFields(signals)) return null
 
     const entryParams = buildEntryParams(target, signals)
-    if (readWorkspaceId(target) === undefined) {
-        const wsId = readWorkspaceId(original)
-        if (wsId !== undefined) entryParams['workspace_id'] = wsId
+    const targetWs = readWorkspaceId(target)
+    const origWs = readWorkspaceId(original)
+    if (targetWs === undefined && origWs !== undefined) {
+        entryParams['workspace_id'] = origWs
     }
-    if (readProjectNumber(target) === undefined) {
+    if (
+        readProjectNumber(target) === undefined &&
+        (targetWs === undefined || targetWs === origWs) &&
+        targetWs?.toLowerCase() !== 'default'
+    ) {
         const projNum = readProjectNumber(original)
         if (projNum !== undefined) entryParams['project_number'] = projNum
     }
@@ -376,9 +388,20 @@ function copyOptionalEntryFields(
     if (typeof sessId === 'string') entryParams['session_id'] = sessId
     const projNum = readProjectNumber(target)
     if (projNum !== undefined) entryParams['project_number'] = projNum
-    if (typeof target['impact'] === 'number') entryParams['impact'] = target['impact']
-    if (typeof target['trust'] === 'number') entryParams['trust'] = target['trust']
-    if (typeof target['validation_status'] === 'string') {
-        entryParams['validation_status'] = target['validation_status']
+    const impactVal = target['impact_score'] ?? target['impactScore'] ?? target['impact']
+    if (typeof impactVal === 'number') entryParams['impact_score'] = impactVal
+    const trustVal = target['trust_score'] ?? target['trustScore'] ?? target['trust']
+    if (typeof trustVal === 'number') entryParams['trust_score'] = trustVal
+    const valStatus = target['validation_status'] ?? target['validationStatus']
+    if (typeof valStatus === 'string') {
+        entryParams['validation_status'] = valStatus
     }
+    const sigType = target['significance_type'] ?? target['significanceType']
+    if (typeof sigType === 'string') entryParams['significance_type'] = sigType
+    const isPersonal = target['is_personal'] ?? target['isPersonal']
+    if (typeof isPersonal === 'boolean') entryParams['is_personal'] = isPersonal
+    const shareWithTeam = target['share_with_team'] ?? target['shareWithTeam']
+    if (typeof shareWithTeam === 'boolean') entryParams['share_with_team'] = shareWithTeam
+    if (Array.isArray(target['relationships'])) entryParams['relationships'] = target['relationships']
+    if (Array.isArray(target['anchors'])) entryParams['anchors'] = target['anchors']
 }

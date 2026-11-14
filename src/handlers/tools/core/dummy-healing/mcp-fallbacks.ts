@@ -300,7 +300,7 @@ export async function handleServerInfo(
     context?: ToolContext
 ): Promise<unknown> {
     let healthData: Record<string, unknown> | undefined
-    let healthReadFailed = false
+    let healthReadFailed = context === undefined
     if (context !== undefined) {
         try {
             const res = await readResource(

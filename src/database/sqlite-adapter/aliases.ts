@@ -37,7 +37,7 @@ export class AliasManager {
     }
 
     addAlias(alias: string, canonicalAuthor: string, createdBy?: string, workspaceId?: string): AuthorAlias {
-        if (workspaceId === '*') {
+        if (workspaceId?.trim() === '*') {
             throw new ValidationError(
                 "Aliases are stored per workspace; workspaceId '*' is not a valid destination. Provide a concrete workspace."
             )
@@ -151,8 +151,8 @@ export class AliasManager {
             const scopeId = effectiveWorkspace(workspaceId)
             const scoped = scopeId !== '*'
             const sql = scoped
-                ? `SELECT canonical_author FROM author_aliases WHERE alias = ? COLLATE NOCASE AND workspace_id = ?`
-                : `SELECT canonical_author FROM author_aliases WHERE alias = ? COLLATE NOCASE`
+                ? `SELECT canonical_author FROM author_aliases WHERE alias = ? COLLATE NOCASE AND (workspace_id IS NULL OR workspace_id = ?) ORDER BY workspace_id IS NULL ASC LIMIT 1`
+                : `SELECT canonical_author FROM author_aliases WHERE alias = ? COLLATE NOCASE ORDER BY workspace_id IS NULL ASC LIMIT 1`
             const params = scoped ? [rawAuthor, scopeId] : [rawAuthor]
             const results = this.db.exec(sql, params)
             const row = this.getSingleRow(results)
@@ -186,8 +186,8 @@ export class AliasManager {
             const scopeId = effectiveWorkspace(workspaceId)
             const scoped = scopeId !== '*'
             const sql = scoped
-                ? `SELECT alias, canonical_author FROM author_aliases WHERE alias IN (${placeholders}) COLLATE NOCASE AND workspace_id = ?`
-                : `SELECT alias, canonical_author FROM author_aliases WHERE alias IN (${placeholders}) COLLATE NOCASE`
+                ? `SELECT alias, canonical_author FROM author_aliases WHERE alias IN (${placeholders}) COLLATE NOCASE AND (workspace_id IS NULL OR workspace_id = ?) ORDER BY workspace_id IS NULL DESC`
+                : `SELECT alias, canonical_author FROM author_aliases WHERE alias IN (${placeholders}) COLLATE NOCASE ORDER BY workspace_id IS NULL DESC`
             const params = scoped ? [...rawAuthors, scopeId] : rawAuthors
             const results = this.db.exec(sql, params)
 

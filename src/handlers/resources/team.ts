@@ -113,12 +113,15 @@ export function getTeamResourceDefinitions(): InternalResourceDef[] {
 
                 // Author breakdown
                 let authors: { author: string; count: number }[] = []
+                let authorStatsWarning: string | undefined
                 try {
                     authors = context.teamDb.getAuthorStatistics(wsId)
                 } catch (error: unknown) {
+                    authorStatsWarning =
+                        error instanceof Error ? error.message : 'Failed to get team author statistics'
                     logger.warning('Failed to get team author statistics', {
                         module: 'ResourceHandler',
-                        error: error instanceof Error ? error.message : 'Unknown error',
+                        error: authorStatsWarning,
                     })
                 }
 
@@ -127,6 +130,9 @@ export function getTeamResourceDefinitions(): InternalResourceDef[] {
                     ...(stats as object),
                     authors,
                     source: 'team',
+                    ...(authorStatsWarning !== undefined
+                        ? { degraded: true, warning: authorStatsWarning }
+                        : {}),
                 }
                 const tokenEstimate = Math.ceil(JSON.stringify(responseData).length / 4)
 

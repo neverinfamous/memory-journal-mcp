@@ -72,7 +72,7 @@ export function getTeamAnalyticsTools(context: ToolContext): ToolDefinition[] {
                     let authors: { author: string; count: number }[] = []
                     let authorStatsError: string | undefined
                     try {
-                        authors = teamDb.getAuthorStatistics(wsId)
+                        authors = teamDb.getAuthorStatistics(wsId, alignedProject)
                     } catch (err) {
                         authorStatsError = err instanceof Error ? err.message : String(err)
                         logger.debug('Failed to fetch team author statistics', { error: err })

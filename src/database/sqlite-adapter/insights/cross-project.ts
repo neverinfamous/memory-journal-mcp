@@ -165,9 +165,10 @@ function queryGraphEntries(
 ): QueryResult[] {
     const wsFilter = scopeId !== '*' ? ' AND mj.workspace_id = ?' : ''
     const wsParam = scopeId !== '*' ? [scopeId] : []
-    // [INTENT] Traversal must not hop through soft-deleted or foreign-workspace entries.
+    // [INTENT] Traversal must not hop through soft-deleted, foreign-workspace, or cross-project entries.
     const nxWsFilter = scopeId !== '*' ? ' AND nx.workspace_id = ?' : ''
     const projSql = options.projectNumber !== undefined ? ' AND mj.project_number = ?' : ''
+    const nxProjFilter = options.projectNumber !== undefined ? ' AND nx.project_number = ?' : ''
     const projParam = options.projectNumber !== undefined ? [options.projectNumber] : []
 
     if (options.entryId !== undefined) {
@@ -188,7 +189,7 @@ function queryGraphEntries(
                         WHEN r.from_entry_id = ce.id THEN r.to_entry_id
                         ELSE r.from_entry_id
                     END
-                WHERE ce.distance < ? AND nx.deleted_at IS NULL${nxWsFilter}
+                WHERE ce.distance < ? AND nx.deleted_at IS NULL${nxWsFilter}${nxProjFilter}
             )
             SELECT DISTINCT mj.id, mj.entry_type, mj.content, mj.is_personal
             FROM memory_journal mj
@@ -196,7 +197,7 @@ function queryGraphEntries(
             WHERE mj.deleted_at IS NULL${wsFilter}${projSql}
             LIMIT ?
         `,
-            [options.entryId, ...wsParam, ...projParam, options.depth, ...wsParam, ...wsParam, ...projParam, options.limit]
+            [options.entryId, ...wsParam, ...projParam, options.depth, ...wsParam, ...projParam, ...wsParam, ...projParam, options.limit]
         )
     }
     if (options.tags !== undefined && options.tags.length > 0) {

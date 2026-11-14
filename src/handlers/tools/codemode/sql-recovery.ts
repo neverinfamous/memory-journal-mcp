@@ -122,12 +122,26 @@ export function extractAndRecoverSqlCode(code: string): string | null {
 
     if (/^UPDATE\b/i.test(cleanSql)) {
         if (idVal !== undefined) {
-            const setContentMatch = /\bSET\s+[\s\S]*?\bcontent\s*=\s*(['"])([\s\S]*?)\1/i.exec(cleanSql)
+            const setClause = /\bSET\s+([\s\S]*?)(?:\bWHERE\b|$)/i.exec(cleanSql)?.[1] ?? ''
+            const setContentMatch = /\bcontent\s*=\s*(['"])([\s\S]*?)\1/i.exec(setClause)
             if (setContentMatch?.[2] !== undefined) {
+                const setWsMatch = /[`"']?workspace_id[`"']?\s*=\s*(['"])([^'"]+)\1/i.exec(setClause)
+                const setProjMatch = /[`"']?(?:project_number|project_id)[`"']?\s*=\s*['"]?(\d+)['"]?/i.exec(setClause)
+                const setWs = setWsMatch?.[2]?.trim()
+                const setProj = setProjMatch?.[1] !== undefined ? parseInt(setProjMatch[1], 10) : undefined
+                const whereProj =
+                    typeof scopeFields['project_number'] === 'number'
+                        ? scopeFields['project_number']
+                        : undefined
+                if (setProj !== undefined && whereProj !== undefined && setProj !== whereProj) {
+                    return null
+                }
                 const updatePayload: Record<string, unknown> = {
                     entry_id: idVal,
                     content: setContentMatch[2],
                     ...scopeFields,
+                    ...(setWs !== undefined && setWs !== '' ? { target_workspace_id: setWs } : {}),
+                    ...(whereProj === undefined && setProj !== undefined ? { project_number: setProj } : {}),
                 }
                 return `return await mj.admin.updateEntry(${JSON.stringify(updatePayload)});`
             }
@@ -205,6 +219,8 @@ function unescapeStringLiteral(inner: string): string {
     return result
 }
 
+const UNPARSEABLE_ARG = Symbol('UNPARSEABLE_ARG')
+
 function parseSingleArgToken(rawToken: string): unknown {
     const trimmed = rawToken.trim()
     if (trimmed === 'null' || trimmed === 'undefined') return null
@@ -214,7 +230,7 @@ function parseSingleArgToken(rawToken: string): unknown {
     if (
         (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
         (trimmed.startsWith("'") && trimmed.endsWith("'")) ||
-        (trimmed.startsWith('`') && trimmed.endsWith('`'))
+        (trimmed.startsWith('`') && trimmed.endsWith('`') && !trimmed.includes('${'))
     ) {
         return unescapeStringLiteral(trimmed.slice(1, -1))
     }
@@ -224,7 +240,7 @@ function parseSingleArgToken(rawToken: string): unknown {
             const parsed: unknown = JSON.parse(inner)
             return parsed
         } catch {
-            return trimmed
+            return UNPARSEABLE_ARG
         }
     }
     if (
@@ -234,25 +250,31 @@ function parseSingleArgToken(rawToken: string): unknown {
         try {
             return JSON.parse(trimmed) as unknown
         } catch {
-            return trimmed
+            return UNPARSEABLE_ARG
         }
     }
-    return trimmed
+    return UNPARSEABLE_ARG
 }
 
-function parsePreparedStatementArgs(rawArgs: string): unknown[] {
+function isUnknownArray(val: unknown): val is unknown[] {
+    return Array.isArray(val)
+}
+
+function parsePreparedStatementArgs(rawArgs: string): unknown[] | null {
     if (rawArgs.length > 50_000) return []
     // 1. Try safe JSON.parse first
     try {
         const parsed: unknown = JSON.parse(`[${rawArgs}]`)
-        if (Array.isArray(parsed)) return parsed
+        if (isUnknownArray(parsed)) return parsed
     } catch {
         // Fallback to linear state-machine splitter (no vm.runInNewContext or catastrophic regexes)
     }
 
-    // 2. Linear O(N) top-level comma splitter and literal parser
+    // 2. Linear O(N) top-level comma splitter and literal parser; abort if any arg is a live JS expression.
     const tokens = splitTopLevelCommaArgs(rawArgs)
-    return tokens.map(parseSingleArgToken)
+    const parsed = tokens.map(parseSingleArgToken)
+    if (parsed.some((item) => item === UNPARSEABLE_ARG)) return null
+    return parsed
 }
 
 /**
@@ -272,7 +294,9 @@ export function extractAndRecoverPreparedStatementCode(code: string): string | n
     if (runMatch?.[1] !== undefined) {
         const rawArgs = runMatch[1].trim()
         if (rawArgs.length > 0) {
-            parsedArgs = parsePreparedStatementArgs(rawArgs)
+            const recovered = parsePreparedStatementArgs(rawArgs)
+            if (recovered === null) return null
+            parsedArgs = recovered
         }
     }
 

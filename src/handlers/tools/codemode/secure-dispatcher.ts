@@ -335,8 +335,26 @@ async function normalizeDispatchParams(
     }
     const callerWorkspaceId =
         typeof paramsObj['workspace_id'] === 'string' ? paramsObj['workspace_id'] : undefined
+    const callerTargetWs =
+        typeof paramsObj['target_workspace_id'] === 'string' && paramsObj['target_workspace_id'].trim() !== ''
+            ? paramsObj['target_workspace_id'].trim()
+            : undefined
+    const hasCrossWorkspaceTarget = callerTargetWs !== undefined && callerTargetWs !== workspaceId
+    const batchArrayKey =
+        (tool.name === 'batch_create_entries' || tool.name === 'team_batch_create_entries') &&
+        Array.isArray(paramsObj['entries'])
+            ? 'entries'
+            : (tool.name === 'batch_update_entries' || tool.name === 'team_batch_update_entries') &&
+                Array.isArray(paramsObj['updates'])
+              ? 'updates'
+              : undefined
+    const isBatchScopedTool = batchArrayKey !== undefined
+
     // [INVARIANT] Explicit `workspace_id: 'default'` never inherits the session projectId.
+    // Batch tools inherit per-item scope below so root defaults never clobber project-only items.
     if (
+        !isBatchScopedTool &&
+        !hasCrossWorkspaceTarget &&
         paramsObj['project_number'] === undefined &&
         projectId !== undefined &&
         (callerWorkspaceId === undefined || callerWorkspaceId === workspaceId) &&
@@ -346,6 +364,7 @@ async function normalizeDispatchParams(
         paramsObj['project_number'] = projectId
     }
     if (
+        !isBatchScopedTool &&
         !callerPassedProjectOnly &&
         paramsObj['workspace_id'] === undefined &&
         workspaceId !== undefined &&
@@ -355,16 +374,36 @@ async function normalizeDispatchParams(
         paramsObj['workspace_id'] = workspaceId
     }
 
-    if (
-        (tool.name === 'batch_create_entries' || tool.name === 'team_batch_create_entries') &&
-        Array.isArray(paramsObj['entries'])
-    ) {
-        paramsObj['entries'] = paramsObj['entries'].map((item: unknown): unknown => {
+    if (batchArrayKey !== undefined) {
+        const reg = activeProjectRegistry(sessionContext.config?.projectRegistry)
+        paramsObj[batchArrayKey] = (paramsObj[batchArrayKey] as unknown[]).map((item: unknown): unknown => {
             if (!isRecord(item)) return item
             const nextItem = { ...item }
-            const hasItemWs =
+            const callerItemWs =
                 typeof nextItem['workspace_id'] === 'string' && nextItem['workspace_id'].trim() !== ''
+                    ? nextItem['workspace_id'].trim()
+                    : undefined
+            const hasItemWs = callerItemWs !== undefined
+            const itemProjNum =
+                typeof nextItem['project_number'] === 'number' && Number.isFinite(nextItem['project_number'])
+                    ? nextItem['project_number']
+                    : undefined
             const hasItemProj = nextItem['project_number'] !== undefined
+            const itemTargetWs =
+                typeof nextItem['target_workspace_id'] === 'string' && nextItem['target_workspace_id'].trim() !== ''
+                    ? nextItem['target_workspace_id'].trim()
+                    : undefined
+            const itemCrossWsMove = itemTargetWs !== undefined && itemTargetWs !== workspaceId
+
+            if (
+                explicitWorkspace === true &&
+                !hasItemWs &&
+                itemProjNum !== undefined &&
+                typeof workspaceId === 'string' &&
+                workspaceId !== '*'
+            ) {
+                pairStoredScope(workspaceId, itemProjNum, reg)
+            }
             if (
                 !hasItemWs &&
                 !hasItemProj &&
@@ -375,10 +414,11 @@ async function normalizeDispatchParams(
                 nextItem['workspace_id'] = workspaceId
             }
             if (
+                !itemCrossWsMove &&
                 nextItem['project_number'] === undefined &&
                 typeof projectId === 'number' &&
-                !isDefaultWorkspaceName(nextItem['workspace_id']) &&
-                (nextItem['workspace_id'] === undefined || nextItem['workspace_id'] === workspaceId)
+                !isDefaultWorkspaceName(callerItemWs) &&
+                (callerItemWs === undefined || callerItemWs === workspaceId)
             ) {
                 nextItem['project_number'] = projectId
             }

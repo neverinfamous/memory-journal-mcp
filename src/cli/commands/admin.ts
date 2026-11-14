@@ -4,6 +4,7 @@ import { type z } from 'zod'
 
 import { ConfigResolver } from '../../utils/config-resolver.js'
 import { buildServerOptions } from '../server-options-builder.js'
+import { dumpConfigAndExit } from '../dump-config.js'
 import { getCliCommandDb as getDb } from './db-helper.js'
 import { resolveWorkspaceId } from '../../utils/workspace-resolver.js'
 import { 
@@ -170,6 +171,9 @@ export async function auditAction(options: z.infer<typeof auditSchema>, command:
             configErrors.forEach((err) => process.stderr.write(` - ${err}\n`))
             process.exit(1)
         }
+        if (options.dumpConfig === true) {
+            dumpConfigAndExit(serverOptions)
+        }
         const auditDefaults = serverOptions.auditConfig
         const allowConfigLogPath =
             configPath !== undefined ||
@@ -228,7 +232,10 @@ export async function rebuildIndexAction(options: z.infer<typeof rebuildIndexSch
         const vectorManager = new VectorSearchManager(db, { modelName: serverOptions.embeddingModel })
 
         process.stderr.write('Rebuilding vector index...\n')
-        const result = await vectorManager.rebuildIndex()
+        const result = await vectorManager.rebuildIndex(undefined, {
+            ...(options.workspace !== undefined ? { workspaceId: options.workspace } : {}),
+            ...(options.defaultProject !== undefined ? { projectNumber: options.defaultProject } : {}),
+        })
         const stats = vectorManager.getStats()
 
         if (!result.success) {

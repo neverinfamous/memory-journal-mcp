@@ -67,15 +67,21 @@ export async function buildBriefingData(
 ): Promise<ResourceResult> {
     const config = { ...DEFAULT_BRIEFING_CONFIG, ...context.briefingConfig }
 
+    const registry = config.projectRegistry ?? loadProjectRegistryFromConfig()
+    const hasRegistry = registry !== undefined && Object.keys(registry).length > 0
     let activeGithub = context.github
-    let activeProjectNumber = config.defaultProjectNumber
     let activeRepoPath: string | undefined
     let activeWorkspaceId: string | undefined = resourceWorkspace({
         briefingConfig: config,
         ...(context.runtime !== undefined ? { runtime: context.runtime } : {}),
     })
+    let activeProjectNumber =
+        (config.defaultWorkspaceId === undefined && activeWorkspaceId !== 'default') ||
+        (activeWorkspaceId !== undefined &&
+            config.defaultWorkspaceId?.toLowerCase() === activeWorkspaceId.toLowerCase())
+            ? config.defaultProjectNumber
+            : undefined
 
-    const registry = config.projectRegistry ?? loadProjectRegistryFromConfig()
     if (targetRepo) {
         let matchedTargetRepo = false
         const numericTarget = /^#?(\d+)$/.exec(targetRepo)
@@ -131,6 +137,14 @@ export async function buildBriefingData(
             activeGithub = hasRepoPath ? getGitHubIntegration(repoPath, context.runtime) : undefined
             if (registryEntry.project_number !== undefined) {
                 activeProjectNumber = registryEntry.project_number
+            } else if (config.defaultWorkspaceId?.toLowerCase() !== canonicalKey.toLowerCase()) {
+                activeProjectNumber = undefined
+            }
+        } else {
+            activeRepoPath = undefined
+            activeGithub = undefined
+            if (config.defaultWorkspaceId?.toLowerCase() !== canonicalKey.toLowerCase()) {
+                activeProjectNumber = undefined
             }
         }
     } else if (activeWorkspaceId === 'default') {
@@ -140,10 +154,15 @@ export async function buildBriefingData(
         if (hasDefaultPath) {
             activeRepoPath = defaultPath
             activeGithub = getGitHubIntegration(defaultPath, context.runtime)
-        } else if (defaultEntry !== undefined) {
+        } else if (hasRegistry || config.defaultWorkspaceId?.toLowerCase() === 'default') {
             activeRepoPath = undefined
             activeGithub = undefined
         }
+        activeProjectNumber =
+            defaultEntry?.project_number ??
+            (config.defaultWorkspaceId?.toLowerCase() === 'default'
+                ? config.defaultProjectNumber
+                : undefined)
     }
 
     // Build all sections
@@ -167,8 +186,10 @@ export async function buildBriefingData(
         targetRepo !== undefined ||
         (activeWorkspaceId !== undefined &&
             activeWorkspaceId !== '*' &&
-            registry?.[activeWorkspaceId] !== undefined &&
-            activeRepoPath === undefined)
+            activeRepoPath === undefined &&
+            (activeWorkspaceId !== 'default' ||
+                hasRegistry ||
+                config.defaultWorkspaceId?.toLowerCase() === 'default'))
     const systemRepoPath = activeRepoPath ?? (suppressSystemCwd ? null : undefined)
     const system = buildSystemContext(
         config,

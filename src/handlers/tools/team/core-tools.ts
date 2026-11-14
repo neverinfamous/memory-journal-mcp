@@ -248,17 +248,8 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                         TeamGetEntryByIdSchema.parse(params)
                     let wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
                     const projectNumber = project_number
-                    let entry = teamDb.getEntryById(entry_id, wsId)
-                    if (
-                        !entry &&
-                        workspace_id === undefined &&
-                        project_number === undefined
-                    ) {
-                        entry = teamDb.getEntryById(entry_id, '*')
-                        if (entry?.workspaceId !== undefined) {
-                            wsId = entry.workspaceId
-                        }
-                    } else if (entry?.workspaceId !== undefined && wsId === '*') {
+                    const entry = teamDb.getEntryById(entry_id, wsId)
+                    if (entry?.workspaceId !== undefined && wsId === '*') {
                         wsId = entry.workspaceId
                     }
 

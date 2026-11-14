@@ -137,7 +137,9 @@ function buildUpdateSets(
     }
 
     if (input.targetWorkspaceId !== undefined) {
-        if (callerWorkspace !== '*') {
+        const sameWorkspace =
+            input.targetWorkspaceId.toLowerCase() === existing.workspaceId.toLowerCase()
+        if (callerWorkspace !== '*' && !sameWorkspace) {
             throw new ConflictError(
                 `Cannot move entry ${String(id)} to workspace '${input.targetWorkspaceId}' from '${callerWorkspace}'. Moving an entry to another workspace requires workspaceId = '*'.`,
                 { id: existing.id, version: existing.version, workspaceId: existing.workspaceId }
@@ -175,7 +177,10 @@ function resolveUpdateScope(
             throw new ValidationError('targetWorkspaceId cannot be blank.', { id })
         }
     }
-    const moving = target !== undefined && target !== '*'
+    const moving =
+        target !== undefined &&
+        target !== '*' &&
+        target.toLowerCase() !== existing.workspaceId.toLowerCase()
     const destination = moving && target !== undefined ? target : existing.workspaceId
     const paired = pairStoredScope(
         destination,

@@ -53,9 +53,9 @@ export function scopeFromInsertLiterals(cleanSql: string): Record<string, unknow
 }
 
 export function scopeFromSqlLiterals(cleanSql: string): Record<string, unknown> {
-    const projectMatch = /\b(?:WHERE|AND)\s+[`"']?(?:project_number|project_id)[`"']?\s*=\s*(\d+)/i.exec(cleanSql)
+    const projectMatch = /\b(?:WHERE|AND)\s+\(*[`"']?(?:project_number|project_id)[`"']?\s*=\s*['"]?(\d+)['"]?/i.exec(cleanSql)
     const projectVal = projectMatch?.[1] !== undefined ? parseInt(projectMatch[1], 10) : undefined
-    const wsMatch = /\b(?:WHERE|AND)\s+[`"']?workspace_id[`"']?\s*=\s*['"]([^'"]+)['"]/i.exec(cleanSql)
+    const wsMatch = /\b(?:WHERE|AND)\s+\(*[`"']?workspace_id[`"']?\s*=\s*['"]([^'"]+)['"]/i.exec(cleanSql)
     const wsVal = wsMatch?.[1]
     return {
         ...(projectVal !== undefined ? { project_number: projectVal } : {}),

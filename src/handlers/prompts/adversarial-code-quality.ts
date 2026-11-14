@@ -7,7 +7,7 @@
 import type { InternalPromptDef } from './index.js'
 import { buildAuditPromptDefinition } from './adversarial-audit-factory.js'
 
-export const CODE_QUALITY_PROMPT_REVISION = '2026-11-13-audit-pass22'
+export const CODE_QUALITY_PROMPT_REVISION = '2026-11-13-audit-pass23'
 
 const SCAN_METHOD_1 = `     \`\`\`powershell
      $skip = @('vendor','third_party','node_modules','dist','coverage','build','.next','out')
@@ -38,7 +38,7 @@ import {readdirSync as r,statSync as s,readFileSync as f} from 'fs';import {join
      \`\`\``
 
 const TEMP_SCRIPT_RULE =
-    "write the script to a temporary `.mjs` file in the session's scratch/temp directory outside the repository and run `bun <file>` with the repository as the working directory (never an inline `bun -e` here-string, which Windows execution proxies rewrite)"
+    "write the script to a temporary `.mjs` file in the session's scratch/temp directory outside the repository and run `bun <file>` with the repository as the working directory (never an inline `bun -e` here-string, which Windows execution proxies rewrite). Note for Antigravity Plan Mode: if `write_file` is blocked while Plan Mode is active, write the scratch `.mjs` file via PowerShell `[System.IO.File]::WriteAllText($scratchFile, $code)` inside `run_command`, execute `bun $scratchFile`, and remove the scratch `.mjs` file once complete"
 
 const DETECTORS = `     1. **Silent Catch Block Detector**: Find every \`catch\` in production source, including \`catch (e)\` and multiline catches. A catch is silent when its body does not log, rethrow, or return a structured error. Quote the body. Keep intentional best-effort fallbacks out of the table. Do not flag a catch that returns the project's structured handler error.
      2. **Cross-Platform Path Separator Assumption Detector**: Flag filesystem prefix checks (\`startsWith\` / \`endsWith\` on a resolved path without a separator boundary) and hardcoded \`'\\\\'\` or \`'/'\` used to test real filesystem paths. Prefer \`path.relative()\` and \`path.sep\`. Ignore URL, route, glob, and SQL slashes. Case-fold only on Windows.
@@ -55,7 +55,7 @@ const DETECTORS = `     1. **Silent Catch Block Detector**: Find every \`catch\`
         - Content or tag keywords that select a different registered project than the active session, the cwd, or an explicit project number are a finding. A session project number counts even when the session workspace is missing or \`default\`, and wins over keyword aliases.
         - Hot-reload listeners must propagate registry/default changes (including cleared fields) to background schedulers and interceptors; sticky per-session context must never be written onto shared long-lived config.
         - A query with no workspace predicate selects every row and is a finding; an omission that becomes the server's configured default is a product note. A resource that rewrites an explicit \`default\` workspace into the cwd project is High.
-        - Explicit \`'*'\` on multi-workspace DB queries/admin operations is an intentional override, but a supplied project number must still be applied; flag \`'*'\` manufactured by a fallback after a miss or passed to a single-root filesystem mutation (High). Lookup-then-narrow \`'*'\` (load by id, then use that row's workspace) is acceptable; dropping an already-parsed workspace or project before that lookup is the defect; Code Mode session/dispatch normalizers, markdown/external importers, and CLI update commands must enforce the same workspace/project pair and CWD-isolation invariants as direct MCP tool calls.
+        - Explicit \`'*'\` on multi-workspace DB queries/admin operations is an intentional override, but a supplied project number must still be applied; flag \`'*'\` manufactured by a fallback after a miss or passed to a single-root filesystem mutation (High). Lookup-then-narrow \`'*'\` (load by id, then use that row's workspace) is acceptable; dropping an already-parsed workspace or project before that lookup is the defect; inspect all secondary entry-creation paths (\`create_github_issue_with_entry\`, \`close_github_issue_with_entry\`, markdown/external importers, Code Mode SQL/JSON recovery creates), pre-dispatch worker/API normalizers, resource URI alias tables (\`RESOURCE_URI_ALIASES\` \`/default\` rewrites), CLI update commands, and hardcoded \`project_number\` literals in prompts to ensure every path enforces the same workspace/project pair and CWD-isolation invariants as direct MCP tool calls.
     11. **Safety gate**: Flag a \`catch\` that logs and then continues a destructive operation, such as a failed backup followed by a prune.`
 
 function buildCodeQualityBody(target: string, copilotInstruction: string, priorAuditSection: string): string {
@@ -87,7 +87,7 @@ ${SCAN_METHOD_2}
 
 3. Group findings by category and severity (**Critical**, **High**, **Moderate**, **Low**).
 4. **External Validation (Copilot — Opt-In)**: ${copilotInstruction}
-5. Present a summary table to the user (incorporating Copilot findings if applicable) and await approval. Diagnostic scans in step 2, and read-only lint or typecheck when the target defines them, are part of the audit. **CRITICAL**: Do not edit project files, apply fixes, or commit until the user explicitly approves the implementation plan. Present the plan as markdown in the chat. Do not add an audit plan file to the repository. The plan must be readable in Cursor and in Antigravity.
+5. Present a summary table to the user (incorporating Copilot findings if applicable) and await approval. Whenever a planned fix touches a watch-list file already \`>= 470\` lines, include extracting a cohesive helper module in the fix plan so no edit pushes a file over 500 lines. Diagnostic scans in step 2, and read-only lint or typecheck when the target defines them, are part of the audit. **CRITICAL**: Do not edit project files, apply fixes, or commit until the user explicitly approves the implementation plan. Present the plan as markdown in the chat. Do not add an audit plan file to the repository. The plan must be readable in Cursor and in Antigravity.
 6. After approval, fix critical issues first, then run the target's lint and typecheck and the tests that cover the change.
 7. Commit with the target repository's own commit helper when one exists. Discover that helper. Do not invent a script path. Do not add an audit plan file to the repository.
 **Rule**: If you don't make changes, do not commit.

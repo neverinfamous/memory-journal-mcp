@@ -1,6 +1,6 @@
 import type { Database } from 'better-sqlite3'
 import { logger } from '../../utils/logger.js'
-import { ResourceNotFoundError, QueryError } from '../../types/errors.js'
+import { ResourceNotFoundError, QueryError, ValidationError } from '../../types/errors.js'
 import type { Tag } from '../../types/index.js'
 import type { NativeConnectionManager } from './native-connection.js'
 import { effectiveWorkspace } from '../workspace-scope.js'
@@ -142,6 +142,11 @@ export class TagsManager {
         workspaceId?: string,
         projectNumber?: number
     ): { entriesUpdated: number; sourceDeleted: boolean } {
+        if (sourceTag.trim().toLowerCase() === targetTag.trim().toLowerCase()) {
+            throw new ValidationError(
+                `Cannot merge tag '${sourceTag}' into itself ('${targetTag}').`
+            )
+        }
         const db = this.db
 
         const mergeOp = db.transaction(() => {
@@ -254,12 +259,11 @@ export class TagsManager {
     private detachSourceTag(
         sourceTagId: number,
         entryIds: number[],
-        scopedWorkspace: string | undefined,
+        _scopedWorkspace: string | undefined,
         scopedProject: number | undefined
     ): boolean {
         const db = this.db
-        const scoped = scopedWorkspace !== undefined || scopedProject !== undefined
-        if (scoped && entryIds.length > 0) {
+        if (entryIds.length > 0) {
             const idPlaceholders = entryIds.map(() => '?').join(', ')
             const params: unknown[] = [sourceTagId, ...entryIds]
             let projectClause = ''
@@ -268,16 +272,15 @@ export class TagsManager {
                     ' AND entry_id IN (SELECT id FROM memory_journal WHERE project_number = ?)'
                 params.push(scopedProject)
             }
-            db.prepare(
-                `DELETE FROM entry_tags WHERE tag_id = ? AND entry_id IN (${idPlaceholders})${projectClause}`
-            ).run(...params)
+            const delResult = db
+                .prepare(
+                    `DELETE FROM entry_tags WHERE tag_id = ? AND entry_id IN (${idPlaceholders})${projectClause}`
+                )
+                .run(...params)
             db.prepare('UPDATE tags SET usage_count = MAX(0, usage_count - ?) WHERE id = ?').run(
-                entryIds.length,
+                delResult.changes,
                 sourceTagId
             )
-        } else if (!scoped) {
-            db.prepare('DELETE FROM entry_tags WHERE tag_id = ?').run(sourceTagId)
-            db.prepare('UPDATE tags SET usage_count = 0 WHERE id = ?').run(sourceTagId)
         }
 
         const remaining = db

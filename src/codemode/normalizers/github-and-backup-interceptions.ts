@@ -192,13 +192,14 @@ function applyGithubInterceptions(
 
     mapGithubTextKeys(methodName, obj)
 
-    const hasStateParam =
-        methodName.includes('get_github_issues') ||
-        methodName.includes('getGithubIssues') ||
-        methodName.includes('get_github_prs') ||
-        methodName.includes('getGithubPrs') ||
-        methodName.includes('get_github_milestones') ||
-        methodName.includes('getGithubMilestones')
+    const hasStateParam = leafEquals(methodName, [
+        'get_github_issues',
+        'getGithubIssues',
+        'get_github_prs',
+        'getGithubPrs',
+        'get_github_milestones',
+        'getGithubMilestones',
+    ])
     if (hasStateParam && obj['keep'] !== undefined && obj['state'] === undefined) {
         if (obj['keep'] === true) obj['state'] = 'open'
         else if (obj['keep'] === false) obj['state'] = 'closed'
@@ -226,7 +227,7 @@ function applyGithubInterceptions(
         }
     }
 
-    if ((methodName.includes('get_github_context') || methodName.includes('getGithubContext')) && obj['path'] !== undefined) {
+    if (leafEquals(methodName, ['get_github_context', 'getGithubContext']) && obj['path'] !== undefined) {
         return {
             error: {
                 success: false,
