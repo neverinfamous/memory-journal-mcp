@@ -10,7 +10,7 @@ import type { SandboxResult } from '../../../codemode/types.js'
 
 import { ExecuteCodeSchema, ExecuteCodeSchemaMcp } from './schemas.js'
 import { collectNonCodeModeTools, getSandboxPool, getSecurityManager } from './singleton-state.js'
-import { healCodeModeScript } from './code-healer.js'
+import { healCodeModeScript, healTemplateBackticksOnRuntimeError } from './code-healer.js'
 import { extractAndRecoverJsonCode, extractAndRecoverEntryCode } from './json-entry-recovery.js'
 import { extractAndRecoverSqlCode, extractAndRecoverPreparedStatementCode } from './sql-recovery.js'
 import { resolveExecutionPayload, buildSandboxUserContext } from './payload-synthesizer.js'
@@ -28,7 +28,7 @@ function filterToolsForSandbox(
     sessionContext: ToolContext,
     context: ToolContext,
     readonlyRequested: boolean | undefined
-): { tools: ToolDefinition[]; isSandboxReadonly: boolean } {
+): { tools: ToolDefinition[]; allEnabledTools: ToolDefinition[]; isSandboxReadonly: boolean } {
     let tools = collectNonCodeModeTools(sessionContext)
     if (
         context.config?.codemodeInternalFullAccess !== true &&
@@ -37,6 +37,7 @@ function filterToolsForSandbox(
         const enabledSet = context.config.filterConfig.enabledTools
         tools = tools.filter((t) => enabledSet.has(t.name))
     }
+    const allEnabledTools = tools
     let isGlobalReadonly = false
     if (context.config?.filterConfig?.raw !== undefined && context.config.filterConfig.raw !== '') {
         const rawTokens = context.config.filterConfig.raw
@@ -54,7 +55,7 @@ function filterToolsForSandbox(
     if (isSandboxReadonly) {
         tools = tools.filter((t) => t.annotations?.readOnlyHint === true)
     }
-    return { tools, isSandboxReadonly }
+    return { tools, allEnabledTools, isSandboxReadonly }
 }
 
 function isRecoverableSyntaxError(errorMessage: string): boolean {
@@ -144,7 +145,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                     }
                     const { sessionContext, projectId, numericProjectId, workspaceId, explicitWorkspace } = sessionRes
 
-                    const { tools, isSandboxReadonly } = filterToolsForSandbox(
+                    const { tools, allEnabledTools, isSandboxReadonly } = filterToolsForSandbox(
                         sessionContext,
                         context,
                         input.readonly
@@ -166,7 +167,10 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                         () => activeProjectRegistry(context.config?.projectRegistry)
                     )
                     const apiBindings = journalApi.createSandboxBindings(sessionContext.progress)
-                    const schemas = journalApi.createSandboxSchemas()
+                    const schemaSourceApi = isSandboxReadonly
+                        ? createJournalApi(allEnabledTools)
+                        : journalApi
+                    const schemas = schemaSourceApi.createSandboxSchemas()
 
                     const pool = getSandboxPool()
                     const { userContext, requestedMaxResultSize } = buildSandboxUserContext(
@@ -215,7 +219,8 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                             const recoveredCode =
                                 extractAndRecoverSqlCode(originalInput) ??
                                 extractAndRecoverEntryCode(originalInput) ??
-                                extractAndRecoverJsonCode(originalInput)
+                                extractAndRecoverJsonCode(originalInput) ??
+                                healTemplateBackticksOnRuntimeError(executionCode)
                             if (recoveredCode !== null && recoveredCode !== executionCode) {
                                 // [BOUNDARY] Recovered code is re-validated before it ever runs.
                                 const retryValidation = securityManager.validateCode(recoveredCode)

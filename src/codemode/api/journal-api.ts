@@ -50,6 +50,7 @@ export class JournalApi {
 
     private readonly registryProvider: ProjectRegistryProvider | undefined
     private readonly hasDispatcher: boolean
+    private readonly fnSchemas = new WeakMap<object, string>()
 
     constructor(tools: ToolDefinition[], dispatcher?: ToolDispatcher, registryProvider?: ProjectRegistryProvider) {
         this.registryProvider = registryProvider
@@ -82,9 +83,39 @@ export class JournalApi {
             git: this.git, memory: this.memory,
         }
 
+        for (const [groupName, groupTools] of this.toolsByGroup.entries()) {
+            const groupApi = this.groupApiMap[groupName]
+            if (!groupApi) continue
+            for (const tool of groupTools) {
+                const methodName = toolNameToMethodName(tool.name, groupName)
+                const fn = groupApi[methodName]
+                if (typeof fn === 'function') {
+                    this.fnSchemas.set(fn, this.getToolSchemaString(tool))
+                }
+            }
+        }
+
         this.wireCrossGroupAliases()
         this.wireProjectAndTeamAliases()
         this.wireMethodAliases()
+    }
+
+    private getToolSchemaString(tool: ToolDefinition): string {
+        let typeStr = TOOL_SCHEMA_STRING_CACHE.get(tool)
+        if (typeStr === undefined) {
+            typeStr = getZodTypeString(tool.inputSchema)
+            TOOL_SCHEMA_STRING_CACHE.set(tool, typeStr)
+        }
+        return typeStr
+    }
+
+    private copyFnSchema(source: unknown, wrapper: (...args: unknown[]) => unknown): void {
+        if (typeof source === 'function') {
+            const schemaStr = this.fnSchemas.get(source)
+            if (schemaStr !== undefined) {
+                this.fnSchemas.set(wrapper, schemaStr)
+            }
+        }
     }
 
     private wireCrossGroupAliases(): void {
@@ -93,10 +124,12 @@ export class JournalApi {
             this.core['searchEntries'] = searchEntriesFn
             this.core['search'] = searchEntriesFn
             this.core['listEntries'] = searchEntriesFn
-            this.core['readQuery'] = async (...args: unknown[]): Promise<unknown> => {
+            const readQueryFn = async (...args: unknown[]): Promise<unknown> => {
                 const res = await searchEntriesFn(...args)
                 return isRecord(res) && 'entries' in res ? { ...res, rows: res['entries'] } : res
             }
+            this.copyFnSchema(searchEntriesFn, readQueryFn)
+            this.core['readQuery'] = readQueryFn
         }
 
         const enrichEntryRecord = (
@@ -165,7 +198,7 @@ export class JournalApi {
         const wrapEntryCreator = (
             origFn: (...args: unknown[]) => Promise<unknown>
         ): ((...args: unknown[]) => Promise<unknown>) => {
-            return async (...args: unknown[]): Promise<unknown> => {
+            const wrapper = async (...args: unknown[]): Promise<unknown> => {
                 const params = args[0]
                 if (isRecord(params)) {
                     enrichEntryRecord(params)
@@ -179,6 +212,8 @@ export class JournalApi {
                 }
                 return await origFn(...args)
             }
+            this.copyFnSchema(origFn, wrapper)
+            return wrapper
         }
 
         const origCreateEntryFn = this.core['createEntry']
@@ -236,6 +271,7 @@ export class JournalApi {
                 }
                 return res
             }
+            this.copyFnSchema(semanticFn, wrappedSemanticFn)
             this.search['semanticSearch'] = wrappedSemanticFn
             this.core['semanticSearch'] = wrappedSemanticFn
         }
@@ -275,7 +311,7 @@ export class JournalApi {
 
         if (typeof existingRegisterProject === 'function') {
             const fallbackRegister = this.hasDispatcher ? undefined : createRegisterProjectFn(this.core)
-            this.admin['registerProject'] = async (...args: unknown[]): Promise<unknown> => {
+            const wrappedRegister = async (...args: unknown[]): Promise<unknown> => {
                 if (isRecord(args[0])) return await existingRegisterProject(args[0])
                 if (typeof args[0] === 'string') {
                     return await existingRegisterProject({
@@ -287,10 +323,12 @@ export class JournalApi {
                 if (fallbackRegister === undefined) return await existingRegisterProject({})
                 return await fallbackRegister(...args)
             }
+            this.copyFnSchema(existingRegisterProject, wrappedRegister)
+            this.admin['registerProject'] = wrappedRegister
         }
         if (typeof existingUpdateProject === 'function') {
             const fallbackUpdate = this.hasDispatcher ? undefined : createUpdateProjectFn()
-            this.admin['updateProject'] = async (...args: unknown[]): Promise<unknown> => {
+            const wrappedUpdate = async (...args: unknown[]): Promise<unknown> => {
                 if (isRecord(args[0])) return await existingUpdateProject(args[0])
                 if (typeof args[0] === 'string') {
                     return await existingUpdateProject({
@@ -303,10 +341,12 @@ export class JournalApi {
                 if (fallbackUpdate === undefined) return await existingUpdateProject({})
                 return await fallbackUpdate(...args)
             }
+            this.copyFnSchema(existingUpdateProject, wrappedUpdate)
+            this.admin['updateProject'] = wrappedUpdate
         }
         if (typeof existingDeleteProject === 'function') {
             const fallbackDelete = this.hasDispatcher ? undefined : createDeleteProjectFn()
-            this.admin['deleteProject'] = async (...args: unknown[]): Promise<unknown> => {
+            const wrappedDelete = async (...args: unknown[]): Promise<unknown> => {
                 if (isRecord(args[0])) return await existingDeleteProject(args[0])
                 if (typeof args[0] === 'string') {
                     return await existingDeleteProject({ name: args[0] })
@@ -314,6 +354,8 @@ export class JournalApi {
                 if (fallbackDelete === undefined) return await existingDeleteProject({})
                 return await fallbackDelete(...args)
             }
+            this.copyFnSchema(existingDeleteProject, wrappedDelete)
+            this.admin['deleteProject'] = wrappedDelete
         }
 
         const listProjectsFn = createListProjectsFn(this.registryProvider)
@@ -387,12 +429,9 @@ export class JournalApi {
             const groupSchemas: Record<string, string> = {}
             for (const tool of tools) {
                 const methodName = toolNameToMethodName(tool.name, groupName)
-                let typeStr = TOOL_SCHEMA_STRING_CACHE.get(tool)
-                if (typeStr === undefined) {
-                    typeStr = getZodTypeString(tool.inputSchema)
-                    TOOL_SCHEMA_STRING_CACHE.set(tool, typeStr)
-                }
+                const typeStr = this.getToolSchemaString(tool)
                 groupSchemas[methodName] = typeStr
+                if (tool.name !== methodName) groupSchemas[tool.name] = typeStr
             }
             const aliases = METHOD_ALIASES[groupName]
             if (aliases) {
@@ -401,6 +440,20 @@ export class JournalApi {
                 }
             }
             schemas[groupName] = groupSchemas
+        }
+
+        for (const [key, val] of Object.entries(this.createSandboxBindings())) {
+            if (typeof val === 'function') {
+                const s = this.fnSchemas.get(val)
+                if (s !== undefined) (schemas['_topLevel'] ??= {})[key] = s
+            } else if (isRecord(val)) {
+                for (const [mName, mVal] of Object.entries(val)) {
+                    if (typeof mVal === 'function') {
+                        const s = this.fnSchemas.get(mVal)
+                        if (s !== undefined) (schemas[key] ??= {})[mName] = s
+                    }
+                }
+            }
         }
         return schemas
     }

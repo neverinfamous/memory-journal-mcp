@@ -3,6 +3,7 @@
  */
 
 import { logger } from '../../../utils/logger.js'
+import { healAutoContext, healSessionSummaryContent } from '../../../codemode/normalizers/shared-utils.js'
 import {
     RELATIONSHIP_TARGET_KEYS,
     RELATIONSHIP_TYPE_KEYS,
@@ -61,12 +62,14 @@ function repairSingleQuotedJson(raw: string): string | undefined {
     }
 }
 
-/** Normalise object-valued or single-quoted `auto_context` into a JSON string (or drop empties). */
+/** Normalise object-valued, key-aliased, or single-quoted `auto_context` into a JSON string (or drop empties). */
 function healAutoContextField(obj: Record<string, unknown>): boolean {
     if (!('auto_context' in obj)) return false
     let modified = false
 
-    if (typeof obj['auto_context'] === 'object' && obj['auto_context'] !== null) {
+    if (typeof obj['auto_context'] === 'object' && obj['auto_context'] !== null && !Array.isArray(obj['auto_context'])) {
+        obj['auto_context'] = { ...(obj['auto_context'] as Record<string, unknown>) }
+        healAutoContext(obj)
         try {
             obj['auto_context'] = JSON.stringify(obj['auto_context'])
             modified = true
@@ -76,6 +79,10 @@ function healAutoContextField(obj: Record<string, unknown>): boolean {
                 error: err instanceof Error ? err.message : String(err),
             })
         }
+    } else if (typeof obj['auto_context'] === 'string') {
+        const beforeStr = obj['auto_context']
+        healAutoContext(obj)
+        if (obj['auto_context'] !== beforeStr) modified = true
     }
     if (typeof obj['auto_context'] !== 'string') return modified
 
@@ -93,6 +100,36 @@ function healAutoContextField(obj: Record<string, unknown>): boolean {
         }
     }
 
+    return modified
+}
+
+/** Promote `session-summary` entry_type and normalize its 4-header structure for direct MCP calls. */
+export function healSessionSummaryPayload(obj: Record<string, unknown>): boolean {
+    if ('query' in obj || !Array.isArray(obj['tags']) || !obj['tags'].includes('session-summary')) {
+        return false
+    }
+    let modified = false
+    const isUpdate = isUpdatePayload(obj)
+    if (!isUpdate && obj['entry_type'] === undefined) {
+        obj['entry_type'] = 'retrospective'
+        modified = true
+    }
+    if (typeof obj['content'] === 'string' && /^#+\s+/m.test(obj['content'])) {
+        const hasAccomplishedLikeHeader =
+            /^#+\s+(?:Accomplished|Accomplishments|Completed|Done|What I did|What we did)\b/im.test(
+                obj['content']
+            )
+        if (!isUpdate || hasAccomplishedLikeHeader) {
+            const healed = healSessionSummaryContent(obj['content'], {
+                normalizeSynonyms: true,
+                usePeriodOnNone: true,
+            })
+            if (healed !== obj['content']) {
+                obj['content'] = healed
+                modified = true
+            }
+        }
+    }
     return modified
 }
 

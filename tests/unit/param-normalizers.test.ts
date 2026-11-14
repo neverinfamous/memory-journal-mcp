@@ -410,7 +410,9 @@ describe('src/codemode/param-normalizer.ts (applyArgInterceptions)', () => {
         if ('args' in bdArr) expect(bdArr.args[0]).toEqual({ entry_ids: [1, 2] })
         const bdMulti = applyArgInterceptions('batch_delete_entries', [4, 5])
         if ('args' in bdMulti) expect(bdMulti.args[0]).toEqual({ entry_ids: [4, 5] })
-        expect('error' in applyArgInterceptions('batch_delete_entries', [['1', '2']])).toBe(true)
+        const bdStrIds = applyArgInterceptions('batch_delete_entries', [['1', '2', '#3']])
+        if ('args' in bdStrIds) expect(bdStrIds.args[0]).toEqual({ entry_ids: [1, 2, 3] })
+        expect('error' in applyArgInterceptions('batch_delete_entries', [['abc']])).toBe(true)
         expect('error' in applyArgInterceptions('batch_delete_entries', [{ foo: 1 }])).toBe(true)
 
         // Link, merge_tags, audit, recent, list_tags, test, member, alias

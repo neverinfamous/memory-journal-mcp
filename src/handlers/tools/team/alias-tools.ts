@@ -65,8 +65,8 @@ const preprocessAlias = (val: unknown): unknown => {
 };
 
 const AddAuthorAliasSchema = z.preprocess(preprocessAlias, z.object({
-    alias: z.string().min(1).max(255).describe('The raw author name to map (e.g., "Chris" or "GitHub: neverinfamous")'),
-    canonical_author: z.string().min(1).max(255).describe('The canonical author identity to map the alias to (e.g., "christopher")'),
+    alias: z.string().min(1).max(255).describe('The raw author name to map (e.g., "Alex" or "GitHub: octocat")'),
+    canonical_author: z.string().min(1).max(255).describe('The canonical author identity to map the alias to (e.g., "alex-dev")'),
     project_number: relaxedNumber().optional().describe('GitHub Project number'),
     workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
 }))

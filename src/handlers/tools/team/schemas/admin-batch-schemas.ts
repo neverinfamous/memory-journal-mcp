@@ -15,7 +15,11 @@ import {
     TeamCreateEntrySchema,
     TeamCreateEntrySchemaMcp,
 } from './core-search-schemas.js'
-import { preprocessBatchCreateEntries } from '../../admin/schemas/crud-batch-schemas.js'
+import {
+    preprocessBatchCreateEntries,
+    preprocessBatchUpdates,
+    preprocessBatchDeleteIds,
+} from '../../admin/schemas/batch-preprocessors.js'
 
 /** team_update_entry — strict */
 export const TeamUpdateEntrySchema = z.preprocess(
@@ -238,40 +242,8 @@ export const TeamBatchCreateEntriesSchemaMcp = z.preprocess(
     })
 )
 
-function preprocessTeamBatchUpdates(val: unknown): unknown {
-    if (typeof val === 'object' && val !== null) {
-        const obj = { ...(val as Record<string, unknown>) }
-        let updatesArr = obj['updates']
-        if (updatesArr === undefined && Array.isArray(obj['items'])) {
-            updatesArr = obj['items']
-            obj['updates'] = updatesArr
-            Reflect.deleteProperty(obj, 'items')
-        }
-        if (updatesArr === undefined && Array.isArray(obj['entries'])) {
-            updatesArr = obj['entries']
-            obj['updates'] = updatesArr
-            Reflect.deleteProperty(obj, 'entries')
-        }
-        if (Array.isArray(updatesArr)) {
-            const newUpdates = updatesArr.map((u: unknown) => {
-                if (typeof u === 'object' && u !== null) {
-                    const uObj = { ...(u as Record<string, unknown>) }
-                    if ('id' in uObj && !('entry_id' in uObj)) {
-                        uObj['entry_id'] = uObj['id']
-                        delete uObj['id']
-                    }
-                    return uObj
-                }
-                return u
-            })
-            return { ...obj, updates: newUpdates }
-        }
-    }
-    return val
-}
-
 export const TeamBatchUpdateEntriesSchema = z.preprocess(
-    preprocessTeamBatchUpdates,
+    (val: unknown) => preprocessBatchUpdates(val, false),
     z
         .object({
             updates: z.array(TeamUpdateEntrySchema).min(1).max(MAX_BATCH_SIZE),
@@ -283,7 +255,7 @@ export const TeamBatchUpdateEntriesSchema = z.preprocess(
 )
 
 export const TeamBatchUpdateEntriesSchemaMcp = z.preprocess(
-    preprocessTeamBatchUpdates,
+    (val: unknown) => preprocessBatchUpdates(val, false),
     z
         .object({
             updates: z.array(TeamUpdateEntrySchemaMcp).optional(),
@@ -300,7 +272,7 @@ export const TeamBatchUpdateEntriesSchemaMcp = z.preprocess(
 )
 
 export const TeamBatchDeleteEntriesSchema = z.preprocess(
-    (val: unknown) => healAgentHallucinations(val),
+    (val: unknown) => healAgentHallucinations(preprocessBatchDeleteIds(val)),
     z
         .object({
             entry_ids: z.array(z.number()).min(1).max(MAX_BATCH_SIZE),
@@ -312,7 +284,7 @@ export const TeamBatchDeleteEntriesSchema = z.preprocess(
 )
 
 export const TeamBatchDeleteEntriesSchemaMcp = z.preprocess(
-    (val: unknown) => healAgentHallucinations(val),
+    (val: unknown) => healAgentHallucinations(preprocessBatchDeleteIds(val)),
     z
         .object({
             entry_ids: z.array(relaxedNumber().optional()).optional(),

@@ -195,9 +195,29 @@ ${JSON.stringify(formatPromptEntries(entries), null, 2)}`,
             name: 'project-status-summary',
             description: 'Generate a comprehensive status summary for a GitHub project',
             icons: [ICON_PROMPT],
-            arguments: [{ name: 'project_number', description: 'GitHub Project Number', required: true }],
-            handler: (args: Record<string, string> | undefined, _db: IDatabaseAdapter) => {
-                const projectNumber = formatPositiveIntOrPlaceholder(args?.['project_number'], '{project_number}')
+            arguments: [
+                {
+                    name: 'project_number',
+                    description:
+                        'GitHub Project Number (optional; falls back to configured default project)',
+                    required: false,
+                },
+            ],
+            handler: (
+                args: Record<string, string> | undefined,
+                _db: IDatabaseAdapter,
+                _teamDb?: IDatabaseAdapter,
+                _github?: unknown,
+                briefingConfig?: BriefingConfig
+            ) => {
+                const fallbackProject =
+                    briefingConfig?.defaultProjectNumber !== undefined
+                        ? String(briefingConfig.defaultProjectNumber)
+                        : '{project_number}'
+                const projectNumber = formatPositiveIntOrPlaceholder(
+                    args?.['project_number'],
+                    fallbackProject
+                )
                 return {
                     messages: [
                         {
@@ -224,9 +244,29 @@ Please provide:
             name: 'project-milestone-tracker',
             description: 'Track progress against a specific project milestone',
             icons: [ICON_PROMPT],
-            arguments: [{ name: 'project_number', description: 'GitHub Project Number', required: true }],
-            handler: (args: Record<string, string> | undefined, _db: IDatabaseAdapter) => {
-                const projectNumber = formatPositiveIntOrPlaceholder(args?.['project_number'], '{project_number}')
+            arguments: [
+                {
+                    name: 'project_number',
+                    description:
+                        'GitHub Project Number (optional; falls back to configured default project)',
+                    required: false,
+                },
+            ],
+            handler: (
+                args: Record<string, string> | undefined,
+                _db: IDatabaseAdapter,
+                _teamDb?: IDatabaseAdapter,
+                _github?: unknown,
+                briefingConfig?: BriefingConfig
+            ) => {
+                const fallbackProject =
+                    briefingConfig?.defaultProjectNumber !== undefined
+                        ? String(briefingConfig.defaultProjectNumber)
+                        : '{project_number}'
+                const projectNumber = formatPositiveIntOrPlaceholder(
+                    args?.['project_number'],
+                    fallbackProject
+                )
                 return {
                     messages: [
                         {

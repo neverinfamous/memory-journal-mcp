@@ -53,6 +53,7 @@ interface GroupProxyContext {
     group: string
     methodNames: string[]
     methods: Record<string, string[]>
+    schemas: Record<string, Record<string, string>> | undefined
     api: Record<string, unknown>
     readonlyMode: boolean | undefined
     createMethodProxyFn: (
@@ -62,8 +63,33 @@ interface GroupProxyContext {
     ) => (...args: unknown[]) => Promise<unknown>
 }
 
+function resolveFallbackSchema(
+    schemas: Record<string, Record<string, string>> | undefined,
+    group: string,
+    key: string,
+    resolvedKey: string
+): string | undefined {
+    if (schemas === undefined) return undefined
+    const groupSchemas = schemas[group]
+    if (groupSchemas !== undefined) {
+        if (groupSchemas[key] !== undefined) return groupSchemas[key]
+        if (groupSchemas[resolvedKey] !== undefined) return groupSchemas[resolvedKey]
+    }
+    const snakeKey = /[A-Z]/.test(resolvedKey)
+        ? resolvedKey.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
+        : resolvedKey
+    if (groupSchemas?.[snakeKey] !== undefined) return groupSchemas[snakeKey]
+
+    for (const [gName, gMap] of Object.entries(schemas)) {
+        if (gName === '_topLevel') continue
+        const found = gMap[key] ?? gMap[resolvedKey] ?? gMap[snakeKey] ?? gMap[`team_${snakeKey}`]
+        if (found !== undefined) return found
+    }
+    return schemas['_topLevel']?.[key] ?? schemas['_topLevel']?.[resolvedKey] ?? schemas['_topLevel']?.[snakeKey]
+}
+
 function createGroupNamespaceProxy(ctx: GroupProxyContext): object {
-    const { group, methodNames, methods, api, readonlyMode, createMethodProxyFn } = ctx
+    const { group, methodNames, methods, schemas, api, readonlyMode, createMethodProxyFn } = ctx
     const groupProxy: Record<string, (...args: unknown[]) => Promise<unknown>> = {}
     for (const methodName of methodNames) {
         groupProxy[methodName] = createMethodProxyFn(group, methodName)
@@ -191,7 +217,13 @@ function createGroupNamespaceProxy(ctx: GroupProxyContext): object {
                     ),
                     key
                 )
-            attachMethodIntrospection(fallbackFn, group, key, () => 'unknown', reason)
+            attachMethodIntrospection(
+                fallbackFn,
+                group,
+                key,
+                () => resolveFallbackSchema(schemas, group, key, resolvedKey) ?? 'unknown',
+                reason
+            )
             return fallbackFn
         },
         set: () => false,
@@ -261,6 +293,7 @@ export function buildApiProxy(
             group,
             methodNames,
             methods,
+            schemas,
             api,
             readonlyMode,
             createMethodProxyFn,
@@ -353,6 +386,28 @@ export function buildApiProxy(
                 const foundGroup = Object.keys(methods).find((g) => methods[g]?.includes(snakeKey))
                 if (foundGroup !== undefined) {
                     return createMethodProxyFn(foundGroup, snakeKey)
+                }
+            }
+
+            if (readonlyMode === true && typeof prop === 'string') {
+                const topSchema = resolveFallbackSchema(schemas, '_topLevel', prop, prop)
+                if (topSchema !== undefined) {
+                    const roReason = `🛠️ AUTONOMOUS HEALING: Operation '${prop}' is blocked in readonly mode. Read operations only.`
+                    const roFn = (..._args: unknown[]): Promise<unknown> =>
+                        wrapPromise(
+                            Promise.resolve(
+                                wrapResult({
+                                    success: false,
+                                    error: roReason,
+                                    code: 'VALIDATION_ERROR',
+                                    category: 'validation',
+                                    recoverable: true,
+                                })
+                            ),
+                            prop
+                        )
+                    attachMethodIntrospection(roFn, '_topLevel', prop, () => topSchema, roReason)
+                    return roFn
                 }
             }
 

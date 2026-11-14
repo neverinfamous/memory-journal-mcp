@@ -10,6 +10,13 @@ import {
 } from '../../schemas.js'
 import { ErrorFieldsMixin } from '../../error-fields-mixin.js'
 import { CreateEntrySchema, CreateEntrySchemaMcp } from '../../core/index.js'
+import {
+    preprocessBatchCreateEntries,
+    preprocessBatchUpdates,
+    preprocessBatchDeleteIds,
+} from './batch-preprocessors.js'
+
+export { preprocessBatchCreateEntries, preprocessBatchUpdates, preprocessBatchDeleteIds }
 
 const WORKSPACE_DESC =
     'Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'
@@ -210,87 +217,6 @@ export const DeleteEntrySchemaMcp = z.preprocess(
         .strict()
 )
 
-const WORKSPACE_ALIAS_KEYS = ['workspace_id', 'workspaceId', 'workspace', 'repo'] as const
-const PROJECT_ALIAS_KEYS = [
-    'project_number',
-    'projectNumber',
-    'project_name',
-    'projectName',
-    'project',
-] as const
-
-function firstDefinedEntry(
-    obj: Record<string, unknown>,
-    keys: readonly string[]
-): { key: string; value: unknown } | undefined {
-    for (const key of keys) {
-        if (obj[key] !== undefined) return { key, value: obj[key] }
-    }
-    return undefined
-}
-
-function inheritRootBatchScope(
-    itemObj: Record<string, unknown>,
-    rootObj: Record<string, unknown>,
-    inheritProject: boolean
-): void {
-    const rootWs = firstDefinedEntry(rootObj, WORKSPACE_ALIAS_KEYS)
-    const rootProj = firstDefinedEntry(rootObj, PROJECT_ALIAS_KEYS)
-    const itemWs = firstDefinedEntry(itemObj, WORKSPACE_ALIAS_KEYS)
-    const itemTargetWs = firstDefinedEntry(itemObj, ['target_workspace_id', 'targetWorkspaceId'])
-    const itemProj = firstDefinedEntry(itemObj, PROJECT_ALIAS_KEYS)
-    const differsFromRoot = (entry: { value: unknown } | undefined): boolean =>
-        entry !== undefined &&
-        (rootWs === undefined ||
-            (typeof entry.value === 'string' && typeof rootWs.value === 'string'
-                ? entry.value.trim().toLowerCase() !== rootWs.value.trim().toLowerCase()
-                : entry.value !== rootWs.value))
-    const hasConcreteTargetWs =
-        itemTargetWs !== undefined &&
-        (typeof itemTargetWs.value !== 'string' || itemTargetWs.value.trim() !== '')
-    const itemIsDefaultWs =
-        itemWs !== undefined &&
-        typeof itemWs.value === 'string' &&
-        itemWs.value.trim().toLowerCase() === 'default'
-    const rootIsDefaultWs =
-        rootWs !== undefined &&
-        typeof rootWs.value === 'string' &&
-        rootWs.value.trim().toLowerCase() === 'default'
-    const namesOtherWorkspace =
-        differsFromRoot(itemWs) || (hasConcreteTargetWs && differsFromRoot(itemTargetWs))
-    if (
-        inheritProject &&
-        itemProj === undefined &&
-        rootProj !== undefined &&
-        !namesOtherWorkspace &&
-        !itemIsDefaultWs &&
-        !(itemWs === undefined && rootIsDefaultWs)
-    ) {
-        itemObj[rootProj.key] = rootProj.value
-    }
-    if (itemWs === undefined && itemProj === undefined && rootWs !== undefined) {
-        itemObj[rootWs.key] = rootWs.value
-    }
-}
-
-export function preprocessBatchCreateEntries(val: unknown): unknown {
-    if (typeof val === 'object' && val !== null) {
-        const obj = { ...(val as Record<string, unknown>) }
-        if (Array.isArray(obj['entries'])) {
-            obj['entries'] = obj['entries'].map((e: unknown) => {
-                if (typeof e === 'object' && e !== null) {
-                    const eObj = { ...(e as Record<string, unknown>) }
-                    inheritRootBatchScope(eObj, obj, true)
-                    return eObj
-                }
-                return e
-            })
-            return obj
-        }
-    }
-    return val
-}
-
 export const BatchCreateEntriesSchema = z.preprocess(
     preprocessBatchCreateEntries,
     z
@@ -317,39 +243,6 @@ export const BatchCreateEntriesSchemaMcp = z.preprocess(
         .strict()
 )
 
-function preprocessBatchUpdates(val: unknown, propagateRootProject: boolean): unknown {
-    if (typeof val === 'object' && val !== null) {
-        const obj = { ...(val as Record<string, unknown>) }
-        let updatesArr = obj['updates']
-        if (updatesArr === undefined && Array.isArray(obj['items'])) {
-            updatesArr = obj['items']
-            obj['updates'] = updatesArr
-            delete obj['items']
-        }
-        if (updatesArr === undefined && Array.isArray(obj['entries'])) {
-            updatesArr = obj['entries']
-            obj['updates'] = updatesArr
-            delete obj['entries']
-        }
-        if (Array.isArray(updatesArr)) {
-            const newUpdates = updatesArr.map((u: unknown) => {
-                if (typeof u === 'object' && u !== null) {
-                    const uObj = { ...(u as Record<string, unknown>) }
-                    if ('id' in uObj && !('entry_id' in uObj)) {
-                        uObj['entry_id'] = uObj['id']
-                        delete uObj['id']
-                    }
-                    inheritRootBatchScope(uObj, obj, propagateRootProject)
-                    return uObj
-                }
-                return u
-            })
-            return { ...obj, updates: newUpdates }
-        }
-    }
-    return val
-}
-
 export const BatchUpdateEntriesSchema = z.preprocess(
     (val: unknown) => preprocessBatchUpdates(val, true),
     z
@@ -375,25 +268,6 @@ export const BatchUpdateEntriesSchemaMcp = z.preprocess(
         })
         .strict()
 )
-
-function preprocessBatchDeleteIds(val: unknown): unknown {
-    if (typeof val === 'object' && val !== null) {
-        const obj = { ...(val as Record<string, unknown>) }
-        let modified = false
-        if ('ids' in obj && !('entry_ids' in obj)) {
-            obj['entry_ids'] = Array.isArray(obj['ids']) ? obj['ids'] : [obj['ids']]
-            delete obj['ids']
-            modified = true
-        }
-        if ('id' in obj && !('entry_ids' in obj)) {
-            obj['entry_ids'] = Array.isArray(obj['id']) ? obj['id'] : [obj['id']]
-            delete obj['id']
-            modified = true
-        }
-        return modified ? obj : val
-    }
-    return val
-}
 
 export const BatchDeleteEntriesSchema = z.preprocess(
     preprocessBatchDeleteIds,

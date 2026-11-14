@@ -144,7 +144,7 @@ export const CreateEntrySchemaMcp = z.preprocess(
         ),
         is_personal: z.boolean().optional().default(true),
         significance_type: z.string().optional(),
-        workspace_id: z.string().min(1, 'workspace_id is required').describe('REQUIRED. Repository workspace name (e.g. adamic). Do not use numeric project IDs or "workspace" as the key.'),
+        workspace_id: z.string().min(1, 'workspace_id is required').describe('REQUIRED. Repository workspace name (e.g. "my-repo"). Do not use numeric project IDs or "workspace" as the key.'),
         project_number: relaxedNumber().optional().describe(
             'Numeric project ID (e.g., 1, 14). This is now optional; workspace_id is preferred.'
         ),

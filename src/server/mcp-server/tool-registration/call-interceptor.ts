@@ -350,6 +350,32 @@ export function attachCallToolInterceptor(
                 else delete healerOptions.defaultProjectNumber
                 if (liveDefaultWs !== undefined) healerOptions.defaultWorkspaceId = liveDefaultWs
                 else delete healerOptions.defaultWorkspaceId
+                if (
+                    Array.isArray(req.params.arguments) &&
+                    req.params.name !== undefined &&
+                    req.params.name !== ''
+                ) {
+                    const arrayIntercept = applyArgInterceptions(req.params.name, [req.params.arguments])
+                    if ('error' in arrayIntercept) {
+                        const errorResult = arrayIntercept.error
+                        logAgentIssue({
+                            source: 'MCP',
+                            action: req.params.name,
+                            input: req.params.arguments,
+                            error: (errorResult['error'] as string) ?? 'Validation Error',
+                        })
+                        return formatTokenEstimatedError(errorResult, true)
+                    }
+                    const unwrapped = arrayIntercept.args?.[0]
+                    if (
+                        unwrapped !== null &&
+                        unwrapped !== undefined &&
+                        typeof unwrapped === 'object' &&
+                        !Array.isArray(unwrapped)
+                    ) {
+                        req.params.arguments = unwrapped as Record<string, unknown>
+                    }
+                }
                 normalizeAndAliasToolCall(req.params, healerOptions)
                 const toolArgs = req.params.arguments
 

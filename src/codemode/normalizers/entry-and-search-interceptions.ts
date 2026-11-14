@@ -222,6 +222,15 @@ function applySingleIdInterception(
     return { args }
 }
 
+function parseNumericBatchId(val: unknown): number | undefined {
+    if (typeof val === 'number' && Number.isFinite(val)) return val
+    if (typeof val === 'string') {
+        const cleaned = val.trim().replace(/^#/, '')
+        if (/^\d+$/.test(cleaned)) return parseInt(cleaned, 10)
+    }
+    return undefined
+}
+
 function applyBatchAndMutationInterceptions(
     methodName: string,
     args: unknown[]
@@ -229,32 +238,67 @@ function applyBatchAndMutationInterceptions(
     if (['batch_create_entries', 'batchCreateEntries', 'team_batch_create_entries', 'teamBatchCreateEntries'].includes(methodName) && args.length === 1) {
         if (Array.isArray(args[0])) args[0] = { entries: args[0] }
         else if (isRecord(args[0]) && !('entries' in args[0])) {
-            return validationError(`${methodName} requires an 'entries' array.`, 'Provide { entries: [...] } as the argument')
+            if (Array.isArray(args[0]['items'])) {
+                const obj = { ...args[0], entries: args[0]['items'] }
+                Reflect.deleteProperty(obj, 'items')
+                args[0] = obj
+            } else {
+                return validationError(`${methodName} requires an 'entries' array.`, 'Provide { entries: [...] } as the argument')
+            }
         }
     }
 
     if (['batch_update_entries', 'batchUpdateEntries', 'team_batch_update_entries', 'teamBatchUpdateEntries'].includes(methodName) && args.length === 1) {
         if (Array.isArray(args[0])) args[0] = { updates: args[0] }
         else if (isRecord(args[0]) && !('updates' in args[0])) {
-            return validationError(`${methodName} requires an 'updates' array.`, 'Provide { updates: [...] } as the argument')
+            const aliasKey = Array.isArray(args[0]['items'])
+                ? 'items'
+                : Array.isArray(args[0]['entries'])
+                  ? 'entries'
+                  : undefined
+            if (aliasKey !== undefined) {
+                const obj = { ...args[0], updates: args[0][aliasKey] }
+                Reflect.deleteProperty(obj, aliasKey)
+                args[0] = obj
+            } else {
+                return validationError(`${methodName} requires an 'updates' array.`, 'Provide { updates: [...] } as the argument')
+            }
         }
     }
 
     if (['batch_delete_entries', 'batchDeleteEntries', 'team_batch_delete_entries', 'teamBatchDeleteEntries'].includes(methodName)) {
+        const multiCoerced = args.length > 1 ? args.map(parseNumericBatchId) : []
         if (args.length === 1 && typeof args[0] === 'string') {
-            args[0] = { entry_ids: args[0].split(',').map((s) => parseInt(s.trim(), 10)).filter((n) => !isNaN(n)) }
+            args[0] = { entry_ids: args[0].split(',').map((s) => parseInt(s.trim().replace(/^#/, ''), 10)).filter((n) => !isNaN(n)) }
         } else if (args.length === 1 && Array.isArray(args[0])) {
-            if (args[0].some((id) => typeof id === 'string')) {
+            const coerced = args[0].map(parseNumericBatchId)
+            const validIds = coerced.filter((n): n is number => n !== undefined)
+            if (validIds.length !== coerced.length) {
                 return validationError(
-                    'batch_delete_entries expects an array of numeric IDs, but received an array containing strings.',
-                    'Ensure all IDs in the array are numbers. Use parseInt() if necessary.'
+                    'batch_delete_entries expects an array of numeric IDs, but received non-numeric values.',
+                    'Ensure all IDs in the array are numbers or numeric strings.'
                 )
             }
-            args[0] = { entry_ids: args[0] }
-        } else if (args.length > 1 && args.every((a) => typeof a === 'number')) {
-            args = [{ entry_ids: args }]
-        } else if (args.length === 1 && isRecord(args[0]) && !('entry_ids' in args[0])) {
-            return validationError(`${methodName} requires an 'entry_ids' array.`, 'Provide { entry_ids: [...] } as the argument')
+            args[0] = { entry_ids: validIds }
+        } else if (args.length > 1 && multiCoerced.every((n): n is number => n !== undefined)) {
+            args = [{ entry_ids: multiCoerced }]
+        } else if (args.length === 1 && isRecord(args[0])) {
+            const obj = { ...args[0] }
+            if (!('entry_ids' in obj)) {
+                const aliasKey = (['ids', 'id', 'items', 'entries'] as const).find((k) => k in obj)
+                if (aliasKey === undefined) {
+                    return validationError(`${methodName} requires an 'entry_ids' array.`, 'Provide { entry_ids: [...] } as the argument')
+                }
+                const raw = obj[aliasKey]
+                obj['entry_ids'] = Array.isArray(raw) ? raw : [raw]
+                Reflect.deleteProperty(obj, aliasKey)
+            }
+            if (Array.isArray(obj['entry_ids'])) {
+                obj['entry_ids'] = (obj['entry_ids'] as unknown[]).map(
+                    (item: unknown): unknown => parseNumericBatchId(item) ?? item
+                )
+            }
+            args[0] = obj
         }
     }
 

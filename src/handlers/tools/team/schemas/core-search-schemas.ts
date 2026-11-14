@@ -187,7 +187,7 @@ export const TeamCreateEntrySchemaMcp = z.preprocess(
                 .string()
                 .optional()
                 .describe(
-                    'REQUIRED. The repository name (e.g. adamic). Do not use numeric project IDs or "workspace" as the key.'
+                    'REQUIRED. The repository name (e.g. "my-repo"). Do not use numeric project IDs or "workspace" as the key.'
                 ),
             project_owner: z.string().optional().describe('Owner of the project/task.'),
             issue_number: relaxedNumber().optional(),

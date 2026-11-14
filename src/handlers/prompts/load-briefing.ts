@@ -135,7 +135,7 @@ export function getLoadBriefingPromptDefinitions(): InternalPromptDef[] {
                 {
                     name: 'projects',
                     description:
-                        'Optional comma-separated project names or registry project numbers (e.g., memory-journal-mcp, adamic, 16, 5,16)',
+                        'Optional comma-separated project names or registry project numbers (e.g., memory-journal-mcp, frontend-app, 5, 5,12)',
                     required: false,
                 },
             ],

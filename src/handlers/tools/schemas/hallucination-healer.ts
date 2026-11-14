@@ -8,6 +8,7 @@ import {
     healAnchorsField,
     healSortByField,
     healIncludeArchivedField,
+    healSessionSummaryPayload,
     isUpdatePayload,
 } from './hallucination-healer-fields.js'
 import {
@@ -452,6 +453,7 @@ export function healAgentHallucinations(val: unknown): unknown {
     if (healSortByField(obj)) modified = true
     if (healMetadataAndContextFields(obj)) modified = true
     if (healTagsAndEntryType(obj)) modified = true
+    if (healSessionSummaryPayload(obj)) modified = true
     if (healWorkspaceAndProjectContext(obj)) modified = true
 
     return modified ? obj : val

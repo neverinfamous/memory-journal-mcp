@@ -146,6 +146,11 @@ export function healSessionSummaryContent(
         healed = healed.replace(/^#+\s+(?:Accomplishments|Completed|Done|What I did|What we did)\s*$/gim, '## Accomplished')
         healed = healed.replace(/^#+\s+(?:Blockers|Unfinished|Unfinished\/?Blocked|Blocked)\s*$/gim, '## Unfinished / Blocked')
         healed = healed.replace(/^#+\s+(?:Next Session|Context|Next steps)\s*$/gim, '## Context for Next Session')
+        healed = healed.replace(/^#+\s+(?:Commit History|Git Commits)\s*$/gim, '## Commits')
+        healed = healed.replace(/^(?:#|#{3,})\s+Accomplished\s*$/gim, '## Accomplished')
+        healed = healed.replace(/^(?:#|#{3,})\s+Unfinished \/ Blocked\s*$/gim, '## Unfinished / Blocked')
+        healed = healed.replace(/^(?:#|#{3,})\s+Context for Next Session\s*$/gim, '## Context for Next Session')
+        healed = healed.replace(/^(?:#|#{3,})\s+Commits\s*$/gim, '## Commits')
     }
 
     healed = healed.replace(/(?:^#+\s+Accomplished\s*\n-\s*(?:None\.?|)\s*){2,}/gim, '## Accomplished\n- None.\n')
