@@ -67,7 +67,10 @@ function assertUpdateAllowed(
     callerWorkspace: string,
     input: UpdateEntryInput
 ): void {
-    if (callerWorkspace !== '*' && existing.workspaceId !== callerWorkspace) {
+    if (
+        callerWorkspace !== '*' &&
+        existing.workspaceId.toLowerCase() !== callerWorkspace.toLowerCase()
+    ) {
         throw new ConflictError(
             `Entry ${String(id)} belongs to workspace '${existing.workspaceId}', cannot be updated from '${callerWorkspace}'. Moving to another workspace requires explicit overrides (e.g. workspaceId = '*').`,
             { id: existing.id, version: existing.version, workspaceId: existing.workspaceId }
@@ -176,10 +179,15 @@ function resolveUpdateScope(
         if (target === '') {
             throw new ValidationError('targetWorkspaceId cannot be blank.', { id })
         }
+        if (target === '*') {
+            throw new ConflictError(
+                "targetWorkspaceId cannot be '*'. Provide the concrete destination workspace.",
+                { id, version: existing.version, workspaceId: existing.workspaceId }
+            )
+        }
     }
     const moving =
         target !== undefined &&
-        target !== '*' &&
         target.toLowerCase() !== existing.workspaceId.toLowerCase()
     const destination = moving && target !== undefined ? target : existing.workspaceId
     const paired = pairStoredScope(
@@ -206,7 +214,7 @@ function resolveUpdateScope(
         next.projectNumber = null
     }
     const canonical = paired.workspaceId
-    if (moving && canonical !== undefined && canonical !== '' && canonical !== '*') {
+    if (target !== undefined && canonical !== undefined && canonical !== '' && canonical !== '*') {
         next.targetWorkspaceId = canonical
     }
     return next
@@ -219,10 +227,13 @@ export function performUpdateEntry(
 ): boolean {
     const { db, tagsMgr } = context
 
-    const callerWorkspace = effectiveWorkspace(input.workspaceId)
+    const rawCaller = effectiveWorkspace(input.workspaceId)
+    const registry = activeProjectRegistry(context.config?.projectRegistry)
+    const canonicalCaller = rawCaller !== '*' ? exactRegistryKey(rawCaller, registry) : undefined
+    const callerWorkspace = canonicalCaller ?? rawCaller
     const scopedSelect = callerWorkspace !== '*'
     const selectSql = scopedSelect
-        ? 'SELECT id, content, version, workspace_id as workspaceId FROM memory_journal WHERE id = ? AND deleted_at IS NULL AND workspace_id = ?'
+        ? 'SELECT id, content, version, workspace_id as workspaceId FROM memory_journal WHERE id = ? AND deleted_at IS NULL AND workspace_id = ? COLLATE NOCASE'
         : 'SELECT id, content, version, workspace_id as workspaceId FROM memory_journal WHERE id = ? AND deleted_at IS NULL'
     const existing = (
         scopedSelect
@@ -233,13 +244,12 @@ export function performUpdateEntry(
 
     assertUpdateAllowed(id, existing, callerWorkspace, input)
 
-    const registry = activeProjectRegistry(context.config?.projectRegistry)
     const writeInput = resolveUpdateScope(id, existing, input, registry)
 
     const { updates, values } = buildUpdateSets(id, existing, callerWorkspace, writeInput)
 
     const scopeUpdate = callerWorkspace !== '*'
-    const query = `UPDATE memory_journal SET ${updates.join(', ')} WHERE id = ? AND deleted_at IS NULL${scopeUpdate ? ' AND workspace_id = ?' : ''}`
+    const query = `UPDATE memory_journal SET ${updates.join(', ')} WHERE id = ? AND deleted_at IS NULL${scopeUpdate ? ' AND workspace_id = ? COLLATE NOCASE' : ''}`
 
     const txn = db.transaction(() => {
         const stmt = db.prepare(query)

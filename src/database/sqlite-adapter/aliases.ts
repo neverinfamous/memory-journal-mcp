@@ -228,7 +228,9 @@ export class AliasManager {
             const journalFilter =
                 (scoped ? ' AND workspace_id = ?' : '') +
                 (projectScoped ? ' AND project_number = ?' : '')
-            const aliasFilter = scoped ? ' AND (workspace_id IS NULL OR workspace_id = ?)' : ''
+            const aliasScopeClause = scoped
+                ? ' AND (aa.workspace_id IS NULL OR aa.workspace_id = ?)'
+                : ''
             const countParams: unknown[] = [
                 ...(scoped ? [scopeId] : []),
                 ...(projectScoped ? [projectNumber] : []),
@@ -237,8 +239,11 @@ export class AliasManager {
             ]
             const countResults = this.db.exec(
                 `SELECT COUNT(*) as count FROM memory_journal
-                 WHERE deleted_at IS NULL${journalFilter} AND author IN (
-                     SELECT alias FROM author_aliases WHERE canonical_author = ? COLLATE NOCASE${aliasFilter}
+                 WHERE deleted_at IS NULL${journalFilter} AND EXISTS (
+                     SELECT 1 FROM author_aliases aa
+                     WHERE aa.canonical_author = ? COLLATE NOCASE
+                       AND aa.alias = memory_journal.author
+                       AND (aa.workspace_id IS NULL OR aa.workspace_id = memory_journal.workspace_id)${aliasScopeClause}
                  )`,
                 countParams
             )
@@ -257,8 +262,11 @@ export class AliasManager {
                 this.db.run(
                     `UPDATE memory_journal
                      SET author = ?
-                     WHERE deleted_at IS NULL${journalFilter} AND author IN (
-                         SELECT alias FROM author_aliases WHERE canonical_author = ? COLLATE NOCASE${aliasFilter}
+                     WHERE deleted_at IS NULL${journalFilter} AND EXISTS (
+                         SELECT 1 FROM author_aliases aa
+                         WHERE aa.canonical_author = ? COLLATE NOCASE
+                           AND aa.alias = memory_journal.author
+                           AND (aa.workspace_id IS NULL OR aa.workspace_id = memory_journal.workspace_id)${aliasScopeClause}
                      )`,
                     updateParams
                 )

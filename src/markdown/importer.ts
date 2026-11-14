@@ -12,8 +12,9 @@ import { constants } from 'node:fs'
 import type { IDatabaseAdapter } from '../database/core/interfaces.js'
 import type { VectorSearchManager } from '../vector/vector-search-manager/index.js'
 import type { EntryType, SignificanceType, ToolHandlerConfig } from '../types/index.js'
-import { ENTRY_TYPES } from '../types/index.js'
+import { ENTRY_TYPES, SIGNIFICANCE_TYPES } from '../types/index.js'
 import { ValidationError } from '../types/errors.js'
+import { normalizeSignificanceValue } from '../handlers/tools/schemas/constants-and-primitives.js'
 import { linkImportedRelationships } from './import-relationships.js'
 import { parseFrontmatter } from './frontmatter.js'
 import { assertSafeDirectoryPath, assertSafeFilePath } from '../utils/security-utils.js'
@@ -54,21 +55,54 @@ export interface ImportResult {
     dry_run: boolean
 }
 
-/** Supported relationship types for validation */
-/** Valid entry types for casting */
+/** Valid entry types and significance types for casting */
 const VALID_ENTRY_TYPES = new Set<string>(ENTRY_TYPES)
+const VALID_SIGNIFICANCE_TYPES = new Set<string>(SIGNIFICANCE_TYPES)
 
 /**
- * Safely cast a string to EntryType, returning undefined for invalid values.
+ * Safely cast a string to EntryType, throwing ValidationError on invalid values.
  */
 function toEntryType(value: string | undefined): EntryType | undefined {
     if (value === undefined) return undefined
     if (!VALID_ENTRY_TYPES.has(value)) {
-        throw new Error(
+        throw new ValidationError(
             `Invalid entry type: ${value}. Must be one of: ${Array.from(VALID_ENTRY_TYPES).join(', ')}`
         )
     }
     return value as EntryType
+}
+
+/**
+ * Validate a string against canonical SignificanceType values before persistence.
+ */
+function toSignificanceType(value: string | undefined): SignificanceType | undefined {
+    if (value === undefined) return undefined
+    const normalized = normalizeSignificanceValue(value)
+    if (normalized === undefined) return undefined
+    if (!VALID_SIGNIFICANCE_TYPES.has(normalized)) {
+        throw new ValidationError(
+            `Invalid significance type: ${value}. Must be one of: ${Array.from(VALID_SIGNIFICANCE_TYPES).join(', ')}`
+        )
+    }
+    return normalized as SignificanceType
+}
+
+function validateImportTimestamp(timestamp: string | undefined): void {
+    if (timestamp === undefined) return
+    const ymdMatch = /^(\d{4})-(\d{2})-(\d{2})(?:$|T)/.exec(timestamp)
+    if (ymdMatch !== null) {
+        const y = Number(ymdMatch[1])
+        const m = Number(ymdMatch[2])
+        const d = Number(ymdMatch[3])
+        const probe = new Date(Date.UTC(y, m - 1, d))
+        if (probe.getUTCFullYear() !== y || probe.getUTCMonth() !== m - 1 || probe.getUTCDate() !== d) {
+            throw new ValidationError(`Invalid timestamp format: ${timestamp}. Expected a valid ISO 8601 date or timestamp.`)
+        }
+    }
+    const candidate = timestamp.includes('T') ? timestamp : `${timestamp}T00:00:00.000Z`
+    if (Number.isNaN(new Date(candidate).getTime())) {
+        throw new ValidationError(`Invalid timestamp format: ${timestamp}. Expected an ISO 8601 date or timestamp.`)
+    }
 }
 
 // ============================================================================
@@ -165,15 +199,15 @@ export async function importMarkdownEntries(
 
     assertSafeDirectoryPath(sourceDir, allowedRoots)
 
-    const mdFiles: string[] = []
+    const allMdFiles: string[] = []
     const dir = await opendir(sourceDir)
     for await (const dirent of dir) {
         if (dirent.isFile() && dirent.name.endsWith('.md')) {
-            mdFiles.push(dirent.name)
-            if (mdFiles.length >= limit) break
+            allMdFiles.push(dirent.name)
         }
     }
-    mdFiles.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+    allMdFiles.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+    const mdFiles = allMdFiles.slice(0, Math.max(0, limit))
 
     const result: ImportResult = {
         success: true,
@@ -220,7 +254,7 @@ function assertImportAuthorOwnership(
     entryId: number,
     author: string | undefined
 ): void {
-    if (author === undefined) return
+    if (author === undefined || typeof db.getAuthorsForEntries !== 'function') return
     const existingAuthor = db.getAuthorsForEntries([entryId]).get(entryId)
     if (
         existingAuthor !== undefined &&
@@ -233,6 +267,45 @@ function assertImportAuthorOwnership(
     }
 }
 
+function validateImportedFileEntry(
+    file: ParsedFile,
+    db: IDatabaseAdapter,
+    options: ImportOptions
+): {
+    effectiveWsId: string | undefined
+    effectiveProjNum: number | undefined
+    rawEntryType: EntryType | undefined
+    significanceType: SignificanceType | undefined
+    existing: ReturnType<IDatabaseAdapter['getEntryById']>
+} {
+    const { metadata } = file
+    const { effectiveWsId, effectiveProjNum } = resolveImportedFileContext(file, options)
+    if (effectiveWsId?.trim() === '*') {
+        throw new ValidationError(
+            "Wildcard workspace_id '*' cannot be used when importing entries. Specify a concrete workspace_id."
+        )
+    }
+    const rawEntryType = toEntryType(metadata.entry_type)
+    const significanceType = toSignificanceType(metadata.significance)
+    validateImportTimestamp(metadata.timestamp)
+    const existing =
+        metadata.mj_id !== undefined
+            ? db.getEntryById(metadata.mj_id, effectiveWsId ?? options.workspaceId)
+            : null
+    if (existing && metadata.mj_id !== undefined) {
+        if (
+            effectiveProjNum !== undefined &&
+            (existing.projectNumber ?? null) !== effectiveProjNum
+        ) {
+            throw new ValidationError(
+                `Entry ${String(metadata.mj_id)} belongs to project #${String(existing.projectNumber ?? 'none')}, not project #${String(effectiveProjNum)}.`
+            )
+        }
+        assertImportAuthorOwnership(db, metadata.mj_id, options.author)
+    }
+    return { effectiveWsId, effectiveProjNum, rawEntryType, significanceType, existing }
+}
+
 function upsertParsedFile(
     file: ParsedFile,
     db: IDatabaseAdapter,
@@ -241,56 +314,33 @@ function upsertParsedFile(
 ): { entryId: number; workspaceId: string | undefined } {
     const { body, metadata } = file
     const { author } = options
-    const { effectiveWsId, effectiveProjNum } = resolveImportedFileContext(file, options)
-    if (effectiveWsId?.trim() === '*') {
-        throw new ValidationError(
-            "Wildcard workspace_id '*' cannot be used when importing entries. Specify a concrete workspace_id."
-        )
-    }
-    const entryType: EntryType = toEntryType(metadata.entry_type) ?? 'personal_reflection'
+    const { effectiveWsId, effectiveProjNum, rawEntryType, significanceType, existing } =
+        validateImportedFileEntry(file, db, options)
 
-    if (metadata.mj_id !== undefined) {
-        const existing = db.getEntryById(metadata.mj_id, effectiveWsId)
-        if (existing) {
-            if (
-                existing.projectNumber !== undefined &&
-                existing.projectNumber !== null &&
-                effectiveProjNum !== undefined &&
-                existing.projectNumber !== effectiveProjNum
-            ) {
-                throw new ValidationError(
-                    `Entry ${String(metadata.mj_id)} belongs to project #${String(existing.projectNumber)}, not project #${String(effectiveProjNum)}.`
-                )
-            }
-            assertImportAuthorOwnership(db, metadata.mj_id, author)
-            const updated = db.updateEntry(metadata.mj_id, {
-                content: body,
-                entryType: toEntryType(metadata.entry_type),
-                tags: metadata.tags,
-                ...(metadata.significance !== undefined && {
-                    significanceType: metadata.significance,
-                }),
-                ...(effectiveProjNum !== undefined && { projectNumber: effectiveProjNum }),
-                workspaceId: effectiveWsId,
-            })
-            if (updated === null) {
-                throw new Error(`Entry ${String(metadata.mj_id)} could not be updated during import`)
-            }
-            result.updated++
-            // [INTENT] Use the stored (canonical) workspace for relationship linking and vector indexing.
-            return { entryId: metadata.mj_id, workspaceId: updated.workspaceId ?? effectiveWsId }
+    if (existing && metadata.mj_id !== undefined) {
+        const updated = db.updateEntry(metadata.mj_id, {
+            content: body,
+            entryType: rawEntryType,
+            tags: metadata.tags,
+            ...(significanceType !== undefined && { significanceType }),
+            ...(effectiveProjNum !== undefined && { projectNumber: effectiveProjNum }),
+            workspaceId: effectiveWsId,
+        })
+        if (updated === null) {
+            throw new Error(`Entry ${String(metadata.mj_id)} could not be updated during import`)
         }
+        result.updated++
+        // [INTENT] Use the stored (canonical) workspace for relationship linking and vector indexing.
+        return { entryId: metadata.mj_id, workspaceId: updated.workspaceId ?? effectiveWsId }
     }
 
     const resolvedAuthor = author ?? metadata.author
     const newEntry = db.createEntry({
         content: body,
-        entryType,
+        entryType: rawEntryType ?? 'personal_reflection',
         tags: metadata.tags,
         ...(metadata.timestamp !== undefined && { timestamp: metadata.timestamp }),
-        ...(metadata.significance !== undefined && {
-            significanceType: metadata.significance as SignificanceType,
-        }),
+        ...(significanceType !== undefined && { significanceType }),
         ...(resolvedAuthor !== undefined && { author: resolvedAuthor }),
         ...(effectiveProjNum !== undefined && { projectNumber: effectiveProjNum }),
         workspaceId: effectiveWsId,
@@ -308,7 +358,7 @@ export async function processImportBatch(
     options: ImportOptions = {},
     vectorManager: VectorSearchManager | undefined
 ): Promise<ImportResult> {
-    const { dry_run = false, workspaceId, limit } = options
+    const { dry_run = false, limit } = options
     // [BOUNDARY] Direct callers (e.g. team import) bypass the directory scan, so enforce limit here too.
     const files = limit !== undefined && limit >= 0 ? parsedFiles.slice(0, limit) : parsedFiles
 
@@ -337,11 +387,8 @@ export async function processImportBatch(
             const { filename, metadata } = file
 
             if (dry_run) {
-                const { effectiveWsId } = resolveImportedFileContext(file, options)
-                if (
-                    metadata.mj_id !== undefined &&
-                    db.getEntryById(metadata.mj_id, effectiveWsId ?? workspaceId)
-                ) {
+                const { existing } = validateImportedFileEntry(file, db, options)
+                if (existing) {
                     result.updated++
                 } else {
                     result.created++

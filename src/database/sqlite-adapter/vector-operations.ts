@@ -58,28 +58,33 @@ export class VectorOperations {
     searchVectors(
         embedding: Float32Array,
         limit: number,
-        workspaceId?: string
+        workspaceId?: string,
+        projectNumber?: number
     ): { entry_id: number; distance: number }[] {
         const db = this.connection.getNativeDb()
         const scopeId = effectiveWorkspace(workspaceId)
-        const scoped = scopeId !== '*'
-        const sql = scoped
-            ? `SELECT v.entry_id, v.distance
-                 FROM vec_embeddings v
-                 INNER JOIN memory_journal mj ON v.entry_id = mj.id
-                 WHERE v.embedding MATCH ? AND v.k = ? AND mj.deleted_at IS NULL AND mj.workspace_id = ?
-                 LIMIT ?`
-            : `SELECT v.entry_id, v.distance
-                 FROM vec_embeddings v
-                 INNER JOIN memory_journal mj ON v.entry_id = mj.id
-                 WHERE v.embedding MATCH ? AND v.k = ? AND mj.deleted_at IS NULL
-                 LIMIT ?`
-        const params = (k: number): unknown[] =>
-            scoped ? [embedding, k, scopeId, limit] : [embedding, k, limit]
+        const wsScoped = scopeId !== '*'
+        const pnScoped = projectNumber !== undefined
+        const scoped = wsScoped || pnScoped
+        const clauses = ['v.embedding MATCH ?', 'v.k = ?', 'mj.deleted_at IS NULL']
+        if (wsScoped) clauses.push('mj.workspace_id = ?')
+        if (pnScoped) clauses.push('mj.project_number = ?')
+        const sql = `SELECT v.entry_id, v.distance
+             FROM vec_embeddings v
+             INNER JOIN memory_journal mj ON v.entry_id = mj.id
+             WHERE ${clauses.join(' AND ')}
+             LIMIT ?`
+        const params = (k: number): unknown[] => [
+            embedding,
+            k,
+            ...(wsScoped ? [scopeId] : []),
+            ...(pnScoped ? [projectNumber] : []),
+            limit,
+        ]
         const stmt = db.prepare(sql)
 
-        // The vec0 KNN runs globally before the workspace JOIN filter, so a workspace holding a
-        // small share of the vectors can be under-filled. Widen k until `limit` rows are found.
+        // The vec0 KNN runs globally before the workspace/project JOIN filter, so a scoped slice
+        // holding a small share of the vectors can be under-filled. Widen k until `limit` rows are found.
         let k = Math.min(limit * VECTOR_KNN_OVERFETCH, VECTOR_KNN_MAX_K)
         let rows = stmt.all(...params(k)) as { entry_id: number; distance: number }[]
         while (scoped && rows.length < limit && k < VECTOR_KNN_MAX_K) {

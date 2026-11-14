@@ -7,6 +7,7 @@ import {
     healRelationshipFields,
     healAnchorsField,
     healSortByField,
+    healIncludeArchivedField,
     isUpdatePayload,
 } from './hallucination-healer-fields.js'
 import {
@@ -105,27 +106,23 @@ function healMetadataAndContextFields(obj: Record<string, unknown>): boolean {
     return modified
 }
 
-function healTagsAndEntryType(obj: Record<string, unknown>): boolean {
+function normalizeTagsField(obj: Record<string, unknown>): boolean {
     let modified = false
-
     if ('tag' in obj && !('tags' in obj)) {
         obj['tags'] = obj['tag']
         delete obj['tag']
         modified = true
     }
-
     if ('tags' in obj && typeof obj['tags'] === 'string') {
         obj['tags'] = obj['tags'].split(',').map((t: string) => t.trim()).filter(Boolean)
         modified = true
     }
-
     if ('tags' in obj && Array.isArray(obj['tags'])) {
         const healedTags = obj['tags'].map((t: unknown) => {
             if (typeof t === 'string') {
                 const lower = t.toLowerCase().trim()
                 if (SESSION_SUMMARY_TAG_ALIASES.has(lower)) return 'session-summary'
-                if (lower === 'commit narrative' || lower === 'commit_narrative')
-                    return 'commit-narrative'
+                if (lower === 'commit narrative' || lower === 'commit_narrative') return 'commit-narrative'
             }
             return t
         })
@@ -134,28 +131,32 @@ function healTagsAndEntryType(obj: Record<string, unknown>): boolean {
             modified = true
         }
     }
+    return modified
+}
+
+function mapKnownEntryTypeAlias(etLower: string): { entryType: string; tag?: string } | undefined {
+    if (etLower === 'session-summary' || SESSION_SUMMARY_TAG_ALIASES.has(etLower)) {
+        return { entryType: 'retrospective', tag: 'session-summary' }
+    }
+    if (etLower === 'progress' || etLower === 'status' || etLower === 'development') {
+        return { entryType: 'development_note' }
+    }
+    if (TECHNICAL_NOTE_ALIASES.has(etLower)) return { entryType: 'technical_note', tag: etLower }
+    if (BUG_FIX_ALIASES.has(etLower)) return { entryType: 'bug_fix' }
+    if (etLower === 'feature') return { entryType: 'feature_implementation' }
+    if (etLower === 'meeting') return { entryType: 'meeting_notes' }
+    return undefined
+}
+
+function healTagsAndEntryType(obj: Record<string, unknown>): boolean {
+    let modified = normalizeTagsField(obj)
 
     if ('entry_type' in obj && typeof obj['entry_type'] === 'string') {
         const etLower = obj['entry_type'].toLowerCase()
-        if (etLower === 'session-summary' || SESSION_SUMMARY_TAG_ALIASES.has(etLower)) {
-            obj['entry_type'] = 'retrospective'
-            appendHealedTag(obj, 'session-summary')
-            modified = true
-        } else if (etLower === 'progress' || etLower === 'status' || etLower === 'development') {
-            obj['entry_type'] = 'development_note'
-            modified = true
-        } else if (TECHNICAL_NOTE_ALIASES.has(etLower)) {
-            obj['entry_type'] = 'technical_note'
-            appendHealedTag(obj, etLower)
-            modified = true
-        } else if (BUG_FIX_ALIASES.has(etLower)) {
-            obj['entry_type'] = 'bug_fix'
-            modified = true
-        } else if (etLower === 'feature') {
-            obj['entry_type'] = 'feature_implementation'
-            modified = true
-        } else if (etLower === 'meeting') {
-            obj['entry_type'] = 'meeting_notes'
+        const mapped = mapKnownEntryTypeAlias(etLower)
+        if (mapped !== undefined) {
+            obj['entry_type'] = mapped.entryType
+            if (mapped.tag !== undefined) appendHealedTag(obj, mapped.tag)
             modified = true
         } else if (!ENTRY_TYPES.some((t) => t === obj['entry_type'])) {
             const cleanedTag = etLower.replace(/^[^a-z0-9]+/, '').replace(/_/g, '-')
@@ -207,6 +208,33 @@ function healWorkspaceAndProjectContext(obj: Record<string, unknown>): boolean {
     return normalized || inferred
 }
 
+function unpackFilterContainers(obj: Record<string, unknown>): boolean {
+    let modified = false
+    for (const containerKey of ['filters', 'filter']) {
+        if (!(containerKey in obj)) continue
+        const val = obj[containerKey]
+        Reflect.deleteProperty(obj, containerKey)
+        modified = true
+        if (typeof val !== 'object' || val === null || Array.isArray(val)) continue
+        for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
+            if (!(k in obj) && v !== undefined) obj[k] = v
+        }
+    }
+    return modified
+}
+
+function coerceEntryIdField(obj: Record<string, unknown>): boolean {
+    if ('entry_id' in obj && typeof obj['entry_id'] === 'string') {
+        const cleaned = obj['entry_id'].replace(/^[^0-9]+/, '')
+        const num = Number(cleaned)
+        if (!Number.isNaN(num) && cleaned.trim() !== '') {
+            obj['entry_id'] = num
+            return true
+        }
+    }
+    return false
+}
+
 function healNestedContainersAndEntryIds(obj: Record<string, unknown>): boolean {
     let modified = false
 
@@ -224,16 +252,7 @@ function healNestedContainersAndEntryIds(obj: Record<string, unknown>): boolean 
         modified = true
     }
 
-    for (const containerKey of ['filters', 'filter']) {
-        if (!(containerKey in obj)) continue
-        const val = obj[containerKey]
-        Reflect.deleteProperty(obj, containerKey)
-        modified = true
-        if (typeof val !== 'object' || val === null || Array.isArray(val)) continue
-        for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
-            if (!(k in obj) && v !== undefined) obj[k] = v
-        }
-    }
+    if (unpackFilterContainers(obj)) modified = true
 
     if ('entry' in obj) {
         const entryVal = obj['entry']
@@ -253,14 +272,7 @@ function healNestedContainersAndEntryIds(obj: Record<string, unknown>): boolean 
         }
     }
 
-    if ('entry_id' in obj && typeof obj['entry_id'] === 'string') {
-        const cleaned = obj['entry_id'].replace(/^[^0-9]+/, '')
-        const num = Number(cleaned)
-        if (!Number.isNaN(num) && cleaned.trim() !== '') {
-            obj['entry_id'] = num
-            modified = true
-        }
-    }
+    if (coerceEntryIdField(obj)) modified = true
     if ('entry_ids' in obj && Array.isArray(obj['entry_ids'])) {
         const healedIds = obj['entry_ids'].map((id: unknown) => {
             if (typeof id === 'string') {
@@ -277,6 +289,76 @@ function healNestedContainersAndEntryIds(obj: Record<string, unknown>): boolean 
     }
 
     return modified
+}
+
+const SEARCH_KEY_ALIAS_MAP: Record<string, string> = {
+    id: 'entry_id',
+    entryId: 'entry_id',
+    project_id: 'project_number',
+    projectId: 'project_number',
+    projectNumber: 'project_number',
+    project: 'project_number',
+    workspaceId: 'workspace_id',
+    workspace: 'workspace_id',
+    repo: 'workspace_id',
+    repository: 'workspace_id',
+    repo_name: 'workspace_id',
+    isPersonal: 'is_personal',
+    personal: 'is_personal',
+    entryType: 'entry_type',
+    type: 'entry_type',
+    startDate: 'start_date',
+    endDate: 'end_date',
+    sortBy: 'sort_by',
+    includeTeam: 'include_team',
+    includeArchived: 'include_archived',
+    includeFacets: 'include_facets',
+    includeHighlights: 'include_highlights',
+    ftsWeight: 'fts_weight',
+    semanticWeight: 'semantic_weight',
+    fuzzyMatch: 'fuzzy_match',
+    autoCorrect: 'auto_correct',
+    exactMatch: 'exact_match',
+    similarityThreshold: 'similarity_threshold',
+    hintOnEmpty: 'hint_on_empty',
+    workflowRunId: 'workflow_run_id',
+    prNumber: 'pr_number',
+    prStatus: 'pr_status',
+    issueNumber: 'issue_number',
+}
+
+/** Read-safe preprocessor for search schemas: normalizes search filters without synthesizing `content` or write `tags`. */
+export function healSearchPayload(val: unknown): unknown {
+    if (typeof val !== 'object' || val === null || Array.isArray(val)) return val
+
+    const obj = { ...(val as Record<string, unknown>) }
+    let modified = false
+
+    for (const [badKey, goodKey] of Object.entries(SEARCH_KEY_ALIAS_MAP)) {
+        if (badKey in obj) {
+            if (!(goodKey in obj) && obj[badKey] !== undefined) obj[goodKey] = obj[badKey]
+            Reflect.deleteProperty(obj, badKey)
+            modified = true
+        }
+    }
+
+    if (unpackFilterContainers(obj)) modified = true
+    if (coerceEntryIdField(obj)) modified = true
+    if (normalizeTagsField(obj)) modified = true
+
+    if ('entry_type' in obj && typeof obj['entry_type'] === 'string') {
+        const mapped = mapKnownEntryTypeAlias(obj['entry_type'].toLowerCase())
+        if (mapped !== undefined && obj['entry_type'] !== mapped.entryType) {
+            obj['entry_type'] = mapped.entryType
+            modified = true
+        }
+    }
+
+    if (healSortByField(obj)) modified = true
+    if (normalizeProjectFields(obj)) modified = true
+    if (healIncludeArchivedField(obj)) modified = true
+
+    return modified ? obj : val
 }
 
 /**

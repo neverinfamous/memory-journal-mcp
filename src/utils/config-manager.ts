@@ -154,6 +154,34 @@ export class ConfigManager extends EventEmitter {
     }
 
     /**
+     * Fill missing scope defaults from `ServerOptions` for in-memory `ConfigManager` instances
+     * (when no config file is watched/reloaded, preserving C9 file hot-reload clearing).
+     */
+    public seedMissingScopeDefaults(defaults: ConfigCliEnvBaseline): void {
+        if (this.configFilePath !== undefined) return
+        const bc = { ...this.config.briefingConfig }
+        let changed = false
+        if (bc.defaultProjectNumber === undefined && defaults.defaultProjectNumber !== undefined) {
+            bc.defaultProjectNumber = defaults.defaultProjectNumber
+            this.cliEnvBaseline.defaultProjectNumber ??= defaults.defaultProjectNumber
+            changed = true
+        }
+        if (bc.defaultWorkspaceId === undefined && defaults.defaultWorkspaceId !== undefined) {
+            bc.defaultWorkspaceId = defaults.defaultWorkspaceId
+            this.cliEnvBaseline.defaultWorkspaceId ??= defaults.defaultWorkspaceId
+            changed = true
+        }
+        if (bc.projectRegistry === undefined && defaults.projectRegistry !== undefined) {
+            bc.projectRegistry = defaults.projectRegistry
+            this.cliEnvBaseline.projectRegistry ??= defaults.projectRegistry
+            changed = true
+        }
+        if (changed) {
+            this.config = { ...this.config, briefingConfig: bc }
+        }
+    }
+
+    /**
      * Apply a config update. When `persist` is set and a config file is in use, the change is
      * also written to disk; the returned string is the write error, or undefined on success.
      */

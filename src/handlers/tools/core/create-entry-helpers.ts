@@ -50,12 +50,12 @@ export function buildCreateEntryInput(
 
 /**
  * Copy a freshly created entry into the team database when `share_with_team` is set.
- * Returns the author when the entry was shared, otherwise `undefined`.
+ * Returns the author and created team entry when shared, otherwise `undefined`.
  */
 export function shareCreatedEntryWithTeam(
     context: ToolContext,
     entryInput: CreateEntryInput
-): string | undefined {
+): { author: string; entry: JournalEntry } | undefined {
     const { teamDb } = context
     if (!teamDb) return undefined
     enforceAccessBoundary(
@@ -67,9 +67,9 @@ export function shareCreatedEntryWithTeam(
     const author = resolveAuthenticatedAuthor()
     if (!author || author === 'unknown') return undefined
 
-    teamDb.createEntry({ ...entryInput, isPersonal: false, author })
+    const entry = teamDb.createEntry({ ...entryInput, isPersonal: false, author })
     teamDb.flushSave()
-    return author
+    return { author, entry }
 }
 
 /** Generate embeddings for a newly created entry, returning any soft-fail warning. */
@@ -95,32 +95,43 @@ export async function indexCreatedEntry(
 }
 
 /** Execute optional team sharing after personal entry creation, recording warnings rather than throwing. */
-export function recordTeamShareOutcome(
+export async function recordTeamShareOutcome(
     context: ToolContext,
     entryInput: CreateEntryInput,
     relationshipWarnings: string[]
-): { sharedWithTeam: boolean; author?: string } {
+): Promise<{ sharedWithTeam: boolean; author?: string }> {
     if (!context.teamDb) {
         relationshipWarnings.push(
             'Team sharing skipped: team database is not configured (set TEAM_DB_PATH).'
         )
         return { sharedWithTeam: false }
     }
-    // [INVARIANT] M5: the personal entry is already committed; a team-share
+    // [INVARIANT] M5: the personal entry is already committed; a team-share or team-vector
     // failure must surface as a warning, not fail (or silently drop) the create.
-    let author: string | undefined
+    let shared: { author: string; entry: JournalEntry } | undefined
     try {
-        author = shareCreatedEntryWithTeam(context, entryInput)
+        shared = shareCreatedEntryWithTeam(context, entryInput)
     } catch (shareErr) {
         relationshipWarnings.push(
             `Team sharing failed: ${shareErr instanceof Error ? shareErr.message : String(shareErr)}`
         )
     }
-    const sharedWithTeam = author !== undefined
+    if (shared !== undefined && context.teamVectorManager !== undefined) {
+        try {
+            await context.teamVectorManager.addEntry(shared.entry)
+        } catch (vecErr) {
+            relationshipWarnings.push(
+                `Team vector indexing failed: ${vecErr instanceof Error ? vecErr.message : String(vecErr)}`
+            )
+        }
+    }
+    const sharedWithTeam = shared !== undefined
     if (!sharedWithTeam && relationshipWarnings.every((w) => !w.startsWith('Team sharing failed'))) {
         relationshipWarnings.push('Team sharing skipped: author identity could not be resolved.')
     }
-    return author !== undefined ? { sharedWithTeam, author } : { sharedWithTeam }
+    return shared !== undefined
+        ? { sharedWithTeam, author: shared.author }
+        : { sharedWithTeam }
 }
 
 /**

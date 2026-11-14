@@ -11,7 +11,9 @@ import type {
     CreateEntryInput as BaseCreateEntryInput,
     CreateTeamEntryInput as BaseCreateTeamEntryInput,
 } from '../../types/index.js'
-import type { DigestSnapshot } from '../sqlite-adapter/entries/digest.js'
+import type { IDatabaseVectorAndAdminAdapter } from './vector-and-admin-interfaces.js'
+
+export type * from './vector-and-admin-interfaces.js'
 
 export type CreateEntryInput = Omit<BaseCreateEntryInput, 'anchors'> & {
     anchors?: { anchorPath: string; anchorType: string; status?: string | undefined }[] | undefined
@@ -107,7 +109,7 @@ export interface IDatabaseConnection {
 /**
  * The public facade representing the capabilities of any memory-journal DB adapter
  */
-export interface IDatabaseAdapter {
+export interface IDatabaseAdapter extends IDatabaseVectorAndAdminAdapter {
     initialize(): Promise<void>
     applyTeamSchema(): void
     flushSave(): void
@@ -321,151 +323,4 @@ export interface IDatabaseAdapter {
         entryIds: number[],
         workspaceId?: string
     ): Map<number, Relationship[]>
-
-    // Backup Manager
-    getBackupsDir(): string
-    exportToFile(
-        backupName?: string
-    ): Promise<{ filename: string; path: string; sizeBytes: number }>
-    listBackups(): { filename: string; path: string; sizeBytes: number; createdAt: string }[]
-    deleteOldBackups(keepCount: number): { deleted: string[]; failed?: string[]; kept: number }
-    restoreFromFile(
-        filename: string,
-        runtime?: unknown
-    ): Promise<{
-        restoredFrom: string
-        previousEntryCount: number
-        newEntryCount: number
-    }>
-    getHealthStatus(): {
-        database: {
-            path: string
-            sizeBytes: number
-            entryCount: number
-            deletedEntryCount: number
-            relationshipCount: number
-            tagCount: number
-        }
-        backups: {
-            directory: string
-            count: number
-            lastBackup: { filename: string; createdAt: string; sizeBytes: number } | null
-        }
-    }
-
-    // Analytics Snapshots
-    saveAnalyticsSnapshot(
-        type: string,
-        data: DigestSnapshot | Record<string, unknown>,
-        workspaceId?: string
-    ): number
-    getLatestAnalyticsSnapshot(
-        type: string,
-        workspaceId?: string
-    ): { id: number; createdAt: string; data: Record<string, unknown> } | null
-    getAnalyticsSnapshots(
-        type: string,
-        limit?: number,
-        workspaceId?: string
-    ): { id: number; createdAt: string; data: Record<string, unknown> }[]
-    computeDigest(workspaceId?: string): DigestSnapshot
-
-    pragma(command: string): void
-
-    // Advanced Analytic and Relationship queries (Replaces raw queries)
-    getCrossProjectInsights(options: {
-        startDate?: string
-        endDate?: string
-        minEntries: number
-        inactiveThresholdDays: number
-        workspaceId?: string
-        projectNumber?: number
-    }): {
-        projects: Record<string, unknown>[]
-        inactiveProjects: { project_number: number; last_entry_date: string }[]
-    }
-
-    visualizeRelationships(options: {
-        entryId?: number
-        tags?: string[]
-        relationshipType?: string
-        depth: number
-        limit: number
-        workspaceId?: string
-        projectNumber?: number
-    }): {
-        nodes: {
-            id: string | number
-            label: string
-            group: string
-            metadata?: Record<string, unknown>
-        }[]
-        edges: { from: string | number; to: string | number; label: string; type: string }[]
-    }
-
-    getTeamCollaborationMatrix(options: { period: string; limit: number; workspaceId?: string; projectNumber?: number }): {
-        totalAuthors: number
-        totalEntries: number
-        authorActivity: { author: string; period: string; entryCount: number }[]
-        crossAuthorLinks: { fromAuthor: string; toAuthor: string; linkCount: number }[]
-        impactFactor: { author: string; inboundLinks: number }[]
-    }
-
-    getWorkflowActionEntries(limit: number, workspaceId?: string): JournalEntry[]
-    getSignificantEntries(limit: number, projectNumber?: number, workspaceId?: string): JournalEntry[]
-    getRecentGraphRelationships(limit: number, workspaceId?: string): {
-        from_entry_id: number
-        to_entry_id: number
-        relationship_type: string
-        from_content: string
-        to_content: string
-    }[]
-
-    // ========================================================================
-    // Vector Search Primitives
-    // ========================================================================
-
-    getVectorMetadata(key: string): string | undefined
-    setVectorMetadata(key: string, value: string): void
-    createVecTable(dimensions: number): void
-    dropVecTable(): void
-
-    upsertVector(entryId: number, embedding: Float32Array): void
-    upsertVectors(vectors: { entryId: number; embedding: Float32Array }[]): void
-    searchVectors(
-        embedding: Float32Array,
-        limit: number,
-        workspaceId?: string
-    ): { entry_id: number; distance: number }[]
-    getVector(entryId: number): Float32Array | null
-    deleteVector(entryId: number): boolean
-    clearVectors(): void
-    getVectorCount(): number
-    cleanupStaleVectors(): void
-
-    // Auto-Prune
-    executeDataLifecycle(options: {
-        archiveOlderThanDays: number
-        pruneOlderThanDays: number
-        hardDeleteOlderThanDays: number
-        importanceThreshold: number
-        dryRun?: boolean
-        excludeTags?: string[]
-        workspaceId?: string
-        projectNumber?: number
-    }): {
-        archivedCount: number
-        prunedCount: number
-        hardDeletedCount: number
-        candidates?: {
-            archived: { id: number; importance_score: number }[]
-            pruned: { id: number; importance_score: number }[]
-            hardDeleted: { id: number; age_days: number }[]
-        }
-    }
-
-    executeInTransaction<T>(cb: () => T): T
-
-    getRelationshipHubs(limit: number, workspaceId?: string): { entryId: number; content: string; totalLinks: number }[]
-    getOrphanCount(workspaceId?: string): number
 }

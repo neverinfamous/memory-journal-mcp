@@ -6,6 +6,7 @@ import { assertNoPathTraversal } from '../../utils/security-utils.js'
 import { ResourceNotFoundError, ValidationError } from '../../types/errors.js'
 import type { IDatabaseConnection } from '../core/interfaces.js'
 import { acquireRestoreLock } from './restore-lock.js'
+import { applySqlCipherKey } from './sqlcipher-key.js'
 
 /** Unlink a file, ignoring a missing file (ENOENT) and logging any other failure at debug. */
 async function unlinkBestEffort(filePath: string): Promise<void> {
@@ -29,30 +30,18 @@ async function assertIncomingBackupIntact(backupPath: string): Promise<void> {
     try {
         const Database = (await import('better-sqlite3')).default
         const tempDb = new Database(backupPath, { fileMustExist: true, readonly: true })
+        try {
+            applySqlCipherKey(tempDb)
 
-        const rawKey = process.env['MJ_DB_ENCRYPTION_KEY'] || process.env['DB_ENCRYPTION_KEY']
-        if (rawKey) {
-            const key = rawKey
-            if (key.startsWith("x'") && key.endsWith("'")) {
-                if (!/^x'[0-9a-fA-F]+'$/.test(key)) {
-                    tempDb.close()
-                    throw new Error('Invalid hex encryption key format')
-                }
-                tempDb.pragma(`key = "${key}"`)
-            } else {
-                const escapedKey = key.replace(/'/g, "''")
-                tempDb.pragma(`key = '${escapedKey}'`)
+            const tempStmt = tempDb.prepare('PRAGMA integrity_check')
+            const result = tempStmt.get() as Record<string, unknown> | undefined
+            const integrityResult = Object.values(result ?? {})[0]
+            if (integrityResult !== 'ok') {
+                throw new Error(`Integrity check failed: ${String(integrityResult)}`)
             }
-        }
-
-        const tempStmt = tempDb.prepare('PRAGMA integrity_check')
-        const result = tempStmt.get() as Record<string, unknown>
-        const integrityResult = Object.values(result ?? {})[0]
-        if (integrityResult !== 'ok') {
+        } finally {
             tempDb.close()
-            throw new Error(`Integrity check failed: ${String(integrityResult)}`)
         }
-        tempDb.close()
     } catch (err) {
         throw new Error(
             `Incoming backup file is invalid or corrupt. Rejecting restore. Details: ${err instanceof Error ? err.message : String(err)}`,

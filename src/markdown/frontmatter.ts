@@ -106,11 +106,12 @@ export function serializeFrontmatter(data: FrontmatterData | null | undefined): 
  * @throws Error if frontmatter is malformed or fails validation
  */
 export function parseFrontmatter(content: string): ParseResult {
-    const lines = content.split('\n')
+    const normalized = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+    const lines = normalized.split('\n')
 
     // Must start with ---
     if (lines[0]?.trim() !== '---') {
-        return { metadata: {}, body: content }
+        return { metadata: {}, body: normalized }
     }
 
     // Find closing ---

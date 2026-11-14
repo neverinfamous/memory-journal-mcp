@@ -51,6 +51,32 @@ export const SIGNIFICANCE_TYPES = [
     'security',
 ] as const
 
+const SIGNIFICANCE_ALIAS_MAP: Readonly<Record<string, string | undefined>> = {
+    important: 'milestone',
+    major: 'breakthrough',
+    critical: 'security',
+    learning: 'lesson_learned',
+    key_decision: 'decision',
+    resolved: 'blocker_resolved',
+    architectural: 'architecture',
+    maintenance: undefined,
+    minor: undefined,
+}
+
+/**
+ * Normalize common significance_type aliases to their canonical enum equivalent,
+ * returning `undefined` when an alias represents non-significant noise (`maintenance`/`minor`),
+ * or returning the trimmed raw value otherwise.
+ */
+export function normalizeSignificanceValue(raw: string): string | undefined {
+    const trimmed = raw.trim()
+    const lower = trimmed.toLowerCase()
+    if (Object.hasOwn(SIGNIFICANCE_ALIAS_MAP, lower)) {
+        return SIGNIFICANCE_ALIAS_MAP[lower]
+    }
+    return trimmed
+}
+
 /**
  * Coerce common invalid significance_type aliases to their valid enum equivalents.
  * Mutates the params object directly before Zod validation.
@@ -59,14 +85,12 @@ export function coerceSignificanceAlias(params: unknown): void {
     if (params !== null && params !== undefined && typeof params === 'object') {
         const obj = params as Record<string, unknown>
         if (typeof obj['significance_type'] === 'string') {
-            const lower = obj['significance_type'].toLowerCase()
-            if (lower === 'important') obj['significance_type'] = 'milestone'
-            else if (lower === 'major') obj['significance_type'] = 'breakthrough'
-            else if (lower === 'critical') obj['significance_type'] = 'security'
-            else if (lower === 'learning') obj['significance_type'] = 'lesson_learned'
-            else if (lower === 'key_decision') obj['significance_type'] = 'decision'
-            else if (lower === 'resolved') obj['significance_type'] = 'blocker_resolved'
-            else if (lower === 'maintenance' || lower === 'minor') delete obj['significance_type']
+            const normalized = normalizeSignificanceValue(obj['significance_type'])
+            if (normalized === undefined) {
+                delete obj['significance_type']
+            } else {
+                obj['significance_type'] = normalized
+            }
         }
     }
 }

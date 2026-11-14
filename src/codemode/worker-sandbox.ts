@@ -82,18 +82,20 @@ export class WorkerSandbox {
             maxYoungGenerationSizeMb: Math.max(8, Math.floor(this.options.memoryLimitMb / 8)),
         }
 
-        this.worker = new Worker(getWorkerScriptPath(), {
+        const spawnedWorker = new Worker(getWorkerScriptPath(), {
             workerData: {}, // Initialized without specific execution data
             resourceLimits,
         })
-        this.worker.unref()
+        this.worker = spawnedWorker
+        spawnedWorker.unref()
 
-        this.worker.on('message', (msg: { type: string; id: number; result: SandboxResult }) => {
+        spawnedWorker.on('message', (msg: { type: string; id: number; result: SandboxResult }) => {
+            if (this.worker !== spawnedWorker) return
             // [INVARIANT] Ignore stale RESULT messages from a previous (timed-out) execution.
             if (msg.type === 'RESULT' && this.currentExecution && msg.id === this.executionId) {
                 clearTimeout(this.currentExecution.timeoutHandle)
                 this.currentExecution.hostPort.close()
-                this.worker?.unref()
+                this.worker.unref()
 
                 const endTime = performance.now()
                 const endRss = process.memoryUsage.rss()
@@ -113,11 +115,13 @@ export class WorkerSandbox {
             }
         })
 
-        this.worker.on('error', (err: Error) => {
+        spawnedWorker.on('error', (err: Error) => {
+            if (this.worker !== spawnedWorker) return
             this.handleWorkerDeath(err.message, err.stack)
         })
 
-        this.worker.on('exit', (exitCode) => {
+        spawnedWorker.on('exit', (exitCode) => {
+            if (this.worker !== spawnedWorker) return
             if (exitCode !== 0 || this.currentExecution !== null) {
                 this.handleWorkerDeath(
                     `🛠️ AUTONOMOUS HEALING: Worker execution timed out or ran out of memory. Avoid executing hundreds of sequential RPC calls (e.g. inside a loop calling getEntryById) or unbounded loops without keyset/offset pagination. For project counts and aggregates, use 'mj.analytics.getStatistics({ projectBreakdown: true })' or 'mj.admin.listProjects()' instead of iterating entries. Reduce batch/sample size or filter results server-side. (Worker exit code ${String(exitCode)})`

@@ -46,6 +46,15 @@ import type { ServerContext, ServerOptions } from '../types.js'
 import type { ToolRegistration, ToolHandlerConfig, ToolContext } from '../../../types/index.js'
 import type { RequestHandlerMap } from './list-interceptor.js'
 
+function isFailureObject(res: unknown): res is Record<string, unknown> {
+    return (
+        typeof res === 'object' &&
+        res !== null &&
+        !Array.isArray(res) &&
+        (res as Record<string, unknown>)['success'] === false
+    )
+}
+
 async function tryPromptAndResourceFallbacks(
     requestedTool: string,
     toolArgs: Record<string, unknown>,
@@ -58,6 +67,7 @@ async function tryPromptAndResourceFallbacks(
         enforceAccessBoundary(matchingPrompt.name, 'prompt', matchingPrompt.capabilities, runtime.auditLogger)
         const res = await handlePrompt(toolArgs, requestedTool, toolContext)
         if (isSuccessObject(res)) return formatSuccessPayload(res)
+        if (isFailureObject(res)) return formatTokenEstimatedError(res, true)
     }
 
     if (
@@ -68,6 +78,7 @@ async function tryPromptAndResourceFallbacks(
         enforceAccessBoundary('read_resource', 'tool', undefined, runtime.auditLogger)
         const res = await handleReadResource(toolArgs, requestedTool, toolContext)
         if (isSuccessObject(res)) return formatSuccessPayload(res)
+        if (isFailureObject(res)) return formatTokenEstimatedError(res, true)
     }
 
     if (matchesExactName(requestedTool, DUMMY_LIST_RESOURCE_TOOL_NAMES)) {
@@ -100,6 +111,7 @@ async function tryPromptAndResourceFallbacks(
         )
         const res = await handleGetPrompt(toolArgs, requestedTool, toolContext)
         if (isSuccessObject(res)) return formatSuccessPayload(res)
+        if (isFailureObject(res)) return formatTokenEstimatedError(res, true)
     }
 
     return undefined

@@ -105,17 +105,17 @@ export async function prepareBatchCreateInputs(
 }
 
 /**
- * Copy the entries flagged with `share_with_team` into the team database.
- * Returns warnings for entries that could not be shared.
+ * Copy the entries flagged with `share_with_team` into the team database and
+ * index them in `teamVectorManager` when configured. Returns warnings for failures.
  */
-export function shareBatchEntriesWithTeam(
+export async function shareBatchEntriesWithTeam(
     context: ToolContext,
     prepared: PreparedBatchEntry[],
     createdIndexes: number[]
-): { sharedCount: number; warnings: string[] } {
+): Promise<{ sharedCount: number; warnings: string[] }> {
     const warnings: string[] = []
     let sharedCount = 0
-    const { teamDb } = context
+    const { teamDb, teamVectorManager } = context
     const wanted = createdIndexes.filter((i) => prepared[i]?.shareWithTeam === true)
     if (wanted.length === 0) return { sharedCount, warnings }
 
@@ -136,11 +136,13 @@ export function shareBatchEntriesWithTeam(
         return { sharedCount, warnings }
     }
 
+    const sharedEntries: ReturnType<typeof teamDb.createEntry>[] = []
     for (const i of wanted) {
         const entry = prepared[i]
         if (!entry) continue
         try {
-            teamDb.createEntry({ ...entry.input, isPersonal: false, author })
+            const teamEntry = teamDb.createEntry({ ...entry.input, isPersonal: false, author })
+            sharedEntries.push(teamEntry)
             sharedCount++
         } catch (err) {
             logger.warning('Batch share_with_team failed for entry', {
@@ -152,5 +154,16 @@ export function shareBatchEntriesWithTeam(
         }
     }
     if (sharedCount > 0) teamDb.flushSave()
+    if (teamVectorManager !== undefined && sharedEntries.length > 0) {
+        for (const teamEntry of sharedEntries) {
+            try {
+                await teamVectorManager.addEntry(teamEntry)
+            } catch (vecErr) {
+                warnings.push(
+                    `Team vector indexing failed for shared entry ${String(teamEntry.id)}: ${vecErr instanceof Error ? vecErr.message : String(vecErr)}`
+                )
+            }
+        }
+    }
     return { sharedCount, warnings }
 }

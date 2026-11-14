@@ -1,6 +1,7 @@
 import type { z } from 'zod'
 import type { ToolContext } from '../../../types/index.js'
 import { createBatchProgressReporter, sendProgress } from '../../../utils/progress-utils.js'
+import { activeProjectRegistry, pairStoredScope } from '../../../utils/write-scope.js'
 import { resolveWriteWorkspaceId } from '../write-workspace.js'
 import type { BatchDeleteEntriesSchema } from './schemas.js'
 
@@ -35,7 +36,8 @@ export function vectorWarningField(warnings: string[]): { warning?: string } {
 
 /**
  * [INVARIANT] C2: `workspace_id: '*'` updates scoped by project_number may only touch
- * entries owned by that project. Returns the offending entry IDs.
+ * entries owned by that project; concrete-workspace updates reject conflicting existing projects
+ * and validate unnumbered entries against the project registry.
  */
 export function findWildcardProjectMismatches(
     db: ToolContext['db'],
@@ -46,17 +48,29 @@ export function findWildcardProjectMismatches(
         target_workspace_id?: string | undefined
     }[],
     rootWorkspaceId: string | undefined,
-    rootProjectNumber: number | undefined
+    rootProjectNumber: number | undefined,
+    config?: ToolContext['config']
 ): number[] {
+    const registry = activeProjectRegistry(config?.projectRegistry)
     return updates
         .filter((u) => {
             if (u.target_workspace_id !== undefined) return false
             const ws = u.workspace_id ?? rootWorkspaceId
             const pn = u.project_number ?? rootProjectNumber
-            if (ws === undefined || pn === undefined) return false
+            if (pn === undefined) return false
             const entry = db.getEntryById(u.entry_id, '*')
             if (entry === null || entry === undefined) return ws === '*'
-            return entry.projectNumber !== pn
+            const existingWs = entry.workspaceId ?? ws
+            if (entry.projectNumber !== undefined && entry.projectNumber !== null) {
+                if (ws === '*' || existingWs?.toLowerCase() !== 'default') {
+                    return entry.projectNumber !== pn
+                }
+                pairStoredScope('default', pn, registry)
+                return false
+            }
+            if (ws === '*') return true
+            pairStoredScope(existingWs, pn, registry)
+            return false
         })
         .map((u) => u.entry_id)
 }

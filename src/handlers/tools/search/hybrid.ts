@@ -79,7 +79,7 @@ export async function hybridSearch(
         teamVectorManager?: VectorSearchManager
     }
 ): Promise<{ entries: EntryWithSource[]; fusionScores: Map<number, number>; degraded?: boolean }> {
-    const overfetchLimit = Math.min(options.limit * OVERFETCH_MULTIPLIER, 500)
+    const overfetchLimit = Math.min(Math.max(options.limit * OVERFETCH_MULTIPLIER, 50), 500)
 
     let semanticDegraded = false
 
@@ -128,10 +128,11 @@ export async function hybridSearch(
         [options.ftsWeight ?? 1.0, options.semanticWeight ?? 1.0]
     )
 
-    // Sort by fusion score descending
+    // Hydrate candidate pool before slicing so post-fusion metadata filters cannot under-fill `limit`
+    const candidateCap = Math.min(Math.max(options.limit * 10, 200), 1000)
     const sortedIds = [...fusionScores.entries()]
         .sort((a, b) => b[1] - a[1])
-        .slice(0, options.limit)
+        .slice(0, candidateCap)
         .map(([id]) => id)
 
     // Batch fetch entries
@@ -145,7 +146,7 @@ export async function hybridSearch(
         }
     }
 
-    // Build output in fusion-score order
+    // Build output in fusion-score order and cap at requested limit after filtering
     const entries: EntryWithSource[] = []
     for (const id of sortedIds) {
         const entry = entriesMap.get(id)
@@ -153,6 +154,7 @@ export async function hybridSearch(
         // Apply memory-level metadata filters
         if (!passMetadataFilters(entry, options, db)) continue
         entries.push({ ...entry, source: 'personal' as const })
+        if (entries.length >= options.limit) break
     }
 
     const isDegraded = ftsResults.degraded === true || semanticDegraded

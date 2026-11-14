@@ -281,13 +281,16 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                             recoverable: true,
                         }
                     }
+                    let deleteWarning: string | undefined
                     try {
                         teamDb.deleteVector(entry_id)
                     } catch (vecErr) {
+                        const vecMessage = vecErr instanceof Error ? vecErr.message : String(vecErr)
                         logger.warning('Team delete vector cleanup failed', {
                             entryId: entry_id,
-                            error: vecErr instanceof Error ? vecErr.message : String(vecErr),
+                            error: vecMessage,
                         })
+                        deleteWarning = `Vector index cleanup failed: ${vecMessage}`
                     }
 
                     triggerTeamNotifications(context)
@@ -295,6 +298,7 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                     return {
                         success: true,
                         message: `Team entry ${String(entry_id)} soft-deleted`,
+                        ...(deleteWarning !== undefined ? { warning: deleteWarning } : {}),
                     }
                 } catch (err) {
                     return formatHandlerError(err)
@@ -314,7 +318,7 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                 idempotentHint: false,
                 openWorldHint: false,
             },
-            handler: (params: unknown) => {
+            handler: async (params: unknown) => {
                 try {
                     if (!teamDb) return { ...TEAM_DB_ERROR_RESPONSE }
 
@@ -364,9 +368,31 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
+                    let indexStatus: string | undefined
+                    let warning: string | undefined
+                    const restored = teamDb.getEntryById(entry_id, wsId)
+                    if (
+                        context.teamVectorManager !== undefined &&
+                        restored !== null &&
+                        restored !== undefined
+                    ) {
+                        try {
+                            await context.teamVectorManager.addEntry(restored)
+                            indexStatus = 'success'
+                        } catch (vecErr) {
+                            indexStatus = 'failed'
+                            warning = `Team vector re-indexing failed: ${vecErr instanceof Error ? vecErr.message : String(vecErr)}`
+                        }
+                    }
+
                     triggerTeamNotifications(context)
 
-                    return { success: true, entryId: entry_id }
+                    return {
+                        success: true,
+                        entryId: entry_id,
+                        ...(indexStatus !== undefined ? { indexStatus } : {}),
+                        ...(warning !== undefined ? { warning } : {}),
+                    }
                 } catch (err) {
                     return formatHandlerError(err)
                 }

@@ -60,7 +60,7 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
                         .filter((i) => !failedIndexes.has(i))
                     const relationshipWarnings: string[] = []
                     relationshipWarnings.push(
-                        ...shareBatchEntriesWithTeam(context, prepared, createdIndexes).warnings
+                        ...(await shareBatchEntriesWithTeam(context, prepared, createdIndexes)).warnings
                     )
                     for (let i = 0; i < results.length; i++) {
                         const createdEntry = results[i]
@@ -101,12 +101,16 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
                         throw new AggregateError(allErrors, `Batch create partially failed: ${allErrors.length} operations failed`);
                     }
 
+                    const failedVectorCount = indexStatuses.filter((s) => s === 'failed').length
                     return {
                         success: true,
                         count: results.length,
                         entries: results,
                         indexStatuses,
                         ...(relationshipWarnings.length > 0 ? { relationshipWarnings } : {}),
+                        ...(failedVectorCount > 0
+                            ? { warning: `Vector indexing failed for ${String(failedVectorCount)} entry(ies).` }
+                            : {}),
                     }
                 } catch (err) {
                     return formatHandlerError(err)
@@ -133,7 +137,8 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
                         db,
                         input.updates,
                         input.workspace_id,
-                        input.project_number
+                        input.project_number,
+                        context.config
                     )
                     if (wildcardMismatches.length > 0) {
                         return {
@@ -189,10 +194,16 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
                                 explicitPn === undefined ? undefined : resolvedUpdate.projectNumber
                             resolvedWs =
                                 explicitWs === '*' ? '*' : resolvedUpdate.workspaceId
-                            if (explicitWs === undefined && explicitPn === undefined) {
-                                const existingByPk = db.getEntryById(u.entry_id, '*')
+                            if (explicitWs === undefined) {
+                                const existingByPk =
+                                    typeof db.getEntryById === 'function'
+                                        ? db.getEntryById(u.entry_id, '*')
+                                        : undefined
                                 if (existingByPk?.workspaceId !== undefined) {
                                     resolvedWs = existingByPk.workspaceId
+                                }
+                                if (explicitPn !== undefined) {
+                                    projectNumberForUpdate ??= explicitPn
                                 }
                             }
                         }
@@ -229,9 +240,13 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
 
                     await sendProgress(progress, 1, 2, `Updated ${String(updated.length)} entries...`)
 
-                    // Re-index only if content was part of the update
-                    const contentUpdatedIds = new Set(
-                        input.updates.filter((u) => u.content).map((u) => u.entry_id)
+                    // Re-index if content changed or workspace moved so vector search reflects new metadata
+                    const reindexIds = new Set(
+                        input.updates
+                            .filter(
+                                (u) => u.content !== undefined || u.target_workspace_id !== undefined
+                            )
+                            .map((u) => u.entry_id)
                     )
                     const { indexStatuses, indexErrors } = await indexBatchEntries({
                         progress,
@@ -241,7 +256,7 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
                         entryIds: updated.map((r) => r.id),
                         errorPrefix: 'Entry',
                         doneMessage: 'Batch update complete',
-                        shouldIndex: (id) => contentUpdatedIds.has(id),
+                        shouldIndex: (id) => reindexIds.has(id),
                         workspaceByEntryId: collectIndexWorkspaces(updated),
                     })
 
@@ -255,7 +270,17 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
                         throw new AggregateError(allErrors, `Batch update partially failed: ${allErrors.length} operations failed`);
                     }
 
-                    return { success: true, count: updated.length, updated, notFound, indexStatuses }
+                    const failedUpdateVectors = indexStatuses.filter((s) => s === 'failed').length
+                    return {
+                        success: true,
+                        count: updated.length,
+                        updated,
+                        notFound,
+                        indexStatuses,
+                        ...(failedUpdateVectors > 0
+                            ? { warning: `Vector indexing failed for ${String(failedUpdateVectors)} entry(ies).` }
+                            : {}),
+                    }
                 } catch (err) {
                     return formatHandlerError(err)
                 }

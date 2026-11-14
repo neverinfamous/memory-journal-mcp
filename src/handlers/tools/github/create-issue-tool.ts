@@ -5,6 +5,7 @@
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
+import { autoIndexEntry } from '../../../utils/vector-index-helpers.js'
 import {
     findCanonicalRegistryKey,
     loadProjectRegistryFromConfig,
@@ -351,6 +352,17 @@ export function getCreateGitHubIssueTool(context: ToolContext): ToolDefinition {
                     workspaceId,
                 })
 
+                const indexStatus = await autoIndexEntry(
+                    context.vectorManager,
+                    db,
+                    entry.id,
+                    workspaceId
+                )
+                const vectorWarning =
+                    indexStatus === 'failed'
+                        ? 'Journal entry saved, but vector indexing failed.'
+                        : undefined
+
                 const projectWarning =
                     projectResult !== undefined && !projectResult.added
                         ? (projectResult.error ??
@@ -362,11 +374,14 @@ export function getCreateGitHubIssueTool(context: ToolContext): ToolDefinition {
                           `Initial status "${input.initial_status}" could not be applied.`)
                         : undefined
                 const projectItemError = projectWarning ?? statusError
+                const combinedWarning =
+                    projectItemError !== undefined && vectorWarning !== undefined
+                        ? `${projectItemError}; ${vectorWarning}`
+                        : (projectItemError ?? vectorWarning)
                 return {
                     success: projectItemError === undefined,
-                    ...(projectItemError !== undefined
-                        ? { warning: projectItemError, projectItemError }
-                        : {}),
+                    ...(combinedWarning !== undefined ? { warning: combinedWarning } : {}),
+                    ...(projectItemError !== undefined ? { projectItemError } : {}),
                     issue: {
                         number: issue.number,
                         title: issue.title,

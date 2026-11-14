@@ -72,19 +72,18 @@ export class RelationshipsManager {
     getRelationships(entryId: number, workspaceId?: string): Relationship[] {
         const scopeId = effectiveWorkspace(workspaceId)
         const scoped = scopeId !== '*'
+        const peerFilter = scoped ? 'deleted_at IS NULL AND workspace_id = ?' : 'deleted_at IS NULL'
+        const wsParams = scoped ? [scopeId, scopeId] : []
         const rows = this.db
             .prepare(
                 `SELECT id, from_entry_id as fromEntryId, to_entry_id as toEntryId,
                         relationship_type as relationshipType, description, created_at as createdAt
                  FROM relationships
-                 WHERE (from_entry_id = ? OR to_entry_id = ?)${
-                     scoped
-                         ? ` AND from_entry_id IN (SELECT id FROM memory_journal WHERE workspace_id = ?)
-                             AND to_entry_id IN (SELECT id FROM memory_journal WHERE workspace_id = ?)`
-                         : ''
-                 }`
+                 WHERE (from_entry_id = ? OR to_entry_id = ?)
+                   AND from_entry_id IN (SELECT id FROM memory_journal WHERE ${peerFilter})
+                   AND to_entry_id IN (SELECT id FROM memory_journal WHERE ${peerFilter})`
             )
-            .all(...(scoped ? [entryId, entryId, scopeId, scopeId] : [entryId, entryId])) as {
+            .all(entryId, entryId, ...wsParams) as {
             id: number
             fromEntryId: number
             toEntryId: number
@@ -104,10 +103,8 @@ export class RelationshipsManager {
         if (entryIds.length === 0) return result
         const scopeId = effectiveWorkspace(workspaceId)
         const scoped = scopeId !== '*'
-        const wsClause = scoped
-            ? ` AND from_entry_id IN (SELECT id FROM memory_journal WHERE workspace_id = ?)
-                AND to_entry_id IN (SELECT id FROM memory_journal WHERE workspace_id = ?)`
-            : ''
+        const peerFilter = scoped ? 'deleted_at IS NULL AND workspace_id = ?' : 'deleted_at IS NULL'
+        const wsClause = ` AND from_entry_id IN (SELECT id FROM memory_journal WHERE ${peerFilter}) AND to_entry_id IN (SELECT id FROM memory_journal WHERE ${peerFilter})`
         const wsParams: unknown[] = scoped ? [scopeId, scopeId] : []
 
         for (const id of entryIds) {
@@ -173,22 +170,25 @@ export class RelationshipsManager {
     ): { entryId: number; content: string; totalLinks: number }[] {
         const scopeId = effectiveWorkspace(workspaceId)
         const scoped = scopeId !== '*'
-        const linkFrom = scoped
-            ? `SELECT r.from_entry_id as entry_id, COUNT(*) as link_count
+        const peerFilter = scoped
+            ? 'endpoint.deleted_at IS NULL AND peer.deleted_at IS NULL AND endpoint.workspace_id = ? AND peer.workspace_id = ?'
+            : 'endpoint.deleted_at IS NULL AND peer.deleted_at IS NULL'
+        const linkFrom = `SELECT r.from_entry_id as entry_id, COUNT(*) as link_count
                FROM relationships r
                JOIN memory_journal endpoint ON endpoint.id = r.from_entry_id
-               WHERE endpoint.deleted_at IS NULL AND endpoint.workspace_id = ?
+               JOIN memory_journal peer ON peer.id = r.to_entry_id
+               WHERE ${peerFilter}
                GROUP BY r.from_entry_id`
-            : `SELECT from_entry_id as entry_id, COUNT(*) as link_count FROM relationships GROUP BY from_entry_id`
-        const linkTo = scoped
-            ? `SELECT r.to_entry_id as entry_id, COUNT(*) as link_count
+        const linkTo = `SELECT r.to_entry_id as entry_id, COUNT(*) as link_count
                FROM relationships r
                JOIN memory_journal endpoint ON endpoint.id = r.to_entry_id
-               WHERE endpoint.deleted_at IS NULL AND endpoint.workspace_id = ?
+               JOIN memory_journal peer ON peer.id = r.from_entry_id
+               WHERE ${peerFilter}
                GROUP BY r.to_entry_id`
-            : `SELECT to_entry_id as entry_id, COUNT(*) as link_count FROM relationships GROUP BY to_entry_id`
         const wsFilter = scoped ? ' AND m.workspace_id = ?' : ''
-        const params: unknown[] = scoped ? [scopeId, scopeId, scopeId, limit] : [limit]
+        const params: unknown[] = scoped
+            ? [scopeId, scopeId, scopeId, scopeId, scopeId, limit]
+            : [limit]
         const rows = this.db
             .prepare(
                 `SELECT counts.entry_id, SUM(counts.link_count) as total_links, m.content
@@ -220,18 +220,19 @@ export class RelationshipsManager {
         const scopeId = effectiveWorkspace(workspaceId)
         const scoped = scopeId !== '*'
         const filter = scoped ? ' AND e.workspace_id = ?' : ''
-        const linkSet = scoped
-            ? `SELECT r.from_entry_id FROM relationships r
-               JOIN memory_journal endpoint ON endpoint.id = r.from_entry_id
-               WHERE endpoint.workspace_id = ?
+        const peerFilter = scoped
+            ? 'p1.deleted_at IS NULL AND p2.deleted_at IS NULL AND p1.workspace_id = ? AND p2.workspace_id = ?'
+            : 'p1.deleted_at IS NULL AND p2.deleted_at IS NULL'
+        const linkSet = `SELECT r.from_entry_id FROM relationships r
+               JOIN memory_journal p1 ON p1.id = r.from_entry_id
+               JOIN memory_journal p2 ON p2.id = r.to_entry_id
+               WHERE ${peerFilter}
                UNION
                SELECT r.to_entry_id FROM relationships r
-               JOIN memory_journal endpoint ON endpoint.id = r.to_entry_id
-               WHERE endpoint.workspace_id = ?`
-            : `SELECT from_entry_id FROM relationships
-               UNION
-               SELECT to_entry_id FROM relationships`
-        const params: unknown[] = scoped ? [scopeId, scopeId, scopeId] : []
+               JOIN memory_journal p1 ON p1.id = r.from_entry_id
+               JOIN memory_journal p2 ON p2.id = r.to_entry_id
+               WHERE ${peerFilter}`
+        const params: unknown[] = scoped ? [scopeId, scopeId, scopeId, scopeId, scopeId] : []
 
         const row = this.db
             .prepare(
@@ -241,8 +242,8 @@ export class RelationshipsManager {
                      ${linkSet}
                  )`
             )
-            .get(...params) as { orphan_count: number } | undefined
+            .get(...params) as { orphan_count: unknown } | undefined
 
-        return row?.orphan_count ?? 0
+        return typeof row?.orphan_count === 'number' ? row.orphan_count : 0
     }
 }

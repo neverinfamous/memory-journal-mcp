@@ -14,6 +14,7 @@ import {
     DeleteEntryOutputSchema,
 } from './schemas.js'
 import { ErrorFieldsMixin } from '../error-fields-mixin.js'
+import { activeProjectRegistry, pairStoredScope } from '../../../utils/write-scope.js'
 import { resolveWriteWorkspaceId } from '../write-workspace.js'
 import { relaxedNumber } from '../schemas.js'
 
@@ -40,6 +41,73 @@ export function canonicalTargetWorkspace(
         )
     }
     return resolveWriteWorkspaceId(target, undefined, config)
+}
+
+function validateUpdateProjectScope(
+    db: ToolContext['db'],
+    entryId: number,
+    requestedProject: number,
+    workspaceInput: string | undefined,
+    resolvedWorkspace: string,
+    config: ToolContext['config']
+): { errorResponse?: Record<string, unknown>; assignedWorkspace?: string } {
+    if (typeof db.getEntryById !== 'function') {
+        return {}
+    }
+    const scoped = db.getEntryById(entryId, '*')
+    if (scoped === null || scoped === undefined) {
+        return {
+            errorResponse: {
+                success: false,
+                error: `Entry ${String(entryId)} not found`,
+                code: 'RESOURCE_NOT_FOUND',
+                category: 'resource',
+                suggestion: 'Verify the entry ID and project number, and try again',
+                recoverable: true,
+            },
+        }
+    }
+    const registry = activeProjectRegistry(config?.projectRegistry)
+    const existingWs = scoped.workspaceId ?? resolvedWorkspace
+    if (scoped.projectNumber !== undefined && scoped.projectNumber !== null) {
+        if (workspaceInput === '*' || existingWs.toLowerCase() !== 'default') {
+            if (projectOwnershipMismatch(requestedProject, scoped.projectNumber)) {
+                return {
+                    errorResponse: {
+                        success: false,
+                        error: `Entry ${String(entryId)} not found`,
+                        code: 'RESOURCE_NOT_FOUND',
+                        category: 'resource',
+                        suggestion: 'Verify the entry ID and project number, and try again',
+                        recoverable: true,
+                    },
+                }
+            }
+            return {}
+        }
+        // Entries in `default` may reassign numeric `project_number` metadata as long as
+        // the destination number does not belong to a conflicting registered workspace.
+        pairStoredScope('default', requestedProject, registry)
+        return workspaceInput === undefined && scoped.workspaceId !== undefined
+            ? { assignedWorkspace: scoped.workspaceId }
+            : {}
+    }
+    if (workspaceInput === '*') {
+        return {
+            errorResponse: {
+                success: false,
+                error: `Entry ${String(entryId)} not found`,
+                code: 'RESOURCE_NOT_FOUND',
+                category: 'resource',
+                suggestion: 'Verify the entry ID and project number, and try again',
+                recoverable: true,
+            },
+        }
+    }
+    pairStoredScope(existingWs, requestedProject, registry)
+    return workspaceInput === undefined && scoped.workspaceId !== undefined
+        ? { assignedWorkspace: scoped.workspaceId }
+        : {}
 }
 
 export function getCoreTools(context: ToolContext): ToolDefinition[] {
@@ -118,18 +186,22 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                                 wsId = existingByPk.workspaceId
                             }
                         }
-                        if (input.project_number !== undefined && input.workspace_id !== undefined) {
-                            const scoped = db.getEntryById(input.entry_id, '*')
-                            if (projectOwnershipMismatch(input.project_number, scoped?.projectNumber)) {
-                                return {
-                                    success: false,
-                                    error: `Entry ${String(input.entry_id)} not found`,
-                                    code: 'RESOURCE_NOT_FOUND',
-                                    category: 'resource',
-                                    suggestion: 'Verify the entry ID and project number, and try again',
-                                    recoverable: true,
-                                }
+                        if (input.project_number !== undefined) {
+                            const scopeCheck = validateUpdateProjectScope(
+                                db,
+                                input.entry_id,
+                                input.project_number,
+                                input.workspace_id,
+                                wsId,
+                                context.config
+                            )
+                            if (scopeCheck.errorResponse !== undefined) {
+                                return scopeCheck.errorResponse
                             }
+                            if (scopeCheck.assignedWorkspace !== undefined) {
+                                wsId = scopeCheck.assignedWorkspace
+                            }
+                            projectNumberForUpdate ??= input.project_number
                         }
                     }
                     const entry = db.updateEntry(input.entry_id, {
@@ -169,13 +241,22 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    // Re-index if content changed
+                    // Re-index if content changed or workspace moved so vector search reflects new metadata
                     let indexStatus: string | undefined
-                    if (input.content) {
+                    let warning: string | undefined
+                    if (input.content !== undefined || targetWorkspaceId !== undefined) {
                         indexStatus = await autoIndexEntry(vectorManager, db, entry.id, entry.workspaceId ?? wsId)
+                        if (indexStatus === 'failed') {
+                            warning = 'Entry updated, but vector re-indexing failed.'
+                        }
                     }
 
-                    return { success: true, entry, ...(indexStatus ? { indexStatus } : {}) }
+                    return {
+                        success: true,
+                        entry,
+                        ...(indexStatus ? { indexStatus } : {}),
+                        ...(warning !== undefined ? { warning } : {}),
+                    }
                 } catch (err) {
                     return formatHandlerError(err)
                 }
@@ -297,7 +378,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                     workspace_id: z.string().optional(),
                 })
             ),
-            outputSchema: z.object({ success: z.boolean().optional(), entryId: z.number().optional(), indexStatus: z.string().optional(), error: z.string().optional() }).extend(ErrorFieldsMixin.shape),
+            outputSchema: z.object({ success: z.boolean().optional(), entryId: z.number().optional(), indexStatus: z.string().optional(), warning: z.string().optional(), error: z.string().optional() }).extend(ErrorFieldsMixin.shape),
             annotations: {
                 readOnlyHint: false,
                 destructiveHint: false,
@@ -366,7 +447,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         entry_id,
                         restored?.workspaceId ?? wsId
                     )
-                    return { success, entryId: entry_id, indexStatus }
+                    return { success, entryId: entry_id, indexStatus, ...(indexStatus === 'failed' ? { warning: 'Entry restored, but vector re-indexing failed.' } : {}) }
                 } catch (err) {
                     return formatHandlerError(err)
                 }

@@ -187,6 +187,7 @@ export const CreateEntryOutputSchema = z
         entry: EntryOutputSchema.optional(),
         sharedWithTeam: z.boolean().optional(),
         author: z.string().optional(),
+        warning: z.string().optional(),
         error: z.string().optional(),
         relationshipWarnings: z.array(z.string()).optional(),
     })

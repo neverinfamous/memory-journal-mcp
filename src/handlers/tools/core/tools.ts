@@ -142,14 +142,14 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                     const finalEntry = createdEntry
 
                     const teamShare = input.share_with_team
-                        ? recordTeamShareOutcome(context, entryInput, relationshipWarnings)
+                        ? await recordTeamShareOutcome(context, entryInput, relationshipWarnings)
                         : { sharedWithTeam: false }
 
                     return {
                         success: true,
                         id,
                         entry: finalEntry,
-                        ...(vectorWarning ? { error: vectorWarning } : {}),
+                        ...(vectorWarning !== undefined ? { warning: vectorWarning } : {}),
                         ...(teamShare.sharedWithTeam
                             ? { sharedWithTeam: true, ...(teamShare.author !== undefined ? { author: teamShare.author } : {}) }
                             : {}),

@@ -197,8 +197,9 @@ function queryImpactFactor(
             ${authorExpr} AS author,
             COUNT(*) AS inbound_links
         FROM relationships r
+        JOIN memory_journal m1 ON r.from_entry_id = m1.id
         JOIN memory_journal m2 ON r.to_entry_id = m2.id
-        WHERE m2.deleted_at IS NULL${clause.sql}
+        WHERE m1.deleted_at IS NULL AND m2.deleted_at IS NULL AND m1.workspace_id = m2.workspace_id${clause.sql}
         GROUP BY ${authorExpr}
         ORDER BY inbound_links DESC
         LIMIT ?`,

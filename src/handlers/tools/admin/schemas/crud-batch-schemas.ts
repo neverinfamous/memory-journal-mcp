@@ -425,12 +425,14 @@ export const BatchCreateEntriesOutputSchema = BatchResultOutputSchema.extend({
     entries: z.array(EntryOutputSchema).optional(),
     indexStatuses: z.array(z.string()).optional(),
     relationshipWarnings: z.array(z.string()).optional(),
+    warning: z.string().optional(),
 })
 
 export const BatchUpdateEntriesOutputSchema = BatchResultOutputSchema.extend({
     updated: z.array(EntryOutputSchema).optional(),
     notFound: z.array(z.number()).optional(),
     indexStatuses: z.array(z.string()).optional(),
+    warning: z.string().optional(),
 })
 
 export const BatchDeleteEntriesOutputSchema = BatchResultOutputSchema.extend({
@@ -445,6 +447,7 @@ export const UpdateEntryOutputSchema = z
         success: z.boolean().optional(),
         entry: EntryOutputSchema.optional(),
         indexStatus: z.string().optional(),
+        warning: z.string().optional(),
         error: z.string().optional(),
     })
     .extend(ErrorFieldsMixin.shape)

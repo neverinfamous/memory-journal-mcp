@@ -169,7 +169,6 @@ const GetStatisticsSchema = z.object({
     project_number: z.unknown().optional(), // Allow injected project_number
 }).strict()
 
-const STATISTICS_GROUP_BY_HINTS = new Set(['day', 'week', 'month'])
 const STATISTICS_HINT_KEYS = ['timeframe', 'period', 'time'] as const
 
 function isStatisticsArgRecord(params: unknown): params is Record<string, unknown> {
@@ -183,7 +182,7 @@ function omitNonStrictStatisticsKeys(params: unknown): unknown {
     if (copy['group_by'] === undefined) {
         for (const hintKey of STATISTICS_HINT_KEYS) {
             const hintVal = copy[hintKey]
-            if (typeof hintVal === 'string' && STATISTICS_GROUP_BY_HINTS.has(hintVal)) {
+            if (typeof hintVal === 'string') {
                 copy['group_by'] = hintVal
                 break
             }
@@ -220,7 +219,7 @@ const CrossProjectInsightsInputSchema = z.object({
         .regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE)
         .optional()
         .describe('End date (YYYY-MM-DD)'),
-    min_entries: z.number().optional().default(3).describe('Minimum entries to include project'),
+    min_entries: z.number().int().min(1).optional().default(3).describe('Minimum entries to include project'),
     workspace_id: z.string().optional(),
     project_number: z.unknown().optional(), // Allow injected project_number
 }).strict()
@@ -322,11 +321,16 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
                         input.workspace_id === undefined
                             ? '*'
                             : resolveWorkspaceId(input.workspace_id, resolvedProjectNumber, context.config)
-                    const effectiveProjectFilter = alignedProjectFilter(
-                        wsId,
-                        resolvedProjectNumber,
-                        activeProjectRegistry(context.config?.projectRegistry)
-                    )
+                    // Cross-project insights aggregate across projects when workspace is wildcard;
+                    // only filter to one project_number when an explicit concrete workspace was given.
+                    const effectiveProjectFilter =
+                        wsId === '*'
+                            ? undefined
+                            : alignedProjectFilter(
+                                  wsId,
+                                  resolvedProjectNumber,
+                                  activeProjectRegistry(context.config?.projectRegistry)
+                              )
 
                     const results = db.getCrossProjectInsights({
                         startDate: input.start_date,
@@ -354,8 +358,10 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
 
                     // Calculate time distribution
                     const totalEntries = results.projects.reduce(
-                        (sum: number, p: Record<string, unknown>) =>
-                            sum + (p['entry_count'] as number),
+                        (sum: number, p: Record<string, unknown>) => {
+                            const count = p['entry_count']
+                            return sum + (typeof count === 'number' ? count : Number(count ?? 0))
+                        },
                         0
                     )
                     const distribution = results.projects

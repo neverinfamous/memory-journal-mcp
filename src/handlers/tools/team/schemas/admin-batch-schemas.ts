@@ -343,6 +343,7 @@ export const TeamDeleteOutputSchema = z
     .object({
         success: z.boolean().optional(),
         message: z.string().optional(),
+        warning: z.string().optional(),
         error: z.string().optional(),
     })
     .extend(ErrorFieldsMixin.shape)
@@ -351,6 +352,8 @@ export const TeamRestoreOutputSchema = z
     .object({
         success: z.boolean().optional(),
         entryId: z.number().optional(),
+        indexStatus: z.string().optional(),
+        warning: z.string().optional(),
         error: z.string().optional(),
     })
     .extend(ErrorFieldsMixin.shape)

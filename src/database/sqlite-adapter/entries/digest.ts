@@ -201,11 +201,13 @@ function computeRelationshipDensity(
         `SELECT
             COALESCE((SELECT COUNT(*) FROM relationships r
                 JOIN memory_journal m ON r.from_entry_id = m.id
-                WHERE m.deleted_at IS NULL AND strftime('%Y-%m', m.timestamp) = strftime('%Y-%m', 'now')${s.filterAlias}
+                JOIN memory_journal p ON r.to_entry_id = p.id
+                WHERE m.deleted_at IS NULL AND p.deleted_at IS NULL AND m.workspace_id = p.workspace_id AND strftime('%Y-%m', m.timestamp) = strftime('%Y-%m', 'now')${s.filterAlias}
             ), 0) AS current_rels,
             COALESCE((SELECT COUNT(*) FROM relationships r
                 JOIN memory_journal m ON r.from_entry_id = m.id
-                WHERE m.deleted_at IS NULL AND strftime('%Y-%m', m.timestamp) = strftime('%Y-%m', 'now', '-1 month')${s.filterAlias}
+                JOIN memory_journal p ON r.to_entry_id = p.id
+                WHERE m.deleted_at IS NULL AND p.deleted_at IS NULL AND m.workspace_id = p.workspace_id AND strftime('%Y-%m', m.timestamp) = strftime('%Y-%m', 'now', '-1 month')${s.filterAlias}
             ), 0) AS previous_rels`,
         ...s.params,
         ...s.params

@@ -119,9 +119,13 @@ function getRelationshipCounts(
     linkedCount: number
     relTypeRows: { relationship_type: string; count: number }[]
 } {
+    const peerWsClause = dateFilter.includes('workspace_id')
+        ? ' AND p.workspace_id = m.workspace_id'
+        : ''
+    const activePeerFilter = `EXISTS (SELECT 1 FROM memory_journal p WHERE p.id = r.to_entry_id AND p.deleted_at IS NULL${peerWsClause})`
     const relCountRow = db
         .prepare(
-            `SELECT COUNT(*) as count FROM relationships r JOIN memory_journal m ON r.from_entry_id = m.id WHERE m.deleted_at IS NULL${dateFilter}`
+            `SELECT COUNT(*) as count FROM relationships r JOIN memory_journal m ON r.from_entry_id = m.id WHERE m.deleted_at IS NULL${dateFilter} AND ${activePeerFilter}`
         )
         .get(...dateParams) as {
         count: number
@@ -132,7 +136,7 @@ function getRelationshipCounts(
         SELECT r.relationship_type, COUNT(*) as count
         FROM relationships r
         JOIN memory_journal m ON r.from_entry_id = m.id
-        WHERE m.deleted_at IS NULL${dateFilter}
+        WHERE m.deleted_at IS NULL${dateFilter} AND ${activePeerFilter}
         GROUP BY r.relationship_type
     `
         )
@@ -145,10 +149,17 @@ function getRelationshipCounts(
         .prepare(
             `SELECT COUNT(*) as count FROM memory_journal m
              WHERE m.deleted_at IS NULL${dateFilter}
-               AND m.id IN (
-                   SELECT from_entry_id FROM relationships
-                   UNION
-                   SELECT to_entry_id FROM relationships
+               AND (
+                   EXISTS (
+                       SELECT 1 FROM relationships r
+                       JOIN memory_journal p ON p.id = r.to_entry_id
+                       WHERE r.from_entry_id = m.id AND p.deleted_at IS NULL${peerWsClause}
+                   )
+                   OR EXISTS (
+                       SELECT 1 FROM relationships r
+                       JOIN memory_journal p ON p.id = r.from_entry_id
+                       WHERE r.to_entry_id = m.id AND p.deleted_at IS NULL${peerWsClause}
+                   )
                )`
         )
         .get(...dateParams) as { count: number }

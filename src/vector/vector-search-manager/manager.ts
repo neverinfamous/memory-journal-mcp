@@ -9,6 +9,11 @@ import { DEFAULT_MODEL, type SemanticSearchResult } from './types.js'
 import { rebuildIndex } from './rebuild.js'
 import { effectiveWorkspace } from '../../database/workspace-scope.js'
 import { isMissingTableError } from '../../database/sqlite-adapter/schema-errors.js'
+import {
+    collectCandidates,
+    resolveCandidates,
+    searchSimilarEntriesById,
+} from './candidate-search.js'
 
 function dbPathFromAdapter(adapter: { getDbPath?: () => string }): string | undefined {
     if (typeof adapter.getDbPath !== 'function') {
@@ -52,39 +57,6 @@ function isTransientFileLockError(err: unknown): boolean {
 
 /** Base backoff (ms) between embedding-model load retries; multiplied by the attempt number. */
 const MODEL_LOAD_RETRY_DELAY_MS = 250
-
-interface VectorCandidate {
-    entryId: number
-    distance: number
-    similarityScore: number
-}
-
-/**
- * Convert raw sqlite-vec hits into scored candidates above `threshold`,
- * optionally skipping `excludeId` (the query entry itself).
- */
-function collectCandidates(
-    results: { entry_id: number; distance: number }[],
-    threshold: number,
-    excludeId?: number
-): VectorCandidate[] {
-    const candidates: VectorCandidate[] = []
-    for (const result of results) {
-        if (excludeId !== undefined && result.entry_id === excludeId) continue
-        // sqlite-vec MATCH computes L2 distance by default.
-        // For normalized unit vectors: L2_distance^2 = 2 - 2 * cosine_similarity
-        // Therefore: cosine_similarity = 1 - (L2_distance^2 / 2)
-        const similarityScore = Math.max(-1, 1 - (result.distance * result.distance) / 2)
-        if (similarityScore >= threshold) {
-            candidates.push({
-                entryId: result.entry_id,
-                distance: result.distance,
-                similarityScore,
-            })
-        }
-    }
-    return candidates
-}
 
 export class VectorSearchManager {
     private dbAdapter: IDatabaseAdapter
@@ -327,51 +299,6 @@ export class VectorSearchManager {
     }
 
     /**
-     * Hydrate vector-search candidates into entries (workspace-filtered), capped at `limit`.
-     */
-    private resolveCandidates(
-        candidates: VectorCandidate[],
-        limit: number,
-        targetWs: string,
-        projectNumber?: number
-    ): SemanticSearchResult[] {
-        if (candidates.length === 0) {
-            return []
-        }
-
-        const entriesMap =
-            typeof (this.dbAdapter as { getEntriesByIds?: unknown }).getEntriesByIds === 'function'
-                ? this.dbAdapter.getEntriesByIds(
-                      candidates.map((c) => c.entryId),
-                      targetWs
-                  )
-                : null
-
-        const searchResults: SemanticSearchResult[] = []
-        for (const candidate of candidates) {
-            const entry = entriesMap
-                ? (entriesMap.get(candidate.entryId) ?? null)
-                : this.dbAdapter.getEntryById(candidate.entryId, targetWs)
-            if (
-                entry &&
-                (targetWs === '*' || entry.workspaceId === targetWs) &&
-                (projectNumber === undefined || entry.projectNumber === projectNumber)
-            ) {
-                searchResults.push({
-                    entryId: candidate.entryId,
-                    entry,
-                    distance: candidate.distance,
-                    score: candidate.similarityScore,
-                    similarityScore: candidate.similarityScore,
-                })
-            }
-            if (searchResults.length >= limit) break
-        }
-
-        return searchResults
-    }
-
-    /**
      * Search for similar entries by text query
      */
     public async search(
@@ -385,17 +312,19 @@ export class VectorSearchManager {
 
         try {
             const queryEmbedding = await this.generateEmbedding(query)
-
-            // searchVectors returns { entry_id: number; distance: number }[]
             const targetWs = effectiveWorkspace(workspaceId)
-            // [INTENT] projectNumber is filtered post-KNN, so over-fetch candidates to avoid
-            // truncating results when the nearest neighbours belong to other projects.
+            // [INTENT] Pass projectNumber through so SQLite vector JOIN & k-widening filter inside DB too.
             const fetchLimit = projectNumber !== undefined ? Math.max(limit * 10, 100) : limit
-            const results = this.dbAdapter.searchVectors(queryEmbedding, fetchLimit, targetWs)
+            const results = this.dbAdapter.searchVectors(
+                queryEmbedding,
+                fetchLimit,
+                targetWs,
+                projectNumber
+            )
 
             const candidates = collectCandidates(results, threshold)
 
-            return this.resolveCandidates(candidates, limit, targetWs, projectNumber)
+            return resolveCandidates(this.dbAdapter, candidates, limit, targetWs, projectNumber)
         } catch (error) {
             logger.error('Semantic search failed', {
                 error: error instanceof Error ? error.message : String(error),
@@ -412,34 +341,22 @@ export class VectorSearchManager {
         entryId: number,
         limit = 10,
         threshold = 0.0,
-        workspaceId?: string
+        workspaceId?: string,
+        projectNumber?: number
     ): Promise<SemanticSearchResult[]> {
         await this.initialize()
 
         try {
             const targetWs = effectiveWorkspace(workspaceId)
-            const sourceEntry = this.dbAdapter.getEntryById(entryId, targetWs)
-            if (!sourceEntry) {
-                throw new Error(`Entry ${entryId} not found`)
-            }
-
-            let queryEmbedding = this.dbAdapter.getVector(entryId)
-
-            if (!queryEmbedding) {
-                const tagsText = sourceEntry.tags !== undefined && sourceEntry.tags !== null && sourceEntry.tags.length > 0 ? ` [Tags: ${sourceEntry.tags.join(', ')}]` : ''
-                const text = `[${sourceEntry.entryType}]${tagsText} ${sourceEntry.content}`
-                queryEmbedding = await this.generateEmbedding(text)
-
-                // Add it to the index while we're at it
-                this.dbAdapter.upsertVector(entryId, queryEmbedding)
-            }
-
-            // Search (request limit + 1 to account for the entry itself)
-            const results = this.dbAdapter.searchVectors(queryEmbedding, limit + 1, targetWs)
-
-            const candidates = collectCandidates(results, threshold, entryId)
-
-            return this.resolveCandidates(candidates, limit, targetWs)
+            return await searchSimilarEntriesById(
+                this.dbAdapter,
+                (text) => this.generateEmbedding(text),
+                entryId,
+                limit,
+                threshold,
+                targetWs,
+                projectNumber
+            )
         } catch (error) {
             logger.error(`Semantic search by entry ID ${entryId} failed`, {
                 error: error instanceof Error ? error.message : String(error)

@@ -1,7 +1,8 @@
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../../types/index.js'
-import { PermissionError } from '../../../../types/errors.js'
+import { PermissionError, ValidationError } from '../../../../types/errors.js'
 import { VERSION } from '../../../../version.js'
+import { getAllToolNames, isToolVisibleForFilter } from '../../../../filtering/tool-filter.js'
 import { getCoreTools } from '../tools.js'
 import { getSearchTools } from '../../search/index.js'
 import { getAdminTools } from '../../admin/index.js'
@@ -106,7 +107,7 @@ export async function handleReadResource(
                 _healing_note: `🛠️ AUTONOMOUS HEALING: '${toolName}' was called as an MCP tool instead of an MCP resource read. The resource '${uri}' was resolved successfully.`,
             }
         } catch (err) {
-            if (err instanceof PermissionError) throw err
+            if (err instanceof PermissionError || err instanceof ValidationError) throw err
             return {
                 success: false,
                 error: `Failed to read resource '${uri}': ${err instanceof Error ? err.message : String(err)}`,
@@ -135,6 +136,22 @@ export function handleListResources(toolName: string): unknown {
     }
 }
 
+function buildToolFilterSummary(context?: ToolContext): {
+    active: boolean
+    enabledCount: number
+    totalCount: number
+    filterString: string | null
+} {
+    const filterConfig = context?.config?.filterConfig
+    const totalCount = getAllToolNames().length
+    return {
+        active: filterConfig !== null && filterConfig !== undefined,
+        enabledCount: filterConfig?.enabledTools.size ?? totalCount,
+        totalCount,
+        filterString: filterConfig?.raw ?? null,
+    }
+}
+
 export function handleListTools(toolName: string, context?: ToolContext): unknown {
     if (context === undefined) {
         return {
@@ -144,19 +161,29 @@ export function handleListTools(toolName: string, context?: ToolContext): unknow
             _healing_note: `🛠️ AUTONOMOUS HEALING: '${toolName}' was called as an MCP tool instead of an MCP protocol request (tools/list). The tool list was not built because no server context was available.`,
         }
     }
+    const filterConfig = context.config?.filterConfig
     const toolsList = [
         ...getCoreTools(context),
         ...getSearchTools(context),
         ...getAdminTools(context),
-    ].map((t) => ({
-        name: t.name,
-        title: t.title,
-        description: t.description,
-        group: t.group,
-    }))
+    ]
+        .filter(
+            (t) =>
+                (filterConfig === undefined ||
+                    filterConfig === null ||
+                    filterConfig.enabledTools.has(t.name)) &&
+                isToolVisibleForFilter(t.name, t.annotations?.readOnlyHint, filterConfig?.raw)
+        )
+        .map((t) => ({
+            name: t.name,
+            title: t.title,
+            description: t.description,
+            group: t.group,
+        }))
     return {
         success: true,
         tools: toolsList,
+        toolFilter: buildToolFilterSummary(context),
         _healing_note: `🛠️ AUTONOMOUS HEALING: '${toolName}' was called as an MCP tool instead of an MCP protocol request (tools/list). The available tools were returned successfully.`,
     }
 }
@@ -210,6 +237,7 @@ export async function handleServerInfo(
             platform: process.platform,
             uptimeSeconds: Math.floor(process.uptime()),
         },
+        toolFilter: buildToolFilterSummary(context),
         ...(healthData !== undefined ? { health: healthData } : {}),
         ...(dbHealth !== undefined ? { database: dbHealth } : {}),
         capabilities: { codemode: true, resources: true, prompts: true, tools: true },
@@ -219,11 +247,21 @@ export async function handleServerInfo(
     }
 }
 
-function sqliteAdapterStatus(context?: ToolContext): string {
-    if (context?.db === undefined || context.db === null) return 'disabled'
+function sqliteAdapterStatus(db?: ToolContext['db']): string {
+    if (db === undefined || db === null) return 'disabled'
     try {
-        context.db.getHealthStatus()
+        db.getHealthStatus()
         return 'connected'
+    } catch {
+        return 'error'
+    }
+}
+
+function vectorAdapterStatus(vectorManager?: ToolContext['vectorManager']): string {
+    if (vectorManager === undefined || vectorManager === null) return 'disabled'
+    try {
+        const stats = vectorManager.getStats()
+        return stats.isReady ? 'connected' : 'initialized'
     } catch {
         return 'error'
     }
@@ -235,7 +273,7 @@ export function handleListAdapters(toolName: string, context?: ToolContext): unk
             name: 'sqlite',
             type: 'database',
             driver: 'better-sqlite3',
-            status: sqliteAdapterStatus(context),
+            status: sqliteAdapterStatus(context?.db),
             primary: true,
             description: 'Primary SQLite storage engine for journal entries, tags, and relationships',
         },
@@ -243,18 +281,14 @@ export function handleListAdapters(toolName: string, context?: ToolContext): unk
             name: 'sqlite-vec',
             type: 'vector',
             driver: 'sqlite-vec',
-            status:
-                context?.vectorManager !== undefined && context.vectorManager !== null
-                    ? 'connected'
-                    : 'ready',
+            status: vectorAdapterStatus(context?.vectorManager),
             description: 'Native vector embeddings and semantic search engine',
         },
         {
             name: 'team',
             type: 'database',
             driver: 'better-sqlite3',
-            status:
-                context?.teamDb !== undefined && context.teamDb !== null ? 'connected' : 'disabled',
+            status: sqliteAdapterStatus(context?.teamDb),
             description: 'Collaborative team journal database adapter',
         },
         {

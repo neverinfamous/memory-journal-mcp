@@ -4,6 +4,7 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { logger } from '../../utils/logger.js'
 import { isMissingTableError } from './schema-errors.js'
+import { applySqlCipherKey } from './sqlcipher-key.js'
 import { ConnectionError } from '../../types/errors.js'
 import { MigrationManager } from '../migrations/migration-manager.js'
 import type { IDatabaseConnection, QueryResult } from '../core/interfaces.js'
@@ -18,8 +19,6 @@ const IS_MUTATION_RE =
 
 const ALLOWED_PRAGMAS_RE =
     /^\s*(?:wal_checkpoint(?:\s*\(\s*(?:PASSIVE|FULL|RESTART|TRUNCATE)\s*\))?|integrity_check|quick_check|foreign_keys(?:\s*=\s*(?:ON|OFF|1|0))?|journal_mode(?:\s*=\s*(?:WAL|DELETE|TRUNCATE|PERSIST|MEMORY|OFF))?|synchronous(?:\s*=\s*(?:OFF|NORMAL|FULL|EXTRA|0|1|2|3))?|temp_store(?:\s*=\s*(?:DEFAULT|FILE|MEMORY|0|1|2))?|busy_timeout(?:\s*=\s*\d+)?|optimize|table_info\s*\([^)]+\)|index_list\s*\([^)]+\)|index_info\s*\([^)]+\)|foreign_key_list\s*\([^)]+\))\s*$/i
-
-const HEX_CIPHER_KEY_RE = /^x'[0-9a-fA-F]+'$/
 
 /** Delay before the deferred FTS5 rebuild starts, so server startup is not blocked. */
 const FTS_REBUILD_DEFER_MS = 5000
@@ -51,7 +50,7 @@ export class NativeConnectionManager implements IDatabaseConnection {
             const db = this.db
 
             // Decrypt if key is provided (must be done before any other PRAGMAs or queries)
-            this.applyEncryptionKey(db)
+            applySqlCipherKey(db, true)
 
             // Native-only PRAGMAs for performance and safety
             db.pragma('journal_mode = WAL')
@@ -83,30 +82,24 @@ export class NativeConnectionManager implements IDatabaseConnection {
                 dbPath: this.dbPath,
             })
         } catch (error) {
+            if (this.ftsRebuildTimer !== null) {
+                clearTimeout(this.ftsRebuildTimer)
+                this.ftsRebuildTimer = null
+            }
+            if (this.db !== null) {
+                try {
+                    this.db.close()
+                } catch {
+                    // Best-effort cleanup after partial initialization failure
+                }
+                this.db = null
+            }
             logger.error('Failed to initialize native database', {
                 module: 'NativeConnectionManager',
                 error: String(error),
             })
             throw new ConnectionError(`Native DB Initialization failed: ${String(error)}`)
         }
-    }
-
-    /** Apply the SQLCipher key from the environment, if configured. Must run before any other PRAGMA/query. */
-    private applyEncryptionKey(db: Database): void {
-        const rawKey = process.env['MJ_DB_ENCRYPTION_KEY'] || process.env['DB_ENCRYPTION_KEY']
-        if (!rawKey) return
-        const key = rawKey
-        if (key.startsWith("x'") && key.endsWith("'")) {
-            if (!HEX_CIPHER_KEY_RE.test(key)) {
-                throw new Error('Invalid hex encryption key format')
-            }
-            // Raw hex keys must not be wrapped in additional single quotes
-            db.pragma(`key = "${key}"`)
-        } else {
-            const escapedKey = key.replace(/'/g, "''")
-            db.pragma(`key = '${escapedKey}'`)
-        }
-        logger.info('Database encryption key applied', { module: 'NativeConnectionManager' })
     }
 
     /**

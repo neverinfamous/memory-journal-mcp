@@ -383,6 +383,17 @@ export function createServerInstance(
     customToolHandlerConfig: ToolHandlerConfig
 ): McpServer {
     const { configManager, db, teamDb, allowedIoRoots, runtime } = context
+    configManager.seedMissingScopeDefaults({
+        ...(options.defaultProjectNumber !== undefined
+            ? { defaultProjectNumber: options.defaultProjectNumber }
+            : {}),
+        ...(options.defaultWorkspaceId !== undefined
+            ? { defaultWorkspaceId: options.defaultWorkspaceId }
+            : {}),
+        ...(options.projectRegistry !== undefined
+            ? { projectRegistry: options.projectRegistry }
+            : {}),
+    })
 
     const getInstructions = (): string =>
         buildServerInstructions(context, options, prompts, allToolNames)

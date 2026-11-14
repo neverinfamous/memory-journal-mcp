@@ -256,12 +256,16 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
 
                     triggerTeamNotifications(context)
 
+                    const failedVectorCount = indexStatuses.filter((s) => s === 'failed').length
                     return {
                         success: true,
                         count: entries.length,
                         entries,
                         indexStatuses,
                         ...(relationshipWarnings.length > 0 ? { relationshipWarnings } : {}),
+                        ...(failedVectorCount > 0
+                            ? { warning: `Vector indexing failed for ${String(failedVectorCount)} team entry(ies).` }
+                            : {}),
                     }
                 } catch (err) {
                     return formatHandlerError(err)
@@ -325,7 +329,7 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                     await sendProgress(context.progress, 1, 2, `Updated ${String(entries.length)} team entries...`)
 
                     const contentUpdatedIds = new Set(
-                        input.updates.filter((u) => u.content).map((u) => u.entry_id)
+                        input.updates.filter((u) => u.content !== undefined).map((u) => u.entry_id)
                     )
                     const { indexStatuses, indexErrors } = await indexBatchEntries({
                         progress: context.progress,
@@ -354,7 +358,17 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
 
                     triggerTeamNotifications(context)
 
-                    return { success: true, count: entries.length, updated: entries, notFound: finalNotFound, indexStatuses }
+                    const failedUpdateVectors = indexStatuses.filter((s) => s === 'failed').length
+                    return {
+                        success: true,
+                        count: entries.length,
+                        updated: entries,
+                        notFound: finalNotFound,
+                        indexStatuses,
+                        ...(failedUpdateVectors > 0
+                            ? { warning: `Vector indexing failed for ${String(failedUpdateVectors)} team entry(ies).` }
+                            : {}),
+                    }
                 } catch (err) {
                     return formatHandlerError(err)
                 }

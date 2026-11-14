@@ -1,5 +1,4 @@
 import { z } from 'zod'
-import { healIncludeArchivedField } from '../schemas/hallucination-healer-fields.js'
 import {
     ENTRY_TYPES,
     DATE_FORMAT_REGEX,
@@ -7,15 +6,12 @@ import {
     EntryOutputSchema,
     relaxedNumber,
     MAX_QUERY_LIMIT,
-    healAgentHallucinations,
+    healSearchPayload,
 } from '../schemas.js'
 import { ErrorFieldsMixin } from '../error-fields-mixin.js'
 
 function preprocessSearchPayload(val: unknown): unknown {
-    const healed = healAgentHallucinations(val)
-    if (typeof healed !== 'object' || healed === null || Array.isArray(healed)) return healed
-    const obj = { ...(healed as Record<string, unknown>) }
-    return healIncludeArchivedField(obj) ? obj : healed
+    return healSearchPayload(val)
 }
 
 // Input Schemas

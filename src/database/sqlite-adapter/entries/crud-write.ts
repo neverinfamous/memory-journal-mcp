@@ -46,29 +46,41 @@ function runBatchTransaction(
     }
 }
 
-
 export function validateEntryInput(input: CreateEntryInput): { normalizedTimestamp: string } {
     if (input.workspaceId?.trim() === '*') {
         throw new Error(
             "workspace_id '*' is a read-only cross-workspace selector and cannot be used to create an entry. Pass a specific workspace_id."
         )
     }
-    let timestamp = input.timestamp ?? new Date().toISOString()
+    const rawTimestamp = input.timestamp ?? new Date().toISOString()
 
-    // Accept broad ISO-8601 input shapes, then normalize to canonical UTC ISO format for storage.
-    if (!timestamp.includes('T')) {
-        timestamp = `${timestamp}T00:00:00.000Z`
-    } else {
-        const parsedTimestamp = new Date(timestamp)
-        if (Number.isNaN(parsedTimestamp.getTime())) {
+    // Reject calendar rollovers (e.g. 2026-02-31) and normalize broad ISO-8601 inputs to UTC ISO.
+    const ymdMatch = /^(\d{4})-(\d{2})-(\d{2})(?:$|T)/.exec(rawTimestamp)
+    if (ymdMatch !== null) {
+        const year = Number(ymdMatch[1])
+        const month = Number(ymdMatch[2])
+        const day = Number(ymdMatch[3])
+        const probe = new Date(Date.UTC(year, month - 1, day))
+        if (
+            probe.getUTCFullYear() !== year ||
+            probe.getUTCMonth() !== month - 1 ||
+            probe.getUTCDate() !== day
+        ) {
             throw new Error(
-                `Invalid timestamp format: ${timestamp}. Expected an ISO 8601 date or timestamp.`
+                `Invalid timestamp format: ${rawTimestamp}. Expected a valid ISO 8601 date or timestamp.`
             )
         }
-        timestamp = parsedTimestamp.toISOString()
     }
 
-    return { normalizedTimestamp: timestamp }
+    const candidate = rawTimestamp.includes('T') ? rawTimestamp : `${rawTimestamp}T00:00:00.000Z`
+    const parsedTimestamp = new Date(candidate)
+    if (Number.isNaN(parsedTimestamp.getTime())) {
+        throw new Error(
+            `Invalid timestamp format: ${rawTimestamp}. Expected an ISO 8601 date or timestamp.`
+        )
+    }
+
+    return { normalizedTimestamp: parsedTimestamp.toISOString() }
 }
 
 function insertEntryRow(context: EntriesSharedContext, input: CreateEntryInput): number {
@@ -77,11 +89,28 @@ function insertEntryRow(context: EntriesSharedContext, input: CreateEntryInput):
 
     const txn = db.transaction((): number => {
         const columns = [
-            'entry_type', 'content', 'timestamp', 'is_personal', 'significance_type',
-            'auto_context', 'project_number', 'project_owner', 'issue_number', 'issue_url',
-            'pr_number', 'pr_url', 'pr_status', 'workflow_run_id', 'workflow_name',
-            'workflow_status', 'is_archived', 'workspace_id', 'trust_score',
-            'validation_status', 'impact_score', 'session_id',
+            'entry_type',
+            'content',
+            'timestamp',
+            'is_personal',
+            'significance_type',
+            'auto_context',
+            'project_number',
+            'project_owner',
+            'issue_number',
+            'issue_url',
+            'pr_number',
+            'pr_url',
+            'pr_status',
+            'workflow_run_id',
+            'workflow_name',
+            'workflow_status',
+            'is_archived',
+            'workspace_id',
+            'trust_score',
+            'validation_status',
+            'impact_score',
+            'session_id',
         ]
         const nonEmpty = (s: string | null | undefined): string | null =>
             s !== undefined && s !== null && s !== '' ? s : null
@@ -90,7 +119,9 @@ function insertEntryRow(context: EntriesSharedContext, input: CreateEntryInput):
         const resolved = resolveProjectContext(
             {
                 ...(omittedWorkspace ? {} : { workspace_id: trimmedWorkspace }),
-                ...(input.projectNumber !== undefined ? { project_number: input.projectNumber } : {}),
+                ...(input.projectNumber !== undefined
+                    ? { project_number: input.projectNumber }
+                    : {}),
                 content: input.content,
                 ...(input.tags !== undefined ? { tags: input.tags } : {}),
             },
@@ -169,7 +200,6 @@ export function createEntry(context: EntriesSharedContext, input: CreateEntryInp
     }
     return entry
 }
-
 
 export function updateEntry(
     context: EntriesSharedContext,

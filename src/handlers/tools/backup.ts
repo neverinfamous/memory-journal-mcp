@@ -69,8 +69,10 @@ const CleanupBackupsOutputSchema = z
     .object({
         success: z.boolean(),
         deleted: z.array(z.string()).optional(),
+        failed: z.array(z.string()).optional(),
         deletedCount: z.number().optional(),
         keptCount: z.number().optional(),
+        warning: z.string().optional(),
         message: z.string().optional(),
         error: z.string().optional(),
     })
@@ -340,12 +342,19 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     const result = db.deleteOldBackups(keepCountNum)
+                    const hasFailed = result.failed !== undefined && result.failed.length > 0
 
                     return {
                         success: true,
                         deleted: result.deleted,
+                        ...(hasFailed ? { failed: result.failed } : {}),
                         deletedCount: result.deleted.length,
                         keptCount: result.kept,
+                        ...(hasFailed
+                            ? {
+                                  warning: `Failed to delete ${String(result.failed?.length ?? 0)} backup file(s).`,
+                              }
+                            : {}),
                         message:
                             result.deleted.length > 0
                                 ? `Deleted ${String(result.deleted.length)} old backup(s), kept ${String(result.kept)}`

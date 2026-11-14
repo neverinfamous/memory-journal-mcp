@@ -290,9 +290,10 @@ export class AdapterDelegates {
     searchVectors(
         embedding: Float32Array,
         limit: number,
-        workspaceId?: string
+        workspaceId?: string,
+        projectNumber?: number
     ): { entry_id: number; distance: number }[] {
-        return this.vectorOps.searchVectors(embedding, limit, workspaceId)
+        return this.vectorOps.searchVectors(embedding, limit, workspaceId, projectNumber)
     }
 
     getVector(entryId: number): Float32Array | null {

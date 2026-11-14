@@ -98,37 +98,51 @@ async function initializeTeamDatabase(options: ServerOptions): Promise<{
         return { primaryTeamDb: undefined, testTeamDb: undefined, teamDb: undefined }
     }
 
-    const primaryTeamDb = await DatabaseAdapterFactory.create(teamDbPath, options)
-    await primaryTeamDb.initialize()
-    primaryTeamDb.applyTeamSchema()
-    logger.info('Team database initialized', { module: 'McpServer', teamDbPath })
-
+    let primaryTeamDb: IDatabaseAdapter | undefined
     let testTeamDb: IDatabaseAdapter | undefined
-    if (testTeamDbPath) {
-        testTeamDb = await DatabaseAdapterFactory.create(testTeamDbPath, options)
-        await testTeamDb.initialize()
-        testTeamDb.applyTeamSchema()
-        logger.info('Test team database initialized', { module: 'McpServer', testTeamDbPath })
-    }
+    try {
+        primaryTeamDb = await DatabaseAdapterFactory.create(teamDbPath, options)
+        await primaryTeamDb.initialize()
+        primaryTeamDb.applyTeamSchema()
+        logger.info('Team database initialized', { module: 'McpServer', teamDbPath })
 
-    const teamDb = DatabaseAdapterProxy.create(primaryTeamDb, testTeamDb)
+        if (testTeamDbPath) {
+            testTeamDb = await DatabaseAdapterFactory.create(testTeamDbPath, options)
+            await testTeamDb.initialize()
+            testTeamDb.applyTeamSchema()
+            logger.info('Test team database initialized', { module: 'McpServer', testTeamDbPath })
+        }
 
-    // Bootstrap team admin if configured and RBAC is not yet active (empty table)
-    if (
-        options.teamAdmin &&
-        teamDb.getTeamMemberCount !== undefined &&
-        teamDb.addTeamMember !== undefined
-    ) {
-        if (!teamDb.isTeamRbacActive?.()) {
+        const teamDb = DatabaseAdapterProxy.create(primaryTeamDb, testTeamDb)
+
+        // Bootstrap team admin if configured and RBAC is not yet active (empty table)
+        if (
+            options.teamAdmin &&
+            teamDb.getTeamMemberCount !== undefined &&
+            teamDb.addTeamMember !== undefined &&
+            !teamDb.isTeamRbacActive?.()
+        ) {
             teamDb.addTeamMember(options.teamAdmin, 'admin', 'system', 'Bootstrap Admin')
             logger.info('Bootstrapped initial team admin', {
                 module: 'McpServer',
                 admin: options.teamAdmin,
             })
         }
-    }
 
-    return { primaryTeamDb, testTeamDb, teamDb }
+        return { primaryTeamDb, testTeamDb, teamDb }
+    } catch (error: unknown) {
+        try {
+            testTeamDb?.close()
+        } catch {
+            // Ignore cleanup errors during aborted team DB startup
+        }
+        try {
+            primaryTeamDb?.close()
+        } catch {
+            // Ignore cleanup errors during aborted team DB startup
+        }
+        throw error
+    }
 }
 
 const STARTUP_REPO_INFO_TIMEOUT_MS = 8000
@@ -188,90 +202,139 @@ async function initializeGitHubIntegration(
     return github
 }
 
+async function safeCloseStartupResources(resources: {
+    scheduler: Scheduler | null
+    configManager: ConfigManager | undefined
+    runtime: ServerRuntime
+    testTeamDb: IDatabaseAdapter | undefined
+    primaryTeamDb: IDatabaseAdapter | undefined
+    testDb: IDatabaseAdapter | undefined
+    primaryDb: IDatabaseAdapter | undefined
+}): Promise<void> {
+    try {
+        resources.scheduler?.stop()
+    } catch {
+        // Ignore cleanup errors during aborted startup
+    }
+    try {
+        resources.configManager?.close()
+    } catch {
+        // Ignore cleanup errors during aborted startup
+    }
+    try {
+        resources.runtime.stopBackgroundTasks?.()
+    } catch {
+        // Ignore cleanup errors during aborted startup
+    }
+    if (resources.runtime.auditLogger !== null) {
+        await resources.runtime.auditLogger.close().catch(() => undefined)
+    }
+    for (const adapter of [
+        resources.testTeamDb,
+        resources.primaryTeamDb,
+        resources.testDb,
+        resources.primaryDb,
+    ]) {
+        if (adapter !== undefined) {
+            try {
+                adapter.close()
+            } catch {
+                // Ignore close errors during aborted startup
+            }
+        }
+    }
+}
+
 export async function initializeDependencies(options: ServerOptions): Promise<ServerContext> {
     const { dbPath, testDbPath } = options
-
-    // Initialize database
-    const primaryDb = await DatabaseAdapterFactory.create(dbPath, options)
-    await primaryDb.initialize()
-    logger.info('Database initialized', { module: 'McpServer', dbPath })
-
-    let testDb: IDatabaseAdapter | undefined
-    if (testDbPath) {
-        testDb = await DatabaseAdapterFactory.create(testDbPath, options)
-        await testDb.initialize()
-        logger.info('Test database initialized', { module: 'McpServer', testDbPath })
-    }
-
-    const db = DatabaseAdapterProxy.create(primaryDb, testDb)
-
-    // Initialize ServerRuntime (handles instance-scoped globals)
     const runtime = new ServerRuntime()
+    let primaryDb: IDatabaseAdapter | undefined
+    let testDb: IDatabaseAdapter | undefined
+    let primaryTeamDb: IDatabaseAdapter | undefined
+    let testTeamDb: IDatabaseAdapter | undefined
+    let configManager: ConfigManager | undefined
+    let scheduler: Scheduler | null = null
 
-    // Initialize audit logging if configured
-    if (options.auditConfig?.enabled) {
-        runtime.auditLogger = new AuditLogger(options.auditConfig)
-        runtime.auditInterceptor = createAuditInterceptor(runtime.auditLogger)
-        logger.info('Audit logging enabled', {
-            module: 'McpServer',
-            path: options.auditConfig.logPath,
-            redact: options.auditConfig.redact,
-            auditReads: options.auditConfig.auditReads,
-        })
-    }
-
-    // Configure metrics persistence path
-    let activeMetricsPath: string | undefined
-    if (options.persistMetrics) {
-        activeMetricsPath = await configureMetricsPersistence(runtime, options, dbPath)
-    }
-
-    const { primaryTeamDb, testTeamDb, teamDb } = await initializeTeamDatabase(options)
-
-    // Initialize vector search managers (lazy loading) and start background initialization
-    const { vectorManager, teamVectorManager } = createVectorManagers({
-        options,
-        primaryDb,
-        testDb,
-        primaryTeamDb,
-        testTeamDb,
-    })
-
-    const github = await initializeGitHubIntegration(options, runtime)
-
-    // Parse tool filter
-    const filterConfig = resolveToolFilterConfig(options)
-
-    const rawToolFilter = options.toolFilter ?? process.env['MEMORY_JOURNAL_MCP_TOOL_FILTER'] ?? process.env['TOOL_FILTER']
-
-    const configManager = new ConfigManager({
-        rawToolFilter,
-        toolFilterConfig: filterConfig,
-        briefingConfig: {
-            ...(options.briefingConfig ?? DEFAULT_BRIEFING_CONFIG),
-            // --default-workspace-id, --default-project-number, and projectRegistry must reach briefing resources/prompts
-            ...(options.defaultWorkspaceId !== undefined &&
-            options.briefingConfig?.defaultWorkspaceId === undefined
-                ? { defaultWorkspaceId: options.defaultWorkspaceId }
-                : {}),
-            ...(options.defaultProjectNumber !== undefined &&
-            options.briefingConfig?.defaultProjectNumber === undefined
-                ? { defaultProjectNumber: options.defaultProjectNumber }
-                : {}),
-            ...(options.projectRegistry !== undefined &&
-            options.briefingConfig?.projectRegistry === undefined
-                ? { projectRegistry: options.projectRegistry }
-                : {}),
-        },
-        codemodeInternalFullAccess: options.codemodeInternalFullAccess
-    }, options.configFilePath)
-
-    runtime.configManager = configManager
-
-    // [INVARIANT] Auto-prune runs only after `--config` is loaded so it is scoped to the
-    // effective default workspace/project (H3).
-    const loadedBriefing = configManager.getConfig().briefingConfig
     try {
+        // Initialize database
+        primaryDb = await DatabaseAdapterFactory.create(dbPath, options)
+        await primaryDb.initialize()
+        logger.info('Database initialized', { module: 'McpServer', dbPath })
+
+        if (testDbPath) {
+            testDb = await DatabaseAdapterFactory.create(testDbPath, options)
+            await testDb.initialize()
+            logger.info('Test database initialized', { module: 'McpServer', testDbPath })
+        }
+
+        const db = DatabaseAdapterProxy.create(primaryDb, testDb)
+
+        // Initialize audit logging if configured
+        if (options.auditConfig?.enabled) {
+            runtime.auditLogger = new AuditLogger(options.auditConfig)
+            runtime.auditInterceptor = createAuditInterceptor(runtime.auditLogger)
+            logger.info('Audit logging enabled', {
+                module: 'McpServer',
+                path: options.auditConfig.logPath,
+                redact: options.auditConfig.redact,
+                auditReads: options.auditConfig.auditReads,
+            })
+        }
+
+        // Configure metrics persistence path
+        let activeMetricsPath: string | undefined
+        if (options.persistMetrics) {
+            activeMetricsPath = await configureMetricsPersistence(runtime, options, dbPath)
+        }
+
+        const teamResult = await initializeTeamDatabase(options)
+        primaryTeamDb = teamResult.primaryTeamDb
+        testTeamDb = teamResult.testTeamDb
+        const { teamDb } = teamResult
+
+        // Initialize vector search managers (lazy loading) and start background initialization
+        const { vectorManager, teamVectorManager } = createVectorManagers({
+            options,
+            primaryDb,
+            testDb,
+            primaryTeamDb,
+            testTeamDb,
+        })
+
+        const github = await initializeGitHubIntegration(options, runtime)
+
+        // Parse tool filter
+        const filterConfig = resolveToolFilterConfig(options)
+
+        const rawToolFilter = options.toolFilter ?? process.env['MEMORY_JOURNAL_MCP_TOOL_FILTER'] ?? process.env['TOOL_FILTER']
+
+        configManager = new ConfigManager({
+            rawToolFilter,
+            toolFilterConfig: filterConfig,
+            briefingConfig: {
+                ...(options.briefingConfig ?? DEFAULT_BRIEFING_CONFIG),
+                // --default-workspace-id, --default-project-number, and projectRegistry must reach briefing resources/prompts
+                ...(options.defaultWorkspaceId !== undefined &&
+                options.briefingConfig?.defaultWorkspaceId === undefined
+                    ? { defaultWorkspaceId: options.defaultWorkspaceId }
+                    : {}),
+                ...(options.defaultProjectNumber !== undefined &&
+                options.briefingConfig?.defaultProjectNumber === undefined
+                    ? { defaultProjectNumber: options.defaultProjectNumber }
+                    : {}),
+                ...(options.projectRegistry !== undefined &&
+                options.briefingConfig?.projectRegistry === undefined
+                    ? { projectRegistry: options.projectRegistry }
+                    : {}),
+            },
+            codemodeInternalFullAccess: options.codemodeInternalFullAccess
+        }, options.configFilePath)
+
+        runtime.configManager = configManager
+
+        // [INVARIANT] Auto-prune runs only after `--config` is loaded so it is scoped to the
+        // effective default workspace/project (H3).
+        const loadedBriefing = configManager.getConfig().briefingConfig
         await runStartupAutoPrune(db, options, {
             ...(loadedBriefing.defaultWorkspaceId !== undefined
                 ? { defaultWorkspaceId: loadedBriefing.defaultWorkspaceId }
@@ -283,77 +346,86 @@ export async function initializeDependencies(options: ServerOptions): Promise<Se
                 ? { projectRegistry: loadedBriefing.projectRegistry }
                 : {}),
         })
-    } catch (error: unknown) {
-        configManager.close()
-        throw error
-    }
-    const effectiveDefaultWorkspaceId =
-        options.defaultWorkspaceId ?? loadedBriefing.defaultWorkspaceId
-    const effectiveDefaultProjectNumber =
-        options.defaultProjectNumber ?? loadedBriefing.defaultProjectNumber
-    const effectiveProjectRegistry = options.projectRegistry ?? loadedBriefing.projectRegistry
-    const effectiveOptions: ServerOptions = {
-        ...options,
-        ...(effectiveDefaultWorkspaceId !== undefined
-            ? { defaultWorkspaceId: effectiveDefaultWorkspaceId }
-            : {}),
-        ...(effectiveDefaultProjectNumber !== undefined
-            ? { defaultProjectNumber: effectiveDefaultProjectNumber }
-            : {}),
-        ...(effectiveProjectRegistry !== undefined
-            ? { projectRegistry: effectiveProjectRegistry }
-            : {}),
-    }
 
-    // Initialize scheduler (HTTP/SSE only) — must be before handleResourceRead
-    // which captures scheduler in its closure.
-    const scheduler: Scheduler | null = createSchedulerIfConfigured(
-        effectiveOptions,
-        db,
-        vectorManager,
-        runtime
-    )
-
-    // Seed initial digest snapshot so first briefing read has analytics.
-    // Runs for both stdio and HTTP transports.
-    seedInitialDigest(db, effectiveOptions)
-
-    let finalAllowedIoRoots = options.allowedIoRoots
-    if (!finalAllowedIoRoots) {
-        if (options.transport === 'http') {
-            const errorMsg = `FATAL: Refusing to bind HTTP transport without explicit ALLOWED_IO_ROOTS. You MUST specify --allowed-io-roots (or ALLOWED_IO_ROOTS env var) to prevent ambient filesystem authority.`
-            logger.error(errorMsg, { module: 'HTTP' })
-            throw new Error(errorMsg)
+        const effectiveDefaultWorkspaceId =
+            options.defaultWorkspaceId ?? loadedBriefing.defaultWorkspaceId
+        const effectiveDefaultProjectNumber =
+            options.defaultProjectNumber ?? loadedBriefing.defaultProjectNumber
+        const effectiveProjectRegistry = options.projectRegistry ?? loadedBriefing.projectRegistry
+        const effectiveOptions: ServerOptions = {
+            ...options,
+            ...(effectiveDefaultWorkspaceId !== undefined
+                ? { defaultWorkspaceId: effectiveDefaultWorkspaceId }
+                : {}),
+            ...(effectiveDefaultProjectNumber !== undefined
+                ? { defaultProjectNumber: effectiveDefaultProjectNumber }
+                : {}),
+            ...(effectiveProjectRegistry !== undefined
+                ? { projectRegistry: effectiveProjectRegistry }
+                : {}),
         }
-        finalAllowedIoRoots = [] // Empty array means NO filesystem access
-        logger.warning(
-            '⚠️ SECURITY WARNING: ALLOWED_IO_ROOTS not explicitly provided. Defaulting to empty array (NO filesystem access). You MUST specify --allowed-io-roots (or ALLOWED_IO_ROOTS env var) to enable filesystem tools.',
-            {
-                module: 'McpServer',
-            }
+
+        // Initialize scheduler (HTTP/SSE only) — must be before handleResourceRead
+        // which captures scheduler in its closure.
+        scheduler = createSchedulerIfConfigured(
+            effectiveOptions,
+            db,
+            vectorManager,
+            runtime
         )
-    }
 
-    logger.info('IO sandbox configured', {
-        module: 'McpServer',
-        allowedRoots: finalAllowedIoRoots,
-    })
+        // Seed initial digest snapshot so first briefing read has analytics.
+        // Runs for both stdio and HTTP transports.
+        seedInitialDigest(db, effectiveOptions)
 
-    const skillCatalog = await loadBundledSkillCatalog()
+        let finalAllowedIoRoots = options.allowedIoRoots
+        if (!finalAllowedIoRoots) {
+            if (options.transport === 'http') {
+                const errorMsg = `FATAL: Refusing to bind HTTP transport without explicit ALLOWED_IO_ROOTS. You MUST specify --allowed-io-roots (or ALLOWED_IO_ROOTS env var) to prevent ambient filesystem authority.`
+                logger.error(errorMsg, { module: 'HTTP' })
+                throw new Error(errorMsg)
+            }
+            finalAllowedIoRoots = [] // Empty array means NO filesystem access
+            logger.warning(
+                '⚠️ SECURITY WARNING: ALLOWED_IO_ROOTS not explicitly provided. Defaulting to empty array (NO filesystem access). You MUST specify --allowed-io-roots (or ALLOWED_IO_ROOTS env var) to enable filesystem tools.',
+                {
+                    module: 'McpServer',
+                }
+            )
+        }
 
-    return {
-        db,
-        testDb,
-        teamDb,
-        testTeamDb,
-        runtime,
-        vectorManager,
-        teamVectorManager,
-        github,
-        configManager,
-        scheduler,
-        allowedIoRoots: finalAllowedIoRoots,
-        activeMetricsPath,
-        ...(skillCatalog ? { skillCatalog } : {}),
+        logger.info('IO sandbox configured', {
+            module: 'McpServer',
+            allowedRoots: finalAllowedIoRoots,
+        })
+
+        const skillCatalog = await loadBundledSkillCatalog()
+
+        return {
+            db,
+            testDb,
+            teamDb,
+            testTeamDb,
+            runtime,
+            vectorManager,
+            teamVectorManager,
+            github,
+            configManager,
+            scheduler,
+            allowedIoRoots: finalAllowedIoRoots,
+            activeMetricsPath,
+            ...(skillCatalog ? { skillCatalog } : {}),
+        }
+    } catch (error: unknown) {
+        await safeCloseStartupResources({
+            scheduler,
+            configManager,
+            runtime,
+            testTeamDb,
+            primaryTeamDb,
+            testDb,
+            primaryDb,
+        })
+        throw error
     }
 }

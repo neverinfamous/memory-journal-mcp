@@ -6,6 +6,7 @@ import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { ValidationError } from '../../../types/errors.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
+import { autoIndexEntry } from '../../../utils/vector-index-helpers.js'
 import { CloseGitHubIssueWithEntryOutputSchema } from './schemas.js'
 import { resolveOwnerRepo, resolveProjectNumber } from './helpers.js'
 import { moveIssueToDone, type KanbanMoveResult } from './close-issue-kanban.js'
@@ -134,6 +135,10 @@ async function executeCloseIssueMutation(
         workspaceId,
     })
 
+    const indexStatus = await autoIndexEntry(context.vectorManager, db, entry.id, workspaceId)
+    const vectorWarning =
+        indexStatus === 'failed' ? 'Journal entry saved, but vector indexing failed.' : undefined
+
     const kanbanFailed = input.move_to_done && kanbanResult?.moved !== true
     const closedIssue = {
         number: input.issue_number,
@@ -148,9 +153,10 @@ async function executeCloseIssueMutation(
         significanceType: 'blocker_resolved' as const,
     }
     if (kanbanFailed) {
+        const kanbanMsg = kanbanResult?.error ?? 'Kanban move did not run.'
         return {
             success: false,
-            warning: kanbanResult?.error ?? 'Kanban move did not run.',
+            warning: vectorWarning !== undefined ? `${kanbanMsg}; ${vectorWarning}` : kanbanMsg,
             issue: closedIssue,
             journalEntry,
             kanban: kanbanResult,
@@ -159,6 +165,7 @@ async function executeCloseIssueMutation(
     }
     return {
         success: true,
+        ...(vectorWarning !== undefined ? { warning: vectorWarning } : {}),
         issue: closedIssue,
         journalEntry,
         kanban: kanbanResult,
