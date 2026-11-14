@@ -17,10 +17,23 @@ export function decodeCursor(cursor: string): { t: string; id: number } | { offs
         const decoded = Buffer.from(cursor, 'base64').toString('utf8')
         const parsed: unknown = JSON.parse(decoded)
         if (typeof parsed !== 'object' || parsed === null) return null
-        if ('offset' in parsed && typeof parsed.offset === 'number') {
+        if (
+            'offset' in parsed &&
+            typeof parsed.offset === 'number' &&
+            Number.isInteger(parsed.offset) &&
+            parsed.offset >= 0
+        ) {
             return { offset: parsed.offset }
         }
-        if ('t' in parsed && 'id' in parsed && typeof parsed.t === 'string' && typeof parsed.id === 'number') {
+        if (
+            't' in parsed &&
+            'id' in parsed &&
+            typeof parsed.t === 'string' &&
+            parsed.t.trim() !== '' &&
+            typeof parsed.id === 'number' &&
+            Number.isInteger(parsed.id) &&
+            parsed.id > 0
+        ) {
             return { t: parsed.t, id: parsed.id }
         }
         return null

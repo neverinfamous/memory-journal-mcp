@@ -3,7 +3,7 @@ import { z } from 'zod'
 export const safeCoerceNumber = z.preprocess((val) => {
     if (val === undefined || val === null || val === '') return undefined
     const num = Number(val)
-    return isNaN(num) ? undefined : num
+    return isNaN(num) ? val : num
 }, z.number().optional())
 
 export const safeCoerceValidationStatus = z.preprocess((val) => {

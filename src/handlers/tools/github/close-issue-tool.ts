@@ -4,24 +4,12 @@
 
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
-import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { ValidationError } from '../../../types/errors.js'
-import {
-    findCanonicalRegistryKey,
-    loadProjectRegistryFromConfig,
-    resolveProjectContext,
-} from '../../../utils/workspace-resolver.js'
+import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { CloseGitHubIssueWithEntryOutputSchema } from './schemas.js'
 import { resolveOwnerRepo, resolveProjectNumber } from './helpers.js'
 import { moveIssueToDone, type KanbanMoveResult } from './close-issue-kanban.js'
-import { detectScopeMismatch, scopeMismatchResponse } from './create-issue-tool.js'
-
-function concreteCallerWorkspace(workspaceId: string | undefined): string | undefined {
-    if (workspaceId === undefined) return undefined
-    const trimmed = workspaceId.trim()
-    if (trimmed === '' || trimmed === '*') return undefined
-    return trimmed
-}
+import { resolveIssueEntryScope } from './create-issue-tool.js'
 
 const CloseIssueHandlerInputSchema = z.object({
     issue_number: z.number(),
@@ -75,42 +63,15 @@ async function executeCloseIssueMutation(
         `[PENDING] Closing GitHub issue #${String(input.issue_number)}: ${safeIssueTitle}\n` +
         (input.resolution_notes ? `\nResolution: ${input.resolution_notes}` : '')
 
-    const entryProjectNumber = resolveProjectNumber(
+    const entryScope = resolveIssueEntryScope(
         context,
         resolved.repo,
-        input.project_number
+        input.workspace_id,
+        input.project_number,
+        'close issues and write journal entries'
     )
-    const callerWorkspace = concreteCallerWorkspace(input.workspace_id)
-    const pairCallerWorkspace =
-        callerWorkspace !== undefined && input.project_number === undefined
-    const registry = context.config?.projectRegistry ?? loadProjectRegistryFromConfig()
-    const canonicalRepo = resolved.repo
-        ? (findCanonicalRegistryKey(resolved.repo, registry) ?? resolved.repo)
-        : undefined
-    if (input.workspace_id?.trim() === '*') {
-        return scopeMismatchResponse(
-            "workspace_id '*' is a read-only wildcard and cannot be used to close issues and write journal entries."
-        )
-    }
-    const mismatch = detectScopeMismatch(registry, canonicalRepo, callerWorkspace, input.project_number)
-    if (mismatch !== undefined) return scopeMismatchResponse(mismatch)
-    // [INVARIANT] Entry scope derives from repo/workspace/project only, never from content/tag keywords.
-    const resolvedCtx = resolveProjectContext(
-        {
-            workspace_id: callerWorkspace ?? canonicalRepo,
-            ...(pairCallerWorkspace || entryProjectNumber === undefined
-                ? {}
-                : { project_number: entryProjectNumber }),
-        },
-        context.config
-    )
-    const workspaceId =
-        resolvedCtx.workspaceId === 'default' && canonicalRepo && callerWorkspace === undefined
-            ? canonicalRepo
-            : resolvedCtx.workspaceId
-    const projectNumber = pairCallerWorkspace
-        ? resolvedCtx.projectNumber
-        : (resolvedCtx.projectNumber ?? entryProjectNumber)
+    if ('errorResponse' in entryScope) return entryScope.errorResponse
+    const { workspaceId, projectNumber } = entryScope
     const entry = db.createEntry({
         content: entryContent,
         entryType: 'bug_fix',

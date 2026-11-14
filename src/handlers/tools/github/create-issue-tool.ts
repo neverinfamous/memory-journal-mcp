@@ -10,6 +10,7 @@ import {
     loadProjectRegistryFromConfig,
     resolveProjectContext,
 } from '../../../utils/workspace-resolver.js'
+import { activeProjectRegistry, pairStoredScope } from '../../../utils/write-scope.js'
 import { CreateGitHubIssueWithEntryOutputSchema } from './schemas.js'
 import { resolveOwnerRepo, resolveProjectNumber } from './helpers.js'
 import { addIssueToProject, type IssueProjectResult } from './create-issue-project.js'
@@ -34,15 +35,15 @@ export function detectScopeMismatch(
 ): string | undefined {
     if (registry === undefined || registry === null) return undefined
     const wsKey =
-        callerWorkspace !== undefined && callerWorkspace.toLowerCase() !== 'default'
+        callerWorkspace !== undefined
             ? findCanonicalRegistryKey(callerWorkspace, registry)
             : undefined
     const repoKey =
         canonicalRepo !== undefined && Object.prototype.hasOwnProperty.call(registry, canonicalRepo)
             ? canonicalRepo
             : undefined
-    if (wsKey !== undefined && repoKey !== undefined && wsKey !== repoKey) {
-        return `workspace_id "${callerWorkspace ?? ''}" does not match repository "${canonicalRepo ?? ''}".`
+    if (callerWorkspace !== undefined && repoKey !== undefined && wsKey !== repoKey) {
+        return `workspace_id "${callerWorkspace}" does not match repository "${canonicalRepo ?? ''}".`
     }
     const ownerKey = wsKey ?? repoKey
     const registered = ownerKey !== undefined ? registry[ownerKey]?.project_number : undefined
@@ -65,6 +66,69 @@ export function scopeMismatchResponse(error: string): Record<string, unknown> {
         category: 'validation',
         suggestion: 'Provide a consistent repo, workspace_id, and project_number for a single registered project.',
         recoverable: true,
+    }
+}
+
+export function resolveIssueEntryScope(
+    context: ToolContext,
+    resolvedRepo: string | undefined,
+    inputWorkspaceId: string | undefined,
+    inputProjectNumber: number | undefined,
+    wildcardAction: string
+):
+    | { workspaceId: string; projectNumber: number | undefined }
+    | { errorResponse: Record<string, unknown> } {
+    if (inputWorkspaceId?.trim() === '*') {
+        return {
+            errorResponse: scopeMismatchResponse(
+                `workspace_id '*' is a read-only wildcard and cannot be used to ${wildcardAction}.`
+            ),
+        }
+    }
+    const entryProjectNumber = resolveProjectNumber(context, resolvedRepo, inputProjectNumber)
+    if (entryProjectNumber !== undefined && entryProjectNumber <= 0) {
+        return {
+            errorResponse: scopeMismatchResponse('project_number must be a positive integer.'),
+        }
+    }
+    const callerWorkspace = concreteCallerWorkspace(inputWorkspaceId)
+    const pairCallerWorkspace = callerWorkspace !== undefined && inputProjectNumber === undefined
+    const registry = context.config?.projectRegistry ?? loadProjectRegistryFromConfig()
+    const canonicalRepo = resolvedRepo
+        ? (findCanonicalRegistryKey(resolvedRepo, registry) ?? resolvedRepo)
+        : undefined
+    const mismatch = detectScopeMismatch(
+        registry,
+        canonicalRepo,
+        callerWorkspace,
+        inputProjectNumber
+    )
+    if (mismatch !== undefined) return { errorResponse: scopeMismatchResponse(mismatch) }
+
+    const resolvedCtx = resolveProjectContext(
+        {
+            workspace_id: callerWorkspace ?? canonicalRepo,
+            ...(pairCallerWorkspace || entryProjectNumber === undefined
+                ? {}
+                : { project_number: entryProjectNumber }),
+        },
+        context.config
+    )
+    const candidateWs =
+        resolvedCtx.workspaceId === 'default' && canonicalRepo && callerWorkspace === undefined
+            ? canonicalRepo
+            : resolvedCtx.workspaceId
+    const candidateProj = pairCallerWorkspace
+        ? resolvedCtx.projectNumber
+        : (resolvedCtx.projectNumber ?? entryProjectNumber)
+    const paired = pairStoredScope(
+        candidateWs,
+        candidateProj,
+        activeProjectRegistry(context.config?.projectRegistry)
+    )
+    return {
+        workspaceId: paired.workspaceId ?? candidateWs,
+        projectNumber: paired.projectNumber ?? undefined,
     }
 }
 
@@ -147,39 +211,15 @@ export function getCreateGitHubIssueTool(context: ToolContext): ToolDefinition {
                 const resolved = await resolveOwnerRepo(context, input)
                 if ('error' in resolved) return resolved.response
 
-                const entryProjectNumber = resolveProjectNumber(
+                const entryScope = resolveIssueEntryScope(
                     context,
                     resolved.repo,
-                    input.project_number
+                    input.workspace_id,
+                    input.project_number,
+                    'create issues and journal entries'
                 )
-                const callerWorkspace = concreteCallerWorkspace(input.workspace_id)
-                const pairCallerWorkspace =
-                    callerWorkspace !== undefined && input.project_number === undefined
-
-                const registry =
-                    context.config?.projectRegistry ?? loadProjectRegistryFromConfig()
-                const canonicalRepo = resolved.repo
-                    ? (findCanonicalRegistryKey(resolved.repo, registry) ?? resolved.repo)
-                    : undefined
-                const mismatch = detectScopeMismatch(registry, canonicalRepo, callerWorkspace, input.project_number)
-                if (mismatch !== undefined) return scopeMismatchResponse(mismatch)
-                // [INVARIANT] Entry scope derives from repo/workspace/project only, never from content/tag keywords.
-                const resolvedCtx = resolveProjectContext(
-                    {
-                        workspace_id: callerWorkspace ?? canonicalRepo,
-                        ...(pairCallerWorkspace || entryProjectNumber === undefined
-                            ? {}
-                            : { project_number: entryProjectNumber }),
-                    },
-                    context.config
-                )
-                const workspaceId =
-                    resolvedCtx.workspaceId === 'default' && canonicalRepo && callerWorkspace === undefined
-                        ? canonicalRepo
-                        : resolvedCtx.workspaceId
-                const projectNumber = pairCallerWorkspace
-                    ? resolvedCtx.projectNumber
-                    : (resolvedCtx.projectNumber ?? entryProjectNumber)
+                if ('errorResponse' in entryScope) return entryScope.errorResponse
+                const { workspaceId, projectNumber } = entryScope
 
                 // 1. OUTBOX PATTERN: Create journal entry in pending state FIRST
                 const entryContent =

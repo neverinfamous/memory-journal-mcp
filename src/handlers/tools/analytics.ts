@@ -9,6 +9,7 @@ import type { ToolDefinition, ToolContext } from '../../types/index.js'
 import { ValidationError } from '../../types/errors.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
 import { resolveWorkspaceId } from '../../utils/workspace-resolver.js'
+import { activeProjectRegistry, alignedProjectFilter } from '../../utils/write-scope.js'
 import {
     DATE_FORMAT_REGEX,
     DATE_FORMAT_MESSAGE,
@@ -277,12 +278,18 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
                         resolvedProjectNumber === undefined
                             ? '*'
                             : resolveWorkspaceId(workspace_id, resolvedProjectNumber, context.config)
+                    const effectiveProjectFilter = alignedProjectFilter(
+                        wsId,
+                        resolvedProjectNumber,
+                        activeProjectRegistry(context.config?.projectRegistry)
+                    )
                     const stats = db.getStatistics(
                         group_by,
                         start_date,
                         end_date,
                         project_breakdown,
-                        wsId
+                        wsId,
+                        ...(effectiveProjectFilter !== undefined ? [effectiveProjectFilter] : [])
                     )
                     return { success: true, ...(stats as object), groupBy: group_by }
                 } catch (err) {
@@ -321,6 +328,9 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
                         minEntries: input.min_entries,
                         inactiveThresholdDays: INACTIVE_THRESHOLD_DAYS,
                         workspaceId: wsId,
+                        ...(resolvedProjectNumber !== undefined
+                            ? { projectNumber: resolvedProjectNumber }
+                            : {}),
                     })
 
                     if (results.projects.length === 0) {

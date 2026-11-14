@@ -186,12 +186,12 @@ function resolveAliasedKey(startKey: string, value: unknown, ctx: KeyContext): s
     const contentKeys = startKey === 'text' || startKey === 'body' || startKey === 'note' || startKey === 'title'
     if (
         contentKeys &&
-        methodLower !== undefined &&
+        methodName !== undefined &&
         !(
             isGithubTool ||
-            hasMethodToken(methodLower, 'create') ||
-            hasMethodToken(methodLower, 'update') ||
-            hasMethodToken(methodLower, 'entry')
+            hasMethodToken(methodName, 'create') ||
+            hasMethodToken(methodName, 'update') ||
+            hasMethodToken(methodName, 'entry')
         )
     ) {
         return startKey
@@ -201,13 +201,17 @@ function resolveAliasedKey(startKey: string, value: unknown, ctx: KeyContext): s
 
 /** Redirects content-like keys (message/name/description/...) to the right field per tool family. */
 function resolveContentLikeKey(startKey: string, ctx: KeyContext): string {
-    const { obj, result, methodName, methodLower, isGithubTool } = ctx
+    const { obj, result, methodName, isGithubTool } = ctx
     let snakeKey = startKey
     if (CONTENT_LIKE_KEYS.has(snakeKey)) {
         if (isGithubTool) {
             if (snakeKey === 'name') {
                 if (!('title' in obj) && !('title' in result)) snakeKey = 'title'
-            } else if (snakeKey === 'description' && methodLower?.includes('milestone')) {
+            } else if (
+                snakeKey === 'description' &&
+                methodName !== undefined &&
+                (hasMethodToken(methodName, 'milestone') || hasMethodToken(methodName, 'milestones'))
+            ) {
                 snakeKey = 'description'
             } else if (
                 methodName !== undefined &&

@@ -96,7 +96,7 @@ function insertEntryRow(context: EntriesSharedContext, input: CreateEntryInput):
             context.config
         )
         const paired = pairStoredScope(
-            omittedWorkspace ? resolved.workspaceId : trimmedWorkspace,
+            resolved.workspaceId,
             input.projectNumber ?? resolved.projectNumber,
             activeProjectRegistry(context.config?.projectRegistry)
         )

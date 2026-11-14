@@ -4,6 +4,77 @@ import type { EntryType, RelationshipType } from '../../types/index.js'
 import { ENTRY_TYPES, RELATIONSHIP_TYPES } from '../../types/entities.js'
 import type { createEntryOptionsSchema } from '../schemas.js'
 
+export type HealedEntryOptions = z.infer<typeof createEntryOptionsSchema> & {
+    tag?: string
+    contentFile?: string
+    body?: string
+}
+
+/** Normalize CLI flag aliases (--tag, --content-file, --body, --validation, --workspace, --summary, --description) and positional content. */
+export function applyCliEntryFlagAliases(
+    options: HealedEntryOptions,
+    restArgs: unknown[] = []
+): void {
+    if (
+        options.workspace !== undefined &&
+        options.workspaceId === undefined &&
+        options.workspace.trim() !== ''
+    ) {
+        options.workspaceId = options.workspace
+    }
+    if (
+        options.workspace_id !== undefined &&
+        options.workspaceId === undefined &&
+        options.workspace_id.trim() !== ''
+    ) {
+        options.workspaceId = options.workspace_id
+    }
+    if (options.tag !== undefined && options.tags === undefined) options.tags = options.tag
+    if (options.contentFile !== undefined && options.file === undefined) {
+        options.file = options.contentFile
+    }
+    if (options.body !== undefined && options.content === undefined) options.content = options.body
+    if (options.validation !== undefined && options.validationStatus === undefined) {
+        options.validationStatus = options.validation
+    }
+    if (options.validation_status !== undefined && options.validationStatus === undefined) {
+        options.validationStatus = options.validation_status
+    }
+
+    if (options.content === undefined && options.file === undefined && restArgs.length > 0) {
+        const rawParts: unknown[] = []
+        for (const arg of restArgs) {
+            if (Array.isArray(arg)) {
+                for (const item of arg) rawParts.push(item)
+            } else {
+                rawParts.push(arg)
+            }
+        }
+        const positionalParts = rawParts.filter(
+            (arg): arg is string => typeof arg === 'string' && arg.trim() !== ''
+        )
+        if (positionalParts.length > 0) {
+            options.content = positionalParts.join(' ')
+        }
+    }
+    if (
+        options.description !== undefined &&
+        options.content === undefined &&
+        options.file === undefined
+    ) {
+        options.content = options.description
+    }
+    if (
+        options.summary !== undefined &&
+        options.content === undefined &&
+        options.file === undefined
+    ) {
+        options.content = options.summary
+    } else if (options.summary !== undefined && options.title === undefined) {
+        options.title = options.summary
+    }
+}
+
 /**
  * Pure helpers for resolving entry payload fields from CLI options and metadata.
  * Extracted from buildEntryPayload.
@@ -117,8 +188,38 @@ export function resolveEntryTypeAndTags(
     return { entryType, tags }
 }
 
+function parseStrictPositiveProjectNumber(raw: unknown): number | undefined {
+    if (raw === undefined || raw === null) return undefined
+    if (typeof raw === 'number') {
+        if (!Number.isInteger(raw) || raw < 1) {
+            throw new Error(
+                `Invalid project number '${String(raw)}'. Expected a positive integer.`
+            )
+        }
+        return raw
+    }
+    if (typeof raw !== 'string') {
+        throw new Error('Invalid project number. Expected a positive integer.')
+    }
+    const trimmed = raw.trim()
+    if (trimmed === '') return undefined
+    const match = /^p?(\d+)$/i.exec(trimmed)
+    if (match === null) {
+        throw new Error(
+            `Invalid project number '${trimmed}'. Expected a positive integer.`
+        )
+    }
+    const parsed = Number.parseInt(match[1] ?? '', 10)
+    if (!Number.isInteger(parsed) || parsed < 1) {
+        throw new Error(
+            `Invalid project number '${trimmed}'. Expected a positive integer.`
+        )
+    }
+    return parsed
+}
+
 export function resolveExplicitProjectAndWorkspace(
-    options: z.infer<typeof createEntryOptionsSchema>,
+    options: HealedEntryOptions,
     metadata: Record<string, unknown>
 ): { explicitProjectNum: number | undefined; explicitWorkspaceId: string | undefined } {
     const projectRaw =
@@ -128,18 +229,18 @@ export function resolveExplicitProjectAndWorkspace(
         metadata['project'] ??
         metadata['projectNumber'] ??
         metadata['project_number']
-    const parsedProjectNum = projectRaw !== undefined ? Number(projectRaw) : undefined
-    const explicitProjectNum =
-        parsedProjectNum !== undefined && !isNaN(parsedProjectNum) ? parsedProjectNum : undefined
+    const explicitProjectNum = parseStrictPositiveProjectNumber(projectRaw)
 
     const optsRec = z.record(z.string(), z.unknown()).parse(options)
     const rawWs =
         optsRec['workspaceId'] ??
         optsRec['workspace_id'] ??
+        optsRec['workspace'] ??
         metadata['workspace'] ??
         metadata['workspaceId'] ??
         metadata['workspace_id']
-    const explicitWorkspaceId = typeof rawWs === 'string' ? rawWs : undefined
+    const explicitWorkspaceId =
+        typeof rawWs === 'string' && rawWs.trim() !== '' ? rawWs.trim() : undefined
     return { explicitProjectNum, explicitWorkspaceId }
 }
 

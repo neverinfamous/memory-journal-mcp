@@ -78,16 +78,24 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                             }
                         }
                         const namedWorkspace = e.workspace_id ?? input.workspace_id
+                        const itemNamesOtherWorkspace =
+                            e.workspace_id !== undefined &&
+                            input.workspace_id !== undefined &&
+                            e.workspace_id.trim().toLowerCase() !==
+                                input.workspace_id.trim().toLowerCase()
+                        const effectiveProject =
+                            e.project_number ??
+                            (!itemNamesOtherWorkspace ? input.project_number : undefined)
                         const resolved = resolveProjectContext(
                             {
                                 workspace_id: namedWorkspace,
-                                project_number: e.project_number ?? input.project_number,
+                                project_number: effectiveProject,
                                 content: e.content,
                                 tags: e.tags,
                             },
                             context.config
                         )
-                        const requestedProject = e.project_number ?? input.project_number
+                        const requestedProject = effectiveProject
                         const callerWorkspace =
                             namedWorkspace !== undefined && namedWorkspace !== '*'
                                 ? namedWorkspace
@@ -176,25 +184,34 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                     }))
 
                     const { created: results, errors } = teamDb.createEntries(inputs)
+                    const failedIndices = new Set(errors.map((err) => err.index))
+                    const createdSourceIndices: number[] = []
+                    for (let idx = 0; idx < inputs.length; idx++) {
+                        if (!failedIndices.has(idx)) {
+                            createdSourceIndices.push(idx)
+                        }
+                    }
 
                     const relationshipWarnings: string[] = []
                     for (let i = 0; i < results.length; i++) {
                         const createdEntry = results[i]
-                        const sourceEntry = input.entries[i]
+                        const sourceIdx = createdSourceIndices[i] ?? i
+                        const sourceEntry = input.entries[sourceIdx]
                         if (createdEntry) {
                             relationshipWarnings.push(
                                 ...linkRequestedRelationships(
                                     teamDb,
                                     createdEntry.id,
                                     sourceEntry?.relationships,
-                                    inputs[i]?.workspaceId
+                                    inputs[sourceIdx]?.workspaceId
                                 )
                             )
                         }
                     }
 
                     const entries = results.map((r, i) => {
-                        const author = inputs[i]?.author
+                        const sourceIdx = createdSourceIndices[i] ?? i
+                        const author = inputs[sourceIdx]?.author
                         return { ...r, author }
                     })
 
@@ -396,6 +413,7 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                         currentUser,
                         callerRole,
                         codemodeBypass,
+                        ...(input.permanent !== undefined ? { permanent: input.permanent } : {}),
                     })
                     if ('errorResponse' in filtered) return filtered.errorResponse
                     const { validIds, notFound } = filtered

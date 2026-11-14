@@ -113,7 +113,10 @@ export function applyEntryAndSearchInterceptions(
             const entryType = typeof obj['entry_type'] === 'string' ? obj['entry_type'] : undefined
             const isFlagSearch = Boolean(tags && tags.length > 0 && tags.every((t) => typeof t === 'string' && t.startsWith('flag:'))) || entryType === 'flag'
             if (!isFlagSearch) {
-                const label = methodName.includes('date') ? 'Cross-project team date range searches' : 'Cross-project team searches'
+                const label =
+                    methodName === 'team_search_by_date_range' || methodName === 'teamSearchByDateRange'
+                        ? 'Cross-project team date range searches'
+                        : 'Cross-project team searches'
                 return validationError(
                     `${label} are only permitted for flags. Provide a project_number or filter by entry_type="flag" or flag:* tags.`,
                     'Provide a project_number, or use tags starting with "flag:" or entry_type="flag"'

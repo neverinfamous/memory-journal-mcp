@@ -41,10 +41,13 @@ export function extractAndRecoverSqlCode(code: string): string | null {
     const limitMatch = /\bLIMIT\s+(\d+)/i.exec(cleanSql)
     const limitVal = limitMatch?.[1] !== undefined ? parseInt(limitMatch[1], 10) : undefined
 
-    const idMatch = /\bWHERE\s+[`"']?(?:id|entry_id)[`"']?\s*=\s*(\d+)/i.exec(cleanSql)
+    const idMatch = /\b(?:WHERE|AND)\s+[`"']?(?:id|entry_id)[`"']?\s*=\s*(\d+)/i.exec(cleanSql)
     const idVal = idMatch?.[1] !== undefined ? parseInt(idMatch[1], 10) : undefined
 
-    const likeMatch = /\bWHERE\s+[`"']?(?:[a-zA-Z0-9_]+)[`"']?\s+(?:LIKE|ILIKE|=)\s*['"]%?([^%'"]+)%?['"]/i.exec(cleanSql)
+    const likeMatch =
+        /\b(?:WHERE|AND)\s+[`"']?(?:content|title|tags|body|text|summary|name)[`"']?\s+(?:LIKE|ILIKE|=)\s*['"]%?([^%'"]+)%?['"]/i.exec(
+            cleanSql
+        )
     const searchQuery = likeMatch?.[1]
 
     const isCount = /\bCOUNT\s*\(/i.test(cleanSql)

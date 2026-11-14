@@ -117,7 +117,7 @@ function mapGithubTextKeys(methodName: string, obj: Record<string, unknown>): vo
 }
 
 function mapKanbanAndMilestoneKeepAliases(methodName: string, obj: Record<string, unknown>): void {
-    if (methodName.includes('get_kanban_board') || methodName.includes('getKanbanBoard')) {
+    if (methodName === 'get_kanban_board' || methodName === 'getKanbanBoard') {
         for (const k of ['keep', 'path']) {
             if (obj[k] !== undefined && obj['project_number'] === undefined) {
                 obj['project_number'] = obj[k]
@@ -125,7 +125,7 @@ function mapKanbanAndMilestoneKeepAliases(methodName: string, obj: Record<string
             }
         }
     }
-    if (methodName.includes('move_kanban_item') || methodName.includes('moveKanbanItem')) {
+    if (methodName === 'move_kanban_item' || methodName === 'moveKanbanItem') {
         if (obj['keep'] !== undefined && obj['item_id'] === undefined) {
             obj['item_id'] = obj['keep']
             delete obj['keep']
@@ -135,13 +135,13 @@ function mapKanbanAndMilestoneKeepAliases(methodName: string, obj: Record<string
             delete obj['path']
         }
     }
-    if (methodName.includes('add_kanban_item') || methodName.includes('addKanbanItem')) {
+    if (methodName === 'add_kanban_item' || methodName === 'addKanbanItem') {
         if (obj['keep'] !== undefined && obj['issue_number'] === undefined) {
             obj['issue_number'] = obj['keep']
             delete obj['keep']
         }
     }
-    if (methodName.includes('delete_kanban_item') || methodName.includes('deleteKanbanItem')) {
+    if (methodName === 'delete_kanban_item' || methodName === 'deleteKanbanItem') {
         if (obj['keep'] !== undefined && obj['item_id'] === undefined) {
             obj['item_id'] = obj['keep']
             delete obj['keep']
@@ -244,12 +244,7 @@ function applyBackupInterceptions(
 ): { obj: Record<string, unknown> } | { error: Record<string, unknown> } {
     const obj = { ...rawObj }
 
-    if (
-        methodName.includes('backup_journal') ||
-        methodName.includes('backupJournal') ||
-        methodName.includes('team_backup') ||
-        methodName.includes('teamBackup')
-    ) {
+    if (['backup_journal', 'backupJournal', 'team_backup', 'teamBackup'].includes(methodName)) {
         if (obj['name'] === undefined) {
             for (const k of ['description', 'message', 'text', 'path', 'q', 'keep', 'mode']) {
                 if (obj[k] !== undefined && obj['name'] === undefined) obj['name'] = obj[k]
@@ -258,12 +253,7 @@ function applyBackupInterceptions(
         }
     }
 
-    if (
-        methodName.includes('list_backups') ||
-        methodName.includes('listBackups') ||
-        methodName.includes('team_list_backups') ||
-        methodName.includes('teamListBackups')
-    ) {
+    if (['list_backups', 'listBackups', 'team_list_backups', 'teamListBackups'].includes(methodName)) {
         if (
             obj['q'] !== undefined ||
             obj['query'] !== undefined ||
@@ -300,7 +290,7 @@ function applyBackupInterceptions(
         }
     }
 
-    if (methodName.includes('restore_backup') || methodName.includes('restoreBackup')) {
+    if (['restore_backup', 'restoreBackup', 'team_restore_backup', 'teamRestoreBackup'].includes(methodName)) {
         if (obj['filename'] === undefined) {
             for (const k of ['path', 'file', 'text', 'message', 'description', 'q', 'keep', 'mode']) {
                 if (obj[k] !== undefined && obj['filename'] === undefined) obj['filename'] = obj[k]
@@ -309,7 +299,7 @@ function applyBackupInterceptions(
         }
     }
 
-    if (methodName.includes('cleanup_backups') || methodName.includes('cleanupBackups')) {
+    if (['cleanup_backups', 'cleanupBackups', 'team_cleanup_backups', 'teamCleanupBackups'].includes(methodName)) {
         if (obj['keep_count'] === undefined) {
             for (const k of ['keep', 'limit', 'q', 'mode', 'text', 'message', 'description', 'path']) {
                 if (obj[k] !== undefined && obj['keep_count'] === undefined) obj['keep_count'] = obj[k]

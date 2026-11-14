@@ -14,6 +14,10 @@ import {
     buildEntryPayload,
     type EntryPayload,
 } from './entry-payload.js'
+import {
+    applyCliEntryFlagAliases,
+    type HealedEntryOptions,
+} from './entry-payload-helpers.js'
 
 export const createEntrySchema = createEntryOptionsSchema
 export const updateEntrySchema = updateEntryOptionsSchema
@@ -27,43 +31,6 @@ export {
     parseMetadata,
     buildEntryPayload,
     type EntryPayload,
-}
-
-type HealedEntryOptions = z.infer<typeof createEntrySchema> & {
-    tag?: string
-    contentFile?: string
-    body?: string
-}
-
-function applyCliEntryFlagAliases(options: HealedEntryOptions, restArgs: unknown[]): void {
-    if (options.tag !== undefined && options.tags === undefined) options.tags = options.tag
-    if (options.contentFile !== undefined && options.file === undefined) {
-        options.file = options.contentFile
-    }
-    if (options.body !== undefined && options.content === undefined) options.content = options.body
-    if (options.validation !== undefined && options.validationStatus === undefined) {
-        options.validationStatus = options.validation
-    }
-    if (options.validation_status !== undefined && options.validationStatus === undefined) {
-        options.validationStatus = options.validation_status
-    }
-    if (options.workspace !== undefined && options.workspaceId === undefined) {
-        options.workspaceId = options.workspace
-    }
-    if (options.summary !== undefined && options.title === undefined) {
-        options.title = options.summary
-    }
-
-    if (
-        restArgs.length > 0 &&
-        typeof restArgs[0] === 'string' &&
-        options.content === undefined
-    ) {
-        options.content = restArgs.map(String).join(' ')
-    }
-    if (options.description !== undefined && options.content === undefined) {
-        options.content = options.description
-    }
 }
 
 function handleCliEntryError(e: unknown, actionLabel: 'create' | 'update'): never {
@@ -273,7 +240,8 @@ export async function updateEntryAction(...args: unknown[]): Promise<void> {
             existingEntry?.content
         )
 
-        const updates: Partial<CreateEntryInput> & {
+        const updates: Omit<Partial<CreateEntryInput>, 'projectNumber'> & {
+            projectNumber?: number | null
             expectedVersion: number
             targetWorkspaceId?: string
         } = {
@@ -283,14 +251,15 @@ export async function updateEntryAction(...args: unknown[]): Promise<void> {
         if (payload.entryType !== undefined) updates.entryType = payload.entryType
         if (payload.tags !== undefined) updates.tags = payload.tags
         // [INVARIANT] A cwd-derived project number is only backfilled onto an unnumbered entry
-        // that lives in a non-`default` workspace; `default` entries stay unnumbered unless the
-        // caller passed an explicit project (C2).
+        // that lives in a non-`default` workspace and stays in that workspace; `default` entries
+        // stay unnumbered unless the caller passed an explicit project (C2).
         const existingIsDefault = existingEntry?.workspaceId?.toLowerCase() === 'default'
         if (
             payload.projectNumber !== undefined &&
             (payload.hasExplicitProject === true ||
                 (!existingIsDefault &&
-                    (existingEntry?.projectNumber == null || existingEntry.projectNumber === 0)))
+                    (existingEntry?.projectNumber == null || existingEntry.projectNumber === 0) &&
+                    payload.workspaceId === existingEntry?.workspaceId))
         ) {
             updates.projectNumber = payload.projectNumber
         }
@@ -302,6 +271,9 @@ export async function updateEntryAction(...args: unknown[]): Promise<void> {
             if (existingEntry !== null && existingEntry.workspaceId !== payload.workspaceId) {
                 updates.workspaceId = '*'
                 updates.targetWorkspaceId = payload.workspaceId
+                if (payload.hasExplicitProject !== true) {
+                    updates.projectNumber = payload.projectNumber ?? null
+                }
             } else {
                 updates.workspaceId = payload.workspaceId
             }

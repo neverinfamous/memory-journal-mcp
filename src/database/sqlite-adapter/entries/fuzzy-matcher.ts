@@ -64,7 +64,14 @@ export function buildVocabulary(db: Database, workspaceId?: string): string[] {
                            WHERE mj.workspace_id = ? AND mj.deleted_at IS NULL`
                       )
                       .all(workspaceId)
-                : db.prepare('SELECT name FROM tags').all()
+                : db
+                      .prepare(
+                          `SELECT DISTINCT t.name FROM tags t
+                           INNER JOIN entry_tags et ON et.tag_id = t.id
+                           INNER JOIN memory_journal mj ON mj.id = et.entry_id
+                           WHERE mj.deleted_at IS NULL`
+                      )
+                      .all()
         ) as { name: string }[]
         for (const tag of tags) {
             vocab.add(tag.name.toLowerCase())
@@ -84,7 +91,7 @@ export function buildVocabulary(db: Database, workspaceId?: string): string[] {
                       .all(workspaceId)
                 : db
                       .prepare(
-                          'SELECT DISTINCT entry_type FROM memory_journal WHERE entry_type IS NOT NULL'
+                          'SELECT DISTINCT entry_type FROM memory_journal WHERE entry_type IS NOT NULL AND deleted_at IS NULL'
                       )
                       .all()
         ) as { entry_type: string }[]

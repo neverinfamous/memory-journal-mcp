@@ -279,7 +279,7 @@ describe('Code Mode Worker Proxies & Globals', () => {
             sort_by: 'importance',
         })
         expect((shimMj['close'] as () => { success: boolean })().success).toBe(false)
-        expect((shimMj['execSync'] as () => string)()).toBe('')
+        expect(() => (shimMj['execSync'] as () => string)()).toThrow(/VALIDATION_ERROR/)
         const spawnRes = (shimMj['spawn'] as (c: string, cb: () => void) => { kill: () => boolean })(
             'ls',
             () => undefined

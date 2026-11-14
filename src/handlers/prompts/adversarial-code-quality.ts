@@ -7,7 +7,7 @@
 import type { InternalPromptDef } from './index.js'
 import { buildAuditPromptDefinition } from './adversarial-audit-factory.js'
 
-export const CODE_QUALITY_PROMPT_REVISION = '2026-11-12-audit-pass20'
+export const CODE_QUALITY_PROMPT_REVISION = '2026-11-13-audit-pass21'
 
 const SCAN_METHOD_1 = `     \`\`\`powershell
      $skip = @('vendor','third_party','node_modules','dist','coverage','build','.next','out')

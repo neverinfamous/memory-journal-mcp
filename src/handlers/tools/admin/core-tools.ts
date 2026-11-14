@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
+import { ValidationError } from '../../../types/errors.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { autoIndexEntry } from '../../../utils/vector-index-helpers.js'
 import { resolveProjectContext, resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
@@ -33,6 +34,11 @@ export function canonicalTargetWorkspace(
     config: ToolContext['config']
 ): string | undefined {
     if (target === undefined) return undefined
+    if (target.trim() === '') {
+        throw new ValidationError(
+            "target_workspace_id cannot be blank. Omit it to keep the entry's current workspace."
+        )
+    }
     return resolveWriteWorkspaceId(target, undefined, config)
 }
 
@@ -62,54 +68,83 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                     coerceSignificanceAlias(params)
 
                     const input = UpdateEntrySchema.parse(params)
-                    const resolved = resolveProjectContext(
-                        {
-                            workspace_id: input.workspace_id,
-                            project_number: input.project_number,
-                            content: input.content,
-                            tags: input.tags ?? undefined,
-                        },
-                        context.config
-                    )
-                    let wsId = input.workspace_id === '*' ? '*' : resolved.workspaceId
-                    const rawHasExplicitWorkspace =
-                        typeof params === 'object' &&
-                        params !== null &&
-                        ('workspace_id' in params || 'workspaceId' in params || 'workspace' in params)
-                    if (
-                        !rawHasExplicitWorkspace &&
-                        input.project_number === undefined
-                    ) {
-                        const existingByPk = db.getEntryById(input.entry_id, '*')
-                        if (existingByPk?.workspaceId !== undefined) {
-                            wsId = existingByPk.workspaceId
-                        }
-                    }
-                    if (wsId === '*' && input.project_number !== undefined) {
-                        const scoped = db.getEntryById(input.entry_id, '*')
-                        if (projectOwnershipMismatch(input.project_number, scoped?.projectNumber)) {
-                            return {
-                                success: false,
-                                error: `Entry ${String(input.entry_id)} not found`,
-                                code: 'RESOURCE_NOT_FOUND',
-                                category: 'resource',
-                                suggestion: 'Verify the entry ID and project number, and try again',
-                                recoverable: true,
-                            }
-                        }
-                    }
                     const targetWorkspaceId = canonicalTargetWorkspace(
                         input.target_workspace_id,
                         context.config
                     )
+                    let wsId: string
+                    let projectNumberForUpdate: number | undefined
+                    if (targetWorkspaceId !== undefined) {
+                        const targetResolved = resolveProjectContext(
+                            {
+                                workspace_id: targetWorkspaceId,
+                                ...(input.project_number !== undefined
+                                    ? { project_number: input.project_number }
+                                    : {}),
+                            },
+                            context.config
+                        )
+                        projectNumberForUpdate =
+                            input.project_number === undefined
+                                ? undefined
+                                : targetResolved.projectNumber
+                        if (input.workspace_id === '*') {
+                            wsId = '*'
+                        } else if (input.workspace_id !== undefined) {
+                            wsId = resolveWriteWorkspaceId(
+                                input.workspace_id,
+                                undefined,
+                                context.config
+                            )
+                        } else {
+                            const existingByPk = db.getEntryById(input.entry_id, '*')
+                            wsId =
+                                existingByPk?.workspaceId ??
+                                resolveWriteWorkspaceId(undefined, undefined, context.config)
+                        }
+                    } else {
+                        const resolved = resolveProjectContext(
+                            {
+                                workspace_id: input.workspace_id,
+                                project_number: input.project_number,
+                            },
+                            context.config
+                        )
+                        projectNumberForUpdate =
+                            input.project_number === undefined
+                                ? undefined
+                                : resolved.projectNumber
+                        wsId = input.workspace_id === '*' ? '*' : resolved.workspaceId
+                        if (input.workspace_id === undefined && input.project_number === undefined) {
+                            const existingByPk = db.getEntryById(input.entry_id, '*')
+                            if (existingByPk?.workspaceId !== undefined) {
+                                wsId = existingByPk.workspaceId
+                            }
+                        }
+                        if (
+                            input.project_number !== undefined &&
+                            (wsId === '*' || input.workspace_id !== undefined)
+                        ) {
+                            const scoped = db.getEntryById(input.entry_id, '*')
+                            if (projectOwnershipMismatch(input.project_number, scoped?.projectNumber)) {
+                                return {
+                                    success: false,
+                                    error: `Entry ${String(input.entry_id)} not found`,
+                                    code: 'RESOURCE_NOT_FOUND',
+                                    category: 'resource',
+                                    suggestion: 'Verify the entry ID and project number, and try again',
+                                    recoverable: true,
+                                }
+                            }
+                        }
+                    }
                     const entry = db.updateEntry(input.entry_id, {
                         content: input.content,
                         entryType: input.entry_type,
                         isPersonal: input.is_personal,
                         tags: input.tags,
                         significanceType: input.significance_type,
-                        projectNumber:
-                            input.project_number === undefined ? undefined : resolved.projectNumber,
+                        projectNumber: projectNumberForUpdate,
                         projectOwner: input.project_owner,
                         issueNumber: input.issue_number,
                         issueUrl: input.issue_url,

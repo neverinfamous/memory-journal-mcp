@@ -127,6 +127,7 @@ export interface SecureDispatcherOptions {
     sessionContext: ToolContext
     projectId: number | string | undefined
     workspaceId: string | undefined
+    explicitWorkspace?: boolean
     autoVersion: boolean
     dryRun: boolean
 }
@@ -134,7 +135,7 @@ export interface SecureDispatcherOptions {
 export function createSecureDispatcher(
     options: SecureDispatcherOptions
 ): (toolName: string, toolParams: unknown, isSimulation?: boolean) => Promise<unknown> {
-    const { tools, sessionContext, projectId, workspaceId, autoVersion, dryRun } = options
+    const { tools, sessionContext, projectId, workspaceId, explicitWorkspace, autoVersion, dryRun } = options
 
     return async (toolName: string, toolParams: unknown, isSimulation?: boolean): Promise<unknown> => {
         const tool = tools.find((t) => t.name === toolName)
@@ -148,6 +149,7 @@ export function createSecureDispatcher(
             sessionContext,
             projectId,
             workspaceId,
+            explicitWorkspace,
         })
         if ('errorResult' in normalized) return normalized.errorResult
         let finalParams = normalized.params
@@ -175,6 +177,7 @@ interface DispatchParamContext {
     sessionContext: ToolContext
     projectId: number | string | undefined
     workspaceId: string | undefined
+    explicitWorkspace?: boolean
 }
 
 async function autoPopulateGithubUrls(
@@ -213,15 +216,15 @@ async function normalizeDispatchParams(
     toolParams: unknown,
     ctx: DispatchParamContext
 ): Promise<{ params: unknown } | { errorResult: Record<string, unknown> }> {
-    const { sessionContext, projectId, workspaceId } = ctx
+    const { sessionContext, projectId, workspaceId, explicitWorkspace } = ctx
     const finalParams = deepCamelToSnake(toolParams, 0, (key) => checkSchemaAcceptsKey(tool.inputSchema, key))
     if (!isRecord(finalParams)) return { params: finalParams }
 
     const paramsObj = { ...finalParams }
+    const callerHasExplicitWs = paramsObj['workspace_id'] !== undefined || paramsObj['workspace'] !== undefined
     // When the caller named a project but no workspace, let resolveProjectContext derive the
     // workspace from that project instead of overriding it with the session workspace.
-    const callerPassedProjectOnly =
-        paramsObj['project_number'] !== undefined && paramsObj['workspace_id'] === undefined && paramsObj['workspace'] === undefined
+    const callerPassedProjectOnly = paramsObj['project_number'] !== undefined && !callerHasExplicitWs
     if (paramsObj['workspace'] !== undefined && paramsObj['workspace_id'] === undefined) {
         paramsObj['workspace_id'] = paramsObj['workspace']
     }
@@ -243,6 +246,25 @@ async function normalizeDispatchParams(
                     error: `Invalid project_number: '${paramsObj['project_number']}'. Code Mode failed to resolve this to a known numeric ID. You can pass the exact numeric ID (e.g. 14), the repo name (e.g. 'mysql-mcp'), or simply OMIT the project_number field entirely to let the system auto-inject the current workspace's ID.`,
                 },
             }
+        }
+    }
+    if (
+        !callerHasExplicitWs &&
+        callerPassedProjectOnly &&
+        explicitWorkspace === true &&
+        workspaceId !== undefined &&
+        workspaceId !== '*'
+    ) {
+        const supplied = typeof paramsObj['project_number'] === 'number' ? paramsObj['project_number'] : undefined
+        if (supplied !== undefined) {
+            pairStoredScope(
+                workspaceId,
+                supplied,
+                activeProjectRegistry(sessionContext.config?.projectRegistry)
+            )
+        }
+        if (checkSchemaAcceptsKey(tool.inputSchema, 'workspace_id')) {
+            paramsObj['workspace_id'] = workspaceId
         }
     }
     if (
@@ -278,7 +300,7 @@ async function normalizeDispatchParams(
         !callerPassedProjectOnly &&
         paramsObj['workspace_id'] === undefined &&
         workspaceId !== undefined &&
-        workspaceId !== 'default' &&
+        (workspaceId !== 'default' || explicitWorkspace === true) &&
         checkSchemaAcceptsKey(tool.inputSchema, 'workspace_id')
     ) {
         paramsObj['workspace_id'] = workspaceId

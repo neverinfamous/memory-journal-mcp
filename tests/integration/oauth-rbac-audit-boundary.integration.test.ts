@@ -201,7 +201,7 @@ describe('OAuth Scopes, Team RBAC, Audit Boundary & DatabaseAdapterProxy Integra
         })
 
         await runWithAuthContext(viewerCtx, async () => {
-            const viewerRead = await callTool('team_get_recent', { limit: 5 }, proxiedDb, undefined, undefined, config, undefined, teamDb)
+            const viewerRead = await callTool('team_get_recent', { limit: 5, workspace_id: 'ws-alpha' }, proxiedDb, undefined, undefined, config, undefined, teamDb)
             expect(isToolResponse(viewerRead) && viewerRead.error).toBeUndefined()
 
             const viewerWrite = await callTool(

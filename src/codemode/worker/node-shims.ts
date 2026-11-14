@@ -55,6 +55,7 @@ export interface SafeFsShim {
     writeFileSync: () => void
     writeFile: () => Promise<void>
     mkdirSync: () => void
+    appendFileSync: () => void
     unlinkSync: () => void
     readdirSync: () => string[]
     promises: {
@@ -113,6 +114,7 @@ export function createSafeFsShim(contextObj?: Record<string, unknown>): SafeFsSh
         writeFileSync: (): void => disabledFsOperation('writeFileSync'),
         writeFile: (): Promise<void> => rejectFsOperation('writeFile'),
         mkdirSync: (): void => disabledFsOperation('mkdirSync'),
+        appendFileSync: (): void => disabledFsOperation('appendFileSync'),
         unlinkSync: (): void => disabledFsOperation('unlinkSync'),
         readdirSync: (): string[] => [],
         promises: {

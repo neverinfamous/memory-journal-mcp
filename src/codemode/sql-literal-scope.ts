@@ -37,8 +37,16 @@ export function scopeFromInsertLiterals(cleanSql: string): Record<string, unknow
         if (column === 'workspace_id' && raw.length >= 2 && (raw.startsWith("'") || raw.startsWith('"'))) {
             scope['workspace_id'] = raw.slice(1, -1)
         }
-        if ((column === 'project_number' || column === 'project_id') && /^\d+$/.test(raw)) {
-            scope['project_number'] = Number(raw)
+        if (column === 'project_number' || column === 'project_id') {
+            const unquoted =
+                raw.length >= 2 &&
+                ((raw.startsWith("'") && raw.endsWith("'")) ||
+                    (raw.startsWith('"') && raw.endsWith('"')))
+                    ? raw.slice(1, -1)
+                    : raw
+            if (/^\d+$/.test(unquoted)) {
+                scope['project_number'] = Number(unquoted)
+            }
         }
     }
     return scope

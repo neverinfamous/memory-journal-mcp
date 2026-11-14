@@ -99,8 +99,11 @@ function assignColumn(payload: Record<string, unknown>, column: string, val: unk
             return pn !== undefined
         }
         case 'workspace_id':
-            if (typeof val === 'string' && val.trim() !== '') payload['workspace_id'] = val
-            return true
+            if (typeof val === 'string' && val.trim() !== '') {
+                payload['workspace_id'] = val.trim()
+                return true
+            }
+            return false
         case 'content':
         case 'title':
         case 'significance_type':
@@ -123,14 +126,15 @@ function assignColumn(payload: Record<string, unknown>, column: string, val: unk
     }
 }
 
-function mergeRecordBinds(payload: Record<string, unknown>, args: unknown[]): void {
+function mergeRecordBinds(payload: Record<string, unknown>, args: unknown[]): boolean {
     for (const arg of args) {
         if (!isPlainRecord(arg)) continue
         for (const [key, val] of Object.entries(arg)) {
             const col = key.replace(/^[@:$]/, '').replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`)
-            assignColumn(payload, col, val)
+            if (!assignColumn(payload, col, val)) return false
         }
     }
+    return true
 }
 
 function parseLiteral(raw: string): unknown {
@@ -153,7 +157,7 @@ function bindPlaceholders(
 ): boolean {
     const positional = args.filter((a) => !isPlainRecord(a))
     const placeholders = listPlaceholders(cleanSql)
-    if (positional.length === 0) return true
+    if (positional.length === 0) return placeholders.length === 0 || args.some(isPlainRecord)
     if (positional.length < placeholders.length) return false
     for (let i = 0; i < placeholders.length; i++) {
         const ph = placeholders[i]
@@ -194,11 +198,13 @@ function parseUpdate(cleanSql: string, args: unknown[]): ParsedSql {
         const eq = assignment.indexOf('=')
         if (eq < 0) continue
         const literal = parseLiteral(assignment.slice(eq + 1))
-        if (literal !== undefined) assignColumn(setFields, normalizeColumn(assignment.slice(0, eq)), literal)
+        if (literal !== undefined && !assignColumn(setFields, normalizeColumn(assignment.slice(0, eq)), literal)) {
+            return UNMAPPED
+        }
     }
 
     const payload: Record<string, unknown> = { ...setFields }
-    mergeRecordBinds(payload, args)
+    if (!mergeRecordBinds(payload, args)) return UNMAPPED
     if (where['entry_id'] !== undefined) payload['entry_id'] = where['entry_id']
     if (where['workspace_id'] !== undefined) payload['workspace_id'] ??= where['workspace_id']
     if (where['project_number'] !== undefined) payload['project_number'] ??= where['project_number']
@@ -211,6 +217,7 @@ function parseInsert(cleanSql: string, args: unknown[]): ParsedSql {
     const payload: Record<string, unknown> = {}
     const match = /\bINSERT\s+INTO\b[\s\S]*?\(([^)]*)\)\s*VALUES\s*\(([\s\S]*)\)\s*;?\s*$/i.exec(cleanSql)
     const positional = args.filter((a) => !isPlainRecord(a))
+    const hasRecordBind = args.some(isPlainRecord)
     if (match?.[1] !== undefined && match[2] !== undefined) {
         const columns = match[1].split(',').map(normalizeColumn)
         const values = splitSqlValueList(match[2])
@@ -221,18 +228,21 @@ function parseInsert(cleanSql: string, args: unknown[]): ParsedSql {
             const raw = values[i] ?? ''
             if (raw === '?') {
                 // Record-only binds (named params) leave placeholders to mergeRecordBinds.
-                if (positional.length === 0) continue
+                if (positional.length === 0) {
+                    if (!hasRecordBind) return UNMAPPED
+                    continue
+                }
                 if (cursor >= positional.length) return UNMAPPED
-                assignColumn(payload, column, positional[cursor++])
+                if (!assignColumn(payload, column, positional[cursor++])) return UNMAPPED
             } else {
                 const literal = parseLiteral(raw)
-                if (literal !== undefined) assignColumn(payload, column, literal)
+                if (literal !== undefined && !assignColumn(payload, column, literal)) return UNMAPPED
             }
         }
     } else if (positional.length > 0) {
         return UNMAPPED
     }
-    mergeRecordBinds(payload, args)
+    if (!mergeRecordBinds(payload, args)) return UNMAPPED
     const literalScope = { ...scopeFromSqlLiterals(cleanSql), ...scopeFromInsertLiterals(cleanSql) }
     if (payload['workspace_id'] === undefined && typeof literalScope['workspace_id'] === 'string') {
         payload['workspace_id'] = literalScope['workspace_id']
@@ -255,7 +265,7 @@ function parseWhereOnly(cleanSql: string, args: unknown[], action: 'delete' | 'g
     })
     if (!bound) return UNMAPPED
     const records: Record<string, unknown> = {}
-    mergeRecordBinds(records, args)
+    if (!mergeRecordBinds(records, args)) return UNMAPPED
     if (records['workspace_id'] !== undefined) payload['workspace_id'] = records['workspace_id']
     if (records['project_number'] !== undefined) payload['project_number'] = records['project_number']
     if (records['entry_id'] !== undefined) payload['entry_id'] ??= records['entry_id']

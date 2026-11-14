@@ -218,10 +218,13 @@ function normalizeValidationStatusAlias(obj: Record<string, unknown>): void {
 }
 
 function applyProjectNameAlias(rawVal: unknown, obj: Record<string, unknown>): boolean {
-    if (obj['project_number'] !== undefined) return true
+    const existingProj = obj['project_number'] ?? obj['projectNumber']
     const num = Number(rawVal)
     const strVal = typeof rawVal === 'string' || typeof rawVal === 'number' ? String(rawVal) : ''
     if (!Number.isNaN(num) && strVal.trim() !== '') {
+        if (existingProj !== undefined) {
+            return Number(existingProj) === num
+        }
         obj['project_number'] = num
         return true
     }
@@ -233,13 +236,35 @@ function applyProjectNameAlias(rawVal: unknown, obj: Record<string, unknown>): b
             ? undefined
             : Object.keys(registry).find((key) => key.toLowerCase() === name.toLowerCase())
     if (matchedKey === undefined || registry === undefined) return false
+    const existingWs = obj['workspace_id'] ?? obj['workspaceId'] ?? obj['workspace']
+    if (typeof existingWs === 'string' && existingWs.trim() !== '' && existingWs.trim().toLowerCase() !== matchedKey.toLowerCase()) {
+        return false
+    }
     const projectNumber = registry[matchedKey]?.project_number
-    if (projectNumber !== undefined) obj['project_number'] = projectNumber
+    if (existingProj !== undefined && projectNumber !== undefined && Number(existingProj) !== projectNumber) {
+        return false
+    }
+    if (projectNumber !== undefined && obj['project_number'] === undefined) {
+        obj['project_number'] = projectNumber
+    }
     if (obj['workspace_id'] === undefined) obj['workspace_id'] = matchedKey
     return true
 }
 
 function normalizeProjectAliases(obj: Record<string, unknown>): void {
+    if (obj['workspace_id'] === undefined) {
+        if (typeof obj['workspaceId'] === 'string') {
+            obj['workspace_id'] = obj['workspaceId']
+            Reflect.deleteProperty(obj, 'workspaceId')
+        } else if (typeof obj['workspace'] === 'string') {
+            obj['workspace_id'] = obj['workspace']
+            Reflect.deleteProperty(obj, 'workspace')
+        }
+    }
+    if (obj['project_number'] === undefined && obj['projectNumber'] !== undefined) {
+        obj['project_number'] = obj['projectNumber']
+        Reflect.deleteProperty(obj, 'projectNumber')
+    }
     for (const projAlias of ['project_name', 'projectName'] as const) {
         if (obj[projAlias] === undefined) continue
         if (applyProjectNameAlias(obj[projAlias], obj)) {
@@ -247,19 +272,9 @@ function normalizeProjectAliases(obj: Record<string, unknown>): void {
         }
     }
     if (obj['project'] !== undefined) {
-        if (obj['project_number'] === undefined) {
-            const num = Number(obj['project'])
-            const strVal = typeof obj['project'] === 'string' || typeof obj['project'] === 'number' ? String(obj['project']) : ''
-            if (!Number.isNaN(num) && strVal.trim() !== '') {
-                obj['project_number'] = num
-            } else if (typeof obj['project'] === 'string' && obj['project'].trim() !== '') {
-                if (!applyProjectNameAlias(obj['project'], obj)) {
-                    const existingTags = Array.isArray(obj['tags']) ? obj['tags'].filter((t): t is string => typeof t === 'string') : []
-                    obj['tags'] = [...existingTags, obj['project'].trim()]
-                }
-            }
+        if (applyProjectNameAlias(obj['project'], obj)) {
+            delete obj['project']
         }
-        delete obj['project']
     }
 }
 
@@ -280,11 +295,17 @@ export function resolveCreateEntryProjectContext(obj: Record<string, unknown>): 
         if (!Number.isNaN(parsedNum) && cleaned !== '') {
             projNum = parsedNum
             obj['project_number'] = parsedNum
-        } else {
-            if (obj['workspace_id'] === undefined || obj['workspace_id'] === null || obj['workspace_id'] === '') {
-                obj['workspace_id'] = cleaned
-            }
+        } else if (cleaned !== '') {
             delete obj['project_number']
+            if (applyProjectNameAlias(cleaned, obj)) {
+                projNum = typeof obj['project_number'] === 'number' ? obj['project_number'] : undefined
+            } else if (obj['workspace_id'] === undefined || obj['workspace_id'] === null || obj['workspace_id'] === '') {
+                obj['workspace_id'] = cleaned
+            } else {
+                obj['project_number'] = cleaned
+            }
+        } else {
+            obj['project_number'] = cleaned
         }
     }
     // [INVARIANT] No content/tag/CWD guessing here: the host `secure-dispatcher` binds the

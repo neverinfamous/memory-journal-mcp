@@ -87,7 +87,15 @@ export function ftsSearch(
 
     let personalResult
     if (!query && !hasFilters) {
-        personalResult = db.getRecentEntries(perDbLimit, options.isPersonal, options.sortBy, personalCursor, options.includeArchived, options.workspaceId)
+        personalResult = db.getRecentEntries(
+            perDbLimit,
+            options.isPersonal,
+            options.sortBy,
+            personalCursor,
+            options.includeArchived,
+            options.workspaceId,
+            options.projectNumber
+        )
     } else {
         personalResult = db.searchEntries(query || '', {
             limit: perDbLimit,
@@ -117,7 +125,15 @@ export function ftsSearch(
     if (teamDb && options.includeTeam === true && options.isPersonal !== true) {
         let teamResult
         if (!query && !hasFilters) {
-            teamResult = teamDb.getRecentEntries(perDbLimit, undefined, options.sortBy, teamCursor, options.includeArchived, options.workspaceId)
+            teamResult = teamDb.getRecentEntries(
+                perDbLimit,
+                undefined,
+                options.sortBy,
+                teamCursor,
+                options.includeArchived,
+                options.workspaceId,
+                options.projectNumber
+            )
         } else {
             teamResult = teamDb.searchEntries(query || '', {
                 limit: perDbLimit,

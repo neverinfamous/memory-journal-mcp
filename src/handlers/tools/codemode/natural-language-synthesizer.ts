@@ -49,7 +49,7 @@ export function readWorkspaceField(primary: Record<string, unknown>, secondary: 
 export function parseProjectNumberField(
     primary: Record<string, unknown>,
     secondary: Record<string, unknown>
-): number | undefined {
+): number | string | undefined {
     const raw =
         primary['project_number'] ??
         primary['projectNumber'] ??
@@ -59,8 +59,11 @@ export function parseProjectNumberField(
         secondary['project']
     if (typeof raw === 'number' && !Number.isNaN(raw)) return raw
     if (typeof raw === 'string' && raw.trim() !== '') {
-        const num = Number(raw.trim().replace(/^p-?/i, ''))
+        const trimmed = raw.trim()
+        if (/^p-?\d+$/i.test(trimmed)) return Number(trimmed.replace(/^p-?/i, ''))
+        const num = Number(trimmed)
         if (!Number.isNaN(num)) return num
+        return trimmed
     }
     return undefined
 }
@@ -145,7 +148,10 @@ export function synthesizeNaturalLanguageOrEntryPayload(executionCode: string, i
     const entryKeys = isFlatCall ? ENTRY_KEYS : [...ENTRY_KEYS, 'project_number', 'session_id']
     const hasEntryFields = entryKeys.some((k) => entryObj[k] !== undefined || (!isFlatCall && rawObj[k] !== undefined))
     const learnedVal = getNonEmptyString(entryObj, rawObj, ['learned_context', 'learnedContext', 'lesson', 'insight', 'knowledge', 'rule'])
-    if (!((!isExplicitJsCode || learnedVal !== undefined || !isFlatCall) && (hasEntryFields || isNaturalLanguagePrompt(executionCode)))) {
+    if (
+        isExplicitJsCode ||
+        (!hasEntryFields && learnedVal === undefined && !isNaturalLanguagePrompt(executionCode))
+    ) {
         return executionCode
     }
 

@@ -116,7 +116,8 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                             input.query ?? '',
                             internalLimit,
                             input.similarity_threshold ?? 0.25,
-                            wsId
+                            wsId,
+                            projectNumber
                         )
                     }
 
@@ -252,7 +253,7 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
             description:
                 'Rebuild the team semantic search vector index from all existing team entries. Requires TEAM_DB_PATH. [REQUIRES ADMIN SCOPE]',
             group: 'team',
-            inputSchema: z.object({}).strict(),
+            inputSchema: z.object({ workspace_id: z.string().optional() }).strict(),
             outputSchema: TeamRebuildVectorIndexOutputSchema,
             annotations: {
                 readOnlyHint: false,
@@ -263,11 +264,16 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
             capabilities: {
                 requiresAdminScope: true,
             },
-            handler: async (_params: unknown) => {
+            handler: async (params: unknown) => {
                 try {
                     if (!teamDb) {
                         return { ...TEAM_DB_ERROR_RESPONSE }
                     }
+
+                    const parsed = z
+                        .object({ workspace_id: z.string().optional() })
+                        .strict()
+                        .parse(params ?? {})
 
                     if (!teamVectorManager) {
                         return {
@@ -283,7 +289,12 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     const { success, indexed, failed, firstError } =
-                        await teamVectorManager.rebuildIndex(progress)
+                        await teamVectorManager.rebuildIndex(
+                            progress,
+                            parsed.workspace_id !== undefined
+                                ? { workspaceId: parsed.workspace_id }
+                                : undefined
+                        )
 
                     if (!success && firstError) {
                         logger.warning(`Team vector index rebuild had errors: ${firstError}`)
@@ -350,7 +361,7 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                         if (entry?.workspaceId !== undefined) {
                             wsId = entry.workspaceId
                         }
-                    } else if (entry?.workspaceId !== undefined && (wsId === '*' || wsId === 'default')) {
+                    } else if (entry?.workspaceId !== undefined && wsId === '*') {
                         wsId = entry.workspaceId
                     }
                     const projectNumber =

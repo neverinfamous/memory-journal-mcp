@@ -115,6 +115,24 @@ export async function createServer(options: ServerOptions): Promise<void> {
         options,
         allowedIoRoots
     )
+    if (
+        baseConfig.defaultProjectNumber === undefined &&
+        baseConfig.briefingConfig.defaultProjectNumber !== undefined
+    ) {
+        baseConfig.defaultProjectNumber = baseConfig.briefingConfig.defaultProjectNumber
+    }
+    if (
+        baseConfig.defaultWorkspaceId === undefined &&
+        baseConfig.briefingConfig.defaultWorkspaceId !== undefined
+    ) {
+        baseConfig.defaultWorkspaceId = baseConfig.briefingConfig.defaultWorkspaceId
+    }
+    if (
+        baseConfig.projectRegistry === undefined &&
+        baseConfig.briefingConfig.projectRegistry !== undefined
+    ) {
+        baseConfig.projectRegistry = baseConfig.briefingConfig.projectRegistry
+    }
 
     const customToolHandlerConfig: ToolHandlerConfig = { ...baseConfig }
     const dispatch = (name: string, args: Record<string, unknown>): Promise<unknown> =>

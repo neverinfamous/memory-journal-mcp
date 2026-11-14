@@ -257,7 +257,7 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                         if (entry?.workspaceId !== undefined) {
                             wsId = entry.workspaceId
                         }
-                    } else if (entry?.workspaceId !== undefined && (wsId === '*' || wsId === 'default')) {
+                    } else if (entry?.workspaceId !== undefined && wsId === '*') {
                         wsId = entry.workspaceId
                     }
 
@@ -272,7 +272,7 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    if (projectNumber !== undefined && entry.projectNumber !== undefined && entry.projectNumber !== projectNumber) {
+                    if (projectNumber !== undefined && entry.projectNumber !== projectNumber) {
                         return {
                             success: false,
                             error: `Team entry ${String(entry_id)} does not belong to project ${projectNumber}`,

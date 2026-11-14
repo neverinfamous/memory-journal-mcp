@@ -142,7 +142,16 @@ function resolveNodeAndSqlShims(
         }
     }
     if (prop === 'execSync' || prop === 'spawnSync' || prop === 'execFileSync') {
-        return { matched: true, value: () => '' }
+        return {
+            matched: true,
+            value: () => {
+                const err = new Error(
+                    `VALIDATION_ERROR: child_process.${prop} is disabled inside Code Mode.`
+                )
+                err.name = 'VALIDATION_ERROR'
+                throw err
+            },
+        }
     }
     if (prop === 'spawn' || prop === 'fork' || prop === 'execFile') {
         return {
@@ -179,15 +188,14 @@ function resolveNodeAndSqlShims(
     if (prop === 'path' || prop === '__path') return { matched: true, value: pathShim }
     if (prop === 'existsSync') return { matched: true, value: safeFsShim.existsSync }
     if (prop === 'readFileSync' || prop === 'readFile') return { matched: true, value: safeFsShim.readFileSync }
-    if (
-        prop === 'writeFileSync' || prop === 'writeFile' || prop === 'mkdirSync' ||
-        prop === 'appendFileSync' || prop === 'unlinkSync'
-    ) {
-        return { matched: true, value: () => undefined }
-    }
+    if (prop === 'writeFileSync') return { matched: true, value: safeFsShim.writeFileSync }
+    if (prop === 'writeFile') return { matched: true, value: safeFsShim.writeFile }
+    if (prop === 'mkdirSync') return { matched: true, value: safeFsShim.mkdirSync }
+    if (prop === 'appendFileSync') return { matched: true, value: safeFsShim.appendFileSync }
+    if (prop === 'unlinkSync') return { matched: true, value: safeFsShim.unlinkSync }
     if (prop === 'statSync') return { matched: true, value: safeFsShim.statSync }
     if (prop === 'stat') return { matched: true, value: safeFsShim.stat }
-    if (prop === 'readdirSync') return { matched: true, value: () => [] }
+    if (prop === 'readdirSync') return { matched: true, value: safeFsShim.readdirSync }
     if (prop === 'join') return { matched: true, value: pathShim.join }
     if (prop === 'resolve') return { matched: true, value: pathShim.resolve }
     if (prop === 'basename') return { matched: true, value: pathShim.basename }

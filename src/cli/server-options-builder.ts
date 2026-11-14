@@ -84,6 +84,45 @@ function buildSchedulerOptions(
     }
 }
 
+function resolveDefaultProjectNumberOption(
+    resolver: ConfigResolver,
+    catchConfig: CatchConfig
+): number | undefined {
+    return catchConfig(() => {
+        const configVal = resolver.resolve<string | number>('defaultProjectNumber')
+        const raw =
+            resolver.resolve<string | number>('defaultProject', 'DEFAULT_PROJECT_NUMBER') ?? configVal
+        if (raw === undefined || raw === null) return undefined
+        const str = String(raw).trim()
+        if (str === '') return undefined
+        const match = /^p?(\d+)$/i.exec(str)
+        if (match === null) {
+            throw new Error(
+                `Invalid defaultProjectNumber '${str}'. Expected a positive integer.`
+            )
+        }
+        const parsed = Number.parseInt(match[1] ?? '', 10)
+        if (!Number.isInteger(parsed) || parsed < 1) {
+            throw new Error(
+                `Invalid defaultProjectNumber '${str}'. Expected a positive integer.`
+            )
+        }
+        return parsed
+    }, undefined)
+}
+
+function resolveDefaultWorkspaceIdOption(
+    resolver: ConfigResolver,
+    catchConfig: CatchConfig
+): string | undefined {
+    return catchConfig(() => {
+        const ws = resolver.resolve<string>('workspace')
+        if (ws !== undefined && ws.trim() !== '') return ws.trim()
+        const defWs = resolver.resolve<string>('defaultWorkspaceId', 'DEFAULT_WORKSPACE_ID')
+        return defWs !== undefined && defWs.trim() !== '' ? defWs.trim() : undefined
+    }, undefined)
+}
+
 function buildBriefingConfigOptions(
     resolver: ConfigResolver,
     catchConfig: CatchConfig
@@ -109,12 +148,8 @@ function buildBriefingConfigOptions(
         workflowStatusBreakdown: catchConfig(() => resolver.resolveBool('briefingWorkflowStatus', 'BRIEFING_WORKFLOW_STATUS') ?? false, false),
         copilotReviews: catchConfig(() => resolver.resolveBool('briefingCopilot', 'BRIEFING_COPILOT_REVIEWS') ?? false, false),
         workflowSummary: catchConfig(() => resolver.resolve<string>('workflowSummary', 'MEMORY_JOURNAL_WORKFLOW_SUMMARY'), undefined),
-        defaultProjectNumber: catchConfig(() => {
-            const configVal = resolver.resolve<string | number>('defaultProjectNumber')
-            const val = resolver.resolve<string>('defaultProject', 'DEFAULT_PROJECT_NUMBER') ?? configVal
-            return val !== undefined && val !== null ? parseInt(String(val), 10) : undefined
-        }, undefined),
-        defaultWorkspaceId: catchConfig(() => resolver.resolve<string>('defaultWorkspaceId', 'DEFAULT_WORKSPACE_ID'), undefined),
+        defaultProjectNumber: resolveDefaultProjectNumberOption(resolver, catchConfig),
+        defaultWorkspaceId: resolveDefaultWorkspaceIdOption(resolver, catchConfig),
         projectRegistry: catchConfig(() => parseProjectRegistryOption(resolver.resolve<unknown>('projectRegistry', 'PROJECT_REGISTRY')), undefined),
         briefingImportanceThreshold: catchConfig(() => {
             const val = resolver.resolve<unknown>('briefingImportanceThreshold', 'BRIEFING_IMPORTANCE_THRESHOLD')
@@ -262,12 +297,8 @@ export function buildServerOptions(
         teamDefaultRole: resolveTeamDefaultRoleOption(resolver, catchConfig),
         teamAdmin: catchConfig(() => resolver.resolve<string>('teamAdmin', 'TEAM_ADMIN'), undefined),
         toolFilter: catchConfig(() => resolver.resolve<string>('toolFilter', 'MEMORY_JOURNAL_MCP_TOOL_FILTER'), undefined),
-        defaultProjectNumber: catchConfig(() => {
-            const configVal = resolver.resolve<string | number>('defaultProjectNumber')
-            const val = resolver.resolve<string>('defaultProject', 'DEFAULT_PROJECT_NUMBER') ?? configVal
-            return val !== undefined && val !== null ? parseInt(String(val), 10) : undefined
-        }, undefined),
-        defaultWorkspaceId: catchConfig(() => resolver.resolve<string>('defaultWorkspaceId', 'DEFAULT_WORKSPACE_ID'), undefined),
+        defaultProjectNumber: resolveDefaultProjectNumberOption(resolver, catchConfig),
+        defaultWorkspaceId: resolveDefaultWorkspaceIdOption(resolver, catchConfig),
         autoRebuildIndex: catchConfig(() => resolver.resolveBool('autoRebuildIndex', 'AUTO_REBUILD_INDEX') ?? false, false),
         corsOrigins: catchConfig(() => resolver.resolveStringArray('corsOrigin', 'CORS_ORIGIN'), undefined),
         enableHSTS: catchConfig(() => resolver.resolveBool('enableHsts', 'MCP_ENABLE_HSTS') ?? false, false),

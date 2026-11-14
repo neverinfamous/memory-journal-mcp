@@ -7,6 +7,7 @@
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
+import { relaxedNumber } from '../schemas.js'
 import {
     KanbanBoardOutputSchema,
     MoveKanbanItemOutputSchema,
@@ -39,7 +40,7 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
             group: 'github',
             inputSchema: z.object({
                 ...githubScopeInputFields,
-                project_number: z.number()
+                project_number: relaxedNumber()
                     .optional()
                     .describe('GitHub Project number (optional if repo is registered)'),
                 owner: z.string().optional().describe('Project owner - LEAVE EMPTY to auto-detect'),
@@ -72,7 +73,7 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                 try {
                     const input = z
                         .object({
-                            project_number: z.number().optional(),
+                            project_number: githubScopeParseFields.project_number,
                             owner: z.string().optional(),
                             repo: z.string().optional(),
                             workspace_id: githubScopeParseFields.workspace_id,
@@ -181,7 +182,7 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
             group: 'github',
             inputSchema: z.object({
                 ...githubScopeInputFields,
-                project_number: z.number()
+                project_number: relaxedNumber()
                     .optional()
                     .describe('GitHub Project number (optional if repo is registered)'),
                 item_id: z.string().describe('Project item ID (from get_kanban_board)'),
@@ -205,7 +206,7 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                 try {
                     const input = z
                         .object({
-                            project_number: z.number().optional(),
+                            project_number: githubScopeParseFields.project_number,
                             item_id: z.string(),
                             target_status: z.string(),
                             owner: z.string().optional(),
@@ -293,7 +294,7 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
             group: 'github',
             inputSchema: z.object({
                 ...githubScopeInputFields,
-                project_number: z.number()
+                project_number: relaxedNumber()
                     .optional()
                     .describe('GitHub Project number (optional if repo is registered)'),
                 issue_number: z
@@ -319,7 +320,7 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                 try {
                     const input = z
                         .object({
-                            project_number: z.number().optional(),
+                            project_number: githubScopeParseFields.project_number,
                             issue_number: z.number(),
                             owner: z.string().optional(),
                             repo: z.string().optional(),
@@ -394,7 +395,7 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
             group: 'github',
             inputSchema: z.object({
                 ...githubScopeInputFields,
-                project_number: z.number()
+                project_number: relaxedNumber()
                     .optional()
                     .describe('GitHub Project number (optional if repo is registered)'),
                 item_id: z
@@ -417,7 +418,7 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                 try {
                     const input = z
                         .object({
-                            project_number: z.number().optional(),
+                            project_number: githubScopeParseFields.project_number,
                             item_id: z.string(),
                             owner: z.string().optional(),
                             repo: z.string().optional(),

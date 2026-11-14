@@ -67,7 +67,8 @@ export function extractAndRecoverEntryCode(code: string): string | null {
     const titleMatch =
         /\btitle\s*:\s*[`'"]([\s\S]*?)`['"](?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\)))/i.exec(scanCode) ??
         /\btitle\s*:\s*['"]([^'"]+)['"]/i.exec(scanCode)
-    const projectMatch = /\b(?:project_number|projectNumber|project)\s*:\s*['"]?(\d+)['"]?/i.exec(scanCode)
+    const projectMatch =
+        /\b(?:project_number|projectNumber|project)\s*:\s*(?:(\d+)|['"]([^'"]+)['"])/i.exec(scanCode)
     const workspaceMatch = /\b(?:workspace_id|workspaceId)\s*:\s*['"]([^'"]+)['"]/i.exec(scanCode)
     const sessionMatch = /\b(?:session_id|sessionId)\s*:\s*['"]([^'"]+)['"]/i.exec(scanCode)
     const impactMatch = /\bimpact\s*:\s*([0-9.]+)/i.exec(scanCode)
@@ -86,7 +87,11 @@ export function extractAndRecoverEntryCode(code: string): string | null {
 
     const entryIdMatch = /\b(?:entry_id|id)\s*:\s*(\d+)/i.exec(scanCode)
     if (entryIdMatch?.[1] !== undefined) payload['entry_id'] = parseInt(entryIdMatch[1], 10)
-    if (projectMatch?.[1] !== undefined) payload['project_number'] = parseInt(projectMatch[1], 10)
+    if (projectMatch?.[1] !== undefined) {
+        payload['project_number'] = parseInt(projectMatch[1], 10)
+    } else if (projectMatch?.[2] !== undefined && projectMatch[2].trim() !== '') {
+        payload['project_number'] = projectMatch[2].trim()
+    }
     if (workspaceMatch?.[1] !== undefined) payload['workspace_id'] = workspaceMatch[1]
     if (sessionMatch?.[1] !== undefined) payload['session_id'] = sessionMatch[1]
     if (impactMatch?.[1] !== undefined) payload['impact'] = parseFloat(impactMatch[1])

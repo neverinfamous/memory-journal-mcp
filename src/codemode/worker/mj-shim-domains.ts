@@ -179,7 +179,15 @@ export function createGetReadFindInterceptor(
             if (!Number.isNaN(parsedId)) {
                 return typeof getFn === 'function' ? (getFn as (a: unknown) => unknown)({ entry_id: parsedId }) : undefined
             }
-            if (typeof arg === 'string') return Promise.resolve(shimMj)
+            if (typeof arg === 'string') {
+                return typeof searchFn === 'function'
+                    ? (searchFn as (a: unknown) => unknown)({ query: arg })
+                    : Promise.resolve({
+                          success: false,
+                          code: 'VALIDATION_ERROR',
+                          error: 'Search function unavailable',
+                      })
+            }
         }
         if (arg !== null && typeof arg === 'object') {
             if ('entry_id' in arg || 'id' in arg) {
@@ -315,7 +323,7 @@ export function createDbDomainProxy(
 
 export function createSystemDatabaseDomainProxy(
     target: Record<string, unknown>,
-    shimMj: Record<string, unknown>
+    _shimMj: Record<string, unknown>
 ): object {
     if (typeof target['system'] === 'function' || (typeof target['system'] === 'object' && target['system'] !== null)) {
         return target['system']
@@ -330,8 +338,14 @@ export function createSystemDatabaseDomainProxy(
         get(t, p): unknown {
             if (typeof p === 'symbol' || p === 'then') return undefined
             if (typeof p === 'string' && p in t) return t[p]
-            if (typeof getStatsFn === 'function') return getStatsFn
-            return createCallableShim(shimMj)
+            return (..._args: unknown[]) =>
+                Promise.resolve({
+                    success: false,
+                    code: 'VALIDATION_ERROR',
+                    category: 'validation',
+                    error: `Unknown database/system operation '${p}'`,
+                    recoverable: true,
+                })
         },
     })
 }
@@ -386,8 +400,13 @@ export function createAppendInterceptor(
         if (metadata !== undefined) {
             const wsId = metadata['workspace_id'] ?? metadata['workspaceId']
             if (typeof wsId === 'string' && wsId.trim() !== '') payload['workspace_id'] = wsId
-            const projNum = metadata['project_number'] ?? metadata['projectNumber']
-            if (typeof projNum === 'number' && !Number.isNaN(projNum)) payload['project_number'] = projNum
+            const projNum = metadata['project_number'] ?? metadata['projectNumber'] ?? metadata['project']
+            if (
+                (typeof projNum === 'number' && !Number.isNaN(projNum)) ||
+                (typeof projNum === 'string' && projNum.trim() !== '')
+            ) {
+                payload['project_number'] = projNum
+            }
         }
 
         return (createEntry as (args: unknown) => unknown)(payload)

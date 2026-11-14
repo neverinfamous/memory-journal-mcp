@@ -10,7 +10,7 @@ import { sendProgress } from '../../../utils/progress-utils.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { alignedProjectFilter } from '../../../utils/write-scope.js'
 import { DATE_MIN_SENTINEL, DATE_MAX_SENTINEL } from '../schemas.js'
-import { TEAM_DB_ERROR_RESPONSE, batchFetchAuthors } from './helpers.js'
+import { TEAM_DB_ERROR_RESPONSE, batchFetchAuthors, resolveTeamProjectNumber } from './helpers.js'
 import {
     TeamExportEntriesSchema,
     TeamExportEntriesSchemaMcp,
@@ -60,11 +60,9 @@ export function getTeamExportTools(context: ToolContext): ToolDefinition[] {
                     await sendProgress(progress, 1, 3, 'Fetching team entries...')
 
                     const wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
-                    const alignedProject = alignedProjectFilter(
-                        wsId,
-                        project_number,
-                        context.config?.projectRegistry
-                    )
+                    const alignedProject =
+                        resolveTeamProjectNumber(context, wsId, project_number) ??
+                        alignedProjectFilter(wsId, project_number, context.config?.projectRegistry)
 
                     // When entry_type or tags filters are active, fetch a larger
                     // batch so post-filtering doesn't silently return too few results.

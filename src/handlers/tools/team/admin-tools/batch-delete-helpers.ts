@@ -13,6 +13,7 @@ import { enforceEntryOwnership } from '../rbac.js'
 import { resolveWriteWorkspaceId } from '../../write-workspace.js'
 import type { TeamBatchUpdateEntriesSchema } from '../schemas.js'
 import { createBatchProgressReporter, sendProgress } from '../../../../utils/progress-utils.js'
+import { logger } from '../../../../utils/logger.js'
 import { resolveAuthenticatedAuthor } from '../../../../utils/security-utils.js'
 
 export type TeamDbInstance = NonNullable<ToolContext['teamDb']>
@@ -204,6 +205,7 @@ export interface DeletableIdsOptions {
     currentUser: string
     callerRole: TeamRole | null
     codemodeBypass: boolean
+    permanent?: boolean
 }
 
 /**
@@ -214,12 +216,12 @@ export function filterDeletableIds(
     teamDb: TeamDbInstance,
     opts: DeletableIdsOptions
 ): { validIds: number[]; notFound: number[] } | { errorResponse: Record<string, unknown> } {
-    const { entryIds, wsId, projectNumber, currentUser, callerRole, codemodeBypass } = opts
+    const { entryIds, wsId, projectNumber, currentUser, callerRole, codemodeBypass, permanent } = opts
     const validIds: number[] = []
     const notFound: number[] = []
 
     const existingMap =
-        typeof teamDb.getEntriesByIds === 'function'
+        !permanent && typeof teamDb.getEntriesByIds === 'function'
             ? teamDb.getEntriesByIds(entryIds, wsId)
             : null
     const authorMap =
@@ -230,7 +232,9 @@ export function filterDeletableIds(
     for (const id of entryIds) {
         const rawExisting = existingMap
             ? existingMap.get(id) ?? null
-            : teamDb.getEntryById(id, wsId)
+            : permanent
+              ? teamDb.getEntryByIdIncludeDeleted(id, wsId)
+              : teamDb.getEntryById(id, wsId)
         const existing =
             rawExisting &&
             (wsId === '*' ||
@@ -277,7 +281,16 @@ export async function cleanupDeletedVectors(
         const reporter = createBatchProgressReporter(context.progress, deleted.length, 10)
         for (let i = 0; i < deleted.length; i++) {
             const id = deleted[i]
-            if (id !== undefined) teamDb.deleteVector(id)
+            if (id !== undefined) {
+                try {
+                    teamDb.deleteVector(id)
+                } catch (vecErr) {
+                    logger.warning('Team batch delete vector cleanup failed', {
+                        entryId: id,
+                        error: vecErr instanceof Error ? vecErr.message : String(vecErr),
+                    })
+                }
+            }
             await reporter(i + 1, `Updating index ${String(i + 1)}/${String(deleted.length)}...`)
         }
     } else {

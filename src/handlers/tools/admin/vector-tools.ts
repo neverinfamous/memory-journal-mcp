@@ -51,7 +51,12 @@ export function getVectorTools(context: ToolContext): ToolDefinition[] {
             title: 'Rebuild Vector Index',
             description: '[REQUIRES ADMIN SCOPE] Rebuild the semantic search vector index from all existing entries',
             group: 'admin',
-            inputSchema: z.object({ project_number: relaxedNumber().optional() }).strict(),
+            inputSchema: z
+                .object({
+                    project_number: relaxedNumber().optional(),
+                    workspace_id: z.string().optional(),
+                })
+                .strict(),
             outputSchema: RebuildVectorIndexOutputSchema,
             annotations: {
                 readOnlyHint: false,
@@ -61,7 +66,13 @@ export function getVectorTools(context: ToolContext): ToolDefinition[] {
             },
             handler: async (params: unknown) => {
                 try {
-                    const parsed = z.object({ project_number: z.number().int().optional() }).strict().parse(params)
+                    const parsed = z
+                        .object({
+                            project_number: z.number().int().optional(),
+                            workspace_id: z.string().optional(),
+                        })
+                        .strict()
+                        .parse(params)
                     if (!vectorManager) {
                         return {
                             success: false,
@@ -74,10 +85,17 @@ export function getVectorTools(context: ToolContext): ToolDefinition[] {
                             recoverable: false,
                         }
                     }
+                    const rebuildOpts: { projectNumber?: number; workspaceId?: string } = {}
+                    if (parsed.project_number !== undefined) {
+                        rebuildOpts.projectNumber = parsed.project_number
+                    }
+                    if (parsed.workspace_id !== undefined) {
+                        rebuildOpts.workspaceId = parsed.workspace_id
+                    }
                     const { success, indexed, failed, firstError } =
                         await vectorManager.rebuildIndex(
                             progress,
-                            parsed.project_number !== undefined ? { projectNumber: parsed.project_number } : undefined
+                            Object.keys(rebuildOpts).length > 0 ? rebuildOpts : undefined
                         )
 
                     if (!success && firstError) {
@@ -137,7 +155,7 @@ export function getVectorTools(context: ToolContext): ToolDefinition[] {
                         if (entry?.workspaceId !== undefined) {
                             wsId = entry.workspaceId
                         }
-                    } else if (entry?.workspaceId !== undefined && (wsId === '*' || wsId === 'default')) {
+                    } else if (entry?.workspaceId !== undefined && wsId === '*') {
                         wsId = entry.workspaceId
                     }
                     if (!entry || (project_number !== undefined && entry.projectNumber !== project_number)) {

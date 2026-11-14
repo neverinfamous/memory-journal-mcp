@@ -49,8 +49,10 @@ export function createPreparedStatementShim(
     sql: string,
     shimMj: Record<string, unknown>
 ): Record<string, unknown> {
+    let boundArgs: unknown[] = []
     const executeOperation = (args: unknown[]): unknown => {
-        const { action, params } = parseSqlStatement(sql, args)
+        const effectiveArgs = args.length > 0 ? args : boundArgs
+        const { action, params } = parseSqlStatement(sql, effectiveArgs)
         const targets = ACTION_TARGETS[action]
         if (targets === undefined) {
             return unmappedResult('The SQL statement was not executed.')
@@ -67,7 +69,10 @@ export function createPreparedStatementShim(
         get: (...args: unknown[]) => executeOperation(args),
         all: (...args: unknown[]) => executeOperation(args),
         iterate: (...args: unknown[]) => executeOperation(args),
-        bind: () => stmtObj,
+        bind: (...args: unknown[]) => {
+            boundArgs = args
+            return stmtObj
+        },
         columns: () => [],
         raw: () => stmtObj,
         pluck: () => stmtObj,

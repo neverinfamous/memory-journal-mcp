@@ -163,7 +163,7 @@ export class TagsManager {
             const scopedWorkspace = scopeId === '*' ? undefined : scopeId
             const scopedProject =
                 typeof projectNumber === 'number' && projectNumber > 0 ? projectNumber : undefined
-            const conditions = ['et.tag_id = ?']
+            const conditions = ['et.tag_id = ?', 'mj.deleted_at IS NULL']
             const selectParams: unknown[] = [sourceTagId]
             if (scopedWorkspace !== undefined) {
                 conditions.push('mj.workspace_id = ?')
@@ -287,6 +287,7 @@ export class TagsManager {
             )
         } else if (!scoped) {
             db.prepare('DELETE FROM entry_tags WHERE tag_id = ?').run(sourceTagId)
+            db.prepare('UPDATE tags SET usage_count = 0 WHERE id = ?').run(sourceTagId)
         }
 
         const remaining = db

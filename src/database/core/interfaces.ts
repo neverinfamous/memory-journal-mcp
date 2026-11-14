@@ -186,7 +186,7 @@ export interface IDatabaseAdapter {
     listAuthorAliases(canonicalAuthor?: string, workspaceId?: string): AuthorAlias[]
     resolveAuthor(rawAuthor: string, workspaceId?: string): string
     resolveAuthors(rawAuthors: string[], workspaceId?: string): Map<string, string>
-    consolidateAuthors(canonicalAuthor: string, workspaceId?: string): number
+    consolidateAuthors(canonicalAuthor: string, workspaceId?: string, projectNumber?: number | null): number
 
     // Soft-Delete Recovery
     restoreEntry(id: number, workspaceId?: string): boolean

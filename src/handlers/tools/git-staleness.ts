@@ -97,8 +97,8 @@ export function resolveGitWorkingDir(
                 return entry.path
             }
         }
-        const defaultWs = config?.defaultWorkspaceId ?? 'memory-journal-mcp'
-        const defaultEntry = registry[defaultWs]
+        const defaultWs = config?.defaultWorkspaceId
+        const defaultEntry = defaultWs !== undefined ? registry[defaultWs] : undefined
         if (defaultEntry?.path && fs.existsSync(defaultEntry.path)) {
             return defaultEntry.path
         }

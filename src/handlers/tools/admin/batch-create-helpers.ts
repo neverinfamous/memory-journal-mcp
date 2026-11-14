@@ -23,7 +23,8 @@ export interface PreparedBatchEntry {
 async function prepareBatchEntry(
     e: BatchEntryInput,
     rootProjectNumber: number | undefined,
-    context: ToolContext
+    context: ToolContext,
+    rootWorkspaceId?: string
 ): Promise<PreparedBatchEntry> {
     if (e.workspace_id === '*') {
         throw new ValidationError(
@@ -31,7 +32,12 @@ async function prepareBatchEntry(
         )
     }
 
-    const requestedProject = e.project_number ?? rootProjectNumber
+    const itemNamesOtherWorkspace =
+        e.workspace_id !== undefined &&
+        rootWorkspaceId !== undefined &&
+        e.workspace_id.trim().toLowerCase() !== rootWorkspaceId.trim().toLowerCase()
+    const requestedProject =
+        e.project_number ?? (!itemNamesOtherWorkspace ? rootProjectNumber : undefined)
     const resolved = resolveProjectContext(
         {
             workspace_id: e.workspace_id,
@@ -88,11 +94,12 @@ async function prepareBatchEntry(
 export async function prepareBatchCreateInputs(
     entries: BatchEntryInput[],
     rootProjectNumber: number | undefined,
-    context: ToolContext
+    context: ToolContext,
+    rootWorkspaceId?: string
 ): Promise<PreparedBatchEntry[]> {
     const prepared: PreparedBatchEntry[] = []
     for (const e of entries) {
-        prepared.push(await prepareBatchEntry(e, rootProjectNumber, context))
+        prepared.push(await prepareBatchEntry(e, rootProjectNumber, context, rootWorkspaceId))
     }
     return prepared
 }

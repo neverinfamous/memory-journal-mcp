@@ -280,13 +280,36 @@ export async function initializeDependencies(options: ServerOptions): Promise<Se
         configManager.close()
         throw error
     }
+    const effectiveDefaultWorkspaceId =
+        options.defaultWorkspaceId ?? loadedBriefing.defaultWorkspaceId
+    const effectiveDefaultProjectNumber =
+        options.defaultProjectNumber ?? loadedBriefing.defaultProjectNumber
+    const effectiveProjectRegistry = options.projectRegistry ?? loadedBriefing.projectRegistry
+    const effectiveOptions: ServerOptions = {
+        ...options,
+        ...(effectiveDefaultWorkspaceId !== undefined
+            ? { defaultWorkspaceId: effectiveDefaultWorkspaceId }
+            : {}),
+        ...(effectiveDefaultProjectNumber !== undefined
+            ? { defaultProjectNumber: effectiveDefaultProjectNumber }
+            : {}),
+        ...(effectiveProjectRegistry !== undefined
+            ? { projectRegistry: effectiveProjectRegistry }
+            : {}),
+    }
+
     // Initialize scheduler (HTTP/SSE only) — must be before handleResourceRead
     // which captures scheduler in its closure.
-    const scheduler: Scheduler | null = createSchedulerIfConfigured(options, db, vectorManager, runtime)
+    const scheduler: Scheduler | null = createSchedulerIfConfigured(
+        effectiveOptions,
+        db,
+        vectorManager,
+        runtime
+    )
 
     // Seed initial digest snapshot so first briefing read has analytics.
     // Runs for both stdio and HTTP transports.
-    seedInitialDigest(db, options)
+    seedInitialDigest(db, effectiveOptions)
 
     let finalAllowedIoRoots = options.allowedIoRoots
     if (!finalAllowedIoRoots) {

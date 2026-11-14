@@ -6,6 +6,7 @@
 
 import type { ToolDefinition, ToolContext } from '../../../../types/index.js'
 import { formatHandlerError } from '../../../../utils/error-helpers.js'
+import { logger } from '../../../../utils/logger.js'
 import { resolveWriteWorkspaceId } from '../../write-workspace.js'
 import { alignedProjectFilter } from '../../../../utils/write-scope.js'
 import { TEAM_DB_ERROR_RESPONSE, fetchAuthor, triggerTeamNotifications, resolveTeamProjectNumber } from '../helpers.js'
@@ -67,9 +68,7 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                             : resolveWriteWorkspaceId(
                                   input.workspace_id,
                                   input.project_number,
-                                  context.config,
-                                  input.content,
-                                  input.tags
+                                  context.config
                               )
 
                     // Verify entry exists
@@ -279,7 +278,14 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                             recoverable: true,
                         }
                     }
-                    teamDb.deleteVector(entry_id)
+                    try {
+                        teamDb.deleteVector(entry_id)
+                    } catch (vecErr) {
+                        logger.warning('Team delete vector cleanup failed', {
+                            entryId: entry_id,
+                            error: vecErr instanceof Error ? vecErr.message : String(vecErr),
+                        })
+                    }
 
                     triggerTeamNotifications(context)
 
@@ -408,11 +414,19 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                         workspace_id === '*'
                             ? '*'
                             : resolveWriteWorkspaceId(workspace_id, project_number, context.config)
+                    const scopedProject =
+                        wsId === '*'
+                            ? project_number
+                            : resolveTeamProjectNumber(context, wsId, project_number)
                     const result = teamDb.mergeTags(
                         source_tag,
                         target_tag,
                         wsId,
-                        alignedProjectFilter(wsId, project_number, context.config?.projectRegistry)
+                        alignedProjectFilter(
+                            wsId,
+                            scopedProject ?? undefined,
+                            context.config?.projectRegistry
+                        )
                     )
 
                     triggerTeamNotifications(context)

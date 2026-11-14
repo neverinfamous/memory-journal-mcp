@@ -104,10 +104,11 @@ function buildExportFileContent(entry: ExportableEntry, relationships: readonly 
     if (entry.author !== undefined) {
         fmData.author = entry.author
     }
-    if (relationships.length > 0) {
-        fmData.relationships = relationships.map((r) => ({
+    const outgoing = relationships.filter((r) => r.fromEntryId === entry.id)
+    if (outgoing.length > 0) {
+        fmData.relationships = outgoing.map((r) => ({
             type: r.relationshipType,
-            target_id: r.fromEntryId === entry.id ? r.toEntryId : r.fromEntryId,
+            target_id: r.toEntryId,
         }))
     }
     return serializeFrontmatter(fmData) + '\n' + entry.content + '\n'

@@ -472,7 +472,13 @@ export class VectorSearchManager {
 
     public async rebuildIndex(
         progress?: ProgressContext,
-        options?: { force?: boolean; batchSize?: number; pageSize?: number; projectNumber?: number }
+        options?: {
+            force?: boolean
+            batchSize?: number
+            pageSize?: number
+            projectNumber?: number
+            workspaceId?: string
+        }
     ): Promise<{ success: boolean; indexed: number; failed: number; firstError: string | null }> {
         await this.initialize()
         return rebuildIndex(this, this.dbAdapter, progress, options)

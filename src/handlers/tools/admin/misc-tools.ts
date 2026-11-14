@@ -3,6 +3,7 @@ import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { ValidationError } from '../../../types/errors.js'
 import { resolveWriteWorkspaceId } from '../write-workspace.js'
+import { alignedProjectFilter } from '../../../utils/write-scope.js'
 import { relaxedNumber } from '../schemas.js'
 import { healAgentHallucinations } from '../schemas/hallucination-healer.js'
 import {
@@ -111,7 +112,12 @@ export function getMiscTools(context: ToolContext): ToolDefinition[] {
                                 input.project_number,
                                 context.config
                             )
-                    const result = db.mergeTags(source_tag, target_tag, wsId, input.project_number)
+                    const result = db.mergeTags(
+                        source_tag,
+                        target_tag,
+                        wsId,
+                        alignedProjectFilter(wsId, input.project_number, context.config?.projectRegistry)
+                    )
                     return {
                         success: true,
                         sourceTag: source_tag,

@@ -96,7 +96,8 @@ export function getSemanticSearchTool(context: ToolContext): ToolDefinition[] {
                             input.query ?? '',
                             internalLimit,
                             input.similarity_threshold ?? 0.25,
-                            wsId
+                            wsId,
+                            projectNumber
                         )
                     }
 

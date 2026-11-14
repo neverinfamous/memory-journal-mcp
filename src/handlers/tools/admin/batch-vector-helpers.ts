@@ -25,16 +25,25 @@ export function vectorWarningField(warnings: string[]): { warning?: string } {
  */
 export function findWildcardProjectMismatches(
     db: ToolContext['db'],
-    updates: readonly { entry_id: number; workspace_id?: string | undefined; project_number?: number | undefined }[],
+    updates: readonly {
+        entry_id: number
+        workspace_id?: string | undefined
+        project_number?: number | undefined
+        target_workspace_id?: string | undefined
+    }[],
     rootWorkspaceId: string | undefined,
     rootProjectNumber: number | undefined
 ): number[] {
     return updates
         .filter((u) => {
+            if (u.target_workspace_id !== undefined) return false
             const ws = u.workspace_id ?? rootWorkspaceId
             const pn = u.project_number ?? rootProjectNumber
-            if (ws !== '*' || pn === undefined) return false
-            return db.getEntryById(u.entry_id, '*')?.projectNumber !== pn
+            if (pn === undefined) return false
+            if (ws !== '*' && ws === undefined) return false
+            const entry = db.getEntryById(u.entry_id, '*')
+            if (entry === null || entry === undefined) return ws === '*'
+            return entry.projectNumber !== pn
         })
         .map((u) => u.entry_id)
 }

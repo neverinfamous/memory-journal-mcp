@@ -34,6 +34,10 @@ const CONFIG_RELOAD_DEBOUNCE_MS = 500
 export class ConfigManager extends EventEmitter {
     private config: DynamicConfig
     private readonly initialCodemodeFullAccess: boolean
+    private readonly initialBriefingScope: Pick<
+        BriefingConfig,
+        'defaultProjectNumber' | 'defaultWorkspaceId' | 'projectRegistry'
+    >
     private configFilePath?: string | undefined
     private watcher: fs.FSWatcher | undefined
     private debounceTimer?: ReturnType<typeof setTimeout>
@@ -45,6 +49,17 @@ export class ConfigManager extends EventEmitter {
         super()
         this.config = { ...initialConfig }
         this.initialCodemodeFullAccess = Boolean(initialConfig.codemodeInternalFullAccess)
+        this.initialBriefingScope = {
+            ...(initialConfig.briefingConfig.defaultProjectNumber !== undefined
+                ? { defaultProjectNumber: initialConfig.briefingConfig.defaultProjectNumber }
+                : {}),
+            ...(initialConfig.briefingConfig.defaultWorkspaceId !== undefined
+                ? { defaultWorkspaceId: initialConfig.briefingConfig.defaultWorkspaceId }
+                : {}),
+            ...(initialConfig.briefingConfig.projectRegistry !== undefined
+                ? { projectRegistry: initialConfig.briefingConfig.projectRegistry }
+                : {}),
+        }
         this.configFilePath = configFilePath
 
         if (this.configFilePath && fs.existsSync(this.configFilePath)) {
@@ -228,9 +243,23 @@ export class ConfigManager extends EventEmitter {
             if (typeof parsed['defaultProjectNumber'] === 'number') {
                 bc.defaultProjectNumber = parsed['defaultProjectNumber']
                 bcChanged = true
+            } else if (bc.defaultProjectNumber !== this.initialBriefingScope.defaultProjectNumber) {
+                if (this.initialBriefingScope.defaultProjectNumber !== undefined) {
+                    bc.defaultProjectNumber = this.initialBriefingScope.defaultProjectNumber
+                } else {
+                    delete bc.defaultProjectNumber
+                }
+                bcChanged = true
             }
             if (typeof parsed['defaultWorkspaceId'] === 'string') {
                 bc.defaultWorkspaceId = parsed['defaultWorkspaceId']
+                bcChanged = true
+            } else if (bc.defaultWorkspaceId !== this.initialBriefingScope.defaultWorkspaceId) {
+                if (this.initialBriefingScope.defaultWorkspaceId !== undefined) {
+                    bc.defaultWorkspaceId = this.initialBriefingScope.defaultWorkspaceId
+                } else {
+                    delete bc.defaultWorkspaceId
+                }
                 bcChanged = true
             }
             if (
@@ -241,6 +270,13 @@ export class ConfigManager extends EventEmitter {
                 bc.projectRegistry = parsed['projectRegistry'] as NonNullable<
                     BriefingConfig['projectRegistry']
                 >
+                bcChanged = true
+            } else if (bc.projectRegistry !== this.initialBriefingScope.projectRegistry) {
+                if (this.initialBriefingScope.projectRegistry !== undefined) {
+                    bc.projectRegistry = this.initialBriefingScope.projectRegistry
+                } else {
+                    delete bc.projectRegistry
+                }
                 bcChanged = true
             }
 

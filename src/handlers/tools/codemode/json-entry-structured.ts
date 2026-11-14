@@ -85,12 +85,15 @@ function assignMissingScope(params: Record<string, unknown>, source: Record<stri
     }
 }
 
-function readProjectNumber(target: Record<string, unknown>): number | undefined {
-    const raw = target['project_number'] ?? target['projectNumber']
+function readProjectNumber(target: Record<string, unknown>): number | string | undefined {
+    const raw = target['project_number'] ?? target['projectNumber'] ?? target['project']
     if (typeof raw === 'number' && !Number.isNaN(raw)) return raw
     if (typeof raw === 'string' && raw.trim() !== '') {
-        const num = Number(raw.trim().replace(/^p-?/i, ''))
+        const trimmed = raw.trim()
+        if (/^p-?\d+$/i.test(trimmed)) return Number(trimmed.replace(/^p-?/i, ''))
+        const num = Number(trimmed)
         if (!Number.isNaN(num)) return num
+        return trimmed
     }
     return undefined
 }

@@ -210,29 +210,56 @@ export const DeleteEntrySchemaMcp = z.preprocess(
         .strict()
 )
 
+const WORKSPACE_ALIAS_KEYS = ['workspace_id', 'workspaceId', 'workspace', 'repo'] as const
+const PROJECT_ALIAS_KEYS = [
+    'project_number',
+    'projectNumber',
+    'project_name',
+    'projectName',
+    'project',
+] as const
+
+function firstDefinedEntry(
+    obj: Record<string, unknown>,
+    keys: readonly string[]
+): { key: string; value: unknown } | undefined {
+    for (const key of keys) {
+        if (obj[key] !== undefined) return { key, value: obj[key] }
+    }
+    return undefined
+}
+
+function inheritRootBatchScope(
+    itemObj: Record<string, unknown>,
+    rootObj: Record<string, unknown>,
+    inheritProject: boolean
+): void {
+    const rootWs = firstDefinedEntry(rootObj, WORKSPACE_ALIAS_KEYS)
+    const rootProj = firstDefinedEntry(rootObj, PROJECT_ALIAS_KEYS)
+    const itemWs = firstDefinedEntry(itemObj, WORKSPACE_ALIAS_KEYS)
+    const itemProj = firstDefinedEntry(itemObj, PROJECT_ALIAS_KEYS)
+    const namesOtherWorkspace =
+        itemWs !== undefined &&
+        (rootWs === undefined ||
+            (typeof itemWs.value === 'string' && typeof rootWs.value === 'string'
+                ? itemWs.value.trim().toLowerCase() !== rootWs.value.trim().toLowerCase()
+                : itemWs.value !== rootWs.value))
+    if (inheritProject && itemProj === undefined && rootProj !== undefined && !namesOtherWorkspace) {
+        itemObj[rootProj.key] = rootProj.value
+    }
+    if (itemWs === undefined && rootWs !== undefined) {
+        itemObj[rootWs.key] = rootWs.value
+    }
+}
+
 export function preprocessBatchCreateEntries(val: unknown): unknown {
     if (typeof val === 'object' && val !== null) {
         const obj = { ...(val as Record<string, unknown>) }
         if (Array.isArray(obj['entries'])) {
-            const rootProjectNum = obj['project_number']
-            const rootWorkspaceId = obj['workspace_id']
             obj['entries'] = obj['entries'].map((e: unknown) => {
                 if (typeof e === 'object' && e !== null) {
                     const eObj = { ...(e as Record<string, unknown>) }
-                    // [INVARIANT] C3: never pair the root project with an item that names another workspace.
-                    const itemWs = eObj['workspace_id']
-                    const namesOtherWorkspace =
-                        itemWs !== undefined && itemWs !== rootWorkspaceId
-                    if (
-                        eObj['project_number'] === undefined &&
-                        rootProjectNum !== undefined &&
-                        !namesOtherWorkspace
-                    ) {
-                        eObj['project_number'] = rootProjectNum
-                    }
-                    if (eObj['workspace_id'] === undefined && rootWorkspaceId !== undefined) {
-                        eObj['workspace_id'] = rootWorkspaceId
-                    }
+                    inheritRootBatchScope(eObj, obj, true)
                     return eObj
                 }
                 return e
@@ -284,8 +311,6 @@ function preprocessBatchUpdates(val: unknown, propagateRootProject: boolean): un
             delete obj['entries']
         }
         if (Array.isArray(updatesArr)) {
-            const rootProjectNum = obj['project_number']
-            const rootWorkspaceId = obj['workspace_id']
             const newUpdates = updatesArr.map((u: unknown) => {
                 if (typeof u === 'object' && u !== null) {
                     const uObj = { ...(u as Record<string, unknown>) }
@@ -293,15 +318,7 @@ function preprocessBatchUpdates(val: unknown, propagateRootProject: boolean): un
                         uObj['entry_id'] = uObj['id']
                         delete uObj['id']
                     }
-                    const itemWs = uObj['workspace_id']
-                    if (
-                        propagateRootProject &&
-                        uObj['project_number'] === undefined &&
-                        rootProjectNum !== undefined &&
-                        (itemWs === undefined || itemWs === rootWorkspaceId)
-                    ) {
-                        uObj['project_number'] = rootProjectNum
-                    }
+                    inheritRootBatchScope(uObj, obj, propagateRootProject)
                     return uObj
                 }
                 return u

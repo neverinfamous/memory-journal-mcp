@@ -21,6 +21,7 @@ import {
     loadProjectRegistryFromConfig,
     resolveProjectContext,
 } from '../utils/workspace-resolver.js'
+import { activeProjectRegistry, pairStoredScope } from '../utils/write-scope.js'
 
 /** Maximum size (5 MB) permitted for a single markdown file during import. */
 const MAX_IMPORT_FILE_SIZE_BYTES = 5 * 1024 * 1024
@@ -247,8 +248,11 @@ function concreteCallerWorkspace(workspaceId: string | undefined): string | unde
     return trimmed
 }
 
-function registryWorkspaceForProject(projectNumber: number): string | undefined {
-    const registry = loadProjectRegistryFromConfig()
+function registryWorkspaceForProject(
+    projectNumber: number,
+    config?: ToolHandlerConfig
+): string | undefined {
+    const registry = config?.projectRegistry ?? loadProjectRegistryFromConfig()
     if (registry === undefined) return undefined
     for (const [key, entry] of Object.entries(registry)) {
         if (entry.project_number === projectNumber) return key
@@ -256,8 +260,12 @@ function registryWorkspaceForProject(projectNumber: number): string | undefined 
     return undefined
 }
 
-function sameRegistryWorkspace(left: string, right: string): boolean {
-    const registry = loadProjectRegistryFromConfig()
+function sameRegistryWorkspace(
+    left: string,
+    right: string,
+    config?: ToolHandlerConfig
+): boolean {
+    const registry = config?.projectRegistry ?? loadProjectRegistryFromConfig()
     const leftKey = findCanonicalRegistryKey(left, registry) ?? left
     const rightKey = findCanonicalRegistryKey(right, registry) ?? right
     return leftKey.toLowerCase() === rightKey.toLowerCase()
@@ -267,7 +275,7 @@ function resolveImportedFileContext(
     file: ParsedFile,
     options: ImportOptions
 ): { effectiveWsId: string | undefined; effectiveProjNum: number | undefined } {
-    const { body, metadata } = file
+    const { metadata } = file
     const rawWorkspaceId = options.workspaceId ?? metadata.workspace_id
     if (rawWorkspaceId?.trim() === '*') {
         throw new Error("Workspace '*' cannot be used for import writes")
@@ -275,27 +283,37 @@ function resolveImportedFileContext(
 
     const lockedWorkspace = concreteCallerWorkspace(options.workspaceId)
     const fileProject = metadata.project_number
+    const effectiveRegistry = activeProjectRegistry(options.config?.projectRegistry)
     if (lockedWorkspace !== undefined && fileProject !== undefined) {
-        const owner = registryWorkspaceForProject(fileProject)
-        if (owner !== undefined && !sameRegistryWorkspace(lockedWorkspace, owner)) {
+        const owner = registryWorkspaceForProject(fileProject, options.config)
+        if (owner !== undefined && !sameRegistryWorkspace(lockedWorkspace, owner, options.config)) {
             throw new Error(
                 `project_number ${String(fileProject)} belongs to workspace '${owner}', not '${lockedWorkspace}'.`
             )
         }
+        const canonicalLocked = findCanonicalRegistryKey(lockedWorkspace, effectiveRegistry)
+        const lockedRegisteredProject =
+            canonicalLocked !== undefined ? effectiveRegistry?.[canonicalLocked]?.project_number : undefined
+        if (lockedRegisteredProject !== undefined && lockedRegisteredProject !== fileProject) {
+            throw new Error(
+                `project_number ${String(fileProject)} does not match registered project ${String(lockedRegisteredProject)} for workspace '${lockedWorkspace}'.`
+            )
+        }
+        pairStoredScope(lockedWorkspace, fileProject, effectiveRegistry)
     }
     const rawProjectNumber = options.project_number ?? fileProject
     const resolved = resolveProjectContext(
         {
             workspace_id: rawWorkspaceId,
             project_number: rawProjectNumber,
-            content: body,
-            tags: metadata.tags,
         },
         options.config
     )
-    const effectiveWsId = resolved.workspaceId
-    const effectiveProjNum = resolved.projectNumber
-    return { effectiveWsId, effectiveProjNum }
+    const paired = pairStoredScope(resolved.workspaceId, resolved.projectNumber, effectiveRegistry)
+    return {
+        effectiveWsId: paired.workspaceId ?? resolved.workspaceId,
+        effectiveProjNum: paired.projectNumber ?? undefined,
+    }
 }
 
 function upsertParsedFile(

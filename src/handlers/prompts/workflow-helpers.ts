@@ -112,7 +112,8 @@ export function generateSummaryPrompt(
         'timestamp',
         undefined,
         false,
-        workspaceId
+        workspaceId,
+        projectNumber
     )
 
     const entrySummary =
@@ -273,7 +274,8 @@ export function generateUpdateEntryPrompt(
             'timestamp',
             undefined,
             false,
-            workspaceId
+            workspaceId,
+            projectNumber
         ) as { entries?: unknown[] } | unknown[]
         const recent = (Array.isArray(recentRes) ? recentRes[0] : recentRes.entries?.[0]) as
             | Record<string, unknown>
@@ -304,7 +306,9 @@ ${markUntrustedContent(String(recent['content']))}
         explicitDefaultRequested
     )
     const cliWorkspaceFlag =
-        workspaceId !== 'default' && workspaceId !== '' ? `--workspace ${workspaceId} ` : ''
+        (workspaceId !== 'default' || explicitDefaultRequested) && workspaceId !== ''
+            ? `--workspace ${workspaceId} `
+            : ''
 
     return {
         messages: [

@@ -133,7 +133,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                     if ('errorResponse' in sessionRes) {
                         return sessionRes.errorResponse
                     }
-                    const { sessionContext, projectId, numericProjectId, workspaceId } = sessionRes
+                    const { sessionContext, projectId, numericProjectId, workspaceId, explicitWorkspace } = sessionRes
 
                     const { tools, isSandboxReadonly } = filterToolsForSandbox(
                         sessionContext,
@@ -146,6 +146,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                         sessionContext,
                         projectId,
                         workspaceId,
+                        explicitWorkspace,
                         autoVersion: input.auto_version,
                         dryRun: input.dry_run,
                     })

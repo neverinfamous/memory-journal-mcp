@@ -77,6 +77,7 @@ export async function buildBriefingData(
 
     const registry = config.projectRegistry ?? loadProjectRegistryFromConfig()
     if (targetRepo) {
+        let matchedTargetRepo = false
         const numericTarget = /^#?(\d+)$/.exec(targetRepo)
         const numericWorkspace =
             numericTarget !== null
@@ -84,6 +85,7 @@ export async function buildBriefingData(
                 : undefined
         const resolvedRepo = exactRegistryKey(targetRepo, registry) ?? numericWorkspace
         if (resolvedRepo !== undefined) {
+            matchedTargetRepo = true
             activeWorkspaceId = resolvedRepo
 
             const registryEntry = registry?.[resolvedRepo]
@@ -95,10 +97,15 @@ export async function buildBriefingData(
                 setActiveSessionProject(resolvedRepo, activeProjectNumber ?? null, context.runtime)
             }
         } else if (targetRepo.trim().toLowerCase() === 'default') {
+            matchedTargetRepo = true
             activeWorkspaceId = 'default'
             const registeredDefault = registry?.['default']?.project_number
             activeProjectNumber = registeredDefault
             setActiveSessionProject('default', registeredDefault ?? null, context.runtime)
+        }
+        if (!matchedTargetRepo) {
+            activeWorkspaceId = targetRepo
+            activeProjectNumber = undefined
         }
     } else if (activeWorkspaceId && activeWorkspaceId !== 'default' && activeWorkspaceId !== '*') {
         const canonicalKey = findCanonicalRegistryKey(activeWorkspaceId, registry) ?? activeWorkspaceId

@@ -5,6 +5,7 @@ import { createBatchProgressReporter, sendProgress } from '../../../utils/progre
 import { linkRequestedRelationships } from '../relationship-linking.js'
 import { resolveWriteWorkspaceId } from '../write-workspace.js'
 import { resolveProjectContext } from '../../../utils/workspace-resolver.js'
+import { canonicalTargetWorkspace } from './core-tools.js'
 import { prepareBatchCreateInputs, shareBatchEntriesWithTeam } from './batch-create-helpers.js'
 import {
     findWildcardProjectMismatches,
@@ -49,7 +50,8 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
                     const prepared = await prepareBatchCreateInputs(
                         input.entries,
                         input.project_number,
-                        context
+                        context,
+                        input.workspace_id
                     )
                     const { created: results, errors } = db.createEntries(prepared.map((p) => p.input))
 
@@ -148,30 +150,50 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
                     }
                     await sendProgress(progress, 0, 2, 'Updating entries...')
                     const updates = input.updates.map((u) => {
-                        const explicitWs = u.workspace_id || input.workspace_id
+                        const explicitWs = u.workspace_id ?? input.workspace_id
                         const explicitPn = u.project_number ?? input.project_number
-                        const resolvedUpdate = resolveProjectContext(
-                            {
-                                ...(explicitWs !== undefined && explicitWs !== '*'
-                                    ? { workspace_id: explicitWs }
-                                    : {}),
-                                ...(explicitPn !== undefined ? { project_number: explicitPn } : {}),
-                                ...(u.content !== undefined ? { content: u.content } : {}),
-                                ...(u.tags !== undefined ? { tags: u.tags } : {}),
-                            },
+                        const targetWorkspaceId = canonicalTargetWorkspace(
+                            u.target_workspace_id,
                             context.config
                         )
-                        let resolvedWs =
-                            explicitWs === '*'
-                                ? '*'
-                                : resolvedUpdate.workspaceId
-                        if (
-                            explicitWs === undefined &&
-                            explicitPn === undefined
-                        ) {
-                            const existingByPk = db.getEntryById(u.entry_id, '*')
-                            if (existingByPk?.workspaceId !== undefined) {
-                                resolvedWs = existingByPk.workspaceId
+                        let resolvedWs: string
+                        let projectNumberForUpdate: number | undefined
+                        if (targetWorkspaceId !== undefined) {
+                            const targetResolved = resolveProjectContext(
+                                {
+                                    workspace_id: targetWorkspaceId,
+                                    ...(explicitPn !== undefined ? { project_number: explicitPn } : {}),
+                                },
+                                context.config
+                            )
+                            projectNumberForUpdate =
+                                explicitPn === undefined ? undefined : targetResolved.projectNumber
+                            if (explicitWs === '*') {
+                                resolvedWs = '*'
+                            } else if (explicitWs !== undefined) {
+                                resolvedWs = resolveWriteWorkspaceId(explicitWs, undefined, context.config)
+                            } else {
+                                resolvedWs = db.getEntryById(u.entry_id, '*')?.workspaceId ?? targetWorkspaceId
+                            }
+                        } else {
+                            const resolvedUpdate = resolveProjectContext(
+                                {
+                                    ...(explicitWs !== undefined && explicitWs !== '*'
+                                        ? { workspace_id: explicitWs }
+                                        : {}),
+                                    ...(explicitPn !== undefined ? { project_number: explicitPn } : {}),
+                                },
+                                context.config
+                            )
+                            projectNumberForUpdate =
+                                explicitPn === undefined ? undefined : resolvedUpdate.projectNumber
+                            resolvedWs =
+                                explicitWs === '*' ? '*' : resolvedUpdate.workspaceId
+                            if (explicitWs === undefined && explicitPn === undefined) {
+                                const existingByPk = db.getEntryById(u.entry_id, '*')
+                                if (existingByPk?.workspaceId !== undefined) {
+                                    resolvedWs = existingByPk.workspaceId
+                                }
                             }
                         }
                         return {
@@ -181,10 +203,7 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
                             isPersonal: u.is_personal,
                             tags: u.tags,
                             significanceType: u.significance_type,
-                            projectNumber:
-                                u.project_number === undefined && input.project_number === undefined
-                                    ? undefined
-                                    : resolvedUpdate.projectNumber,
+                            projectNumber: projectNumberForUpdate,
                             projectOwner: u.project_owner,
                             issueNumber: u.issue_number,
                             issueUrl: u.issue_url,
@@ -200,10 +219,7 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
                             impactScore: u.impact_score,
                             trustScore: u.trust_score,
                             validationStatus: u.validation_status,
-                            targetWorkspaceId:
-                                u.target_workspace_id === undefined
-                                    ? undefined
-                                    : resolveWriteWorkspaceId(u.target_workspace_id, undefined, context.config),
+                            targetWorkspaceId,
                             sessionId: u.session_id,
                             workspaceId: resolvedWs,
                         }

@@ -16,7 +16,11 @@ export function applyGitInterceptions(methodName: string, args: unknown[]): { ar
         
         // Hallucination mappings for Git
         for (const key of ['text', 'message', 'description', 'q', 'search']) {
-            if (obj[key] !== undefined && obj['query'] === undefined && (methodName.includes('search_commits') || methodName.includes('searchCommits'))) {
+            if (
+                obj[key] !== undefined &&
+                obj['query'] === undefined &&
+                (methodName === 'search_commits' || methodName === 'searchCommits')
+            ) {
                 obj['query'] = obj[key];
                 Reflect.deleteProperty(obj, key);
             }
@@ -47,7 +51,11 @@ export function applyGitInterceptions(methodName: string, args: unknown[]): { ar
         }
 
         // Q/Query error interception for non-search tools
-        if (!methodName.includes('search') && (obj['q'] !== undefined || obj['query'] !== undefined || obj['search'] !== undefined)) {
+        if (
+            methodName !== 'search_commits' &&
+            methodName !== 'searchCommits' &&
+            (obj['q'] !== undefined || obj['query'] !== undefined || obj['search'] !== undefined)
+        ) {
              return { error: {
                 success: false,
                 error: `${methodName} does not support search queries (q/query/search). It only retrieves history or analysis.`,

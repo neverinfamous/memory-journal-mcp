@@ -143,9 +143,18 @@ const ConsolidateAuthorsOutputSchema = z.object({
 
 function coerceAliasProjectNumber(projectNumber: number | string | undefined): number | undefined {
     if (typeof projectNumber === 'number') return projectNumber
-    if (typeof projectNumber === 'string' && projectNumber.trim() !== '') {
-        const parsed = Number(projectNumber)
-        return Number.isNaN(parsed) ? undefined : parsed
+    if (typeof projectNumber === 'string') {
+        const trimmed = projectNumber.trim()
+        if (trimmed === '') {
+            throw new ValidationError('Invalid project_number "". Expected an integer.')
+        }
+        const parsed = Number(trimmed)
+        if (!Number.isInteger(parsed)) {
+            throw new ValidationError(
+                `Invalid project_number "${projectNumber}". Expected an integer.`
+            )
+        }
+        return parsed
     }
     return undefined
 }
@@ -280,8 +289,12 @@ function handleConsolidateAuthors(context: ToolContext) {
             }
             const { canonical_author, project_number, workspace_id } = ConsolidateAuthorsSchema.parse(params)
             const workspaceId = scopedWriteWorkspace(workspace_id, project_number, context)
+            const projectNum = coerceAliasProjectNumber(project_number)
 
-            const updatedCount = teamDb.consolidateAuthors(canonical_author, workspaceId)
+            const updatedCount =
+                projectNum !== undefined
+                    ? teamDb.consolidateAuthors(canonical_author, workspaceId, projectNum)
+                    : teamDb.consolidateAuthors(canonical_author, workspaceId)
 
             return {
                 success: true,

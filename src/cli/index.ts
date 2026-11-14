@@ -6,7 +6,7 @@ import { createProgram, addAgentInstructions, withGroup, withValidation, normali
 import {
     addServerOptions, addCoreOptions, addDatabaseOptions,
     addCodeModeOptions, addAuditOptions,
-    addWorkspaceOptions, addWorkspaceScopeOptions, addVectorOptions,
+    addWorkspaceScopeOptions, addVectorOptions,
     addOutputOptions
 } from './option-groups.js'
 import { serveAction, serveSchema } from './commands/serve.js'
@@ -56,7 +56,7 @@ addOutputOptions(execCmd)
 
 addCoreOptions(execCmd)
 addDatabaseOptions(execCmd)
-addWorkspaceOptions(execCmd)
+addWorkspaceScopeOptions(execCmd)
 addVectorOptions(execCmd)
 addCodeModeOptions(execCmd)
 addAuditOptions(execCmd)

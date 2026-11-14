@@ -1129,8 +1129,8 @@ describe('Code Mode Anti-Hallucination & Healing Guardrails', () => {
                 const normalized = result.args[0] as Record<string, unknown>
                 expect(normalized.content).toContain('**Findings:**\n- Identified missing syntax validation')
                 expect(normalized.content).toContain('- Added regression tests for JSON code payloads')
-                expect(normalized.project).toBeUndefined()
-                expect(normalized.tags).toContain('db-mcp')
+                expect(normalized.project).toBe('db-mcp')
+                expect(normalized.tags).toBeUndefined()
             }
         })
 

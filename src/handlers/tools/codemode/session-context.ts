@@ -1,4 +1,3 @@
-import * as path from 'node:path'
 import type { ToolContext } from '../../../types/index.js'
 import { getGitHubIntegration } from '../../../github/github-integration/index.js'
 import {
@@ -32,11 +31,6 @@ export function lookupRegistryEntry(
     return undefined
 }
 
-function comparablePath(filePath: string): string {
-    const resolved = path.resolve(filePath)
-    return process.platform === 'win32' ? resolved.toLowerCase() : resolved
-}
-
 function githubInjectError(error: string): { errorResponse: Record<string, unknown> } {
     return { errorResponse: { success: false, error, project_id: undefined, executionTimeMs: 0 } }
 }
@@ -61,7 +55,12 @@ function resolveSessionProjectId(
         const repoEntry = lookupRegistryEntry(effectiveRegistry, input.repo)
         if (repoEntry?.project_number !== undefined) projectId = repoEntry.project_number
     }
-    projectId ??= projectIdFromDefaults(context, effectiveRegistry)
+    const callerExplicitWorkspaceOrRepo =
+        (input.workspace_id !== undefined && input.workspace_id.trim() !== '') ||
+        (input.repo !== undefined && input.repo.trim() !== '')
+    if (!callerExplicitWorkspaceOrRepo) {
+        projectId ??= projectIdFromDefaults(context, effectiveRegistry)
+    }
     if (typeof projectId === 'string') {
         const entry = lookupRegistryEntry(effectiveRegistry, projectId)
         if (entry?.project_number !== undefined) projectId = entry.project_number
@@ -130,7 +129,7 @@ function injectProjectGithub(
     if (projectId === undefined || effectiveRegistry === undefined) return sessionContext
     const registryEntry = Object.values(effectiveRegistry).find((entry) => entry.project_number === projectId)
     if (registryEntry?.path === undefined || registryEntry.path === '') return sessionContext
-    const isSameAsCwd = comparablePath(registryEntry.path) === comparablePath(process.cwd())
+    const isSameAsCwd = cwdMatchesRegistryPath(registryEntry.path, process.cwd())
     if (!fullAccess && !isSameAsCwd) return sessionContext
     // [M11] Keep the context identity when the CWD GitHub integration already applies, so the
     // per-context tool cache in singleton-state is not thrashed on every execution.
@@ -158,11 +157,25 @@ export async function resolveCodeModeSessionContext(
           projectId: number | string | undefined
           numericProjectId: number | undefined
           workspaceId: string | undefined
+          explicitWorkspace: boolean
       }
     | { errorResponse: Record<string, unknown> }
 > {
     const effectiveRegistry = context.config?.projectRegistry ?? loadProjectRegistryFromConfig()
+    const explicitWorkspace =
+        (input.workspace_id !== undefined &&
+            input.workspace_id.trim() !== '' &&
+            input.workspace_id.trim() !== '*') ||
+        (input.repo !== undefined && input.repo.trim() !== '')
     let projectId = resolveSessionProjectId(context, input, effectiveRegistry)
+    if (
+        input.project_number !== undefined &&
+        (typeof projectId !== 'number' || !Number.isInteger(projectId) || projectId <= 0)
+    ) {
+        return githubInjectError(
+            `Invalid project_number '${String(input.project_number)}'. Expected a positive integer or registered project name.`
+        )
+    }
     let numericProjectId = typeof projectId === 'number' ? projectId : undefined
     // [C3] Session scope is never guessed from keywords inside the submitted code.
     const resolvedContext = resolveProjectContext(
@@ -189,5 +202,5 @@ export async function resolveCodeModeSessionContext(
         context.config?.codemodeInternalFullAccess === true
     )
     if ('errorResponse' in sessionContext) return sessionContext
-    return { sessionContext, projectId, numericProjectId, workspaceId }
+    return { sessionContext, projectId, numericProjectId, workspaceId, explicitWorkspace }
 }

@@ -152,7 +152,14 @@ export class AdapterDelegates {
         return this.aliasMgr.resolveAuthors(rawAuthors, workspaceId)
     }
 
-    consolidateAuthors(canonicalAuthor: string, workspaceId?: string): number {
+    consolidateAuthors(
+        canonicalAuthor: string,
+        workspaceId?: string,
+        projectNumber?: number | null
+    ): number {
+        if (projectNumber !== undefined) {
+            return this.aliasMgr.consolidateAuthors(canonicalAuthor, workspaceId, projectNumber)
+        }
         return workspaceId === undefined
             ? this.aliasMgr.consolidateAuthors(canonicalAuthor)
             : this.aliasMgr.consolidateAuthors(canonicalAuthor, workspaceId)

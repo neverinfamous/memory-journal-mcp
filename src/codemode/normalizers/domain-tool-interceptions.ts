@@ -129,7 +129,7 @@ export function applyDomainToolInterceptions(
             )
         }
 
-        if (methodName.includes('get_statistics') || methodName.includes('getStatistics')) {
+        if (['get_statistics', 'getStatistics', 'team_get_statistics', 'teamGetStatistics'].includes(methodName)) {
             const timeVal = obj['time'] ?? obj['timeframe'] ?? obj['period']
             if (timeVal !== undefined) {
                 if (obj['group_by'] === undefined && typeof timeVal === 'string') {
@@ -142,7 +142,15 @@ export function applyDomainToolInterceptions(
             }
         }
 
-        if ((methodName.includes('get_cross_project_insights') || methodName.includes('getCrossProjectInsights')) && obj['limit'] !== undefined) {
+        if (
+            [
+                'get_cross_project_insights',
+                'getCrossProjectInsights',
+                'team_get_cross_project_insights',
+                'teamGetCrossProjectInsights',
+            ].includes(methodName) &&
+            obj['limit'] !== undefined
+        ) {
             return validationErr('get_cross_project_insights does not accept a limit parameter. It analyzes all projects.', 'Remove the limit parameter.')
         }
     }
@@ -181,16 +189,24 @@ function applyIoInterceptions(
         }
     }
 
-    const isExportMd =
-        methodName.includes('export_markdown') ||
-        methodName.includes('exportMarkdown') ||
-        methodName.includes('teamExportMarkdown') ||
-        methodName.includes('team_export_markdown')
-    const isExternal =
-        methodName.includes('import_external') ||
-        methodName.includes('importExternal') ||
-        methodName.includes('teamImportExternal') ||
-        methodName.includes('team_import_external')
+    const isExportMd = [
+        'export_markdown',
+        'exportMarkdown',
+        'team_export_markdown',
+        'teamExportMarkdown',
+    ].includes(methodName)
+    const isImportMd = [
+        'import_markdown',
+        'importMarkdown',
+        'team_import_markdown',
+        'teamImportMarkdown',
+    ].includes(methodName)
+    const isExternal = [
+        'import_external',
+        'importExternal',
+        'team_import_external',
+        'teamImportExternal',
+    ].includes(methodName)
 
     for (const key of ['path', 'file', 'filepath', 'dir', 'folder', 'target', 'source']) {
         if (obj[key] !== undefined) {
@@ -198,7 +214,7 @@ function applyIoInterceptions(
             if (isExportMd) {
                 if (obj['output_dir'] === undefined) obj['output_dir'] = obj[key]
                 didMap = true
-            } else if (methodName.toLowerCase().includes('import') && !(key === 'source' && isExternal)) {
+            } else if ((isImportMd || isExternal) && !(key === 'source' && isExternal)) {
                 if (obj['source_dir'] === undefined) obj['source_dir'] = obj[key]
                 didMap = true
             }

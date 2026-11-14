@@ -211,6 +211,20 @@ function healWorkspaceAndProjectContext(obj: Record<string, unknown>): boolean {
 function normalizeProjectFields(obj: Record<string, unknown>): boolean {
     let modified = false
 
+    if (obj['workspace_id'] === undefined && typeof obj['workspaceId'] === 'string') {
+        obj['workspace_id'] = obj['workspaceId']
+        delete obj['workspaceId']
+        modified = true
+    } else if (obj['workspace_id'] === undefined && typeof obj['workspace'] === 'string') {
+        obj['workspace_id'] = obj['workspace']
+        delete obj['workspace']
+        modified = true
+    }
+
+    const existingWs =
+        typeof obj['workspace_id'] === 'string' && obj['workspace_id'].trim() !== ''
+            ? obj['workspace_id'].trim()
+            : undefined
     const rawProjName = obj['project_name'] ?? obj['projectName']
     if (rawProjName !== undefined) {
         const strVal =
@@ -218,18 +232,34 @@ function normalizeProjectFields(obj: Record<string, unknown>): boolean {
                 ? String(rawProjName).trim()
                 : ''
         const num = Number(strVal)
+        let conflicting = false
         if (!Number.isNaN(num) && strVal !== '') {
-            if (!('project_number' in obj) || obj['project_number'] === undefined) {
+            if (typeof obj['project_number'] === 'number' && obj['project_number'] !== num) {
+                conflicting = true
+            } else if (!('project_number' in obj) || obj['project_number'] === undefined) {
                 obj['project_number'] = num
             }
-        } else if (
-            strVal !== '' &&
-            (obj['workspace_id'] === undefined || obj['workspace_id'] === null || obj['workspace_id'] === '')
-        ) {
-            obj['workspace_id'] = strVal
+        } else if (strVal !== '') {
+            const byName = resolveProjectContext({ workspace_id: strVal })
+            if (
+                existingWs !== undefined &&
+                existingWs.toLowerCase() !== byName.workspaceId.toLowerCase()
+            ) {
+                conflicting = true
+            } else if (
+                typeof obj['project_number'] === 'number' &&
+                byName.projectNumber !== undefined &&
+                obj['project_number'] !== byName.projectNumber
+            ) {
+                conflicting = true
+            } else if (existingWs === undefined) {
+                obj['workspace_id'] = strVal
+            }
         }
-        delete obj['project_name']
-        delete obj['projectName']
+        if (!conflicting) {
+            delete obj['project_name']
+            delete obj['projectName']
+        }
         modified = true
     }
 
@@ -242,14 +272,13 @@ function normalizeProjectFields(obj: Record<string, unknown>): boolean {
         if (!Number.isNaN(num) && cleaned !== '') {
             obj['project_number'] = num
             modified = true
-        } else {
-            if (
-                obj['workspace_id'] === undefined ||
+        } else if (
+            cleaned !== '' &&
+            (obj['workspace_id'] === undefined ||
                 obj['workspace_id'] === null ||
-                obj['workspace_id'] === ''
-            ) {
-                obj['workspace_id'] = cleaned
-            }
+                obj['workspace_id'] === '')
+        ) {
+            obj['workspace_id'] = cleaned
             delete obj['project_number']
             modified = true
         }

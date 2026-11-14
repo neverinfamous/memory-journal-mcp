@@ -266,7 +266,16 @@ export function getEntryAndCodemodeFallbackToolDefinitions(
                             (t: ToolDefinition) => t.name === name
                         )
                         if (tool !== undefined) {
-                            return await Promise.resolve(tool.handler(args))
+                            const res = await Promise.resolve(tool.handler(args))
+                            if (typeof res !== 'object' || res === null) return res
+                            const resRecord = res as Record<string, unknown>
+                            return {
+                                ...resRecord,
+                                _healing_note:
+                                    resRecord['success'] !== false
+                                        ? `🛠️ AUTONOMOUS HEALING: '${name}' was invoked directly while in Code Mode and succeeded. In Code Mode, prefer using 'mj_execute_code' with 'mj.core.${camelMethod}({ ... })'.`
+                                        : `🛠️ AUTONOMOUS HEALING: '${name}' was invoked directly while in Code Mode, but the operation did not succeed. In Code Mode, prefer using 'mj_execute_code' with 'mj.core.${camelMethod}({ ... })'.`,
+                            }
                         }
                     }
                     return {

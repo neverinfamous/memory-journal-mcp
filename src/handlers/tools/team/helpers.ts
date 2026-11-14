@@ -6,6 +6,7 @@
 
 import type { ToolContext } from '../../../types/index.js'
 import { logger } from '../../../utils/logger.js'
+import { findWorkspaceByProjectNumber } from '../../../utils/workspace-resolver-registry.js'
 import { activeProjectRegistry, pairStoredScope } from '../../../utils/write-scope.js'
 
 // ============================================================================
@@ -87,6 +88,13 @@ export function resolveTeamProjectNumber(
     const registry = activeProjectRegistry(context.config?.projectRegistry)
     const paired = pairStoredScope(trimmed, explicitProjectNumber, registry)
     if (paired.projectNumber !== undefined && paired.projectNumber !== null) return paired.projectNumber
-    // [INVARIANT] Only an omitted workspace that resolved to `default` keeps the configured project; unregistered named workspaces never inherit it.
-    return trimmed === 'default' ? context.config?.defaultProjectNumber : undefined
+    // [INVARIANT] Only an omitted workspace that resolved to `default` keeps the configured project; unregistered named workspaces or defaults colliding with a registered workspace's project never inherit it.
+    if (trimmed === 'default') {
+        const defaultProj = context.config?.defaultProjectNumber
+        if (defaultProj === undefined) return undefined
+        return findWorkspaceByProjectNumber(defaultProj, registry) === undefined
+            ? defaultProj
+            : undefined
+    }
+    return undefined
 }

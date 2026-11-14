@@ -15,6 +15,7 @@ import { resolveProjectContext } from '../../utils/workspace-resolver.js'
 import { activeProjectRegistry, pairStoredScope } from '../../utils/write-scope.js'
 import { createGroupApi, toolNameToMethodName } from './group-factory.js'
 import { isRecord } from '../normalizers/shared-utils.js'
+import { ValidationError } from '../../types/errors.js'
 import {
     createGetConfigFn,
     createRegisterProjectFn,
@@ -118,14 +119,15 @@ export class JournalApi {
             }
             if (typeof rec['project_number'] === 'string') {
                 const cleaned = rec['project_number'].trim()
-                const num = Number(cleaned)
-                if (!Number.isNaN(num) && cleaned !== '') {
+                const pMatch = /^p-?(\d+)$/i.exec(cleaned)
+                const candidate = pMatch?.[1] ?? cleaned
+                const num = /^\d+$/.test(candidate) ? Number(candidate) : Number.NaN
+                if (Number.isInteger(num) && num > 0) {
                     rec['project_number'] = num
                 } else {
-                    if (rec['workspace_id'] === undefined || rec['workspace_id'] === '') {
-                        rec['workspace_id'] = cleaned
-                    }
-                    delete rec['project_number']
+                    throw new ValidationError(
+                        `Invalid project_number '${rec['project_number']}'. Expected a positive integer.`
+                    )
                 }
             }
             const currentWs = rec['workspace_id'] ?? rec['workspaceId']

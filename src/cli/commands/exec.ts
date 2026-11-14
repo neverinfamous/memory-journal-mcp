@@ -56,9 +56,13 @@ export async function execAction(scriptPath: string, options: z.infer<typeof exe
         allowedIoRoots
     )
     const baseConfig: ToolHandlerConfig = {
-        defaultProjectNumber: serverOptions.defaultProjectNumber,
-        defaultWorkspaceId: serverOptions.defaultWorkspaceId,
-        projectRegistry: serverOptions.projectRegistry,
+        defaultProjectNumber:
+            serverOptions.defaultProjectNumber ?? briefingConfig.defaultProjectNumber,
+        defaultWorkspaceId:
+            options.workspace ??
+            serverOptions.defaultWorkspaceId ??
+            briefingConfig.defaultWorkspaceId,
+        projectRegistry: serverOptions.projectRegistry ?? briefingConfig.projectRegistry,
         additionalTeamDbs: serverOptions.additionalTeamDbs,
         allowedIoRoots,
         filterConfig,
@@ -79,11 +83,18 @@ export async function execAction(scriptPath: string, options: z.infer<typeof exe
         callTool(name, args, db, vectorManager, github, customToolHandlerConfig, undefined, teamDb ?? undefined, teamVectorManager ?? undefined)
     customToolHandlerConfig.dispatch = dispatch
 
+    const execWorkspaceId = options.workspace ?? options.defaultWorkspaceId
     let exitCode = 0
     try {
         const result = await callTool(
             'mj_execute_code',
-            { code: scriptContent },
+            {
+                code: scriptContent,
+                ...(execWorkspaceId !== undefined ? { workspace_id: execWorkspaceId } : {}),
+                ...(options.defaultProject !== undefined
+                    ? { project_number: options.defaultProject }
+                    : {}),
+            },
             db,
             vectorManager,
             github,

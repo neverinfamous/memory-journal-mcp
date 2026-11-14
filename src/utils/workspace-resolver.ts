@@ -45,6 +45,19 @@ function assertNotForeignProject(
     }
 }
 
+function unclaimedByOtherWorkspace(
+    projectNumber: number | undefined,
+    workspaceId: string,
+    registry: Record<string, RegistryEntry> | undefined
+): number | undefined {
+    if (projectNumber === undefined) return undefined
+    const owner = findWorkspaceByProjectNumber(projectNumber, registry)
+    if (owner !== undefined && owner.toLowerCase() !== workspaceId.toLowerCase()) {
+        return undefined
+    }
+    return projectNumber
+}
+
 /**
  * Resolves one workspace and that workspace's project number.
  * Priority:
@@ -132,7 +145,11 @@ export function resolveProjectContext(
             registeredCwd.projectNumber ??
             (registeredCwd.workspaceId.toLowerCase() === 'default'
                 ? undefined
-                : config?.defaultProjectNumber)
+                : unclaimedByOtherWorkspace(
+                      config?.defaultProjectNumber,
+                      registeredCwd.workspaceId,
+                      registry
+                  ))
         return {
             workspaceId: registeredCwd.workspaceId,
             projectNumber: cwdProject,
@@ -146,22 +163,35 @@ export function resolveProjectContext(
         sessionCtx.workspaceId !== '' &&
         sessionCtx.workspaceId !== '*'
     ) {
-        const registryProject = registry?.[sessionCtx.workspaceId]?.project_number
+        const canonicalSessionWs =
+            findCanonicalRegistryKey(sessionCtx.workspaceId, registry) ?? sessionCtx.workspaceId
+        const registryProject = registry?.[canonicalSessionWs]?.project_number
         const sessionProject =
-            sessionCtx.projectNumber ??
+            unclaimedByOtherWorkspace(sessionCtx.projectNumber, canonicalSessionWs, registry) ??
             registryProject ??
-            (sessionCtx.workspaceId.toLowerCase() === 'default'
+            (canonicalSessionWs.toLowerCase() === 'default'
                 ? undefined
-                : config?.defaultProjectNumber)
-        return { workspaceId: sessionCtx.workspaceId, projectNumber: sessionProject }
+                : unclaimedByOtherWorkspace(
+                      config?.defaultProjectNumber,
+                      canonicalSessionWs,
+                      registry
+                  ))
+        return { workspaceId: canonicalSessionWs, projectNumber: sessionProject }
     }
     if (sessionCtx.projectNumber !== undefined) {
         const sessionWorkspace = findWorkspaceByProjectNumber(sessionCtx.projectNumber, registry)
         if (sessionWorkspace !== undefined) {
             return { workspaceId: sessionWorkspace, projectNumber: sessionCtx.projectNumber }
         }
+        const rawDefaultWs = config?.defaultWorkspaceId ?? 'default'
+        const canonicalDefaultWs = findCanonicalRegistryKey(rawDefaultWs, registry) ?? rawDefaultWs
+        const defaultOwnerProj = registry?.[canonicalDefaultWs]?.project_number
+        const fallbackWs =
+            defaultOwnerProj !== undefined && defaultOwnerProj !== sessionCtx.projectNumber
+                ? 'default'
+                : canonicalDefaultWs
         return {
-            workspaceId: config?.defaultWorkspaceId ?? 'default',
+            workspaceId: fallbackWs,
             projectNumber: sessionCtx.projectNumber,
         }
     }
@@ -173,9 +203,15 @@ export function resolveProjectContext(
         if (matched !== undefined) return matched
     }
 
+    const rawFallbackWs = config?.defaultWorkspaceId ?? sessionCtx.workspaceId ?? 'default'
+    const fallbackWorkspace = findCanonicalRegistryKey(rawFallbackWs, registry) ?? rawFallbackWs
     return {
-        workspaceId: config?.defaultWorkspaceId ?? sessionCtx.workspaceId ?? 'default',
-        projectNumber: config?.defaultProjectNumber ?? sessionCtx.projectNumber,
+        workspaceId: fallbackWorkspace,
+        projectNumber: unclaimedByOtherWorkspace(
+            config?.defaultProjectNumber ?? sessionCtx.projectNumber,
+            fallbackWorkspace,
+            registry
+        ),
     }
 }
 

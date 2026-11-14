@@ -1,6 +1,6 @@
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
-import { AggregateMcpError } from '../../../types/errors.js'
+import { AggregateMcpError, ValidationError } from '../../../types/errors.js'
 import { sendProgress } from '../../../utils/progress-utils.js'
 import { importMarkdownEntries, processImportBatch, convertFile } from '../../../markdown/index.js'
 import type { ParsedFile } from '../../../markdown/index.js'
@@ -43,6 +43,9 @@ export function getIoImportTools(context: ToolContext): ToolDefinition[] {
                     const rejectedImport = wildcardWriteRejection(input.workspace_id)
                     if (rejectedImport !== undefined) return rejectedImport
                     const { wsId, effectiveProjectNum } = resolveImportScope(input, context.config)
+                    if (effectiveProjectNum !== undefined && effectiveProjectNum <= 0) {
+                        throw new ValidationError('project_number must be a positive integer')
+                    }
 
                     // Determine allowed roots
                     // Security fix: Use explicitly configured roots, without CWD fallback
@@ -60,6 +63,7 @@ export function getIoImportTools(context: ToolContext): ToolDefinition[] {
                             limit: input.limit,
                             workspaceId: wsId,
                             ...(effectiveProjectNum !== undefined ? { project_number: effectiveProjectNum } : {}),
+                            config: context.config,
                         },
                         context.vectorManager,
                         allowedRoots
@@ -173,12 +177,17 @@ export function getIoImportTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
+                    if (effectiveProjectNum !== undefined && effectiveProjectNum <= 0) {
+                        throw new ValidationError('project_number must be a positive integer')
+                    }
+
                     await sendProgress(progress, 2, 3, 'Importing entries...')
 
                     const result = await processImportBatch(parsedFiles, db, {
                         dry_run: input.dry_run,
                         workspaceId: wsId,
                         ...(effectiveProjectNum !== undefined ? { project_number: effectiveProjectNum } : {}),
+                        config: context.config,
                     }, context.vectorManager)
 
                     // Merge conversion phase errors

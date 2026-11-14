@@ -6,7 +6,7 @@ import {
     loadProjectRegistryFromConfig,
     setActiveSessionProject,
 } from '../../../utils/workspace-resolver.js'
-import { activeProjectRegistry, exactRegistryKey } from '../../../utils/write-scope.js'
+import { activeProjectRegistry, exactRegistryKey, pairStoredScope } from '../../../utils/write-scope.js'
 import { ValidationError } from '../../../types/errors.js'
 import { relaxedNumber } from '../schemas.js'
 
@@ -31,12 +31,12 @@ function preprocessUpdateConfig(val: unknown): unknown {
             obj['project_number'] !== null
         ) {
             if (typeof obj['project_number'] === 'string') {
-                const cleaned = obj['project_number'].replace(/^[^0-9]+/, '')
-                const num = Number(cleaned)
-                if (!Number.isNaN(num) && cleaned.trim() !== '') {
-                    obj['project_number'] = num
+                const trimmed = obj['project_number'].trim()
+                const pMatch = /^(?:#|p-?)?(\d+)$/i.exec(trimmed) ?? /^(-?\d+)$/.exec(trimmed)
+                if (pMatch?.[1] !== undefined) {
+                    obj['project_number'] = Number(pMatch[1])
                 } else {
-                    Reflect.deleteProperty(obj, 'project_number')
+                    delete obj['project_number']
                 }
             }
         }
@@ -167,6 +167,13 @@ export function handleUpdateConfiguration(
     if (args.briefing_workflow_status !== undefined) { newBc.workflowStatusBreakdown = args.briefing_workflow_status; bcChanged = true; updatedKeys.push('briefing_workflow_status'); }
     if (args.briefing_copilot !== undefined) { newBc.copilotReviews = args.briefing_copilot; bcChanged = true; updatedKeys.push('briefing_copilot'); }
     const registry = newBc.projectRegistry ?? config.projectRegistry ?? loadProjectRegistryFromConfig()
+    if (args.workspace_id?.trim() === '*') {
+        throw new ValidationError(
+            "workspace_id '*' is a read-only wildcard and cannot be configured as a write workspace."
+        )
+    }
+    let nextWorkspaceId = newBc.defaultWorkspaceId
+    let nextProjectNumber = newBc.defaultProjectNumber
     if (args.workspace_id !== undefined && args.project_number !== undefined) {
         const canonical = findCanonicalRegistryKey(args.workspace_id, registry) ?? args.workspace_id
         const exactKey = exactRegistryKey(canonical, activeProjectRegistry(registry)) ?? canonical
@@ -178,13 +185,11 @@ export function handleUpdateConfiguration(
         }
     }
     if (args.project_number !== undefined) {
-        newBc.defaultProjectNumber = args.project_number
-        config.defaultProjectNumber = args.project_number
+        nextProjectNumber = args.project_number
         if (registry !== undefined && args.workspace_id === undefined) {
             for (const [key, entry] of Object.entries(registry)) {
                 if (entry.project_number === args.project_number) {
-                    newBc.defaultWorkspaceId = key
-                    config.defaultWorkspaceId = key
+                    nextWorkspaceId = key
                     break
                 }
             }
@@ -205,21 +210,32 @@ export function handleUpdateConfiguration(
                 `workspace '${exactKey}' uses project_number ${String(regProjNum)}, not ${String(args.project_number)}.`
             )
         }
-        newBc.defaultWorkspaceId = exactKey
-        config.defaultWorkspaceId = exactKey
+        nextWorkspaceId = exactKey
         if (regProjNum !== undefined && args.project_number === undefined) {
-            newBc.defaultProjectNumber = regProjNum
-            config.defaultProjectNumber = regProjNum
+            nextProjectNumber = regProjNum
         } else if (args.project_number === undefined) {
             // [INVARIANT] H3: switching to an unnumbered workspace must clear the stale default
             // project so later writes are not paired with the previous project's number.
-            delete newBc.defaultProjectNumber
-            delete config.defaultProjectNumber
+            nextProjectNumber = undefined
         }
         bcChanged = true
         updatedKeys.push('workspace_id')
     }
     if (args.project_number !== undefined || args.workspace_id !== undefined) {
+        const paired = pairStoredScope(
+            nextWorkspaceId,
+            nextProjectNumber,
+            activeProjectRegistry(registry)
+        )
+        newBc.defaultWorkspaceId = paired.workspaceId
+        config.defaultWorkspaceId = paired.workspaceId
+        if (typeof paired.projectNumber === 'number') {
+            newBc.defaultProjectNumber = paired.projectNumber
+            config.defaultProjectNumber = paired.projectNumber
+        } else {
+            delete newBc.defaultProjectNumber
+            delete config.defaultProjectNumber
+        }
         setActiveSessionProject(
             newBc.defaultWorkspaceId,
             newBc.defaultProjectNumber,

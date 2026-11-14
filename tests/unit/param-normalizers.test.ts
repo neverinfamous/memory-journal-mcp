@@ -126,7 +126,8 @@ describe('src/codemode/param-normalizer.ts (applyArgInterceptions)', () => {
         ])
         if ('args' in vUnknown) {
             const arg = vUnknown.args[0] as Record<string, unknown>
-            expect(arg['tags']).toContain('my-tag-proj')
+            expect(arg['project']).toBe('my-tag-proj')
+            expect(arg['tags']).toBeUndefined()
             expect(arg['validation_status']).toBe('none')
         }
     })

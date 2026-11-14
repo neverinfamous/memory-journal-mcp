@@ -216,15 +216,25 @@ export class AliasManager {
         return resultMap
     }
 
-    consolidateAuthors(canonicalAuthor: string, workspaceId?: string): number {
+    consolidateAuthors(
+        canonicalAuthor: string,
+        workspaceId?: string,
+        projectNumber?: number | null
+    ): number {
         try {
             const scopeId = effectiveWorkspace(workspaceId)
             const scoped = scopeId !== '*'
-            const journalFilter = scoped ? ' AND workspace_id = ?' : ''
+            const projectScoped = typeof projectNumber === 'number'
+            const journalFilter =
+                (scoped ? ' AND workspace_id = ?' : '') +
+                (projectScoped ? ' AND project_number = ?' : '')
             const aliasFilter = scoped ? ' AND (workspace_id IS NULL OR workspace_id = ?)' : ''
-            const countParams: unknown[] = scoped
-                ? [scopeId, canonicalAuthor, scopeId]
-                : [canonicalAuthor]
+            const countParams: unknown[] = [
+                ...(scoped ? [scopeId] : []),
+                ...(projectScoped ? [projectNumber] : []),
+                canonicalAuthor,
+                ...(scoped ? [scopeId] : []),
+            ]
             const countResults = this.db.exec(
                 `SELECT COUNT(*) as count FROM memory_journal
                  WHERE deleted_at IS NULL${journalFilter} AND author IN (
@@ -237,9 +247,13 @@ export class AliasManager {
             const count = typeof countRow?.['count'] === 'number' ? countRow['count'] : 0
 
             if (count > 0) {
-                const updateParams: unknown[] = scoped
-                    ? [canonicalAuthor, scopeId, canonicalAuthor, scopeId]
-                    : [canonicalAuthor, canonicalAuthor]
+                const updateParams: unknown[] = [
+                    canonicalAuthor,
+                    ...(scoped ? [scopeId] : []),
+                    ...(projectScoped ? [projectNumber] : []),
+                    canonicalAuthor,
+                    ...(scoped ? [scopeId] : []),
+                ]
                 this.db.run(
                     `UPDATE memory_journal
                      SET author = ?

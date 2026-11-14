@@ -11,14 +11,16 @@ import { buildServerOptions } from '../server-options-builder.js'
 import { z } from 'zod'
 import * as p from '@clack/prompts'
 import * as yaml from 'yaml'
-import type { BaseEntryOptionsSchema, createEntryOptionsSchema } from '../schemas.js'
+import type { BaseEntryOptionsSchema } from '../schemas.js'
 import {
+    applyCliEntryFlagAliases,
     relationshipsFromMetadata,
     relationTypeSchema,
     resolveAutoContext,
     resolveEntryTypeAndTags,
     resolveExplicitProjectAndWorkspace,
     resolveScoresAndValidation,
+    type HealedEntryOptions,
 } from './entry-payload-helpers.js'
 
 /** How long to wait for piped stdin before failing a non-interactive create. */
@@ -78,11 +80,11 @@ export async function getDb(
     return { db, config: serverOptions }
 }
 
-export async function parseContent(
-    options: z.infer<typeof createEntryOptionsSchema>
-): Promise<string> {
-    const file = options.file
-    const contentStr = options.content
+export async function parseContent(options: HealedEntryOptions): Promise<string> {
+    const normalizedOptions: HealedEntryOptions = { ...options }
+    applyCliEntryFlagAliases(normalizedOptions)
+    const file = normalizedOptions.file
+    const contentStr = normalizedOptions.content
 
     if (file) {
         return readFileSync(file, 'utf-8')
@@ -267,14 +269,16 @@ export function parseMetadata(metadataFile: unknown): Record<string, unknown> {
 }
 
 export function buildEntryPayload(
-    options: z.infer<typeof createEntryOptionsSchema>,
+    options: HealedEntryOptions,
     metadata: Record<string, unknown>,
     config?: ToolHandlerConfig,
     content?: string
 ): EntryPayload {
-    const { entryType, tags } = resolveEntryTypeAndTags(options, metadata)
+    const normalizedOptions: HealedEntryOptions = { ...options }
+    applyCliEntryFlagAliases(normalizedOptions)
+    const { entryType, tags } = resolveEntryTypeAndTags(normalizedOptions, metadata)
     const { explicitProjectNum, explicitWorkspaceId } = resolveExplicitProjectAndWorkspace(
-        options,
+        normalizedOptions,
         metadata
     )
 
@@ -282,7 +286,7 @@ export function buildEntryPayload(
         {
             workspace_id: explicitWorkspaceId,
             project_number: explicitProjectNum,
-            content: content ?? options.content,
+            content: content ?? normalizedOptions.content,
             tags,
             preferCwdOverKeywords: true,
         },
@@ -297,13 +301,13 @@ export function buildEntryPayload(
     const workspaceId = paired.workspaceId ?? resolved.workspaceId
 
     const { trustScore, impactScore, validationStatus, sessionId } = resolveScoresAndValidation(
-        options,
+        normalizedOptions,
         metadata
     )
 
     const autoContextStr = resolveAutoContext(
-        options.autoContext,
-        options.autoContextFile,
+        normalizedOptions.autoContext,
+        normalizedOptions.autoContextFile,
         metadata
     )
 
@@ -315,10 +319,13 @@ export function buildEntryPayload(
     ) {
         relationships = relationshipsFromMetadata(metadata['relationships'])
     } else {
-        relationships = parseRelationships(options.relationships, options.relFile)
+        relationships = parseRelationships(
+            normalizedOptions.relationships,
+            normalizedOptions.relFile
+        )
     }
 
-    let relatedIds = parseRelatedTo(options.relatedTo)
+    let relatedIds = parseRelatedTo(normalizedOptions.relatedTo)
     if (relatedIds.length === 0 && Array.isArray(metadata['related_to'])) {
         relatedIds = metadata['related_to'].map(Number).filter((n) => !isNaN(n))
     }
