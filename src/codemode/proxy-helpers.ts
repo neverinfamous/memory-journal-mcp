@@ -172,12 +172,13 @@ export function createUnknownGroupRejectionProxy(prop: string, reason: string): 
         },
         get(_t, subProp): unknown {
             if (typeof subProp === 'symbol' || subProp === 'then') return undefined
-            return (..._args: unknown[]): Promise<unknown> =>
+            const fullReason = `${reason} (Attempted to access 'mj.${prop}.${subProp}')`
+            const subFn = (..._args: unknown[]): Promise<unknown> =>
                 wrapPromise(
                     Promise.resolve(
                         wrapResult({
                             success: false,
-                            error: `${reason} (Attempted to access 'mj.${prop}.${subProp}')`,
+                            error: fullReason,
                             code: 'VALIDATION_ERROR',
                             category: 'validation',
                             recoverable: true,
@@ -185,6 +186,8 @@ export function createUnknownGroupRejectionProxy(prop: string, reason: string): 
                     ),
                     `${prop}.${subProp}`
                 )
+            attachMethodIntrospection(subFn, prop, subProp, () => 'unknown', fullReason)
+            return subFn
         },
     })
 }

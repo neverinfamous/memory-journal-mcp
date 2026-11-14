@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { ErrorFieldsMixin } from '../error-fields-mixin.js'
-import { healSortByField } from '../schemas/hallucination-healer-fields.js'
+import { healSortByField, healIncludeArchivedField } from '../schemas/hallucination-healer-fields.js'
 import {
     ENTRY_TYPES,
     SIGNIFICANCE_TYPES,
@@ -238,7 +238,10 @@ export const EntryByIdOutputSchema = z
 function preprocessSortByOnly(val: unknown): unknown {
     if (typeof val !== 'object' || val === null || Array.isArray(val)) return val
     const obj = { ...(val as Record<string, unknown>) }
-    return healSortByField(obj) ? obj : val
+    let modified = false
+    if (healSortByField(obj)) modified = true
+    if (healIncludeArchivedField(obj)) modified = true
+    return modified ? obj : val
 }
 
 export const GetRecentEntriesSchema = z.preprocess(
@@ -259,23 +262,26 @@ export const GetRecentEntriesSchema = z.preprocess(
     })
 )
 
-export const GetRecentEntriesSchemaMcp = z.object({
-    limit: relaxedNumber()
-        .optional()
-        .default(10)
-        .describe(`Maximum entries to return (max ${String(MAX_SEARCH_LIMIT)})`),
-    project_number: relaxedNumber().optional(),
-    workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
-    is_personal: z.boolean().optional(),
-    sort_by: z
-        .string()
-        .optional()
-        .default('timestamp')
-        .describe('Sort results by timestamp (default) or importance score'),
-    cursor: z.string().optional(),
-    offset: relaxedNumber().optional().default(0).describe('Zero-based offset for pagination (used when cursor is not provided)'),
-    include_archived: z.boolean().optional().default(false),
-})
+export const GetRecentEntriesSchemaMcp = z.preprocess(
+    preprocessSortByOnly,
+    z.object({
+        limit: relaxedNumber()
+            .optional()
+            .default(10)
+            .describe(`Maximum entries to return (max ${String(MAX_SEARCH_LIMIT)})`),
+        project_number: relaxedNumber().optional(),
+        workspace_id: z.string().optional().describe('Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'),
+        is_personal: z.boolean().optional(),
+        sort_by: z
+            .string()
+            .optional()
+            .default('timestamp')
+            .describe('Sort results by timestamp (default) or importance score'),
+        cursor: z.string().optional(),
+        offset: relaxedNumber().optional().default(0).describe('Zero-based offset for pagination (used when cursor is not provided)'),
+        include_archived: z.boolean().optional().default(false),
+    })
+)
 
 // ============================================================================
 // History Schemas

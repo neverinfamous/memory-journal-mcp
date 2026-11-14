@@ -6,6 +6,7 @@
  */
 
 import { z } from 'zod'
+import { healIncludeArchivedField } from '../schemas/hallucination-healer-fields.js'
 import {
     ENTRY_TYPES,
     DATE_FORMAT_REGEX,
@@ -28,7 +29,15 @@ import { logger } from '../../../utils/logger.js'
 // Schemas
 // ============================================================================
 
-export const CrossTeamSearchSchema = z.object({
+function preprocessCrossTeamSearch(val: unknown): unknown {
+    if (typeof val !== 'object' || val === null || Array.isArray(val)) return val
+    const obj = { ...(val as Record<string, unknown>) }
+    return healIncludeArchivedField(obj) ? obj : val
+}
+
+export const CrossTeamSearchSchema = z.preprocess(
+    preprocessCrossTeamSearch,
+    z.object({
     query: z.string().min(1).max(250),
     team_dbs: z
         .array(z.string())
@@ -49,35 +58,39 @@ export const CrossTeamSearchSchema = z.object({
     include_archived: z.boolean().optional().default(false),
     fuzzy_match: z.boolean().optional().default(false),
 }).strict()
+)
 
-export const CrossTeamSearchSchemaMcp = z
-    .object({
-        query: z.string().optional(),
-        team_dbs: z
-            .array(z.string())
-            .optional()
-            .describe('Specific team DB labels to search. Omit to search all configured DBs.'),
-        tags: z.array(z.string()).optional(),
-        project_number: relaxedNumber().optional(),
-        workspace_id: z
-            .string()
-            .optional()
-            .describe(
-                'Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'
-            ),
-        entry_type: z.string().optional(),
-        start_date: z.string().optional(),
-        end_date: z.string().optional(),
-        limit: relaxedNumber().optional().default(20),
-        sort_by: z
-            .string()
-            .optional()
-            .default('timestamp')
-            .describe('Sort results by timestamp (default) or importance score'),
-        include_archived: z.boolean().optional().default(false),
-        fuzzy_match: z.boolean().optional().default(false),
-    })
-    .strict()
+export const CrossTeamSearchSchemaMcp = z.preprocess(
+    preprocessCrossTeamSearch,
+    z
+        .object({
+            query: z.string().optional(),
+            team_dbs: z
+                .array(z.string())
+                .optional()
+                .describe('Specific team DB labels to search. Omit to search all configured DBs.'),
+            tags: z.array(z.string()).optional(),
+            project_number: relaxedNumber().optional(),
+            workspace_id: z
+                .string()
+                .optional()
+                .describe(
+                    'Optional workspace isolation identifier (e.g. "alpha"). Do not use numeric project IDs or "workspace" as the key.'
+                ),
+            entry_type: z.string().optional(),
+            start_date: z.string().optional(),
+            end_date: z.string().optional(),
+            limit: relaxedNumber().optional().default(20),
+            sort_by: z
+                .string()
+                .optional()
+                .default('timestamp')
+                .describe('Sort results by timestamp (default) or importance score'),
+            include_archived: z.boolean().optional().default(false),
+            fuzzy_match: z.boolean().optional().default(false),
+        })
+        .strict()
+)
 
 export const CrossTeamSearchOutputSchema = z
     .object({

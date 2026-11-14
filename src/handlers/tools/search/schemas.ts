@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { healIncludeArchivedField } from '../schemas/hallucination-healer-fields.js'
 import {
     ENTRY_TYPES,
     DATE_FORMAT_REGEX,
@@ -10,12 +11,19 @@ import {
 } from '../schemas.js'
 import { ErrorFieldsMixin } from '../error-fields-mixin.js'
 
+function preprocessSearchPayload(val: unknown): unknown {
+    const healed = healAgentHallucinations(val)
+    if (typeof healed !== 'object' || healed === null || Array.isArray(healed)) return healed
+    const obj = { ...(healed as Record<string, unknown>) }
+    return healIncludeArchivedField(obj) ? obj : healed
+}
+
 // Input Schemas
 // ============================================================================
 
 /** Strict schema — used inside handler for structured Zod errors */
 export const SearchEntriesSchema = z.preprocess(
-    (val: unknown) => healAgentHallucinations(val),
+    preprocessSearchPayload,
     z.object({
     query: z.string().max(250).optional().describe('The search query string (use `query`, not `q`)'),
     cursor: z.string().optional().describe('Cursor for pagination'),
@@ -60,7 +68,7 @@ export const SearchEntriesSchema = z.preprocess(
 
 /** Relaxed schema — passed to SDK inputSchema so Zod enum errors reach the handler */
 export const SearchEntriesSchemaMcp = z.preprocess(
-    (val: unknown) => healAgentHallucinations(val),
+    preprocessSearchPayload,
     z.object({
     query: z.string().optional().describe('The search query string (use `query`, not `q`)'),
     cursor: z.string().optional().describe('Cursor for pagination'),
@@ -105,7 +113,7 @@ export const SearchEntriesSchemaMcp = z.preprocess(
 
 /** Strict schema — used inside handler for structured Zod errors */
 export const SearchByDateRangeSchema = z.preprocess(
-    (val: unknown) => healAgentHallucinations(val),
+    preprocessSearchPayload,
     z.object({
     start_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).describe('Start date (use `start_date`, not `start`)'),
     end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).describe('End date (use `end_date`, not `end`)'),
@@ -134,7 +142,7 @@ export const SearchByDateRangeSchema = z.preprocess(
 
 /** Relaxed schema — passed to SDK inputSchema so Zod errors reach the handler */
 export const SearchByDateRangeSchemaMcp = z.preprocess(
-    (val: unknown) => healAgentHallucinations(val),
+    preprocessSearchPayload,
     z.object({
     start_date: z.string().optional().refine(
         (val): val is string => val !== undefined,
@@ -169,7 +177,7 @@ export const SearchByDateRangeSchemaMcp = z.preprocess(
 
 /** Strict schema — used inside handler for structured Zod errors */
 export const SemanticSearchSchema = z.preprocess(
-    (val: unknown) => healAgentHallucinations(val),
+    preprocessSearchPayload,
     z.object({
     query: z.string().max(250).optional().describe('The search query string (use `query`, not `q`)'),
     entry_id: z
@@ -213,7 +221,7 @@ export const SemanticSearchSchema = z.preprocess(
 
 /** Relaxed schema — passed to SDK inputSchema so Zod min/max errors reach the handler */
 export const SemanticSearchSchemaMcp = z.preprocess(
-    (val: unknown) => healAgentHallucinations(val),
+    preprocessSearchPayload,
     z.object({
     query: z.string().optional().describe('The search query string (use `query`, not `q`)'),
     entry_id: relaxedNumber()

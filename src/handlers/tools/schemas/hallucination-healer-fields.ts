@@ -373,3 +373,18 @@ export function healSortByField(obj: Record<string, unknown>): boolean {
     }
     return false
 }
+
+/** Normalise `is_archived`, `isArchived`, `archived`, and `includeArchived` into `include_archived` on read/search payloads. */
+export function healIncludeArchivedField(obj: Record<string, unknown>): boolean {
+    let modified = false
+    for (const aliasKey of ['is_archived', 'isArchived', 'archived', 'includeArchived'] as const) {
+        if (aliasKey in obj) {
+            if (!('include_archived' in obj) && typeof obj[aliasKey] === 'boolean') {
+                obj['include_archived'] = obj[aliasKey]
+            }
+            Reflect.deleteProperty(obj, aliasKey)
+            modified = true
+        }
+    }
+    return modified
+}

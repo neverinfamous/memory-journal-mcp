@@ -293,6 +293,14 @@ export function createShimMjProxy(options: CreateShimMjOptions): Record<string, 
 
             if (prop === 'database' || prop === 'system') return createSystemDatabaseDomainProxy(target, shimMj)
             if (prop === 'tags' || prop === 'tag') return target['tags']
+            if (
+                prop === 'graph' ||
+                prop === 'rel' ||
+                prop === 'relations' ||
+                prop === 'relationship'
+            ) {
+                return target['relationships']
+            }
 
             if (prop === 'getProjects' || prop === 'listProjects' || prop === 'searchProjects') {
                 const listProjects =

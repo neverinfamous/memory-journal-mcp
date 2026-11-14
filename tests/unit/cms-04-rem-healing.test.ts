@@ -10,6 +10,7 @@ import { MarkAnchorsStaleSchema } from '../../src/handlers/tools/core/staleness-
 import { SearchAuditLogSchema } from '../../src/handlers/tools/admin/schemas/project-and-ops-schemas.js'
 import { resolveGitWorkingDir } from '../../src/handlers/tools/git-staleness.js'
 import { insertAnchors } from '../../src/database/sqlite-adapter/entries/anchors.js'
+import { buildApiProxy } from '../../src/codemode/worker-api-proxy.js'
 import { ServerRuntime } from '../../src/utils/maintenance-lock.js'
 import type { ToolHandlerConfig } from '../../src/types/index.js'
 
@@ -249,5 +250,90 @@ describe('CMS-04 REM Self-Healing Regressions (agent-issues.jsonl & audit teleme
             expect(cmRes.success).toBe(true)
             expect(cmRes._healing_note).toContain('AUTONOMOUS HEALING')
         }
+    })
+
+    it('normalizes is_archived, isArchived, archived, and includeArchived into include_archived on search and recent tools', () => {
+        const searchParsed = SearchEntriesSchema.parse({
+            query: 'compaction',
+            workspace_id: '*',
+            is_archived: true,
+        })
+        expect(searchParsed.include_archived).toBe(true)
+
+        const recentParsed = GetRecentEntriesSchema.parse({
+            limit: 20,
+            workspace_id: '*',
+            isArchived: true,
+        })
+        expect(recentParsed.include_archived).toBe(true)
+
+        const cmSearch = applyArgInterceptions('searchEntries', [
+            { query: 'audit', workspace_id: '*', is_archived: true },
+        ])
+        expect('args' in cmSearch).toBe(true)
+        if ('args' in cmSearch) {
+            const argObj = cmSearch.args[0] as Record<string, unknown>
+            expect(argObj['include_archived']).toBe(true)
+            expect(argObj['is_archived']).toBeUndefined()
+        }
+
+        const cmRecent = applyArgInterceptions('getRecentEntries', [
+            { limit: 10, workspace_id: '*', is_archived: true },
+        ])
+        expect('args' in cmRecent).toBe(true)
+        if ('args' in cmRecent) {
+            const argObj = cmRecent.args[0] as Record<string, unknown>
+            expect(argObj['include_archived']).toBe(true)
+            expect(argObj['is_archived']).toBeUndefined()
+        }
+    })
+
+    it('aliases mj.graph to mj.relationships and supports .schema() across Object.keys(mj.admin) and unknown groups', async () => {
+        const proxy = buildApiProxy(
+            () => Promise.resolve({ success: true }),
+            {
+                admin: ['update_entry', 'delete_entry', 'merge_tags'],
+                relationships: ['link_entries', 'visualize_relationships'],
+            },
+            {
+                admin: {
+                    update_entry: '{ entry_id: number }',
+                    delete_entry: '{ entry_id: number }',
+                    merge_tags: '{ source_tag: string, target_tag: string }',
+                },
+                relationships: {
+                    link_entries: '{ from_entry_id: number, to_entry_id: number, relationship_type: string }',
+                    visualize_relationships: '{ entry_id?: number }',
+                },
+            }
+        )
+
+        const graphGroup = proxy['graph'] as Record<
+            string,
+            { schema: () => Promise<string> }
+        >
+        expect(graphGroup).toBeDefined()
+        const linkSchema = await graphGroup['linkEntries']?.schema()
+        expect(linkSchema).toContain('from_entry_id')
+
+        const adminGroup = proxy['admin'] as Record<
+            string,
+            { schema: () => Promise<string> }
+        >
+        const adminKeys = Object.keys(adminGroup)
+        expect(adminKeys).toEqual(['update_entry', 'delete_entry', 'merge_tags'])
+        for (const methodKey of adminKeys) {
+            const schemaStr = await adminGroup[methodKey]?.schema()
+            expect(typeof schemaStr).toBe('string')
+        }
+        // Direct .schema() on help/describe also resolves cleanly
+        expect(typeof (await adminGroup['help']?.schema())).toBe('string')
+
+        // Unknown group method .schema() never throws TypeError
+        const unknownGroup = proxy['nonexistentGroup'] as Record<
+            string,
+            { schema: () => Promise<string> }
+        >
+        expect(await unknownGroup['someMethod']?.schema()).toBe('unknown')
     })
 })

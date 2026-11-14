@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { healIncludeArchivedField } from '../../schemas/hallucination-healer-fields.js'
 import {
     ENTRY_TYPES,
     RelationshipOutputSchema,
@@ -185,7 +186,7 @@ export const TeamVisualizeOutputSchema = z
 function preprocessSemanticSearchQuery(val: unknown): unknown {
     if (typeof val === 'object' && val !== null) {
         const obj = { ...(val as Record<string, unknown>) }
-        let modified = false
+        let modified = healIncludeArchivedField(obj)
         for (const key of ['q', 'text', 'message', 'description']) {
             if (key in obj && !('query' in obj)) {
                 obj['query'] = obj[key]

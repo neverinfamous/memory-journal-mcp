@@ -1,3 +1,4 @@
+import { healIncludeArchivedField } from '../../handlers/tools/schemas/hallucination-healer-fields.js'
 import { isRecord } from './shared-utils.js'
 import { applyGithubAndBackupInterceptions } from './github-and-backup-interceptions.js'
 
@@ -251,6 +252,7 @@ function applyMiscToolInterceptions(
     if (['get_recent_entries', 'getRecentEntries', 'team_get_recent', 'teamGetRecent'].includes(methodName) && args.length === 1 && isRecord(args[0])) {
         const obj = { ...args[0] }
         args[0] = obj
+        healIncludeArchivedField(obj)
         if (hasAnyKey(obj, ['q', 'query', 'search'])) {
             return validationErr(
                 `${methodName} does not support search queries. It only returns the most recent entries.`,

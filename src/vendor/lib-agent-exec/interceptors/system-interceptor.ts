@@ -497,6 +497,38 @@ export function systemInterceptor(ctx: ExecutionContext): void {
     } else if (payload.type === 'command') {
       const underlyingScript = getUnderlyingPackageScript(cmdBasename, args, payload.cwd);
       const isNestedAgentExec = (args && args.some(a => path.basename(a).toLowerCase() === 'agent-exec.ts'));
+      if (
+        !isNestedAgentExec &&
+        args &&
+        (
+          /(?:vitest|jest|pytest|playwright|cypress)/i.test(cmdBasename) ||
+          args.some(a => /(?:vitest|jest|pytest|playwright|cypress|^test(?::.*|-.*)?$|^coverage(?::.*)?$)/i.test(a)) ||
+          /(?:vitest|jest|pytest|playwright|cypress)/i.test(underlyingScript)
+        )
+      ) {
+        let didSplitJoinedTestArgs = false;
+        const expandedArgs: string[] = [];
+        for (const a of args) {
+          if (!a.startsWith('-') && a.includes(' ')) {
+            const parts = a.trim().split(/\s+/);
+            const allTestTargets = parts.length > 1 && parts.every(p =>
+              /\.(?:test|spec)\.[a-zA-Z0-9]+$/i.test(p) ||
+              /(?:^|[/\\])(?:tests?|__tests__)(?:[/\\][^\s.]*)?$/i.test(p)
+            );
+            if (allTestTargets) {
+              expandedArgs.push(...parts);
+              didSplitJoinedTestArgs = true;
+              continue;
+            }
+          }
+          expandedArgs.push(a);
+        }
+        if (didSplitJoinedTestArgs) {
+          console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected space-separated test file paths in a single argument. Splitting into individual arguments... (Frictionless Recovery)`);
+          args.splice(0, args.length, ...expandedArgs);
+          payload.args = args;
+        }
+      }
       const isDockerScout = /(?:docker|docker-compose|podman)/i.test(cmdBasename) && (args && args.some(a => /scout/i.test(a)));
       const isInfraOrchestration = /recreate-ecosystem/i.test(cmdBasename) ||
         (args && args.some(a => /recreate-ecosystem/i.test(a))) ||
@@ -531,8 +563,10 @@ export function systemInterceptor(ctx: ExecutionContext): void {
         payload.bypassInterceptors = true;
       } else if (isQuality) {
         const testFiles = args ? args.filter(a => /\.(?:test|spec)\.[a-zA-Z0-9]+$/i.test(a)) : [];
+        const testDirs = args ? args.filter(a => !a.startsWith('-') && !['run', 'exec', 'test', 'vitest', 'jest', 'pytest', 'playwright', 'cypress', 'coverage'].includes(a.toLowerCase()) && /(?:^|[/\\])(?:tests?|__tests__)(?:[/\\][^\s.]*)?$/i.test(a) && !/\.[a-zA-Z0-9_-]+$/i.test(a)) : [];
         const isMultiTest = testFiles.length > 1;
-        const isTestDir = args ? args.some(a => /(?:tests?[/\\]\w+[/\\].*[/\\].*|tests?[/\\]$)/i.test(a) && !/\.[a-zA-Z0-9_-]+$/i.test(a)) : false;
+        const isTestDir = testDirs.length > 0;
+        const isLargeTestBatch = testDirs.length > 1 || (testDirs.length >= 1 && testFiles.length + testDirs.length > 1) || testFiles.length >= 5;
         const isTestRunner = /(?:vitest|jest|pytest|playwright|cypress)/i.test(cmdBasename) ||
           (args && args.some(a => /(?:vitest|jest|pytest|playwright|cypress|^test(?::.*|-.*)?$|^coverage(?::.*)?$)/i.test(a))) ||
           /(?:vitest|jest|pytest|playwright|cypress)/i.test(underlyingScript);
@@ -544,7 +578,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
           (args && args.some(a => /(?:lint|check)/i.test(a))) ||
           /(?:lint|check)/i.test(underlyingScript);
         const isFullLintOrCheck = isLintOrCheck && !hasTargetFiles;
-        defaultWslTimeout = isCoverage ? 300000 : (isFullLintOrCheck || hasLargeFile ? 360000 : (isMultiTest || isTestDir || isFullSuite ? 180000 : 90000));
+        defaultWslTimeout = isFullLintOrCheck || hasLargeFile ? 360000 : (isCoverage || isLargeTestBatch ? 300000 : (isMultiTest || isTestDir || isFullSuite ? 180000 : 90000));
         payload.bypassInterceptors = true;
       } else if (isSearch) {
         defaultWslTimeout = 90000;
@@ -589,6 +623,38 @@ export function systemInterceptor(ctx: ExecutionContext): void {
     } else if (payload.type === 'command') {
       const underlyingScript = getUnderlyingPackageScript(cmdBasename, args, payload.cwd);
       const isNestedAgentExec = (args && args.some(a => path.basename(a).toLowerCase() === 'agent-exec.ts'));
+      if (
+        !isNestedAgentExec &&
+        args &&
+        (
+          /(?:vitest|jest|pytest|playwright|cypress)/i.test(cmdBasename) ||
+          args.some(a => /(?:vitest|jest|pytest|playwright|cypress|^test(?::.*|-.*)?$|^coverage(?::.*)?$)/i.test(a)) ||
+          /(?:vitest|jest|pytest|playwright|cypress)/i.test(underlyingScript)
+        )
+      ) {
+        let didSplitJoinedTestArgs = false;
+        const expandedArgs: string[] = [];
+        for (const a of args) {
+          if (!a.startsWith('-') && a.includes(' ')) {
+            const parts = a.trim().split(/\s+/);
+            const allTestTargets = parts.length > 1 && parts.every(p =>
+              /\.(?:test|spec)\.[a-zA-Z0-9]+$/i.test(p) ||
+              /(?:^|[/\\])(?:tests?|__tests__)(?:[/\\][^\s.]*)?$/i.test(p)
+            );
+            if (allTestTargets) {
+              expandedArgs.push(...parts);
+              didSplitJoinedTestArgs = true;
+              continue;
+            }
+          }
+          expandedArgs.push(a);
+        }
+        if (didSplitJoinedTestArgs) {
+          console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected space-separated test file paths in a single argument. Splitting into individual arguments... (Frictionless Recovery)`);
+          args.splice(0, args.length, ...expandedArgs);
+          payload.args = args;
+        }
+      }
       const isInfraOrchestration = /recreate-ecosystem/i.test(cmdBasename) ||
         (args && args.some(a => /recreate-ecosystem/i.test(a))) ||
         /recreate-ecosystem/i.test(underlyingScript);
@@ -620,8 +686,10 @@ export function systemInterceptor(ctx: ExecutionContext): void {
         payload.bypassInterceptors = true;
       } else if (isQuality) {
         const testFiles = args ? args.filter(a => /\.(?:test|spec)\.[a-zA-Z0-9]+$/i.test(a)) : [];
+        const testDirs = args ? args.filter(a => !a.startsWith('-') && !['run', 'exec', 'test', 'vitest', 'jest', 'pytest', 'playwright', 'cypress', 'coverage'].includes(a.toLowerCase()) && /(?:^|[/\\])(?:tests?|__tests__)(?:[/\\][^\s.]*)?$/i.test(a) && !/\.[a-zA-Z0-9_-]+$/i.test(a)) : [];
         const isMultiTest = testFiles.length > 1;
-        const isTestDir = args ? args.some(a => /(?:tests?[/\\]\w+[/\\].*[/\\].*|tests?[/\\]$)/i.test(a) && !/\.[a-zA-Z0-9_-]+$/i.test(a)) : false;
+        const isTestDir = testDirs.length > 0;
+        const isLargeTestBatch = testDirs.length > 1 || (testDirs.length >= 1 && testFiles.length + testDirs.length > 1) || testFiles.length >= 5;
         const isTestRunner = /(?:vitest|jest|pytest|playwright|cypress)/i.test(cmdBasename) ||
           (args && args.some(a => /(?:vitest|jest|pytest|playwright|cypress|^test(?::.*|-.*)?$|^coverage(?::.*)?$)/i.test(a))) ||
           /(?:vitest|jest|pytest|playwright|cypress)/i.test(underlyingScript);
@@ -638,7 +706,7 @@ export function systemInterceptor(ctx: ExecutionContext): void {
           (args && args.includes('--isolate')) ||
           /--isolate\b/.test(underlyingScript)
         );
-        const winTimeout = isCoverage ? 480000 : (isFullLintOrCheck || hasLargeFile || isIsolatedFullSuite ? 600000 : (isTestDir || isFullSuite ? 360000 : (isMultiTest || isMultiFileLint ? 300000 : 240000)));
+        const winTimeout = isFullLintOrCheck || hasLargeFile || isIsolatedFullSuite ? 600000 : (isCoverage || isLargeTestBatch ? 480000 : (isTestDir || isFullSuite ? 360000 : (isMultiTest || isMultiFileLint ? 300000 : 240000)));
         payload.timeoutMs = Math.max(payload.timeoutMs || winTimeout, winTimeout);
         payload.bypassInterceptors = true;
       }
@@ -893,7 +961,8 @@ export function systemInterceptor(ctx: ExecutionContext): void {
   if (shouldCheckPipes) {
     const isShell = ['pwsh', 'powershell', 'bash', 'sh', 'cmd', 'pwsh.exe', 'powershell.exe', 'cmd.exe'].includes(cmdLower);
     const textDataFlags = [
-      '-m', '--message',
+      '-m', '--message', '--msg',
+      '--history', '--summary', '--reason', '--prompt', '--subject',
       '-b', '--body',
       '-t', '--title',
       '-n', '--notes',
@@ -910,7 +979,8 @@ export function systemInterceptor(ctx: ExecutionContext): void {
     ];
     const textDataPrefixes = [
       '--body=', '-b=',
-      '--message=', '-m=',
+      '--message=', '-m=', '--msg=',
+      '--history=', '--summary=', '--reason=', '--prompt=', '--subject=',
       '--title=', '-t=',
       '--notes=', '-n=',
       '--description=',
@@ -920,7 +990,8 @@ export function systemInterceptor(ctx: ExecutionContext): void {
       '-d=', '--data=', '--data-raw=', '--data-binary=',
       '--filter=',
       '-f=', '-F=',
-      'body=', 'title=', 'notes=', 'comment=', 'query=', 'message=', 'description='
+      'body=', 'title=', 'notes=', 'comment=', 'query=', 'message=', 'description=',
+      'msg=', 'history=', 'summary=', 'reason=', 'prompt=', 'subject='
     ];
 
     const hasUnsafe = args.some((arg, index) => {

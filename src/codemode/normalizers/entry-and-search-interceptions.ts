@@ -1,3 +1,4 @@
+import { healIncludeArchivedField } from '../../handlers/tools/schemas/hallucination-healer-fields.js'
 import { isRecord, healSessionSummaryContent } from './shared-utils.js'
 
 const SEARCH_METHODS = new Set([
@@ -54,6 +55,7 @@ export function applyEntryAndSearchInterceptions(
     if (SEARCH_METHODS.has(methodName) && args.length === 1 && isRecord(args[0])) {
         const obj = { ...args[0] }
         args[0] = obj
+        healIncludeArchivedField(obj)
 
         const isDateRange = ['search_by_date_range', 'searchByDateRange', 'team_search_by_date_range', 'teamSearchByDateRange'].includes(methodName)
         if (isDateRange && ['q', 'query', 'text', 'message', 'description', 'keep', 'path'].some((k) => obj[k] !== undefined)) {

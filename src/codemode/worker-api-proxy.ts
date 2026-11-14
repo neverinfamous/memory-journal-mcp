@@ -69,13 +69,31 @@ function createGroupNamespaceProxy(ctx: GroupProxyContext): object {
         groupProxy[methodName] = createMethodProxyFn(group, methodName)
     }
 
-    groupProxy['help'] = () => Promise.resolve({ group, methods: methodNames })
-    groupProxy['describe'] = groupProxy['help']
+    const helpFn = (): Promise<unknown> => Promise.resolve({ group, methods: methodNames })
+    attachMethodIntrospection(
+        helpFn,
+        group,
+        'help',
+        () => '() => Promise<{ group: string, methods: string[] }>',
+        `List available methods in group '${group}'.`
+    )
 
     const groupCallable = function (): void {
         /* callable namespace target */
     }
     Object.assign(groupCallable, groupProxy)
+    Object.defineProperty(groupCallable, 'help', {
+        value: helpFn,
+        enumerable: false,
+        configurable: true,
+        writable: true,
+    })
+    Object.defineProperty(groupCallable, 'describe', {
+        value: helpFn,
+        enumerable: false,
+        configurable: true,
+        writable: true,
+    })
 
     return new Proxy(groupCallable, {
         apply(_target, _thisArg, _args: unknown[]): Promise<unknown> {
@@ -290,6 +308,14 @@ export function buildApiProxy(
             if (typeof prop === 'symbol') return undefined
             if (prop in target) return target[prop]
             if (prop === 'gitApi') return target['git']
+            if (
+                prop === 'graph' ||
+                prop === 'rel' ||
+                prop === 'relations' ||
+                prop === 'relationship'
+            ) {
+                return target['relationships'] ?? target
+            }
             if (prop === 'journal' || prop === 'memory' || prop === 'entries' || prop === 'entry')
                 return target['core'] ?? target
             if (prop === 'schema') return target['schema']

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { healSortByField } from '../../schemas/hallucination-healer-fields.js'
+import { healSortByField, healIncludeArchivedField } from '../../schemas/hallucination-healer-fields.js'
 import {
     ENTRY_TYPES,
     SIGNIFICANCE_TYPES,
@@ -249,7 +249,10 @@ export const TeamCreateEntrySchemaMcp = z.preprocess(
 function preprocessTeamSortByOnly(val: unknown): unknown {
     if (typeof val !== 'object' || val === null || Array.isArray(val)) return val
     const obj = { ...(val as Record<string, unknown>) }
-    return healSortByField(obj) ? obj : val
+    let modified = false
+    if (healSortByField(obj)) modified = true
+    if (healIncludeArchivedField(obj)) modified = true
+    return modified ? obj : val
 }
 
 /** team_get_recent — strict */
@@ -266,20 +269,23 @@ export const TeamGetRecentSchema = z.preprocess(
 )
 
 /** team_get_recent — relaxed */
-export const TeamGetRecentSchemaMcp = z.object({
-    limit: relaxedNumber().optional().default(10),
-    cursor: z.string().optional().describe('Cursor for pagination'),
-    project_number: relaxedNumber().optional().describe('REQUIRED: project number to scope the query to.'),
-    workspace_id: z.string().optional().describe(WORKSPACE_DESC),
-    sort_by: z.string().optional().default('timestamp').describe(SORT_BY_DESC),
-    include_archived: z.boolean().optional().default(false),
-})
+export const TeamGetRecentSchemaMcp = z.preprocess(
+    preprocessTeamSortByOnly,
+    z.object({
+        limit: relaxedNumber().optional().default(10),
+        cursor: z.string().optional().describe('Cursor for pagination'),
+        project_number: relaxedNumber().optional().describe('REQUIRED: project number to scope the query to.'),
+        workspace_id: z.string().optional().describe(WORKSPACE_DESC),
+        sort_by: z.string().optional().default('timestamp').describe(SORT_BY_DESC),
+        include_archived: z.boolean().optional().default(false),
+    })
+)
 
 function preprocessTeamSearchQuery(val: unknown): unknown {
     const healed = healAgentHallucinations(val)
     if (typeof healed === 'object' && healed !== null) {
         const obj = { ...(healed as Record<string, unknown>) }
-        let modified = false
+        let modified = healIncludeArchivedField(obj)
         for (const key of ['q', 'text', 'message', 'description', 'keep', 'path', 'mode', 'content']) {
             if (key in obj && !('query' in obj)) {
                 obj['query'] = obj[key]
@@ -363,7 +369,7 @@ function preprocessDateRange(val: unknown): unknown {
     const healed = healAgentHallucinations(val)
     if (typeof healed === 'object' && healed !== null) {
         const obj = { ...(healed as Record<string, unknown>) }
-        let modified = false
+        let modified = healIncludeArchivedField(obj)
         if ('start' in obj && !('start_date' in obj)) {
             obj['start_date'] = obj['start']
             Reflect.deleteProperty(obj, 'start')

@@ -286,6 +286,34 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
     if (isNestedAgentExec) {
       return;
     }
+    const isTestSubCmd = (subCmd && /^(?:vitest|jest|pytest|playwright|cypress|test(?::.*|-.*)?|coverage(?::.*)?)$/i.test(subCmd)) ||
+      args.some(a => /^(?:vitest|jest|pytest|playwright|cypress)$/i.test(a));
+    if (isTestSubCmd) {
+      let didSplitJoinedTestArgs = false;
+      const expandedArgs: string[] = [];
+      for (const a of args) {
+        if (!a.startsWith('-') && a.includes(' ')) {
+          const parts = a.trim().split(/\s+/);
+          const allTestTargets = parts.length > 1 && parts.every(p =>
+            /\.(?:test|spec)\.[a-zA-Z0-9]+$/i.test(p) ||
+            /(?:^|[/\\])(?:tests?|__tests__)(?:[/\\][^\s.]*)?$/i.test(p)
+          );
+          if (allTestTargets) {
+            expandedArgs.push(...parts);
+            didSplitJoinedTestArgs = true;
+            continue;
+          }
+        }
+        expandedArgs.push(a);
+      }
+      if (didSplitJoinedTestArgs) {
+        console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected space-separated test file paths in a single argument. Splitting into individual arguments... (Frictionless Recovery)`);
+        args.splice(0, args.length, ...expandedArgs);
+        if ('command' in ctx.payload) {
+          ctx.payload.args = args;
+        }
+      }
+    }
     const nonFlagArgs = args.filter(a => !a.startsWith('-'));
     const tsxBin = (subCmd === 'tsx' || subCmd === 'ts-node')
       ? subCmd
@@ -360,8 +388,10 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
       console.error(`\n   🛠️ AUTONOMOUS HEALING: Disabling stall interceptors and extending timeout for quality command to prevent false positive aborts.... (Frictionless Recovery)`);
       ctx.payload.bypassInterceptors = true;
       const testFiles = args.filter(a => /\.(?:test|spec)\.[a-zA-Z0-9]+$/i.test(a));
+      const testDirs = args.filter(a => !a.startsWith('-') && !['run', 'exec', 'test', 'vitest', 'jest', 'pytest', 'playwright', 'cypress', 'coverage'].includes(a.toLowerCase()) && /(?:^|[/\\])(?:tests?|__tests__)(?:[/\\][^\s.]*)?$/i.test(a) && !/\.[a-zA-Z0-9_-]+$/i.test(a));
       const isMultiTest = testFiles.length > 1;
-      const isTestDir = args.some(a => /(?:tests?[/\\]\w+[/\\].*[/\\].*|tests?[/\\]$)/i.test(a) && !/\.[a-zA-Z0-9_-]+$/i.test(a));
+      const isTestDir = testDirs.length > 0;
+      const isLargeTestBatch = testDirs.length > 1 || (testDirs.length >= 1 && testFiles.length + testDirs.length > 1) || testFiles.length >= 5;
       const isTestRunner = /(?:vitest|jest|pytest|playwright|cypress)/i.test(cmdBasename) ||
         args.some(a => /(?:vitest|jest|pytest|playwright|cypress|^test(?::.*|-.*)?$|^coverage(?::.*)?$)/i.test(a)) ||
         Boolean(targetScript && (targetScript.startsWith('test') || targetScript.includes('coverage'))) ||
@@ -381,8 +411,8 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
         (underlyingScript && /--isolate\b/.test(underlyingScript))
       );
       const targetTimeout = ctx.payload.target === 'wsl2'
-        ? (isCoverage ? 300000 : (isFullLintOrCheck || hasLargeFile || isIsolatedFullSuite ? 360000 : (isMultiTest || isTestDir || isFullSuite ? 180000 : 90000)))
-        : (isCoverage ? 480000 : (isFullLintOrCheck || hasLargeFile || isIsolatedFullSuite ? 600000 : (isTestDir || isFullSuite ? 360000 : (isMultiTest || isMultiFileLint ? 300000 : 240000))));
+        ? (isFullLintOrCheck || hasLargeFile || isIsolatedFullSuite ? 360000 : (isCoverage || isLargeTestBatch ? 300000 : (isMultiTest || isTestDir || isFullSuite ? 180000 : 90000)))
+        : (isFullLintOrCheck || hasLargeFile || isIsolatedFullSuite ? 600000 : (isCoverage || isLargeTestBatch ? 480000 : (isTestDir || isFullSuite ? 360000 : (isMultiTest || isMultiFileLint ? 300000 : 240000))));
       if (ctx.payload.timeoutMs === undefined || ctx.payload.timeoutMs < targetTimeout) {
         ctx.payload.timeoutMs = targetTimeout;
       }
@@ -443,6 +473,32 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
       }
     } else {
       envOverrides['CI'] = '1';
+      if (args.some(a => /^(?:vitest|jest|pytest|playwright|cypress)$/i.test(a))) {
+        let didSplitJoinedTestArgs = false;
+        const expandedArgs: string[] = [];
+        for (const a of args) {
+          if (!a.startsWith('-') && a.includes(' ')) {
+            const parts = a.trim().split(/\s+/);
+            const allTestTargets = parts.length > 1 && parts.every(p =>
+              /\.(?:test|spec)\.[a-zA-Z0-9]+$/i.test(p) ||
+              /(?:^|[/\\])(?:tests?|__tests__)(?:[/\\][^\s.]*)?$/i.test(p)
+            );
+            if (allTestTargets) {
+              expandedArgs.push(...parts);
+              didSplitJoinedTestArgs = true;
+              continue;
+            }
+          }
+          expandedArgs.push(a);
+        }
+        if (didSplitJoinedTestArgs) {
+          console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected space-separated test file paths in a single argument. Splitting into individual arguments... (Frictionless Recovery)`);
+          args.splice(0, args.length, ...expandedArgs);
+          if ('command' in ctx.payload) {
+            ctx.payload.args = args;
+          }
+        }
+      }
       const isKnownDeterministic = args.some(a => /(?:commit\.ts|get-git-history-json\.ts|backup-conversations\.ts)/i.test(a));
       const isPlaywright = !isKnownDeterministic && args.some(a => /(?:playwright|cypress|\be2e\b|test:e2e|test-e2e)/i.test(a));
       const isCoverage = !isKnownDeterministic && args.some(a => /(?:coverage|--coverage|test:coverage)/i.test(a));
@@ -457,14 +513,16 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
         console.error(`\n   🛠️ AUTONOMOUS HEALING: Disabling stall interceptors and extending timeout for quality command to prevent false positive aborts.... (Frictionless Recovery)`);
         ctx.payload.bypassInterceptors = true;
         const testFiles = args.filter(a => /\.(?:test|spec)\.[a-zA-Z0-9]+$/i.test(a));
+        const testDirs = args.filter(a => !a.startsWith('-') && !['run', 'exec', 'test', 'vitest', 'jest', 'pytest', 'playwright', 'cypress', 'coverage'].includes(a.toLowerCase()) && /(?:^|[/\\])(?:tests?|__tests__)(?:[/\\][^\s.]*)?$/i.test(a) && !/\.[a-zA-Z0-9_-]+$/i.test(a));
         const isMultiTest = testFiles.length > 1;
-        const isTestDir = args.some(a => /(?:tests?[/\\]\w+[/\\].*[/\\].*|tests?[/\\]$)/i.test(a) && !/\.[a-zA-Z0-9_-]+$/i.test(a));
+        const isTestDir = testDirs.length > 0;
+        const isLargeTestBatch = testDirs.length > 1 || (testDirs.length >= 1 && testFiles.length + testDirs.length > 1) || testFiles.length >= 5;
         const isTestRunner = /(?:vitest|jest|pytest|playwright|cypress)/i.test(cmdBasename) ||
           args.some(a => /(?:vitest|jest|pytest|playwright|cypress|^test(?::.*|-.*)?$|^coverage(?::.*)?$)/i.test(a));
         const isFullSuite = isTestRunner && testFiles.length === 0 && !isTestDir;
         const runnerTimeout = ctx.payload.target === 'wsl2'
-          ? (isCoverage ? 300000 : (isMultiTest || isTestDir || isFullSuite ? 180000 : 90000))
-          : (isCoverage ? 480000 : (isTestDir || isFullSuite ? 360000 : (isMultiTest ? 300000 : 240000)));
+          ? (isCoverage || isLargeTestBatch ? 300000 : (isMultiTest || isTestDir || isFullSuite ? 180000 : 90000))
+          : (isCoverage || isLargeTestBatch ? 480000 : (isTestDir || isFullSuite ? 360000 : (isMultiTest ? 300000 : 240000)));
         if (ctx.payload.timeoutMs === undefined || ctx.payload.timeoutMs < runnerTimeout) {
           ctx.payload.timeoutMs = runnerTimeout;
         }
