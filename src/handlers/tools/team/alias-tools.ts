@@ -57,6 +57,7 @@ const preprocessAlias = (val: unknown): unknown => {
         // fix 'author' vs 'canonical_author' confusion
         if ('author' in obj && !('canonical_author' in obj)) {
             obj['canonical_author'] = obj['author'];
+            modified = true;
         }
         return modified ? obj : val;
     }

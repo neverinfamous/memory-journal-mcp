@@ -7,6 +7,7 @@
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import type { IDatabaseAdapter } from '../../../database/core/interfaces.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
+import { ValidationError } from '../../../types/errors.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { resolveWriteWorkspaceId } from '../write-workspace.js'
 import { TEAM_DB_ERROR_RESPONSE, triggerTeamNotifications, resolveTeamProjectNumber } from './helpers.js'
@@ -137,10 +138,12 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                         project_number,
                         workspace_id,
                     } = TeamLinkEntriesSchema.parse(params)
-                    let wsId =
-                        workspace_id === '*'
-                            ? '*'
-                            : resolveWriteWorkspaceId(workspace_id, project_number, context.config)
+                    if (workspace_id?.trim() === '*') {
+                        throw new ValidationError(
+                            "Wildcard workspace_id '*' is not supported for team_link_entries. Specify a concrete workspace_id."
+                        )
+                    }
+                    let wsId = resolveWriteWorkspaceId(workspace_id, project_number, context.config)
 
                     // Guard: self-referential links are not meaningful
                     if (from_entry_id === to_entry_id) {
@@ -156,19 +159,18 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                     }
 
                     // Verify both entries exist and belong to the project
-                    let fromEntry = teamDb.getEntryById(from_entry_id, wsId)
-                    if (!fromEntry && workspace_id === '*' && project_number === undefined) {
-                        fromEntry = teamDb.getEntryById(from_entry_id, '*')
-                    }
-                    const explicitOrResolvedPn =
-                        wsId !== '*'
-                            ? resolveTeamProjectNumber(context, wsId, project_number, workspace_id)
-                            : project_number
+                    const fromEntry = teamDb.getEntryById(from_entry_id, wsId)
+                    const explicitOrResolvedPn = resolveTeamProjectNumber(
+                        context,
+                        wsId,
+                        project_number,
+                        workspace_id
+                    )
                     const resolvedPn =
                         explicitOrResolvedPn ??
                         (fromEntry?.projectNumber !== null ? fromEntry?.projectNumber : undefined)
                     const projectNumber = resolvedPn !== null ? resolvedPn : undefined
-                    if (workspace_id !== '*' && projectNumber === undefined) {
+                    if (projectNumber === undefined) {
                         return {
                             success: false,
                             error: 'Missing project_number. You MUST provide a valid project_number (e.g., 1) or configure DEFAULT_PROJECT_NUMBER on the server.',
@@ -179,9 +181,7 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                             recoverable: true,
                         }
                     }
-                    if (workspace_id !== '*') {
-                        wsId = resolveWriteWorkspaceId(workspace_id ?? wsId, projectNumber, context.config)
-                    }
+                    wsId = resolveWriteWorkspaceId(workspace_id ?? wsId, projectNumber, context.config)
                     if (!fromEntry) {
                         return {
                             success: false,
@@ -192,7 +192,7 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                             recoverable: true,
                         }
                     }
-                    if (projectNumber !== undefined && fromEntry.projectNumber !== projectNumber) {
+                    if (fromEntry.projectNumber !== projectNumber) {
                         return {
                             success: false,
                             error: `Team entry ${String(from_entry_id)} does not belong to project ${String(projectNumber)}`,
@@ -202,10 +202,7 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                             recoverable: true,
                         }
                     }
-                    let toEntry = teamDb.getEntryById(to_entry_id, wsId)
-                    if (!toEntry && workspace_id === '*' && project_number === undefined) {
-                        toEntry = teamDb.getEntryById(to_entry_id, '*')
-                    }
+                    const toEntry = teamDb.getEntryById(to_entry_id, wsId)
                     if (!toEntry) {
                         return {
                             success: false,
@@ -216,7 +213,7 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                             recoverable: true,
                         }
                     }
-                    if (projectNumber !== undefined && toEntry.projectNumber !== projectNumber) {
+                    if (toEntry.projectNumber !== projectNumber) {
                         return {
                             success: false,
                             error: `Team entry ${String(to_entry_id)} does not belong to project ${String(projectNumber)}`,
@@ -227,13 +224,13 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                         }
                     }
 
-                    if (fromEntry.workspaceId !== toEntry.workspaceId && workspace_id !== '*') {
+                    if (fromEntry.workspaceId !== toEntry.workspaceId) {
                         return {
                             success: false,
                             error: 'Cannot link team entries that belong to different workspaces',
                             code: 'VALIDATION_ERROR',
                             category: 'validation',
-                            suggestion: 'Pass workspace_id: "*" to link entries across workspaces',
+                            suggestion: 'Both team entries must belong to the same workspace',
                             recoverable: true,
                         }
                     }
@@ -262,7 +259,7 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                         to_entry_id,
                         relationship_type,
                         description,
-                        wsId === '*' ? fromEntry.workspaceId : wsId
+                        wsId
                     )
 
                     triggerTeamNotifications(context)

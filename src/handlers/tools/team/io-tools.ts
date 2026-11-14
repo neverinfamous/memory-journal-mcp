@@ -21,7 +21,7 @@ import { ErrorFieldsMixin } from '../error-fields-mixin.js'
 import { batchFetchAuthors, triggerTeamNotifications, resolveTeamProjectNumber } from './helpers.js'
 import {
     TEAM_IO_NOT_CONFIGURED,
-    MISSING_PROJECT_NUMBER_IO_ERROR,
+    missingTeamIoProjectNumberError,
     resolveTeamImportScope,
     readAndConvertExternalMarkdownFiles,
 } from './io-scope-helpers.js'
@@ -101,6 +101,8 @@ const TeamImportMarkdownOutputSchema = z
         created: z.number().optional(),
         updated: z.number().optional(),
         skipped: z.number().optional(),
+        relationshipsLinked: z.number().optional(),
+        vectorsIndexed: z.number().optional(),
         errors: z.array(z.object({ file: z.string(), error: z.string() })).optional(),
         dry_run: z.boolean().optional(),
     })
@@ -184,7 +186,7 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                     const projectNumber =
                         resolveTeamProjectNumber(context, wsId, input.project_number, input.workspace_id) ?? undefined
                     if (projectNumber === undefined) {
-                        return { ...MISSING_PROJECT_NUMBER_IO_ERROR }
+                        return missingTeamIoProjectNumberError(input.workspace_id)
                     }
 
                     const allowedRoots = context.config?.allowedIoRoots ?? []
@@ -266,7 +268,7 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                         context
                     )
                     if (projectNumber === undefined) {
-                        return { ...MISSING_PROJECT_NUMBER_IO_ERROR }
+                        return missingTeamIoProjectNumberError(input.workspace_id)
                     }
 
                     const allowedRoots = context.config?.allowedIoRoots ?? []
@@ -289,7 +291,20 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                         allowedRoots
                     )
 
-                    if (!input.dry_run) triggerTeamNotifications(context)
+                    if (!result.success && result.errors.length > 0) {
+                        const successCount = result.created + result.updated + result.skipped
+                        const total = successCount + result.errors.length
+                        const message = `Importing ${total} entries: ${successCount} succeeded, ${result.errors.length} failed.`
+                        throw new AggregateMcpError(
+                            message,
+                            result.errors.map((e) => ({ message: e.error, file: e.file })),
+                            { result }
+                        )
+                    }
+
+                    if (!input.dry_run && (result.created > 0 || result.updated > 0)) {
+                        triggerTeamNotifications(context)
+                    }
                     await sendProgress(progress, 2, 2, 'Team import complete')
                     return result
                 } catch (err) {
@@ -324,7 +339,7 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                         context
                     )
                     if (projectNumber === undefined) {
-                        return { ...MISSING_PROJECT_NUMBER_IO_ERROR }
+                        return missingTeamIoProjectNumberError(input.workspace_id)
                     }
 
                     const allowedRoots = context.config?.allowedIoRoots ?? []
@@ -371,7 +386,9 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                         )
                     }
 
-                    if (!input.dry_run) triggerTeamNotifications(context)
+                    if (!input.dry_run && (result.created > 0 || result.updated > 0)) {
+                        triggerTeamNotifications(context)
+                    }
                     await sendProgress(progress, 3, 3, 'Team import complete')
                     return result
                 } catch (err) {

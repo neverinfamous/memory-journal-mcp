@@ -113,12 +113,29 @@ function scopeForCoreMethod(toolName: string): StandardScope {
 
 /** Resource URIs that require a non-READ scope. */
 function scopeForResourceUri(uri: string): StandardScope {
-    if (uri.startsWith('memory://team/') || uri === 'memory://team') return SCOPES.TEAM
+    if (
+        uri === 'memory://team' ||
+        uri.startsWith('memory://team/') ||
+        uri.startsWith('memory://team?') ||
+        uri === 'memory://insights/team-collaboration' ||
+        uri.startsWith('memory://insights/team-collaboration?')
+    ) {
+        return SCOPES.TEAM
+    }
     if (uri === 'memory://audit' || uri.startsWith('memory://audit/') || uri.startsWith('memory://audit?')) {
         return SCOPES.AUDIT
     }
     return SCOPES.READ
 }
+
+const TEAM_PROMPT_NAMES = new Set([
+    'team-session-summary',
+    'create-team-entry',
+    'update-team-entry',
+    'mj_team_session_summary',
+    'mj_create_team_entry',
+    'mj_update_team_entry',
+])
 
 export function getRequiredScope(toolName: string): StandardScope {
     const scope = toolScopeMap.get(toolName)
@@ -141,6 +158,9 @@ export function getRequiredScope(toolName: string): StandardScope {
     }
     if (toolName.startsWith('memory://')) {
         return scopeForResourceUri(toolName)
+    }
+    if (TEAM_PROMPT_NAMES.has(toolName)) {
+        return SCOPES.TEAM
     }
     if (DUMMY_HEALING_TOOL_NAMES.has(toolName)) {
         return SCOPES.READ

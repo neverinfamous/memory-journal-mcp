@@ -9,7 +9,11 @@ import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { alignedProjectFilter } from '../../../utils/write-scope.js'
 import { logger } from '../../../utils/logger.js'
-import { TEAM_DB_ERROR_RESPONSE } from './helpers.js'
+import {
+    TEAM_DB_ERROR_RESPONSE,
+    missingTeamProjectNumberError,
+    resolveTeamProjectNumber,
+} from './helpers.js'
 import {
     TeamGetStatisticsSchema,
     TeamGetStatisticsSchemaMcp,
@@ -55,11 +59,14 @@ export function getTeamAnalyticsTools(context: ToolContext): ToolDefinition[] {
 
                     const { group_by, project_number, workspace_id } = TeamGetStatisticsSchema.parse(params)
                     const wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
-                    const alignedProject = alignedProjectFilter(
-                        wsId,
-                        project_number,
-                        context.config?.projectRegistry
-                    )
+                    const alignedProject =
+                        resolveTeamProjectNumber(context, wsId, project_number, workspace_id) ??
+                        undefined
+                    if (alignedProject === undefined) {
+                        return missingTeamProjectNumberError(
+                            'Missing project_number. Cross-tenant statistics without project_number are not allowed.'
+                        )
+                    }
                     const stats = teamDb.getStatistics(
                         group_by,
                         undefined,

@@ -62,7 +62,7 @@ describe('scope-map', () => {
                     // team_import_markdown now requires team scope (SEC-1.3)
                     if (tool === 'import_markdown') {
                         expected = 'write'
-                    } else if (tool === 'team_import_markdown') {
+                    } else if (tool === 'team_import_markdown' || tool === 'cross_team_search') {
                         expected = 'team'
                     } else if (
                         [

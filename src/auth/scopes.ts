@@ -83,6 +83,7 @@ export const TOOL_SCOPE_OVERRIDES: Record<string, StandardScope> = {
     create_entry_minimal: SCOPES.WRITE,
     link_entries: SCOPES.WRITE,
     export_markdown: SCOPES.WRITE,
+    cross_team_search: SCOPES.TEAM,
 
     // Synthetic & healing fallback tools
     read_resource: SCOPES.READ,

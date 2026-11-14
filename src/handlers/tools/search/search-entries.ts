@@ -2,9 +2,10 @@ import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { activeProjectRegistry, alignedProjectFilter } from '../../../utils/write-scope.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
-import { ValidationError } from '../../../types/errors.js'
+import { PermissionError, ValidationError } from '../../../types/errors.js'
 import { resolveSearchMode } from './auto.js'
 import { ftsSearch } from './fts.js'
+import { resolveAuthorizedIncludeTeam } from './helpers.js'
 import { runHybridSearch, runFtsSearch } from './hybrid-branch.js'
 import { SearchEntriesSchema, SearchEntriesSchemaMcp } from './schemas.js'
 import { EntriesListOutputSchema } from '../schemas.js'
@@ -36,6 +37,12 @@ export function getSearchEntriesTool(context: ToolContext): ToolDefinition[] {
                         wsId,
                         input.project_number,
                         activeProjectRegistry(context.config?.projectRegistry)
+                    )
+                    const includeTeam = resolveAuthorizedIncludeTeam(
+                        'search_entries',
+                        input.include_team,
+                        params,
+                        context.config?.runtime?.auditLogger
                     )
                     const query = input.query?.trim() || ''
                     const mode = input.mode
@@ -102,7 +109,7 @@ export function getSearchEntriesTool(context: ToolContext): ToolDefinition[] {
                         startDate: input.start_date,
                         endDate: input.end_date,
                         sortBy: input.sort_by,
-                        includeTeam: input.include_team,
+                        includeTeam,
                         includeArchived: input.include_archived,
                         includeHighlights: input.include_highlights,
                         fuzzy_match: effectiveFuzzyMatch,
@@ -184,6 +191,7 @@ export function getSearchEntriesTool(context: ToolContext): ToolDefinition[] {
                             return runFtsSearch(context, input, isAuto, searchOptions, facets)
                     }
                 } catch (err) {
+                    if (err instanceof PermissionError) throw err
                     return formatHandlerError(err)
                 }
             },

@@ -1,4 +1,5 @@
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
+import { PermissionError } from '../../../types/errors.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { activeProjectRegistry, alignedProjectFilter } from '../../../utils/write-scope.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
@@ -6,6 +7,7 @@ import {
     passMetadataFilters,
     collectTeamSearchEntries,
     mergeAndDedup,
+    resolveAuthorizedIncludeTeam,
     type EntryWithSource,
 } from './helpers.js'
 import { SemanticSearchSchema, SemanticSearchSchemaMcp, SemanticSearchOutputSchema } from './schemas.js'
@@ -38,6 +40,12 @@ export function getSemanticSearchTool(context: ToolContext): ToolDefinition[] {
                         wsId,
                         input.project_number,
                         activeProjectRegistry(context.config?.projectRegistry)
+                    )
+                    const includeTeam = resolveAuthorizedIncludeTeam(
+                        'semantic_search',
+                        input.include_team,
+                        params,
+                        context.config?.runtime?.auditLogger
                     )
 
                     // Validate: at least one of query or entry_id must be provided
@@ -135,7 +143,7 @@ export function getSemanticSearchTool(context: ToolContext): ToolDefinition[] {
                         entryType: input.entry_type,
                         startDate: input.start_date,
                         endDate: input.end_date,
-                        includeTeam: input.include_team,
+                        includeTeam,
                         includeArchived: input.include_archived,
                         workspaceId: wsId,
                     }
@@ -162,7 +170,7 @@ export function getSemanticSearchTool(context: ToolContext): ToolDefinition[] {
 
                     let entries: EntryWithSource[]
                     if (
-                        input.include_team &&
+                        includeTeam &&
                         input.is_personal !== true &&
                         teamDb !== undefined &&
                         input.query !== undefined &&
@@ -210,6 +218,7 @@ export function getSemanticSearchTool(context: ToolContext): ToolDefinition[] {
                         ...(hint !== undefined ? { hint } : {}),
                     }
                 } catch (err) {
+                    if (err instanceof PermissionError) throw err
                     return formatHandlerError(err)
                 }
             },

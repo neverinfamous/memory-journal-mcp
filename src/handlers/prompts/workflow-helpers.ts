@@ -208,13 +208,16 @@ ${markUntrustedContent(entrySummary)}
 
 export function generateEntryPrompt(
     _db: IDatabaseAdapter,
-    _teamDb: IDatabaseAdapter | undefined,
+    teamDb: IDatabaseAdapter | undefined,
     target: 'personal' | 'team',
     workspaceId = 'default',
     briefingConfig?: Partial<BriefingConfig>,
     projectNumber?: number,
     explicitDefaultRequested = false
 ): { messages: PromptMessage[] } {
+    if (target === 'team' && !teamDb) {
+        throw new ConfigurationError('Team database not configured')
+    }
     const registryHint = getProjectRegistryHint(briefingConfig)
     const attributionArgs = buildExplicitAttributionArgs(
         workspaceId,
@@ -272,6 +275,9 @@ export function generateUpdateEntryPrompt(
     projectNumber?: number,
     explicitDefaultRequested = false
 ): { messages: PromptMessage[] } {
+    if (target === 'team' && !teamDb) {
+        throw new ConfigurationError('Team database not configured')
+    }
     const targetDb = target === 'team' && teamDb ? teamDb : db
     let entryContext = ''
     try {
@@ -316,6 +322,7 @@ ${markUntrustedContent(String(recent['content']))}
         (workspaceId !== 'default' || explicitDefaultRequested) && workspaceId !== ''
             ? `--workspace ${workspaceId} `
             : ''
+    const updateApiCall = target === 'team' ? 'mj.team.teamUpdateEntry' : 'mj.admin.updateEntry'
 
     return {
         messages: [
@@ -344,7 +351,7 @@ Look at the tags and structure of the target entry:
 ${registryHint}- If you lose track of your project number, workspace, or agent ID, read the \`memory://agent-context/{repo}\` resource to retrieve it instead of reloading the full briefing (which wastes tokens)
 
 **Execution:**
-- **Option 1 (Code Mode / MCP Tool):** Execute via \`mj.admin.updateEntry({ entry_id: <ENTRY_ID>, expected_version: <VERSION>, content: "..."${attributionArgs} })\`.
+- **Option 1 (Code Mode / MCP Tool):** Execute via \`${updateApiCall}({ entry_id: <ENTRY_ID>, expected_version: <VERSION>, content: "..."${attributionArgs} })\`.
 - **Option 2 (CLI Scratch File):** Write your updated markdown file to your scratch directory (e.g. \`<appDataDir>\\brain\\<conversation-id>\\scratch\\\`) to avoid shell quotes. Then execute: \`memory-journal-mcp entry update ${target === 'team' ? '--team ' : ''}${cliWorkspaceFlag}--id <ENTRY_ID> --expected-version <VERSION> --file <scratch_dir>/updated_entry.md\``,
                 },
             },

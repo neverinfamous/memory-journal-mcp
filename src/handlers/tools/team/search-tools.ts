@@ -51,7 +51,12 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         TeamSearchSchema.parse(params)
 
                     const wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
-                    const projectNumber = resolveTeamProjectNumber(context, wsId, project_number)
+                    const projectNumber = resolveTeamProjectNumber(
+                        context,
+                        wsId,
+                        project_number,
+                        workspace_id
+                    )
 
                     if (projectNumber == null) {
                         return {
@@ -161,7 +166,12 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
 
 
                     const wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
-                    const projectNumber = resolveTeamProjectNumber(context, wsId, project_number)
+                    const projectNumber = resolveTeamProjectNumber(
+                        context,
+                        wsId,
+                        project_number,
+                        workspace_id
+                    )
 
                     if (projectNumber == null) {
                         return {
@@ -238,7 +248,12 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                     if (!teamDb) return { ...TEAM_DB_ERROR_RESPONSE }
                     const { limit, offset, project_number, workspace_id } = TeamListDeletedEntriesSchema.parse(params)
                     const wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
-                    const projectNumber = resolveTeamProjectNumber(context, wsId, project_number)
+                    const projectNumber = resolveTeamProjectNumber(
+                        context,
+                        wsId,
+                        project_number,
+                        workspace_id
+                    )
                     if (projectNumber == null) {
                         return {
                             success: false,

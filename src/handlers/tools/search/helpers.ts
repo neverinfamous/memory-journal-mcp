@@ -15,6 +15,8 @@ import type { IDatabaseAdapter } from '../../../database/core/interfaces.js'
 import type { VectorSearchManager } from '../../../vector/vector-search-manager/index.js'
 import * as crypto from 'node:crypto'
 import { logger } from '../../../utils/logger.js'
+import { enforceAccessBoundary } from '../../../auth/validation.js'
+import type { AuditLogger } from '../../../audit/index.js'
 
 // ============================================================================
 // Types
@@ -49,6 +51,45 @@ export interface ISearchFilters {
 // ============================================================================
 // Helpers
 // ============================================================================
+
+/** Return true if team boundary access passes without triggering denial audit logs. */
+export function canAccessTeamSilently(toolName = 'search_entries'): boolean {
+    try {
+        enforceAccessBoundary(toolName, 'tool', { requiresTeamScope: true })
+        return true
+    } catch {
+        return false
+    }
+}
+
+/** Return true if the caller explicitly passed `include_team: true`. */
+export function hasExplicitIncludeTeam(rawParams: unknown): boolean {
+    return (
+        typeof rawParams === 'object' &&
+        rawParams !== null &&
+        !Array.isArray(rawParams) &&
+        Reflect.get(rawParams, 'include_team') === true
+    )
+}
+
+/**
+ * Authorize team-DB merging on personal search tools:
+ * - Explicit `include_team: true` enforces the fail-closed team boundary (throwing PermissionError).
+ * - Defaulted `include_team` silently drops team results when unauthorized so personal searches still work.
+ */
+export function resolveAuthorizedIncludeTeam(
+    toolName: string,
+    parsedIncludeTeam: boolean,
+    rawParams: unknown,
+    auditLogger?: AuditLogger | null
+): boolean {
+    if (!parsedIncludeTeam) return false
+    if (hasExplicitIncludeTeam(rawParams)) {
+        enforceAccessBoundary(toolName, 'tool', { requiresTeamScope: true }, auditLogger)
+        return true
+    }
+    return canAccessTeamSilently(toolName)
+}
 
 /**
  * When merging across personal + team DBs, fetch more per-DB so BM25
@@ -178,6 +219,9 @@ export async function collectTeamSearchEntries(
     teamVectorManager: VectorSearchManager | undefined,
     options: ISearchFilters & { limit: number }
 ): Promise<EntryWithSource[]> {
+    if (!canAccessTeamSilently('search_entries')) {
+        return []
+    }
     const seen = new Set<number>()
     const ranked: EntryWithSource[] = []
     const limit = Math.min(Math.max(options.limit, 1), 500)

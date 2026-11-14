@@ -32,10 +32,14 @@ export function enforceAccessBoundary(
         (targetType === 'resource'
             ? targetName === 'memory://team' ||
               targetName.startsWith('memory://team/') ||
-              targetName.startsWith('memory://team?')
+              targetName.startsWith('memory://team?') ||
+              targetName === 'memory://insights/team-collaboration' ||
+              targetName.startsWith('memory://insights/team-collaboration?')
             : getToolGroup(targetName) === 'team' ||
               targetName.startsWith('team_') ||
-              targetName.startsWith('team-'))
+              targetName.startsWith('team-') ||
+              targetName.endsWith('-team-entry') ||
+              targetName === 'mj_team_session_summary')
 
     const isAudit =
         capabilities?.requiresAuditScope ??
@@ -66,7 +70,13 @@ export function enforceAccessBoundary(
     if (auth) {
         let requiredScope: string
         if (targetType === 'tool') {
-            requiredScope = getRequiredScope(targetName)
+            if (capabilities?.requiresTeamScope === true) {
+                requiredScope = SCOPES.TEAM
+            } else if (capabilities?.requiresAuditScope === true) {
+                requiredScope = SCOPES.AUDIT
+            } else {
+                requiredScope = getRequiredScope(targetName)
+            }
         } else {
             requiredScope = SCOPES.READ
             if (isTeam) {

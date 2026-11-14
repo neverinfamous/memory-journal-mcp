@@ -1,8 +1,9 @@
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
+import { PermissionError } from '../../../types/errors.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { activeProjectRegistry, alignedProjectFilter } from '../../../utils/write-scope.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
-import { calcPerDbLimit, mergeAndDedup } from './helpers.js'
+import { calcPerDbLimit, mergeAndDedup, resolveAuthorizedIncludeTeam } from './helpers.js'
 import { SearchByDateRangeSchema, SearchByDateRangeSchemaMcp } from './schemas.js'
 import { EntriesListOutputSchema } from '../schemas.js'
 
@@ -31,6 +32,12 @@ export function getDateRangeSearchTool(context: ToolContext): ToolDefinition[] {
                         input.project_number,
                         activeProjectRegistry(context.config?.projectRegistry)
                     )
+                    const includeTeam = resolveAuthorizedIncludeTeam(
+                        'search_by_date_range',
+                        input.include_team,
+                        params,
+                        context.config?.runtime?.auditLogger
+                    )
 
                     // Validate date range order (YYYY-MM-DD sorts lexicographically)
                     if (input.start_date > input.end_date) {
@@ -49,7 +56,7 @@ export function getDateRangeSearchTool(context: ToolContext): ToolDefinition[] {
                     // [INVARIANT] A compound cursor with a missing side means that side is exhausted; never restart it at page 1.
                     let personalExhausted = false
                     let teamExhausted = false
-                    if (input.cursor && input.include_team && input.is_personal !== true) {
+                    if (input.cursor && includeTeam && input.is_personal !== true) {
                         const { decodeCompoundCursor } = await import('./fts.js')
                         const compound = decodeCompoundCursor(input.cursor)
                         if (compound) {
@@ -60,7 +67,10 @@ export function getDateRangeSearchTool(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    const perDbLimit = calcPerDbLimit(input.limit, !!teamDb)
+                    const perDbLimit = calcPerDbLimit(
+                        input.limit,
+                        !!teamDb && includeTeam && input.is_personal !== true
+                    )
                     const emptyPage: ReturnType<typeof db.searchByDateRange> = { entries: [] }
                     const personalEntries = personalExhausted ? emptyPage : db.searchByDateRange(input.start_date, input.end_date, {
                         entryType: input.entry_type,
@@ -79,7 +89,7 @@ export function getDateRangeSearchTool(context: ToolContext): ToolDefinition[] {
 
                     // Cross-database merge when team DB is available
                     // Skip team DB when is_personal is explicitly true (team entries are never personal)
-                    if (teamDb && input.include_team && input.is_personal !== true) {
+                    if (teamDb && includeTeam && input.is_personal !== true) {
                         const teamEntries = teamExhausted ? emptyPage : teamDb.searchByDateRange(
                             input.start_date,
                             input.end_date,
@@ -128,6 +138,7 @@ export function getDateRangeSearchTool(context: ToolContext): ToolDefinition[] {
                         next_cursor: personalEntries.nextCursor,
                     }
                 } catch (err) {
+                    if (err instanceof PermissionError) throw err
                     return formatHandlerError(err)
                 }
             },

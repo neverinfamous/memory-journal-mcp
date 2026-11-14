@@ -18,7 +18,8 @@ import { ErrorFieldsMixin } from '../error-fields-mixin.js'
 import { DatabaseAdapterFactory } from '../../../database/adapter-factory.js'
 import type { IDatabaseAdapter } from '../../../database/core/interfaces.js'
 import type { ToolContext, ToolDefinition } from '../../../types/index.js'
-import { ConfigurationError, ValidationError } from '../../../types/errors.js'
+import { ConfigurationError, PermissionError, ValidationError } from '../../../types/errors.js'
+import { enforceAccessBoundary } from '../../../auth/validation.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { activeProjectRegistry, alignedProjectFilter } from '../../../utils/write-scope.js'
@@ -291,13 +292,21 @@ export function getCrossTeamTools(context: ToolContext): ToolDefinition[] {
             title: 'Cross-Team Search',
             description: 'Search across multiple configured team databases simultaneously. Returns results with team_db labels.',
             group: 'search',
+            capabilities: { requiresTeamScope: true },
             inputSchema: CrossTeamSearchSchemaMcp,
             outputSchema: CrossTeamSearchOutputSchema,
             handler: async (args: unknown) => {
                 try {
+                    enforceAccessBoundary(
+                        'cross_team_search',
+                        'tool',
+                        { requiresTeamScope: true },
+                        context.config?.runtime?.auditLogger
+                    )
                     const parsed = CrossTeamSearchSchema.parse(args)
                     return await handleCrossTeamSearch(parsed, context)
                 } catch (error) {
+                    if (error instanceof PermissionError) throw error
                     return formatHandlerError(error)
                 }
             },

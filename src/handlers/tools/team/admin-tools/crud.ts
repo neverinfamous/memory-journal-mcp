@@ -5,6 +5,7 @@
  */
 
 import type { ToolDefinition, ToolContext } from '../../../../types/index.js'
+import { ValidationError } from '../../../../types/errors.js'
 import { formatHandlerError } from '../../../../utils/error-helpers.js'
 import { logger } from '../../../../utils/logger.js'
 import { resolveWriteWorkspaceId } from '../../write-workspace.js'
@@ -120,10 +121,24 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                     if (projectNumber === undefined || projectNumber === null) {
                         return missingProjectNumberResponse()
                     }
+                    if (
+                        existing.projectNumber !== null &&
+                        existing.projectNumber !== undefined &&
+                        existing.projectNumber !== projectNumber
+                    ) {
+                        return {
+                            success: false,
+                            error: `Team entry ${String(input.entry_id)} not found in project ${String(projectNumber)}`,
+                            code: 'RESOURCE_NOT_FOUND',
+                            category: 'resource',
+                            suggestion: 'Verify the team entry ID and project number',
+                            recoverable: true,
+                        }
+                    }
 
-                    const author = fetchAuthor(teamDb, input.entry_id)
                     const denied = checkSingleTeamOwnership(teamDb, context, input.entry_id, 'modify')
                     if (denied !== null) return denied
+                    const author = fetchAuthor(teamDb, input.entry_id)
 
                     const updated = teamDb.updateEntry(input.entry_id, {
                         content: input.content,
@@ -337,6 +352,9 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
+                    const denied = checkSingleTeamOwnership(teamDb, context, entry_id, 'restore')
+                    if (denied !== null) return denied
+
                     const success = teamDb.restoreEntry(entry_id, wsId)
                     if (!success) {
                         return {
@@ -380,6 +398,12 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                     const { source_tag, target_tag, project_number, workspace_id } =
                         TeamMergeTagsSchema.parse(params)
 
+                    if (workspace_id?.trim() === '*') {
+                        throw new ValidationError(
+                            "Wildcard workspace_id '*' is not supported for team_merge_tags. Specify a concrete workspace_id."
+                        )
+                    }
+
                     if (source_tag === target_tag) {
                         return {
                             success: false,
@@ -391,14 +415,13 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    const wsId =
-                        workspace_id === '*'
-                            ? '*'
-                            : resolveWriteWorkspaceId(workspace_id, project_number, context.config)
-                    const scopedProject =
-                        wsId === '*'
-                            ? project_number
-                            : resolveTeamProjectNumber(context, wsId, project_number, workspace_id)
+                    const wsId = resolveWriteWorkspaceId(workspace_id, project_number, context.config)
+                    const scopedProject = resolveTeamProjectNumber(
+                        context,
+                        wsId,
+                        project_number,
+                        workspace_id
+                    )
                     const result = teamDb.mergeTags(
                         source_tag,
                         target_tag,

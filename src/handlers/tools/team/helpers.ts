@@ -71,6 +71,28 @@ export function triggerTeamNotifications(context: ToolContext): void {
     }
 }
 
+/** Structured error response for missing required team project_number. */
+export function missingTeamProjectNumberError(
+    error = 'Missing project_number. You MUST provide a valid project_number (e.g., 1) or configure DEFAULT_PROJECT_NUMBER on the server.'
+): {
+    success: false
+    error: string
+    code: 'VALIDATION_ERROR'
+    category: 'validation'
+    suggestion: string
+    recoverable: true
+} {
+    return {
+        success: false,
+        error,
+        code: 'VALIDATION_ERROR',
+        category: 'validation',
+        suggestion:
+            'Specify the project_number in your tool call, or ensure DEFAULT_PROJECT_NUMBER is configured on the server.',
+        recoverable: true,
+    }
+}
+
 /**
  * Derive the project number for a team tool call. A registered workspace keeps its
  * registry project. Otherwise use the explicit number, then the configured default.

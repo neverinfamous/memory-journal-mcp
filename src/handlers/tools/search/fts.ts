@@ -7,7 +7,12 @@
 
 import type { IDatabaseAdapter } from '../../../database/core/interfaces.js'
 import type { EntryType } from '../../../types/index.js'
-import { calcPerDbLimit, mergeAndDedup, type EntryWithSource } from './helpers.js'
+import {
+    calcPerDbLimit,
+    canAccessTeamSilently,
+    mergeAndDedup,
+    type EntryWithSource,
+} from './helpers.js'
 import { Buffer } from 'buffer'
 
 // Helper for compound cursor encoding/decoding
@@ -68,13 +73,19 @@ export function ftsSearch(
         options.startDate !== undefined ||
         options.endDate !== undefined
 
+    const canIncludeTeam =
+        teamDb !== undefined &&
+        options.includeTeam === true &&
+        options.isPersonal !== true &&
+        canAccessTeamSilently('search_entries')
+
     // Decode compound cursor if it exists
     let personalCursor: string | undefined
     let teamCursor: string | undefined
     let personalExhausted = false
     let teamExhausted = false
     if (options.cursor) {
-        if (teamDb && options.includeTeam === true && options.isPersonal !== true) {
+        if (canIncludeTeam) {
             const compound = decodeCompoundCursor(options.cursor)
             if (compound) {
                 personalCursor = compound.p
@@ -89,7 +100,7 @@ export function ftsSearch(
         }
     }
 
-    const perDbLimit = calcPerDbLimit(options.limit, !!teamDb)
+    const perDbLimit = calcPerDbLimit(options.limit, canIncludeTeam)
 
     let personalResult
     if (personalExhausted) {

@@ -18,6 +18,8 @@ import { getAdversarialPromptDefinitions } from './adversarial.js'
 import { getOptimizerPromptDefinitions } from './optimizer.js'
 import { getLoadBriefingPromptDefinitions } from './load-briefing.js'
 import { ResourceNotFoundError } from '../../types/errors.js'
+import { enforceAccessBoundary } from '../../auth/validation.js'
+import type { AuditLogger } from '../../audit/index.js'
 
 /**
  * Message format for MCP prompts
@@ -42,6 +44,11 @@ export interface InternalPromptDef {
         required?: boolean
     }[]
     icons?: McpIcon[]
+    capabilities?: {
+        requiresTeamScope?: boolean
+        requiresAdminScope?: boolean
+        requiresAuditScope?: boolean
+    }
     handler: (
         args: Record<string, string>,
         db: IDatabaseAdapter,
@@ -82,6 +89,15 @@ export function getPrompt(
     if (!prompt) {
         throw new ResourceNotFoundError('Prompt', name)
     }
+
+    const auditLogger =
+        runtime !== null &&
+        runtime !== undefined &&
+        'auditLogger' in runtime &&
+        runtime.auditLogger !== undefined
+            ? (runtime.auditLogger as AuditLogger | null)
+            : undefined
+    enforceAccessBoundary(name, 'prompt', prompt.capabilities, auditLogger)
 
     return Promise.resolve().then(() =>
         prompt.handler(args, db, teamDb, github, briefingConfig, runtime)

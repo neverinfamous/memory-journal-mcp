@@ -8,9 +8,13 @@ import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { sendProgress } from '../../../utils/progress-utils.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
-import { alignedProjectFilter } from '../../../utils/write-scope.js'
 import { DATE_MIN_SENTINEL, DATE_MAX_SENTINEL } from '../schemas.js'
-import { TEAM_DB_ERROR_RESPONSE, batchFetchAuthors, resolveTeamProjectNumber } from './helpers.js'
+import {
+    TEAM_DB_ERROR_RESPONSE,
+    batchFetchAuthors,
+    missingTeamProjectNumberError,
+    resolveTeamProjectNumber,
+} from './helpers.js'
 import {
     TeamExportEntriesSchema,
     TeamExportEntriesSchemaMcp,
@@ -123,8 +127,13 @@ export function getTeamExportTools(context: ToolContext): ToolDefinition[] {
 
                     const wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
                     const alignedProject =
-                        resolveTeamProjectNumber(context, wsId, project_number) ??
-                        alignedProjectFilter(wsId, project_number, context.config?.projectRegistry)
+                        resolveTeamProjectNumber(context, wsId, project_number, workspace_id) ??
+                        undefined
+                    if (alignedProject === undefined) {
+                        return missingTeamProjectNumberError(
+                            'Missing project_number. Cross-tenant exports without project_number are not allowed.'
+                        )
+                    }
 
                     // When entry_type or tags filters are active, fetch a larger
                     // batch so post-filtering doesn't silently return too few results.

@@ -149,7 +149,7 @@ export function checkSingleTeamOwnership(
     teamDb: TeamDbInstance,
     context: ToolContext,
     entryId: number,
-    action: 'modify' | 'delete'
+    action: 'modify' | 'delete' | 'restore'
 ): Record<string, unknown> | null {
     if (context.config?.codemodeInternalFullAccess === true) return null
     const author = fetchAuthor(teamDb, entryId)
@@ -162,12 +162,13 @@ export function checkSingleTeamOwnership(
         enforceEntryOwnership(currentUser, author, callerRole)
         return null
     } catch {
+        const actionVerb = action === 'modify' ? 'update' : action
         return {
             success: false,
             error: `Permission Denied: Only the original author ("${author ?? 'none recorded'}") or a team admin can ${action} this team entry.`,
             code: 'PERMISSION_DENIED',
             category: 'auth',
-            suggestion: `You can only ${action === 'modify' ? 'update' : 'delete'} entries that you authored.`,
+            suggestion: `You can only ${actionVerb} entries that you authored.`,
             recoverable: false,
         }
     }

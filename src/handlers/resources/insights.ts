@@ -93,6 +93,7 @@ export const teamCollaborationResource: InternalResourceDef = {
     description:
         'Cross-author collaboration metrics: activity heatmap, cross-linking patterns, and impact factor per contributor. Requires TEAM_DB_PATH.',
     mimeType: 'application/json',
+    capabilities: { requiresTeamScope: true },
     icons: [ICON_ANALYTICS],
     annotations: {
         ...withPriority(0.4, ASSISTANT_FOCUSED),

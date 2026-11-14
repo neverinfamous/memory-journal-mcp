@@ -1,12 +1,13 @@
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../../types/index.js'
+import { PermissionError } from '../../../../types/errors.js'
 import { VERSION } from '../../../../version.js'
 import { getCoreTools } from '../tools.js'
 import { getSearchTools } from '../../search/index.js'
 import { getAdminTools } from '../../admin/index.js'
-import { getPrompt, getPrompts } from '../../../prompts/index.js'
 import { readResource, getResources } from '../../../resources/index.js'
 import { ErrorFieldsMixin } from '../../error-fields-mixin.js'
+import { handlePrompt, handleListPrompts, handleGetPrompt } from './mcp-prompt-fallbacks.js'
 import {
     DUMMY_RESOURCE_TOOL_NAMES,
     DUMMY_PROMPT_TOOL_NAMES,
@@ -17,6 +18,8 @@ import {
     DUMMY_SERVER_INFO_TOOL_NAMES,
     DUMMY_ADAPTER_TOOL_NAMES,
 } from './alias-catalog.js'
+
+export { handlePrompt, handleListPrompts, handleGetPrompt }
 
 const FLEXIBLE_PASSTHROUGH_SCHEMA = z.looseObject({ ...ErrorFieldsMixin.shape })
 
@@ -103,6 +106,7 @@ export async function handleReadResource(
                 _healing_note: `🛠️ AUTONOMOUS HEALING: '${toolName}' was called as an MCP tool instead of an MCP resource read. The resource '${uri}' was resolved successfully.`,
             }
         } catch (err) {
+            if (err instanceof PermissionError) throw err
             return {
                 success: false,
                 error: `Failed to read resource '${uri}': ${err instanceof Error ? err.message : String(err)}`,
@@ -123,86 +127,11 @@ export async function handleReadResource(
     }
 }
 
-export async function handlePrompt(
-    params: unknown,
-    promptName: string,
-    context?: ToolContext
-): Promise<unknown> {
-    const rawArgs =
-        typeof params === 'object' && params !== null ? (params as Record<string, unknown>) : {}
-    const stringArgs: Record<string, string> = {}
-    for (const [k, v] of Object.entries(rawArgs)) {
-        if (typeof v === 'string') stringArgs[k] = v
-        else if (typeof v === 'number' || typeof v === 'boolean') stringArgs[k] = String(v)
-    }
-
-    const canonicalPromptName = promptName
-        .replace(/^mj_/, '')
-        .replace(/_/g, '-')
-        .replace(/([a-z])([A-Z])/g, '$1-$2')
-        .toLowerCase()
-
-    if (canonicalPromptName === 'load-briefing' || canonicalPromptName === 'briefing') {
-        if (stringArgs['projects'] === undefined || stringArgs['projects'] === '') {
-            stringArgs['projects'] =
-                stringArgs['project'] ??
-                stringArgs['name'] ??
-                stringArgs['target'] ??
-                stringArgs['repo'] ??
-                stringArgs['workspace'] ??
-                ''
-        }
-    }
-
-    if (context !== undefined) {
-        try {
-            const result = await getPrompt(
-                canonicalPromptName === 'briefing' ? 'load-briefing' : canonicalPromptName,
-                stringArgs,
-                context.db,
-                context.teamDb,
-                context.github,
-                context.config?.briefingConfig
-            )
-            return {
-                success: true,
-                data: result,
-                messages: result.messages,
-                _healing_note: `🛠️ AUTONOMOUS HEALING: '${promptName}' is an MCP Prompt, but was invoked directly as an MCP tool. The prompt was evaluated and returned successfully.`,
-            }
-        } catch (err) {
-            return {
-                success: false,
-                error: `Failed to execute prompt '${promptName}': ${err instanceof Error ? err.message : String(err)}`,
-                code: 'PROMPT_ERROR',
-                category: 'prompt',
-                recoverable: true,
-            }
-        }
-    }
-
-    return {
-        success: false,
-        error: `🛠️ AUTONOMOUS HEALING: '${promptName}' is an MCP Prompt, not an MCP Tool. Please fetch it via the Prompts API or use the 'prompts/list' endpoint.`,
-        code: 'VALIDATION_ERROR',
-        category: 'validation',
-        recoverable: true,
-    }
-}
-
 export function handleListResources(toolName: string): unknown {
     return {
         success: true,
         resources: getResources(),
         _healing_note: `🛠️ AUTONOMOUS HEALING: '${toolName}' was called as an MCP tool instead of an MCP protocol request (resources/list). The available resources were returned successfully.`,
-    }
-}
-
-export function handleListPrompts(toolName: string): unknown {
-    return {
-        success: true,
-        prompts: getPrompts(),
-        _healing_note: `🛠️ AUTONOMOUS HEALING: '${toolName}' was called as an MCP tool instead of an MCP protocol request (prompts/list). The available prompts were returned successfully.`,
     }
 }
 
@@ -229,68 +158,6 @@ export function handleListTools(toolName: string, context?: ToolContext): unknow
         success: true,
         tools: toolsList,
         _healing_note: `🛠️ AUTONOMOUS HEALING: '${toolName}' was called as an MCP tool instead of an MCP protocol request (tools/list). The available tools were returned successfully.`,
-    }
-}
-
-export async function handleGetPrompt(
-    params: unknown,
-    toolName: string,
-    context?: ToolContext
-): Promise<unknown> {
-    const rawArgs =
-        typeof params === 'object' && params !== null ? (params as Record<string, unknown>) : {}
-    const targetPromptName =
-        typeof rawArgs['name'] === 'string'
-            ? rawArgs['name']
-            : typeof rawArgs['prompt'] === 'string'
-              ? rawArgs['prompt']
-              : typeof rawArgs['prompt_name'] === 'string'
-                ? rawArgs['prompt_name']
-                : 'load-briefing'
-    const nestedArgs = (
-        typeof rawArgs['arguments'] === 'object' && rawArgs['arguments'] !== null
-            ? rawArgs['arguments']
-            : rawArgs
-    ) as Record<string, unknown>
-    const stringArgs: Record<string, string> = {}
-    for (const [k, v] of Object.entries(nestedArgs)) {
-        if (k !== 'name' && k !== 'prompt' && k !== 'prompt_name' && k !== 'arguments') {
-            if (typeof v === 'string') stringArgs[k] = v
-            else if (typeof v === 'number' || typeof v === 'boolean') stringArgs[k] = String(v)
-        }
-    }
-    if (context !== undefined) {
-        try {
-            const result = await getPrompt(
-                targetPromptName,
-                stringArgs,
-                context.db,
-                context.teamDb,
-                context.github,
-                context.config?.briefingConfig
-            )
-            return {
-                success: true,
-                data: result,
-                messages: result.messages,
-                _healing_note: `🛠️ AUTONOMOUS HEALING: '${toolName}' was called as an MCP tool instead of an MCP protocol request (prompts/get). The prompt '${targetPromptName}' was evaluated successfully.`,
-            }
-        } catch (err) {
-            return {
-                success: false,
-                error: `Failed to execute prompt '${targetPromptName}': ${err instanceof Error ? err.message : String(err)}`,
-                code: 'PROMPT_ERROR',
-                category: 'prompt',
-                recoverable: true,
-            }
-        }
-    }
-    return {
-        success: false,
-        error: `🛠️ AUTONOMOUS HEALING: '${toolName}' is an MCP Prompt protocol method. Context is not initialized.`,
-        code: 'VALIDATION_ERROR',
-        category: 'validation',
-        recoverable: true,
     }
 }
 

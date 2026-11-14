@@ -36,6 +36,20 @@ export const MISSING_PROJECT_NUMBER_IO_ERROR = {
     recoverable: true,
 }
 
+export function missingTeamIoProjectNumberError(explicitWs?: string): typeof MISSING_PROJECT_NUMBER_IO_ERROR {
+    if (explicitWs?.trim().toLowerCase() === 'default') {
+        return {
+            success: false,
+            error: "Explicit workspace_id 'default' requires a numeric project_number for team IO operations (team entries cannot inherit DEFAULT_PROJECT_NUMBER onto 'default').",
+            code: 'VALIDATION_ERROR',
+            category: 'validation',
+            suggestion: 'Specify a concrete workspace_id or pass a valid project_number.',
+            recoverable: true,
+        }
+    }
+    return MISSING_PROJECT_NUMBER_IO_ERROR
+}
+
 export function resolveTeamImportScope(
     sourceDir: string,
     explicitWs: string | undefined,

@@ -317,7 +317,12 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                     const { limit, cursor, sort_by, project_number, workspace_id, include_archived } =
                         TeamGetRecentSchema.parse(params)
                     const wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
-                    const projectNumber = resolveTeamProjectNumber(context, wsId, project_number)
+                    const projectNumber = resolveTeamProjectNumber(
+                        context,
+                        wsId,
+                        project_number,
+                        workspace_id
+                    )
                     if (projectNumber == null) {
                         return {
                             success: false,

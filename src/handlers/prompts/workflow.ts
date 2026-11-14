@@ -93,6 +93,7 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
             name: 'team-session-summary',
             description: 'Create a formatted team session summary entry',
             icons: [ICON_PROMPT],
+            capabilities: { requiresTeamScope: true },
             arguments: WORKFLOW_WORKSPACE_ARGUMENTS,
             handler: (
                 args: Record<string, string> | undefined,
@@ -155,6 +156,7 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
             name: 'create-team-entry',
             description: 'Create a structured mid-thread team journal entry',
             icons: [ICON_PROMPT],
+            capabilities: { requiresTeamScope: true },
             arguments: WORKFLOW_WORKSPACE_ARGUMENTS,
             handler: (
                 args: Record<string, string> | undefined,
@@ -217,6 +219,7 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
             name: 'update-team-entry',
             description: 'Safely update an existing team entry or team session summary',
             icons: [ICON_PROMPT],
+            capabilities: { requiresTeamScope: true },
             arguments: WORKFLOW_WORKSPACE_ARGUMENTS,
             handler: (
                 args: Record<string, string> | undefined,

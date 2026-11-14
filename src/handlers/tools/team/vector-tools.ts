@@ -10,7 +10,12 @@ import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { logger } from '../../../utils/logger.js'
-import { TEAM_DB_ERROR_RESPONSE, batchFetchAuthors, resolveTeamProjectNumber } from './helpers.js'
+import {
+    TEAM_DB_ERROR_RESPONSE,
+    batchFetchAuthors,
+    missingTeamProjectNumberError,
+    resolveTeamProjectNumber,
+} from './helpers.js'
 import {
     TeamSemanticSearchSchema,
     TeamSemanticSearchSchemaMcp,
@@ -62,7 +67,17 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                     const input = TeamSemanticSearchSchema.parse(params)
                     const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
                     const projectNumber =
-                        resolveTeamProjectNumber(context, wsId, input.project_number) ?? undefined
+                        resolveTeamProjectNumber(
+                            context,
+                            wsId,
+                            input.project_number,
+                            input.workspace_id
+                        ) ?? undefined
+                    if (projectNumber === undefined) {
+                        return missingTeamProjectNumberError(
+                            'Missing project_number. Cross-tenant searches without project_number are not allowed.'
+                        )
+                    }
 
                     if (!input.query && input.entry_id === undefined) {
                         return {
