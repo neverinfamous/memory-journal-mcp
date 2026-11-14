@@ -25,7 +25,7 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
         {
             name: 'update_configuration',
             title: 'Update Server Configuration',
-            description: 'Dynamically update the MCP server configuration (instruction level, tool filters, briefing preferences) without restarting the server.',
+            description: 'Dynamically update the MCP server configuration (tool filters, briefing preferences, and default workspace/project scope) without restarting the server.',
             group: 'admin',
             inputSchema: updateConfigurationSchemaMcp,
             outputSchema: z

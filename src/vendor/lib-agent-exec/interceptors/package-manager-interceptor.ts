@@ -366,26 +366,26 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
       (underlyingScript && /(?:vitest|jest|playwright|cypress|eslint|tsc|typecheck|test)/i.test(underlyingScript))
     );
     if (isPackageResolution) {
-      console.error(`\n   🛠️ AUTONOMOUS HEALING: Disabling stall interceptors and extending timeout for package installation/resolution command to prevent false positive aborts.... (Frictionless Recovery)`);
+      console.error(`\n   💡 AGENT INTERCEPT: Disabling stall interceptors and extending timeout for package installation/resolution command to prevent false positive aborts.`);
       ctx.payload.bypassInterceptors = true;
       if (ctx.payload.timeoutMs === undefined || ctx.payload.timeoutMs < 300000) {
         ctx.payload.timeoutMs = 300000;
       }
     } else if (isPlaywright) {
-      console.error(`\n   🛠️ AUTONOMOUS HEALING: Disabling stall interceptors and extending timeout for Playwright/E2E test to prevent false positive aborts.... (Frictionless Recovery)`);
+      console.error(`\n   💡 AGENT INTERCEPT: Disabling stall interceptors and extending timeout for Playwright/E2E test to prevent false positive aborts.`);
       ctx.payload.bypassInterceptors = true;
       if (ctx.payload.timeoutMs === undefined || ctx.payload.timeoutMs < 600000) {
         ctx.payload.timeoutMs = 600000;
       }
     } else if (isKnownDeterministic) {
-      console.error(`\n   🛠️ AUTONOMOUS HEALING: Disabling stall interceptors and extending timeout for quality command to prevent false positive aborts.... (Frictionless Recovery)`);
+      console.error(`\n   💡 AGENT INTERCEPT: Disabling stall interceptors and extending timeout for deterministic workflow script to prevent false positive aborts.`);
       ctx.payload.bypassInterceptors = true;
       const detTimeout = ctx.payload.target === 'wsl2' ? 90000 : 240000;
       if (ctx.payload.timeoutMs === undefined || ctx.payload.timeoutMs < detTimeout) {
         ctx.payload.timeoutMs = detTimeout;
       }
     } else if (isLongRunningQualityCheck) {
-      console.error(`\n   🛠️ AUTONOMOUS HEALING: Disabling stall interceptors and extending timeout for quality command to prevent false positive aborts.... (Frictionless Recovery)`);
+      console.error(`\n   💡 AGENT INTERCEPT: Disabling stall interceptors and extending timeout for quality command to prevent false positive aborts.`);
       ctx.payload.bypassInterceptors = true;
       const testFiles = args.filter(a => /\.(?:test|spec)\.[a-zA-Z0-9]+$/i.test(a));
       const testDirs = args.filter(a => !a.startsWith('-') && !['run', 'exec', 'test', 'vitest', 'jest', 'pytest', 'playwright', 'cypress', 'coverage'].includes(a.toLowerCase()) && /(?:^|[/\\])(?:tests?|__tests__)(?:[/\\][^\s.]*)?$/i.test(a) && !/\.[a-zA-Z0-9_-]+$/i.test(a));
@@ -504,13 +504,13 @@ export function packageManagerInterceptor(ctx: ExecutionContext): void {
       const isCoverage = !isKnownDeterministic && args.some(a => /(?:coverage|--coverage|test:coverage)/i.test(a));
       const isRunnerQuality = isKnownDeterministic || args.some(a => /(?:vitest|jest|playwright|cypress|test|lint|typecheck|tsc)/i.test(a));
       if (isPlaywright) {
-        console.error(`\n   🛠️ AUTONOMOUS HEALING: Disabling stall interceptors and extending timeout for Playwright/E2E test to prevent false positive aborts.... (Frictionless Recovery)`);
+        console.error(`\n   💡 AGENT INTERCEPT: Disabling stall interceptors and extending timeout for Playwright/E2E test to prevent false positive aborts.`);
         ctx.payload.bypassInterceptors = true;
         if (ctx.payload.timeoutMs === undefined || ctx.payload.timeoutMs < 600000) {
           ctx.payload.timeoutMs = 600000;
         }
       } else if (isRunnerQuality) {
-        console.error(`\n   🛠️ AUTONOMOUS HEALING: Disabling stall interceptors and extending timeout for quality command to prevent false positive aborts.... (Frictionless Recovery)`);
+        console.error(`\n   💡 AGENT INTERCEPT: Disabling stall interceptors and extending timeout for ${isKnownDeterministic ? 'deterministic workflow script' : 'quality command'} to prevent false positive aborts.`);
         ctx.payload.bypassInterceptors = true;
         const testFiles = args.filter(a => /\.(?:test|spec)\.[a-zA-Z0-9]+$/i.test(a));
         const testDirs = args.filter(a => !a.startsWith('-') && !['run', 'exec', 'test', 'vitest', 'jest', 'pytest', 'playwright', 'cypress', 'coverage'].includes(a.toLowerCase()) && /(?:^|[/\\])(?:tests?|__tests__)(?:[/\\][^\s.]*)?$/i.test(a) && !/\.[a-zA-Z0-9_-]+$/i.test(a));

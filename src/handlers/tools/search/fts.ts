@@ -46,10 +46,11 @@ export function ftsSearch(
         prStatus?: string
         workflowRunId?: number
         tags?: string[]
+        excludeTags?: string[]
         entryType?: EntryType
         startDate?: string
         endDate?: string
-        sortBy?: 'timestamp' | 'importance'
+        sortBy?: 'timestamp' | 'importance' | 'blended'
         includeTeam?: boolean
         includeArchived?: boolean
         includeHighlights?: boolean
@@ -69,6 +70,7 @@ export function ftsSearch(
         options.workflowRunId !== undefined ||
         options.isPersonal !== undefined ||
         options.tags !== undefined ||
+        (options.excludeTags !== undefined && options.excludeTags.length > 0) ||
         options.entryType !== undefined ||
         options.startDate !== undefined ||
         options.endDate !== undefined
@@ -101,6 +103,7 @@ export function ftsSearch(
     }
 
     const perDbLimit = calcPerDbLimit(options.limit, canIncludeTeam)
+    const recentSortBy = options.sortBy === 'blended' ? 'importance' : options.sortBy
 
     let personalResult
     if (personalExhausted) {
@@ -109,7 +112,7 @@ export function ftsSearch(
         personalResult = db.getRecentEntries(
             perDbLimit,
             options.isPersonal,
-            options.sortBy,
+            recentSortBy,
             personalCursor,
             options.includeArchived,
             options.workspaceId,
@@ -126,6 +129,7 @@ export function ftsSearch(
             prStatus: options.prStatus,
             workflowRunId: options.workflowRunId,
             tags: options.tags,
+            excludeTags: options.excludeTags,
             entryType: options.entryType,
             startDate: options.startDate,
             endDate: options.endDate,
@@ -149,7 +153,7 @@ export function ftsSearch(
             teamResult = teamDb.getRecentEntries(
                 perDbLimit,
                 undefined,
-                options.sortBy,
+                recentSortBy,
                 teamCursor,
                 options.includeArchived,
                 options.workspaceId,
@@ -165,6 +169,7 @@ export function ftsSearch(
                 prStatus: options.prStatus,
                 workflowRunId: options.workflowRunId,
                 tags: options.tags,
+                excludeTags: options.excludeTags,
                 entryType: options.entryType,
                 startDate: options.startDate,
                 endDate: options.endDate,
@@ -184,7 +189,7 @@ export function ftsSearch(
             personalEntries.map((e) => ({ ...e, source: 'personal' as const })),
             teamEntries.map((e) => ({ ...e, source: 'team' as const })),
             options.limit,
-            options.sortBy
+            options.sortBy === 'blended' ? 'preserve' : options.sortBy
         )
         
         let compoundNextCursor: string | undefined

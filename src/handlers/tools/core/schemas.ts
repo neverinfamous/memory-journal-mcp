@@ -176,7 +176,7 @@ export const CreateEntrySchemaMcp = z.preprocess(
                     relationType: z.string().optional().default('references'),
                 })
             )
-        ).optional().describe('Optional array of links to previous entries/flags to establish relationships immediately upon creation. Types: "resolves", "depends_on", "implements", "relates_to", "references", "evolves_from"'),
+        ).optional().describe('Optional array of `{ targetId, relationType }` links to previous entries. Canonical types: "evolves_from", "references", "implements", "clarifies", "response_to", "blocked_by", "resolved", "caused"'),
     }).strict()
 )
 

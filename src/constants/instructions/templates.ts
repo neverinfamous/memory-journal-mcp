@@ -21,7 +21,7 @@ These templates define the REQUIRED structure for journal entry content by type.
 
 Do NOT add extra top-level sections (no "## Summary", "## Overview", "## Notes").
 Do NOT omit any of the four required sections.
-Always remember to populate the \`auto_context\` payload parameter with the session's commit SHAs.
+Include \`auto_context: { commits: ["<sha>"] }\` when commits were made during the session; omit \`auto_context\` on zero-commit sessions.
 
 ## Feature Implementation (entry\\_type: "feature\\_implementation")
 

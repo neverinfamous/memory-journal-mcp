@@ -19,12 +19,14 @@ function hasValidNextToken(tokens: string[], startIndex: number): boolean {
 
 /**
  * Extract balanced quoted phrases (sanitised) and return them with the remaining text.
- * Tokens inside a phrase keep only alphanumerics, hyphen and underscore.
+ * Compound delimiters (`.`, `/`, `:`, `@`) split into space-separated phrase terms;
+ * hyphens and underscores inside words are preserved.
  */
 function extractQuotedPhrases(query: string): { phrases: string[]; remaining: string } {
     const phrases: string[] = []
     const remaining = query.replace(/"([^"]+)"/g, (_match, inner: string) => {
         const safeInner = inner
+            .replace(/[./:@]+/g, ' ')
             .split(/\s+/)
             .map((t: string) => t.replace(/[^a-zA-Z0-9_-]/g, ''))
             .filter((t: string) => t.length > 0)
@@ -35,6 +37,33 @@ function extractQuotedPhrases(query: string): { phrases: string[]; remaining: st
         return ' ' // Replace the matched phrase with space in the remaining text
     })
     return { phrases, remaining }
+}
+
+/** Expand non-quoted text into tokens, preserving compound delimiter chunks as atomic phrase candidates. */
+function expandSearchTokens(rawText: string): string[] {
+    const stripped = rawText
+        .replace(/\bNEAR(?:\/\d+)?\b/gi, ' ')
+        .replace(/"/g, ' ')
+    const tokens: string[] = []
+    for (const chunk of stripped.split(/\s+/)) {
+        if (!chunk) continue
+        if (/[./:@]/.test(chunk) && !chunk.endsWith('*')) {
+            tokens.push(chunk)
+        } else {
+            for (const part of chunk.replace(/-/g, ' ').split(/\s+/)) {
+                if (part) tokens.push(part)
+            }
+        }
+    }
+    return tokens
+}
+
+/** Convert compound tokens (`AGENTS.md`, `@scope/pkg`, `memory://agent-id`) into phrase or single segments. */
+function sanitizeCompoundSegments(token: string): string[] {
+    return token
+        .split(/[./:@-]+/)
+        .map((seg: string) => seg.replace(/[^a-zA-Z0-9_]/g, ''))
+        .filter((seg: string) => seg.length > 0 && !/^NEAR\d*$/i.test(seg))
 }
 
 /**
@@ -56,17 +85,27 @@ export function sanitizeFtsQuery(query: string): string {
     // Phase 1: Extract balanced quoted phrases and protect them
     const { phrases, remaining: withoutPhrases } = extractQuotedPhrases(query)
 
-    // Phase 2: Strip any remaining unbalanced quotes and replace hyphens with spaces
-    // Bare hyphens in FTS5 cause syntax errors. We replace them with spaces so they become implicit AND matches.
-    const noQuotes = withoutPhrases.replace(/"/g, ' ').replace(/-/g, ' ')
-
-    // Phase 3: Tokenize and sanitize the non-phrase portion
-    const tokens = noQuotes.split(/\s+/)
+    // Phase 2-3: Strip NEAR/quotes and tokenize while protecting compound tokens for phrase matching
+    const tokens = expandSearchTokens(withoutPhrases)
     const safeTokens: string[] = []
 
     for (let i = 0; i < tokens.length; i++) {
         const token = tokens[i]
         if (!token) continue
+
+        if (/[./:@]/.test(token) && !token.endsWith('*')) {
+            const segments = sanitizeCompoundSegments(token)
+            if (segments.length >= 2) {
+                safeTokens.push(`"${segments.join(' ')}"`)
+                continue
+            }
+            if (segments.length === 0) continue
+            const single = segments[0]
+            if (single !== undefined && !/^(AND|OR|NOT)$/i.test(single)) {
+                safeTokens.push(single)
+                continue
+            }
+        }
 
         // Strip out non-alphanumeric characters, except hyphen, underscore, and asterisk
         let sanitizedToken = token.replace(/[^a-zA-Z0-9_*-]/g, '')

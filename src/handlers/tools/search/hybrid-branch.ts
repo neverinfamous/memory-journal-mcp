@@ -6,7 +6,7 @@ import type { z } from 'zod'
 import type { ToolContext } from '../../../types/index.js'
 import { ftsSearch } from './fts.js'
 import { hybridSearch } from './hybrid.js'
-import { cursorOffset, pageRows, rankByImportance } from './semantic-branch.js'
+import { cursorOffset, pageRows, rankByImportance, rankByBlendedScore } from './semantic-branch.js'
 import type { SearchEntriesSchema } from './schemas.js'
 
 type SearchInput = z.infer<typeof SearchEntriesSchema>
@@ -45,7 +45,7 @@ export async function runHybridSearch(params: HybridBranchParams): Promise<Recor
         }
     }
     const hybridOffset = cursorOffset(input.cursor)
-    const { entries: hybridEntries, degraded } = await hybridSearch(query, db, vectorManager, {
+    const { entries: hybridEntries, fusionScores, degraded } = await hybridSearch(query, db, vectorManager, {
         ...searchOptions,
         // [INVARIANT] Over-fetch one row past the page so pageRows can emit next_cursor.
         limit: input.limit + hybridOffset + 1,
@@ -56,9 +56,12 @@ export async function runHybridSearch(params: HybridBranchParams): Promise<Recor
     })
     const hybridPage = pageRows(hybridEntries, input.cursor, input.limit)
 
-    // Post-fetch importance re-sort for vector results
-    if (input.sort_by === 'importance') {
-        const scored = rankByImportance(db, hybridEntries, wsId, teamDb)
+    // Post-fetch importance or blended relevance × importance re-sort for vector results
+    if (input.sort_by === 'blended' || input.sort_by === 'importance') {
+        const scored =
+            input.sort_by === 'blended'
+                ? rankByBlendedScore(db, hybridEntries, wsId, fusionScores, teamDb)
+                : rankByImportance(db, hybridEntries, wsId, teamDb)
         const scoredPage = pageRows(scored, input.cursor, input.limit)
         return {
             success: true,

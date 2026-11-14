@@ -16,11 +16,11 @@ You only need to manually pass a JSON payload (as described below) if you are ex
 ## ⚠️ The `&&` Pipeline Chaining Rule & WSL2 Linux Support
 
 > [!WARNING]
-> Even though we develop and test natively on **PowerShell 7.x** (which *does* support `&&` and `||`), the system's global agent rules strictly **FORBID** their use natively to prevent proxy interception conflicts and syntax hallucination traps. If you use `&&` natively, it will be blocked by `lib-agent-exec` unless routed to WSL2.
+> Antigravity `run_command` executes in **Windows PowerShell 5.1 (`powershell.exe`)**, which does **not** support native `&&` or `||` (local human terminals run **PowerShell 7.7**). Global rules and the `PreToolUse` hook forbid raw `&&` / `||` natively; `PreToolUse` auto-rewrites top-level `&&` chains to `;`.
 > 
 > **Rule of Thumb:**
 > 1. For native Windows command separation, **MUST** use semicolons (`;`).
-> 2. Whenever you must chain complex commands natively or utilize robust Unix pipelines, you **MUST** leverage WSL2 execution by creating a JSON payload with `"target": "wsl2"` and running it via `agent-exec`. This routes the command seamlessly into the Linux VM environment, fully supporting `&&`, `||`, `|`, CRLF stripping, and other POSIX shell features.
+> 2. Whenever you must chain complex commands natively or utilize robust Unix pipelines, pass an inline raw JSON string with `"target": "wsl2"` directly to `agent-exec.ts` (no scratch JSON file needed). This routes the command into Linux/bash, supporting `&&`, `||`, `|`, and POSIX shell features.
 
 ## 🐳 Docker CLI & WSL Containers (No Docker Desktop)
 
@@ -62,7 +62,7 @@ Used for executing standard CLI binaries.
 {
   "type": "command",
   "command": "git",
-  "args": ["log", "-n", "5"],
+  "args": ["rev-parse", "HEAD"],
   "cwd": "C:\\path\\to\\dir", // Optional
   "env": { "CUSTOM_VAR": "value", "IS_TRUE": true, "PORT": 8080 }, // Optional (numbers and booleans are automatically coerced to strings)
   "stdin": "input string", // Optional (max 10MB UTF-8 string; safeString/noNullString schemas enforce valid characters)
@@ -124,9 +124,9 @@ The execution bridge features two distinct layers of autonomous healing:
 ### 1. Seamless Interception (No Errors Thrown)
 When executing `agent-exec.ts` directly, the infrastructure will detect if you accidentally provided a raw command string or raw JSON literal instead of the required `.json` file path. When this happens, it will **autonomously heal** your request by parsing the payload directly in memory and continuing execution seamlessly without throwing an error. You do not need to intervene.
 
-### 2. Guided Recovery Hints (Errors Thrown)
-When you execute a command and see a console error containing `🛠️ AUTONOMOUS HEALING:`, it means `agent-exec` intercepted your command to prevent a catastrophic execution failure (e.g., blocking an interactive prompt, stripping an unknown CLI flag).
-**If you encounter this hint:** Read the explicit guidance in the intercept message and immediately re-invoke the correct tool or adjust the command parameters yourself.
+### 2. Guided Banners & Recovery Hints
+- **`💡 AGENT INTERCEPT`**: Informational notice when the bridge auto-extends timeouts (e.g., deterministic workflow scripts, builds, test suites) or forwards passthrough args cleanly. No retry needed.
+- **`🛠️ AUTONOMOUS HEALING`**: Emitted when `agent-exec` intercepts an unsafe command or blocks/heals a flag. Read the explicit guidance in the intercept message and immediately re-invoke with the corrected tool or arguments.
 
 ## Troubleshooting & Common Issues
 
@@ -157,11 +157,11 @@ To ensure non-interactive reliability, `agent-exec.ts` actively intercepts and m
 Agents frequently hallucinate Unix tools or specific flags that break natively in PowerShell:
 
 1. **`curl` & `wget`**: PowerShell natively aliases these to `Invoke-WebRequest`. Unix flags like `-s`, `-D`, or `-L` fail in raw PowerShell (e.g., `Missing an argument for parameter 'SessionVariable'`).
-   * **Fix**: Prefer native `search_web` / `read_url_content` tools. When CLI HTTP requests are needed, `lib-agent-exec` automatically routes `curl`/`wget` to WSL2 (Frictionless Recovery), or you may invoke `curl.exe` explicitly.
+   * **Fix**: Prefer native `search_web`. When CLI HTTP requests are needed, `lib-agent-exec` automatically routes `curl`/`wget` to WSL2 (Frictionless Recovery), or you may invoke `curl.exe` explicitly.
 2. **`cat`, `ls`, `grep` & Native PowerShell Cmdlets**: PowerShell aliases `cat` to `Get-Content` and `ls` to `Get-ChildItem`, and lacks native Unix `grep` (`Select-String`).
-   * **Fix**: **ALWAYS** prefer declared agent-native tools first: `read_file` / `view_file` (for reading files), `edit_file` / `write_file` (for modifying/creating files), `list_dir` / `find_by_name` (for directory discovery), and `grep_search` (for searching code).
+   * **Fix**: **ALWAYS** prefer declared agent-native tools first (`read_file`, `edit_file`, `write_file`), and use `Get-ChildItem` or `rg` for directory discovery and code search.
    * **WSL2 Frictionless Recovery**: If standalone `ls`, `grep`, `cat`, `rg`, `find`, `jq`, `sed`, or `awk` are invoked on Windows, `lib-agent-exec` transparently routes them to WSL2, converts Windows paths (`C:\...` -> `/mnt/c/...`), and injects recursive exclusions (`node_modules`, `.git`, `dist`, etc.) where appropriate.
-   * **Workspace Boundary Fallback**: When `grep_search` or `list_dir` is unavailable in the active model harness or blocked outside workspace roots, fall back cleanly to `rg` (e.g., `rg -n "pattern" "C:\path\outside\workspace"`) or `Get-ChildItem`.
+   * **Workspace Boundary Fallback**: For paths outside workspace roots, use `rg -n "pattern" "C:\path\outside\workspace"` or `Get-ChildItem`.
 3. **`gh run view --log`**: If a GitHub Action job is still running, this command exits with code 1 instead of waiting.
    * **Fix**: Do NOT poll this in a loop. Use the `schedule` tool to set an asynchronous timer to check back later.
 

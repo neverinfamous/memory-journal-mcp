@@ -25,6 +25,7 @@ interface SearchQueryOptions {
     prStatus?: string
     workflowRunId?: number
     tags?: string[]
+    excludeTags?: string[]
     entryType?: EntryType
     startDate?: string
     endDate?: string
@@ -99,10 +100,11 @@ function executeSearchQuery(
         attachImportanceScoresToEntries(context, entries)
     }
 
+    const needsImportance = options?.sortBy === 'importance' || options?.sortBy === 'blended'
     let nextCursor: string | undefined
     const limit = options?.limit ?? 10
     if (entries.length === limit && limit > 0) {
-        if (!useFts && options?.sortBy !== 'importance' && entries.length > 0) {
+        if (!useFts && !needsImportance && entries.length > 0) {
             const last = entries[entries.length - 1]
             if (last !== undefined) {
                 nextCursor = encodeCursor({ t: last.timestamp, id: last.id })
@@ -194,10 +196,18 @@ export function searchEntries(
     const runQuery = (useFts: boolean): SearchPage =>
         executeSearchQuery(context, queryStr, options, useFts, offset, hasKeyset, keysetT, keysetId)
 
-    // Try FTS5 first for relevance-ranked results, fall back to LIKE on syntax error
+    // Try FTS5 first for relevance-ranked results, fall back to LIKE on syntax error or 0 hits
     if (queryStr.length > 0) {
         try {
             const result = runQuery(true)
+            if (result.entries.length > 0) {
+                const fuzzy = applyFuzzyFallback(context, db, queryStr, options, result)
+                return fuzzy ?? result
+            }
+            const likeFallback = runQuery(false)
+            if (likeFallback.entries.length > 0) {
+                return { ...likeFallback, degraded: true }
+            }
             const fuzzy = applyFuzzyFallback(context, db, queryStr, options, result)
             return fuzzy ?? result
         } catch (error) {
@@ -224,13 +234,13 @@ export function searchEntries(
  * Builds the SELECT ... FROM prefix (with optional importance CTE/joins and snippet column).
  */
 function buildBaseSelect(options: SearchQueryOptions | undefined, useFts: boolean): string {
-    const useImportance = options?.sortBy === 'importance'
-    const importanceCol = useImportance
+    const needsImportance = options?.sortBy === 'importance' || options?.sortBy === 'blended'
+    const importanceCol = needsImportance
         ? `, ${buildImportanceSqlExpression()} AS importanceScore`
         : ''
 
-    const ctePrefix = useImportance ? `WITH ${buildImportanceCte()}` : ''
-    const joinClause = useImportance
+    const ctePrefix = needsImportance ? `WITH ${buildImportanceCte()}` : ''
+    const joinClause = needsImportance
         ? `LEFT JOIN rel_stats rs ON e.id = rs.entry_id LEFT JOIN anchor_stats ans ON e.id = ans.entry_id`
         : ''
 
@@ -268,7 +278,7 @@ function buildSearchQuery(
     keysetT: string,
     keysetId: number
 ): { sql: string; params: unknown[] } {
-    const useImportance = options?.sortBy === 'importance'
+    const needsImportance = options?.sortBy === 'importance' || options?.sortBy === 'blended'
     let query = buildBaseSelect(options, useFts)
 
     const params: unknown[] = []
@@ -296,7 +306,7 @@ function buildSearchQuery(
 
     appendFilterConditions(conditions, params, options)
 
-    if (hasKeyset && !useFts && !useImportance) {
+    if (hasKeyset && !useFts && !needsImportance) {
         conditions.push(`(e.timestamp < ? OR (e.timestamp = ? AND e.id < ?))`)
         params.push(keysetT, keysetT, keysetId)
     }
@@ -305,7 +315,9 @@ function buildSearchQuery(
         query += ` WHERE ${conditions.join(' AND ')}`
     }
 
-    if (useImportance) {
+    if (options?.sortBy === 'blended' && useFts) {
+        query += ` ORDER BY ((-rank) * (1.0 + 0.35 * importanceScore)) DESC, e.timestamp DESC, e.id DESC`
+    } else if (needsImportance) {
         query += ` ORDER BY importanceScore DESC, e.timestamp DESC, e.id DESC`
     } else if (useFts) {
         query += ` ORDER BY rank, e.timestamp DESC, e.id DESC`
@@ -363,6 +375,14 @@ function appendFilterConditions(
             `EXISTS (SELECT 1 FROM entry_tags et JOIN tags t ON et.tag_id = t.id WHERE et.entry_id = e.id AND t.name IN (${placeholders}))`
         )
         params.push(...options.tags)
+    }
+
+    if (options?.excludeTags !== undefined && options.excludeTags.length > 0) {
+        const placeholders = options.excludeTags.map(() => '?').join(',')
+        conditions.push(
+            `NOT EXISTS (SELECT 1 FROM entry_tags et JOIN tags t ON et.tag_id = t.id WHERE et.entry_id = e.id AND t.name IN (${placeholders}))`
+        )
+        params.push(...options.excludeTags)
     }
 
     if (options?.entryType !== undefined) {

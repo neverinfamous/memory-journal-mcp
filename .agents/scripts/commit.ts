@@ -15,6 +15,16 @@ import {
 } from './commit-journal.js';
 
 const VALIDATION_STATES = ['passed', 'none', 'failed'] as const;
+const CANONICAL_RELATION_TYPES = [
+  'evolves_from',
+  'references',
+  'implements',
+  'clarifies',
+  'response_to',
+  'blocked_by',
+  'resolved',
+  'caused',
+] as const;
 const CONVENTIONAL_COMMIT_REGEX = /^([a-zA-Z0-9_-]+)(?:\(([^)]+)\))?(!)?:\s+(.+)$/;
 const COMMIT_MSG_PREFIX = 'commit-msg-';
 
@@ -38,6 +48,7 @@ const CLI_OPTIONS = {
   'session-id': { type: 'string' },
   tags: { type: 'string', multiple: true },
   tag: { type: 'string', multiple: true },
+  relate: { type: 'string', multiple: true },
 } as const;
 
 function fatalError(msg: string): never {
@@ -190,6 +201,32 @@ export const cliSchema = z.object({
     }
     return normalized.length > 0 ? normalized : undefined;
   }, z.array(z.string().min(1).max(128)).optional()),
+  relate: z.preprocess((val) => {
+    if (val === undefined) return undefined;
+    const rawItems = Array.isArray(val) ? val : [val];
+    const specs: unknown[] = [];
+    for (const item of rawItems) {
+      if (typeof item !== 'string') {
+        specs.push(item);
+        continue;
+      }
+      for (const token of item.split(',')) {
+        const clean = token.trim();
+        if (clean.length === 0) continue;
+        const colonIdx = clean.indexOf(':');
+        const idStr = colonIdx === -1 ? clean : clean.slice(0, colonIdx).trim();
+        const relStr = colonIdx === -1 ? 'references' : clean.slice(colonIdx + 1).trim();
+        if (!/^\d+$/.test(idStr)) {
+          return clean;
+        }
+        specs.push({ targetId: Number(idStr), relationType: relStr });
+      }
+    }
+    return specs.length > 0 ? specs : undefined;
+  }, z.array(z.object({
+    targetId: z.number().int().positive(),
+    relationType: z.enum(CANONICAL_RELATION_TYPES),
+  })).optional()),
 }).strict().transform(data => {
   if (data['journal-project'] !== undefined && !data.journal) {
     console.warn("⚠️ AUTONOMOUS HEALING: --journal-project provided without --journal flag. Automatically enabling --journal.");
@@ -354,14 +391,15 @@ Options:
   --journal              Automatically create a memory journal entry for this commit.
   --journal-project <id> Specify the project ID for the journal entry (auto-resolved from projectRegistry if omitted).
   --session-id <id>      Conversation/session ID to attach to the automated journal entry.
+  --relate <id[:type]>   Link commit journal entry to an existing entry (e.g. '14653:evolves_from'; repeatable/comma-separated).
   --help                 Show this help message.
   
 🤖 AI AGENT INSTRUCTIONS:
-- MULTI-LINE HISTORY: ALWAYS write history to a scratch file (e.g. \`scratch/hist.txt\`) and use \`--history-file <path>\` instead of \`--history\` to prevent shell escaping failures.
+- MULTI-LINE HISTORY: ALWAYS write history to your conversation scratch dir (e.g. \`<scratch_dir>/hist.txt\`) and use \`--history-file <path>\` instead of \`--history\` to prevent shell escaping failures.
 - MESSAGE FORMAT: The commit message (\`--msg\` or first positional argument) MUST strictly follow conventional commits: \`type(scope): subject\`.
 - REQUIRED FLAGS: You MUST provide \`--impact\`, \`--confidence\`, and \`--validation\`.
 - STAGING: Try to stage ONLY the specific files you modified using \`--add <path>\` (or additional positional arguments) to keep commits atomic. Wildcard staging (\`--add .\`) is supported as a fallback for unified sweeping changes.
-- EXAMPLE: bun commit.ts "fix(cli): resolve option errors" --history-file "scratch/hist.txt" --impact 0.6 --confidence 1.0 --validation passed "src/index.ts"`);
+- EXAMPLE: bun commit.ts "fix(cli): resolve option errors" --history-file "<scratch_dir>/hist.txt" --impact 0.6 --confidence 1.0 --validation passed "src/index.ts"`);
   process.exit(0);
 }
 
@@ -512,7 +550,10 @@ function main(): void {
     
     let historyContent = args.history ? args.history.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n') : '';
     if (args['history-file']) {
-      const resolvedPath = path.resolve(args['history-file']);
+      const candidateCwdPath = path.resolve(cwd, args['history-file']);
+      const resolvedPath = fs.existsSync(candidateCwdPath)
+        ? candidateCwdPath
+        : path.resolve(args['history-file']);
       if (!fs.existsSync(resolvedPath)) {
         console.warn(`⚠️ AUTONOMOUS HEALING: History file '${args['history-file']}' not found. Defaulting to --no-history.`);
         args['no-history'] = true;

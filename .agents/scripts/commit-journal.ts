@@ -34,6 +34,11 @@ const memoryJournalConfigSchema = z.object({
   projectRegistry: z.record(z.string(), projectRegistryEntrySchema).optional(),
 });
 
+export interface CommitRelationSpec {
+  targetId: number;
+  relationType: string;
+}
+
 export interface CommitJournalArgs {
   impact: number;
   confidence: number;
@@ -43,6 +48,7 @@ export interface CommitJournalArgs {
   'session-id'?: string | undefined;
   tags?: string[] | undefined;
   significance?: string | undefined;
+  relate?: CommitRelationSpec[] | undefined;
   category?: CommitCategory | undefined;
   'no-history': boolean;
 }
@@ -232,7 +238,10 @@ export function buildCommitJournalContent(
     frontmatterLines.push(`session_id: ${JSON.stringify(args['session-id'])}`);
   }
   if (args.significance !== undefined && args.significance.length > 0) {
-    frontmatterLines.push(`significance: ${JSON.stringify(args.significance)}`);
+    frontmatterLines.push(`significance_type: ${JSON.stringify(args.significance)}`);
+  }
+  if (args.relate !== undefined && args.relate.length > 0) {
+    frontmatterLines.push(`relationships: ${JSON.stringify(args.relate)}`);
   }
 
   frontmatterLines.push(`impact: ${args.impact}`);

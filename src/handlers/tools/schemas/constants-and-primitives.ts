@@ -154,6 +154,38 @@ export const StrictProjectNumberSchema = z
  * Normalize relationship item aliases (target_id, to_entry_id, relation_type, type, etc.)
  * into canonical { targetId, relationType } shape before Zod validation.
  */
+export const RELATIONSHIP_TARGET_KEYS = [
+    'targetId',
+    'target_id',
+    'target_entry_id',
+    'targetEntryId',
+    'to_entry_id',
+    'toEntryId',
+    'to_id',
+    'toId',
+    'entry_id',
+    'entryId',
+    'target',
+    'to',
+    'id',
+] as const
+
+export const RELATIONSHIP_TYPE_KEYS = [
+    'relationType',
+    'relation_type',
+    'relationship_type',
+    'relationshipType',
+    'type',
+] as const
+
+/** Pick the first defined value matching `keys` from a plain record. */
+export function pickRecordField(obj: Record<string, unknown>, keys: readonly string[]): unknown {
+    for (const key of keys) {
+        if (obj[key] !== undefined) return obj[key]
+    }
+    return undefined
+}
+
 export function preprocessRelationshipItem(item: unknown): unknown {
     if (typeof item === 'number' && !Number.isNaN(item)) {
         return { targetId: item, relationType: 'references' }
@@ -163,25 +195,14 @@ export function preprocessRelationshipItem(item: unknown): unknown {
     }
     if (item !== null && typeof item === 'object') {
         const relObj = item as Record<string, unknown>
-        const rawTarget =
-            relObj['targetId'] ??
-            relObj['target_id'] ??
-            relObj['to_entry_id'] ??
-            relObj['toEntryId'] ??
-            relObj['id']
+        const rawTarget = pickRecordField(relObj, RELATIONSHIP_TARGET_KEYS)
         const targetId =
             typeof rawTarget === 'string' && /^\d+$/.test(rawTarget.trim())
                 ? Number(rawTarget.trim())
                 : rawTarget
         return {
             targetId,
-            relationType:
-                relObj['relationType'] ??
-                relObj['relation_type'] ??
-                relObj['relationship_type'] ??
-                relObj['relationshipType'] ??
-                relObj['type'] ??
-                'references',
+            relationType: pickRecordField(relObj, RELATIONSHIP_TYPE_KEYS) ?? 'references',
         }
     }
     return item

@@ -1,8 +1,14 @@
 import { readFileSync } from 'node:fs'
 import { z } from 'zod'
-import type { EntryType, RelationshipType } from '../../types/index.js'
-import { ENTRY_TYPES, RELATIONSHIP_TYPES } from '../../types/entities.js'
+import type { EntryType, RelationshipType, SignificanceType } from '../../types/index.js'
+import { ENTRY_TYPES, RELATIONSHIP_TYPES, SIGNIFICANCE_TYPES } from '../../types/entities.js'
 import { ValidationError } from '../../types/errors.js'
+import {
+    RELATIONSHIP_TARGET_KEYS,
+    RELATIONSHIP_TYPE_KEYS,
+    normalizeSignificanceValue,
+    pickRecordField,
+} from '../../handlers/tools/schemas/constants-and-primitives.js'
 import type { createEntryOptionsSchema } from '../schemas.js'
 
 export type HealedEntryOptions = z.infer<typeof createEntryOptionsSchema> & {
@@ -11,7 +17,7 @@ export type HealedEntryOptions = z.infer<typeof createEntryOptionsSchema> & {
     body?: string
 }
 
-/** Normalize CLI flag aliases (--tag, --content-file, --body, --validation, --workspace, --summary, --description) and positional content. */
+/** Normalize CLI flag aliases (--tag, --content-file, --body, --validation, --significance, --workspace, --summary, --description) and positional content. */
 export function applyCliEntryFlagAliases(
     options: HealedEntryOptions,
     restArgs: unknown[] = []
@@ -40,6 +46,12 @@ export function applyCliEntryFlagAliases(
     }
     if (options.validation_status !== undefined && options.validationStatus === undefined) {
         options.validationStatus = options.validation_status
+    }
+    if (options.significance !== undefined && options.significanceType === undefined) {
+        options.significanceType = options.significance
+    }
+    if (options.significance_type !== undefined && options.significanceType === undefined) {
+        options.significanceType = options.significance_type
     }
 
     if (options.content === undefined && options.file === undefined && restArgs.length > 0) {
@@ -138,7 +150,13 @@ export function resolveAutoContext(
     return autoContextStr
 }
 
-/** Parse and validate relationship objects (`target_id` / `targetId` + `relation_type`). */
+const CLI_RELATION_TYPE_ALIASES: Readonly<Record<string, RelationshipType>> = {
+    resolves: 'resolved',
+    depends_on: 'blocked_by',
+    relates_to: 'references',
+}
+
+/** Parse and validate relationship objects (`target_id` / `targetId` / aliases + `relation_type` / `relationType` / aliases). */
 export function parseRelationshipArray(
     raw: unknown[],
     source: string
@@ -150,7 +168,7 @@ export function parseRelationshipArray(
             )
         }
         const rec = z.record(z.string(), z.unknown()).parse(r)
-        const rawTarget = rec['target_id'] ?? rec['targetId']
+        const rawTarget = pickRecordField(rec, RELATIONSHIP_TARGET_KEYS)
         const targetId =
             typeof rawTarget === 'number' ||
             (typeof rawTarget === 'string' && rawTarget.trim() !== '')
@@ -161,10 +179,15 @@ export function parseRelationshipArray(
                 `Invalid relationship target_id '${String(rawTarget)}' at index ${String(index)} in ${source}: expected a positive integer.`
             )
         }
-        const relType = relationTypeSchema.safeParse(rec['relation_type'])
+        const rawRelType = pickRecordField(rec, RELATIONSHIP_TYPE_KEYS)
+        const normalizedRelType =
+            typeof rawRelType === 'string'
+                ? (CLI_RELATION_TYPE_ALIASES[rawRelType.trim().toLowerCase()] ?? rawRelType.trim())
+                : rawRelType
+        const relType = relationTypeSchema.safeParse(normalizedRelType)
         if (!relType.success) {
             throw new ValidationError(
-                `Invalid relation_type '${String(rec['relation_type'])}' at index ${String(index)} in ${source}. Expected one of: ${relationTypeSchema.options.join(', ')}`
+                `Invalid relation_type '${String(rawRelType)}' at index ${String(index)} in ${source}. Expected one of: ${relationTypeSchema.options.join(', ')}`
             )
         }
         return { target_id: targetId, relation_type: relType.data }
@@ -277,6 +300,28 @@ export function resolveExplicitProjectAndWorkspace(
     return { explicitProjectNum, explicitWorkspaceId }
 }
 
+function resolveSignificanceType(
+    options: z.infer<typeof createEntryOptionsSchema>,
+    metadata: Record<string, unknown>
+): SignificanceType | undefined {
+    const sigRaw =
+        options.significanceType ??
+        options.significance ??
+        options.significance_type ??
+        metadata['significance_type'] ??
+        metadata['significanceType'] ??
+        metadata['significance']
+    if (typeof sigRaw !== 'string' || sigRaw.trim() === '') return undefined
+    const normalized = normalizeSignificanceValue(sigRaw)
+    if (normalized === undefined) return undefined
+    if (!SIGNIFICANCE_TYPES.some((t) => t === normalized)) {
+        throw new ValidationError(
+            `Invalid significance_type '${sigRaw}'. Expected one of: ${SIGNIFICANCE_TYPES.join(', ')}`
+        )
+    }
+    return normalized as SignificanceType
+}
+
 export function resolveScoresAndValidation(
     options: z.infer<typeof createEntryOptionsSchema>,
     metadata: Record<string, unknown>
@@ -285,6 +330,7 @@ export function resolveScoresAndValidation(
     impactScore: number | undefined
     validationStatus: 'passed' | 'failed' | 'none' | undefined
     sessionId: string | undefined
+    significanceType: SignificanceType | undefined
 } {
     const trustRaw =
         options.trustScore ??
@@ -317,5 +363,11 @@ export function resolveScoresAndValidation(
         options.sessionId ?? options.session_id ?? metadata['session_id'] ?? metadata['sessionId']
     const sessionId = sessionIdRaw as string | undefined
 
-    return { trustScore, impactScore, validationStatus, sessionId }
+    return {
+        trustScore,
+        impactScore,
+        validationStatus,
+        sessionId,
+        significanceType: resolveSignificanceType(options, metadata),
+    }
 }

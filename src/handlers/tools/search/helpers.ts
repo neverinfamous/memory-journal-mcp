@@ -39,6 +39,7 @@ export interface ISearchFilters {
     prStatus?: string
     workflowRunId?: number
     tags?: string[]
+    excludeTags?: string[]
     entryType?: string
     startDate?: string
     endDate?: string
@@ -205,6 +206,12 @@ export function passMetadataFilters(
             : db.getTagsForEntry(entry.id)
         if (!options.tags.some((t: string) => entryTags.includes(t))) return false
     }
+    if (options.excludeTags && options.excludeTags.length > 0) {
+        const entryTags: string[] = Array.isArray(entry.tags)
+            ? entry.tags
+            : db.getTagsForEntry(entry.id)
+        if (options.excludeTags.some((t: string) => entryTags.includes(t))) return false
+    }
     if (!options.includeArchived && entry.isArchived) return false
     return true
 }
@@ -250,6 +257,15 @@ export async function collectTeamSearchEntries(
             )
             const ids = hits.map((hit) => hit.entryId)
             const hydrated = teamDb.getEntriesByIds(ids, options.workspaceId ?? 'default')
+            if (
+                (options.tags !== undefined && options.tags.length > 0) ||
+                (options.excludeTags !== undefined && options.excludeTags.length > 0)
+            ) {
+                const tagsMap = teamDb.getTagsForEntries(ids)
+                for (const entry of hydrated.values()) {
+                    entry.tags = tagsMap.get(entry.id) ?? []
+                }
+            }
             for (const hit of hits) {
                 const entry = hydrated.get(hit.entryId)
                 if (entry !== undefined) pushEntry(entry, Math.round(hit.score * 100) / 100)
@@ -272,6 +288,7 @@ export async function collectTeamSearchEntries(
             ...(options.prStatus !== undefined ? { prStatus: options.prStatus } : {}),
             ...(options.workflowRunId !== undefined ? { workflowRunId: options.workflowRunId } : {}),
             ...(options.tags !== undefined ? { tags: options.tags } : {}),
+            ...(options.excludeTags !== undefined ? { excludeTags: options.excludeTags } : {}),
             ...(options.entryType !== undefined ? { entryType: options.entryType as JournalEntry['entryType'] } : {}),
             ...(options.startDate !== undefined ? { startDate: options.startDate } : {}),
             ...(options.endDate !== undefined ? { endDate: options.endDate } : {}),

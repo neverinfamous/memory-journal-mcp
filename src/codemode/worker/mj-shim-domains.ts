@@ -48,7 +48,8 @@ export function createAdaptersShim(prop: string): object {
 }
 
 const RESOURCE_SUGGESTIONS: Record<string, string> = {
-    'memory://agent-id': 'mj.core.getStatistics() or mj.core.listProjects()',
+    'memory://agent-context': 'mj.core.getStatistics() or mj.core.listProjects()',
+    'memory://agent-id': 'mj.core.getStatistics() or mj.core.listProjects() (prefer memory://agent-context/<repo>)',
     'memory://recent': 'mj.core.getRecentEntries()',
     'memory://statistics': 'mj.analytics.getStatistics()',
     'memory://tags': 'mj.core.listTags()',

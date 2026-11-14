@@ -92,7 +92,7 @@ export function dockerInterceptor({ cmdBasename, args, payload }: ExecutionConte
   } else if (isDockerBuild || isDockerScout) {
     const minTimeout = isDockerScout ? 1800000 : 600000;
     const timeoutMsg = isDockerScout ? '1800s' : '600s';
-    console.error(`\n   🛠️ AUTONOMOUS HEALING: Disabling stall interceptors and extending timeout to ${timeoutMsg} for Docker ${isDockerScout ? 'scout' : 'build'}... (Frictionless Recovery)`);
+    console.error(`\n   💡 AGENT INTERCEPT: Disabling stall interceptors and extending timeout to ${timeoutMsg} for Docker ${isDockerScout ? 'scout' : 'build'}.`);
     payload.bypassInterceptors = true;
     if (payload.timeoutMs === undefined || payload.timeoutMs < minTimeout) {
       payload.timeoutMs = minTimeout;

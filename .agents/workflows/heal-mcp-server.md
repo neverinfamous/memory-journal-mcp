@@ -52,8 +52,8 @@ Prevent friction first; mitigate only as fallback. Address issues across the 6 a
    pnpm run lint
    pnpm run typecheck
    pnpm run build
-   npx vitest run
-   npx playwright test
+   pnpm exec vitest run
+   pnpm exec playwright test
    ```
    *(Note: DO NOT run `pnpm run check` as it is an unmanaged meta-script that may hang or time out).*
 

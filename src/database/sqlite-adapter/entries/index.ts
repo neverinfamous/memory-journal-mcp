@@ -157,7 +157,8 @@ export class EntriesManager {
         if (isPersonal !== undefined) {
             return searchEntries(this.sharedContext, '', { limit, isPersonal, sortBy, cursor, includeArchived, workspaceId, projectNumber, offset })
         }
-        return getRecentEntriesQuery(this.sharedContext, limit, sortBy, cursor, includeArchived, workspaceId, projectNumber, offset)
+        const recentSortBy: SortBy = sortBy === 'blended' ? 'importance' : (sortBy ?? 'timestamp')
+        return getRecentEntriesQuery(this.sharedContext, limit, recentSortBy, cursor, includeArchived, workspaceId, projectNumber, offset)
     }
 
     getEntriesPage(
@@ -180,6 +181,11 @@ export class EntriesManager {
             prNumber?: number
             prStatus?: string
             workflowRunId?: number
+            tags?: string[]
+            excludeTags?: string[]
+            entryType?: EntryType
+            startDate?: string
+            endDate?: string
             sortBy?: SortBy
             cursor?: string
             includeArchived?: boolean

@@ -191,6 +191,7 @@ export async function createEntryAction(...args: unknown[]): Promise<void> {
         const entryInput: CreateEntryInput = {
             content,
             entryType: payload.entryType,
+            significanceType: payload.significanceType,
             tags: payload.tags,
             projectNumber: payload.projectNumber,
             workspaceId: resolvedWs,
@@ -345,6 +346,9 @@ export async function updateEntryAction(...args: unknown[]): Promise<void> {
         if (payload.impactScore !== undefined) updates.impactScore = payload.impactScore
         if (payload.validationStatus !== undefined) {
             updates.validationStatus = payload.validationStatus
+        }
+        if (payload.significanceType !== undefined) {
+            updates.significanceType = payload.significanceType
         }
         if (payload.sessionId !== undefined) updates.sessionId = payload.sessionId
         if (payload.autoContextStr !== undefined) updates.autoContext = payload.autoContextStr

@@ -213,6 +213,7 @@ export class ProcessController {
   private ioController!: IOController;
   
   private isFinished = false;
+  private timedOut = false;
   private hasRetriedWsl = false;
   private timeoutTimer: NodeJS.Timeout | null = null;
   private forceKillTimer: NodeJS.Timeout | null = null;
@@ -410,8 +411,9 @@ export class ProcessController {
     const timeoutMs = this.payload.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     if (timeoutMs > 0) {
       this.timeoutTimer = setTimeout(() => { 
+        this.timedOut = true;
         console.error(`\n❌ Execution timed out after ${timeoutMs}ms. Attempting graceful shutdown...`);
-        console.error(`   💡 AGENT HINT: If you intended to start a long-running process (like a dev server), you must send it to the background by configuring your tool payload (e.g., using 'WaitMsBeforeAsync') AND set 'timeoutMs' to a large value (e.g. 86400000) in the JSON payload.\n${AUTONOMOUS_HEALING_MSG}`);
+        console.error(`   💡 AGENT HINT: If you intended to start a long-running process (like a dev server), you must send it to the background by configuring your tool payload (e.g., using 'WaitMsBeforeAsync') AND set 'timeoutMs' to a large value (e.g. 86400000) in the JSON payload.`);
         try {
           if (this.child.pid) {
             if (process.platform === 'win32') {
@@ -423,11 +425,11 @@ export class ProcessController {
         } catch { /* ignore */ }
         
         this.forceKillTimer = setTimeout(() => {
-          if (!this.isFinished) { if (!this.isJson) console.error(`❌ Process did not exit gracefully. Force killing process tree...`);
+          if (!this.isFinished) { if (!this.isJson) console.error(`${this.timedOut ? 'ℹ️' : '❌'} Process did not exit gracefully. Force killing process tree...`);
              killProcessTree(this.child);
              this.ioController.destroyStreams();
              this.handleFinish(null, 'SIGKILL', false);
-             setTimeout(() => { if (!this.isJson) console.error(`❌ Ultimate fallback: Process exit forced.`);
+             setTimeout(() => { if (!this.isJson) console.error(`${this.timedOut ? 'ℹ️' : '❌'} Ultimate fallback: Process exit forced.`);
                process.exit(1);
              }, TIMEOUT_EXIT_FORCE_MS).unref();
           }
@@ -547,7 +549,7 @@ export class ProcessController {
             envData
           });
         }
-        if (code === null && signal) { if (!this.isJson) console.error(`\n❌ Command was terminated by signal ${signal}`);
+        if (code === null && signal) { if (!this.isJson) console.error(`\n${this.timedOut ? 'ℹ️' : '❌'} Command was terminated by signal ${signal}`);
           process.exit(1);
         } else if (code !== null) {
           const { isGrepNoMatch, isGrepMatchesFound, isDiffFound, isOutdatedInfo, isLsNoMatch, isRmNoMatch, isFindNoMatch } = analyzeExitCode1(this.payload, code, this.ioController?.stdoutTail || '', this.ioController?.stderrTail || '');

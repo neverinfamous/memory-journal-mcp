@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { entrySchema, commitSizeSchema, type CommitEntry } from './schema.js';
 
 let db: Database | null = null;
+let currentDbPath: string | null = null;
 
 // Cached prepared statements keyed by query string to avoid re-preparing on every call
 const stmtCache = new Map<string, ReturnType<Database['prepare']>>();
@@ -63,9 +64,16 @@ export const dbCommitRowSchema = z.object({
 });
 
 export function initCache(dbPath?: string): Database {
-  if (db) return db;
-  
   const targetPath = dbPath || join(process.cwd(), '.agents', 'cache', 'git-history.db');
+  if (db) {
+    if (!dbPath || targetPath === currentDbPath) {
+      return db;
+    }
+    db.close();
+    db = null;
+    currentDbPath = null;
+    stmtCache.clear();
+  }
   
   try {
     mkdirSync(dirname(targetPath), { recursive: true });
@@ -75,6 +83,7 @@ export function initCache(dbPath?: string): Database {
   }
   
   db = new Database(targetPath);
+  currentDbPath = targetPath;
   
   // enable WAL mode for performance
   db.exec('PRAGMA journal_mode = WAL;');
@@ -134,6 +143,7 @@ export function closeCache(): void {
   if (db) {
     db.close();
     db = null;
+    currentDbPath = null;
     stmtCache.clear();
   }
 }

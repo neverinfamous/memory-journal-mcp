@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../types/index.js'
+import { ValidationError } from '../../types/errors.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
 import { sendProgress } from '../../utils/progress-utils.js'
 import { loadProjectRegistryFromConfig } from '../../utils/workspace-resolver.js'
@@ -77,9 +78,19 @@ async function fetchCommits(input: FetchCommitsInput, cwd: string): Promise<Comm
 
     const records = streamGitRecords(gitArgs, cwd)
     const batch = []
-    for await (const record of records) {
-        const parsed = parseGitRecord(record, cliArgs)
-        if (parsed) batch.push(parsed)
+    try {
+        for await (const record of records) {
+            const parsed = parseGitRecord(record, cliArgs)
+            if (parsed) batch.push(parsed)
+        }
+    } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        if (/not a git repository|code 128/i.test(msg)) {
+            throw new ValidationError(
+                `Git command failed because '${cwd}' is not a valid git repository. Pass a registered repo, project_number, or valid git cwd.`
+            )
+        }
+        throw err
     }
     const commits = await processBatch(batch, cliArgs, [])
 

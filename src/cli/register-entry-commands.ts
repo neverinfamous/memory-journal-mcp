@@ -27,6 +27,8 @@ function addEntryFieldOptions(cmd: Command): void {
         .option('--title <title>', 'Optional title (will be prepended as an H1 to content if provided, for agent compatibility)')
         .option('-t, --type <type>', ENTRY_TYPE_HELP)
         .option('--category <type>', 'Entry type (alias)')
+        .option('--significance, --significance-type <type>', 'Significance type (milestone|breakthrough|decision|architecture|lesson_learned|blocker_resolved|release|security)')
+        .option('--significance_type <type>', 'Significance type (alias)')
         .option('--tags <tags>', 'Comma-separated tags (e.g., session-summary)')
         .option('--tag <tags>', 'Alias for --tags (Auto-healing agent hallucination)')
         .option('-p, --project <number>', 'Project number (alias)')

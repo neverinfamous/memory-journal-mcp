@@ -55,7 +55,7 @@ async function prepareBatchEntry(
 
     if (pNumber === undefined || pNumber <= 0) {
         throw new Error(
-            `project_number is required. Batch entry must be assigned to a valid project (failed to resolve project_number for workspace '${wsId}'). To find your project_number, read memory://agent-id via read_resource, call mj.core.listProjects(), or check memory://briefing/<project-name>.`
+            `project_number is required. Batch entry must be assigned to a valid project (failed to resolve project_number for workspace '${wsId}'). To find your project_number, read memory://agent-context/<repo> via read_resource, call mj.core.listProjects(), or check memory://briefing/<project-name>.`
         )
     }
 

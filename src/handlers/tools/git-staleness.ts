@@ -23,6 +23,24 @@ export interface GitWorkingDirInput {
     path?: string
 }
 
+function hasGitAncestor(dir: string): boolean {
+    let current = path.resolve(dir)
+    for (let depth = 0; depth < 10; depth++) {
+        if (fs.existsSync(path.join(current, '.git'))) return true
+        const parent = path.dirname(current)
+        if (parent === current) break
+        current = parent
+    }
+    return false
+}
+
+function formatRegisteredReposHint(registry: ToolHandlerConfig['projectRegistry']): string {
+    const keys = Object.keys(registry ?? {})
+    return keys.length > 0
+        ? `Registered repositories: ${keys.join(', ')}.`
+        : 'No repositories are registered in projectRegistry.'
+}
+
 export function resolveGitWorkingDir(
     input: GitWorkingDirInput,
     config?: ToolHandlerConfig
@@ -114,7 +132,9 @@ export function resolveGitWorkingDir(
                 return target
             }
         }
-        throw new Error(`Git repository '${target}' did not resolve to an existing path`)
+        throw new ValidationError(
+            `Git repository '${target}' did not resolve to an existing path. ${formatRegisteredReposHint(registry)} Pass repo, project_number, or a registered cwd.`
+        )
     }
     if (pNum !== undefined && !Number.isNaN(pNum)) {
         if (registry) {
@@ -124,15 +144,17 @@ export function resolveGitWorkingDir(
                 }
             }
         }
-        throw new Error(`Git repository for project ${String(pNum)} did not resolve to an existing path`)
+        throw new ValidationError(
+            `Git repository for project ${String(pNum)} did not resolve to an existing path. ${formatRegisteredReposHint(registry)}`
+        )
     }
     const currentCwd = process.cwd()
-    if (fs.existsSync(path.join(currentCwd, '.git'))) {
+    if (hasGitAncestor(currentCwd)) {
         return currentCwd
     }
     if (registry) {
         for (const entry of Object.values(registry)) {
-            if (entry.path && cwdMatchesRegistryPath(entry.path, currentCwd)) {
+            if (entry.path && cwdMatchesRegistryPath(entry.path, currentCwd) && fs.existsSync(entry.path)) {
                 return entry.path
             }
         }
@@ -142,7 +164,9 @@ export function resolveGitWorkingDir(
             return defaultEntry.path
         }
     }
-    return currentCwd
+    throw new ValidationError(
+        `No git repository found at server cwd (${currentCwd}) and no matching repo, workspace_id, or project_number was resolved. ${formatRegisteredReposHint(registry)} Pass repo, project_number, or cwd.`
+    )
 }
 
 export interface StalenessCheckRow {

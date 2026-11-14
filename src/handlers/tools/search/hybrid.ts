@@ -96,6 +96,7 @@ export async function hybridSearch(
                 prStatus: options.prStatus,
                 workflowRunId: options.workflowRunId,
                 tags: options.tags,
+                excludeTags: options.excludeTags,
                 entryType: options.entryType as EntryType,
                 startDate: options.startDate,
                 endDate: options.endDate,
@@ -139,7 +140,10 @@ export async function hybridSearch(
     const entriesMap = db.getEntriesByIds(sortedIds, options.workspaceId ?? 'default')
 
     // Pre-hydrate tags to avoid N+1 queries during metadata filtering
-    if (options.tags && options.tags.length > 0) {
+    if (
+        (options.tags !== undefined && options.tags.length > 0) ||
+        (options.excludeTags !== undefined && options.excludeTags.length > 0)
+    ) {
         const tagsMap = db.getTagsForEntries(sortedIds)
         for (const entry of entriesMap.values()) {
             entry.tags = tagsMap.get(entry.id) ?? []

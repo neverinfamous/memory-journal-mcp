@@ -34,9 +34,9 @@ Only help resources for your enabled tool groups are registered.
 ## Essential Operations
 
 - **Creating Entries:** Prefer \`mj.core.createEntry\` in Code Mode when available (or \`create_entry\`), or use the \`memory-journal-mcp entry create\` CLI command via your terminal (\`run_command\`; do NOT attempt to shell out to CLI commands inside Code Mode). ALL entries MUST define \`impact_score\`/\`--impact-score\`, \`trust_score\`/\`--trust-score\`, and \`validation_status\`/\`--validation-status\`. See \`memory://help/core\` for criteria.
-- **Session Summaries:** Use the \`memory-journal-mcp entry create\` CLI command with \`--type retrospective\` and \`--tags session-summary\`. You MUST provide the markdown content via \`--content "<string>"\` or \`--file <path>\` (or pipe to stdin). See \`memory://help/templates\` for the exact 4-section format required.
+- **Session Summaries:** Use \`mj.core.createEntry\` (or \`create_entry\` / \`memory-journal-mcp entry create\`) with \`entry_type: "retrospective"\` and \`tags: ["session-summary"]\`. See \`memory://help/templates\` for the exact 4-section format required.
 - **Updating/Deleting:** Use \`memory-journal-mcp entry update\` (pass \`--expected-version\` to prevent concurrent overwrites) and use the \`delete_entry\` MCP tool for soft-deletes.
-- **Searching:** Use \`search_entries\` or \`search_by_date_range\`. Use \`sort_by: "importance"\` to surface structurally significant entries. Use phrase matching (e.g. \`"error handling"\`) for exact matches.
+- **Searching:** Use \`search_entries\` or \`search_by_date_range\` with \`mode: "hybrid"\` and \`exclude_tags: ["commit-narrative"]\` (omit \`sort_by\` or use \`sort_by: "blended"\`; use \`sort_by: "importance"\` only when structural centrality outweighs query relevance). Use phrase matching (e.g. \`"error handling"\`) for exact matches.
 - **Team DB:** Append the \`--team\` flag to your CLI commands for shared state. Use \`team_*\` MCP tools (or \`mj.team.*\` in Code Mode) for searches, deletes, relationships, analytics, and RBAC member/alias management. See \`memory://help/team\` for RBAC rules. Do NOT create bulk relationships between unrelated entries that happen to share tags.`;
 
 export const CODE_MODE_INSTRUCTIONS = `

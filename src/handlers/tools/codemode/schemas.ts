@@ -124,7 +124,7 @@ export const ExecuteCodeSchemaMcp = z.object({
         .describe(
             'Numeric project ID to bind to all tool calls in this sandbox. ' +
             'Repo name strings (e.g., "mysql-mcp") are auto-resolved via the project registry. ' +
-            'Falls back to DEFAULT_PROJECT_NUMBER if unspecified. Find it by querying memory://agent-id.'
+            'Falls back to DEFAULT_PROJECT_NUMBER if unspecified. Find it by querying memory://agent-context/<repo>.'
         ),
     workspace_id: z
         .string()

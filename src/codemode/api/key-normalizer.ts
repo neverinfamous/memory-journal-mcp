@@ -11,9 +11,44 @@ import {
     healAutoContext,
 } from '../normalizers/shared-utils.js'
 import { healAnchorsField, healSortByField } from '../../handlers/tools/schemas/hallucination-healer-fields.js'
+import {
+    RELATIONSHIP_TARGET_KEYS,
+    RELATIONSHIP_TYPE_KEYS,
+    pickRecordField,
+} from '../../handlers/tools/schemas/constants-and-primitives.js'
 import { hasMethodToken, methodTokens } from '../method-tokens.js'
 
 const CONTENT_LIKE_KEYS = new Set(['message', 'msg', 'name', 'heading', 'subject', 'description', 'content', 'comment'])
+
+function healArchitectureAndDecisionType(
+    rawObj: Record<string, unknown>,
+    result: Record<string, unknown>
+): void {
+    if (!('entry_type' in result)) return
+    const rawEntryType =
+        rawObj['entry_type'] ?? rawObj['entryType'] ?? rawObj['type'] ?? rawObj['kind']
+    const etLower = typeof rawEntryType === 'string' ? rawEntryType.trim().toLowerCase() : ''
+    const isMutation =
+        'content' in result || 'title' in result || 'content' in rawObj || 'title' in rawObj
+    const hasExplicitSig =
+        result['significance_type'] !== undefined ||
+        rawObj['significance'] !== undefined ||
+        rawObj['significanceType'] !== undefined ||
+        rawObj['significance_type'] !== undefined
+    if (
+        etLower === 'architecture' ||
+        etLower === 'architectural_decision' ||
+        etLower === 'architectural-decision' ||
+        etLower === 'adr'
+    ) {
+        result['entry_type'] = 'project_decision'
+        if (isMutation && !hasExplicitSig) {
+            result['significance_type'] = 'architecture'
+        }
+    } else if (etLower === 'decision' && isMutation && !hasExplicitSig) {
+        result['significance_type'] = 'decision'
+    }
+}
 
 /**
  * Convert camelCase object keys to snake_case and apply context-aware alias mapping.
@@ -53,6 +88,7 @@ export function convertKeysToSnakeCase(obj: Record<string, unknown>, methodName?
     }
 
     postProcessNormalizedKeys(result, methodLower)
+    healArchitectureAndDecisionType(obj, result)
     return result
 }
 
@@ -317,6 +353,31 @@ const GIT_COMMIT_METHODS = new Set([
     'get_commit_history', 'getcommithistory', 'search_commits', 'searchcommits',
 ])
 
+function normalizeRelationshipItemRecord(rel: unknown): unknown {
+    if (!isRecord(rel)) return rel
+    const healedRel: Record<string, unknown> = { ...rel }
+    const rawTarget = pickRecordField(rel, RELATIONSHIP_TARGET_KEYS)
+    if (rawTarget !== undefined && healedRel['targetId'] === undefined) {
+        healedRel['targetId'] =
+            typeof rawTarget === 'string' && /^\d+$/.test(rawTarget.trim())
+                ? Number(rawTarget.trim())
+                : rawTarget
+    } else if (typeof healedRel['targetId'] === 'string' && /^\d+$/.test(healedRel['targetId'].trim())) {
+        healedRel['targetId'] = Number(healedRel['targetId'].trim())
+    }
+    for (const k of RELATIONSHIP_TARGET_KEYS) {
+        if (k !== 'targetId' && k in healedRel) Reflect.deleteProperty(healedRel, k)
+    }
+    const rawType = pickRecordField(rel, RELATIONSHIP_TYPE_KEYS)
+    if (rawType !== undefined && healedRel['relationType'] === undefined) {
+        healedRel['relationType'] = rawType
+    }
+    for (const k of RELATIONSHIP_TYPE_KEYS) {
+        if (k !== 'relationType' && k in healedRel) Reflect.deleteProperty(healedRel, k)
+    }
+    return healedRel
+}
+
 function postProcessNormalizedKeys(result: Record<string, unknown>, methodLower?: string): void {
     healAnchorsField(result)
     if (methodLower === undefined || !GIT_COMMIT_METHODS.has(methodLower)) {
@@ -333,21 +394,14 @@ function postProcessNormalizedKeys(result: Record<string, unknown>, methodLower?
             typeof tag === 'string' ? (TAG_ALIASES[tag.trim().toLowerCase()] ?? tag) : tag
         )
     }
+    if ('exclude_tags' in result && Array.isArray(result['exclude_tags'])) {
+        result['exclude_tags'] = result['exclude_tags'].map((tag: unknown) =>
+            typeof tag === 'string' ? (TAG_ALIASES[tag.trim().toLowerCase()] ?? tag) : tag
+        )
+    }
 
     if ('relationships' in result && Array.isArray(result['relationships'])) {
-        result['relationships'] = result['relationships'].map((rel: unknown) => {
-            if (!isRecord(rel)) return rel
-            const healedRel: Record<string, unknown> = { ...rel }
-            if ('target_id' in rel) {
-                healedRel['targetId'] = rel['target_id']
-                delete healedRel['target_id']
-            }
-            if ('relation_type' in rel) {
-                healedRel['relationType'] = rel['relation_type']
-                delete healedRel['relation_type']
-            }
-            return healedRel
-        })
+        result['relationships'] = result['relationships'].map(normalizeRelationshipItemRecord)
     }
 
     if ('commits' in result && Array.isArray(result['commits'])) {

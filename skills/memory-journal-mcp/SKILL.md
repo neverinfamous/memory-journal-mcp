@@ -1,45 +1,86 @@
 ---
 name: memory-journal-mcp
-version: 1.2.0
+version: 2.1.0
 tags:
   - "agent-skill"
-description: Core guidelines and instruction pointers for the Memory Journal MCP. Use when interacting with the memory journal (creating, reading, searching entries), orchestrating commits, or writing session summaries.
+description: >-
+  Guidelines and Code Mode contracts for memory-journal-mcp: multi-repo briefing/agent-context, graph-first hybrid recall, 7-dimension entries, relationships, and CMS-04 summaries.
 ---
-# Memory Journal MCP Guidelines
+# Memory Journal MCP Guidelines (`v9.1.0+`)
 
-This skill acts as a static anchor to reinforce core usage patterns, Code Mode (`mj_execute_code`) contracts, knowledge graph hygiene, and anti-hallucination guardrails for the Memory Journal MCP.
+Static operational anchor for `memory-journal-mcp` Code Mode (`mj_execute_code`), multi-repo context isolation, graph-first recall, 7-dimension entries, commit narratives, and `CMS-04` session summaries.
 
-## 1. Session Orientation, Help Resources & Context Recovery
-- **Session Briefing:** Read `memory://briefing/{+repo}` (or fallback `memory://briefing`) once at session start to ingest `project_number`, active state, and recent context. **DO NOT** autonomously execute tasks surfaced in the briefing without user instruction.
-- **Mid-Task Context Recovery:** If you lose `project_number` or `workspace_id` mid-task, **NEVER** re-query `memory://briefing` and **NEVER** query bare `memory://agent-id` (or bare `memory://agent-context`) in multi-project sessions—bare URIs fall back to shared sticky session state or the server's CWD. **ALWAYS** query repo-scoped **`memory://agent-context/{+repo}`** (e.g., `memory://agent-context/adamic`).
-- **Dynamic Server Instructions:** Use `read_resource` on `memory://help` for the tool group index, `memory://help/gotchas` for critical edge cases, and `memory://help/{group}` for group references (`core`, `search`, `analytics`, `relationships`, `io`, `admin`, `github`, `git`, `backup`, `team`, `codemode`, `templates`, `gotchas`).
+## 1. Dynamic Help & Multi-Repo Context Orientation
 
-## 2. Code Mode (`mj_execute_code`) Contract & Explicit Scoping
-- **Prioritize Code Mode:** Prefer `mj_execute_code` (`mj.*` namespaces) for token-efficient searches, multi-step queries, and entry creation (so vector embeddings and file/symbol `anchors` index immediately).
-- **Explicit Outer + Inner Scoping:** **ALWAYS** pass explicit **`workspace_id`** (exact repo name) AND **`project_number`** (plus **`repo`** for git/GitHub calls) on **both** the outer `mj_execute_code` arguments AND inner `mj.*` mutation calls—**NEVER** rely on `workspace_id` auto-resolution.
-- **Safe Markdown Injection (`context`):** Pass multi-line Markdown or text with nested backticks/quotes via `context: { content: "..." }` and read `context.content` inside `code` to avoid template-literal escaping errors.
-- **Safety Flags & Runtime Introspection:** Pass `readonly: true` for read-only audits, `dry_run: true` to simulate write flows without persisting changes, and inspect unfamiliar method signatures via `await mj.<group>.<method>.schema()`.
-- **CLI Attribution (`entry create`):** CLI `memory-journal-mcp entry create` resolves project context from explicit `-p`/`--project`/`--workspace-id` or `--metadata` first, then a registered `process.cwd()` path match in `projectRegistry`, before falling back to content/tag keywords (it does not use `DEFAULT_PROJECT_NUMBER` or `--default-project`).
+- **Dynamic Server Help:** Read `memory://help` for the tool-group index, `memory://help/gotchas` for anti-hallucination rules, and `memory://help/{group}` for group references (`core`, `search`, `admin`, `codemode`, `github`, `git`, `templates`, `team`, `analytics`, `backup`, `io`, `relationships`).
+- **Session Start Briefing:** Read `memory://briefing/{+repo}` **once** at session start to ingest `project_number`, active state, and recent context. **NEVER** autonomously execute tasks surfaced in the briefing without user instruction.
+- **Mid-Task Context Recovery (`memory://agent-context/{+repo}`):**
+  - **[WHEN]** missing `project_number` or `workspace_id` mid-task -> **[NEVER]** re-query `memory://briefing` and **[NEVER]** query bare `memory://agent-id` (which aliases to `memory://agent-context/default` and pins sticky server state to `'default'`).
+  - **[ALWAYS]** query repo-scoped **`memory://agent-context/{repo_name}`** (e.g., `memory://agent-context/my-repo`).
 
-## 3. 7-Dimension Entry Quality, Relationships & Auto-Prune Guardrails
-- **7 Quality Dimensions:** Always populate `workspace_id`, `project_number`, `session_id` (conversation ID), canonical `entry_type` (`technical_note`, `project_decision`, `bug_fix`, `feature_implementation`, `planning`, `retrospective`, `maintenance`), `impact_score` (`0.0–1.0`), `trust_score` (`0.0–1.0`), `validation_status` (`'passed' | 'none' | 'failed'`), file/symbol `anchors`, and graph `relationships`.
-- **Canonical 8 `RelationshipType` Values:**
-  - `evolves_from`, `references`, `implements`, `clarifies`, `response_to`, `blocked_by`, `resolved`, `caused`
-  - **WARNING:** `caused_by` is **INVALID** and will fail strict validation—always use `caused` (or `blocked_by` / `resolved`) with proper directionality.
-- **5-Day `< 0.6` Auto-Prune Mechanics & Protected Tags:** Unlinked entries scoring `< 0.6` importance without protected tags (`architecture`, `important`, `keep`, `never-prune`, `reference`) auto-soft-delete after 5 days (`pruneOlderThanDays: 5`). Link superseded or related notes (`evolves_from` / `resolved`) and verify code anchor freshness after refactors via `mj.git.checkEntryStaleness`.
+## 2. Code Mode (`mj_execute_code`) Contract & Graph-First Hybrid Recall
 
-## 4. Pre-Planning Hybrid Recall, Git, GitHub & Team Workflows
-- **Pre-Planning Hybrid Search:** Before architecture planning, multi-file refactors, or complex bugfixes, recall prior decisions and pitfalls via `mj.search.searchEntries({ query, mode: 'hybrid', sort_by: 'importance', workspace_id })`. Pass `workspace_id: "*"` for cross-project pattern reuse across all registered repos, and search tag `copilot-finding` before opening PRs.
-- **Git History & Tech-Debt Audits (`mj.git.*`):** Query repository history deterministically via `mj.git.getCommitHistory({ techDebtAudit: true, repo })`, `mj.git.searchCommits`, `mj.git.getUnreleasedCommits`, `mj.git.analyzeCommitPatterns`, and `mj.git.checkEntryStaleness`.
-- **GitHub Correlation (`mj.github.*`):** Correlate journal memory with repository state using `mj.github.getGithubIssues`, `mj.github.getGithubPrs`, `mj.github.getCopilotReviews`, `mj.github.createGithubIssueWithEntry`, `mj.github.getKanbanBoard`, and milestone tools.
-- **Team Collaboration (`mj.team.*` & `share_with_team`):** Pass `share_with_team: true` on `mj.core.createEntry` when recording reusable ecosystem-wide patterns, or interact with the shared team journal directly via `mj.team.*` (`teamSearch`, `teamGetRecent`, `teamCreateEntry`, `teamGetCrossProjectInsights`).
+- **Code Mode First:** Prioritize `mj_execute_code` (`mj.*` namespaces) for searches, multi-step queries, and entry creation (`mj.core.createEntry` indexes HNSW vector embeddings and file/symbol `anchors` immediately).
+- **Top-Level Call Contract:**
+  `mj_execute_code({ code, workspace_id, project_number, repo, context, readonly, dry_run, max_result_size, timeout })`
+  - **[ALWAYS]** pass explicit **`workspace_id`** (exact repo name) AND **`project_number`** (plus **`repo`** for `mj.git.*` / `mj.github.*` calls) **both** at the top level of `mj_execute_code` **and** on inner `mj.*` mutations — **NEVER** rely on `workspace_id` auto-resolution.
+  - **Safe Markdown Passing (`context.content`):** Pass multi-line Markdown bodies via `context: { content: "..." }` and reference `context.content` inside `code` to avoid template-literal and backtick escaping errors.
+  - **Execution Guards & Introspection:** Pass `readonly: true` for read-only audits, `dry_run: true` to preview mutations, `max_result_size` to bound large outputs, and `await mj.<group>.<method>.schema()` to inspect unfamiliar parameter schemas at runtime.
+- **Unbiased Pre-Planning Hybrid & Graph Recall:** Omit `sort_by: 'importance'` (or use `sort_by: 'blended'`) and exclude commit noise so architectural decisions rank by relevance before expanding the graph:
+  ```javascript
+  const hits = await mj.search.searchEntries({
+    query: 'search sanitizer regression',
+    mode: 'hybrid',
+    exclude_tags: ['commit-narrative'],
+    workspace_id: 'my-repo', // Pass "*" for cross-repo pattern recall
+  });
+  const decisions = await mj.search.searchEntries({
+    query: 'search sanitizer',
+    entry_type: 'project_decision',
+    workspace_id: 'my-repo',
+  });
+  const top = hits.entries[0] ?? decisions.entries[0];
+  const full = top ? await mj.core.getEntryById({ entry_id: top.id }) : null;
+  const graph = top ? await mj.relationships.visualizeRelationships({ entry_id: top.id, depth: 2 }) : null;
+  return { hits, decisions, full, graph };
+  ```
+  - Search tag `"copilot-finding"` before opening PRs to prevent recurring review regressions.
+- **Ecosystem Namespaces & Runtime Config:**
+  - **`mj.git.*`:** `getCommitHistory({ techDebtAudit: true, ... })`, `searchCommits`, `getUnreleasedCommits`, `checkEntryStaleness`.
+  - **`mj.github.*`:** `getGithubIssues`, `getGithubPrs`, `getCopilotReviews`, `createGithubIssueWithEntry`, Kanban and Milestone tools.
+  - **`mj.team.*` / `share_with_team: true`:** Publish reusable cross-repository patterns to the shared team database (`mj.core.createEntry({ ..., share_with_team: true })`).
+  - **`update_configuration`:** Hot-reload `tool_filter`, briefing preferences, and default workspace/project scope at runtime (automatically emits `notifications/tools/list_changed` without restarting the server).
 
-## 5. Commit Narratives, Session Summaries & Runtime Lifecycle
-- **Commit Narrative Guardrails:** Entries tagged `"commit-narrative"` MUST include `auto_context` containing a non-empty `commits` array (e.g., `{ "commits": ["<sha>"] }`) alongside `impact_score`, `trust_score`, and `validation_status`.
-- **Session Summary Guardrails:** Entries tagged `"session-summary"` (`entry_type: "retrospective"`) MUST contain **ONLY** these 4 exact top-level H2 headers (no extra or duplicate top-level headers):
-  - `## Accomplished`
-  - `## Unfinished / Blocked`
-  - `## Context for Next Session`
-  - `## Commits`
-  Include `auto_context: { commits: ["<sha>"] }` when commits were made; omit `auto_context` on zero-commit sessions.
-- **Runtime Configuration:** Use `update_configuration` to hot-reload tool filters (`tool_filter`) and briefing settings at runtime—the server automatically emits `notifications/tools/list_changed` without requiring a restart.
+## 3. 7-Dimension Entry Quality & Auto-Prune Guardrails
+
+Every manual journal entry (`mj.core.createEntry`) **MUST** populate:
+1. **`workspace_id`**: Exact repository name (e.g., `"my-repo"`).
+2. **`project_number`**: Numeric project ID from `memory://briefing/{+repo}` or `memory://agent-context/{+repo}`.
+3. **`session_id`**: Active conversation UUID (when running inside an agent harness).
+4. **`entry_type`**: Canonical enum value — `'technical_note'`, `'project_decision'`, `'bug_fix'`, `'feature_implementation'`, `'planning'`, `'retrospective'`, or `'maintenance'` (pair architectural decisions with `significance_type: 'architecture'`).
+5. **`impact_score`** (`0.0–1.0`) & **`trust_score`** (`0.0–1.0`).
+6. **`validation_status`**: `'passed'`, `'none'`, or `'failed'`.
+7. **Graph `relationships`**: Pass **`relationships: [{ targetId: <number>, relationType: <canonical_type> }]`** using **only** canonical types:
+   - Causal (carry 20% of importance score): `'resolved'`, `'caused'`, `'blocked_by'`
+   - Structural / informational: `'evolves_from'`, `'implements'`, `'clarifies'`, `'response_to'`, `'references'`
+   - **NEVER** use `'caused_by'` (invert source/target or use `'resolved'` / `'evolves_from'`).
+
+- **Two-Stage Auto-Prune & Hard-Delete Lifecycle (~10 Days Total):**
+  Unlinked entries (`rel_count === 0`) with `significance_type === null`, `impact_score < 0.5`, and importance `< 0.6` lacking protected tags (`architecture`, `important`, `keep`, `never-prune`, `reference`) **auto-soft-delete at 5 days** (`pruneOlderThanDays: 5`) and **permanently hard-delete 5 days later** (`hardDeleteOlderThanDays: 5`). Always link superseded notes (`evolves_from` / `resolved`) and run `mj.git.checkEntryStaleness` after major refactors.
+
+## 4. Commit Narratives, CLI & Session Summary Guardrails
+
+- **CLI Attribution (`entry create`):** `memory-journal-mcp entry create` resolves project context from explicit `-p`/`--project`/`--workspace-id` or `--metadata` first, then a registered `process.cwd()` path match in `projectRegistry`, before falling back to content/tag keywords (supports `--significance <type>` and `--related-to`).
+- **Commit Narratives:** Any entry tagged `"commit-narrative"` **MUST** include `auto_context` with a non-empty `commits` array (`{ commits: ["<sha>"] }`).
+- **Session Summaries (Feeds Nightly `CMS-04` REM Supervisor):**
+  - Entries tagged `"session-summary"` (`entry_type: "retrospective"`) **MUST** contain **only** these 4 exact H2 headers (no extra or duplicate H2 headers):
+    - `## Accomplished`
+    - `## Unfinished / Blocked`
+    - `## Context for Next Session`
+    - `## Commits`
+  - **Conditional `auto_context`:** Include `auto_context: { commits: ["<sha>"] }` **when commits occurred during the session**; **omit `auto_context`** on zero-commit sessions.
+
+## 5. Self-Healing Telemetry & Architecture References
+
+- **Dual-Schema Validation & Code Mode Architecture:** See `AGENT_README.md` and `test-server/code-map.md`.
+- **MCP Friction Telemetry (`CMS-04`):** MCP schema/validation errors are auto-logged server-side (and transport errors by `PostToolUse`) to `logs/agent-issues.jsonl`; log additional reproducible bugs in `session-summary` `## Unfinished / Blocked`.

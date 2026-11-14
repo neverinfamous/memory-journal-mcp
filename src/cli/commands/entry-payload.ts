@@ -2,7 +2,12 @@ import { readFileSync } from 'node:fs'
 import type { Command } from 'commander'
 import { DatabaseAdapterFactory } from '../../database/adapter-factory.js'
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
-import type { EntryType, RelationshipType, ToolHandlerConfig } from '../../types/index.js'
+import type {
+    EntryType,
+    RelationshipType,
+    SignificanceType,
+    ToolHandlerConfig,
+} from '../../types/index.js'
 import { ConfigResolver } from '../../utils/config-resolver.js'
 import { resolveProjectContext } from '../../utils/workspace-resolver.js'
 import { activeProjectRegistry, pairStoredScope } from '../../utils/write-scope.js'
@@ -29,6 +34,7 @@ const STDIN_TIMEOUT_MS = 3000
 
 export interface EntryPayload {
     entryType: EntryType | undefined
+    significanceType: SignificanceType | undefined
     tags: string[] | undefined
     projectNumber: number | undefined
     workspaceId: string | undefined
@@ -295,10 +301,8 @@ export function buildEntryPayload(
     const projectNumber = paired.projectNumber ?? explicitProjectNum
     const workspaceId = paired.workspaceId ?? resolved.workspaceId
 
-    const { trustScore, impactScore, validationStatus, sessionId } = resolveScoresAndValidation(
-        normalizedOptions,
-        metadata
-    )
+    const { trustScore, impactScore, validationStatus, sessionId, significanceType } =
+        resolveScoresAndValidation(normalizedOptions, metadata)
 
     const autoContextStr = resolveAutoContext(
         normalizedOptions.autoContext,
@@ -327,6 +331,7 @@ export function buildEntryPayload(
 
     return {
         entryType,
+        significanceType,
         tags,
         projectNumber,
         workspaceId,

@@ -11,6 +11,23 @@
  */
 
 import { z } from 'zod'
+import {
+    RELATIONSHIP_TARGET_KEYS,
+    RELATIONSHIP_TYPE_KEYS,
+    pickRecordField,
+} from '../handlers/tools/schemas/constants-and-primitives.js'
+
+function preprocessFrontmatterRelationship(item: unknown): unknown {
+    if (typeof item !== 'object' || item === null || Array.isArray(item)) return item
+    const rec = item as Record<string, unknown>
+    const rawTarget = pickRecordField(rec, RELATIONSHIP_TARGET_KEYS)
+    const target_id =
+        typeof rawTarget === 'string' && /^\d+$/.test(rawTarget.trim())
+            ? Number(rawTarget.trim())
+            : rawTarget
+    const rawType = pickRecordField(rec, RELATIONSHIP_TYPE_KEYS)
+    return { type: rawType, target_id }
+}
 
 // ============================================================================
 // Types
@@ -51,10 +68,13 @@ const FrontmatterSchema = z.object({
     project_number: z.number().int().positive().optional(),
     relationships: z
         .array(
-            z.object({
-                type: z.string(),
-                target_id: z.number().int().positive(),
-            })
+            z.preprocess(
+                preprocessFrontmatterRelationship,
+                z.object({
+                    type: z.string(),
+                    target_id: z.number().int().positive(),
+                })
+            )
         )
         .max(100)
         .optional(),

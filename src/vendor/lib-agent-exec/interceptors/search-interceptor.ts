@@ -56,9 +56,27 @@ function hasBackslashRegexEscape(arg: string): boolean {
 
 // [INTENT]: Distinguishes directory targets from patterns and single-file paths in rg/grep interceptors.
 // [INVARIANT]: Must NOT assume arbitrary POSIX paths without trailing '/' (e.g., '/var/log/syslog', '/etc/os-release', '/proc/cpuinfo') are directories on Windows hosts, and must NOT misclassify Windows backslash paths (e.g., 'C:\Users\...\Desktop\...\src' containing '\D' and '\s') as regex escapes.
+function hasUriOrNonDriveColon(value: string): boolean {
+  return value.includes('://') || (value.includes(':') && !/^[a-zA-Z]:(?:[/\\]|$)/.test(value));
+}
+
+function isSecondExistingTargetOnly(first: string, second: string, cwd?: string): boolean {
+  try {
+    const baseDir = cwd !== undefined && cwd.length > 0 ? path.resolve(cwd) : process.cwd();
+    const resolvedFirst = path.resolve(baseDir, first);
+    const resolvedSecond = path.resolve(baseDir, second);
+    return !fs.existsSync(resolvedFirst) && fs.existsSync(resolvedSecond);
+  } catch {
+    return false;
+  }
+}
+
 export function isLikelyDirectoryArg(arg: string, cwd?: string): boolean {
   if (arg.length === 0 || arg.startsWith('-') || arg.startsWith('\\-')) return false;
   if (hasUnambiguousRegexMeta(arg)) {
+    return false;
+  }
+  if (hasUriOrNonDriveColon(arg)) {
     return false;
   }
 
@@ -214,6 +232,7 @@ export function parseGrepSearchArgs(args: string[]): ParsedGrepSearchArgs {
   const isPathLike = (s: string): boolean => {
     if (!s || s.length === 0) return false;
     const clean = s.trim();
+    if (hasUriOrNonDriveColon(clean)) return false;
     if (/[()*+?[\]^$|{}]/.test(clean) || /\\[bBwWdDsSnrtv0()[\]{}.*+?^$|\-.]/.test(clean) || clean.includes('|')) return false;
     if (clean === '.' || clean === '..' || clean.startsWith('./') || clean.startsWith('../') || clean.endsWith('/') || clean.endsWith('\\')) return true;
     if (clean.includes('/') || clean.includes('\\') || /^[a-zA-Z]:/.test(clean)) return true;
@@ -224,7 +243,7 @@ export function parseGrepSearchArgs(args: string[]): ParsedGrepSearchArgs {
     }
   };
 
-  if (isPathLike(pattern)) {
+  if (isPathLike(pattern) && !isSecondExistingTargetOnly(pattern, searchPath)) {
     if (!isPathLike(searchPath) && searchPath.length > 0) {
       const tmp = pattern;
       pattern = searchPath;
@@ -545,7 +564,7 @@ export function handleRipgrepInterception(ctx: ExecutionContext, hasStdin: boole
 
   // Auto-heal reversed arguments (e.g. rg src/adapters/sqlite pattern)
   if (!hasStdin && !hasPatternFlag && !hasFiles && positionalArgs.length === 2) {
-    if (isDir(positionalArgs[0]) && !isDir(positionalArgs[1])) {
+    if (isDir(positionalArgs[0]) && !isDir(positionalArgs[1]) && !isSecondExistingTargetOnly(positionalArgs[0], positionalArgs[1], ctx.payload.cwd)) {
       console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected reversed arguments in 'rg' (directory before pattern). Swapping arguments to place pattern first... (Frictionless Recovery)\x1b[0m`);
       const idx0 = ctx.args.indexOf(positionalArgs[0]);
       const idx1 = ctx.args.indexOf(positionalArgs[1]);
@@ -736,7 +755,7 @@ export function handleGrepInterception(ctx: ExecutionContext, hasStdin: boolean)
   // Auto-heal reversed arguments (e.g. grep -r src/adapters/sqlite pattern)
   if (!hasStdin && !hasPatternFlag && positionalArgs.length === 2) {
     const isDir = (arg: string): boolean => isLikelyDirectoryArg(arg, ctx.payload.cwd);
-    if (isDir(positionalArgs[0]) && !isDir(positionalArgs[1])) {
+    if (isDir(positionalArgs[0]) && !isDir(positionalArgs[1]) && !isSecondExistingTargetOnly(positionalArgs[0], positionalArgs[1], ctx.payload.cwd)) {
       console.error(`\n   🛠️ AUTONOMOUS HEALING: Detected reversed arguments in '${cmdBasename}' (directory before pattern). Swapping arguments to place pattern first... (Frictionless Recovery)\x1b[0m`);
       const idx0 = ctx.args.indexOf(positionalArgs[0]);
       const idx1 = ctx.args.indexOf(positionalArgs[1]);

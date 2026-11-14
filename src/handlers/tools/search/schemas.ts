@@ -39,14 +39,18 @@ export const SearchEntriesSchema = z.preprocess(
     pr_status: z.enum(['draft', 'open', 'merged', 'closed']).optional(),
     workflow_run_id: z.number().optional(),
     tags: z.array(z.string()).optional(),
+    exclude_tags: z
+        .array(z.string())
+        .optional()
+        .describe('Exclude entries having any of these tags'),
     entry_type: z.enum(ENTRY_TYPES).optional(),
     start_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
     end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
     sort_by: z
-        .enum(['timestamp', 'importance'])
+        .enum(['timestamp', 'importance', 'blended'])
         .optional()
         .default('timestamp')
-        .describe('Sort results by timestamp (default) or importance score'),
+        .describe('Sort results by timestamp (default), importance score, or blended score'),
     include_team: z
         .boolean()
         .optional()
@@ -84,6 +88,10 @@ export const SearchEntriesSchemaMcp = z.preprocess(
     pr_status: z.string().optional(),
     workflow_run_id: relaxedNumber().optional(),
     tags: z.array(z.string()).optional(),
+    exclude_tags: z
+        .array(z.string())
+        .optional()
+        .describe('Exclude entries having any of these tags'),
     entry_type: z.string().optional(),
     start_date: z.string().optional(),
     end_date: z.string().optional(),
@@ -91,7 +99,7 @@ export const SearchEntriesSchemaMcp = z.preprocess(
         .string()
         .optional()
         .default('timestamp')
-        .describe('Sort results by timestamp (default) or importance score'),
+        .describe('Sort results by timestamp (default), importance score, or blended score'),
     include_team: z
         .boolean()
         .optional()

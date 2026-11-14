@@ -242,10 +242,11 @@ export interface IDatabaseAdapter extends IDatabaseVectorAndAdminAdapter {
             prStatus?: string
             workflowRunId?: number
             tags?: string[]
+            excludeTags?: string[]
             entryType?: EntryType
             startDate?: string
             endDate?: string
-            sortBy?: 'timestamp' | 'importance'
+            sortBy?: 'timestamp' | 'importance' | 'blended'
             includeArchived?: boolean
             includeHighlights?: boolean
             fuzzy_match?: boolean

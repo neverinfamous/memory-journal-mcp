@@ -3,7 +3,12 @@
  */
 
 import { logger } from '../../../utils/logger.js'
-import { safeString } from './constants-and-primitives.js'
+import {
+    RELATIONSHIP_TARGET_KEYS,
+    RELATIONSHIP_TYPE_KEYS,
+    pickRecordField,
+    safeString,
+} from './constants-and-primitives.js'
 
 /** Fold title/heading/subject/name aliases into the content as a markdown heading. */
 function healTitleField(obj: Record<string, unknown>): boolean {
@@ -143,20 +148,11 @@ function readRelationshipItem(
     }
     if (typeof item !== 'object' || item === null) return { relType: canonicalType }
     const itemObj = item as Record<string, unknown>
-    const rawId =
-        itemObj['targetId'] ??
-        itemObj['target_id'] ??
-        itemObj['to_entry_id'] ??
-        itemObj['toEntryId'] ??
-        itemObj['id']
+    const rawId = pickRecordField(itemObj, RELATIONSHIP_TARGET_KEYS)
     let targetId: number | undefined
     if (typeof rawId === 'number' && !Number.isNaN(rawId)) targetId = rawId
     else if (typeof rawId === 'string' && /^\d+$/.test(rawId.trim())) targetId = Number(rawId.trim())
-    const explicitType =
-        itemObj['relationType'] ??
-        itemObj['relation_type'] ??
-        itemObj['relationship_type'] ??
-        itemObj['type']
+    const explicitType = pickRecordField(itemObj, RELATIONSHIP_TYPE_KEYS)
     const relType =
         typeof explicitType === 'string' && explicitType.trim() !== ''
             ? explicitType.trim()
@@ -175,8 +171,8 @@ function pushUniqueRelationship(
         (r) =>
             typeof r === 'object' &&
             r !== null &&
-            (r['targetId'] === targetId || r['target_id'] === targetId || r['to_entry_id'] === targetId) &&
-            (r['relationType'] === relType || r['relation_type'] === relType)
+            RELATIONSHIP_TARGET_KEYS.some((k) => r[k] === targetId) &&
+            RELATIONSHIP_TYPE_KEYS.some((k) => r[k] === relType)
     )
     if (!alreadyExists) relList.push({ targetId, relationType: relType })
 }

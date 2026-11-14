@@ -240,7 +240,7 @@ export const TeamCreateEntrySchemaMcp = z.preprocess(
                 )
                 .optional()
                 .describe(
-                    'Optional array of links to previous entries/flags to establish relationships immediately upon creation. Types: "resolves", "depends_on", "implements", "relates_to", "references", "evolves_from"'
+                    'Optional array of `{ targetId, relationType }` links to previous entries. Canonical types: "evolves_from", "references", "implements", "clarifies", "response_to", "blocked_by", "resolved", "caused"'
                 ),
         })
         .strict()

@@ -2,7 +2,7 @@ import { Buffer } from 'buffer'
 import { logger } from '../../../../utils/logger.js'
 
 /** Allowed sort dimensions for search results */
-export type SortBy = 'timestamp' | 'importance'
+export type SortBy = 'timestamp' | 'importance' | 'blended'
 
 // ============================================================================
 // Cursor Pagination Helpers

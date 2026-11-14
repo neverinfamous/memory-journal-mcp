@@ -59,6 +59,7 @@ export function getSearchEntriesTool(context: ToolContext): ToolDefinition[] {
                         input.workflow_run_id !== undefined ||
                         input.is_personal !== undefined ||
                         input.tags !== undefined ||
+                        (input.exclude_tags !== undefined && input.exclude_tags.length > 0) ||
                         input.entry_type !== undefined ||
                         input.start_date !== undefined ||
                         input.end_date !== undefined
@@ -105,6 +106,7 @@ export function getSearchEntriesTool(context: ToolContext): ToolDefinition[] {
                         prStatus: input.pr_status,
                         workflowRunId: input.workflow_run_id,
                         tags: input.tags,
+                        excludeTags: input.exclude_tags,
                         entryType: input.entry_type,
                         startDate: input.start_date,
                         endDate: input.end_date,

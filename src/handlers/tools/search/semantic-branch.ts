@@ -41,8 +41,8 @@ interface SemanticSearchParams {
     searchOptions: SearchOptions & { includeTeam?: boolean | undefined }
 }
 
-/** Re-rank entries by importance score (highest first), annotating `importanceScore`. */
-export function rankByImportance(
+/** Hydrate `importanceScore` onto ranked entries via a single batch lookup per DB. */
+function attachImportance(
     db: ToolContext['db'],
     ranked: EntryWithSource[],
     wsId: string,
@@ -63,16 +63,47 @@ export function rankByImportance(
         teamDb !== undefined && teamIds.length > 0
             ? teamDb.getEntriesByIdsWithImportance(teamIds, wsId)
             : undefined
-    const scored = ranked.map((entry) => {
+    return ranked.map((entry) => {
         const id = entry['id']
         const map = entry.source === 'team' ? teamMap : personalMap
         const score = typeof id === 'number' ? (map?.get(id)?.importance.score ?? 0) : 0
         return { ...entry, importanceScore: Math.round(score * 100) / 100 }
     })
+}
+
+/** Re-rank entries by importance score (highest first), annotating `importanceScore`. */
+export function rankByImportance(
+    db: ToolContext['db'],
+    ranked: EntryWithSource[],
+    wsId: string,
+    teamDb?: ToolContext['teamDb']
+): EntryWithSource[] {
+    const scored = attachImportance(db, ranked, wsId, teamDb)
     scored.sort((a, b) => {
-        const left = typeof a.importanceScore === 'number' ? a.importanceScore : 0
-        const right = typeof b.importanceScore === 'number' ? b.importanceScore : 0
+        const left = typeof a['importanceScore'] === 'number' ? a['importanceScore'] : 0
+        const right = typeof b['importanceScore'] === 'number' ? b['importanceScore'] : 0
         return right - left
+    })
+    return scored
+}
+
+/** Re-rank entries by `relevance * (1 + 0.35 * importanceScore)` (highest first). */
+export function rankByBlendedScore(
+    db: ToolContext['db'],
+    ranked: EntryWithSource[],
+    wsId: string,
+    relevanceMap: Map<number, number>,
+    teamDb?: ToolContext['teamDb']
+): EntryWithSource[] {
+    const scored = attachImportance(db, ranked, wsId, teamDb)
+    scored.sort((a, b) => {
+        const aId = typeof a['id'] === 'number' ? a['id'] : -1
+        const bId = typeof b['id'] === 'number' ? b['id'] : -1
+        const aRel = relevanceMap.get(aId) ?? (typeof a['similarity'] === 'number' ? a['similarity'] : 0)
+        const bRel = relevanceMap.get(bId) ?? (typeof b['similarity'] === 'number' ? b['similarity'] : 0)
+        const aImp = typeof a['importanceScore'] === 'number' ? a['importanceScore'] : 0
+        const bImp = typeof b['importanceScore'] === 'number' ? b['importanceScore'] : 0
+        return bRel * (1.0 + 0.35 * bImp) - aRel * (1.0 + 0.35 * aImp)
     })
     return scored
 }
@@ -98,10 +129,17 @@ export async function runSemanticSearch(
         searchOptions.projectNumber
     )
     const entryIds = semanticResults.map((r) => r.entryId)
+    const relevanceMap = new Map<number, number>()
+    for (const result of semanticResults) {
+        relevanceMap.set(result.entryId, result.score)
+    }
     const entriesMap = db.getEntriesByIds(entryIds, wsId)
 
     // Pre-hydrate tags to avoid N+1 queries during metadata filtering
-    if (input.tags && input.tags.length > 0) {
+    if (
+        (input.tags !== undefined && input.tags.length > 0) ||
+        (input.exclude_tags !== undefined && input.exclude_tags.length > 0)
+    ) {
         const tagsMap = db.getTagsForEntries(entryIds)
         for (const entry of entriesMap.values()) {
             entry.tags = tagsMap.get(entry.id) ?? []
@@ -134,8 +172,10 @@ export async function runSemanticSearch(
         ranked = mergeAndDedup(ranked, teamEntries, needed + 1, 'preserve')
     }
 
-    // Post-fetch importance re-sort for vector results
-    if (input.sort_by === 'importance') {
+    // Post-fetch importance or blended relevance × importance re-sort for vector results
+    if (input.sort_by === 'blended') {
+        ranked = rankByBlendedScore(db, ranked, wsId, relevanceMap, teamDb)
+    } else if (input.sort_by === 'importance') {
         ranked = rankByImportance(db, ranked, wsId, teamDb)
     }
 

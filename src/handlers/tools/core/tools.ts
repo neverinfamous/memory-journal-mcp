@@ -46,7 +46,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                 'For session summaries, use entry_type "retrospective" ' +
                 'with tag "session-summary" and structure content as: ' +
                 '## Accomplished, ## Unfinished / Blocked, ## Context for Next Session, ## Commits. ' +
-                'REQUIRED: You MUST include project_number. Extract this by querying memory://agent-id. ' +
+                'REQUIRED: You MUST include project_number. Extract this by querying memory://agent-context/<repo>. ' +
                 'REQUIRED: You MUST include impact_score, trust_score, and validation_status. ' +
                 'REQUIRED: You MUST use related_to to anchor the entry to a session summary or nearby context.',
             group: 'core',
@@ -91,7 +91,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                             error: 'Missing or unresolvable project_number. Entry creation blocked because no valid project could be determined for this entry.',
                             code: 'VALIDATION_ERROR',
                             category: 'validation',
-                            suggestion: 'To find your project_number, call list_projects (or mj.core.listProjects()), read the memory://agent-id resource via read_resource (e.g. read_resource("memory-journal-mcp", "memory://agent-id")), or inspect memory://briefing/<project-name>. Then pass project_number explicitly in your request.',
+                            suggestion: 'To find your project_number, call list_projects (or mj.core.listProjects()), read memory://agent-context/<repo-name> via read_resource (e.g. read_resource("memory-journal-mcp", "memory://agent-context/memory-journal-mcp")), or inspect memory://briefing/<project-name>. Avoid bare memory://agent-id in multi-project setups. Then pass project_number explicitly in your request.',
                             recoverable: true,
                         }
                     }

@@ -106,19 +106,14 @@ function healMetadataAndContextFields(obj: Record<string, unknown>): boolean {
     return modified
 }
 
-function normalizeTagsField(obj: Record<string, unknown>): boolean {
+function healTagListField(obj: Record<string, unknown>, fieldKey: string): boolean {
     let modified = false
-    if ('tag' in obj && !('tags' in obj)) {
-        obj['tags'] = obj['tag']
-        delete obj['tag']
+    if (fieldKey in obj && typeof obj[fieldKey] === 'string') {
+        obj[fieldKey] = obj[fieldKey].split(',').map((t: string) => t.trim()).filter(Boolean)
         modified = true
     }
-    if ('tags' in obj && typeof obj['tags'] === 'string') {
-        obj['tags'] = obj['tags'].split(',').map((t: string) => t.trim()).filter(Boolean)
-        modified = true
-    }
-    if ('tags' in obj && Array.isArray(obj['tags'])) {
-        const healedTags = obj['tags'].map((t: unknown) => {
+    if (fieldKey in obj && Array.isArray(obj[fieldKey])) {
+        const healedTags = obj[fieldKey].map((t: unknown) => {
             if (typeof t === 'string') {
                 const lower = t.toLowerCase().trim()
                 if (SESSION_SUMMARY_TAG_ALIASES.has(lower)) return 'session-summary'
@@ -126,17 +121,41 @@ function normalizeTagsField(obj: Record<string, unknown>): boolean {
             }
             return t
         })
-        if (JSON.stringify(obj['tags']) !== JSON.stringify(healedTags)) {
-            obj['tags'] = healedTags
+        if (JSON.stringify(obj[fieldKey]) !== JSON.stringify(healedTags)) {
+            obj[fieldKey] = healedTags
             modified = true
         }
     }
     return modified
 }
 
-function mapKnownEntryTypeAlias(etLower: string): { entryType: string; tag?: string } | undefined {
+function normalizeTagsField(obj: Record<string, unknown>): boolean {
+    let modified = false
+    if ('tag' in obj && !('tags' in obj)) {
+        obj['tags'] = obj['tag']
+        delete obj['tag']
+        modified = true
+    }
+    if (healTagListField(obj, 'tags')) modified = true
+    return modified
+}
+
+function mapKnownEntryTypeAlias(
+    etLower: string
+): { entryType: string; tag?: string; significanceType?: string } | undefined {
     if (etLower === 'session-summary' || SESSION_SUMMARY_TAG_ALIASES.has(etLower)) {
         return { entryType: 'retrospective', tag: 'session-summary' }
+    }
+    if (
+        etLower === 'architecture' ||
+        etLower === 'architectural_decision' ||
+        etLower === 'architectural-decision' ||
+        etLower === 'adr'
+    ) {
+        return { entryType: 'project_decision', significanceType: 'architecture' }
+    }
+    if (etLower === 'decision') {
+        return { entryType: 'project_decision', significanceType: 'decision' }
     }
     if (etLower === 'progress' || etLower === 'status' || etLower === 'development') {
         return { entryType: 'development_note' }
@@ -157,6 +176,14 @@ function healTagsAndEntryType(obj: Record<string, unknown>): boolean {
         if (mapped !== undefined) {
             obj['entry_type'] = mapped.entryType
             if (mapped.tag !== undefined) appendHealedTag(obj, mapped.tag)
+            if (
+                mapped.significanceType !== undefined &&
+                (obj['significance_type'] === undefined ||
+                    obj['significance_type'] === null ||
+                    obj['significance_type'] === '')
+            ) {
+                obj['significance_type'] = mapped.significanceType
+            }
             modified = true
         } else if (!ENTRY_TYPES.some((t) => t === obj['entry_type'])) {
             const cleanedTag = etLower.replace(/^[^a-z0-9]+/, '').replace(/_/g, '-')
@@ -325,6 +352,31 @@ const SEARCH_KEY_ALIAS_MAP: Record<string, string> = {
     prNumber: 'pr_number',
     prStatus: 'pr_status',
     issueNumber: 'issue_number',
+    excludeTags: 'exclude_tags',
+    excludeTag: 'exclude_tags',
+    exclude_tag: 'exclude_tags',
+    excludedTags: 'exclude_tags',
+    excluded_tags: 'exclude_tags',
+}
+
+function healSearchSortBy(obj: Record<string, unknown>): boolean {
+    if ('sort_by' in obj && typeof obj['sort_by'] === 'string') {
+        const cleaned = obj['sort_by'].trim().toLowerCase()
+        if (
+            cleaned === 'blended' ||
+            cleaned === 'blend' ||
+            cleaned === 'balanced' ||
+            cleaned === 'weighted' ||
+            cleaned === 'combined'
+        ) {
+            if (obj['sort_by'] !== 'blended') {
+                obj['sort_by'] = 'blended'
+                return true
+            }
+            return false
+        }
+    }
+    return healSortByField(obj)
 }
 
 /** Read-safe preprocessor for search schemas: normalizes search filters without synthesizing `content` or write `tags`. */
@@ -345,6 +397,7 @@ export function healSearchPayload(val: unknown): unknown {
     if (unpackFilterContainers(obj)) modified = true
     if (coerceEntryIdField(obj)) modified = true
     if (normalizeTagsField(obj)) modified = true
+    if (healTagListField(obj, 'exclude_tags')) modified = true
 
     if ('entry_type' in obj && typeof obj['entry_type'] === 'string') {
         const mapped = mapKnownEntryTypeAlias(obj['entry_type'].toLowerCase())
@@ -354,7 +407,7 @@ export function healSearchPayload(val: unknown): unknown {
         }
     }
 
-    if (healSortByField(obj)) modified = true
+    if (healSearchSortBy(obj)) modified = true
     if (normalizeProjectFields(obj)) modified = true
     if (healIncludeArchivedField(obj)) modified = true
 
