@@ -15,7 +15,21 @@ import {
     buildPriorAuditSection,
     sanitizeCopilotTarget,
     sanitizePromptTarget,
+    validateAdversarialPromptScope,
 } from './adversarial-helpers.js'
+
+export const AUDIT_PROMPT_REVISION = '2026-11-14-audit-pass24'
+
+export function buildSharedAuditPreamble(target: string, targetKind = 'file or module'): string {
+    return `Prompt revision: ${AUDIT_PROMPT_REVISION}.
+Target: ${target}
+
+If the target is '{target}', determine it from the user's request. If the user hasn't specified a target ${targetKind}, ask them for it now.
+
+This prompt is shared by every project. Audit the repository the user named. Do not assume that repository is memory-journal-mcp, and do not copy this server's directory layout, commit script, or parameter-normalizer filenames onto a different codebase. Discover those in the target.
+
+If \`memory://briefing/{repo}\` cannot be read, continue the audit. Bind \`workspace_id\` and \`project_number\` only from the registry entry for the repository the user named. If that pair is missing, do not call \`create_entry\`. Record the resource failure.`
+}
 
 export interface AuditPromptBodyContext {
     target: string
@@ -50,6 +64,11 @@ export function buildAuditPromptDefinition(spec: AuditPromptSpec): InternalPromp
             runtime?: object | null
         ) => {
             const parsed = auditArgsSchema.parse(args ?? {})
+            const scope = validateAdversarialPromptScope(
+                parsed.workspace_id,
+                parsed.project_number,
+                briefingConfig
+            )
             const target = sanitizePromptTarget(parsed.target ?? '{target}')
             const copilotInstruction = buildCopilotStep(
                 parsed.copilot === 'true',
@@ -60,9 +79,10 @@ export function buildAuditPromptDefinition(spec: AuditPromptSpec): InternalPromp
                 spec.tag,
                 spec.heading,
                 briefingConfig,
-                parsed.workspace_id,
+                scope.effectiveWorkspaceId,
                 parsed.target,
-                runtime
+                runtime,
+                scope.projectNumber
             )
             return {
                 messages: [

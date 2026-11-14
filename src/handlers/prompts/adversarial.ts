@@ -19,22 +19,29 @@ import {
     sanitizePromptTarget,
     buildPlanReviewPriorContextSection,
     buildSubagentProtocolGuidance,
+    validateAdversarialPromptScope,
 } from './adversarial-helpers.js'
-import { buildAuditPromptDefinition, buildStandardAuditClosing } from './adversarial-audit-factory.js'
+import {
+    buildAuditPromptDefinition,
+    buildSharedAuditPreamble,
+    buildStandardAuditClosing,
+} from './adversarial-audit-factory.js'
 import { getCodeQualityAuditPromptDefinition } from './adversarial-code-quality.js'
-
-const TARGET_PREAMBLE = (kind: string): string =>
-    `If the target is '{target}', determine it from the user's request. If the user hasn't specified a target ${kind}, ask them for it now.`
 
 function getPlanReviewPromptDefinition(): InternalPromptDef {
     return {
         name: 'adversarial-plan-review',
         description:
-            'Bootstrap an adversarial planning workflow with structured review dimensions, scoring rubric, and prior plan context from the journal. Optional parameters: topic, depth, copilot, workspace_id.',
+            'Bootstrap an adversarial planning workflow with structured review dimensions, scoring rubric, and prior plan context from the journal. Optional parameters: topic, depth, copilot, workspace_id, project_number.',
         icons: [ICON_PROMPT],
         arguments: PLAN_REVIEW_ARGUMENTS,
         handler: (args: Record<string, string> | undefined, db: IDatabaseAdapter, _teamDb?: IDatabaseAdapter, _github?: unknown, briefingConfig?: BriefingConfig, runtime?: object | null) => {
             const parsed = planReviewArgsSchema.parse(args ?? {})
+            const scope = validateAdversarialPromptScope(
+                parsed.workspace_id,
+                parsed.project_number,
+                briefingConfig
+            )
             const topic = sanitizePromptTarget(parsed.topic ?? '{topic}')
             const depth: ReviewDepth = parsed.depth ?? 'standard'
             const useCopilot = parsed.copilot === 'true'
@@ -44,8 +51,9 @@ function getPlanReviewPromptDefinition(): InternalPromptDef {
                 topic,
                 parsed.topic,
                 briefingConfig,
-                parsed.workspace_id,
-                runtime
+                scope.effectiveWorkspaceId,
+                runtime,
+                scope.projectNumber
             )
 
             const dimensionsTable = buildDimensionsTable(depth)
@@ -125,15 +133,13 @@ ${priorContextSection}`,
 
 const securityAudit = buildAuditPromptDefinition({
     name: 'adversarial-audit-security',
-    description: 'Multi-pass adversarial security audit (threat modeling, attack surfaces) Optional parameters: target, copilot, workspace_id',
+    description: 'Multi-pass adversarial security audit (threat modeling, attack surfaces) Optional parameters: target, copilot, workspace_id, project_number',
     tag: 'security-audit',
     heading: 'Prior security audits',
     copilotCommand: (t) =>
         `gh copilot -- -p "Perform a security audit on ${t} looking for injection vectors, auth/authz gaps, data boundaries, and agent-specific risks like prompt injection, excessive agency, or tool poisoning." --allow-all`,
     body: ({ target, copilotInstruction, priorAuditSection }) => `# Adversarial Security Audit
-Target: ${target}
-
-${TARGET_PREAMBLE('file or module')}
+${buildSharedAuditPreamble(target, 'file or module')}
 
 1. Perform a multi-pass security audit. For large targets or full-repository audits, spawn parallel read-only subagents by architectural domain. In Cursor use the Task tool with subagent type \`explore\` or \`generalPurpose\`. On any other host use that host's read-only subagent tool. Treat all external inputs as untrusted until verified. Depending on the target, evaluate:
    ${buildSubagentProtocolGuidance()}
@@ -151,15 +157,13 @@ ${buildStandardAuditClosing(copilotInstruction, priorAuditSection)}`,
 
 const performanceAudit = buildAuditPromptDefinition({
     name: 'adversarial-audit-performance',
-    description: 'Multi-pass adversarial performance audit (profiling, stress-testing) Optional parameters: target, copilot, workspace_id',
+    description: 'Multi-pass adversarial performance audit (profiling, stress-testing) Optional parameters: target, copilot, workspace_id, project_number',
     tag: 'performance-audit',
     heading: 'Prior performance audits',
     copilotCommand: (t) =>
         `gh copilot -- -p "Perform a performance audit on ${t} looking for N+1 queries, unnecessary allocations, and hot-path bottlenecks." --allow-all`,
     body: ({ target, copilotInstruction, priorAuditSection }) => `# Adversarial Performance Audit
-Target: ${target}
-
-${TARGET_PREAMBLE('file or module')}
+${buildSharedAuditPreamble(target, 'file or module')}
 
 1. Perform a multi-pass performance audit looking for N+1 queries, unnecessary allocations, and hot-path bottlenecks. For large targets or full-repository audits, spawn parallel read-only subagents by architectural domain (for example Database and Query Plans, Vector and Sandbox Execution, Server Dispatch and Observability). In Cursor use the Task tool with subagent type \`explore\` or \`generalPurpose\`. On any other host use that host's read-only subagent tool.
    ${buildSubagentProtocolGuidance()}
@@ -182,14 +186,12 @@ ${priorAuditSection}`,
 
 const seoAudit = buildAuditPromptDefinition({
     name: 'adversarial-audit-seo',
-    description: 'Adversarial SEO audit (technical, semantic HTML, ARIA, structured data, Core Web Vitals) Optional parameters: target, copilot, workspace_id',
+    description: 'Adversarial SEO audit (technical, semantic HTML, ARIA, structured data, Core Web Vitals) Optional parameters: target, copilot, workspace_id, project_number',
     tag: 'seo-audit',
     heading: 'Prior SEO audits',
     copilotCommand: (t) => `gh copilot -- -p "Perform an SEO and Core Web Vitals audit on ${t}." --allow-all`,
     body: ({ target, copilotInstruction, priorAuditSection }) => `# Adversarial SEO Audit
-Target: ${target}
-
-${TARGET_PREAMBLE('file or module')}
+${buildSharedAuditPreamble(target, 'file or module')}
 
 1. Perform a multi-pass audit. For a large site, spawn read-only subagents. In Cursor use the Task tool with subagent type \`explore\` or \`generalPurpose\`. Check:
    - Technical SEO (meta tags, Open Graph, canonicals, viewport).
@@ -201,15 +203,13 @@ ${buildStandardAuditClosing(copilotInstruction, priorAuditSection)}`,
 
 const skillAudit = buildAuditPromptDefinition({
     name: 'adversarial-audit-skill',
-    description: 'Multi-pass adversarial skill audit (research, evaluate triggers, stress-test) Optional parameters: target, copilot, workspace_id',
+    description: 'Multi-pass adversarial skill audit (research, evaluate triggers, stress-test) Optional parameters: target, copilot, workspace_id, project_number',
     tag: 'skill-audit',
     heading: 'Prior skill audits',
     copilotCommand: (t) =>
         `gh copilot -- -p "Evaluate the agent skill at ${t} for trigger reliability, safety gates, and frontmatter compliance. When viewing or reading files, always provide the 'path' parameter correctly." --allow-all`,
     body: ({ target, copilotInstruction, priorAuditSection }) => `# Adversarial Skill Audit
-Target: ${target}
-
-${TARGET_PREAMBLE('skill')}
+${buildSharedAuditPreamble(target, 'skill')}
 
 1. **Subagent Research Phase**: Use the host's web search tool for official docs, release notes, and credible write-ups of the latest practices and version changes for the target skill. In Cursor use the Task tool with subagent type \`explore\` or \`generalPurpose\` when the skill tree is large. Wait for those findings.
 2. **Gap Analysis**: Compare the subagent research findings against the current skill's contents to identify missing context, outdated information, or new version features.
@@ -225,15 +225,13 @@ ${priorAuditSection}`,
 
 const workflowAudit = buildAuditPromptDefinition({
     name: 'adversarial-audit-workflow',
-    description: 'Multi-pass adversarial workflow audit (clarity, safety gates, loop prevention) Optional parameters: target, copilot, workspace_id',
+    description: 'Multi-pass adversarial workflow audit (clarity, safety gates, loop prevention) Optional parameters: target, copilot, workspace_id, project_number',
     tag: 'workflow-audit',
     heading: 'Prior workflow audits',
     copilotCommand: (t) =>
         `gh copilot -- -p "Evaluate the workflow ${t} for sequential clarity, human-in-the-loop safety gates, and infinite loop prevention." --allow-all`,
     body: ({ target, copilotInstruction, priorAuditSection }) => `# Adversarial Workflow Audit
-Target: ${target}
-
-${TARGET_PREAMBLE('workflow')}
+${buildSharedAuditPreamble(target, 'workflow')}
 
 1. Evaluate the workflow for sequential clarity, human-in-the-loop safety gates, and infinite loop prevention. For a large workflow tree, spawn read-only subagents. In Cursor use the Task tool with subagent type \`explore\` or \`generalPurpose\`.
 ${buildStandardAuditClosing(copilotInstruction, priorAuditSection)}`,

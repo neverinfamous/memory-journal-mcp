@@ -5,12 +5,16 @@
  */
 
 import type { InternalPromptDef } from './index.js'
-import { buildAuditPromptDefinition } from './adversarial-audit-factory.js'
+import {
+    AUDIT_PROMPT_REVISION,
+    buildAuditPromptDefinition,
+    buildSharedAuditPreamble,
+} from './adversarial-audit-factory.js'
 
-export const CODE_QUALITY_PROMPT_REVISION = '2026-11-13-audit-pass23'
+export const CODE_QUALITY_PROMPT_REVISION = AUDIT_PROMPT_REVISION
 
 const SCAN_METHOD_1 = `     \`\`\`powershell
-     $skip = @('vendor','third_party','node_modules','dist','coverage','build','.next','out')
+     $skip = @('.git','vendor','third_party','node_modules','dist','coverage','build','.next','out','.wrangler','.turbo','.output','.svelte-kit','.test-output')
      $n = 0
      $over = 0
      function Walk($dir) {
@@ -18,7 +22,7 @@ const SCAN_METHOD_1 = `     \`\`\`powershell
        foreach ($item in (Get-ChildItem -LiteralPath $dir -Force)) {
          if ($skip -contains $item.Name) { continue }
          if ($item.PSIsContainer) { Walk $item.FullName; continue }
-         if ($item.Name -cmatch '\\.(ts|tsx|js|mjs|cjs)$' -and $item.Name -cnotmatch '\\.(test|spec)\\.') {
+         if ($item.Name -cmatch '\\.(ts|tsx|js|mjs|cjs)$' -and $item.Name -cnotmatch '\\.(test|spec)\\.' -and $item.Name -cnotmatch '\\.d\\.ts$') {
            $script:n++
            $parts = [System.IO.File]::ReadAllText($item.FullName) -split '\\r?\\n'
            $lines = $parts.Length
@@ -28,13 +32,19 @@ const SCAN_METHOD_1 = `     \`\`\`powershell
          }
        }
      }
-     Walk 'src'
-     Walk 'scripts'
+     if ((Test-Path -LiteralPath 'src') -or (Test-Path -LiteralPath 'scripts')) {
+       Walk 'src'
+       Walk 'scripts'
+     } else {
+       foreach ($top in (Get-ChildItem -LiteralPath '.' -Directory)) {
+         if (-not $top.Name.StartsWith('.') -and ($skip -notcontains $top.Name)) { Walk $top.FullName }
+       }
+     }
      Write-Output ('SCAN_OK scanned=' + $n + ' over500=' + $over)
      \`\`\``
 
 const SCAN_METHOD_2 = `     \`\`\`javascript
-import {readdirSync as r,statSync as s,readFileSync as f} from 'fs';import {join as j} from 'path';const skip=new Set(['vendor','third_party','node_modules','dist','coverage','build','.next','out']);let n=0,over=0;function w(d){if(!s(d,{throwIfNoEntry:false}))return;for(const x of r(d)){if(skip.has(x))continue;const p=j(d,x);if(s(p).isDirectory())w(p);else if(/\\.(ts|tsx|js|mjs|cjs)$/.test(x)&&!/\\.(test|spec)\\./.test(x)){n++;const parts=f(p,'utf8').split(/\\r?\\n/);const l=parts.length>0&&parts[parts.length-1]===''?parts.length-1:parts.length;if(l>500){over++;console.log(l,p)}else if(l>=451)console.log('WATCH',l,p)}}}}w('src');w('scripts');console.log('SCAN_OK scanned='+n+' over500='+over);
+import {readdirSync as r,statSync as s,readFileSync as f} from 'fs';import {join as j} from 'path';const skip=new Set(['.git','vendor','third_party','node_modules','dist','coverage','build','.next','out','.wrangler','.turbo','.output','.svelte-kit','.test-output']);let n=0,over=0;function w(d){if(!s(d,{throwIfNoEntry:false}))return;for(const x of r(d)){if(skip.has(x))continue;const p=j(d,x);if(s(p).isDirectory())w(p);else if(/\\.(ts|tsx|js|mjs|cjs)$/.test(x)&&!/\\.(test|spec)\\./.test(x)&&!/\\.d\\.ts$/.test(x)){n++;const parts=f(p,'utf8').split(/\\r?\\n/);const l=parts.length>0&&parts[parts.length-1]===''?parts.length-1:parts.length;if(l>500){over++;console.log(l,p)}else if(l>=451)console.log('WATCH',l,p)}}}}if(s('src',{throwIfNoEntry:false})||s('scripts',{throwIfNoEntry:false})){w('src');w('scripts');}else{for(const top of r('.')){if(!top.startsWith('.')&&!skip.has(top)&&s(top,{throwIfNoEntry:false})?.isDirectory())w(top);}}console.log('SCAN_OK scanned='+n+' over500='+over);
      \`\`\``
 
 const TEMP_SCRIPT_RULE =
@@ -42,7 +52,7 @@ const TEMP_SCRIPT_RULE =
 
 const DETECTORS = `     1. **Silent Catch Block Detector**: Find every \`catch\` in production source, including \`catch (e)\` and multiline catches. A catch is silent when its body does not log, rethrow, or return a structured error. Quote the body. Keep intentional best-effort fallbacks out of the table. Do not flag a catch that returns the project's structured handler error.
      2. **Cross-Platform Path Separator Assumption Detector**: Flag filesystem prefix checks (\`startsWith\` / \`endsWith\` on a resolved path without a separator boundary) and hardcoded \`'\\\\'\` or \`'/'\` used to test real filesystem paths. Prefer \`path.relative()\` and \`path.sep\`. Ignore URL, route, glob, and SQL slashes. Case-fold only on Windows.
-     3. **Cognitive Complexity & Nesting Hotspot Scan (parent-owned)**: Flag functions over 80 lines or control-flow nesting deeper than 4, measured by a script, not by eye (for example the TypeScript compiler API via \`createRequire(path.join(process.cwd(), 'package.json'))('typescript')\` over \`path.join(process.cwd(), 'src')\`, skipping \`vendor\` and \`third_party\`). To run it, ${TEMP_SCRIPT_RULE}. The script must print \`COMPLEXITY_OK files=<n> over80=<n> nestgt4=<n>\`; a script that does not print that line failed. Count an else-if chain, and a chained conditional (\`a ? b : c ? d : e\`), as one decision. Measure inner handlers and real helpers, not registration factories whose body is a table of tool, prompt, resource, route, or schema definitions; such a factory over 450 lines is a watch item, even when its file exceeds 500 lines.
+     3. **Cognitive Complexity & Nesting Hotspot Scan (parent-owned)**: Flag functions over 80 lines or control-flow nesting deeper than 4, measured by a script, not by eye (for example the TypeScript compiler API via \`createRequire(path.join(process.cwd(), 'package.json'))('typescript')\` over \`path.join(process.cwd(), 'src')\`, falling back to top-level non-hidden, non-skipped source directories when \`src\` is absent, and skipping \`vendor\`, \`third_party\`, \`node_modules\`, \`dist\`, \`coverage\`, \`build\`, \`.next\`, \`out\`, \`*.test.*\`, \`*.spec.*\`, \`*.d.ts\`). To run it, ${TEMP_SCRIPT_RULE}. The script must print \`COMPLEXITY_OK files=<n> over80=<n> nestgt4=<n>\`; a script that does not print that line failed. Count an else-if chain, and a chained conditional (\`a ? b : c ? d : e\`), as one decision. Measure inner handlers and real helpers, not registration factories whose body is a table of tool, prompt, resource, route, or schema definitions; such a factory over 450 lines is a watch item, even when its file exceeds 500 lines.
      4. **Schema-to-Handler Parameter Drift Check**: Every input-schema property is consumed by the handler or rewritten by that project's own parameter-normalization layer. Do not assume a file named \`param-normalizer.ts\` exists. Quote the schema field and the handler or normalizer read. Ignore fields that are forwarded as a whole parsed object.
      5. **Uncleaned Timer / EventListener Detector**: Flag \`setInterval\`, retained \`setTimeout\` handles, \`fs.watch\`, and \`process\` / server / filesystem / worker \`.on(\` registrations that lack \`unref()\`, \`clear*\`, or \`close()\` / \`finally\` cleanup. An awaited one-shot delay is not a leak.
      6. **Type-safety Detector**: Flag \`any\`, \`as any\`, \`z.any()\` in Zod schemas (unless explicitly documented for arbitrary untrusted JSON passthrough), TypeScript postfix non-null assertions (\`value!\`), definite assignment (\`!:\`), and a double assertion (\`as unknown as\`) that reads a property the source type does not declare. Ignore GraphQL \`Type!\`, \`!=\`, and \`!condition\`. Leave SDK boundary casts alone. Do not file every \`as\` on a database row.
@@ -60,26 +70,19 @@ const DETECTORS = `     1. **Silent Catch Block Detector**: Find every \`catch\`
 
 function buildCodeQualityBody(target: string, copilotInstruction: string, priorAuditSection: string): string {
     return `# Adversarial Code Quality Audit
-Prompt revision: ${CODE_QUALITY_PROMPT_REVISION}.
-Target: ${target}
-
-If the target is '{target}', determine it from the user's request. If the user hasn't specified a target file or module, ask them for it now.
-
-This prompt is shared by every project. Audit the repository the user named. Do not assume that repository is memory-journal-mcp, and do not copy this server's directory layout, commit script, or parameter-normalizer filenames onto a different codebase. Discover those in the target.
-
-If \`memory://briefing/{repo}\` cannot be read, continue the audit. Bind \`workspace_id\` and \`project_number\` only from the registry entry for the repository the user named. If that pair is missing, do not call \`create_entry\`. Record the resource failure.
+${buildSharedAuditPreamble(target, 'file or module')}
 
 1. Scan the target for dead code, duplication, type safety, magic values, complexity, boundary validation, monkey-patching, unused variables/exports, unhandled promises, and global scope pollution:
-   - **Evidence & Low-Severity Rules**: File dead code, duplication, magic values, unused exports, and floating promises only when you quote them, and count those as **Low**. Ignore samples that exist only inside prompt template strings in every detector.
+   - **Evidence & Low-Severity Rules**: File dead code, duplication, magic values, unused exports, and floating promises only when you quote them, and count those as **Low**. Ignore illustrative bad-code examples inside audit detector descriptions, but DO audit executable tool calls, API namespaces, and workspace/project attributions generated by prompt and skill templates.
    - **Subagent Orchestration**: For a large or full-repository audit, run step 2 first and pass the \`SCAN_OK\` result to parallel read-only subagents partitioned by subsystem (assigning each directory to one subagent). In Cursor use the Task tool (\`explore\` or \`generalPurpose\`); on any other host use that host's read-only subagent tool. Put the parent conversation id in every subagent prompt (or, if unavailable, the audit date, repository name, and prompt revision). Subagents are read-only: no edits, commits, or journal entries. They read full function bodies (not only grep hits), treat a grep-only detector as \`not run\`, skip step 2 scans, mark Detector 3 \`not run\`, and return one coverage line per detector (\`run\`, \`not run\`, or \`nothing found\`) plus at most 8 Moderate and 5 Low ranked findings (path, line number, raw one-line quote, severity, one-sentence fix). The parent runs any detector a subagent skipped before reporting it clean and merges parallel copies of one pattern into one finding that cites both sites.
    - **Severity Calibration**: Cross-workspace mutation is **Critical**; wrong-tool dispatch, false success, a dropped isolation field, or a file over 500 lines is **High**. A primary-key update that already rejects a workspace mismatch is **Moderate**. A database-wide maintenance function with no scope parameter (or optional workspace kept database-wide on purpose) is a product note, not an automatic Critical. Merge one pattern across call sites into one finding before ranking. Assign prompt and schema modules so they are not skipped.
    - **Parent Verification & Caps**: The parent dedupes a handler that drops a field and the callee branch it reaches into one finding with both lines, re-reads every Critical/High citation (and any cross-workspace, authz, or false-success citation marked Moderate), strips one wrapping backtick pair, and drops any citation whose quote is not a substring of that one physical line. Cap Moderate at 8 and Low at 5 per subsystem (parent table max: 12 Moderate, 8 Low; never cap Critical or High). Record which directories were opened and which detectors found nothing.
    - **Mandatory Deep-Quality Detectors**: Run all 11 detectors on every audit (Detector 3 by the parent only).
 ${DETECTORS}
-2. **Scan for files exceeding 500 lines using two redundant methods.** Run both from the target repository root, scoped to \`src\` and \`scripts\` when those directories exist (\`src\` only if \`scripts\` is absent). Skip test files and vendored or build trees (\`vendor\`, \`src/vendor\`, \`third_party\`, \`node_modules\`, \`dist\`, \`coverage\`, \`build\`, \`.next\`, \`out\`) by name before descending, in every detector. Both methods count lines by splitting on \`\\r?\\n\` and dropping one trailing empty segment, match extensions case-sensitively, and must print the same \`SCAN_OK scanned=<n> over500=<n>\` counts plus \`WATCH <lines> <path>\` for each file of 451 to 500 lines. A scan that does not print that line failed; a healer banner before SCAN_OK does not fail it, but scanned=0 does (never treat that as zero files over 500 lines).
+2. **Scan for files exceeding 500 lines using two redundant methods.** Run both from the target repository root, scoped to \`src\` and \`scripts\` when those directories exist, or falling back to top-level non-hidden, non-skipped directories when neither exists. Skip test files, declaration files (\`*.d.ts\`), and vendored, cache, or build trees (\`.git\`, \`vendor\`, \`src/vendor\`, \`third_party\`, \`node_modules\`, \`dist\`, \`coverage\`, \`build\`, \`.next\`, \`out\`, \`.wrangler\`, \`.turbo\`, \`.output\`, \`.svelte-kit\`, \`.test-output\`) by name before descending, in every detector. Both methods count lines by splitting on \`\\r?\\n\` and dropping one trailing empty segment, match extensions case-sensitively, and must print the same \`SCAN_OK scanned=<n> over500=<n>\` counts plus \`WATCH <lines> <path>\` for each file of 451 to 500 lines. A scan that does not print that line failed; a healer banner before SCAN_OK does not fail it, but scanned=0 does (never treat that as zero files over 500 lines).
    - **Method 1 (Native PowerShell)**:
 ${SCAN_METHOD_1}
-   - **Method 2 (Bun file)**: ${TEMP_SCRIPT_RULE}. Do not pass it to \`node\`. The walk can take more than 60 seconds. If \`bun\` is unavailable or the script does not print \`SCAN_OK\`, report method 2 as \`not run\` and method 1 stands.
+   - **Method 2 (Bun file)**: ${TEMP_SCRIPT_RULE}. Do not pass it to \`node\`. The walk can take more than 60 seconds. If \`bun\` is unavailable in PATH (or the script does not print \`SCAN_OK\`), report method 2 as \`not run (bun unavailable)\` and method 1 stands.
 ${SCAN_METHOD_2}
 
 > [!IMPORTANT]
@@ -92,7 +95,7 @@ ${SCAN_METHOD_2}
 7. Commit with the target repository's own commit helper when one exists. Discover that helper. Do not invent a script path. Do not add an audit plan file to the repository.
 **Rule**: If you don't make changes, do not commit.
 
-Load prior code-quality audits by the tag \`code-quality-audit\`, not by a hybrid search for that phrase.
+If the Prior code-quality audits section below is empty because the prior workspace resolved to \`default\`, load prior code-quality audits for the target repository's workspace by the tag \`code-quality-audit\` (not by a hybrid search for that phrase); if entries or an explicit non-\`default\` workspace are already shown below, do not re-query.
 
 ${priorAuditSection}`
 }
@@ -101,7 +104,7 @@ export function getCodeQualityAuditPromptDefinition(): InternalPromptDef {
     return buildAuditPromptDefinition({
         name: 'adversarial-audit-code-quality',
         description:
-            'Multi-pass adversarial code quality audit (dead code, type safety, silent failures, workspace isolation, complexity, file size). Optional parameters: target, copilot, workspace_id',
+            'Multi-pass adversarial code quality audit (dead code, type safety, silent failures, workspace isolation, complexity, file size). Optional parameters: target, copilot, workspace_id, project_number',
         tag: 'code-quality-audit',
         heading: 'Prior code-quality audits',
         copilotCommand: (copilotTarget) =>
