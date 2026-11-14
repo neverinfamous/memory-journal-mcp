@@ -71,12 +71,20 @@ function recoverCodeFromParamsRecord(params: Record<string, unknown>): string | 
             content: contentVal ?? '',
             entry_type:
                 getNonEmptyString(entryObj, params, ['type', 'entry_type', 'category']) ??
-                'technical_decision',
+                'technical_note',
             tags: Array.isArray(entryObj['tags']) ? entryObj['tags'] : [],
         }
-        const projVal = parseProjectNumberField(entryObj, params)
+        const entryWs = readWorkspaceField(entryObj, {})
+        const outerWs = entryObj !== params ? readWorkspaceField(params, {}) : undefined
+        const entryProj = parseProjectNumberField(entryObj, {})
+        const outerProj = entryObj !== params ? parseProjectNumberField(params, {}) : undefined
+        const wsDiffersFromOuter =
+            entryWs !== undefined &&
+            (entryWs.trim().toLowerCase() === 'default' ||
+                (outerWs !== undefined && entryWs.trim().toLowerCase() !== outerWs.trim().toLowerCase()))
+        const projVal = entryProj ?? (!wsDiffersFromOuter ? outerProj : undefined)
         if (projVal !== undefined) payload['project_number'] = projVal
-        const wsVal = readWorkspaceField(entryObj, params)
+        const wsVal = entryWs ?? (entryProj === undefined ? outerWs : undefined)
         if (wsVal !== undefined) payload['workspace_id'] = wsVal
         const sessVal = getNonEmptyString(entryObj, params, ['session_id', 'sessionId'])
         if (sessVal !== undefined) payload['session_id'] = sessVal
@@ -201,7 +209,14 @@ export function resolveExecutionPayload(
     }
 
     if (healingEnabled && executionCode !== undefined && executionCode !== '' && !recoveredJs) {
-        if (initial.sourceKey === 'query' && isNaturalLanguagePrompt(executionCode)) {
+        const trimmedInitial = executionCode.trim()
+        const isPlainQuery =
+            initial.sourceKey === 'query' &&
+            trimmedInitial !== '' &&
+            !trimmedInitial.startsWith('{') &&
+            !/\b(?:const|let|var|function|return|await|mj\.|import|export)\b/.test(trimmedInitial) &&
+            !/^(?:SELECT|INSERT|UPDATE|DELETE|PRAGMA|SHOW|DESCRIBE|EXPLAIN|WITH|SCHEMA|TABLES)\b/i.test(trimmedInitial)
+        if (isPlainQuery || (initial.sourceKey === 'query' && isNaturalLanguagePrompt(executionCode))) {
             executionCode = buildQuerySearch(executionCode, input, params)
         } else {
             executionCode = healCodeModeScript(executionCode)
@@ -249,10 +264,10 @@ function recoverFromContextField(ctxVal: unknown): string | undefined {
             const entryPayload: Record<string, unknown> = {
                 title: typeof ctxVal['title'] === 'string' ? ctxVal['title'] : 'Journal Entry',
                 content: typeof ctxVal['content'] === 'string' ? ctxVal['content'] : ctxVal['instructions'],
-                entry_type: typeof ctxVal['type'] === 'string' ? ctxVal['type'] : 'technical_decision',
+                entry_type: typeof ctxVal['type'] === 'string' ? ctxVal['type'] : 'technical_note',
             }
             if (wsVal !== undefined) entryPayload['workspace_id'] = wsVal
-            if (projVal !== undefined) entryPayload['project_number'] = projVal
+            if (projVal !== undefined && wsVal?.toLowerCase() !== 'default') entryPayload['project_number'] = projVal
             return `return await mj.createEntry(${JSON.stringify(entryPayload)});`
         }
     }

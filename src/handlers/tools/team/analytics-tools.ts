@@ -62,7 +62,7 @@ export function getTeamAnalyticsTools(context: ToolContext): ToolDefinition[] {
                     const alignedProject =
                         resolveTeamProjectNumber(context, wsId, project_number, workspace_id) ??
                         undefined
-                    if (alignedProject === undefined) {
+                    if (wsId === '*' && alignedProject === undefined) {
                         return missingTeamProjectNumberError(
                             'Missing project_number. Cross-tenant statistics without project_number are not allowed.'
                         )
@@ -203,11 +203,14 @@ export function getTeamAnalyticsTools(context: ToolContext): ToolDefinition[] {
 
                     const { period, limit, project_number, workspace_id } = TeamCollaborationMatrixSchema.parse(params)
                     const workspaceId = resolveWorkspaceId(workspace_id, project_number, context.config)
-                    const projectNumber = alignedProjectFilter(
-                        workspaceId,
-                        project_number,
-                        context.config?.projectRegistry
-                    )
+                    const projectNumber =
+                        resolveTeamProjectNumber(context, workspaceId, project_number, workspace_id) ??
+                        undefined
+                    if (workspaceId === '*' && projectNumber === undefined) {
+                        return missingTeamProjectNumberError(
+                            'Missing project_number. Cross-tenant collaboration matrices without project_number are not allowed.'
+                        )
+                    }
                     const matrix = teamDb.getTeamCollaborationMatrix({
                         period,
                         limit,

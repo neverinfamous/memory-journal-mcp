@@ -159,7 +159,8 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                         context,
                         projectNumber,
                         input.issue_number,
-                        input.issue_url
+                        input.issue_url,
+                        wsId
                     )
 
                     const entry = teamDb.createEntry({

@@ -25,9 +25,14 @@ export function extractAndRecoverEntryCode(code: string): string | null {
         /\b(?:createEntry|teamCreateEntry|appendEntry|create_entry|team_create_entry|addMemory|createMemory|saveMemory)\b/i.test(
             code
         )
-    const isUpdate = /\b(?:updateEntry|teamUpdateEntry|update_entry|team_update_entry|updateMemory)\b/i.test(code)
+    const isStrictUpdate =
+        /\b(?:updateEntry|teamUpdateEntry|update_entry|team_update_entry)\b/i.test(code)
+    const isLegacyUpdateAlias = !isStrictUpdate && /\bupdateMemory\b/i.test(code)
+    const isUpdate =
+        isStrictUpdate || (isLegacyUpdateAlias && /\b(?:entry_id|id)\s*:\s*\d+/i.test(code))
+    const isTeamCall = /\b(?:teamCreateEntry|teamUpdateEntry|team_create_entry|team_update_entry)\b/i.test(code)
 
-    if (!isCreate && !isUpdate) return null
+    if (!isCreate && !isStrictUpdate && !isLegacyUpdateAlias) return null
 
     const backtickMatch =
         /\bcontent\s*:\s*`([\s\S]*?)`(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\)))/i.exec(code)
@@ -65,7 +70,7 @@ export function extractAndRecoverEntryCode(code: string): string | null {
 
     const typeMatch = /\b(?:entry_type|type)\s*:\s*['"]([^'"]+)['"]/i.exec(scanCode)
     const titleMatch =
-        /\btitle\s*:\s*[`'"]([\s\S]*?)`['"](?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\)))/i.exec(scanCode) ??
+        /\btitle\s*:\s*[`'"]([\s\S]*?)[`'"](?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\)))/i.exec(scanCode) ??
         /\btitle\s*:\s*['"]([^'"]+)['"]/i.exec(scanCode)
     const projectMatch =
         /\b(?:project_number|projectNumber|project_id|projectId|project_name|projectName|project)\s*:\s*(?:(\d+)|(['"`])([^'"`]+)\2)/i.exec(scanCode)
@@ -84,7 +89,7 @@ export function extractAndRecoverEntryCode(code: string): string | null {
 
     const payload: Record<string, unknown> = {
         content,
-        entry_type: typeMatch?.[1] ?? 'technical_decision',
+        entry_type: typeMatch?.[1] ?? 'technical_note',
     }
 
     const title = titleMatch?.[1]?.replace(/\\+'/g, "'").replace(/\\+"/g, '"').replace(/\\`/g, '`')
@@ -152,6 +157,8 @@ export function extractAndRecoverEntryCode(code: string): string | null {
         }
     }
 
-    const fnName = isUpdate && payload['entry_id'] !== undefined ? 'mj.updateEntry' : 'mj.createEntry'
+    const fnName = isUpdate
+        ? (isTeamCall ? 'mj.team.teamUpdateEntry' : 'mj.updateEntry')
+        : (isTeamCall ? 'mj.team.teamCreateEntry' : 'mj.createEntry')
     return `return await ${fnName}(${JSON.stringify(payload)});`
 }

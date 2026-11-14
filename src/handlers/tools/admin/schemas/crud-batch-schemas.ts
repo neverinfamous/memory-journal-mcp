@@ -248,12 +248,27 @@ function inheritRootBatchScope(
     const hasConcreteTargetWs =
         itemTargetWs !== undefined &&
         (typeof itemTargetWs.value !== 'string' || itemTargetWs.value.trim() !== '')
+    const itemIsDefaultWs =
+        itemWs !== undefined &&
+        typeof itemWs.value === 'string' &&
+        itemWs.value.trim().toLowerCase() === 'default'
+    const rootIsDefaultWs =
+        rootWs !== undefined &&
+        typeof rootWs.value === 'string' &&
+        rootWs.value.trim().toLowerCase() === 'default'
     const namesOtherWorkspace =
         differsFromRoot(itemWs) || (hasConcreteTargetWs && differsFromRoot(itemTargetWs))
-    if (inheritProject && itemProj === undefined && rootProj !== undefined && !namesOtherWorkspace) {
+    if (
+        inheritProject &&
+        itemProj === undefined &&
+        rootProj !== undefined &&
+        !namesOtherWorkspace &&
+        !itemIsDefaultWs &&
+        !(itemWs === undefined && rootIsDefaultWs)
+    ) {
         itemObj[rootProj.key] = rootProj.value
     }
-    if (itemWs === undefined && rootWs !== undefined) {
+    if (itemWs === undefined && itemProj === undefined && rootWs !== undefined) {
         itemObj[rootWs.key] = rootWs.value
     }
 }

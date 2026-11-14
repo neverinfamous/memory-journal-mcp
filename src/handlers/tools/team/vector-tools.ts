@@ -10,6 +10,7 @@ import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { logger } from '../../../utils/logger.js'
+import { relaxedNumber, StrictProjectNumberSchema } from '../schemas.js'
 import {
     TEAM_DB_ERROR_RESPONSE,
     batchFetchAuthors,
@@ -73,7 +74,7 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                             input.project_number,
                             input.workspace_id
                         ) ?? undefined
-                    if (projectNumber === undefined) {
+                    if (wsId === '*' && projectNumber === undefined) {
                         return missingTeamProjectNumberError(
                             'Missing project_number. Cross-tenant searches without project_number are not allowed.'
                         )
@@ -281,7 +282,7 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
             description:
                 'Rebuild the team semantic search vector index from all existing team entries. Requires TEAM_DB_PATH. [REQUIRES ADMIN SCOPE]',
             group: 'team',
-            inputSchema: z.object({ workspace_id: z.string().optional() }).strict(),
+            inputSchema: z.object({ workspace_id: z.string().optional(), project_number: relaxedNumber().optional() }).strict(),
             outputSchema: TeamRebuildVectorIndexOutputSchema,
             annotations: {
                 readOnlyHint: false,
@@ -299,7 +300,10 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     const parsed = z
-                        .object({ workspace_id: z.string().optional() })
+                        .object({
+                            workspace_id: z.string().optional(),
+                            project_number: StrictProjectNumberSchema.optional(),
+                        })
                         .strict()
                         .parse(params ?? {})
 
@@ -316,10 +320,21 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
+                    if (parsed.workspace_id?.trim() === '*' && parsed.project_number !== undefined) {
+                        return {
+                            success: false,
+                            entriesIndexed: 0,
+                            error: "Cannot combine wildcard workspace_id '*' with project_number.",
+                            code: 'VALIDATION_ERROR',
+                            category: 'validation',
+                            recoverable: true,
+                        }
+                    }
+
                     const wsId =
                         parsed.workspace_id?.trim() === '*'
                             ? '*'
-                            : resolveWorkspaceId(parsed.workspace_id, undefined, context.config)
+                            : resolveWorkspaceId(parsed.workspace_id, parsed.project_number, context.config)
                     const { success, indexed, failed, firstError } =
                         await teamVectorManager.rebuildIndex(progress, { workspaceId: wsId })
 

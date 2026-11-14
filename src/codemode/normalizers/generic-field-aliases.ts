@@ -62,7 +62,7 @@ export function cleanSdkMetadataKeys(obj: Record<string, unknown>): void {
     delete obj['_tool_name']
     delete obj['_meta']
     for (const key of Object.keys(obj)) {
-        if (key.startsWith('_') && key !== '_journal') {
+        if (key.startsWith('_') && key !== '_journal' && key !== '_alias_derived_workspace') {
             const strippedKey = key.replace(/^_+/, '')
             if (strippedKey.length > 0 && obj[strippedKey] === undefined) obj[strippedKey] = obj[key]
             Reflect.deleteProperty(obj, key)
@@ -270,7 +270,10 @@ function applyProjectNameAlias(rawVal: unknown, obj: Record<string, unknown>): P
     if (projectNumber !== undefined && obj['project_number'] === undefined) {
         obj['project_number'] = projectNumber
     }
-    if (obj['workspace_id'] === undefined) obj['workspace_id'] = matchedKey
+    if (obj['workspace_id'] === undefined) {
+        obj['workspace_id'] = matchedKey
+        obj['_alias_derived_workspace'] = true
+    }
     return 'applied'
 }
 

@@ -59,7 +59,7 @@ async function prepareBatchEntry(
         )
     }
 
-    const issueUrl = await resolveIssueUrl(context, pNumber, e.issue_number, e.issue_url)
+    const issueUrl = await resolveIssueUrl(context, pNumber, e.issue_number, e.issue_url, wsId)
     const resolvedAnchors = resolveEntryAnchors(e.anchors, e.auto_context, wsId, context)
 
     return {

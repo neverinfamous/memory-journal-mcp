@@ -168,11 +168,19 @@ export function synthesizeNaturalLanguageOrEntryPayload(executionCode: string, i
     const titleVal = resolveTitle(entryObj, rawObj, executionCode, groupNameVal, learnedVal)
     const typeVal =
         getNonEmptyString(entryObj, rawObj, ['type', 'entry_type', 'category']) ??
-        (learnedVal !== undefined ? 'personal_reflection' : 'technical_decision')
+        (learnedVal !== undefined ? 'personal_reflection' : 'technical_note')
     const tagsVal = collectTags(entryObj, rawObj, groupNameVal, learnedVal)
 
-    const projVal = parseProjectNumberField(entryObj, rawObj)
-    const wsVal = readWorkspaceField(entryObj, rawObj)
+    const entryWs = !isFlatCall ? readWorkspaceField(entryObj, {}) : undefined
+    const outerWs = readWorkspaceField(rawObj, {})
+    const entryProj = !isFlatCall ? parseProjectNumberField(entryObj, {}) : undefined
+    const outerProj = parseProjectNumberField(rawObj, {})
+    const wsDiffersFromOuter =
+        entryWs !== undefined &&
+        (entryWs.trim().toLowerCase() === 'default' ||
+            (outerWs !== undefined && entryWs.trim().toLowerCase() !== outerWs.trim().toLowerCase()))
+    const projVal = entryProj ?? (!wsDiffersFromOuter ? outerProj : undefined)
+    const wsVal = entryWs ?? (entryProj === undefined ? outerWs : undefined)
     const sessVal = getNonEmptyString(entryObj, rawObj, ['session_id', 'sessionId'])
     const trustVal = normalizeUnitScore(
         entryObj['trust'] ?? rawObj['trust'] ?? entryObj['trust_score'] ?? rawObj['trust_score'] ??

@@ -145,7 +145,7 @@ function unwrapNestedExecuteCode(src: string): string {
                 .replace(/[:.]+$/, '')
                 .trim()
             const title = firstLine.length > 0 && firstLine.length < 80 ? firstLine : 'Journal Entry'
-            return `return await mj.core.createEntry({\n  title: ${JSON.stringify(title)},\n  content: ${JSON.stringify(inner)},\n  entry_type: "technical_decision"\n});`
+            return `return await mj.core.createEntry({\n  title: ${JSON.stringify(title)},\n  content: ${JSON.stringify(inner)},\n  entry_type: "technical_note"\n});`
         }
         return inner
     }

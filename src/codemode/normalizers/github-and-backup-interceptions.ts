@@ -87,14 +87,24 @@ function leafEquals(methodName: string, names: readonly string[]): boolean {
 }
 
 function mapGithubTextKeys(methodName: string, obj: Record<string, unknown>): void {
-    const isCreateIssue = leafEquals(methodName, ['create_github_issue', 'createGithubIssue'])
+    const isCreateIssue = leafEquals(methodName, [
+        'create_github_issue',
+        'createGithubIssue',
+        'create_github_issue_with_entry',
+        'createGithubIssueWithEntry',
+    ])
     const isMilestoneWrite = leafEquals(methodName, [
         'create_github_milestone',
         'createGithubMilestone',
         'update_github_milestone',
         'updateGithubMilestone',
     ])
-    const isCloseIssue = leafEquals(methodName, ['close_github_issue', 'closeGithubIssue'])
+    const isCloseIssue = leafEquals(methodName, [
+        'close_github_issue',
+        'closeGithubIssue',
+        'close_github_issue_with_entry',
+        'closeGithubIssueWithEntry',
+    ])
 
     for (const key of ['text', 'message', 'description'] as const) {
         if (obj[key] === undefined) continue

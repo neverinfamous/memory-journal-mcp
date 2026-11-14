@@ -286,16 +286,22 @@ export function getCreateGitHubIssueTool(context: ToolContext): ToolDefinition {
                     workspaceId,
                 })
 
-                // 2. Perform external mutation
-                const issue = await resolved.github.createIssue(
-                    resolved.owner,
-                    resolved.repo,
-                    input.title,
-                    input.body,
-                    input.labels,
-                    input.assignees,
-                    input.milestone_number
-                )
+                // 2. Perform external mutation; soft-delete orphaned [PENDING] entry if call throws
+                let issue: Awaited<ReturnType<typeof resolved.github.createIssue>>
+                try {
+                    issue = await resolved.github.createIssue(
+                        resolved.owner,
+                        resolved.repo,
+                        input.title,
+                        input.body,
+                        input.labels,
+                        input.assignees,
+                        input.milestone_number
+                    )
+                } catch (err) {
+                    db.deleteEntry(entry.id, false, workspaceId)
+                    throw err
+                }
 
                 if (!issue) {
                     db.updateEntry(entry.id, {

@@ -86,12 +86,18 @@ async function executeCloseIssueMutation(
         workspaceId,
     })
 
-    const result = await resolved.github.closeIssue(
-        resolved.owner,
-        resolved.repo,
-        input.issue_number,
-        input.comment
-    )
+    let result: Awaited<ReturnType<typeof resolved.github.closeIssue>>
+    try {
+        result = await resolved.github.closeIssue(
+            resolved.owner,
+            resolved.repo,
+            input.issue_number,
+            input.comment
+        )
+    } catch (err) {
+        db.deleteEntry(entry.id, false, workspaceId)
+        throw err
+    }
     if (!result) {
         db.updateEntry(entry.id, {
             content:

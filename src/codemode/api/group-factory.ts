@@ -68,7 +68,14 @@ export function createGroupApi(
                 if (dispatcher) {
                     return await dispatcher(tool.name, normalizedParams as Record<string, unknown>)
                 }
-                return await Promise.resolve(tool.handler(normalizedParams))
+                const cleanDirectParams = isRecord(normalizedParams)
+                    ? ((): Record<string, unknown> => {
+                          const cloned = { ...normalizedParams }
+                          delete cloned['_alias_derived_workspace']
+                          return cloned
+                      })()
+                    : normalizedParams
+                return await Promise.resolve(tool.handler(cleanDirectParams))
             } catch (error) {
                 return {
                     success: false,

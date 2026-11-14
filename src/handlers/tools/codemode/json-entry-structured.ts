@@ -185,25 +185,35 @@ function recoverEntryMutation(
     const entryParams = buildEntryParams(target, signals)
     const targetWs = readWorkspaceId(target)
     const origWs = readWorkspaceId(original)
-    if (targetWs === undefined && origWs !== undefined) {
+    const targetProj = readProjectNumber(target)
+    const origProj = readProjectNumber(original)
+    if (targetWs === undefined && targetProj === undefined && origWs !== undefined) {
         entryParams['workspace_id'] = origWs
     }
     if (
-        readProjectNumber(target) === undefined &&
+        targetProj === undefined &&
         (targetWs === undefined || targetWs === origWs) &&
-        targetWs?.toLowerCase() !== 'default'
+        targetWs?.toLowerCase() !== 'default' &&
+        !(targetWs === undefined && origWs?.toLowerCase() === 'default') &&
+        origProj !== undefined
     ) {
-        const projNum = readProjectNumber(original)
-        if (projNum !== undefined) entryParams['project_number'] = projNum
+        entryParams['project_number'] = origProj
     }
-    const isUpdate = op === 'update_entry' || op === 'update' || (entryId !== undefined && !signals.hasOp)
+    const isTeamOp = op === 'team_create_entry' || op === 'team_update_entry'
+    const isUpdate =
+        op === 'update_entry' ||
+        op === 'update' ||
+        op === 'team_update_entry' ||
+        (entryId !== undefined && !signals.hasOp)
     const content = entryParams['content']
     if (!isUpdate && (typeof content !== 'string' || content.trim() === '')) return null
-    if (isUpdate && entryId !== undefined) {
-        entryParams['entry_id'] = entryId
-        return `return await mj.admin.updateEntry(${JSON.stringify(entryParams)});`
+    if (isUpdate) {
+        if (entryId !== undefined) entryParams['entry_id'] = entryId
+        const updateFn = isTeamOp ? 'mj.team.teamUpdateEntry' : 'mj.admin.updateEntry'
+        return `return await ${updateFn}(${JSON.stringify(entryParams)});`
     }
-    return `return await mj.core.createEntry(${JSON.stringify(entryParams)});`
+    const createFn = isTeamOp ? 'mj.team.teamCreateEntry' : 'mj.core.createEntry'
+    return `return await ${createFn}(${JSON.stringify(entryParams)});`
 }
 
 function formatGetEntryById(
@@ -329,10 +339,10 @@ function resolveTitle(target: Record<string, unknown>, signals: PayloadSignals):
 
 function resolveEntryType(target: Record<string, unknown>): string {
     const rawType = target['entry_type'] ?? target['type'] ?? target['category']
-    if (typeof rawType !== 'string') return 'technical_decision'
+    if (typeof rawType !== 'string') return 'technical_note'
     const low = rawType.toLowerCase()
     if (low === 'code' || low === 'coding' || low === 'technical' || low === 'task') {
-        return 'technical_decision'
+        return 'technical_note'
     }
     return low
 }

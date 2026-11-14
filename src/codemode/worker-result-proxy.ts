@@ -106,16 +106,17 @@ function createFailedResultProxy(result: object): unknown {
             if (prop === 'error' && typeof errVal === 'string' && typeof codeVal === 'string') {
                 return `[${codeVal}] ${errVal}`
             }
-            if (prop in target) return Reflect.get(target, prop) as unknown
-            // [H7] `.length === 0` on a failed result must not read as an empty success.
-            if (prop === 'length') throw new Error(failedResultMessage(target))
-            if (typeof prop === 'string' && /^\d+$/.test(prop)) return undefined
+            // [H7] Collection properties on failed results must throw before `prop in target`
+            // so `{ success: false, entries: [] }` cannot read as an empty success.
             if (
                 prop === Symbol.iterator ||
+                prop === 'length' ||
                 (typeof prop === 'string' && RESULT_COLLECTION_KEYS.includes(prop))
             ) {
                 throw new Error(failedResultMessage(target))
             }
+            if (prop in target) return Reflect.get(target, prop) as unknown
+            if (typeof prop === 'string' && /^\d+$/.test(prop)) return undefined
             if (typeof prop === 'string' && FAILED_ARRAY_METHODS.includes(prop)) {
                 const message = failedResultMessage(target)
                 return () => {

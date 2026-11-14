@@ -281,7 +281,7 @@ function parseInsert(cleanSql: string, args: unknown[]): ParsedSql {
         payload['project_number'] = literalScope['project_number']
     }
     if (typeof payload['content'] !== 'string' || payload['content'] === '') return UNMAPPED
-    payload['entry_type'] ??= 'technical_decision'
+    payload['entry_type'] ??= 'technical_note'
     return { action: 'create', params: payload }
 }
 

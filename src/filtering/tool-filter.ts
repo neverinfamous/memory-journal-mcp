@@ -78,14 +78,14 @@ function resolveGroupAlias(name: string): string {
  * themselves members of the ToolGroup union, making a type predicate unsound.
  */
 function isGroup(name: string): boolean {
-    return resolveGroupAlias(name) in TOOL_GROUPS
+    return Object.hasOwn(TOOL_GROUPS, resolveGroupAlias(name))
 }
 
 /**
  * Check if a string is a valid meta-group name
  */
 function isMetaGroup(name: string): name is MetaGroup {
-    return name in META_GROUPS
+    return Object.hasOwn(META_GROUPS, name)
 }
 
 /**

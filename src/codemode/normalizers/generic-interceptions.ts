@@ -11,9 +11,11 @@ import {
     resolveCreateEntryProjectContext,
     synthesizeEntryMutationFields,
 } from './generic-field-aliases.js'
+import { DUMMY_SQL_EXECUTION_TOOL_NAMES } from '../../handlers/tools/core/dummy-healing/alias-catalog.js'
 
 const EXECUTE_METHODS = new Set([
     'execute', 'execute_code', 'executeCode', 'mj_execute_code', 'mjExecuteCode', 'mysql_execute_code', 'mysqlExecuteCode',
+    ...DUMMY_SQL_EXECUTION_TOOL_NAMES,
 ])
 const AUDIT_LOG_METHODS = new Set(['search_audit_log', 'searchAuditLog'])
 const GIT_METHODS = new Set([
@@ -114,18 +116,26 @@ export function applyGenericInterceptions(
                 }
                 const rawItemWs = item['workspace_id'] ?? item['workspaceId']
                 const itemWs = typeof rawItemWs === 'string' ? rawItemWs.trim() : undefined
+                const itemHasExplicitProj =
+                    item['project_number'] !== undefined ||
+                    item['projectNumber'] !== undefined ||
+                    item['project_id'] !== undefined ||
+                    item['projectId'] !== undefined
+                const itemIsDefaultWs = itemWs?.toLowerCase() === 'default'
+                const topIsDefaultWs = typeof topWs === 'string' && topWs.trim().toLowerCase() === 'default'
                 const itemNamesSameOrNoWs =
                     itemWs === undefined ||
                     itemWs === '' ||
                     (typeof topWs === 'string' &&
                         itemWs.toLowerCase() === topWs.trim().toLowerCase())
-                if ((itemWs === undefined || itemWs === '') && topWs !== undefined) {
+                if ((itemWs === undefined || itemWs === '') && !itemHasExplicitProj && topWs !== undefined) {
                     item['workspace_id'] = topWs
                 }
                 if (
-                    item['project_number'] === undefined &&
-                    item['projectNumber'] === undefined &&
+                    !itemHasExplicitProj &&
                     topProj !== undefined &&
+                    !itemIsDefaultWs &&
+                    !(topIsDefaultWs && (itemWs === undefined || itemWs === '')) &&
                     itemNamesSameOrNoWs
                 ) {
                     item['project_number'] = topProj

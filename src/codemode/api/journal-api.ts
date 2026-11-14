@@ -49,9 +49,11 @@ export class JournalApi {
     private readonly groupApiMap: Record<string, GroupApiRecord>
 
     private readonly registryProvider: ProjectRegistryProvider | undefined
+    private readonly hasDispatcher: boolean
 
     constructor(tools: ToolDefinition[], dispatcher?: ToolDispatcher, registryProvider?: ProjectRegistryProvider) {
         this.registryProvider = registryProvider
+        this.hasDispatcher = dispatcher !== undefined
         this.toolsByGroup = new Map()
         for (const tool of tools) {
             if (tool.group === 'codemode') continue
@@ -272,7 +274,7 @@ export class JournalApi {
         const existingDeleteProject = this.admin['deleteProject']
 
         if (typeof existingRegisterProject === 'function') {
-            const fallbackRegister = createRegisterProjectFn(this.core)
+            const fallbackRegister = this.hasDispatcher ? undefined : createRegisterProjectFn(this.core)
             this.admin['registerProject'] = async (...args: unknown[]): Promise<unknown> => {
                 if (isRecord(args[0])) return await existingRegisterProject(args[0])
                 if (typeof args[0] === 'string') {
@@ -282,11 +284,12 @@ export class JournalApi {
                         ...(typeof args[2] === 'number' ? { project_number: args[2] } : {}),
                     })
                 }
+                if (fallbackRegister === undefined) return await existingRegisterProject({})
                 return await fallbackRegister(...args)
             }
         }
         if (typeof existingUpdateProject === 'function') {
-            const fallbackUpdate = createUpdateProjectFn()
+            const fallbackUpdate = this.hasDispatcher ? undefined : createUpdateProjectFn()
             this.admin['updateProject'] = async (...args: unknown[]): Promise<unknown> => {
                 if (isRecord(args[0])) return await existingUpdateProject(args[0])
                 if (typeof args[0] === 'string') {
@@ -297,16 +300,18 @@ export class JournalApi {
                         ...(typeof args[3] === 'number' ? { project_number: args[3] } : {}),
                     })
                 }
+                if (fallbackUpdate === undefined) return await existingUpdateProject({})
                 return await fallbackUpdate(...args)
             }
         }
         if (typeof existingDeleteProject === 'function') {
-            const fallbackDelete = createDeleteProjectFn()
+            const fallbackDelete = this.hasDispatcher ? undefined : createDeleteProjectFn()
             this.admin['deleteProject'] = async (...args: unknown[]): Promise<unknown> => {
                 if (isRecord(args[0])) return await existingDeleteProject(args[0])
                 if (typeof args[0] === 'string') {
                     return await existingDeleteProject({ name: args[0] })
                 }
+                if (fallbackDelete === undefined) return await existingDeleteProject({})
                 return await fallbackDelete(...args)
             }
         }

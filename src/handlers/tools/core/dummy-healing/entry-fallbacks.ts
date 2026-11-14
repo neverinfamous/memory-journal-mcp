@@ -377,7 +377,18 @@ export function getEntryAndCodemodeFallbackToolDefinitions(
                             (t: ToolDefinition) => t.name === 'mj_execute_code'
                         )
                         if (codemodeTool !== undefined) {
-                            const res = await Promise.resolve(codemodeTool.handler(params))
+                            const forwardedParams =
+                                typeof params === 'object' && params !== null
+                                    ? ((): Record<string, unknown> => {
+                                          const rec = { ...(params as Record<string, unknown>) }
+                                          if (rec['repo'] === undefined && rec['repo_name'] !== undefined) {
+                                              rec['repo'] = rec['repo_name']
+                                              delete rec['repo_name']
+                                          }
+                                          return rec
+                                      })()
+                                    : params
+                            const res = await Promise.resolve(codemodeTool.handler(forwardedParams))
                             if (typeof res === 'object' && res !== null) {
                                 const resRecord = res as Record<string, unknown>
                                 if (resRecord['success'] === false) {

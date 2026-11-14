@@ -4,6 +4,10 @@ import type { ProjectRegistryEntry } from '../types/index.js'
 
 export type ProjectRegistry = Record<string, Pick<ProjectRegistryEntry, 'project_number'>>
 
+export function activeProjectRegistry(
+    registry?: Record<string, ProjectRegistryEntry>
+): Record<string, ProjectRegistryEntry> | undefined
+export function activeProjectRegistry(registry?: ProjectRegistry): ProjectRegistry | undefined
 export function activeProjectRegistry(registry?: ProjectRegistry): ProjectRegistry | undefined {
     return registry ?? loadProjectRegistryFromConfig()
 }

@@ -138,7 +138,7 @@ function naturalLanguageEntry(codeToExec: string): { title: string; content: str
         .replace(/[:.]+$/, '')
         .trim()
     const title = firstLine.length > 0 && firstLine.length < 80 ? firstLine : 'Journal Entry'
-    return { title, content: trimmed, entry_type: 'technical_decision' }
+    return { title, content: trimmed, entry_type: 'technical_note' }
 }
 
 async function executeCode(

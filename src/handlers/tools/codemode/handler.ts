@@ -4,6 +4,7 @@ import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { getRequestContext, requestContextStorage } from '../../../utils/request-context.js'
 import { runWithAuthContext, getAuthContext } from '../../../auth/auth-context.js'
 import { ConfigurationError } from '../../../types/errors.js'
+import { activeProjectRegistry } from '../../../utils/write-scope.js'
 import { createJournalApi } from '../../../codemode/api/journal-api.js'
 import type { SandboxResult } from '../../../codemode/types.js'
 
@@ -41,8 +42,12 @@ function filterToolsForSandbox(
         const rawTokens = context.config.filterConfig.raw
             .split(',')
             .map((s) => s.trim().toLowerCase())
-        if (rawTokens.includes('readonly') && !rawTokens.includes('-readonly')) {
-            isGlobalReadonly = true
+        for (const token of rawTokens) {
+            if (token === 'readonly' || token === '+readonly') {
+                isGlobalReadonly = true
+            } else if (token === '-readonly') {
+                isGlobalReadonly = false
+            }
         }
     }
     const isSandboxReadonly = Boolean(readonlyRequested) || isGlobalReadonly
@@ -151,7 +156,11 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                         dryRun: input.dry_run,
                     })
 
-                    const journalApi = createJournalApi(tools, secureDispatcher, () => context.config?.projectRegistry)
+                    const journalApi = createJournalApi(
+                        tools,
+                        secureDispatcher,
+                        () => activeProjectRegistry(context.config?.projectRegistry)
+                    )
                     const apiBindings = journalApi.createSandboxBindings(sessionContext.progress)
                     const schemas = journalApi.createSandboxSchemas()
 
@@ -161,7 +170,8 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                         sessionContext,
                         projectId,
                         numericProjectId,
-                        workspaceId
+                        workspaceId,
+                        explicitWorkspace
                     )
 
                     let execResult: SandboxResult | undefined

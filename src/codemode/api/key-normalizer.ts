@@ -184,16 +184,11 @@ function resolveAliasedKey(startKey: string, value: unknown, ctx: KeyContext): s
         return startKey
     }
     const contentKeys = startKey === 'text' || startKey === 'body' || startKey === 'note' || startKey === 'title'
-    if (
-        contentKeys &&
+    const isEntryMutation =
         methodName !== undefined &&
-        !(
-            isGithubTool ||
-            hasMethodToken(methodName, 'create') ||
-            hasMethodToken(methodName, 'update') ||
-            hasMethodToken(methodName, 'entry')
-        )
-    ) {
+        (hasMethodToken(methodName, 'create') || hasMethodToken(methodName, 'update')) &&
+        (hasMethodToken(methodName, 'entry') || hasMethodToken(methodName, 'entries'))
+    if (contentKeys && methodName !== undefined && !(isGithubTool || isEntryMutation)) {
         return startKey
     }
     return alias

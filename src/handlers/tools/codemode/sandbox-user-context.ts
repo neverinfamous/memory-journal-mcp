@@ -5,8 +5,10 @@
 
 import { isRecord } from '../../../codemode/normalizers/shared-utils.js'
 import { getRequestContext } from '../../../utils/request-context.js'
+import { activeProjectRegistry } from '../../../utils/write-scope.js'
 import type { ToolContext } from '../../../types/index.js'
 import { getNonEmptyString, type ExecuteCodeInput } from './natural-language-synthesizer.js'
+import { lookupRegistryEntry } from './session-context.js'
 
 function parseSizeInBytes(val: unknown): number | undefined {
     if (typeof val === 'number') return !Number.isNaN(val) && val > 0 ? val : undefined
@@ -50,12 +52,27 @@ export function buildSandboxUserContext(
     sessionContext: ToolContext,
     projectId: number | string | undefined,
     numericProjectId: number | undefined,
-    workspaceId: string | undefined
+    workspaceId: string | undefined,
+    explicitWorkspace?: boolean
 ): { userContext: Record<string, unknown>; requestedMaxResultSize: number | undefined } {
     const userContext = parseUserContext(input.context)
+    const reg = activeProjectRegistry(sessionContext.config?.projectRegistry)
+
+    const wsRegEntry =
+        workspaceId !== undefined && workspaceId !== '*' ? lookupRegistryEntry(reg, workspaceId) : undefined
+    const isDefaultOrUnnumberedExplicit =
+        explicitWorkspace === true &&
+        workspaceId !== undefined &&
+        (workspaceId.trim().toLowerCase() === 'default' ||
+            (wsRegEntry !== undefined && wsRegEntry.project_number === undefined))
 
     const resolvedProjectNumber =
-        numericProjectId ?? (typeof projectId === 'number' ? projectId : sessionContext.config?.defaultProjectNumber)
+        numericProjectId ??
+        (typeof projectId === 'number'
+            ? projectId
+            : isDefaultOrUnnumberedExplicit
+              ? undefined
+              : sessionContext.config?.defaultProjectNumber)
     const sessionFromUser = getNonEmptyString(userContext, {}, ['session_id', 'sessionId'])
     const resolvedSessionId =
         typeof input['session_id'] === 'string' && input['session_id'].length > 0
@@ -75,8 +92,8 @@ export function buildSandboxUserContext(
         userContext['workspace_id'] ??= resolvedWorkspaceId
         userContext['workspaceId'] ??= resolvedWorkspaceId
     }
-    if (sessionContext.config?.projectRegistry !== undefined) {
-        userContext['__mj_project_registry'] = sessionContext.config.projectRegistry
+    if (reg !== undefined) {
+        userContext['__mj_project_registry'] = reg
     } else {
         Reflect.deleteProperty(userContext, '__mj_project_registry')
     }

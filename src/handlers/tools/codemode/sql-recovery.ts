@@ -4,7 +4,6 @@
 
 import { scopeFromSqlLiterals } from '../../../codemode/sql-literal-scope.js'
 import { parseSqlStatement } from '../../../codemode/sql-positional-binder.js'
-import { extractAndRecoverEntryCode } from './json-entry-recovery.js'
 
 /**
  * Auto-heals raw SQL queries passed as code or script in Code Mode,
@@ -115,8 +114,11 @@ export function extractAndRecoverSqlCode(code: string): string | null {
     }
 
     if (/^INSERT\s+INTO\b/i.test(cleanSql)) {
-        const rec = extractAndRecoverEntryCode(cleanSql)
-        if (rec !== null) return rec
+        const parsedInsert = parseSqlStatement(cleanSql, [])
+        if (parsedInsert.action === 'create') {
+            const insertPayload = { ...scopeFields, ...parsedInsert.params }
+            return `return await mj.core.createEntry(${JSON.stringify(insertPayload)});`
+        }
         return null
     }
 

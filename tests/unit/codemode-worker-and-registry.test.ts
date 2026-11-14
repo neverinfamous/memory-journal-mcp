@@ -280,7 +280,7 @@ describe('Code Mode Worker Core & Project Registry Ops', () => {
                 content: 'Inserted body',
                 title: 'Inserted Title',
                 tags: ['ins-tag'],
-                entry_type: 'technical_decision',
+                entry_type: 'technical_note',
             })
 
             await (insertStmt['get'] as (...a: unknown[]) => Promise<unknown>)({

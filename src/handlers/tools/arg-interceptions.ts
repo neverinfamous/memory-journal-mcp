@@ -80,6 +80,20 @@ export const NUMBER_COERCIONS: readonly string[] = [
     'expected_version',
 ]
 
+function stripInternalNormalizerMarkers(val: unknown): unknown {
+    if (typeof val !== 'object' || val === null) return val
+    if (Array.isArray(val)) return val.map(stripInternalNormalizerMarkers)
+    const obj = { ...(val as Record<string, unknown>) }
+    delete obj['_alias_derived_workspace']
+    if (Array.isArray(obj['entries'])) {
+        obj['entries'] = obj['entries'].map(stripInternalNormalizerMarkers)
+    }
+    if (Array.isArray(obj['updates'])) {
+        obj['updates'] = obj['updates'].map(stripInternalNormalizerMarkers)
+    }
+    return obj
+}
+
 /**
  * Apply argument interceptions and hallucination healing for MCP tool calls.
  */
@@ -87,7 +101,9 @@ export function applyArgInterceptions(
     methodName: string,
     args: unknown[]
 ): { args: unknown[] } | { error: Record<string, unknown> } {
-    return applyCodeModeArgInterceptions(methodName, args)
+    const res = applyCodeModeArgInterceptions(methodName, args)
+    if ('error' in res) return res
+    return { args: res.args.map(stripInternalNormalizerMarkers) }
 }
 
 const projectNumberToNameCache = new WeakMap<
