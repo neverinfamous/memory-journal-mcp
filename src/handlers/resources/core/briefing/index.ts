@@ -19,7 +19,7 @@ import {
     setActiveSessionProject,
 } from '../../../../utils/workspace-resolver.js'
 import { exactRegistryKey, uniqueWorkspaceForProject } from '../../../../utils/write-scope.js'
-import { DEFAULT_BRIEFING_CONFIG, resourceWorkspace } from '../../shared.js'
+import { DEFAULT_BRIEFING_CONFIG, getBaseUri, resourceWorkspace } from '../../shared.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from '../../shared.js'
 import { buildGitHubSection } from './github-section.js'
 import {
@@ -31,6 +31,14 @@ import { formatUserMessage } from './user-message.js'
 import { buildInsightsSection } from './insights-section.js'
 import { buildSystemContext } from './system-section.js'
 
+function parsePinSessionOption(uri: string): boolean {
+    const queryIdx = uri.indexOf('?')
+    if (queryIdx === -1) return true
+    const hashIdx = uri.indexOf('#', queryIdx)
+    const rawQuery = hashIdx === -1 ? uri.slice(queryIdx + 1) : uri.slice(queryIdx + 1, hashIdx)
+    return new URLSearchParams(rawQuery).get('pin_session') !== 'false'
+}
+
 export const briefingResource: InternalResourceDef = {
     uri: 'memory://briefing',
     name: 'Initial Briefing',
@@ -40,8 +48,8 @@ export const briefingResource: InternalResourceDef = {
     mimeType: 'text/markdown',
     icons: [ICON_BRIEFING],
     annotations: withAutoRead(withSessionInit(withPriority(1.0, ASSISTANT_FOCUSED))),
-    handler: async (_uri: string, context: ResourceContext) => {
-        return buildBriefingData(context)
+    handler: async (uri: string, context: ResourceContext) => {
+        return buildBriefingData(context, undefined, { pinSession: parsePinSessionOption(uri) })
     },
 }
 
@@ -55,15 +63,17 @@ export const dynamicBriefingResource: InternalResourceDef = {
     icons: [ICON_BRIEFING],
     annotations: withPriority(0.9, ASSISTANT_FOCUSED),
     handler: async (uri: string, context: ResourceContext) => {
-        const match = /memory:\/\/briefing\/(.+)/.exec(uri)
+        const pinSession = parsePinSessionOption(uri)
+        const match = /memory:\/\/briefing\/(.+)/.exec(getBaseUri(uri))
         const repoName = match?.[1] ? decodeURIComponent(match[1]) : undefined
-        return buildBriefingData(context, repoName)
+        return buildBriefingData(context, repoName, { pinSession })
     },
 }
 
 export async function buildBriefingData(
     context: ResourceContext,
-    targetRepo?: string
+    targetRepo?: string,
+    options?: { pinSession?: boolean }
 ): Promise<ResourceResult> {
     const config = { ...DEFAULT_BRIEFING_CONFIG, ...context.briefingConfig }
 
@@ -101,7 +111,13 @@ export async function buildBriefingData(
                 activeRepoPath = hasRepoPath ? repoPath : undefined
                 activeGithub = hasRepoPath ? getGitHubIntegration(repoPath, context.runtime) : undefined
                 activeProjectNumber = registryEntry.project_number
-                setActiveSessionProject(resolvedRepo, activeProjectNumber ?? null, context.runtime)
+                if (options?.pinSession !== false) {
+                    setActiveSessionProject(
+                        resolvedRepo,
+                        activeProjectNumber ?? null,
+                        context.runtime
+                    )
+                }
             } else {
                 activeRepoPath = undefined
                 activeGithub = undefined
@@ -118,7 +134,9 @@ export async function buildBriefingData(
             activeProjectNumber = registeredDefault
             activeRepoPath = hasDefaultPath ? defaultPath : undefined
             activeGithub = hasDefaultPath ? getGitHubIntegration(defaultPath, context.runtime) : undefined
-            setActiveSessionProject('default', registeredDefault ?? null, context.runtime)
+            if (options?.pinSession !== false) {
+                setActiveSessionProject('default', registeredDefault ?? null, context.runtime)
+            }
         }
         if (!matchedTargetRepo) {
             activeWorkspaceId = targetRepo

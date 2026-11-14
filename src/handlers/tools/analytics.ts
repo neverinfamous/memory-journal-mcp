@@ -366,13 +366,23 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
                     )
                     const distribution = results.projects
                         .slice(0, 5)
-                        .map((p: Record<string, unknown>) => ({
-                            project_number: p['project_number'] as number,
-                            percentage: (totalEntries > 0
-                                ? ((p['entry_count'] as number) / totalEntries) * 100
-                                : 0
-                            ).toFixed(1),
-                        }))
+                        .map((p: Record<string, unknown>) => {
+                            const rawProjNum = p['project_number']
+                            const rawCount = p['entry_count']
+                            const projNum =
+                                typeof rawProjNum === 'number'
+                                    ? rawProjNum
+                                    : Number(rawProjNum ?? 0)
+                            const entryCount =
+                                typeof rawCount === 'number' ? rawCount : Number(rawCount ?? 0)
+                            return {
+                                project_number: projNum,
+                                percentage: (totalEntries > 0
+                                    ? (entryCount / totalEntries) * 100
+                                    : 0
+                                ).toFixed(1),
+                            }
+                        })
 
                     return {
                         success: true,

@@ -254,6 +254,34 @@ export function resolveWorkspaceId(
 }
 
 /**
+ * Resolve CLI query `(workspaceId, projectNumber)` while keeping `requestedProject` separated
+ * from `config.defaultProjectNumber` during `resolveWorkspaceId` (H4), then propagating an
+ * unclaimed `defaultProjectNumber` onto read queries when `workspaceId === 'default'`.
+ */
+export function resolveCliQueryScope(
+    explicitWorkspaceId: string | undefined,
+    requestedProject: number | undefined,
+    config?: WorkspaceResolverConfig
+): { workspaceId: string; projectNumber?: number } {
+    const workspaceId = resolveWorkspaceId(explicitWorkspaceId, requestedProject, config)
+    if (requestedProject !== undefined) {
+        return { workspaceId, projectNumber: requestedProject }
+    }
+    if (workspaceId === 'default' && config?.defaultProjectNumber !== undefined) {
+        const registry = config.projectRegistry ?? loadProjectRegistryFromConfig()
+        const safeProject = unclaimedByOtherWorkspace(
+            config.defaultProjectNumber,
+            workspaceId,
+            registry
+        )
+        if (safeProject !== undefined) {
+            return { workspaceId, projectNumber: safeProject }
+        }
+    }
+    return { workspaceId }
+}
+
+/**
  * Resolve `(workspaceId, projectNumber)` together for startup and scheduled auto-prune,
  * rejecting wildcard `'*'` config defaults and conflicting `(workspaceId, projectNumber)` pairs
  * while preserving explicit `'default'` and unregistered explicit/default project numbers.

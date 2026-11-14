@@ -113,6 +113,7 @@ export class ServerRuntime {
     public githubClientPool: Map<string, GitHubIntegration> | null = null
     public configManager: unknown = null
     public stopBackgroundTasks: (() => void) | null = null
+    public pendingVectorInit: Promise<void> | null = null
     public activeWorkspaceId: string | undefined = undefined
     public activeProjectNumber: number | undefined = undefined
 }

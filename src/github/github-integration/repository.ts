@@ -63,7 +63,7 @@ export class RepositoryManager {
         if (!remoteUrl) return { owner: null, repo: null }
 
         if (remoteUrl.startsWith('git@github.com:')) {
-            const pathPart = remoteUrl.replace('git@github.com:', '').replace('.git', '')
+            const pathPart = remoteUrl.replace('git@github.com:', '').replace(/\.git$/i, '')
             const parts = pathPart.split('/')
             if (parts.length >= 2) {
                 return { owner: parts[0] ?? null, repo: parts[1] ?? null }
@@ -73,7 +73,7 @@ export class RepositoryManager {
         try {
             const url = new URL(remoteUrl)
             if (url.hostname === 'github.com') {
-                const path = url.pathname.replace('.git', '').replace(/^\//, '')
+                const path = url.pathname.replace(/\.git$/i, '').replace(/^\//, '')
                 const parts = path.split('/')
                 if (parts.length >= 2) {
                     return { owner: parts[0] ?? null, repo: parts[1] ?? null }

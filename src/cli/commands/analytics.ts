@@ -2,19 +2,16 @@ import type { Command } from 'commander'
 import { type z } from 'zod'
 import { analyticsOptionsSchema } from '../schemas.js'
 import { getCliCommandDb as getDb } from './db-helper.js'
-import { resolveWorkspaceId } from '../../utils/workspace-resolver.js'
+import { resolveCliQueryScope } from '../../utils/workspace-resolver.js'
 
 export const analyticsSchema = analyticsOptionsSchema
 
 export async function analyticsStatsAction(options: z.infer<typeof analyticsSchema>, command: Command): Promise<void> {
     const { db, serverOptions } = await getDb(options, command)
     try {
-        const requestedProject = options.defaultProject
-        const workspaceId = resolveWorkspaceId(
+        const { workspaceId, projectNumber } = resolveCliQueryScope(
             options.workspace,
-            // [INVARIANT] Only a CLI-supplied project is explicit; the configured default stays a
-            // fallback inside `serverOptions` so it cannot override cwd/workspace pairing (H4).
-            requestedProject,
+            options.defaultProject,
             serverOptions
         )
         const result = db.getStatistics(
@@ -23,7 +20,7 @@ export async function analyticsStatsAction(options: z.infer<typeof analyticsSche
             undefined,
             undefined,
             workspaceId,
-            requestedProject
+            projectNumber
         )
         process.stdout.write(JSON.stringify(result, null, 2) + '\n')
     } catch (e) {
@@ -37,19 +34,16 @@ export async function analyticsStatsAction(options: z.infer<typeof analyticsSche
 export async function analyticsInsightsAction(options: z.infer<typeof analyticsSchema>, command: Command): Promise<void> {
     const { db, serverOptions } = await getDb(options, command)
     try {
-        const requestedProject = options.defaultProject
-        const workspaceId = resolveWorkspaceId(
+        const { workspaceId, projectNumber } = resolveCliQueryScope(
             options.workspace,
-            // [INVARIANT] Only a CLI-supplied project is explicit; the configured default stays a
-            // fallback inside `serverOptions` so it cannot override cwd/workspace pairing (H4).
-            requestedProject,
+            options.defaultProject,
             serverOptions
         )
         const result = db.getCrossProjectInsights({
             minEntries: 1,
             inactiveThresholdDays: 30,
             ...(workspaceId !== undefined ? { workspaceId } : {}),
-            ...(requestedProject !== undefined ? { projectNumber: requestedProject } : {}),
+            ...(projectNumber !== undefined ? { projectNumber } : {}),
         })
         process.stdout.write(JSON.stringify(result, null, 2) + '\n')
     } catch (e) {

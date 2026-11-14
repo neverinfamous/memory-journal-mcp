@@ -25,9 +25,13 @@ export const instructionsResource: InternalResourceDef = {
             ? getEnabledGroups(context.filterConfig.enabledTools)
             : undefined
 
-        const prompts = getPrompts().map((p) => {
-            const prompt = p as { name: string; description?: string }
-            return { name: prompt.name, description: prompt.description }
+        const prompts = getPrompts().flatMap((p) => {
+            if (!('name' in p) || typeof p.name !== 'string') return []
+            const desc =
+                'description' in p && typeof p.description === 'string'
+                    ? p.description
+                    : undefined
+            return [{ name: p.name, ...(desc !== undefined ? { description: desc } : {}) }]
         })
 
         const isCodeModeOnly = enabledTools.size === 1 && enabledTools.has('mj_execute_code')
@@ -39,11 +43,27 @@ export const instructionsResource: InternalResourceDef = {
         let finalEnabledGroups = enabledGroups
 
         if (isCodeModeOnly || context.filterConfig?.raw === 'codemode') {
-            const configManager = context.runtime?.configManager as { getConfig: () => { codemodeInternalFullAccess?: boolean } } | undefined
-            const currentConfig = configManager?.getConfig()
-            if (currentConfig?.codemodeInternalFullAccess === true) {
-                finalEnabledTools = allToolNames
-                finalEnabledGroups = new Set(Object.keys(TOOL_GROUPS) as ToolGroup[])
+            const rawMgr = context.runtime?.configManager
+            if (
+                rawMgr !== null &&
+                rawMgr !== undefined &&
+                typeof rawMgr === 'object' &&
+                'getConfig' in rawMgr &&
+                typeof rawMgr.getConfig === 'function'
+            ) {
+                const currentConfig: unknown = (rawMgr as { getConfig: () => unknown }).getConfig()
+                if (
+                    currentConfig !== null &&
+                    currentConfig !== undefined &&
+                    typeof currentConfig === 'object' &&
+                    'codemodeInternalFullAccess' in currentConfig &&
+                    currentConfig.codemodeInternalFullAccess === true
+                ) {
+                    finalEnabledTools = allToolNames
+                    finalEnabledGroups = new Set<ToolGroup>(
+                        Object.keys(TOOL_GROUPS).filter((k): k is ToolGroup => k in TOOL_GROUPS)
+                    )
+                }
             }
         }
 

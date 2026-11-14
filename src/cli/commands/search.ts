@@ -4,7 +4,7 @@ import { searchOptionsSchema } from '../schemas.js'
 import { getCliCommandDb as getDb } from './db-helper.js'
 import { VectorSearchManager } from '../../vector/vector-search-manager/index.js'
 import { hybridSearch } from '../../handlers/tools/search/hybrid.js'
-import { resolveWorkspaceId } from '../../utils/workspace-resolver.js'
+import { resolveCliQueryScope } from '../../utils/workspace-resolver.js'
 
 export const searchSchema = searchOptionsSchema
 
@@ -21,20 +21,18 @@ export async function searchAction(query: string | undefined, options: z.infer<t
         const mode = options.mode || 'auto'
         const limit = options.limit ?? 100
         const requestedProject = options.defaultProject
-        const workspaceId = resolveWorkspaceId(
+        const { workspaceId, projectNumber } = resolveCliQueryScope(
             options.workspace,
-            // [INVARIANT] Only a CLI-supplied project is explicit; the configured default stays a
-            // fallback inside `serverOptions` so it cannot override cwd/workspace pairing (H4).
             requestedProject,
             serverOptions
         )
         const workspaceFilter = workspaceId !== undefined ? { workspaceId } : {}
-        const projectFilter = requestedProject !== undefined ? { projectNumber: requestedProject } : {}
+        const projectFilter = projectNumber !== undefined ? { projectNumber } : {}
         let result: unknown
 
         if (mode === 'semantic') {
             const vectorManager = new VectorSearchManager(db, { modelName: serverOptions.embeddingModel })
-            result = await vectorManager.search(finalQuery, limit, 0.25, workspaceId, requestedProject)
+            result = await vectorManager.search(finalQuery, limit, 0.25, workspaceId, projectNumber)
         } else if (mode === 'hybrid') {
             const vectorManager = new VectorSearchManager(db, { modelName: serverOptions.embeddingModel })
             result = await hybridSearch(finalQuery, db, vectorManager, { limit, ...workspaceFilter, ...projectFilter })

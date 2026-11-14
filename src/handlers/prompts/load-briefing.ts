@@ -253,7 +253,15 @@ export function getLoadBriefingPromptDefinitions(): InternalPromptDef[] {
                 }
 
                 const uriList = resolvedUris
-                    .map((uri, index) => `${String(index + 1)}. ${uri}`)
+                    .map((uri, index) => {
+                        // [INVARIANT] H28: Secondary multi-project briefings must not overwrite the
+                        // primary active session project pin established for resolvedUris[0].
+                        const displayUri =
+                            index > 0 && uri.startsWith('memory://briefing/')
+                                ? `${uri}?pin_session=false`
+                                : uri
+                        return `${String(index + 1)}. ${displayUri}`
+                    })
                     .join('\n')
 
                 return {

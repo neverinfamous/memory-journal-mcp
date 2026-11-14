@@ -152,11 +152,15 @@ export async function fetchIssuesAndPrs(
     degraded?: boolean | undefined
 }> {
     try {
-        const issueLimit = Math.max(1, config.issueCount || 1)
+        // [INVARIANT] H29: When issueCount/prCount is 0 (summary count only), fetch enough items
+        // for accurate totals instead of capping at 1, while slicing lists to 0 below.
+        const issueLimit = config.issueCount > 0 ? config.issueCount : 100
         const prState = config.prStatusBreakdown ? ('all' as const) : ('open' as const)
         const prLimit = config.prStatusBreakdown
             ? Math.max(20, config.prCount)
-            : Math.max(1, config.prCount || 1)
+            : config.prCount > 0
+              ? config.prCount
+              : 100
 
         const [issues, prs] = await Promise.all([
             github.getIssues(owner, repo, 'open', issueLimit),

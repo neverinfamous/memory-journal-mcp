@@ -50,9 +50,9 @@ Stage your changes and commit. If your environment provides \`commit.ts\` (avail
 > **🛠️ AUTONOMOUS HEALING - PowerShell Operators:** If you are executing commands natively in Windows PowerShell, you MUST use semicolons (\`;\`) to chain commands. DO NOT use Unix shell operators like \`&&\` or \`||\`, as they will throw a ParserError.
 
 **\`commit.ts\` CLI Reference:**
-\\\`\\\`\\\`
+\`\`\`
 bun .\\.agents\\\\scripts\\\\commit.ts --msg "type(scope): subject" --impact <0.1-1.0> --confidence <0.1-1.0> --validation <passed|none|failed> --add <path> [--add <path2>]
-\\\`\\\`\\\`
+\`\`\`
 
 Key flags:
 - \`--msg\` / \`-m\`: Conventional commit subject (\`type(scope): message\`). Also accepted as the first positional argument.
@@ -111,9 +111,9 @@ Stage your changes and commit. If your environment provides \`commit.ts\` (avail
 > **🛠️ AUTONOMOUS HEALING - PowerShell Operators:** If you are executing commands natively in Windows PowerShell, you MUST use semicolons (\`;\`) to chain commands. DO NOT use Unix shell operators like \`&&\` or \`||\`, as they will throw a ParserError.
 
 **\`commit.ts\` CLI Reference:**
-\\\`\\\`\\\`
+\`\`\`
 bun .\\.agents\\\\scripts\\\\commit.ts --msg "type(scope): subject" --impact <0.1-1.0> --confidence <0.1-1.0> --validation <passed|none|failed> --add <path> [--add <path2>]
-\\\`\\\`\\\`
+\`\`\`
 
 Key flags:
 - \`--msg\` / \`-m\`: Conventional commit subject (\`type(scope): message\`). Also accepted as the first positional argument.

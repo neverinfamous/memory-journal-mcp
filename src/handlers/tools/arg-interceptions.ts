@@ -304,6 +304,19 @@ export function instrumentToolDefinitions(
     })
 }
 
+const CODEMODE_FLAT_PREFIXES = [
+    'mj_core_',
+    'mj_admin_',
+    'mj_search_',
+    'mj_analytics_',
+    'mj_relationships_',
+    'mj_io_',
+    'mj_github_',
+    'mj_git_',
+    'mj_backup_',
+    'mj_team_',
+]
+
 /**
  * Throw descriptive ResourceNotFoundError with Code Mode guidance when an unknown tool is called.
  */
@@ -340,9 +353,7 @@ export function throwToolNotFoundError(name: string): never {
     if (
         name.includes('.') ||
         name.startsWith('mj.') ||
-        name.startsWith('mj_core_') ||
-        name.startsWith('mj_admin_') ||
-        name.startsWith('mj_search_')
+        CODEMODE_FLAT_PREFIXES.some((prefix) => name.startsWith(prefix))
     ) {
         throw new ResourceNotFoundError(
             'Tool',

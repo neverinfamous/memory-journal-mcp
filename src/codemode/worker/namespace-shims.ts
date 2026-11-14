@@ -4,7 +4,7 @@
  */
 
 import { wrapResult } from '../worker-result-proxy.js'
-import { ENTRY_TYPES, SIGNIFICANCE_TYPES } from '../../handlers/tools/schemas/constants-and-primitives.js'
+import { JOURNAL_TABLES, getSchemaHelp, listJournalTables } from '../api/schema-help.js'
 
 export const DB_TO_JOURNAL: Record<string, [string, string]> = {
     count: ['analytics', 'getStatistics'],
@@ -169,44 +169,9 @@ export function wrapDelegatingTool(
     })
 }
 
-export const SHIM_TABLES = [
-    'memory_journal',
-    'tags',
-    'entry_tags',
-    'relationships',
-    'entry_anchors',
-    'entry_revisions',
-    'vec_embeddings',
-    'team_flags',
-]
+export const SHIM_TABLES = JOURNAL_TABLES
 
-export const schemaHelpFn = (): Promise<unknown> =>
-    Promise.resolve({
-        group: 'schema',
-        description:
-            'Memory Journal Schema: Embedded SQLite database storing journal entries, tags, relationships, code anchors, revisions, vector embeddings, and team flags.',
-        tables: SHIM_TABLES,
-        entrySchema: {
-            id: 'number (auto-increment primary key)',
-            content: 'string (required, markdown body)',
-            entry_type: ENTRY_TYPES.map((t) => `'${t}'`).join(' | '),
-            timestamp: 'string (ISO 8601 timestamp)',
-            is_personal: 'boolean (default: true)',
-            significance_type: `optional (${SIGNIFICANCE_TYPES.map((t) => `'${t}'`).join(' | ')})`,
-            tags: 'string[] (optional array of kebab-case tags)',
-            workspace_id: 'string (required repository/workspace identifier)',
-            project_number: 'number (optional GitHub project number)',
-            impact_score: 'number (0.0-1.0 blast radius score)',
-            trust_score: 'number (0.0-1.0 confidence score)',
-            validation_status: "'passed' | 'none' | 'failed'",
-            auto_context: 'string (optional JSON metadata string, e.g. { "commits": ["<sha>"] })',
-            session_id: 'string (optional session tracking id)',
-            relationships: 'Array<{ targetId: number, relationType?: string }> (optional entry links)',
-            anchors: 'Array<{ anchor_path: string, anchor_type: string, status?: string }> (optional code anchors)',
-        },
-        methods: ['help', 'describe', 'listTables', 'describeTable', 'getSchema'],
-        usage: 'Call mj.core.createEntry.schema() for entry parameter details, or mj.analytics.getStatistics() for database statistics.',
-    })
+export const schemaHelpFn = (): Promise<unknown> => getSchemaHelp()
 
 /**
  * Creates the `schema` shim proxy for `shimMj`.
@@ -222,17 +187,10 @@ export function createSchemaShim(shimMj: Record<string, unknown>): object {
         get(_t, p: string | symbol): unknown {
             if (p === 'then') return undefined
             if (p === 'help' || p === 'describe') return schemaHelpFn
-            if (p === 'listTables') {
-                return (): Promise<unknown> =>
-                    Promise.resolve({
-                        success: true,
-                        tables: SHIM_TABLES,
-                    })
-            }
+            if (p === 'listTables') return listJournalTables
             if (p === 'describeTable' || p === 'getSchema') return schemaHelpFn
             if (p === 'schema') return createSchemaShim(shimMj)
-            if (p === 'tables')
-                return SHIM_TABLES
+            if (p === 'tables') return SHIM_TABLES
             if (p === 'memory_journal' || p === 'entries' || p === 'journal' || p === 'memory') {
                 const coreGroup = shimMj['core']
                 if (isTargetLike(coreGroup)) {

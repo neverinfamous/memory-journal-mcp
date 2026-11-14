@@ -4,8 +4,8 @@
 
 import type { ToolGroup } from '../../types/filtering.js'
 import { sendProgress, type ProgressContext } from '../../utils/progress-utils.js'
-import { ENTRY_TYPES, SIGNIFICANCE_TYPES } from '../../handlers/tools/schemas/constants-and-primitives.js'
 import type { GroupApiRecord } from './types.js'
+import { JOURNAL_TABLES, getSchemaHelp, listJournalTables } from './schema-help.js'
 
 export interface SandboxBindingsSource {
     readonly core: GroupApiRecord
@@ -85,62 +85,32 @@ export function createHandleReadResource(api: SandboxBindingsSource): (uri?: str
     }
 }
 
-const JOURNAL_TABLES = [
-    'memory_journal',
-    'tags',
-    'entry_tags',
-    'relationships',
-    'entry_anchors',
-    'entry_revisions',
-    'vec_embeddings',
-    'team_flags',
-]
-
 export function createSchemaCallable(_analyticsApi: GroupApiRecord): unknown {
-    const schemaHelpFn = (): Promise<unknown> =>
-        Promise.resolve({
-            group: 'schema',
-            description:
-                'Memory Journal Schema: Embedded SQLite database storing journal entries, tags, relationships, code anchors, revisions, vector embeddings, and team flags.',
-            tables: JOURNAL_TABLES,
-            entrySchema: {
-                id: 'number (auto-increment primary key)',
-                content: 'string (required, markdown body)',
-                entry_type: ENTRY_TYPES.map((t) => `'${t}'`).join(' | '),
-                timestamp: 'string (ISO 8601 timestamp)',
-                is_personal: 'boolean (default: true)',
-                significance_type: `optional (${SIGNIFICANCE_TYPES.map((t) => `'${t}'`).join(' | ')})`,
-                tags: 'string[] (optional array of kebab-case tags)',
-                workspace_id: 'string (required repository/workspace identifier)',
-                project_number: 'number (optional GitHub project number)',
-                impact_score: 'number (0.0-1.0 blast radius score)',
-                trust_score: 'number (0.0-1.0 confidence score)',
-                validation_status: "'passed' | 'none' | 'failed'",
-                auto_context: 'string (optional JSON metadata string, e.g. { "commits": ["<sha>"] })',
-                session_id: 'string (optional session tracking id)',
-                relationships: 'Array<{ targetId: number, relationType?: string }> (optional entry links)',
-                anchors: 'Array<{ anchor_path: string, anchor_type: string, status?: string }> (optional code anchors)',
-            },
-            methods: ['help', 'describe', 'listTables', 'describeTable', 'getSchema'],
-            usage: 'Call mj.core.createEntry.schema() for parameter validation details, or mj.analytics.getStatistics() for database statistics.',
-        })
+    const usage =
+        'Call mj.core.createEntry.schema() for parameter validation details, or mj.analytics.getStatistics() for database statistics.'
+    const schemaHelpFn = (): Promise<unknown> => getSchemaHelp(usage)
 
-    return Object.assign(
-        schemaHelpFn,
-        {
-            help: schemaHelpFn,
-            describe: schemaHelpFn,
-            listTables: (): Promise<{ success: boolean; tables: string[] }> =>
-                Promise.resolve({ success: true, tables: JOURNAL_TABLES }),
-            describeTable: (tableName?: string): Promise<unknown> => {
-                const table = typeof tableName === 'string' ? tableName.toLowerCase() : 'memory_journal'
-                if (table === 'memory_journal' || table === 'entries' || table === 'journal' || table === 'memory')
-                    return schemaHelpFn()
-                return Promise.resolve({ table, description: `Table '${table}' in Memory Journal SQLite database.` })
-            },
-            getSchema: schemaHelpFn,
-        }
-    )
+    return Object.assign(schemaHelpFn, {
+        help: schemaHelpFn,
+        describe: schemaHelpFn,
+        listTables: listJournalTables,
+        describeTable: (tableName?: string): Promise<unknown> => {
+            const table = typeof tableName === 'string' ? tableName.toLowerCase() : 'memory_journal'
+            if (
+                table === 'memory_journal' ||
+                table === 'entries' ||
+                table === 'journal' ||
+                table === 'memory'
+            ) {
+                return schemaHelpFn()
+            }
+            return Promise.resolve({
+                table,
+                description: `Table '${table}' in Memory Journal SQLite database (tables: ${JOURNAL_TABLES.join(', ')}).`,
+            })
+        },
+        getSchema: schemaHelpFn,
+    })
 }
 
 export function buildSandboxBindingsMap(api: SandboxBindingsSource, progressCtx?: ProgressContext): Record<string, unknown> {

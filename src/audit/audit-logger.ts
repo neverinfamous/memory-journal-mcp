@@ -21,6 +21,7 @@ import { appendFile, mkdir, open, rename, stat, readFile } from 'node:fs/promise
 import { dirname } from 'node:path'
 import type { AuditConfig, AuditEntry, AuditSearchFilters } from './types.js'
 import { logger } from '../utils/logger.js'
+import { parseAuditLine, matchesAuditFilters } from './audit-query-helpers.js'
 
 // ============================================================================
 // Constants
@@ -42,27 +43,6 @@ function nodeErrorCode(err: unknown): string | undefined {
     if (typeof err !== 'object' || err === null || !('code' in err)) return undefined
     const code = err.code
     return typeof code === 'string' ? code : undefined
-}
-
-/** Parse one JSONL audit line; returns null for empty or unparseable lines. */
-function parseAuditLine(line: string | undefined): AuditEntry | null {
-    if (line === undefined || line === '') return null
-    try {
-        return JSON.parse(line) as AuditEntry
-    } catch {
-        return null
-    }
-}
-
-/** Whether an audit entry satisfies every provided search filter. */
-function matchesAuditFilters(entry: AuditEntry, filters: AuditSearchFilters): boolean {
-    if (filters.tool_name && entry.tool !== filters.tool_name) return false
-    if (filters.user && entry.user !== filters.user) return false
-    if (filters.status !== undefined && entry.success !== filters.status) return false
-    if (filters.category && entry.category !== filters.category) return false
-    if (filters.date_range?.start && entry.timestamp < filters.date_range.start) return false
-    if (filters.date_range?.end && entry.timestamp > filters.date_range.end) return false
-    return true
 }
 
 /**

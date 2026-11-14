@@ -41,12 +41,12 @@ export function extractAndRecoverEntryCode(code: string): string | null {
     const doubleMatch =
         /\bcontent\s*:\s*"([\s\S]*?)"(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\)))/i.exec(code)
     const fallbackMatch =
-        /\bcontent\s*:\s*[`'"]([\s\S]*?)(?:[`'"]\s*)?(?=,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\))/i.exec(
+        /\bcontent\s*:\s*([`'"])([\s\S]*?)(?:\1\s*)?(?=,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\))/i.exec(
             code
         )
 
     let content: string | undefined =
-        backtickMatch?.[1] ?? singleMatch?.[1] ?? doubleMatch?.[1] ?? fallbackMatch?.[1]
+        backtickMatch?.[1] ?? singleMatch?.[1] ?? doubleMatch?.[1] ?? fallbackMatch?.[2]
 
     if (content === undefined) {
         const altMatch = /\bcontent\s*:\s*`([\s\S]*?)`(?=,\s*[\w$]+\s*:|\s*\})/i.exec(code)
@@ -55,10 +55,10 @@ export function extractAndRecoverEntryCode(code: string): string | null {
 
     if (content === undefined) {
         const descMatch =
-            /\b(?:description|summary)\s*:\s*[`'"]([\s\S]*?)[`'"](?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\)))/i.exec(
+            /\b(?:description|summary)\s*:\s*(['"`])([\s\S]*?)\1(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\)))/i.exec(
                 code
             )
-        if (descMatch?.[1] !== undefined) content = descMatch[1]
+        if (descMatch?.[2] !== undefined) content = descMatch[2]
     }
 
     if (content === undefined || content === '') return null
@@ -68,10 +68,10 @@ export function extractAndRecoverEntryCode(code: string): string | null {
     const scanCode = code.split(content).join('')
     content = content.replace(/\\+'/g, "'").replace(/\\+"/g, '"').replace(/\\`/g, '`')
 
-    const typeMatch = /\b(?:entry_type|type)\s*:\s*['"]([^'"]+)['"]/i.exec(scanCode)
+    const typeMatch = /\b(?:entry_type|type)\s*:\s*(['"])([^'"]+)\1/i.exec(scanCode)
     const titleMatch =
-        /\btitle\s*:\s*[`'"]([\s\S]*?)[`'"](?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\)))/i.exec(scanCode) ??
-        /\btitle\s*:\s*['"]([^'"]+)['"]/i.exec(scanCode)
+        /\btitle\s*:\s*(['"`])([\s\S]*?)\1(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\)))/i.exec(scanCode) ??
+        /\btitle\s*:\s*(['"])([^'"]+)\1/i.exec(scanCode)
     const projectMatch =
         /\b(?:project_number|projectNumber|project_id|projectId|project_name|projectName|project)\s*:\s*(?:(\d+)|(['"`])([^'"`]+)\2)/i.exec(scanCode)
     const workspaceMatch = /\b(?:workspace_id|workspaceId|workspace)\s*:\s*(['"`])([^'"`]+)\1/i.exec(scanCode)
@@ -89,10 +89,10 @@ export function extractAndRecoverEntryCode(code: string): string | null {
 
     const payload: Record<string, unknown> = {
         content,
-        entry_type: typeMatch?.[1] ?? 'technical_note',
+        entry_type: typeMatch?.[2] ?? 'technical_note',
     }
 
-    const title = titleMatch?.[1]?.replace(/\\+'/g, "'").replace(/\\+"/g, '"').replace(/\\`/g, '`')
+    const title = titleMatch?.[2]?.replace(/\\+'/g, "'").replace(/\\+"/g, '"').replace(/\\`/g, '`')
     if (title !== undefined && title !== '') payload['title'] = title
 
     const entryIdMatch = /\b(?:entry_id|id)\s*:\s*(\d+)/i.exec(scanCode)

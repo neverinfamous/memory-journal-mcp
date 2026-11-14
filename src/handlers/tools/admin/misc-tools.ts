@@ -16,15 +16,12 @@ function auditScopeWarning(
     projectNumber: number | undefined,
     workspaceId: string | undefined
 ): { warning: string } | Record<string, never> {
-    const ignored: string[] = []
-    if (projectNumber !== undefined) {
-        ignored.push('project_number was ignored: audit log entries are not project-scoped')
+    const hasWorkspaceFilter = workspaceId !== undefined && workspaceId !== '*'
+    if (projectNumber === undefined && !hasWorkspaceFilter) return {}
+    return {
+        warning:
+            'Results filtered by active workspace_id/project_number scope; unscoped or legacy audit entries without scope metadata are excluded.',
     }
-    if (workspaceId !== undefined) {
-        ignored.push('workspace_id was ignored: audit log entries are not workspace-scoped')
-    }
-    if (ignored.length === 0) return {}
-    return { warning: `${ignored.join('; ')}, so results are not filtered by that scope.` }
 }
 
 export const MergeTagsSchemaMcp = z.preprocess(

@@ -27,7 +27,9 @@ const optimizeJournalArgsSchema = z.object({
         z.string().optional()
     ),
     autoRun: z.preprocess(
-        (val) => val === 'true' || val === true,
+        (val) =>
+            val === true ||
+            (typeof val === 'string' && ['true', '1', 'yes'].includes(val.trim().toLowerCase())),
         z.boolean().optional().default(false)
     ),
     mode: z.preprocess(
@@ -141,12 +143,22 @@ return graph;
 \`\`\``
 }
 
+function formatAutoPruneScopeArg(targetProject: string | undefined): string {
+    if (targetProject === undefined || targetProject === '') return '{}'
+    const numMatch = /^#?(\d+)$/.exec(targetProject.trim())
+    if (numMatch?.[1] !== undefined) {
+        return `{ project_number: ${numMatch[1]} }`
+    }
+    return `{ workspace_id: ${JSON.stringify(targetProject)} }`
+}
+
 function buildOptimizeWorkflowOptionsSection(
     targetDimension: string,
     optionCHeading: string,
     targetProject: string | undefined,
     limitDisplay: string
 ): string {
+    const autoPruneArg = formatAutoPruneScopeArg(targetProject)
     return `## Workflow Execution Options
 
 ### Option A: Quick Health & Priority Workspace Unassigned Audit (Executed Automatically)
@@ -176,7 +188,7 @@ ${optionCHeading}
      - 🛡️ **Trust Calibration**: Normalize trust scores (\`trust_score\` between \`0.90\`–\`1.00\` for verified code/tests).
      - 💥 **Impact Calibration**: Calibrate impact scores (\`impact_score\` between \`0.30\`–\`0.80\` based on blast radius).
      - 🏷️ **Tag Consolidation & Significance**: Assign explicit \`significance_type\`, enrich empty/generic tag lists, and merge synonymous tags globally via \`mj.admin.mergeTags({ source_tag, target_tag, workspace_id: '*' })\` (never iterate per-workspace to avoid "Tag not found" on subsequent scopes).
-     - 🧹 **Noise Pruning, Auto-Prune & Vector Parity**: Soft-delete zero-value transient noise (\`significanceType === null\`) via \`mj.admin.deleteEntry\`, run \`mj.admin.runAutoPrune({})\`, and verify \`mj.search.getVectorIndexStats({})\` (rebuilding via \`mj.admin.rebuildVectorIndex({})\` if drifted).
+     - 🧹 **Noise Pruning, Auto-Prune & Vector Parity**: Soft-delete zero-value transient noise (\`significanceType === null\`) via \`mj.admin.deleteEntry\`, run \`mj.admin.runAutoPrune(${autoPruneArg})\`, and verify \`mj.search.getVectorIndexStats({})\` (rebuilding via \`mj.admin.rebuildVectorIndex({})\` if drifted).
 3. **Subagent Batch Parallelization & Strict Isolation**:
    - Delegate domain project workloads to parallel subagents using \`Model: 'inherit'\`.
    - **Strict Isolation**: Subagents MUST NEVER write files to project directories; all scratch files must be saved in \`<appDataDir>\\\\brain\\\\<conversation-id>\\\\scratch\\\\\`.
@@ -262,20 +274,36 @@ export function getOptimizerPromptDefinitions(): InternalPromptDef[] {
                 _github?: unknown,
                 briefingConfig?: Partial<BriefingConfig>
             ) => {
-                const parsed = optimizeJournalArgsSchema.safeParse(args ?? {})
-                const lookback = parsed.success ? parsed.data.lookback : 10
-                const rawTargetProject = parsed.success ? parsed.data.project : undefined
+                // [INVARIANT] H27: Parse each field independently so one invalid numeric/enum
+                // option (e.g., lookback) never discards `project` scope or valid siblings.
+                const rawArgs = args ?? {}
+                const lookbackRes = optimizeJournalArgsSchema.shape.lookback.safeParse(
+                    rawArgs['lookback']
+                )
+                const lookback = lookbackRes.success ? lookbackRes.data : 10
+                const projectRes = optimizeJournalArgsSchema.shape.project.safeParse(
+                    rawArgs['project']
+                )
+                const rawTargetProject = projectRes.success ? projectRes.data : undefined
                 const targetProject =
                     rawTargetProject !== undefined && rawTargetProject !== ''
                         ? sanitizePromptTarget(rawTargetProject)
                         : undefined
-                const autoRun = parsed.success ? parsed.data.autoRun : false
-                const mode = parsed.success ? parsed.data.mode : 'quick'
-                const targetDimension = parsed.success ? parsed.data.targetDimension : 'all'
+                const autoRunRes = optimizeJournalArgsSchema.shape.autoRun.safeParse(
+                    rawArgs['autoRun']
+                )
+                const autoRun = autoRunRes.success ? autoRunRes.data : false
+                const modeRes = optimizeJournalArgsSchema.shape.mode.safeParse(rawArgs['mode'])
+                const mode = modeRes.success ? modeRes.data : 'quick'
+                const dimRes = optimizeJournalArgsSchema.shape.targetDimension.safeParse(
+                    rawArgs['targetDimension']
+                )
+                const targetDimension = dimRes.success ? dimRes.data : 'all'
                 const isAutonomousFull = autoRun || mode === 'full'
+                const limitRes = optimizeJournalArgsSchema.shape.limit.safeParse(rawArgs['limit'])
                 const entryLimit =
-                    parsed.success && parsed.data.limit !== undefined
-                        ? parsed.data.limit
+                    limitRes.success && limitRes.data !== undefined
+                        ? limitRes.data
                         : isAutonomousFull
                           ? 0
                           : 500

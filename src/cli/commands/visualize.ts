@@ -3,7 +3,7 @@ import { type z } from 'zod'
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import { visualizeOptionsSchema } from '../schemas.js'
 import { getCliCommandDb as getDb } from './db-helper.js'
-import { resolveWorkspaceId } from '../../utils/workspace-resolver.js'
+import { resolveCliQueryScope } from '../../utils/workspace-resolver.js'
 import * as fs from 'node:fs/promises'
 
 export const visualizeSchema = visualizeOptionsSchema
@@ -70,19 +70,16 @@ function renderMermaid(graph: RelationshipGraph): string {
 export async function visualizeAction(options: z.infer<typeof visualizeSchema>, command: Command): Promise<void> {
     const { db, serverOptions } = await getDb(options, command)
     try {
-        const requestedProject = options.defaultProject
-        const workspaceId = resolveWorkspaceId(
+        const { workspaceId, projectNumber } = resolveCliQueryScope(
             options.workspace,
-            // [INVARIANT] Only a CLI-supplied project is explicit; the configured default stays a
-            // fallback inside `serverOptions` so it cannot override cwd/workspace pairing (H4).
-            requestedProject,
+            options.defaultProject,
             serverOptions
         )
         const graph = db.visualizeRelationships({
             depth: 3,
             limit: 200,
             ...(workspaceId !== undefined ? { workspaceId } : {}),
-            ...(requestedProject !== undefined ? { projectNumber: requestedProject } : {}),
+            ...(projectNumber !== undefined ? { projectNumber } : {}),
         })
 
         const mermaid = renderMermaid(graph)

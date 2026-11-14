@@ -14,15 +14,24 @@ import { z } from 'zod'
 import { coerceNumber } from '../../utils/query-helpers.js'
 import { logger } from '../../utils/logger.js'
 
+function parseSupervisorBoolean(val: unknown): boolean | undefined {
+    if (val === undefined) return undefined
+    if (typeof val === 'boolean') return val
+    if (typeof val === 'string') {
+        const normalized = val.trim().toLowerCase()
+        if (normalized === '') return undefined
+        if (normalized === 'true' || normalized === '1' || normalized === 'yes') return true
+        if (normalized === 'false' || normalized === '0' || normalized === 'no') return false
+    }
+    return undefined
+}
+
 const cmsSupervisorArgsSchema = z.object({
     lookbackHours: z.preprocess(
         coerceNumber,
         z.number().int().min(1).max(168).optional().default(24)
     ),
-    autoRestore: z.preprocess(
-        (val) => val !== 'false' && val !== false,
-        z.boolean().optional().default(true)
-    ),
+    autoRestore: z.preprocess(parseSupervisorBoolean, z.boolean().optional().default(true)),
 })
 
 function fetchLatestNremSnippet(db: IDatabaseAdapter): string {
@@ -45,23 +54,31 @@ function fetchLatestNremSnippet(db: IDatabaseAdapter): string {
     }
 }
 
-function fetchDeletedEntriesSnapshot(db: IDatabaseAdapter): string {
+function fetchDeletedEntriesSnapshot(db: IDatabaseAdapter, lookbackHours: number): string {
     try {
         const deletedRes = db.getDeletedEntries({ limit: 25, workspaceId: '*' })
         if (deletedRes.entries.length === 0) {
-            return '_No soft-deleted entries found._'
+            return `_No soft-deleted entries found (lookback window: ${String(lookbackHours)}h)._`
         }
+        const cutoffMs = Date.now() - lookbackHours * 3600_000
         let flaggedDeletionsCount = 0
         const rows = deletedRes.entries.map((e) => {
             const isHighValue =
                 e.significanceType !== null ||
                 (e.impactScore !== undefined && e.impactScore >= 0.5)
-            if (isHighValue) flaggedDeletionsCount++
-            const flag = isHighValue ? '⚠️ [HIGH-VALUE CANDIDATE FOR RESTORE] ' : ''
+            const deletedMs =
+                e.deletedAt !== undefined && e.deletedAt !== null ? Date.parse(e.deletedAt) : NaN
+            const inWindow = Number.isNaN(deletedMs) || deletedMs >= cutoffMs
+            if (isHighValue && inWindow) flaggedDeletionsCount++
+            const flag = isHighValue
+                ? inWindow
+                    ? '⚠️ [HIGH-VALUE CANDIDATE FOR RESTORE] '
+                    : '⏳ [OUTSIDE LOOKBACK WINDOW] '
+                : ''
             return `${flag}ID: #${String(e.id)} | Type: ${e.entryType} | Significance: ${String(e.significanceType)} | Impact: ${String(e.impactScore)} | DeletedAt: ${String(e.deletedAt)}\nSnippet: ${e.content.slice(0, 140)}`
         })
         return (
-            `Total Soft-Deleted Count: ${String(deletedRes.count)} (Flagged High-Value in recent 25: ${String(flaggedDeletionsCount)})\n` +
+            `Total Soft-Deleted Count: ${String(deletedRes.count)} (Lookback Window: ${String(lookbackHours)}h | Flagged High-Value in window: ${String(flaggedDeletionsCount)})\n` +
             rows.join('\n---\n')
         )
     } catch (error: unknown) {
@@ -98,13 +115,19 @@ export function getCmsSupervisorPromptDefinitions(): InternalPromptDef[] {
                 _github?: unknown,
                 briefingConfig?: Partial<BriefingConfig>
             ) => {
-                const parsed = cmsSupervisorArgsSchema.safeParse(args ?? {})
-                const lookbackHours = parsed.success ? parsed.data.lookbackHours : 24
-                const autoRestore = parsed.success ? parsed.data.autoRestore : false
+                const rawArgs = args ?? {}
+                const lookbackRes = cmsSupervisorArgsSchema.shape.lookbackHours.safeParse(
+                    rawArgs['lookbackHours']
+                )
+                const lookbackHours = lookbackRes.success ? lookbackRes.data : 24
+                const restoreRes = cmsSupervisorArgsSchema.shape.autoRestore.safeParse(
+                    rawArgs['autoRestore']
+                )
+                const autoRestore = restoreRes.success ? restoreRes.data : true
                 const registry = briefingConfig?.projectRegistry ?? loadProjectRegistryFromConfig()
                 const mjProjectNumber = registry?.['memory-journal-mcp']?.project_number ?? 5
                 const latestNremSnippet = fetchLatestNremSnippet(db)
-                const deletedSnippet = fetchDeletedEntriesSnapshot(db)
+                const deletedSnippet = fetchDeletedEntriesSnapshot(db, lookbackHours)
 
                 let orphanCount: number | string = 'Unknown'
                 let totalEntries: number | string = 'Unknown'
@@ -142,7 +165,7 @@ ${markUntrustedContent(deletedSnippet)}
 
 ### Phase A — Post-NREM Supervisor Audit & Safety Rollback
 1. **Verify \`CMS-02\` Pruning Safety**:
-   - Inspect the recent soft-deleted entries above (or query \`await mj.admin.listDeletedEntries({ limit: 50, workspace_id: '*' })\` and \`await mj.admin.searchAuditLog({ limit: 100, category: 'write' })\` via \`mj_execute_code\`).
+   - Inspect the recent soft-deleted entries above (or query \`await mj.search.listDeletedEntries({ limit: 50, workspace_id: '*' })\` and \`await mj.admin.searchAuditLog({ limit: 100, category: 'write' })\` via \`mj_execute_code\`).
    - If any soft-deleted entry from the last \`${String(lookbackHours)}h\` has \`significanceType !== null\`, \`impactScore >= 0.5\`, or active relationships, ${autoRestore ? `**immediately restore it** via \`await mj.admin.restoreEntry({ entry_id, workspace_id: '*' })\` and record the false-positive pruning pattern.` : `**do NOT restore it automatically** (\`autoRestore\` is off): list it as a restore candidate with its id, workspace, and reason, and record the false-positive pruning pattern for user review.`}
 2. **Global Invariant Verification**:
    - Confirm \`0\` unassigned (\`workspaceId === 'default'\` or \`projectNumber <= 0\`) entries exist across \`workspace_id: '*'\`.
@@ -171,7 +194,7 @@ ${markUntrustedContent(deletedSnippet)}
      3. \`pnpm run build\`
      4. \`npx vitest run\`
      5. \`npx playwright test\`
-   - Commit the verified changes via \`bun .\\.agents\\scripts\\commit.ts --msg "fix(cms): <summary>" --impact 0.5 --confidence 0.95 --validation passed --journal --add .\`.
+   - Commit the verified changes via \`bun .\\.agents\\scripts\\commit.ts --msg "fix(cms): <summary>" --impact 0.5 --confidence 0.95 --validation passed --journal --add <changed_files>\`.
 
 ### Phase D — Telemetry Cleanup & Supervisor Journal Entry
 1. If \`logs/agent-issues.jsonl\` contained issues that were resolved and validated in Phase C, clear \`logs/agent-issues.jsonl\`.

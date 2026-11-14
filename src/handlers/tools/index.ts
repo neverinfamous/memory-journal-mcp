@@ -60,6 +60,7 @@ import {
     instrumentToolDefinitions,
     throwToolNotFoundError,
 } from './arg-interceptions.js'
+import { getAuthContext } from '../../auth/auth-context.js'
 
 // Re-export for backward compatibility
 export type { ToolHandlerConfig }
@@ -95,14 +96,31 @@ const MUTATING_DUMMY_TOOL_NAMES = new Set<string>([
 const EXEC_DUMMY_TOOL_NAMES = new Set<string>(DUMMY_SQL_EXECUTION_TOOL_NAMES)
 
 /** [INTENT] H5: map mutating dummy aliases to the real tool they execute so filters apply to it. */
+const DUMMY_CREATE_ALIAS_SET = new Set<string>([
+    'create_entry',
+    'mj_core_create_entry',
+    'mj.core.createEntry',
+    'mj.core.create_entry',
+    ...DUMMY_ENTRY_CREATION_TOOL_NAMES,
+])
+const DUMMY_UPDATE_ALIAS_SET = new Set<string>([
+    'update_entry',
+    'mj_core_update_entry',
+    'mj.core.updateEntry',
+    'mj.core.update_entry',
+])
+const DUMMY_DELETE_ALIAS_SET = new Set<string>([
+    'delete_entry',
+    'mj_core_delete_entry',
+    'mj.core.deleteEntry',
+    'mj.core.delete_entry',
+])
+
 function dummyMutationTarget(name: string): string | undefined {
     if (EXEC_DUMMY_TOOL_NAMES.has(name)) return 'mj_execute_code'
-    const lower = name.toLowerCase()
-    if (name === 'create_entry' || DUMMY_ENTRY_CREATION_TOOL_NAMES.includes(name) || /create_?entry/i.test(lower)) {
-        return 'create_entry'
-    }
-    if (/update_?entry/i.test(lower)) return 'update_entry'
-    if (/delete_?entry/i.test(lower)) return 'delete_entry'
+    if (DUMMY_CREATE_ALIAS_SET.has(name)) return 'create_entry'
+    if (DUMMY_UPDATE_ALIAS_SET.has(name)) return 'update_entry'
+    if (DUMMY_DELETE_ALIAS_SET.has(name)) return 'delete_entry'
     return undefined
 }
 
@@ -402,6 +420,14 @@ export async function callTool(
     }
 
     if (progress) {
+        const authCtx = getAuthContext()
+        const activeAuth: ToolContext['auth'] =
+            authCtx?.claims !== undefined
+                ? {
+                      ...(authCtx.claims.sub !== undefined ? { sub: authCtx.claims.sub } : {}),
+                      scopes: authCtx.claims.scopes,
+                  }
+                : undefined
         const context: ToolContext = {
             db,
             teamDb,
@@ -410,6 +436,7 @@ export async function callTool(
             github,
             config,
             progress,
+            ...(activeAuth !== undefined ? { auth: activeAuth } : {}),
         }
         const freshTool = getAllToolDefinitions(context).find((t) => t.name === name)
         if (freshTool) {

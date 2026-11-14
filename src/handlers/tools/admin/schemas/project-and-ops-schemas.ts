@@ -138,6 +138,7 @@ export const SearchAuditLogOutputSchema = z
         success: z.boolean().optional(),
         results: z.array(z.record(z.string(), z.unknown())).optional(),
         count: z.number().optional(),
+        warning: z.string().optional(),
         error: z.string().optional(),
     })
     .extend(ErrorFieldsMixin.shape)

@@ -33,7 +33,7 @@ Only help resources for your enabled tool groups are registered.
 
 ## Essential Operations
 
-- **Creating Entries:** Use the `memory-journal-mcp entry create` CLI command via your terminal (`run_command`). CLI commands are ALWAYS available globally on the system; do NOT attempt to run them via Code Mode. ALL entries MUST define `--impact-score`, `--trust-score`, and `--validation-status`. See `memory://help/core` for criteria.
+- **Creating Entries:** Prefer `mj.core.createEntry` in Code Mode when available (or `create_entry`), or use the `memory-journal-mcp entry create` CLI command via your terminal (`run_command`; do NOT attempt to shell out to CLI commands inside Code Mode). ALL entries MUST define `impact_score`/`--impact-score`, `trust_score`/`--trust-score`, and `validation_status`/`--validation-status`. See `memory://help/core` for criteria.
 - **Session Summaries:** Use the `memory-journal-mcp entry create` CLI command with `--type retrospective` and `--tags session-summary`. You MUST provide the markdown content via `--content "<string>"` or `--file <path>` (or pipe to stdin). See `memory://help/templates` for the exact 4-section format required.
 - **Updating/Deleting:** Use `memory-journal-mcp entry update` (pass `--expected-version` to prevent concurrent overwrites) and use the `delete_entry` MCP tool for soft-deletes.
 - **Searching:** Use `search_entries` or `search_by_date_range`. Use `sort_by: "importance"` to surface structurally significant entries. Use phrase matching (e.g. `"error handling"`) for exact matches.

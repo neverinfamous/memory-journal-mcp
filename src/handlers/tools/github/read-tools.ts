@@ -259,7 +259,10 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                             resolved.repo,
                             input.issue_number
                         )
-                        comments = rawComments
+                        comments = rawComments.map((comment) => ({
+                            ...comment,
+                            body: markUntrustedContent(comment.body),
+                        }))
                     }
 
                     return {

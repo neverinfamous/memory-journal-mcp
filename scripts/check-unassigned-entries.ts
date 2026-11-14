@@ -105,7 +105,7 @@ function checkUnassignedEntries(): void {
             for (const row of rows) {
                 console.error(`- Entry #${row.id}: [Type: ${row.entry_type}, Workspace: '${row.workspace_id}', Project: #${row.project_number}] (${row.timestamp})`)
             }
-            console.error(`\n💡 All journal entries must be explicitly bound to a valid workspace and project number. Read resource memory://agent-id to retrieve your project number.`)
+            console.error(`\n💡 All journal entries must be explicitly bound to a valid workspace and project number. Read resource memory://agent-context/{repo} to retrieve your project number.`)
             db.close()
             process.exit(1)
         }

@@ -28,8 +28,8 @@ function cleanPreview(content: string | undefined | null, length: number): strin
         .replace(/## Accomplished - /g, '')
         .replace(/## Accomplished\n?/g, '')
         // Windows paths
-        .replace(/C:\\Users\\[^\\]+\\.gemini\\antigravity(?:-ide)?\\brain/g, '<appDataDir>\\brain')
-        .replace(/C:\\Users\\[^\\]+\\Desktop/g, '<desktop>')
+        .replace(/C:\\Users\\[^\\]+\\.gemini\\antigravity(?:-ide)?\\brain/gi, '<appDataDir>\\brain')
+        .replace(/C:\\Users\\[^\\]+\\Desktop/gi, '<desktop>')
         // Linux/Mac paths
         .replace(/\/home\/[^/]+\/\.gemini\/antigravity(?:-ide)?\/brain/g, '<appDataDir>/brain')
         .replace(/\/home\/[^/]+\/Desktop/g, '<desktop>')

@@ -103,11 +103,20 @@ export function registerResources(
                     }
                     const auditLog = runtime.auditLogger
                     enforceAccessBoundary(uri.href, 'resource', resDef.capabilities, auditLog)
-                    return auditOperation(auditLog, 'resource', resDef.name, async () => {
-                        return runtime.maintenanceManager.withActiveJob(() =>
-                            handleResourceRead(uri, mimeType)
-                        )
-                    })
+                    const forceAudit =
+                        resDef.capabilities?.requiresTeamScope === true ||
+                        resDef.capabilities?.requiresAuditScope === true
+                    return auditOperation(
+                        auditLog,
+                        'resource',
+                        resDef.name,
+                        async () => {
+                            return runtime.maintenanceManager.withActiveJob(() =>
+                                handleResourceRead(uri, mimeType)
+                            )
+                        },
+                        { forceAudit, resourceUri: uri.href }
+                    )
                 }
             )
         } else {
@@ -119,11 +128,20 @@ export function registerResources(
                 }
                 const auditLog = runtime.auditLogger
                 enforceAccessBoundary(uri.href, 'resource', resDef.capabilities, auditLog)
-                return auditOperation(auditLog, 'resource', resDef.name, async () => {
-                    return runtime.maintenanceManager.withActiveJob(() =>
-                        handleResourceRead(uri, mimeType)
-                    )
-                })
+                const forceAudit =
+                    resDef.capabilities?.requiresTeamScope === true ||
+                    resDef.capabilities?.requiresAuditScope === true
+                return auditOperation(
+                    auditLog,
+                    'resource',
+                    resDef.name,
+                    async () => {
+                        return runtime.maintenanceManager.withActiveJob(() =>
+                            handleResourceRead(uri, mimeType)
+                        )
+                    },
+                    { forceAudit, resourceUri: uri.href }
+                )
             })
         }
     }

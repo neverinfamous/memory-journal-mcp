@@ -423,7 +423,6 @@ async function getAllToolDefinitionsAsync(context: ResourceContext): Promise<Min
  * Infer tool group from the tool name via the canonical tool-filter lookup.
  */
 function inferGroupFromName(name: string): string {
-    if (name.startsWith('team_')) return 'team'
-    if (name.startsWith('mj_')) return 'codemode'
+    if (name === 'mj_execute_code') return 'codemode'
     return getToolGroup(name) ?? 'core'
 }

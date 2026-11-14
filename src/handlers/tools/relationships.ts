@@ -232,7 +232,8 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                     const mermaidLines: string[] = ['```mermaid', 'graph TD']
 
                     for (const node of results.nodes) {
-                        const content = (node.metadata?.['content'] as string) || ''
+                        const rawContent = node.metadata?.['content']
+                        const content = typeof rawContent === 'string' ? rawContent : ''
                         let contentPreview = content
                             .slice(0, MERMAID_CONTENT_PREVIEW_LENGTH)
                             .replace(/\n/g, ' ')

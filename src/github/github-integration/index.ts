@@ -225,9 +225,23 @@ export class GitHubIntegration {
         target?: { owner: string; repo: string }
     ): Promise<ProjectContext> {
         const detected = await this.repositoryManager.getRepoInfo()
-        // [INVARIANT] An explicit target overrides the detected repo; cache is keyed per target.
+        const isSameRepoTarget =
+            target === undefined ||
+            ((detected.owner?.toLowerCase() ?? '') === target.owner.toLowerCase() &&
+                (detected.repo?.toLowerCase() ?? '') === target.repo.toLowerCase())
+        // [INVARIANT] H24: When an explicit target differs from CWD's detected repo, never leak
+        // CWD branch, remoteUrl, or HEAD commit onto the target repo context.
         const repoInfo =
-            target !== undefined ? { ...detected, owner: target.owner, repo: target.repo } : detected
+            target !== undefined
+                ? isSameRepoTarget
+                    ? { ...detected, owner: target.owner, repo: target.repo }
+                    : {
+                          owner: target.owner,
+                          repo: target.repo,
+                          branch: null,
+                          remoteUrl: `https://github.com/${target.owner}/${target.repo}`,
+                      }
+                : detected
         const cacheKey =
             target !== undefined ? `context:repo:${target.owner}/${target.repo}` : 'context:repo'
         const cached = this.client.getCached(cacheKey) as ProjectContext | undefined
@@ -246,15 +260,17 @@ export class GitHubIntegration {
         }
 
         const degraded: string[] = []
-        try {
-            const log = await this.client.git.log({ maxCount: 1 })
-            context.commit = log.latest?.hash ?? null
-        } catch (err) {
-            logger.debug(
-                `git log failed: ${err instanceof Error ? err.message : String(err)}`,
-                { module: 'GitHubIntegration' }
-            )
-            degraded.push('commit')
+        if (isSameRepoTarget) {
+            try {
+                const log = await this.client.git.log({ maxCount: 1 })
+                context.commit = log.latest?.hash ?? null
+            } catch (err) {
+                logger.debug(
+                    `git log failed: ${err instanceof Error ? err.message : String(err)}`,
+                    { module: 'GitHubIntegration' }
+                )
+                degraded.push('commit')
+            }
         }
         if (repoInfo.owner && repoInfo.repo) {
             const [issuesResult, prsResult, runsResult, milestonesResult] =

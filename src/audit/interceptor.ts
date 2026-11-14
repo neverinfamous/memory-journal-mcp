@@ -22,6 +22,12 @@ import { getRequestContext } from '../utils/request-context.js'
 import { sanitizeErrorForLogging } from '../utils/security-utils.js'
 import { estimateTokens, estimatePayloadTokens } from '../observability/token-estimator.js'
 import { logger } from '../utils/logger.js'
+import {
+    extractAuditScopeFromArgs,
+    extractAuditScopeFromUri,
+    isSensitiveAuditTarget,
+    resolveResourceAuditCategory,
+} from './audit-query-helpers.js'
 
 // ============================================================================
 // Types
@@ -110,6 +116,8 @@ export function createAuditInterceptor(auditLogger: AuditLogger): AuditIntercept
             const scopes = authCtx?.claims?.scopes ?? []
             const sessionId = reqCtx?.sessionId
 
+            const scopeMeta = extractAuditScopeFromArgs(args, reqCtx)
+
             const requestId = generateRequestId()
             const start = performance.now()
             let success = true
@@ -161,6 +169,14 @@ export function createAuditInterceptor(auditLogger: AuditLogger): AuditIntercept
                 throw err // Re-throw — don't swallow
             } finally {
                 const durationMs = Math.round(performance.now() - start)
+                const scopeFields = {
+                    ...(scopeMeta.workspaceId !== undefined
+                        ? { workspaceId: scopeMeta.workspaceId }
+                        : {}),
+                    ...(scopeMeta.projectNumber !== undefined
+                        ? { projectNumber: scopeMeta.projectNumber }
+                        : {}),
+                }
 
                 if (isReadScope) {
                     // Compact read entries — omit args, user, scopes for ~100 byte entries
@@ -177,6 +193,7 @@ export function createAuditInterceptor(auditLogger: AuditLogger): AuditIntercept
                         success,
                         error,
                         tokenEstimate,
+                        ...scopeFields,
                     })
                 } else {
                     auditLogger.log({
@@ -195,11 +212,19 @@ export function createAuditInterceptor(auditLogger: AuditLogger): AuditIntercept
                             ? undefined
                             : (args as Record<string, unknown>),
                         tokenEstimate,
+                        ...scopeFields,
                     })
                 }
             }
         },
     }
+}
+
+export interface AuditOperationOptions {
+    forceAudit?: boolean | undefined
+    resourceUri?: string | undefined
+    workspaceId?: string | undefined
+    projectNumber?: number | undefined
 }
 
 /**
@@ -210,9 +235,17 @@ export async function auditOperation<T>(
     auditLogger: AuditLogger | null,
     operationType: 'resource' | 'prompt',
     name: string,
-    fn: () => Promise<T> | T
+    fn: () => Promise<T> | T,
+    options?: AuditOperationOptions
 ): Promise<T> {
-    if (!auditLogger?.config.auditReads) {
+    const target = options?.resourceUri ?? name
+    const isSensitiveResource =
+        options?.forceAudit === true || isSensitiveAuditTarget(target)
+    if (
+        !auditLogger ||
+        !auditLogger.config.enabled ||
+        (!auditLogger.config.auditReads && !isSensitiveResource)
+    ) {
         return Promise.resolve(fn())
     }
 
@@ -221,6 +254,10 @@ export async function auditOperation<T>(
     const user = authCtx?.claims?.sub ?? null
     const scopes = authCtx?.claims?.scopes ?? []
     const sessionId = reqCtx?.sessionId
+    const uriScope = extractAuditScopeFromUri(target, reqCtx)
+    const workspaceId = options?.workspaceId ?? uriScope.workspaceId
+    const projectNumber = options?.projectNumber ?? uriScope.projectNumber
+    const category = resolveResourceAuditCategory(target)
 
     const requestId = generateRequestId()
     const start = performance.now()
@@ -260,14 +297,16 @@ export async function auditOperation<T>(
             requestId,
             sessionId,
             tool: `${operationType}:${name}`,
-            category: 'read',
-            scope: 'read',
+            category,
+            scope: category === 'audit' || category === 'team' ? category : 'read',
             user,
             scopes,
             durationMs,
             success,
             error,
             tokenEstimate,
+            ...(workspaceId !== undefined ? { workspaceId } : {}),
+            ...(projectNumber !== undefined ? { projectNumber } : {}),
         })
     }
 }

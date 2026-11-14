@@ -9,7 +9,8 @@
 import { ICON_ISSUE, ICON_PR } from '../../constants/icons.js'
 import { ASSISTANT_FOCUSED, MEDIUM_PRIORITY } from '../../utils/resource-annotations.js'
 import type { InternalResourceDef, ResourceContext } from './shared.js'
-import { resolveScopedGitHubRepo, isResourceError, resourceWorkspace } from './shared.js'
+import { getBaseUri, resolveScopedGitHubRepo, isResourceError, resourceWorkspace } from './shared.js'
+import { getKanbanTemplateDefinitions } from './templates-kanban.js'
 import { parseSessionCommitContext } from '../../types/auto-context.js'
 import { enrichCommits } from '../../github/commit-references/index.js'
 import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server'
@@ -32,7 +33,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
             mimeType: 'application/json',
             annotations: { ...MEDIUM_PRIORITY, audience: ['assistant'] },
             handler: (uri: string, context: ResourceContext) => {
-                const match = /memory:\/\/projects\/(\d+)\/timeline/.exec(uri)
+                const match = /memory:\/\/projects\/(\d+)\/timeline/.exec(getBaseUri(uri))
                 const projectNumber = match?.[1] ? parseInt(match[1], 10) : null
 
                 if (projectNumber === null) {
@@ -65,7 +66,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
             icons: [ICON_ISSUE],
             annotations: { ...MEDIUM_PRIORITY, audience: ['assistant'] },
             handler: (uri: string, context: ResourceContext) => {
-                const match = /memory:\/\/issues\/(\d+)\/entries/.exec(uri)
+                const match = /memory:\/\/issues\/(\d+)\/entries/.exec(getBaseUri(uri))
                 const issueNumber = match?.[1] ? parseInt(match[1], 10) : null
 
                 if (issueNumber === null) {
@@ -87,7 +88,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
             icons: [ICON_PR],
             annotations: { ...MEDIUM_PRIORITY, audience: ['assistant'] },
             handler: (uri: string, context: ResourceContext) => {
-                const match = /memory:\/\/prs\/(\d+)\/entries/.exec(uri)
+                const match = /memory:\/\/prs\/(\d+)\/entries/.exec(getBaseUri(uri))
                 const prNumber = match?.[1] ? parseInt(match[1], 10) : null
 
                 if (prNumber === null) {
@@ -118,7 +119,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
             icons: [ICON_PR],
             annotations: ASSISTANT_FOCUSED,
             handler: async (uri: string, context: ResourceContext) => {
-                const match = /memory:\/\/prs\/(\d+)\/timeline/.exec(uri)
+                const match = /memory:\/\/prs\/(\d+)\/timeline/.exec(getBaseUri(uri))
                 const prNumber = match?.[1] ? parseInt(match[1], 10) : null
 
                 if (prNumber === null) {
@@ -199,7 +200,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
             mimeType: 'application/json',
             annotations: { ...MEDIUM_PRIORITY, audience: ['assistant'] },
             handler: async (uri: string, context: ResourceContext) => {
-                const match = /memory:\/\/commits\/(\d+)$/.exec(uri)
+                const match = /memory:\/\/commits\/(\d+)$/.exec(getBaseUri(uri))
                 const projectNumber = match?.[1] ? parseInt(match[1], 10) : null
 
                 if (projectNumber === null) {
@@ -272,7 +273,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
             mimeType: 'application/json',
             annotations: { ...MEDIUM_PRIORITY, audience: ['assistant'] },
             handler: async (uri: string, context: ResourceContext) => {
-                const match = /memory:\/\/commits\/(\d+)\/by-issue$/.exec(uri)
+                const match = /memory:\/\/commits\/(\d+)\/by-issue$/.exec(getBaseUri(uri))
                 const projectNumber = match?.[1] ? parseInt(match[1], 10) : null
 
                 if (projectNumber === null) {
@@ -344,7 +345,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
             mimeType: 'application/json',
             annotations: { ...MEDIUM_PRIORITY, audience: ['assistant'] },
             handler: async (uri: string, context: ResourceContext) => {
-                const match = /memory:\/\/commits\/(\d+)\/by-pr$/.exec(uri)
+                const match = /memory:\/\/commits\/(\d+)\/by-pr$/.exec(getBaseUri(uri))
                 const projectNumber = match?.[1] ? parseInt(match[1], 10) : null
 
                 if (projectNumber === null) {
@@ -406,81 +407,9 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                 return { ...data, _meta: { tokenEstimate } }
             },
         },
-        // Kanban board resources (GitHub Projects v2)
-        {
-            uri: 'memory://kanban/{project_number}',
-            name: 'Kanban Board',
-            title: 'GitHub Project Kanban Board',
-            description: 'View a GitHub Project v2 as a Kanban board with items grouped by Status',
-            mimeType: 'application/json',
-            annotations: { ...MEDIUM_PRIORITY, audience: ['assistant'] },
-            handler: async (uri: string, context: ResourceContext) => {
-                const match = /memory:\/\/kanban\/(?:(.*)\/)?(\d+)$/.exec(uri)
-                const targetRepo = match?.[1] ? decodeURIComponent(match[1]) : undefined
-                const projectNumber = match?.[2] ? parseInt(match[2], 10) : null
-
-                if (projectNumber === null) {
-                    throw new ProtocolError(ProtocolErrorCode.InvalidParams,  'Invalid project number')
-                }
-
-                const projScope =
-                    targetRepo === undefined ? resolveProjectScope(context, projectNumber) : undefined
-                if (projScope?.hint !== undefined) {
-                    return {
-                        projectNumber,
-                        status: 'unresolved',
-                        error: projScope.hint,
-                        hint: projScope.hint,
-                    }
-                }
-                const kanbanTarget =
-                    targetRepo ??
-                    (projScope !== undefined && projScope.workspaceId !== 'default'
-                        ? projScope.workspaceId
-                        : undefined)
-                const resolved = await resolveScopedGitHubRepo(context, kanbanTarget)
-                if (isResourceError(resolved)) return resolved.data
-                const { owner, repo, github } = resolved
-
-                const board = await github.getProjectKanban(owner, projectNumber, repo)
-                if (!board) {
-                    throw new ProtocolError(ProtocolErrorCode.InternalError, 
-                        `Project #${String(projectNumber)} not found or Status field not configured`
-                    )
-                }
-
-                // Strip 'body' from all items to mitigate massive payload size
-                for (const column of board.columns) {
-                    for (const item of column.items) {
-                        if ('body' in item) {
-                            delete (item as { body?: string }).body
-                        }
-                    }
-                }
-
-                const tokenEstimate = Math.ceil(JSON.stringify(board).length / 4)
-                return { ...board, _meta: { tokenEstimate } }
-            },
-        },
-
+        // Kanban board resources (GitHub Projects v2) — extracted to templates-kanban.ts
+        ...getKanbanTemplateDefinitions(),
     ]
 
-    // Generate dynamic `{repo}` variants for multi-project registry support
-    const dynamicDefinitions: InternalResourceDef[] = []
-
-    for (const def of definitions) {
-        if (def.uri.startsWith('memory://kanban/')) {
-            const dynamicUri = def.uri.replace('{project_number}', '{+repo}/{project_number}')
-            dynamicDefinitions.push({
-                ...def,
-                uri: dynamicUri,
-                name: def.name + ' (Dynamic)',
-                description:
-                    def.description +
-                    ' (Supports explicit multi-project repository targeting via {repo})',
-            })
-        }
-    }
-
-    return [...definitions, ...dynamicDefinitions]
+    return definitions
 }

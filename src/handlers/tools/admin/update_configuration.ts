@@ -132,6 +132,83 @@ export const updateConfigurationSchemaMcp = z.preprocess(
 
 export type UpdateConfigurationArgs = z.infer<typeof updateConfigurationSchema>
 
+type StoredBriefingConfig = NonNullable<
+    Parameters<ConfigManager['updateConfig']>[0]['briefingConfig']
+>
+
+/** Validate and apply workspace_id / project_number scope updates without deep nesting. */
+function applyScopeConfigurationUpdate(
+    args: UpdateConfigurationArgs,
+    newBc: StoredBriefingConfig,
+    config: ToolHandlerConfig,
+    updatedKeys: string[]
+): boolean {
+    if (args.workspace_id?.trim() === '*') {
+        throw new ValidationError(
+            "workspace_id '*' is a read-only wildcard and cannot be configured as a write workspace."
+        )
+    }
+    if (args.workspace_id === undefined && args.project_number === undefined) {
+        return false
+    }
+
+    const registry = newBc.projectRegistry ?? config.projectRegistry ?? loadProjectRegistryFromConfig()
+    let nextWorkspaceId = newBc.defaultWorkspaceId
+    let nextProjectNumber = newBc.defaultProjectNumber
+
+    if (args.workspace_id !== undefined && args.project_number !== undefined) {
+        const canonical = findCanonicalRegistryKey(args.workspace_id, registry) ?? args.workspace_id
+        const exactKey = exactRegistryKey(canonical, activeProjectRegistry(registry)) ?? canonical
+        const regProjNum = registry?.[exactKey]?.project_number
+        if (regProjNum !== undefined && args.project_number !== regProjNum) {
+            throw new ValidationError(
+                `workspace '${exactKey}' uses project_number ${String(regProjNum)}, not ${String(args.project_number)}.`
+            )
+        }
+    }
+
+    if (args.project_number !== undefined) {
+        nextProjectNumber = args.project_number
+        if (args.workspace_id === undefined) {
+            nextWorkspaceId = Object.entries(registry ?? {}).find(
+                ([, entry]) => entry.project_number === args.project_number
+            )?.[0]
+        }
+        updatedKeys.push('project_number')
+    }
+
+    if (args.workspace_id !== undefined) {
+        const canonical = findCanonicalRegistryKey(args.workspace_id, registry) ?? args.workspace_id
+        const exactKey = exactRegistryKey(canonical, activeProjectRegistry(registry)) ?? canonical
+        const regProjNum = registry?.[exactKey]?.project_number
+        nextWorkspaceId = exactKey
+        if (args.project_number === undefined) {
+            // [INVARIANT] H3: switching to an unnumbered workspace must clear the stale default
+            // project so later writes are not paired with the previous project's number.
+            nextProjectNumber = regProjNum
+        }
+        updatedKeys.push('workspace_id')
+    }
+
+    const paired = pairStoredScope(nextWorkspaceId, nextProjectNumber, activeProjectRegistry(registry))
+    if (paired.workspaceId !== undefined) {
+        newBc.defaultWorkspaceId = paired.workspaceId
+        config.defaultWorkspaceId = paired.workspaceId
+    } else {
+        delete newBc.defaultWorkspaceId
+        delete config.defaultWorkspaceId
+    }
+    if (typeof paired.projectNumber === 'number') {
+        newBc.defaultProjectNumber = paired.projectNumber
+        config.defaultProjectNumber = paired.projectNumber
+    } else {
+        delete newBc.defaultProjectNumber
+        delete config.defaultProjectNumber
+    }
+    setActiveSessionProject(newBc.defaultWorkspaceId, newBc.defaultProjectNumber, config.runtime)
+    return true
+}
+
 export function handleUpdateConfiguration(
     args: UpdateConfigurationArgs,
     config: ToolHandlerConfig
@@ -145,7 +222,6 @@ export function handleUpdateConfiguration(
 
     const updates: Partial<Parameters<ConfigManager['updateConfig']>[0]> = {}
     const updatedKeys: string[] = []
-
 
     if (args.tool_filter !== undefined) {
         updates.rawToolFilter = args.tool_filter
@@ -166,89 +242,9 @@ export function handleUpdateConfiguration(
     if (args.briefing_workflows !== undefined) { newBc.workflowCount = args.briefing_workflows; bcChanged = true; updatedKeys.push('briefing_workflows'); }
     if (args.briefing_workflow_status !== undefined) { newBc.workflowStatusBreakdown = args.briefing_workflow_status; bcChanged = true; updatedKeys.push('briefing_workflow_status'); }
     if (args.briefing_copilot !== undefined) { newBc.copilotReviews = args.briefing_copilot; bcChanged = true; updatedKeys.push('briefing_copilot'); }
-    const registry = newBc.projectRegistry ?? config.projectRegistry ?? loadProjectRegistryFromConfig()
-    if (args.workspace_id?.trim() === '*') {
-        throw new ValidationError(
-            "workspace_id '*' is a read-only wildcard and cannot be configured as a write workspace."
-        )
-    }
-    let nextWorkspaceId = newBc.defaultWorkspaceId
-    let nextProjectNumber = newBc.defaultProjectNumber
-    if (args.workspace_id !== undefined && args.project_number !== undefined) {
-        const canonical = findCanonicalRegistryKey(args.workspace_id, registry) ?? args.workspace_id
-        const exactKey = exactRegistryKey(canonical, activeProjectRegistry(registry)) ?? canonical
-        const regProjNum = registry?.[exactKey]?.project_number
-        if (regProjNum !== undefined && args.project_number !== regProjNum) {
-            throw new ValidationError(
-                `workspace '${exactKey}' uses project_number ${String(regProjNum)}, not ${String(args.project_number)}.`
-            )
-        }
-    }
-    if (args.project_number !== undefined) {
-        nextProjectNumber = args.project_number
-        if (args.workspace_id === undefined) {
-            nextWorkspaceId = undefined
-            if (registry !== undefined) {
-                for (const [key, entry] of Object.entries(registry)) {
-                    if (entry.project_number === args.project_number) {
-                        nextWorkspaceId = key
-                        break
-                    }
-                }
-            }
-        }
+
+    if (applyScopeConfigurationUpdate(args, newBc, config, updatedKeys)) {
         bcChanged = true
-        updatedKeys.push('project_number')
-    }
-    if (args.workspace_id !== undefined) {
-        const canonical = findCanonicalRegistryKey(args.workspace_id, registry) ?? args.workspace_id
-        const exactKey = exactRegistryKey(canonical, activeProjectRegistry(registry)) ?? canonical
-        const regProjNum = registry?.[exactKey]?.project_number
-        if (
-            args.project_number !== undefined &&
-            regProjNum !== undefined &&
-            args.project_number !== regProjNum
-        ) {
-            throw new ValidationError(
-                `workspace '${exactKey}' uses project_number ${String(regProjNum)}, not ${String(args.project_number)}.`
-            )
-        }
-        nextWorkspaceId = exactKey
-        if (regProjNum !== undefined && args.project_number === undefined) {
-            nextProjectNumber = regProjNum
-        } else if (args.project_number === undefined) {
-            // [INVARIANT] H3: switching to an unnumbered workspace must clear the stale default
-            // project so later writes are not paired with the previous project's number.
-            nextProjectNumber = undefined
-        }
-        bcChanged = true
-        updatedKeys.push('workspace_id')
-    }
-    if (args.project_number !== undefined || args.workspace_id !== undefined) {
-        const paired = pairStoredScope(
-            nextWorkspaceId,
-            nextProjectNumber,
-            activeProjectRegistry(registry)
-        )
-        if (paired.workspaceId !== undefined) {
-            newBc.defaultWorkspaceId = paired.workspaceId
-            config.defaultWorkspaceId = paired.workspaceId
-        } else {
-            delete newBc.defaultWorkspaceId
-            delete config.defaultWorkspaceId
-        }
-        if (typeof paired.projectNumber === 'number') {
-            newBc.defaultProjectNumber = paired.projectNumber
-            config.defaultProjectNumber = paired.projectNumber
-        } else {
-            delete newBc.defaultProjectNumber
-            delete config.defaultProjectNumber
-        }
-        setActiveSessionProject(
-            newBc.defaultWorkspaceId,
-            newBc.defaultProjectNumber,
-            config.runtime
-        )
     }
 
     if (bcChanged) {

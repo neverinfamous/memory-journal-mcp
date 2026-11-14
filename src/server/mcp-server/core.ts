@@ -16,6 +16,7 @@ import { createServerInstance } from './tool-registration.js'
 import { startMetricsServer } from '../../observability/metrics-server.js'
 import type { DynamicConfig } from '../../utils/config-manager.js'
 import {
+    awaitPendingVectorInit,
     buildBaseToolConfig,
     buildHttpTransportConfig,
     closeServerResources,
@@ -29,6 +30,7 @@ async function executeGracefulShutdown(params: {
     configManager: { close: () => void }
     runtime: {
         stopBackgroundTasks?: (() => void) | null
+        pendingVectorInit?: Promise<void> | null
         auditLogger?: { close: () => Promise<void> } | null
         metrics: { saveToFile: (path: string) => Promise<void> }
     }
@@ -76,6 +78,7 @@ async function executeGracefulShutdown(params: {
         logShutdownError(label, error)
     } finally {
         params.detachSignals?.()
+        await awaitPendingVectorInit(runtime)
         closeDatabases()
         // [INTENT] Preserve any non-zero exit code set earlier instead of forcing 0 (L6).
         const code = typeof process.exitCode === 'number' ? process.exitCode : 0
@@ -214,15 +217,26 @@ export async function createServer(options: ServerOptions): Promise<void> {
                 ? { projectRegistry: nextBriefing.projectRegistry }
                 : {}),
         })
-        void globalSubscriptionManager.notifyResourceUpdated('memory://briefing')
-        try {
-            void globalSubscriptionManager.broadcastNotification('notifications/tools/list_changed')
-            void globalSubscriptionManager.broadcastNotification('notifications/resources/list_changed')
-        } catch (error: unknown) {
-            logger.debug('Failed to send list_changed notifications to MCP client', {
+        void Promise.resolve(
+            globalSubscriptionManager.notifyResourceUpdated('memory://briefing')
+        ).catch((error: unknown) => {
+            logger.debug('Failed to send briefing updated notification to MCP client', {
                 module: 'McpServer',
                 error: error instanceof Error ? error.message : String(error),
             })
+        })
+        for (const method of [
+            'notifications/tools/list_changed',
+            'notifications/resources/list_changed',
+        ]) {
+            void Promise.resolve(globalSubscriptionManager.broadcastNotification(method)).catch(
+                (error: unknown) => {
+                    logger.debug('Failed to send list_changed notifications to MCP client', {
+                        module: 'McpServer',
+                        error: error instanceof Error ? error.message : String(error),
+                    })
+                }
+            )
         }
     })
 
@@ -243,7 +257,9 @@ export async function createServer(options: ServerOptions): Promise<void> {
         closeServerResources([db, testDb, teamDb, testTeamDb])
     }
     if (options.metricsExport === 'prometheus') {
-        shutdownMetrics = startMetricsServer(runtime, options.metricsPort)
+        shutdownMetrics = startMetricsServer(runtime, options.metricsPort, {
+            ...(options.authToken !== undefined ? { authToken: options.authToken } : {}),
+        })
     }
 
     if (transport === 'stdio') {

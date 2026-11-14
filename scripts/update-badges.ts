@@ -156,8 +156,19 @@ function updateBadges() {
       } else {
         console.log(`Badges in ${file} are already up-to-date.`);
       }
-    } catch {
-      console.warn(`Skipped updating ${file}: File not found or unreadable.`);
+    } catch (err: unknown) {
+      const code =
+        typeof err === "object" && err !== null && "code" in err
+          ? (err as { code?: unknown }).code
+          : undefined;
+      if (code === "ENOENT") {
+        console.warn(`Skipped updating ${file}: File not found.`);
+      } else {
+        console.error(
+          `Failed updating ${file}: ${err instanceof Error ? err.message : String(err)}`
+        );
+        process.exitCode = 1;
+      }
     }
   }
 

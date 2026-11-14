@@ -8,7 +8,12 @@
 
 import type { TokenClaims } from './types.js'
 import type { TokenValidator } from './token-validator.js'
-import { TokenMissingError, InvalidTokenError, InsufficientScopeError } from './errors.js'
+import {
+    OAuthError,
+    TokenMissingError,
+    InvalidTokenError,
+    InsufficientScopeError,
+} from './errors.js'
 import { hasScope as checkScope } from './scopes.js'
 
 /**
@@ -151,6 +156,22 @@ export function formatOAuthError(error: unknown): {
                 error: 'insufficient_scope',
                 error_description: error.message,
                 scope: required !== undefined && required.length > 0 ? required.join(' ') : undefined,
+            },
+        }
+    }
+
+    if (error instanceof OAuthError) {
+        const errorCode =
+            error.httpStatus === 401
+                ? 'invalid_token'
+                : error.httpStatus === 403
+                  ? 'insufficient_scope'
+                  : 'server_error'
+        return {
+            status: error.httpStatus,
+            body: {
+                error: errorCode,
+                error_description: error.message,
             },
         }
     }

@@ -106,8 +106,8 @@ async function fetchCommits(input: FetchCommitsInput, cwd: string): Promise<Comm
         })
     }
 
-    if (needsPostProcessing && input.maxCount !== undefined) {
-        processedCommits = processedCommits.slice(0, input.maxCount)
+    if (needsPostProcessing) {
+        processedCommits = processedCommits.slice(0, input.maxCount ?? 50)
     }
 
     return processedCommits

@@ -88,6 +88,30 @@ export async function runShutdownStep(step: string, fn: () => Promise<void>): Pr
     }
 }
 
+/**
+ * Wait briefly for any in-flight background vector initialization to settle so DB
+ * handles are not closed mid-write during rapid shutdown or aborted startup (L5).
+ */
+export async function awaitPendingVectorInit(
+    runtime: { pendingVectorInit?: Promise<void> | null } | undefined,
+    timeoutMs = 2000
+): Promise<void> {
+    const pending = runtime?.pendingVectorInit
+    if (pending === undefined || pending === null) return
+    let timer: ReturnType<typeof setTimeout> | undefined
+    try {
+        await Promise.race([
+            pending.catch(() => undefined),
+            new Promise<void>((resolve) => {
+                timer = setTimeout(resolve, timeoutMs)
+                timer.unref()
+            }),
+        ])
+    } finally {
+        if (timer !== undefined) clearTimeout(timer)
+    }
+}
+
 /** Dispose codemode resources and close every database handle, logging (not throwing) failures. */
 export function closeServerResources(
     handles: (Pick<IDatabaseAdapter, 'close'> | undefined)[]

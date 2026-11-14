@@ -91,21 +91,33 @@ export interface BuildSystemContextOptions {
 // Startup-Cached Parsers
 // ============================================================================
 
-/**
- * Resolve project root via package.json location.
- *
- * Uses fileURLToPath(import.meta.url) to decode percent-encoded paths and
- * find the closest package.json.
- */
-function resolveProjectRoot(): string {
-    let current = path.dirname(fileURLToPath(import.meta.url))
+/** Walk upward from `startDir` looking for a directory containing `package.json`. */
+function findPackageJsonRoot(startDir: string): string | undefined {
+    let current = path.resolve(startDir)
     while (current !== path.dirname(current)) {
         if (fs.existsSync(path.join(current, 'package.json'))) {
             return current
         }
         current = path.dirname(current)
     }
-    return process.cwd()
+    return undefined
+}
+
+/**
+ * Resolve project root via package.json location.
+ *
+ * [INVARIANT] H29: Inspect `startPath` / `process.cwd()` before falling back to
+ * `import.meta.url` so cross-repo runs inspect the active workspace rather than
+ * `memory-journal-mcp`'s own install directory.
+ */
+function resolveProjectRoot(startPath?: string): string {
+    const cwdTarget =
+        startPath !== undefined && startPath !== '' ? startPath : process.cwd()
+    return (
+        findPackageJsonRoot(cwdTarget) ??
+        findPackageJsonRoot(path.dirname(fileURLToPath(import.meta.url))) ??
+        process.cwd()
+    )
 }
 
 // ============================================================================

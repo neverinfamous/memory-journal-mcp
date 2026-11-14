@@ -198,8 +198,12 @@ export async function evaluateAnchorStaleness(
     workspaceId: string | undefined
 ): Promise<StalenessCheckRow> {
     try {
-        const fullPath = path.resolve(workspaceRoot, anchor.anchorPath)
-        const relPath = path.relative(workspaceRoot, fullPath)
+        const resolvedRoot = path.resolve(workspaceRoot)
+        const fullPath = path.resolve(resolvedRoot, anchor.anchorPath)
+        const relPath =
+            process.platform === 'win32'
+                ? path.relative(resolvedRoot.toLowerCase(), fullPath.toLowerCase())
+                : path.relative(resolvedRoot, fullPath)
         if (relPath === '..' || relPath.startsWith('..' + path.sep) || path.isAbsolute(relPath)) {
             throw new Error(`Path traversal detected: ${anchor.anchorPath}`)
         }

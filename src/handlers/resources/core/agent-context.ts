@@ -3,7 +3,7 @@ import {
     setActiveSessionProject,
 } from '../../../utils/workspace-resolver.js'
 import { exactRegistryKey, uniqueWorkspaceForProject } from '../../../utils/write-scope.js'
-import type { InternalResourceDef, ResourceContext, ResourceResult } from '../shared.js'
+import { getBaseUri, type InternalResourceDef, type ResourceContext, type ResourceResult } from '../shared.js'
 import { withPriority, ASSISTANT_FOCUSED } from '../../../utils/resource-annotations.js'
 
 export function getAgentContextResource(): InternalResourceDef {
@@ -17,7 +17,7 @@ export function getAgentContextResource(): InternalResourceDef {
         handler: (uri: string, context: ResourceContext): ResourceResult => {
             const config = context?.briefingConfig
 
-            const match = /^memory:\/\/(?:agent-context|agent-id)(?:\/(.+))?$/.exec(uri)
+            const match = /^memory:\/\/(?:agent-context|agent-id)(?:\/(.+))?$/.exec(getBaseUri(uri))
             const rawRepo = match?.[1] !== undefined ? decodeURIComponent(match[1]) : undefined
             if (rawRepo?.toLowerCase() === 'default') {
                 const defaultProjNum =

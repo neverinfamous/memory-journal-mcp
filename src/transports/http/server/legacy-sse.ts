@@ -79,6 +79,15 @@ export class LegacySSEServerTransport implements Transport {
      * Handles incoming POST requests containing JSON-RPC messages.
      */
     handlePostMessage(req: Request, res: Response): void {
+        if (
+            this.res === null ||
+            this.res.writableEnded ||
+            this.res.destroyed
+        ) {
+            res.status(410).json({ error: 'SSE stream closed' })
+            return
+        }
+
         const body = req.body as unknown
         if (body === undefined || body === null || typeof body !== 'object') {
             res.status(400).json({ error: 'Invalid JSON body' })

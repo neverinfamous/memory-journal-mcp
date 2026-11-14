@@ -11,6 +11,11 @@ import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import { ICON_PROMPT } from '../../constants/icons.js'
 import type { InternalPromptDef } from './index.js'
 import type { BriefingConfig } from '../resources/shared.js'
+import { ValidationError } from '../../types/errors.js'
+import {
+    findCanonicalRegistryKey,
+    loadProjectRegistryFromConfig,
+} from '../../utils/workspace-resolver.js'
 import { resolvePromptPriorWorkspace } from './adversarial-helpers.js'
 import {
     WORKFLOW_WORKSPACE_ARGUMENTS,
@@ -19,20 +24,55 @@ import {
     generateUpdateEntryPrompt,
 } from './workflow-helpers.js'
 
-function resolveWorkflowPromptScope(args: Record<string, string> | undefined): {
+function resolveWorkflowPromptScope(
+    args: Record<string, string> | undefined,
+    briefingConfig?: Partial<BriefingConfig>
+): {
     workspaceHint?: string
     projectNumber?: number
     explicitDefaultRequested: boolean
 } {
     const rawWorkspace = args?.['workspace_id']?.trim()
     const rawProject = args?.['project_number']?.trim()
-    const hasWorkspace = rawWorkspace !== undefined && rawWorkspace.length > 0 && rawWorkspace !== '*'
-    const projMatch = rawProject !== undefined ? /^#?(\d+)$/.exec(rawProject) : null
-    const parsedNum = projMatch !== null ? Number(projMatch[1]) : undefined
-    const numericProject =
-        parsedNum !== undefined && Number.isSafeInteger(parsedNum) && parsedNum > 0
-            ? parsedNum
-            : undefined
+    if (rawWorkspace === '*') {
+        throw new ValidationError(
+            "workspace_id '*' is a read-only wildcard and cannot be used to target a workflow write prompt."
+        )
+    }
+
+    let numericProject: number | undefined
+    if (rawProject !== undefined && rawProject.length > 0) {
+        const projMatch = /^#?(\d+)$/.exec(rawProject)
+        const parsedNum = projMatch !== null ? Number(projMatch[1]) : undefined
+        if (parsedNum === undefined || !Number.isSafeInteger(parsedNum) || parsedNum <= 0) {
+            throw new ValidationError(
+                `Invalid project_number "${rawProject}": must be a positive integer.`
+            )
+        }
+        numericProject = parsedNum
+
+        const registry = briefingConfig?.projectRegistry ?? loadProjectRegistryFromConfig()
+        if (registry !== undefined && Object.keys(registry).length > 0) {
+            const projectOwners = Object.entries(registry)
+                .filter(([, entry]) => entry.project_number === numericProject)
+                .map(([key]) => key)
+            if (projectOwners.length === 0) {
+                throw new ValidationError(
+                    `project_number ${String(numericProject)} is not registered in projectRegistry.`
+                )
+            }
+            if (rawWorkspace !== undefined && rawWorkspace.length > 0) {
+                const wsKey = findCanonicalRegistryKey(rawWorkspace, registry) ?? rawWorkspace
+                if (!projectOwners.some((owner) => owner.toLowerCase() === wsKey.toLowerCase())) {
+                    throw new ValidationError(
+                        `project_number ${String(numericProject)} belongs to "${projectOwners[0] ?? ''}", not "${rawWorkspace}".`
+                    )
+                }
+            }
+        }
+    }
+
+    const hasWorkspace = rawWorkspace !== undefined && rawWorkspace.length > 0
     const scope: {
         workspaceHint?: string
         projectNumber?: number
@@ -71,7 +111,7 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
                 briefingConfig?: Partial<BriefingConfig>,
                 runtime?: object | null
             ) => {
-                const scope = resolveWorkflowPromptScope(args)
+                const scope = resolveWorkflowPromptScope(args, briefingConfig)
                 const ws = resolvePromptPriorWorkspace(
                     briefingConfig,
                     scope.workspaceHint,
@@ -103,7 +143,7 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
                 briefingConfig?: Partial<BriefingConfig>,
                 runtime?: object | null
             ) => {
-                const scope = resolveWorkflowPromptScope(args)
+                const scope = resolveWorkflowPromptScope(args, briefingConfig)
                 const ws = resolvePromptPriorWorkspace(
                     briefingConfig,
                     scope.workspaceHint,
@@ -134,7 +174,7 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
                 briefingConfig?: Partial<BriefingConfig>,
                 runtime?: object | null
             ) => {
-                const scope = resolveWorkflowPromptScope(args)
+                const scope = resolveWorkflowPromptScope(args, briefingConfig)
                 const ws = resolvePromptPriorWorkspace(
                     briefingConfig,
                     scope.workspaceHint,
@@ -166,7 +206,7 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
                 briefingConfig?: Partial<BriefingConfig>,
                 runtime?: object | null
             ) => {
-                const scope = resolveWorkflowPromptScope(args)
+                const scope = resolveWorkflowPromptScope(args, briefingConfig)
                 const ws = resolvePromptPriorWorkspace(
                     briefingConfig,
                     scope.workspaceHint,
@@ -197,7 +237,7 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
                 briefingConfig?: Partial<BriefingConfig>,
                 runtime?: object | null
             ) => {
-                const scope = resolveWorkflowPromptScope(args)
+                const scope = resolveWorkflowPromptScope(args, briefingConfig)
                 const ws = resolvePromptPriorWorkspace(
                     briefingConfig,
                     scope.workspaceHint,
@@ -229,7 +269,7 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
                 briefingConfig?: Partial<BriefingConfig>,
                 runtime?: object | null
             ) => {
-                const scope = resolveWorkflowPromptScope(args)
+                const scope = resolveWorkflowPromptScope(args, briefingConfig)
                 const ws = resolvePromptPriorWorkspace(
                     briefingConfig,
                     scope.workspaceHint,

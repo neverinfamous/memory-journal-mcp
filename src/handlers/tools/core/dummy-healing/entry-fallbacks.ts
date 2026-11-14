@@ -391,12 +391,12 @@ export function getEntryAndCodemodeFallbackToolDefinitions(
                             const res = await Promise.resolve(codemodeTool.handler(forwardedParams))
                             if (typeof res === 'object' && res !== null) {
                                 const resRecord = res as Record<string, unknown>
-                                if (resRecord['success'] === false) {
-                                    return res
-                                }
+                                const succeeded = resRecord['success'] !== false
                                 return {
                                     ...resRecord,
-                                    _healing_note: `🛠️ AUTONOMOUS HEALING: '${name}' was called as an MCP tool. It was automatically translated and executed via Code Mode ('mj_execute_code').`,
+                                    _healing_note: succeeded
+                                        ? `🛠️ AUTONOMOUS HEALING: '${name}' was called as an MCP tool. It was automatically translated and executed via Code Mode ('mj_execute_code').`
+                                        : `🛠️ AUTONOMOUS HEALING: '${name}' was called as an MCP tool and translated to Code Mode ('mj_execute_code'), but the execution did not succeed. Fix the reported error and prefer calling 'mj_execute_code' directly.`,
                                 }
                             }
                             return res

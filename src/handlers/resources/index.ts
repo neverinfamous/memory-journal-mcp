@@ -15,6 +15,7 @@ import type { ServerRuntime } from '../../utils/maintenance-lock.js'
 import { enforceAccessBoundary } from '../../auth/validation.js'
 
 // Re-export shared types
+export { getBaseUri } from './shared.js'
 export type { ResourceContext, ResourceResult, InternalResourceDef } from './shared.js'
 
 import { getCoreResourceDefinitions } from './core/index.js'
@@ -27,7 +28,7 @@ import { getHelpResourceDefinitions } from './help.js'
 import { getInsightResourceDefinitions } from './insights.js'
 import { getStalenessResourceDefinitions } from './staleness.js'
 import { getToolsCatalogResourceDefinitions } from './tools-catalog.js'
-import type { InternalResourceDef, ResourceResult } from './shared.js'
+import { getBaseUri, type InternalResourceDef, type ResourceResult } from './shared.js'
 import { ResourceNotFoundError } from '../../types/errors.js'
 import { getAuditResourceDef } from '../../audit/index.js'
 
@@ -78,34 +79,6 @@ function isResourceResult(result: unknown): result is ResourceResult {
         'data' in result &&
         (result as Record<string, unknown>)['data'] !== undefined
     )
-}
-
-/**
- * Extract base URI without query parameters for matching
- */
-export function getBaseUri(uri: string): string {
-    // Handle memory:// URIs specially since URL parser treats the path as host
-    if (uri.startsWith('memory://')) {
-        const withoutScheme = uri.slice('memory://'.length)
-        const queryIndex = withoutScheme.indexOf('?')
-        const hashIndex = withoutScheme.indexOf('#')
-
-        // Find first delimiter (query or hash)
-        let endIndex = withoutScheme.length
-        if (queryIndex !== -1 && queryIndex < endIndex) endIndex = queryIndex
-        if (hashIndex !== -1 && hashIndex < endIndex) endIndex = hashIndex
-
-        return 'memory://' + withoutScheme.slice(0, endIndex)
-    }
-
-    // Fallback for other URI schemes
-    try {
-        const url = new URL(uri)
-        return `${url.protocol}//${url.host}${url.pathname}`
-    } catch {
-        // Invalid URL, return original
-        return uri
-    }
 }
 
 /**

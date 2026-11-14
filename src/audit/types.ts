@@ -51,6 +51,12 @@ export interface AuditEntry {
 
     /** Estimated token count of the tool response (~4 bytes per token) */
     tokenEstimate?: number | undefined
+
+    /** Optional workspace ID associated with the audited operation */
+    workspaceId?: string | undefined
+
+    /** Optional project number associated with the audited operation */
+    projectNumber?: number | undefined
 }
 
 /** Filters for searching the audit log */
@@ -61,6 +67,8 @@ export interface AuditSearchFilters {
     status?: boolean
     category?: AuditCategory
     limit?: number
+    workspace_id?: string | undefined
+    project_number?: number | undefined
 }
 
 /** Audit log configuration */

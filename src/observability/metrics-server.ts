@@ -1,14 +1,99 @@
+import { timingSafeEqual } from 'node:crypto';
 import * as http from 'node:http';
 import { logger } from '../utils/logger.js';
 import type { ServerRuntime } from '../utils/maintenance-lock.js';
 import { formatPrometheusMetrics } from './prometheus-formatter.js';
 
-export function startMetricsServer(runtime: ServerRuntime, metricsPort?: number): () => Promise<void> {
+export interface MetricsServerOptions {
+    authToken?: string | undefined;
+}
+
+function parseMetricsPort(metricsPort: number | undefined): number {
+    if (metricsPort !== undefined) {
+        if (!Number.isInteger(metricsPort) || metricsPort < 0 || metricsPort > 65535) {
+            throw new RangeError(
+                `Invalid metrics port: ${String(metricsPort)} (expected integer 0..65535)`
+            );
+        }
+        return metricsPort;
+    }
     const portStr = process.env['MJ_METRICS_PORT'];
-    const port = metricsPort ?? (portStr !== undefined && portStr !== '' ? parseInt(portStr, 10) : 9465);
+    if (portStr === undefined || portStr.trim() === '') return 9465;
+    const trimmed = portStr.trim();
+    if (!/^\d+$/.test(trimmed)) {
+        throw new RangeError(`Invalid MJ_METRICS_PORT: '${portStr}' (expected integer 0..65535)`);
+    }
+    const parsed = Number(trimmed);
+    if (!Number.isInteger(parsed) || parsed < 0 || parsed > 65535) {
+        throw new RangeError(`Invalid MJ_METRICS_PORT: ${parsed} (expected integer 0..65535)`);
+    }
+    return parsed;
+}
+
+function isLoopbackHostHeader(hostHeader: string | string[] | undefined): boolean {
+    if (hostHeader === undefined) return true;
+    if (Array.isArray(hostHeader)) return false;
+    const trimmed = hostHeader.trim().toLowerCase();
+    if (trimmed.length === 0) return false;
+    if (trimmed.startsWith('[')) {
+        const closeIdx = trimmed.indexOf(']');
+        if (closeIdx === -1) return false;
+        const hostPart = trimmed.slice(1, closeIdx);
+        const rest = trimmed.slice(closeIdx + 1);
+        if (rest !== '' && !/^:\d+$/.test(rest)) return false;
+        return hostPart === '::1';
+    }
+    if (trimmed === '::1') return true;
+    const colonIdx = trimmed.indexOf(':');
+    if (colonIdx !== -1) {
+        const hostPart = trimmed.slice(0, colonIdx);
+        const portPart = trimmed.slice(colonIdx + 1);
+        if (!/^\d+$/.test(portPart)) return false;
+        return hostPart === 'localhost' || hostPart === '127.0.0.1';
+    }
+    return trimmed === 'localhost' || trimmed === '127.0.0.1';
+}
+
+function isValidBearerToken(
+    authHeader: string | string[] | undefined,
+    expectedToken: string
+): boolean {
+    if (typeof authHeader !== 'string') return false;
+    const spaceIdx = authHeader.indexOf(' ');
+    if (spaceIdx === -1) return false;
+    const scheme = authHeader.slice(0, spaceIdx).toLowerCase();
+    if (scheme !== 'bearer') return false;
+    const provided = Buffer.from(authHeader.slice(spaceIdx + 1), 'utf8');
+    const expected = Buffer.from(expectedToken, 'utf8');
+    return provided.length === expected.length && timingSafeEqual(expected, provided);
+}
+
+export function startMetricsServer(
+    runtime: ServerRuntime,
+    metricsPort?: number,
+    options?: MetricsServerOptions
+): () => Promise<void> {
+    const port = parseMetricsPort(metricsPort);
+    const authToken =
+        typeof options?.authToken === 'string' && options.authToken.length > 0
+            ? options.authToken
+            : undefined;
 
     const server = http.createServer((req, res) => {
+        if (!isLoopbackHostHeader(req.headers.host)) {
+            res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
+            res.end('Forbidden');
+            return;
+        }
         if (req.url === '/metrics' && req.method === 'GET') {
+            if (authToken !== undefined && !isValidBearerToken(req.headers.authorization, authToken)) {
+                res.writeHead(401, {
+                    'Content-Type': 'text/plain; charset=utf-8',
+                    'WWW-Authenticate': 'Bearer',
+                });
+                res.end('Unauthorized');
+                return;
+            }
             try {
                 const metrics = formatPrometheusMetrics(runtime.metrics);
                 res.writeHead(200, { 'Content-Type': 'text/plain' });

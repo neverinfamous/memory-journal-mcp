@@ -22,6 +22,7 @@ import type {
 } from '../handlers/resources/shared.js'
 import { ASSISTANT_FOCUSED } from '../utils/resource-annotations.js'
 import type { AuditLogger } from './audit-logger.js'
+import { extractAuditScopeFromUri, matchesAuditFilters } from './audit-query-helpers.js'
 
 // ============================================================================
 // Resource Factory
@@ -51,7 +52,7 @@ export function getAuditResourceDef(getLogger: () => AuditLogger | null): Intern
         capabilities: {
             requiresAuditScope: true,
         },
-        handler: async (_uri: string, _context: ResourceContext): Promise<ResourceResult> => {
+        handler: async (uri: string, _context: ResourceContext): Promise<ResourceResult> => {
             const lastModified = new Date().toISOString()
             const auditLogger = getLogger()
 
@@ -64,7 +65,25 @@ export function getAuditResourceDef(getLogger: () => AuditLogger | null): Intern
                 }
             }
 
-            const entries = await auditLogger.recent(50)
+            const scopeFilter = extractAuditScopeFromUri(uri)
+            const hasScopeFilter =
+                scopeFilter.workspaceId !== undefined || scopeFilter.projectNumber !== undefined
+            const searchFilter = {
+                ...(scopeFilter.workspaceId !== undefined
+                    ? { workspace_id: scopeFilter.workspaceId }
+                    : {}),
+                ...(scopeFilter.projectNumber !== undefined
+                    ? { project_number: scopeFilter.projectNumber }
+                    : {}),
+                limit: 50,
+            }
+            const entries = hasScopeFilter
+                ? typeof auditLogger.search === 'function'
+                    ? await auditLogger.search(searchFilter)
+                    : (await auditLogger.recent(50)).filter((entry) =>
+                          matchesAuditFilters(entry, searchFilter)
+                      )
+                : await auditLogger.recent(50)
 
             if (entries.length === 0) {
                 return {
@@ -99,6 +118,12 @@ export function getAuditResourceDef(getLogger: () => AuditLogger | null): Intern
                     ]
                     if (e.error) {
                         parts.push(`  error: ${JSON.stringify(e.error)}`)
+                    }
+                    if (e.workspaceId !== undefined) {
+                        parts.push(`  workspace_id: ${JSON.stringify(e.workspaceId)}`)
+                    }
+                    if (e.projectNumber !== undefined) {
+                        parts.push(`  project_number: ${String(e.projectNumber)}`)
                     }
                     if (e.tokenEstimate !== undefined) {
                         parts.push(`  token_estimate: ${String(e.tokenEstimate)}`)

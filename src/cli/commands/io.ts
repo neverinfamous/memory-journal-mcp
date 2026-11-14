@@ -15,7 +15,7 @@ import {
     findCanonicalRegistryKey,
     resolveProjectContext,
     resolveWorkspaceFromFilePath,
-    resolveWorkspaceId,
+    resolveCliQueryScope,
 } from '../../utils/workspace-resolver.js'
 import {
     activeProjectRegistry,
@@ -52,15 +52,12 @@ export async function exportJsonAction(options: z.infer<typeof exportJsonSchema>
         if (options.workspace?.trim() === '*') {
             throw new Error("Workspace '*' cannot be used for a single-file export.")
         }
-        const requestedProject = options.defaultProject
-        const workspaceId = resolveWorkspaceId(
+        const { workspaceId, projectNumber } = resolveCliQueryScope(
             options.workspace,
-            // [INVARIANT] Only a CLI-supplied project is explicit; the configured default stays a
-            // fallback inside `serverOptions` so it cannot override cwd/workspace pairing (H4).
-            requestedProject,
+            options.defaultProject,
             serverOptions
         )
-        const entries = fetchAllWorkspaceEntries(db, workspaceId, requestedProject)
+        const entries = fetchAllWorkspaceEntries(db, workspaceId, projectNumber)
 
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
         const defaultName = `journal_export_${timestamp}.json`
@@ -93,15 +90,12 @@ export async function exportMarkdownAction(options: z.infer<typeof exportMarkdow
         if (options.workspace?.trim() === '*') {
             throw new Error("Workspace '*' cannot be used for a single-directory export.")
         }
-        const requestedProject = options.defaultProject
-        const workspaceId = resolveWorkspaceId(
+        const { workspaceId, projectNumber } = resolveCliQueryScope(
             options.workspace,
-            // [INVARIANT] Only a CLI-supplied project is explicit; the configured default stays a
-            // fallback inside `serverOptions` so it cannot override cwd/workspace pairing (H4).
-            requestedProject,
+            options.defaultProject,
             serverOptions
         )
-        const entries = fetchAllWorkspaceEntries(db, workspaceId, requestedProject)
+        const entries = fetchAllWorkspaceEntries(db, workspaceId, projectNumber)
         
         const exportable = entries.map(e => ({
             id: e.id,

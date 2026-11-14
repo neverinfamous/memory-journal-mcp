@@ -95,7 +95,11 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                         throw new ConfigurationError('Code Mode is disabled in the server configuration.')
                     }
 
-                    const clientId = context.auth?.sub ?? context.auth?.subject ?? 'default'
+                    const clientId =
+                        getAuthContext()?.claims?.sub ??
+                        context.auth?.sub ??
+                        context.auth?.subject ??
+                        'default'
                     if (!securityManager.checkRateLimit(clientId)) {
                         return {
                             success: false,

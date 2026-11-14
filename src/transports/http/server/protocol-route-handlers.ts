@@ -55,7 +55,16 @@ function resolveRequestSubject(): string | undefined {
 }
 
 export function extractSessionId(req: Request): string | undefined {
-    return (req.query?.['sessionId'] ?? req.headers?.['mcp-session-id']) as string | undefined
+    const candidate = req.query?.['sessionId'] ?? req.headers?.['mcp-session-id']
+    if (typeof candidate === 'string') {
+        const trimmed = candidate.trim()
+        return trimmed.length > 0 ? trimmed : undefined
+    }
+    if (Array.isArray(candidate) && typeof candidate[0] === 'string') {
+        const trimmed = candidate[0].trim()
+        return trimmed.length > 0 ? trimmed : undefined
+    }
+    return undefined
 }
 
 export function assertHttpBindIsSafe(
@@ -66,7 +75,12 @@ export function assertHttpBindIsSafe(
     logWarning: (msg: string) => void,
     logError: (msg: string) => void
 ): void {
-    const isLocalhost = host === 'localhost' || host === '127.0.0.1' || host === '::1'
+    const normalizedHost = host.trim().toLowerCase()
+    const isLocalhost =
+        normalizedHost === 'localhost' ||
+        normalizedHost === '127.0.0.1' ||
+        normalizedHost === '::1' ||
+        normalizedHost === '[::1]'
     const hasCorsOpen = corsOrigins?.includes('*') ?? false
     const hasAuth = Boolean(authToken) || oauthEnabled === true
 
