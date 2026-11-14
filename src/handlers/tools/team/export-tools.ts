@@ -21,6 +21,68 @@ import {
 // Tool Definitions
 // ============================================================================
 
+interface TeamExportableEntry {
+    id: number
+    timestamp: string
+    entryType: string
+    content: string
+    author: string | null
+    tags?: string[]
+    workspaceId?: string
+}
+
+function capTeamExportEntries<T extends { content: string }>(
+    entries: T[]
+): { boundedEntries: T[]; truncated: boolean } {
+    const MAX_PAYLOAD_BYTES = 5 * 1024 * 1024
+    let currentBytes = 0
+    const boundedEntries: T[] = []
+    let truncated = false
+
+    for (const entry of entries) {
+        const entrySize = Buffer.byteLength(entry.content, 'utf8') + 500
+        if (currentBytes + entrySize > MAX_PAYLOAD_BYTES) {
+            truncated = true
+            break
+        }
+        currentBytes += entrySize
+        boundedEntries.push(entry)
+    }
+
+    return { boundedEntries, truncated }
+}
+
+function formatTeamExportMarkdown(enriched: TeamExportableEntry[], wsId: string): string {
+    const lines: string[] = ['# Team Journal Export', '']
+    // [INTENT] Partition wildcard exports so entries from different workspaces never interleave.
+    const groups = new Map<string, TeamExportableEntry[]>()
+    for (const entry of enriched) {
+        const key = entry.workspaceId ?? wsId
+        const bucket = groups.get(key) ?? []
+        bucket.push(entry)
+        groups.set(key, bucket)
+    }
+    const partitioned = groups.size > 1 || wsId.trim() === '*'
+    for (const [groupWs, groupEntries] of groups) {
+        if (partitioned) {
+            lines.push(`# Workspace: ${groupWs}`, '')
+        }
+        for (const entry of groupEntries) {
+            lines.push(`## Entry #${String(entry.id)}`)
+            lines.push(`**Date:** ${entry.timestamp}`)
+            lines.push(`**Type:** ${entry.entryType}`)
+            if (entry.author) {
+                lines.push(`**Author:** ${entry.author}`)
+            }
+            if (entry.tags !== undefined && entry.tags.length > 0) {
+                lines.push(`**Tags:** ${entry.tags.join(', ')}`)
+            }
+            lines.push('', entry.content, '', '---', '')
+        }
+    }
+    return lines.join('\n')
+}
+
 export function getTeamExportTools(context: ToolContext): ToolDefinition[] {
     const { teamDb, progress } = context
 
@@ -118,21 +180,7 @@ export function getTeamExportTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     // Enforce < 5MB payload ceiling (approximate based on content + overhead)
-                    const MAX_PAYLOAD_BYTES = 5 * 1024 * 1024
-                    let currentBytes = 0
-                    const boundedEntries: typeof entries = []
-                    let truncated = false
-
-                    for (const entry of entries) {
-                        const entrySize = Buffer.byteLength(entry.content, 'utf8') + 500
-                        if (currentBytes + entrySize > MAX_PAYLOAD_BYTES) {
-                            truncated = true
-                            break
-                        }
-                        currentBytes += entrySize
-                        boundedEntries.push(entry)
-                    }
-
+                    const { boundedEntries, truncated } = capTeamExportEntries(entries)
                     entries = boundedEntries
 
                     await sendProgress(progress, 2, 3, 'Formatting export data...')
@@ -147,43 +195,10 @@ export function getTeamExportTools(context: ToolContext): ToolDefinition[] {
                         author: authorMap.get(e.id) ?? null,
                     }))
 
-                    let data: string
-                    if (format === 'markdown') {
-                        const lines: string[] = ['# Team Journal Export', '']
-                        // [INTENT] Partition wildcard exports so entries from different workspaces never interleave.
-                        const groups = new Map<string, typeof enriched>()
-                        for (const entry of enriched) {
-                            const key = entry.workspaceId ?? wsId
-                            const bucket = groups.get(key) ?? []
-                            bucket.push(entry)
-                            groups.set(key, bucket)
-                        }
-                        const partitioned = groups.size > 1 || wsId.trim() === '*'
-                        for (const [groupWs, groupEntries] of groups) {
-                            if (partitioned) {
-                                lines.push(`# Workspace: ${groupWs}`, '')
-                            }
-                            for (const entry of groupEntries) {
-                                lines.push(`## Entry #${String(entry.id)}`)
-                                lines.push(`**Date:** ${entry.timestamp}`)
-                                lines.push(`**Type:** ${entry.entryType}`)
-                                if (entry.author) {
-                                    lines.push(`**Author:** ${entry.author}`)
-                                }
-                                if (entry.tags !== undefined && entry.tags.length > 0) {
-                                    lines.push(`**Tags:** ${entry.tags.join(', ')}`)
-                                }
-                                lines.push('')
-                                lines.push(entry.content)
-                                lines.push('')
-                                lines.push('---')
-                                lines.push('')
-                            }
-                        }
-                        data = lines.join('\n')
-                    } else {
-                        data = JSON.stringify(enriched)
-                    }
+                    const data =
+                        format === 'markdown'
+                            ? formatTeamExportMarkdown(enriched, wsId)
+                            : JSON.stringify(enriched)
 
                     await sendProgress(progress, 3, 3, 'Export complete')
 

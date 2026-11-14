@@ -15,6 +15,27 @@ import type { FrontmatterData } from '../frontmatter.js'
 import { parseYamlFrontmatter } from './yaml-parser.js'
 import { extractTags, formatToISODate } from './utils.js'
 
+function applyLogseqPropertyLine(
+    line: string,
+    mjMeta: FrontmatterData,
+    mergedTags: Set<string>
+): boolean {
+    const propMatch = /^(\s*)([a-zA-Z0-9_-]+)::\s*(.+)$/.exec(line)
+    if (propMatch === null) return false
+    const [, , key, val] = propMatch
+    const k = key?.toLowerCase()
+    const v = val?.trim()
+    if (k === 'tags' && v !== undefined && v !== '') {
+        for (const rawTag of v.split(/[, ]+/)) {
+            const trimmed = rawTag.trim()
+            if (trimmed !== '') mergedTags.add(trimmed.replace(/^#/, ''))
+        }
+    } else if (k === 'date' && v !== undefined && v !== '') {
+        mjMeta.timestamp = formatToISODate(v)
+    }
+    return true
+}
+
 export function convertLogseq(
     content: string,
     filename: string,
@@ -41,22 +62,8 @@ export function convertLogseq(
 
     for (const rawLine of lines) {
         let line = rawLine ?? ''
-        
-        // Extract inline properties (key:: value)
-        const propMatch = /^(\s*)([a-zA-Z0-9_-]+)::\s*(.+)$/.exec(line)
-        if (propMatch !== null) {
-            const [, , key, val] = propMatch
-            const k = key?.toLowerCase()
-            const v = val?.trim()
-            if (k === 'tags' && v) {
-                const tags = v.split(/[, ]+/).map(s => s.trim())
-                for (const t of tags) if (t) mergedTags.add(t.replace(/^#/, ''))
-            } else if (k === 'date' && v) {
-                mjMeta.timestamp = formatToISODate(v)
-            }
-            // Strip the property line from output
-            continue
-        }
+
+        if (applyLogseqPropertyLine(line, mjMeta, mergedTags)) continue
 
         // Handle task markers
         if (/^\s*-\s+(TODO|LATER)\b/.exec(line)) {

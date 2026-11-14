@@ -64,22 +64,19 @@ function healMetadataAndContextFields(obj: Record<string, unknown>): boolean {
     for (const [field, label] of [
         ['context', 'Context'], ['focus', 'Focus'], ['resolution', 'Resolution'],
     ] as const) {
-        if (field in obj) {
-            const val =
-                field === 'context' && typeof obj[field] === 'object' && obj[field] !== null
-                    ? JSON.stringify(obj[field], null, 2)
-                    : toStr(obj[field])
-            if (val !== '') {
-                const existingContent = toStr(obj['content'])
-                // [INVARIANT] H8: never synthesize a full-overwrite body on update payloads.
-                if (existingContent !== '' || !isUpdatePayload(obj)) {
-                    obj['content'] =
-                        existingContent !== '' ? `${existingContent}\n\n**${label}:** ${val}` : val
-                }
-            }
-            Reflect.deleteProperty(obj, field)
-            modified = true
+        if (!(field in obj)) continue
+        const val =
+            field === 'context' && typeof obj[field] === 'object' && obj[field] !== null
+                ? JSON.stringify(obj[field], null, 2)
+                : toStr(obj[field])
+        const existingContent = toStr(obj['content'])
+        // [INVARIANT] H8: never synthesize a full-overwrite body on update payloads.
+        if (val !== '' && (existingContent !== '' || !isUpdatePayload(obj))) {
+            obj['content'] =
+                existingContent !== '' ? `${existingContent}\n\n**${label}:** ${val}` : val
         }
+        Reflect.deleteProperty(obj, field)
+        modified = true
     }
 
     if ('artifacts' in obj) {
@@ -228,15 +225,13 @@ function healNestedContainersAndEntryIds(obj: Record<string, unknown>): boolean 
     }
 
     for (const containerKey of ['filters', 'filter']) {
-        if (containerKey in obj) {
-            const val = obj[containerKey]
-            Reflect.deleteProperty(obj, containerKey)
-            if (typeof val === 'object' && val !== null && !Array.isArray(val)) {
-                for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
-                    if (!(k in obj) && v !== undefined) obj[k] = v
-                }
-            }
-            modified = true
+        if (!(containerKey in obj)) continue
+        const val = obj[containerKey]
+        Reflect.deleteProperty(obj, containerKey)
+        modified = true
+        if (typeof val !== 'object' || val === null || Array.isArray(val)) continue
+        for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
+            if (!(k in obj) && v !== undefined) obj[k] = v
         }
     }
 

@@ -14,14 +14,11 @@ import {
     resolveProjectContext,
 } from '../../../../utils/workspace-resolver.js'
 import { activeProjectRegistry, pairStoredScope } from '../../../../utils/write-scope.js'
-import { TEAM_DB_ERROR_RESPONSE, fetchAuthor, batchFetchAuthors, triggerTeamNotifications, resolveTeamProjectNumber } from '../helpers.js'
+import { TEAM_DB_ERROR_RESPONSE, fetchAuthor, batchFetchAuthors, triggerTeamNotifications } from '../helpers.js'
 import { resolveWriteWorkspaceId } from '../../write-workspace.js'
 import {
     buildValidatedTeamBatchUpdates,
-    missingProjectNumberResponse,
-    permanentDeleteDeniedResponse,
-    filterDeletableIds,
-    cleanupDeletedVectors,
+    executeTeamBatchDelete,
 } from './batch-delete-helpers.js'
 import {
     TeamBatchCreateEntriesSchema,
@@ -379,78 +376,8 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
             handler: async (params: unknown) => {
                 try {
                     if (!teamDb) return { ...TEAM_DB_ERROR_RESPONSE }
-
                     const input = TeamBatchDeleteEntriesSchema.parse(params)
-                    await sendProgress(context.progress, 0, 2, 'Deleting team entries...')
-                    const currentUser = resolveAuthenticatedAuthor()
-                    const codemodeBypass = context.config?.codemodeInternalFullAccess === true
-                    
-                    let wsId =
-                        input.workspace_id === '*'
-                            ? '*'
-                            : resolveWriteWorkspaceId(input.workspace_id, input.project_number, context.config)
-                    const projectNumber = resolveTeamProjectNumber(
-                        context,
-                        wsId,
-                        input.project_number,
-                        input.workspace_id
-                    )
-                    if (projectNumber === undefined || projectNumber === null) {
-                        return missingProjectNumberResponse()
-                    }
-                    wsId =
-                        input.workspace_id === '*' || wsId === '*'
-                            ? '*'
-                            : resolveWriteWorkspaceId(input.workspace_id ?? wsId, projectNumber, context.config)
-
-                    // Filter ids to those that match the project number and check permissions
-                    const callerRole =
-                        teamDb.isTeamRbacActive?.()
-                            ? teamDb.resolveTeamRole(currentUser, context.config?.teamDefaultRole ?? 'denied')
-                            : null
-
-                    if (input.permanent && !codemodeBypass && callerRole !== null && callerRole !== 'admin') {
-                        return permanentDeleteDeniedResponse(currentUser, callerRole)
-                    }
-
-                    const filtered = filterDeletableIds(teamDb, {
-                        entryIds: input.entry_ids,
-                        wsId,
-                        projectNumber,
-                        currentUser,
-                        callerRole,
-                        codemodeBypass,
-                        ...(input.permanent !== undefined ? { permanent: input.permanent } : {}),
-                    })
-                    if ('errorResponse' in filtered) return filtered.errorResponse
-                    const { validIds, notFound } = filtered
-
-                    const { deleted, notFound: deleteNotFound, errors } = teamDb.deleteEntries(validIds, input.permanent, wsId)
-                    
-                    await sendProgress(context.progress, 1, 2, `Deleted ${String(deleted.length)} team entries...`)
-
-                    await cleanupDeletedVectors(context, teamDb, deleted)
-
-                    // Merge notFound arrays
-                    const finalNotFound = [...notFound, ...deleteNotFound]
-
-                    // Deletions are already committed, so notify subscribers even when some ids failed
-                    if (deleted.length > 0) {
-                        triggerTeamNotifications(context)
-                    }
-
-                    if (errors.length > 0 || finalNotFound.length > 0) {
-                        const mcpErrors = [
-                            ...finalNotFound.map(id => new Error(`Team entry ${id} not found`)),
-                            ...errors.map(e => new Error(`Team entry ${e.id} failed to delete: ${e.error.message}`))
-                        ];
-                        throw new AggregateError(
-                            mcpErrors,
-                            `Team batch delete partially failed: ${deleted.length} deleted (ids: ${deleted.join(', ')}), ${mcpErrors.length} operations failed`
-                        );
-                    }
-
-                    return { success: true, count: deleted.length, deleted, notFound: finalNotFound, permanent: input.permanent }
+                    return await executeTeamBatchDelete(context, teamDb, input)
                 } catch (err) {
                     return formatHandlerError(err)
                 }

@@ -5,11 +5,12 @@ import type { AnchorStatus, ToolHandlerConfig } from '../../types/index.js'
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import { mcpLogger } from '../../utils/mcp-logger.js'
 import { assertSafeDirectoryPath } from '../../utils/security-utils.js'
-import { ValidationError } from '../../types/errors.js'
+import { ValidationError, ResourceNotFoundError } from '../../types/errors.js'
 import {
     loadProjectRegistryFromConfig,
     findCanonicalRegistryKey,
     cwdMatchesRegistryPath,
+    resolveWorkspaceId,
 } from '../../utils/workspace-resolver.js'
 
 export interface GitWorkingDirInput {
@@ -281,4 +282,93 @@ export function stalenessFailure(
             error: message,
         },
     }
+}
+
+/** Resolve target workspaces to scan during `check_entry_staleness`. */
+export function resolveStalenessTargetWorkspaces(
+    db: Pick<IDatabaseAdapter, 'getEntryByIdIncludeDeleted'>,
+    rawWs: string | undefined,
+    rawProj: number | undefined,
+    resolvedEntryId: number | undefined,
+    registry: ToolHandlerConfig['projectRegistry'] | undefined,
+    config: ToolHandlerConfig | undefined
+): string[] {
+    const defaultWs = resolveWorkspaceId(undefined, undefined, config)
+    if (rawWs !== '*') {
+        return [resolveWorkspaceId(rawWs, rawProj, config)]
+    }
+    if (resolvedEntryId !== undefined) {
+        const entry = db.getEntryByIdIncludeDeleted(resolvedEntryId, '*')
+        if (!entry) throw new ResourceNotFoundError('entry', String(resolvedEntryId))
+        if (typeof rawProj === 'number' && entry.projectNumber !== rawProj) {
+            throw new ResourceNotFoundError('entry', String(resolvedEntryId))
+        }
+        return [entry.workspaceId ?? defaultWs]
+    }
+    const registryKeys = Object.keys(registry ?? {}).filter(
+        (key) => typeof rawProj !== 'number' || registry?.[key]?.project_number === rawProj
+    )
+    if (registryKeys.length > 0) return Array.from(new Set(registryKeys))
+    return typeof rawProj !== 'number' ? [defaultWs] : []
+}
+
+function collectStalenessTargetsForWorkspace(
+    db: Pick<IDatabaseAdapter, 'getEntryByIdIncludeDeleted' | 'getRecentEntries'>,
+    wsId: string,
+    rawWs: string | undefined,
+    rawProj: number | undefined,
+    resolvedEntryId: number | undefined
+): { id: number; timestamp: string }[] {
+    if (resolvedEntryId !== undefined) {
+        const entry = db.getEntryByIdIncludeDeleted(resolvedEntryId, rawWs === '*' ? '*' : wsId)
+        if (!entry || (typeof rawProj === 'number' && entry.projectNumber !== rawProj)) {
+            if (rawWs !== '*') throw new ResourceNotFoundError('entry', String(resolvedEntryId))
+            return []
+        }
+        return [{ id: entry.id, timestamp: entry.timestamp }]
+    }
+    const projectNumber = typeof rawProj === 'number' ? rawProj : undefined
+    const { entries: recent } = db.getRecentEntries(20, undefined, undefined, undefined, false, wsId, projectNumber)
+    return recent.map((r) => ({ id: r.id, timestamp: r.timestamp }))
+}
+
+/** Evaluate all anchors in a single workspace and report whether it was skipped for missing a path. */
+export async function evaluateWorkspaceAnchors(options: {
+    db: IDatabaseAdapter
+    wsId: string
+    rawWs: string | undefined
+    rawProj: number | undefined
+    resolvedEntryId: number | undefined
+    registry: ToolHandlerConfig['projectRegistry'] | undefined
+    countCommitsSince: (anchorPath: string, since: string, cwd: string) => Promise<number>
+}): Promise<{ rows: StalenessCheckRow[]; skipped: boolean }> {
+    const { db, wsId, rawWs, rawProj, resolvedEntryId, registry, countCommitsSince } = options
+    const canonicalWs = findCanonicalRegistryKey(wsId, registry) ?? wsId
+    const registryPath = registry?.[canonicalWs]?.path
+    if (registryPath === undefined || registryPath.length === 0 || !fs.existsSync(registryPath)) {
+        if (rawWs === '*') return { rows: [], skipped: true }
+        throw new ValidationError(
+            registryPath !== undefined && registryPath.length > 0
+                ? `Registered repository path for workspace '${wsId}' does not exist: ${registryPath}`
+                : `No registered repository path for workspace '${wsId}'. Register the project path before checking its anchors.`
+        )
+    }
+
+    const targets = collectStalenessTargetsForWorkspace(db, wsId, rawWs, rawProj, resolvedEntryId)
+    const rows: StalenessCheckRow[] = []
+    for (const target of targets) {
+        for (const anchor of db.getAnchorsByEntryId(target.id, wsId)) {
+            rows.push(
+                await evaluateAnchorStaleness(
+                    db,
+                    anchor,
+                    target.timestamp,
+                    registryPath,
+                    (anchorPath, since) => countCommitsSince(anchorPath, since, registryPath),
+                    wsId
+                )
+            )
+        }
+    }
+    return { rows, skipped: false }
 }

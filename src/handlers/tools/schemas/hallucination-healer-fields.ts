@@ -7,77 +7,84 @@ import { safeString } from './constants-and-primitives.js'
 
 /** Fold title/heading/subject/name aliases into the content as a markdown heading. */
 function healTitleField(obj: Record<string, unknown>): boolean {
-    let modified = false
-
-    if ('title' in obj || 'heading' in obj || 'subject' in obj || 'name' in obj) {
-        const rawTitle = obj['title'] ?? obj['heading'] ?? obj['subject'] ?? obj['name']
-        if (rawTitle !== undefined && rawTitle !== null) {
-            const titleStr = safeString(rawTitle).trim()
-            if (titleStr !== '') {
-                const cleanTitle = titleStr.replace(/^#+\s*/, '')
-                const currentContent = safeString(obj['content']).trim()
-                if (
-                    !('content' in obj) ||
-                    obj['content'] === undefined ||
-                    obj['content'] === null ||
-                    currentContent === ''
-                ) {
-                    // [INVARIANT] H8: update payloads (entry_id/id) fully overwrite content, so a
-                    // bare title must never synthesize a replacement body.
-                    if (!('query' in obj) && !isUpdatePayload(obj)) obj['content'] = `# ${cleanTitle}`
-                } else if (!currentContent.startsWith(`# ${cleanTitle}`)) {
-                    obj['content'] = `# ${cleanTitle}\n\n${currentContent}`
-                }
-            }
-        }
-        delete obj['title']
-        delete obj['heading']
-        delete obj['subject']
-        delete obj['name']
-        modified = true
+    if (!('title' in obj || 'heading' in obj || 'subject' in obj || 'name' in obj)) {
+        return false
     }
+    const rawTitle = obj['title'] ?? obj['heading'] ?? obj['subject'] ?? obj['name']
+    const titleStr =
+        rawTitle !== undefined && rawTitle !== null ? safeString(rawTitle).trim() : ''
+    if (titleStr !== '') {
+        const cleanTitle = titleStr.replace(/^#+\s*/, '')
+        const currentContent = safeString(obj['content']).trim()
+        const hasNoContent =
+            !('content' in obj) ||
+            obj['content'] === undefined ||
+            obj['content'] === null ||
+            currentContent === ''
+        if (hasNoContent) {
+            // [INVARIANT] H8: update payloads (entry_id/id) fully overwrite content, so a
+            // bare title must never synthesize a replacement body.
+            if (!('query' in obj) && !isUpdatePayload(obj)) obj['content'] = `# ${cleanTitle}`
+        } else if (!currentContent.startsWith(`# ${cleanTitle}`)) {
+            obj['content'] = `# ${cleanTitle}\n\n${currentContent}`
+        }
+    }
+    delete obj['title']
+    delete obj['heading']
+    delete obj['subject']
+    delete obj['name']
+    return true
+}
 
-    return modified
+function repairSingleQuotedJson(raw: string): string | undefined {
+    try {
+        JSON.parse(raw)
+        return undefined
+    } catch {
+        // Proceed to single-quote repair below.
+    }
+    try {
+        const fixed = raw.replace(/'/g, '"')
+        const parsed = JSON.parse(fixed) as Record<string, unknown>
+        return JSON.stringify(parsed)
+    } catch (err) {
+        logger.debug('Could not repair single-quoted auto_context JSON', {
+            module: 'HallucinationHealer',
+            error: err instanceof Error ? err.message : String(err),
+        })
+        return undefined
+    }
 }
 
 /** Normalise object-valued or single-quoted `auto_context` into a JSON string (or drop empties). */
 function healAutoContextField(obj: Record<string, unknown>): boolean {
+    if (!('auto_context' in obj)) return false
     let modified = false
 
-    if ('auto_context' in obj) {
-        if (typeof obj['auto_context'] === 'object' && obj['auto_context'] !== null) {
-            try {
-                obj['auto_context'] = JSON.stringify(obj['auto_context'])
-                modified = true
-            } catch (err) {
-                logger.debug('Could not stringify auto_context object', {
-                    module: 'HallucinationHealer',
-                    error: err instanceof Error ? err.message : String(err),
-                })
-            }
+    if (typeof obj['auto_context'] === 'object' && obj['auto_context'] !== null) {
+        try {
+            obj['auto_context'] = JSON.stringify(obj['auto_context'])
+            modified = true
+        } catch (err) {
+            logger.debug('Could not stringify auto_context object', {
+                module: 'HallucinationHealer',
+                error: err instanceof Error ? err.message : String(err),
+            })
         }
-        if (typeof obj['auto_context'] === 'string') {
-            const ac = obj['auto_context'].trim().toLowerCase()
-            if (ac === 'none' || ac === '{}' || ac === '{"commits":[]}') {
-                delete obj['auto_context']
-                modified = true
-            } else if (ac.startsWith('{') && ac.includes("'")) {
-                try {
-                    JSON.parse(obj['auto_context'])
-                } catch {
-                    try {
-                        const fixed = obj['auto_context'].replace(/'/g, '"')
-                        const parsed = JSON.parse(fixed) as Record<string, unknown>
-                        obj['auto_context'] = JSON.stringify(parsed)
-                        modified = true
-                    } catch (err) {
-                        logger.debug('Could not repair single-quoted auto_context JSON', {
-                            module: 'HallucinationHealer',
-                            error: err instanceof Error ? err.message : String(err),
-                        })
-                    }
-                }
-            }
+    }
+    if (typeof obj['auto_context'] !== 'string') return modified
+
+    const rawStr = obj['auto_context']
+    const ac = rawStr.trim().toLowerCase()
+    if (ac === 'none' || ac === '{}' || ac === '{"commits":[]}') {
+        delete obj['auto_context']
+        return true
+    }
+    if (ac.startsWith('{') && ac.includes("'")) {
+        const repaired = repairSingleQuotedJson(rawStr)
+        if (repaired !== undefined) {
+            obj['auto_context'] = repaired
+            modified = true
         }
     }
 

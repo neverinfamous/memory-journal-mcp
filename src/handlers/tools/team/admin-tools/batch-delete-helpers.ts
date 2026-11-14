@@ -8,10 +8,10 @@
 import type { z } from 'zod'
 import type { ToolContext } from '../../../../types/index.js'
 import type { TeamRole } from '../../../../database/core/interfaces.js'
-import { fetchAuthor, batchFetchAuthors, resolveTeamProjectNumber } from '../helpers.js'
+import { fetchAuthor, batchFetchAuthors, resolveTeamProjectNumber, triggerTeamNotifications } from '../helpers.js'
 import { enforceEntryOwnership } from '../rbac.js'
 import { resolveWriteWorkspaceId } from '../../write-workspace.js'
-import type { TeamBatchUpdateEntriesSchema } from '../schemas.js'
+import type { TeamBatchDeleteEntriesSchema, TeamBatchUpdateEntriesSchema } from '../schemas.js'
 import { createBatchProgressReporter, sendProgress } from '../../../../utils/progress-utils.js'
 import { logger } from '../../../../utils/logger.js'
 import { resolveAuthenticatedAuthor } from '../../../../utils/security-utils.js'
@@ -274,23 +274,105 @@ export async function cleanupDeletedVectors(
     teamDb: TeamDbInstance,
     deleted: number[]
 ): Promise<void> {
-    if (context.teamVectorManager) {
-        const reporter = createBatchProgressReporter(context.progress, deleted.length, 10)
-        for (let i = 0; i < deleted.length; i++) {
-            const id = deleted[i]
-            if (id !== undefined) {
-                try {
-                    teamDb.deleteVector(id)
-                } catch (vecErr) {
-                    logger.warning('Team batch delete vector cleanup failed', {
-                        entryId: id,
-                        error: vecErr instanceof Error ? vecErr.message : String(vecErr),
-                    })
-                }
-            }
-            await reporter(i + 1, `Updating index ${String(i + 1)}/${String(deleted.length)}...`)
-        }
-    } else {
+    if (!context.teamVectorManager) {
         await sendProgress(context.progress, 2, 2, 'Team batch delete complete')
+        return
+    }
+    const reporter = createBatchProgressReporter(context.progress, deleted.length, 10)
+    for (let i = 0; i < deleted.length; i++) {
+        const id = deleted[i]
+        if (id !== undefined) {
+            try {
+                teamDb.deleteVector(id)
+            } catch (vecErr) {
+                logger.warning('Team batch delete vector cleanup failed', {
+                    entryId: id,
+                    error: vecErr instanceof Error ? vecErr.message : String(vecErr),
+                })
+            }
+        }
+        await reporter(i + 1, `Updating index ${String(i + 1)}/${String(deleted.length)}...`)
+    }
+}
+
+type TeamBatchDeleteInput = z.infer<typeof TeamBatchDeleteEntriesSchema>
+
+/** Validate ownership/scope and execute `team_batch_delete_entries` with shallow control flow. */
+export async function executeTeamBatchDelete(
+    context: ToolContext,
+    teamDb: TeamDbInstance,
+    input: TeamBatchDeleteInput
+): Promise<Record<string, unknown>> {
+    await sendProgress(context.progress, 0, 2, 'Deleting team entries...')
+    const currentUser = resolveAuthenticatedAuthor()
+    const codemodeBypass = context.config?.codemodeInternalFullAccess === true
+
+    let wsId =
+        input.workspace_id === '*'
+            ? '*'
+            : resolveWriteWorkspaceId(input.workspace_id, input.project_number, context.config)
+    const projectNumber = resolveTeamProjectNumber(
+        context,
+        wsId,
+        input.project_number,
+        input.workspace_id
+    )
+    if (projectNumber === undefined || projectNumber === null) {
+        return missingProjectNumberResponse()
+    }
+    wsId =
+        input.workspace_id === '*' || wsId === '*'
+            ? '*'
+            : resolveWriteWorkspaceId(input.workspace_id ?? wsId, projectNumber, context.config)
+
+    const callerRole = teamDb.isTeamRbacActive?.()
+        ? teamDb.resolveTeamRole(currentUser, context.config?.teamDefaultRole ?? 'denied')
+        : null
+
+    if (input.permanent && !codemodeBypass && callerRole !== null && callerRole !== 'admin') {
+        return permanentDeleteDeniedResponse(currentUser, callerRole)
+    }
+
+    const filtered = filterDeletableIds(teamDb, {
+        entryIds: input.entry_ids,
+        wsId,
+        projectNumber,
+        currentUser,
+        callerRole,
+        codemodeBypass,
+        ...(input.permanent !== undefined ? { permanent: input.permanent } : {}),
+    })
+    if ('errorResponse' in filtered) return filtered.errorResponse
+
+    const { deleted, notFound: deleteNotFound, errors } = teamDb.deleteEntries(
+        filtered.validIds,
+        input.permanent,
+        wsId
+    )
+    await sendProgress(context.progress, 1, 2, `Deleted ${String(deleted.length)} team entries...`)
+    await cleanupDeletedVectors(context, teamDb, deleted)
+
+    if (deleted.length > 0) {
+        triggerTeamNotifications(context)
+    }
+
+    const finalNotFound = [...filtered.notFound, ...deleteNotFound]
+    if (errors.length > 0 || finalNotFound.length > 0) {
+        const mcpErrors = [
+            ...finalNotFound.map((id) => new Error(`Team entry ${String(id)} not found`)),
+            ...errors.map((e) => new Error(`Team entry ${String(e.id)} failed to delete: ${e.error.message}`)),
+        ]
+        throw new AggregateError(
+            mcpErrors,
+            `Team batch delete partially failed: ${String(deleted.length)} deleted (ids: ${deleted.join(', ')}), ${String(mcpErrors.length)} operations failed`
+        )
+    }
+
+    return {
+        success: true,
+        count: deleted.length,
+        deleted,
+        notFound: finalNotFound,
+        permanent: input.permanent,
     }
 }

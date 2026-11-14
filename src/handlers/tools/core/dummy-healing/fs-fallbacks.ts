@@ -42,6 +42,99 @@ function pickFirstString(rawArgs: Record<string, unknown>, keys: readonly string
     return undefined
 }
 
+async function runFilesystemGrepSearch(
+    searchPath: string,
+    toolName: string,
+    query: string,
+    filePattern: string | undefined,
+    caseInsensitive: boolean,
+    isRegex: boolean,
+    allowedRoots: string[]
+): Promise<unknown> {
+    let stat: fs.Stats | null
+    try {
+        stat = await fs.promises.stat(searchPath)
+    } catch {
+        stat = null
+    }
+    // [INVARIANT] M5: an explicit-but-missing search_path is an error, not a silent reroute.
+    if (stat === null) {
+        return {
+            success: false,
+            error: `Search path not found: '${searchPath}'`,
+            code: 'RESOURCE_NOT_FOUND',
+            category: 'resource',
+            recoverable: true,
+            matches: [],
+            totalMatches: 0,
+            suggestion: "Provide an existing 'search_path', or use 'search_entries' for journal search.",
+            _healing_note: `🛠️ AUTONOMOUS HEALING: '${toolName}' was not executed because the explicit search_path does not exist.`,
+        }
+    }
+    try {
+        const targetDir = stat.isDirectory() ? searchPath : path.dirname(searchPath)
+        if (stat.isFile()) assertSafeFilePath(searchPath, allowedRoots)
+        const targetPattern =
+            stat.isFile() && filePattern === undefined ? path.basename(searchPath) : filePattern
+        const matches = await searchDirectoryAsync(targetDir, query, {
+            filePattern: targetPattern,
+            caseInsensitive,
+            isRegex,
+        })
+        return {
+            success: true,
+            matches,
+            totalMatches: matches.length,
+            searchPath: targetDir,
+            _healing_note: `🛠️ AUTONOMOUS HEALING: '${toolName}' is an agent-native tool, but was invoked directly as an MCP tool. The search was performed on the filesystem and results returned successfully.`,
+        }
+    } catch (err) {
+        return {
+            success: false,
+            error: `Failed to execute grep search on '${searchPath}': ${err instanceof Error ? err.message : String(err)}`,
+            code: err instanceof PathTraversalError ? 'PATH_TRAVERSAL' : 'SEARCH_ERROR',
+            category: err instanceof PathTraversalError ? 'validation' : 'search',
+            recoverable: !(err instanceof PathTraversalError),
+        }
+    }
+}
+
+async function tryJournalSearchFallback(
+    context: ToolContext | undefined,
+    rawArgs: Record<string, unknown>,
+    toolName: string,
+    query: string
+): Promise<unknown> {
+    if (context === undefined || query.trim() === '') return undefined
+    const searchTool = getSearchTools(context).find((t: ToolDefinition) => t.name === 'search_entries')
+    if (searchTool === undefined) return undefined
+    try {
+        const wsArg = pickFirstString(rawArgs, ['workspace_id', 'workspaceId'])
+        const projArg = rawArgs['project_number'] ?? rawArgs['projectNumber']
+        const searchPayload: Record<string, unknown> = {
+            query,
+            ...(wsArg !== undefined ? { workspace_id: wsArg } : {}),
+            ...(projArg !== undefined ? { project_number: projArg } : {}),
+        }
+        const searchResult = await Promise.resolve(searchTool.handler(searchPayload))
+        if (typeof searchResult !== 'object' || searchResult === null) return undefined
+        const searchRecord = searchResult as Record<string, unknown>
+        if (searchRecord['success'] === false) return searchResult
+        return {
+            success: true,
+            ...searchRecord,
+            _healing_note: `🛠️ AUTONOMOUS HEALING: '${toolName}' was invoked as an MCP tool without a local directory path. It was automatically routed to journal 'search_entries' and executed successfully.`,
+        }
+    } catch (err) {
+        logger.debug('Dummy fs-fallback search_entries routing failed', {
+            module: 'dummy-healing',
+            toolName,
+            error: err instanceof Error ? err.message : String(err),
+        })
+        return undefined
+    }
+}
+
 export async function handleGrepSearch(
     params: unknown,
     toolName: string,
@@ -94,92 +187,19 @@ export async function handleGrepSearch(
                 recoverable: false,
             }
         }
+        return await runFilesystemGrepSearch(
+            searchPath,
+            toolName,
+            query,
+            filePattern,
+            caseInsensitive,
+            isRegex,
+            allowedRoots
+        )
     }
 
-    if (typeof searchPath === 'string') {
-        let stat: fs.Stats | null
-        try {
-            stat = await fs.promises.stat(searchPath)
-        } catch {
-            stat = null
-        }
-        // [INVARIANT] M5: an explicit-but-missing search_path is an error, not a silent reroute.
-        if (stat === null) {
-            return {
-                success: false,
-                error: `Search path not found: '${searchPath}'`,
-                code: 'RESOURCE_NOT_FOUND',
-                category: 'resource',
-                recoverable: true,
-                matches: [],
-                totalMatches: 0,
-                suggestion: "Provide an existing 'search_path', or use 'search_entries' for journal search.",
-                _healing_note: `🛠️ AUTONOMOUS HEALING: '${toolName}' was not executed because the explicit search_path does not exist.`,
-            }
-        }
-        if (stat !== null) {
-            try {
-                const targetDir = stat.isDirectory() ? searchPath : path.dirname(searchPath)
-                if (stat.isFile()) assertSafeFilePath(searchPath, allowedRoots)
-                const targetPattern =
-                    stat.isFile() && filePattern === undefined ? path.basename(searchPath) : filePattern
-                const matches = await searchDirectoryAsync(targetDir, query, {
-                    filePattern: targetPattern,
-                    caseInsensitive,
-                    isRegex,
-                })
-                return {
-                    success: true,
-                    matches,
-                    totalMatches: matches.length,
-                    searchPath: targetDir,
-                    _healing_note: `🛠️ AUTONOMOUS HEALING: '${toolName}' is an agent-native tool, but was invoked directly as an MCP tool. The search was performed on the filesystem and results returned successfully.`,
-                }
-            } catch (err) {
-                return {
-                    success: false,
-                    error: `Failed to execute grep search on '${searchPath}': ${err instanceof Error ? err.message : String(err)}`,
-                    code: err instanceof PathTraversalError ? 'PATH_TRAVERSAL' : 'SEARCH_ERROR',
-                    category: err instanceof PathTraversalError ? 'validation' : 'search',
-                    recoverable: !(err instanceof PathTraversalError),
-                }
-            }
-        }
-    }
-
-    if (context !== undefined && query.trim() !== '') {
-        const searchTools = getSearchTools(context)
-        const searchTool = searchTools.find((t: ToolDefinition) => t.name === 'search_entries')
-        if (searchTool !== undefined) {
-            try {
-                const wsArg = pickFirstString(rawArgs, ['workspace_id', 'workspaceId'])
-                const projArg = rawArgs['project_number'] ?? rawArgs['projectNumber']
-                const searchPayload: Record<string, unknown> = {
-                    query,
-                    ...(wsArg !== undefined ? { workspace_id: wsArg } : {}),
-                    ...(projArg !== undefined ? { project_number: projArg } : {}),
-                }
-                const searchResult = await Promise.resolve(searchTool.handler(searchPayload))
-                if (typeof searchResult === 'object' && searchResult !== null) {
-                    const searchRecord = searchResult as Record<string, unknown>
-                    if (searchRecord['success'] === false) {
-                        return searchResult
-                    }
-                    return {
-                        success: true,
-                        ...searchRecord,
-                        _healing_note: `🛠️ AUTONOMOUS HEALING: '${toolName}' was invoked as an MCP tool without a local directory path. It was automatically routed to journal 'search_entries' and executed successfully.`,
-                    }
-                }
-            } catch (err) {
-                logger.debug('Dummy fs-fallback search_entries routing failed', {
-                    module: 'dummy-healing',
-                    toolName,
-                    error: err instanceof Error ? err.message : String(err),
-                })
-            }
-        }
-    }
+    const fallbackResult = await tryJournalSearchFallback(context, rawArgs, toolName, query)
+    if (fallbackResult !== undefined) return fallbackResult
 
     return {
         success: false,

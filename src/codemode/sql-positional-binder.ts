@@ -232,6 +232,34 @@ function parseUpdate(cleanSql: string, args: unknown[]): ParsedSql {
     return { action: 'update', params: payload }
 }
 
+function bindInsertColumns(
+    payload: Record<string, unknown>,
+    columns: string[],
+    values: string[],
+    positional: unknown[],
+    hasRecordBind: boolean
+): boolean {
+    if (columns.length !== values.length) return false
+    let cursor = 0
+    for (let i = 0; i < columns.length; i++) {
+        const column = columns[i] ?? ''
+        const raw = values[i] ?? ''
+        if (raw === '?') {
+            // Record-only binds (named params) leave placeholders to mergeRecordBinds.
+            if (positional.length === 0) {
+                if (!hasRecordBind) return false
+                continue
+            }
+            if (cursor >= positional.length) return false
+            if (!assignColumn(payload, column, positional[cursor++])) return false
+            continue
+        }
+        const literal = parseLiteral(raw)
+        if (literal !== undefined && !assignColumn(payload, column, literal)) return false
+    }
+    return true
+}
+
 function parseInsert(cleanSql: string, args: unknown[]): ParsedSql {
     const payload: Record<string, unknown> = {}
     const match = /\bINSERT\s+INTO\b[\s\S]*?\(([^)]*)\)\s*VALUES\s*\(([\s\S]*)\)\s*;?\s*$/i.exec(cleanSql)
@@ -240,24 +268,7 @@ function parseInsert(cleanSql: string, args: unknown[]): ParsedSql {
     if (match?.[1] !== undefined && match[2] !== undefined) {
         const columns = match[1].split(',').map(normalizeColumn)
         const values = splitSqlValueList(match[2])
-        if (columns.length !== values.length) return UNMAPPED
-        let cursor = 0
-        for (let i = 0; i < columns.length; i++) {
-            const column = columns[i] ?? ''
-            const raw = values[i] ?? ''
-            if (raw === '?') {
-                // Record-only binds (named params) leave placeholders to mergeRecordBinds.
-                if (positional.length === 0) {
-                    if (!hasRecordBind) return UNMAPPED
-                    continue
-                }
-                if (cursor >= positional.length) return UNMAPPED
-                if (!assignColumn(payload, column, positional[cursor++])) return UNMAPPED
-            } else {
-                const literal = parseLiteral(raw)
-                if (literal !== undefined && !assignColumn(payload, column, literal)) return UNMAPPED
-            }
-        }
+        if (!bindInsertColumns(payload, columns, values, positional, hasRecordBind)) return UNMAPPED
     } else if (positional.length > 0) {
         return UNMAPPED
     }

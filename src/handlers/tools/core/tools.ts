@@ -5,7 +5,8 @@ import { sendProgress } from '../../../utils/progress-utils.js'
 import { resolveIssueUrl } from '../../../utils/github-helpers.js'
 import {
     buildCreateEntryInput,
-    shareCreatedEntryWithTeam,
+    indexCreatedEntry,
+    recordTeamShareOutcome,
     tryResolveEntryResourceUri,
 } from './create-entry-helpers.js'
 import { resolveWorkspaceId, resolveProjectContext } from '../../../utils/workspace-resolver.js'
@@ -128,27 +129,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         wsId
                     )
 
-                    // Vectorize entry
-                    let vectorWarning: string | undefined
-                    if (context.vectorManager) {
-                        try {
-                            await sendProgress(progress, 1, 2, 'Generating embeddings...')
-                            await context.vectorManager.addEntry(createdEntry)
-                        } catch (e) {
-                            // Soft fail: continue notifications & team share, attach vector indexing warning
-                            vectorWarning = `Vector indexing failed: ${e instanceof Error ? e.message : String(e)}`
-                            await sendProgress(
-                                progress,
-                                2,
-                                2,
-                                'Entry created (Vector indexing disabled)'
-                            )
-                        }
-                    }
-
-                    if (!vectorWarning) {
-                        await sendProgress(progress, 2, 2, 'Entry created successfully')
-                    }
+                    const vectorWarning = await indexCreatedEntry(context, progress, createdEntry)
 
                     if (context.config?.subscriptionManager) {
                         void context.config.subscriptionManager
@@ -159,39 +140,18 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                     }
                     const finalEntry = createdEntry
 
-                    let sharedWithTeam = false
-                    let author: string | undefined
-
-                    if (input.share_with_team) {
-                        if (!context.teamDb) {
-                            relationshipWarnings.push(
-                                'Team sharing skipped: team database is not configured (set TEAM_DB_PATH).'
-                            )
-                        } else {
-                            // [INVARIANT] M5: the personal entry is already committed; a team-share
-                            // failure must surface as a warning, not fail (or silently drop) the create.
-                            try {
-                                author = shareCreatedEntryWithTeam(context, entryInput)
-                            } catch (shareErr) {
-                                relationshipWarnings.push(
-                                    `Team sharing failed: ${shareErr instanceof Error ? shareErr.message : String(shareErr)}`
-                                )
-                            }
-                            sharedWithTeam = author !== undefined
-                            if (!sharedWithTeam && relationshipWarnings.every((w) => !w.startsWith('Team sharing failed'))) {
-                                relationshipWarnings.push(
-                                    'Team sharing skipped: author identity could not be resolved.'
-                                )
-                            }
-                        }
-                    }
+                    const teamShare = input.share_with_team
+                        ? recordTeamShareOutcome(context, entryInput, relationshipWarnings)
+                        : { sharedWithTeam: false }
 
                     return {
                         success: true,
                         id,
                         entry: finalEntry,
                         ...(vectorWarning ? { error: vectorWarning } : {}),
-                        ...(sharedWithTeam ? { sharedWithTeam, author } : {}),
+                        ...(teamShare.sharedWithTeam
+                            ? { sharedWithTeam: true, ...(teamShare.author !== undefined ? { author: teamShare.author } : {}) }
+                            : {}),
                         ...(relationshipWarnings.length > 0 ? { relationshipWarnings } : {}),
                     }
                 } catch (err) {

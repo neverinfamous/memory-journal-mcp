@@ -32,52 +32,101 @@ function hasAnyKey(obj: Record<string, unknown>, keys: string[]): boolean {
     return keys.some((k) => obj[k] !== undefined)
 }
 
+function applyConfigInterceptions(
+    rawObj: Record<string, unknown>
+): { obj: Record<string, unknown> } | { error: Record<string, unknown> } {
+    let obj = { ...rawObj }
+    if (isRecord(obj['config'])) {
+        obj = { ...obj, ...obj['config'] }
+        delete obj['config']
+    }
+
+    if (
+        obj['update_notes'] !== undefined ||
+        obj['notes'] !== undefined ||
+        (obj['text'] !== undefined && obj['tool_filter'] === undefined && obj['briefing'] === undefined)
+    ) {
+        return validationErr(
+            'update_configuration is for changing server configuration (tool_filter, briefing). To create journal entries or update notes, use mj.core.createEntry({ ... }).',
+            "Use mj.core.createEntry({ content: '...', project_number: 1 }) instead."
+        )
+    }
+
+    const hasContextParam = ['maxTokens', 'max_tokens', 'temperature', 'model', 'top_p', 'topP'].find((k) => k in obj)
+    if (hasContextParam !== undefined) {
+        return validationErr(
+            `Unrecognized key: "${hasContextParam}". update_configuration is for configuring the memory-journal-mcp server and does not support changing LLM context parameters.`,
+            `Remove '${hasContextParam}' from the payload. Only tool_filter and briefing preferences are supported.`
+        )
+    }
+    return { obj }
+}
+
+function applyAnalyticsInterceptions(
+    methodName: string,
+    rawObj: Record<string, unknown>
+): { obj: Record<string, unknown> } | { error: Record<string, unknown> } {
+    const obj = { ...rawObj }
+
+    if (hasAnyKey(obj, ['q', 'query', 'search', 'text', 'message', 'description', 'path', 'keep', 'mode'])) {
+        return validationErr(
+            `${methodName} does not support search queries, content parameters, or modes. It returns analytical data.`,
+            'Remove these parameters. Use search_entries or team_search if you want to find specific content.'
+        )
+    }
+
+    if (['get_statistics', 'getStatistics', 'team_get_statistics', 'teamGetStatistics'].includes(methodName)) {
+        const timeVal = obj['time'] ?? obj['timeframe'] ?? obj['period']
+        if (timeVal !== undefined) {
+            if (obj['group_by'] === undefined && typeof timeVal === 'string') {
+                const lower = timeVal.toLowerCase()
+                obj['group_by'] = ['day', 'week', 'month'].includes(lower) ? lower : 'month'
+            }
+            delete obj['time']
+            delete obj['timeframe']
+            delete obj['period']
+        }
+    }
+
+    if (
+        [
+            'get_cross_project_insights',
+            'getCrossProjectInsights',
+            'team_get_cross_project_insights',
+            'teamGetCrossProjectInsights',
+        ].includes(methodName) &&
+        obj['limit'] !== undefined
+    ) {
+        return validationErr('get_cross_project_insights does not accept a limit parameter. It analyzes all projects.', 'Remove the limit parameter.')
+    }
+
+    return { obj }
+}
+
 export function applyDomainToolInterceptions(
     methodName: string,
     args: unknown[]
 ): { args: unknown[] } | { error: Record<string, unknown> } {
-    if (['update_configuration', 'updateConfiguration', 'config', 'configure'].includes(methodName)) {
-        if (args.length === 1 && isRecord(args[0])) {
-            let obj = { ...args[0] }
-            if (isRecord(obj['config'])) {
-                obj = { ...obj, ...obj['config'] }
-                delete obj['config']
-            }
-            args[0] = obj
+    const hasSingleRecord = args.length === 1 && isRecord(args[0])
+    const singleObj = hasSingleRecord ? (args[0] as Record<string, unknown>) : undefined
 
-            if (
-                obj['update_notes'] !== undefined ||
-                obj['notes'] !== undefined ||
-                (obj['text'] !== undefined && obj['tool_filter'] === undefined && obj['briefing'] === undefined)
-            ) {
-                return validationErr(
-                    'update_configuration is for changing server configuration (tool_filter, briefing). To create journal entries or update notes, use mj.core.createEntry({ ... }).',
-                    "Use mj.core.createEntry({ content: '...', project_number: 1 }) instead."
-                )
-            }
-
-            const hasContextParam = ['maxTokens', 'max_tokens', 'temperature', 'model', 'top_p', 'topP'].find((k) => k in obj)
-            if (hasContextParam !== undefined) {
-                return validationErr(
-                    `Unrecognized key: "${hasContextParam}". update_configuration is for configuring the memory-journal-mcp server and does not support changing LLM context parameters.`,
-                    `Remove '${hasContextParam}' from the payload. Only tool_filter and briefing preferences are supported.`
-                )
-            }
-        }
+    if (singleObj !== undefined && ['update_configuration', 'updateConfiguration', 'config', 'configure'].includes(methodName)) {
+        const configRes = applyConfigInterceptions(singleObj)
+        if ('error' in configRes) return configRes
+        args[0] = configRes.obj
     }
 
-    if (IO_METHODS.includes(methodName) && args.length === 1 && isRecord(args[0])) {
-        const ioRes = applyIoInterceptions(methodName, args[0])
+    if (singleObj !== undefined && IO_METHODS.includes(methodName)) {
+        const ioRes = applyIoInterceptions(methodName, singleObj)
         if ('error' in ioRes) return ioRes
         args[0] = ioRes.obj
     }
 
     if (
-        ['team_get_vector_index_stats', 'teamGetVectorIndexStats', 'get_vector_index_stats', 'getVectorIndexStats'].includes(methodName) &&
-        args.length === 1 &&
-        isRecord(args[0])
+        singleObj !== undefined &&
+        ['team_get_vector_index_stats', 'teamGetVectorIndexStats', 'get_vector_index_stats', 'getVectorIndexStats'].includes(methodName)
     ) {
-        const obj = { ...args[0] }
+        const obj = { ...singleObj }
         args[0] = obj
         if (hasAnyKey(obj, ['q', 'query', 'search', 'text', 'message', 'description', 'path'])) {
             return validationErr(`${methodName} does not support search queries. It returns overall index statistics.`, 'Remove the search query parameter.')
@@ -90,9 +139,7 @@ export function applyDomainToolInterceptions(
         (typeof args[0] === 'boolean' || typeof args[0] === 'string' || typeof args[0] === 'number')
     ) {
         const personalRebuild = methodName === 'rebuild_vector_index' || methodName === 'rebuildVectorIndex'
-        if (personalRebuild && typeof args[0] === 'number') {
-            args[0] = { project_number: args[0] }
-        } else {
+        if (!personalRebuild || typeof args[0] !== 'number') {
             return validationErr(
                 `${methodName} does not accept that positional value.`,
                 personalRebuild
@@ -100,60 +147,29 @@ export function applyDomainToolInterceptions(
                     : 'Call team_rebuild_vector_index with no arguments.'
             )
         }
+        args[0] = { project_number: args[0] }
     }
 
     if (
-        ['list_deleted_entries', 'listDeletedEntries', 'team_list_deleted_entries', 'teamListDeletedEntries'].includes(methodName) &&
-        args.length === 1 &&
-        isRecord(args[0])
+        singleObj !== undefined &&
+        ['list_deleted_entries', 'listDeletedEntries', 'team_list_deleted_entries', 'teamListDeletedEntries'].includes(methodName)
     ) {
-        const obj = { ...args[0] }
+        const obj = { ...singleObj }
         args[0] = obj
         if (hasAnyKey(obj, ['q', 'query', 'search', 'text', 'message', 'description', 'path', 'mode'])) {
             return validationErr(`${methodName} does not support search queries, path, or mode. It returns all deleted entries.`, 'Remove these parameters.')
         }
         remapKeys(obj, ['keep'], 'limit')
         if (obj['project_id'] !== undefined) {
-            if (obj['project_number'] === undefined) obj['project_number'] = obj['project_id']
+            obj['project_number'] ??= obj['project_id']
             delete obj['project_id']
         }
     }
 
-    if (ANALYTICS_METHODS.includes(methodName) && args.length === 1 && isRecord(args[0])) {
-        const obj = { ...args[0] }
-        args[0] = obj
-
-        if (hasAnyKey(obj, ['q', 'query', 'search', 'text', 'message', 'description', 'path', 'keep', 'mode'])) {
-            return validationErr(
-                `${methodName} does not support search queries, content parameters, or modes. It returns analytical data.`,
-                'Remove these parameters. Use search_entries or team_search if you want to find specific content.'
-            )
-        }
-
-        if (['get_statistics', 'getStatistics', 'team_get_statistics', 'teamGetStatistics'].includes(methodName)) {
-            const timeVal = obj['time'] ?? obj['timeframe'] ?? obj['period']
-            if (timeVal !== undefined) {
-                if (obj['group_by'] === undefined && typeof timeVal === 'string') {
-                    const lower = timeVal.toLowerCase()
-                    obj['group_by'] = ['day', 'week', 'month'].includes(lower) ? lower : 'month'
-                }
-                delete obj['time']
-                delete obj['timeframe']
-                delete obj['period']
-            }
-        }
-
-        if (
-            [
-                'get_cross_project_insights',
-                'getCrossProjectInsights',
-                'team_get_cross_project_insights',
-                'teamGetCrossProjectInsights',
-            ].includes(methodName) &&
-            obj['limit'] !== undefined
-        ) {
-            return validationErr('get_cross_project_insights does not accept a limit parameter. It analyzes all projects.', 'Remove the limit parameter.')
-        }
+    if (singleObj !== undefined && ANALYTICS_METHODS.includes(methodName)) {
+        const analyticsRes = applyAnalyticsInterceptions(methodName, singleObj)
+        if ('error' in analyticsRes) return analyticsRes
+        args[0] = analyticsRes.obj
     }
 
     const ghBkRes = applyGithubAndBackupInterceptions(methodName, args)

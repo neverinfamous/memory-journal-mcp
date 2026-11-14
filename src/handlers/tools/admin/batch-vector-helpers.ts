@@ -1,4 +1,10 @@
+import type { z } from 'zod'
 import type { ToolContext } from '../../../types/index.js'
+import { createBatchProgressReporter, sendProgress } from '../../../utils/progress-utils.js'
+import { resolveWriteWorkspaceId } from '../write-workspace.js'
+import type { BatchDeleteEntriesSchema } from './schemas.js'
+
+type BatchDeleteInput = z.infer<typeof BatchDeleteEntriesSchema>
 
 /** [INTENT] M4: vector cleanup is non-critical after a committed delete; surface failures as warnings. */
 export function safeDeleteVectors(
@@ -53,4 +59,194 @@ export function findWildcardProjectMismatches(
             return entry.projectNumber !== pn
         })
         .map((u) => u.entry_id)
+}
+
+function buildBatchDeleteNotFoundAbort(
+    missing: number[],
+    permanent: boolean
+): Record<string, unknown> {
+    return {
+        success: false,
+        error: `Batch delete aborted because entries were not found: ${missing.join(', ')}. No rows were deleted.`,
+        code: 'RESOURCE_NOT_FOUND',
+        category: 'resource',
+        recoverable: false,
+        suggestion: 'Verify the entry identifiers and try again',
+        count: 0,
+        deleted: [],
+        notFound: missing,
+        permanent,
+    }
+}
+
+function buildBatchDeletePartialFailure(
+    deleted: number[],
+    notFound: number[],
+    errors: { id: number; error: Error }[],
+    permanent: boolean
+): Record<string, unknown> {
+    return {
+        success: false,
+        error: `Batch delete partially failed: ${String(notFound.length + errors.length)} failed`,
+        code: 'AGGREGATE_ERROR',
+        category: 'internal',
+        recoverable: false,
+        count: deleted.length,
+        deleted,
+        notFound,
+        permanent,
+        aggregated_errors: [
+            ...notFound.map((id) => ({ message: `Entry ${String(id)} not found` })),
+            ...errors.map((entry) => ({
+                message: `Entry ${String(entry.id)} failed to delete: ${entry.error.message}`,
+            })),
+        ],
+    }
+}
+
+function groupUnscopedBatchDeleteIds(
+    db: ToolContext['db'],
+    entryIds: number[]
+): { missing: number[]; groups: Map<string, number[]> } {
+    const missing: number[] = []
+    const groups = new Map<string, number[]>()
+    for (const id of entryIds) {
+        const existing = db.getEntryByIdIncludeDeleted(id, '*')
+        const entryWorkspace = existing?.workspaceId
+        if (
+            existing === null ||
+            existing === undefined ||
+            entryWorkspace === undefined ||
+            entryWorkspace.length === 0
+        ) {
+            missing.push(id)
+            continue
+        }
+        const bucket = groups.get(entryWorkspace)
+        if (bucket === undefined) groups.set(entryWorkspace, [id])
+        else bucket.push(id)
+    }
+    return { missing, groups }
+}
+
+async function runUnscopedBatchDelete(
+    context: ToolContext,
+    input: BatchDeleteInput
+): Promise<Record<string, unknown>> {
+    const { db, vectorManager, progress } = context
+    const { missing, groups } = groupUnscopedBatchDeleteIds(db, input.entry_ids)
+    if (missing.length > 0) {
+        return buildBatchDeleteNotFoundAbort(missing, input.permanent)
+    }
+
+    await sendProgress(progress, 0, 2, 'Deleting entries...')
+    const deleted: number[] = []
+    const notFound: number[] = []
+    const errors: { id: number; error: Error }[] = []
+    const vectorWarnings: string[] = []
+
+    for (const [groupWorkspace, ids] of groups) {
+        let groupResult: { deleted: number[]; notFound: number[]; errors: { id: number; error: Error }[] }
+        try {
+            groupResult = db.deleteEntries(ids, input.permanent, groupWorkspace)
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err)
+            return {
+                success: false,
+                error: `Batch delete stopped after a committed delete: ${message}`,
+                code: 'INTERNAL_ERROR',
+                category: 'internal',
+                recoverable: false,
+                count: deleted.length,
+                deleted,
+                notFound,
+                permanent: input.permanent,
+            }
+        }
+        deleted.push(...groupResult.deleted)
+        notFound.push(...groupResult.notFound)
+        errors.push(...groupResult.errors)
+        if (vectorManager) {
+            vectorWarnings.push(...safeDeleteVectors(db, groupResult.deleted, vectorManager))
+        }
+    }
+
+    await sendProgress(progress, 2, 2, 'Batch delete complete')
+    if (errors.length > 0 || notFound.length > 0) {
+        return buildBatchDeletePartialFailure(deleted, notFound, errors, input.permanent)
+    }
+    return {
+        success: true,
+        count: deleted.length,
+        deleted,
+        notFound,
+        permanent: input.permanent,
+        ...vectorWarningField(vectorWarnings),
+    }
+}
+
+async function runScopedBatchDelete(
+    context: ToolContext,
+    input: BatchDeleteInput
+): Promise<Record<string, unknown>> {
+    const { db, vectorManager, progress } = context
+    const wsId =
+        input.workspace_id === '*'
+            ? '*'
+            : resolveWriteWorkspaceId(input.workspace_id, input.project_number, context.config)
+    const missingBeforeDelete: number[] = []
+    for (const id of input.entry_ids) {
+        const existing = db.getEntryByIdIncludeDeleted(id, wsId)
+        if (
+            existing === null ||
+            existing === undefined ||
+            (input.project_number !== undefined && existing.projectNumber !== input.project_number)
+        ) {
+            missingBeforeDelete.push(id)
+        }
+    }
+    if (missingBeforeDelete.length > 0) {
+        return buildBatchDeleteNotFoundAbort(missingBeforeDelete, input.permanent)
+    }
+
+    await sendProgress(progress, 0, 2, 'Deleting entries...')
+    const { deleted, notFound, errors } = db.deleteEntries(input.entry_ids, input.permanent, wsId)
+    await sendProgress(progress, 1, 2, `Deleted ${String(deleted.length)} entries...`)
+
+    const vectorWarnings: string[] = []
+    if (vectorManager) {
+        const reporter = createBatchProgressReporter(progress, deleted.length, 10)
+        for (let i = 0; i < deleted.length; i++) {
+            const id = deleted[i]
+            if (id !== undefined) {
+                vectorWarnings.push(...safeDeleteVectors(db, [id], vectorManager))
+            }
+            await reporter(i + 1, `Updating index ${String(i + 1)}/${String(deleted.length)}...`)
+        }
+    } else {
+        await sendProgress(progress, 2, 2, 'Batch delete complete')
+    }
+
+    if (errors.length > 0 || notFound.length > 0) {
+        return buildBatchDeletePartialFailure(deleted, notFound, errors, input.permanent)
+    }
+    return {
+        success: true,
+        count: deleted.length,
+        deleted,
+        notFound,
+        permanent: input.permanent,
+        ...vectorWarningField(vectorWarnings),
+    }
+}
+
+/** Validate target existence/scope and execute `batch_delete_entries` with shallow control flow. */
+export async function executeBatchDeleteEntries(
+    context: ToolContext,
+    input: BatchDeleteInput
+): Promise<Record<string, unknown>> {
+    if (input.workspace_id === undefined && input.project_number === undefined) {
+        return await runUnscopedBatchDelete(context, input)
+    }
+    return await runScopedBatchDelete(context, input)
 }

@@ -1,18 +1,13 @@
-import { existsSync } from 'node:fs'
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../types/index.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
 import { sendProgress } from '../../utils/progress-utils.js'
-import { ResourceNotFoundError, ValidationError } from '../../types/errors.js'
+import { loadProjectRegistryFromConfig } from '../../utils/workspace-resolver.js'
 import {
-    findCanonicalRegistryKey,
-    loadProjectRegistryFromConfig,
-    resolveWorkspaceId,
-} from '../../utils/workspace-resolver.js'
-import {
-    evaluateAnchorStaleness,
+    evaluateWorkspaceAnchors,
     readLatestGitTag,
     resolveGitWorkingDir,
+    resolveStalenessTargetWorkspaces,
     type StalenessCheckRow,
 } from './git-staleness.js'
 import { coerceNumber } from '../../utils/query-helpers.js'
@@ -357,83 +352,31 @@ export function getGitTools(context: ToolContext): ToolDefinition[] {
                     const rawWs = parsedParams.workspace_id ?? parsedParams.workspaceId
                     const rawProj = parsedParams.project_number ?? parsedParams.projectNumber
                     const registry = context.config?.projectRegistry ?? loadProjectRegistryFromConfig()
-                    const defaultWs = resolveWorkspaceId(undefined, undefined, context.config)
-                    const targetWorkspaces: string[] = []
-
-                        if (rawWs === '*') {
-                            if (resolvedEntryId !== undefined) {
-                                const entry = db.getEntryByIdIncludeDeleted(resolvedEntryId, '*')
-                                if (!entry) throw new ResourceNotFoundError('entry', String(resolvedEntryId))
-                                if (typeof rawProj === 'number' && entry.projectNumber !== rawProj) {
-                                    throw new ResourceNotFoundError('entry', String(resolvedEntryId))
-                                }
-                                targetWorkspaces.push(entry.workspaceId ?? defaultWs)
-                        } else {
-                            const registryKeys = Object.keys(registry ?? {}).filter(
-                                (key) =>
-                                    typeof rawProj !== 'number' ||
-                                    registry?.[key]?.project_number === rawProj
-                            )
-                            if (registryKeys.length > 0) {
-                                targetWorkspaces.push(...Array.from(new Set(registryKeys)))
-                            } else if (typeof rawProj !== 'number') {
-                                targetWorkspaces.push(defaultWs)
-                            }
-                        }
-                    } else {
-                        targetWorkspaces.push(resolveWorkspaceId(rawWs, rawProj, context.config))
-                    }
+                    const targetWorkspaces = resolveStalenessTargetWorkspaces(
+                        db,
+                        rawWs,
+                        rawProj,
+                        resolvedEntryId,
+                        registry,
+                        context.config
+                    )
 
                     const results: StalenessCheckRow[] = []
                     const skippedWorkspaces: string[] = []
 
                     for (const wsId of targetWorkspaces) {
-                        const canonicalWs = findCanonicalRegistryKey(wsId, registry) ?? wsId
-                        const registryPath = registry?.[canonicalWs]?.path
-                        if (registryPath === undefined || registryPath.length === 0 || !existsSync(registryPath)) {
-                            if (rawWs === '*') {
-                                skippedWorkspaces.push(wsId)
-                                continue
-                            }
-                            throw new ValidationError(
-                                registryPath !== undefined && registryPath.length > 0
-                                    ? `Registered repository path for workspace '${wsId}' does not exist: ${registryPath}`
-                                    : `No registered repository path for workspace '${wsId}'. Register the project path before checking its anchors.`
-                            )
-                        }
-                        const cwd = registryPath
-
-                        const targets: { id: number; timestamp: string }[] = []
-                        if (resolvedEntryId !== undefined) {
-                            const entry = db.getEntryByIdIncludeDeleted(resolvedEntryId, rawWs === '*' ? '*' : wsId)
-                            if (!entry || (typeof rawProj === 'number' && entry.projectNumber !== rawProj)) {
-                                if (rawWs !== '*') throw new ResourceNotFoundError('entry', String(resolvedEntryId))
-                                continue
-                            }
-                            targets.push({ id: entry.id, timestamp: entry.timestamp })
-                        } else {
-                            const projectNumber = typeof rawProj === 'number' ? rawProj : undefined
-                            const { entries: recent } = db.getRecentEntries(20, undefined, undefined, undefined, false, wsId, projectNumber)
-                            for (const r of recent) {
-                                targets.push({ id: r.id, timestamp: r.timestamp })
-                            }
-                        }
-
-                        for (const target of targets) {
-                            for (const anchor of db.getAnchorsByEntryId(target.id, wsId)) {
-                                results.push(
-                                    await evaluateAnchorStaleness(
-                                        db,
-                                        anchor,
-                                        target.timestamp,
-                                        cwd,
-                                        async (anchorPath, since) =>
-                                            (await fetchCommits({ path: anchorPath, since }, cwd)).length,
-                                        wsId
-                                    )
-                                )
-                            }
-                        }
+                        const outcome = await evaluateWorkspaceAnchors({
+                            db,
+                            wsId,
+                            rawWs,
+                            rawProj,
+                            resolvedEntryId,
+                            registry,
+                            countCommitsSince: async (anchorPath, since, cwd) =>
+                                (await fetchCommits({ path: anchorPath, since }, cwd)).length,
+                        })
+                        if (outcome.skipped) skippedWorkspaces.push(wsId)
+                        else results.push(...outcome.rows)
                     }
 
                     const failureMessages: string[] = []

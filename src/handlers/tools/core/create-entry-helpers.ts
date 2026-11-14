@@ -1,6 +1,7 @@
 import type { z } from 'zod'
-import type { CreateEntryInput, ToolContext } from '../../../types/index.js'
+import type { CreateEntryInput, JournalEntry, ToolContext } from '../../../types/index.js'
 import { enforceAccessBoundary } from '../../../auth/validation.js'
+import { sendProgress, type ProgressContext } from '../../../utils/progress-utils.js'
 import { resolveAuthenticatedAuthor } from '../../../utils/security-utils.js'
 import type { CreateEntrySchema } from './schemas.js'
 
@@ -69,6 +70,57 @@ export function shareCreatedEntryWithTeam(
     teamDb.createEntry({ ...entryInput, isPersonal: false, author })
     teamDb.flushSave()
     return author
+}
+
+/** Generate embeddings for a newly created entry, returning any soft-fail warning. */
+export async function indexCreatedEntry(
+    context: ToolContext,
+    progress: ProgressContext | undefined,
+    createdEntry: JournalEntry
+): Promise<string | undefined> {
+    if (!context.vectorManager) {
+        await sendProgress(progress, 2, 2, 'Entry created successfully')
+        return undefined
+    }
+    try {
+        await sendProgress(progress, 1, 2, 'Generating embeddings...')
+        await context.vectorManager.addEntry(createdEntry)
+        await sendProgress(progress, 2, 2, 'Entry created successfully')
+        return undefined
+    } catch (e) {
+        // Soft fail: continue notifications & team share, attach vector indexing warning
+        await sendProgress(progress, 2, 2, 'Entry created (Vector indexing disabled)')
+        return `Vector indexing failed: ${e instanceof Error ? e.message : String(e)}`
+    }
+}
+
+/** Execute optional team sharing after personal entry creation, recording warnings rather than throwing. */
+export function recordTeamShareOutcome(
+    context: ToolContext,
+    entryInput: CreateEntryInput,
+    relationshipWarnings: string[]
+): { sharedWithTeam: boolean; author?: string } {
+    if (!context.teamDb) {
+        relationshipWarnings.push(
+            'Team sharing skipped: team database is not configured (set TEAM_DB_PATH).'
+        )
+        return { sharedWithTeam: false }
+    }
+    // [INVARIANT] M5: the personal entry is already committed; a team-share
+    // failure must surface as a warning, not fail (or silently drop) the create.
+    let author: string | undefined
+    try {
+        author = shareCreatedEntryWithTeam(context, entryInput)
+    } catch (shareErr) {
+        relationshipWarnings.push(
+            `Team sharing failed: ${shareErr instanceof Error ? shareErr.message : String(shareErr)}`
+        )
+    }
+    const sharedWithTeam = author !== undefined
+    if (!sharedWithTeam && relationshipWarnings.every((w) => !w.startsWith('Team sharing failed'))) {
+        relationshipWarnings.push('Team sharing skipped: author identity could not be resolved.')
+    }
+    return author !== undefined ? { sharedWithTeam, author } : { sharedWithTeam }
 }
 
 /**
