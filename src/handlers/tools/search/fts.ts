@@ -54,7 +54,9 @@ export function ftsSearch(
     }
 ): { entries: EntryWithSource[]; count: number; degraded?: boolean; nextCursor?: string; highlights?: { id: number; snippet: string }[]; suggestions?: string[]; correctedQuery?: string } {
     const hasFilters =
-        (options.workspaceId !== undefined && options.workspaceId.trim() !== '') ||
+        (options.workspaceId !== undefined &&
+            options.workspaceId.trim() !== '' &&
+            options.workspaceId.trim() !== 'default') ||
         options.projectNumber !== undefined ||
         options.issueNumber !== undefined ||
         options.prNumber !== undefined ||

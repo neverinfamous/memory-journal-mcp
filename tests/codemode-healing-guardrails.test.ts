@@ -2498,10 +2498,9 @@ return { success: true, projectId };
             const resBare = (await callTool('search_entries', { limit: 10 }, mockDb, undefined, undefined, mockConfig)) as Record<string, unknown>
             expect(resBare['code']).toBe('VALIDATION_ERROR')
 
-            // Explicit default or named workspace_id without query is treated as an intentional filter
+            // Default workspace without query is rejected to prevent unbounded scans
             const resDefault = (await callTool('search_entries', { workspace_id: 'default', limit: 10 }, mockDb, undefined, undefined, mockConfig)) as Record<string, unknown>
-            expect(resDefault['error']).toBeUndefined()
-            expect(resDefault['entries']).toBeDefined()
+            expect(resDefault['code']).toBe('VALIDATION_ERROR')
 
             // Specific non-default workspace without query is treated as an intentional filter
             const resSpecific = (await callTool('search_entries', { workspace_id: 'alpha', limit: 10 }, mockDb, undefined, undefined, mockConfig)) as Record<string, unknown>
