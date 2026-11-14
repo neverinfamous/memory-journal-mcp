@@ -13,12 +13,12 @@ import type { IDatabaseAdapter } from '../database/core/interfaces.js'
 import type { VectorSearchManager } from '../vector/vector-search-manager/index.js'
 import type { EntryType, SignificanceType, ToolHandlerConfig } from '../types/index.js'
 import { ENTRY_TYPES } from '../types/index.js'
+import { ValidationError } from '../types/errors.js'
 import { linkImportedRelationships } from './import-relationships.js'
 import { parseFrontmatter } from './frontmatter.js'
 import { assertSafeDirectoryPath, assertSafeFilePath } from '../utils/security-utils.js'
 import {
     findCanonicalRegistryKey,
-    loadProjectRegistryFromConfig,
     resolveProjectContext,
 } from '../utils/workspace-resolver.js'
 import { activeProjectRegistry, pairStoredScope } from '../utils/write-scope.js'
@@ -248,24 +248,11 @@ function concreteCallerWorkspace(workspaceId: string | undefined): string | unde
     return trimmed
 }
 
-function registryWorkspaceForProject(
-    projectNumber: number,
-    config?: ToolHandlerConfig
-): string | undefined {
-    const registry = config?.projectRegistry ?? loadProjectRegistryFromConfig()
-    if (registry === undefined) return undefined
-    for (const [key, entry] of Object.entries(registry)) {
-        if (entry.project_number === projectNumber) return key
-    }
-    return undefined
-}
-
 function sameRegistryWorkspace(
     left: string,
     right: string,
-    config?: ToolHandlerConfig
+    registry: Parameters<typeof findCanonicalRegistryKey>[1]
 ): boolean {
-    const registry = config?.projectRegistry ?? loadProjectRegistryFromConfig()
     const leftKey = findCanonicalRegistryKey(left, registry) ?? left
     const rightKey = findCanonicalRegistryKey(right, registry) ?? right
     return leftKey.toLowerCase() === rightKey.toLowerCase()
@@ -277,25 +264,35 @@ function resolveImportedFileContext(
 ): { effectiveWsId: string | undefined; effectiveProjNum: number | undefined } {
     const { metadata } = file
     const rawWorkspaceId = options.workspaceId ?? metadata.workspace_id
-    if (rawWorkspaceId?.trim() === '*') {
-        throw new Error("Workspace '*' cannot be used for import writes")
+    if (rawWorkspaceId?.trim() === '*' || metadata.workspace_id?.trim() === '*') {
+        throw new ValidationError("Workspace '*' cannot be used for import writes")
     }
-
-    const lockedWorkspace = concreteCallerWorkspace(options.workspaceId)
-    const fileProject = metadata.project_number
     const effectiveRegistry = activeProjectRegistry(options.config?.projectRegistry)
-    if (lockedWorkspace !== undefined && fileProject !== undefined) {
-        const owner = registryWorkspaceForProject(fileProject, options.config)
-        if (owner !== undefined && !sameRegistryWorkspace(lockedWorkspace, owner, options.config)) {
-            throw new Error(
+    const lockedWorkspace = concreteCallerWorkspace(options.workspaceId)
+    const fileWorkspace = concreteCallerWorkspace(metadata.workspace_id)
+    if (lockedWorkspace !== undefined && fileWorkspace !== undefined && !sameRegistryWorkspace(lockedWorkspace, fileWorkspace, effectiveRegistry)) {
+        throw new ValidationError(
+            `Frontmatter workspace_id '${fileWorkspace}' conflicts with target workspace '${lockedWorkspace}'.`
+        )
+    }
+    const fileProject = metadata.project_number
+    if (options.project_number !== undefined && fileProject !== undefined && options.project_number !== fileProject) {
+        throw new ValidationError(
+            `Frontmatter project_number ${String(fileProject)} conflicts with target project_number ${String(options.project_number)}.`
+        )
+    }
+    if (lockedWorkspace !== undefined && fileProject !== undefined && effectiveRegistry !== undefined) {
+        const owner = Object.entries(effectiveRegistry).find(([, entry]) => entry.project_number === fileProject)?.[0]
+        if (owner !== undefined && !sameRegistryWorkspace(lockedWorkspace, owner, effectiveRegistry)) {
+            throw new ValidationError(
                 `project_number ${String(fileProject)} belongs to workspace '${owner}', not '${lockedWorkspace}'.`
             )
         }
         const canonicalLocked = findCanonicalRegistryKey(lockedWorkspace, effectiveRegistry)
         const lockedRegisteredProject =
-            canonicalLocked !== undefined ? effectiveRegistry?.[canonicalLocked]?.project_number : undefined
+            canonicalLocked !== undefined ? effectiveRegistry[canonicalLocked]?.project_number : undefined
         if (lockedRegisteredProject !== undefined && lockedRegisteredProject !== fileProject) {
-            throw new Error(
+            throw new ValidationError(
                 `project_number ${String(fileProject)} does not match registered project ${String(lockedRegisteredProject)} for workspace '${lockedWorkspace}'.`
             )
         }

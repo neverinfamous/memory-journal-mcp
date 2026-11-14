@@ -1,4 +1,5 @@
 import type { JournalEntry, EntryType } from '../../../../types/index.js'
+import { ValidationError } from '../../../../types/errors.js'
 import {
     ENTRY_COLUMNS,
     ALIASED_ENTRY_COLUMNS,
@@ -90,16 +91,22 @@ export function getRecentEntries(
         params.push(projectNumber)
     }
 
+    let effectiveOffset = offset
     if (cursor !== undefined) {
         const decoded = decodeCursor(cursor)
-        if (decoded !== null && 't' in decoded) {
+        if (decoded === null) {
+            throw new ValidationError('Invalid cursor format')
+        }
+        if ('t' in decoded) {
             cursorCondition = ' AND (timestamp < ? OR (timestamp = ? AND id < ?))'
             params.push(decoded.t, decoded.t, decoded.id)
+        } else if ('offset' in decoded) {
+            effectiveOffset = decoded.offset
         }
     }
 
     let offsetClause = ''
-    if (cursor === undefined && offset > 0) {
+    if (cursorCondition === '' && effectiveOffset > 0) {
         offsetClause = ' OFFSET ?'
     }
 
@@ -110,14 +117,14 @@ export function getRecentEntries(
     `)
     params.push(limit)
     if (offsetClause !== '') {
-        params.push(offset)
+        params.push(effectiveOffset)
     }
     const rows = stmt.all(params)
     const entries = rowsToEntries(tagsMgr, rows)
 
     if (entries.length === limit && limit > 0) {
-        if (cursor === undefined && offset > 0) {
-            return { entries, nextCursor: encodeCursor({ offset: offset + limit }) }
+        if (cursorCondition === '' && effectiveOffset > 0) {
+            return { entries, nextCursor: encodeCursor({ offset: effectiveOffset + limit }) }
         }
         const last = entries[entries.length - 1]
         if (last !== undefined) {

@@ -17,6 +17,11 @@ import {
     resolveWorkspaceFromFilePath,
     resolveWorkspaceId,
 } from '../../utils/workspace-resolver.js'
+import {
+    activeProjectRegistry,
+    pairStoredScope,
+    uniqueWorkspaceForProject,
+} from '../../utils/write-scope.js'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import { constants } from 'node:fs'
@@ -143,7 +148,7 @@ function workspacesReferToSameProject(
 function resolveImportWriteScope(
     options: { dir?: string; workspace?: string; defaultProject?: number },
     serverOptions: ToolHandlerConfig
-): { workspaceId: string; projectNumber: number | undefined } {
+): { workspaceId: string | undefined; projectNumber: number | undefined } {
     if (options.dir === undefined || options.dir === '') {
         throw new Error('--dir is required')
     }
@@ -153,7 +158,11 @@ function resolveImportWriteScope(
 
     const dirMatch = resolveWorkspaceFromFilePath(options.dir, serverOptions)
     const namedWorkspace = concreteImportWorkspace(options.workspace)
+    const registry = activeProjectRegistry(serverOptions.projectRegistry)
     if (namedWorkspace !== undefined) {
+        if (options.defaultProject !== undefined) {
+            pairStoredScope(namedWorkspace, options.defaultProject, registry)
+        }
         // [INVARIANT] A named workspace keeps its registry project. An explicit
         // defaultProject applies only when that workspace has none. A directory
         // from a different repo must not supply project_number.
@@ -178,17 +187,33 @@ function resolveImportWriteScope(
         return { workspaceId: resolved.workspaceId, projectNumber }
     }
 
+    if (dirMatch === undefined && options.defaultProject === undefined) {
+        return { workspaceId: undefined, projectNumber: undefined }
+    }
+
     // [INVARIANT] The configured default project is a fallback only (via `serverOptions`), never
     // an explicit project paired against the directory's workspace (H4).
     const explicitProject = options.defaultProject ?? dirMatch?.projectNumber
+    const projectOwner =
+        options.defaultProject !== undefined && dirMatch === undefined
+            ? uniqueWorkspaceForProject(options.defaultProject, registry)
+            : undefined
     const resolved = resolveProjectContext(
         {
-            ...(dirMatch?.workspaceId !== undefined ? { workspace_id: dirMatch.workspaceId } : {}),
+            ...(dirMatch?.workspaceId !== undefined
+                ? { workspace_id: dirMatch.workspaceId }
+                : projectOwner !== undefined
+                  ? { workspace_id: projectOwner }
+                  : {}),
             ...(explicitProject !== undefined ? { project_number: explicitProject } : {}),
         },
         serverOptions
     )
-    return { workspaceId: resolved.workspaceId, projectNumber: resolved.projectNumber }
+    return {
+        workspaceId:
+            dirMatch !== undefined || projectOwner !== undefined ? resolved.workspaceId : undefined,
+        projectNumber: explicitProject !== undefined ? (resolved.projectNumber ?? explicitProject) : undefined,
+    }
 }
 
 export async function importMarkdownAction(options: z.infer<typeof importMarkdownSchema>, command: Command): Promise<void> {
@@ -207,8 +232,9 @@ export async function importMarkdownAction(options: z.infer<typeof importMarkdow
             db,
             {
                 limit: 100000,
-                workspaceId,
+                ...(workspaceId !== undefined ? { workspaceId } : {}),
                 ...(projectNumber !== undefined ? { project_number: projectNumber } : {}),
+                config: serverOptions,
             },
             vectorManager,
             [path.resolve(options.dir)]
@@ -284,8 +310,9 @@ export async function importExternalAction(options: z.infer<typeof importExterna
             parsedFiles,
             db,
             {
-                workspaceId,
+                ...(workspaceId !== undefined ? { workspaceId } : {}),
                 ...(projectNumber !== undefined ? { project_number: projectNumber } : {}),
+                config: serverOptions,
             },
             vectorManager
         )

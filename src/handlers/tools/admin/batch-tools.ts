@@ -157,17 +157,18 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
                             context.config
                         )
                         let resolvedWs: string
-                        let projectNumberForUpdate: number | undefined
+                        let projectNumberForUpdate: number | null | undefined
                         if (targetWorkspaceId !== undefined) {
                             const targetResolved = resolveProjectContext(
                                 {
                                     workspace_id: targetWorkspaceId,
-                                    ...(explicitPn !== undefined ? { project_number: explicitPn } : {}),
+                                    ...(u.project_number !== undefined
+                                        ? { project_number: u.project_number }
+                                        : {}),
                                 },
                                 context.config
                             )
-                            projectNumberForUpdate =
-                                explicitPn === undefined ? undefined : targetResolved.projectNumber
+                            projectNumberForUpdate = targetResolved.projectNumber ?? null
                             if (explicitWs === '*') {
                                 resolvedWs = '*'
                             } else if (explicitWs !== undefined) {
@@ -347,7 +348,9 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
                             notFound.push(...groupResult.notFound)
                             errors.push(...groupResult.errors)
                             if (vectorManager) {
-                                vectorWarnings.push(...safeDeleteVectors(db, groupResult.deleted))
+                                vectorWarnings.push(
+                                    ...safeDeleteVectors(db, groupResult.deleted, vectorManager)
+                                )
                             }
                         }
 
@@ -427,7 +430,11 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
                         const reporter = createBatchProgressReporter(progress, deleted.length, 10)
                         for (let i = 0; i < deleted.length; i++) {
                             const id = deleted[i]
-                            if (id !== undefined) vectorWarnings.push(...safeDeleteVectors(db, [id]))
+                            if (id !== undefined) {
+                                vectorWarnings.push(
+                                    ...safeDeleteVectors(db, [id], vectorManager)
+                                )
+                            }
                             await reporter(i + 1, `Updating index ${String(i + 1)}/${String(deleted.length)}...`)
                         }
                     } else {

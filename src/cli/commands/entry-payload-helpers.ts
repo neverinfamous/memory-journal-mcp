@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { z } from 'zod'
 import type { EntryType, RelationshipType } from '../../types/index.js'
 import { ENTRY_TYPES, RELATIONSHIP_TYPES } from '../../types/entities.js'
+import { ValidationError } from '../../types/errors.js'
 import type { createEntryOptionsSchema } from '../schemas.js'
 
 export type HealedEntryOptions = z.infer<typeof createEntryOptionsSchema> & {
@@ -241,6 +242,12 @@ export function resolveExplicitProjectAndWorkspace(
         metadata['workspace_id']
     const explicitWorkspaceId =
         typeof rawWs === 'string' && rawWs.trim() !== '' ? rawWs.trim() : undefined
+    if (explicitWorkspaceId === '*') {
+        throw new ValidationError(
+            "Workspace '*' cannot be used for entry writes. Pass a concrete workspace.",
+            { workspaceId: '*' }
+        )
+    }
     return { explicitProjectNum, explicitWorkspaceId }
 }
 

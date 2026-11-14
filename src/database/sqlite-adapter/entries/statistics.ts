@@ -1,6 +1,7 @@
 import type { EntriesSharedContext } from './shared.js'
 import { effectiveWorkspace } from '../../workspace-scope.js'
 import { validateDateFormatPattern } from '../../../utils/security-utils.js'
+import { logger } from '../../../utils/logger.js'
 
 /** Maximum number of period rows returned in the activity timeline */
 const MAX_PERIOD_ROWS = 52
@@ -316,8 +317,12 @@ function buildProjectBreakdown(
                     if (parts.length >= 2) {
                         name = parts[1]
                     }
-                } catch {
-                    // Ignore URL parsing errors
+                } catch (err) {
+                    logger.debug('Failed to parse project URL for repository name inference', {
+                        module: 'Statistics',
+                        url,
+                        error: err instanceof Error ? err.message : String(err),
+                    })
                 }
             }
         }

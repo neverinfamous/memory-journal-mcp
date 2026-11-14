@@ -8,6 +8,8 @@ import { extractAndRecoverPreparedStatementCode } from '../../src/handlers/tools
 import { deepCamelToSnake } from '../../src/handlers/tools/codemode/secure-dispatcher.js'
 import { recoverStructuredJsonCode } from '../../src/handlers/tools/codemode/json-entry-structured.js'
 import { resolveCreateEntryProjectContext } from '../../src/codemode/normalizers/generic-field-aliases.js'
+import { resolveCodeModeSessionContext } from '../../src/handlers/tools/codemode/session-context.js'
+import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
 
 describe('SQL positional binding (C4)', () => {
     it('binds ? placeholders by column instead of grabbing the first number as entry_id', () => {
@@ -82,5 +84,35 @@ describe('Code Mode scope isolation (C3/H6)', () => {
         )
         expect(recovered).toContain('mj.search.searchEntries')
         expect(recovered).not.toContain('someone/unregistered-repo-xyz')
+    })
+
+    it('rejects conflicting workspace_id and repo and isolates explicit default from defaultProjectNumber in resolveCodeModeSessionContext', async () => {
+        const db = new DatabaseAdapter(':memory:')
+        const config = {
+            projectRegistry: {
+                adamic: { path: '/workspace/adamic', project_number: 16 },
+                'memory-journal-mcp': { path: '/workspace/mj', project_number: 5 },
+            },
+            defaultProjectNumber: 5,
+        }
+        const conflictRes = await resolveCodeModeSessionContext(
+            { db, config },
+            { code: 'return 1', workspace_id: 'adamic', repo: 'memory-journal-mcp' }
+        )
+        expect('errorResponse' in conflictRes).toBe(true)
+        if ('errorResponse' in conflictRes) {
+            expect(String(conflictRes.errorResponse['error'])).toContain('conflicts with repo')
+        }
+
+        const defaultRes = await resolveCodeModeSessionContext(
+            { db, config },
+            { code: 'return 1', workspace_id: 'default' }
+        )
+        expect('errorResponse' in defaultRes).toBe(false)
+        if (!('errorResponse' in defaultRes)) {
+            expect(defaultRes.workspaceId).toBe('default')
+            expect(defaultRes.projectId).toBeUndefined()
+            expect(defaultRes.numericProjectId).toBeUndefined()
+        }
     })
 })

@@ -61,9 +61,9 @@ export function getIoImportTools(context: ToolContext): ToolDefinition[] {
                         {
                             dry_run: input.dry_run,
                             limit: input.limit,
-                            workspaceId: wsId,
+                            ...(wsId !== undefined ? { workspaceId: wsId } : {}),
                             ...(effectiveProjectNum !== undefined ? { project_number: effectiveProjectNum } : {}),
-                            config: context.config,
+                            ...(context.config !== undefined ? { config: context.config } : {}),
                         },
                         context.vectorManager,
                         allowedRoots
@@ -185,9 +185,9 @@ export function getIoImportTools(context: ToolContext): ToolDefinition[] {
 
                     const result = await processImportBatch(parsedFiles, db, {
                         dry_run: input.dry_run,
-                        workspaceId: wsId,
+                        ...(wsId !== undefined ? { workspaceId: wsId } : {}),
                         ...(effectiveProjectNum !== undefined ? { project_number: effectiveProjectNum } : {}),
-                        config: context.config,
+                        ...(context.config !== undefined ? { config: context.config } : {}),
                     }, context.vectorManager)
 
                     // Merge conversion phase errors

@@ -274,18 +274,46 @@ function coerceNumericValue(snakeKey: string, value: unknown): { value: unknown 
 
 function propagateBatchProjectNumber(result: Record<string, unknown>): void {
     const pn = typeof result['project_number'] === 'number' ? result['project_number'] : undefined
-    const ws = typeof result['workspace_id'] === 'string' ? result['workspace_id'] : undefined
+    const ws = typeof result['workspace_id'] === 'string' ? result['workspace_id'].trim() : undefined
     if (pn === undefined && ws === undefined) return
     for (const key of ['entries', 'updates', 'entry_ids']) {
         const list = result[key]
         if (!Array.isArray(list)) continue
         for (const item of list) {
             if (!isRecord(item)) continue
-            const itemWs = item['workspace_id']
-            // [C3] Never pair the batch root project_number with an item naming another workspace.
-            const namesOtherWs = typeof itemWs === 'string' && itemWs !== '' && itemWs !== ws
-            if (pn !== undefined && item['project_number'] === undefined && !namesOtherWs) item['project_number'] = pn
-            if (ws !== undefined && item['workspace_id'] === undefined) item['workspace_id'] = ws
+            const rawItemWs = item['workspace_id'] ?? item['workspaceId'] ?? item['workspace']
+            const rawItemTargetWs = item['target_workspace_id'] ?? item['targetWorkspaceId']
+            const itemWs = typeof rawItemWs === 'string' ? rawItemWs.trim() : undefined
+            const itemTargetWs =
+                typeof rawItemTargetWs === 'string' ? rawItemTargetWs.trim() : undefined
+            const itemPn =
+                item['project_number'] ??
+                item['projectNumber'] ??
+                item['project'] ??
+                item['project_name'] ??
+                item['projectName']
+            // [C5] Never pair the batch root project_number with an item naming another workspace.
+            const namesOtherWs =
+                (itemWs !== undefined &&
+                    itemWs !== '' &&
+                    (ws === undefined || ws === '' || itemWs.toLowerCase() !== ws.toLowerCase())) ||
+                (itemTargetWs !== undefined &&
+                    itemTargetWs !== '' &&
+                    (ws === undefined ||
+                        ws === '' ||
+                        itemTargetWs.toLowerCase() !== ws.toLowerCase()))
+            if (pn !== undefined && itemPn === undefined && !namesOtherWs) {
+                item['project_number'] = pn
+            }
+            if (
+                ws !== undefined &&
+                ws !== '' &&
+                item['workspace_id'] === undefined &&
+                item['workspaceId'] === undefined &&
+                item['workspace'] === undefined
+            ) {
+                item['workspace_id'] = ws
+            }
         }
     }
 }

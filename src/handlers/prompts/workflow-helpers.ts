@@ -8,7 +8,7 @@ import { ConfigurationError, ValidationError } from '../../types/errors.js'
 import { markUntrustedContent } from '../../utils/security-utils.js'
 import { logger } from '../../utils/logger.js'
 import { loadProjectRegistryFromConfig } from '../../utils/workspace-resolver.js'
-import { workspacesForProject } from '../../utils/write-scope.js'
+import { exactRegistryKey, workspacesForProject } from '../../utils/write-scope.js'
 import type { BriefingConfig } from '../resources/shared.js'
 import { RELATIONSHIP_TYPES } from '../../types/entities.js'
 
@@ -53,43 +53,50 @@ export function buildExplicitAttributionArgs(
     explicitProjectNumber?: number,
     explicitDefaultRequested = false
 ): string {
-    if (workspaceId === '') return ''
-    // [INVARIANT] Generated snippets never hardcode `workspace_id: "default"` unless the caller
-    // explicitly asked for `default` (C8); omitting it lets the server resolve the project.
-    if (workspaceId.toLowerCase() === 'default' && !explicitDefaultRequested) return ''
     const registry = briefingConfig?.projectRegistry ?? loadProjectRegistryFromConfig()
-    const registryNumber = registry?.[workspaceId]?.project_number
-    let projNum = registryNumber
-    if (explicitProjectNumber !== undefined) {
-        if (!Number.isFinite(explicitProjectNumber)) {
-            throw new ValidationError(
-                `project_number ${String(explicitProjectNumber)} is not a finite number.`,
-                { projectNumber: explicitProjectNumber }
-            )
-        }
-        const owners = workspacesForProject(explicitProjectNumber, registry)
-        if (owners.length > 1) {
-            throw new ValidationError(
-                `project_number ${String(explicitProjectNumber)} is registered to more than one workspace.`,
-                { projectNumber: explicitProjectNumber }
-            )
-        }
-        const owner = owners[0]
-        if (owner !== undefined && owner.toLowerCase() !== workspaceId.toLowerCase()) {
-            throw new ValidationError(
-                `project_number ${String(explicitProjectNumber)} belongs to workspace '${owner}', not '${workspaceId}'.`,
-                { workspaceId, projectNumber: explicitProjectNumber }
-            )
-        }
-        if (registryNumber !== undefined && explicitProjectNumber !== registryNumber) {
-            throw new ValidationError(
-                `workspace '${workspaceId}' uses project_number ${String(registryNumber)}, not ${String(explicitProjectNumber)}.`,
-                { workspaceId, projectNumber: explicitProjectNumber }
-            )
-        }
-        projNum = explicitProjectNumber
+    const isImplicitDefault =
+        workspaceId === '' || (workspaceId.toLowerCase() === 'default' && !explicitDefaultRequested)
+    if (explicitProjectNumber === undefined) {
+        if (isImplicitDefault) return ''
+        const canonicalWs = exactRegistryKey(workspaceId, registry) ?? workspaceId
+        const registryNumber = registry?.[canonicalWs]?.project_number
+        return `, workspace_id: "${canonicalWs}"${registryNumber !== undefined ? `, project_number: ${String(registryNumber)}` : ''}`
     }
-    return `, workspace_id: "${workspaceId}"${projNum !== undefined ? `, project_number: ${String(projNum)}` : ''}`
+    if (!Number.isFinite(explicitProjectNumber)) {
+        throw new ValidationError(
+            `project_number ${String(explicitProjectNumber)} is not a finite number.`,
+            { projectNumber: explicitProjectNumber }
+        )
+    }
+    const owners = workspacesForProject(explicitProjectNumber, registry)
+    if (owners.length > 1) {
+        throw new ValidationError(
+            `project_number ${String(explicitProjectNumber)} is registered to more than one workspace.`,
+            { projectNumber: explicitProjectNumber }
+        )
+    }
+    const owner = owners[0]
+    if (isImplicitDefault) {
+        if (owner !== undefined) {
+            return `, workspace_id: "${owner}", project_number: ${String(explicitProjectNumber)}`
+        }
+        return `, project_number: ${String(explicitProjectNumber)}`
+    }
+    const canonicalWs = exactRegistryKey(workspaceId, registry) ?? workspaceId
+    if (owner !== undefined && owner.toLowerCase() !== canonicalWs.toLowerCase()) {
+        throw new ValidationError(
+            `project_number ${String(explicitProjectNumber)} belongs to workspace '${owner}', not '${canonicalWs}'.`,
+            { workspaceId: canonicalWs, projectNumber: explicitProjectNumber }
+        )
+    }
+    const registryNumber = registry?.[canonicalWs]?.project_number
+    if (registryNumber !== undefined && explicitProjectNumber !== registryNumber) {
+        throw new ValidationError(
+            `workspace '${canonicalWs}' uses project_number ${String(registryNumber)}, not ${String(explicitProjectNumber)}.`,
+            { workspaceId: canonicalWs, projectNumber: explicitProjectNumber }
+        )
+    }
+    return `, workspace_id: "${canonicalWs}", project_number: ${String(explicitProjectNumber)}`
 }
 
 export function generateSummaryPrompt(

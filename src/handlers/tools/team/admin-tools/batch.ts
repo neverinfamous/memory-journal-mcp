@@ -9,7 +9,10 @@ import { linkRequestedRelationships } from '../../relationship-linking.js'
 import { formatHandlerError } from '../../../../utils/error-helpers.js'
 import { resolveAuthor, resolveAuthenticatedAuthor } from '../../../../utils/security-utils.js'
 import { getAuthContext } from '../../../../auth/auth-context.js'
-import { resolveProjectContext } from '../../../../utils/workspace-resolver.js'
+import {
+    findCanonicalRegistryKey,
+    resolveProjectContext,
+} from '../../../../utils/workspace-resolver.js'
 import { activeProjectRegistry, pairStoredScope } from '../../../../utils/write-scope.js'
 import { TEAM_DB_ERROR_RESPONSE, fetchAuthor, batchFetchAuthors, triggerTeamNotifications, resolveTeamProjectNumber } from '../helpers.js'
 import { resolveWriteWorkspaceId } from '../../write-workspace.js'
@@ -102,9 +105,17 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                                 : undefined
                         // [INVARIANT] A configured defaultProjectNumber does not satisfy team batch create.
                         // Only an explicit number, or the registry project of a named workspace, does.
+                        const callerRegistry = activeProjectRegistry(context.config?.projectRegistry)
+                        const canonicalCaller =
+                            callerWorkspace !== undefined
+                                ? (findCanonicalRegistryKey(callerWorkspace, callerRegistry) ??
+                                  callerWorkspace)
+                                : undefined
                         const projectNumber =
                             requestedProject ??
-                            (callerWorkspace !== undefined ? resolved.projectNumber : undefined)
+                            (canonicalCaller !== undefined
+                                ? callerRegistry?.[canonicalCaller]?.project_number
+                                : undefined)
                         if (projectNumber === undefined || projectNumber === null) {
                             return {
                                 success: false,
@@ -181,6 +192,15 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                         validationStatus: e.validation_status,
                         sessionId: e.session_id,
                         workspaceId,
+                        ...(e.anchors !== undefined
+                            ? {
+                                  anchors: e.anchors.map((a) => ({
+                                      anchorPath: a.anchor_path,
+                                      anchorType: a.anchor_type,
+                                      ...(a.status !== undefined ? { status: a.status } : {}),
+                                  })),
+                              }
+                            : {}),
                     }))
 
                     const { created: results, errors } = teamDb.createEntries(inputs)
@@ -386,8 +406,12 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
                     const projectNumber =
-                        resolveTeamProjectNumber(context, wsId, input.project_number) ??
-                        inferredProjectNum
+                        input.workspace_id !== undefined
+                            ? (resolveTeamProjectNumber(context, wsId, input.project_number) ??
+                              inferredProjectNum)
+                            : (input.project_number ??
+                              inferredProjectNum ??
+                              resolveTeamProjectNumber(context, wsId, undefined))
                     if (projectNumber === undefined || projectNumber === null) {
                         return missingProjectNumberResponse()
                     }

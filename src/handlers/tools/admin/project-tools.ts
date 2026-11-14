@@ -14,6 +14,11 @@ import path from 'node:path'
 import os from 'node:os'
 import { assertSafeDirectoryPath } from '../../../utils/security-utils.js'
 import { readProjectRegistryFile } from '../../../utils/registry-config-file.js'
+import {
+    clearActiveSessionProject,
+    getActiveSessionProject,
+    setActiveSessionProject,
+} from '../../../utils/workspace-resolver-session.js'
 
 const FORBIDDEN_PROJECT_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
 
@@ -55,6 +60,7 @@ function loadConfig(): Record<string, unknown> {
 interface RegistryKeyChange {
     from: string
     to?: string
+    projectNumber?: number | null
 }
 
 /** Rewrites/clears session defaults that pointed at a renamed/deleted project. */
@@ -65,6 +71,11 @@ function applyDefaultsChange(
     if (change === undefined || target.defaultWorkspaceId !== change.from) return
     if (change.to !== undefined) {
         target.defaultWorkspaceId = change.to
+        if (typeof change.projectNumber === 'number') {
+            target.defaultProjectNumber = change.projectNumber
+        } else if (change.projectNumber === null) {
+            delete target.defaultProjectNumber
+        }
     } else {
         delete target.defaultWorkspaceId
         delete target.defaultProjectNumber
@@ -76,6 +87,19 @@ function applyDefaultsChange(
  * ConfigManager) instead of mutating process.env, so hot-reload listeners observe the change.
  */
 function saveConfig(config: Record<string, unknown>, context?: ToolContext, change?: RegistryKeyChange): void {
+    if (change !== undefined && typeof config['defaultWorkspaceId'] === 'string' && config['defaultWorkspaceId'] === change.from) {
+        if (change.to !== undefined) {
+            config['defaultWorkspaceId'] = change.to
+            if (typeof change.projectNumber === 'number') {
+                config['defaultProjectNumber'] = change.projectNumber
+            } else if (change.projectNumber === null) {
+                delete config['defaultProjectNumber']
+            }
+        } else {
+            delete config['defaultWorkspaceId']
+            delete config['defaultProjectNumber']
+        }
+    }
     const configPath = getRegistryConfigPath()
     fs.mkdirSync(path.dirname(configPath), { recursive: true })
     fs.writeFileSync(configPath, JSON.stringify(config, null, 4), 'utf-8')
@@ -88,7 +112,20 @@ function saveConfig(config: Record<string, unknown>, context?: ToolContext, chan
         context.config.briefingConfig.projectRegistry = reg
         applyDefaultsChange(context.config.briefingConfig, change)
     }
-    const manager = context.config.runtime?.configManager
+    const runtime = context.config.runtime
+    const activeSession = getActiveSessionProject(runtime)
+    if (change !== undefined && activeSession.workspaceId === change.from) {
+        if (change.to !== undefined) {
+            const nextProj =
+                change.projectNumber !== undefined
+                    ? change.projectNumber
+                    : activeSession.projectNumber
+            setActiveSessionProject(change.to, nextProj ?? null, runtime)
+        } else {
+            clearActiveSessionProject(runtime)
+        }
+    }
+    const manager = runtime?.configManager
     if (manager instanceof ConfigManager) {
         const briefingConfig = { ...manager.getConfig().briefingConfig, projectRegistry: reg }
         applyDefaultsChange(briefingConfig, change)
@@ -208,7 +245,17 @@ export function getProjectTools(context: ToolContext): ToolDefinition[] {
                     
                     const updatedRegistry = config['projectRegistry'] as Record<string, { path: string, project_number?: number }>
                     updatedRegistry[targetName] = project
-                    saveConfig(config, context, targetName !== parsed.name ? { from: parsed.name, to: targetName } : undefined)
+                    const keyChange: RegistryKeyChange | undefined =
+                        targetName !== parsed.name || coercedUpdateNum !== undefined
+                            ? {
+                                  from: parsed.name,
+                                  to: targetName,
+                                  ...(coercedUpdateNum !== undefined
+                                      ? { projectNumber: coercedUpdateNum }
+                                      : {}),
+                              }
+                            : undefined
+                    saveConfig(config, context, keyChange)
                     
                     return Promise.resolve({ success: true, message: `Project '${targetName}' updated.`, project: { name: targetName, ...updatedRegistry[targetName] } })
                 } catch (err) {
@@ -320,9 +367,47 @@ export function getProjectTools(context: ToolContext): ToolDefinition[] {
                     let foundName = parsed.name
                     let projectInfo = Object.hasOwn(registry, foundName) ? registry[foundName] : undefined
                     const rawProjNum = (parsed as Record<string, unknown>)['project_number']
-                    const parsedProjNum = typeof rawProjNum === 'number' ? rawProjNum : undefined
-                    if (!projectInfo && (!isNaN(Number(parsed.name)) || parsedProjNum !== undefined)) {
-                        const targetNum = parsedProjNum ?? Number(parsed.name)
+                    if (
+                        rawProjNum !== undefined &&
+                        typeof rawProjNum !== 'number' &&
+                        typeof rawProjNum !== 'string'
+                    ) {
+                        return Promise.resolve({
+                            success: false,
+                            error: `🛠️ AUTONOMOUS HEALING: Invalid project_number: '${JSON.stringify(rawProjNum) ?? typeof rawProjNum}'`,
+                        })
+                    }
+                    const parsedProjNum = coerceRegistryProjectNumber(rawProjNum)
+                    if (rawProjNum !== undefined && parsedProjNum === undefined) {
+                        return Promise.resolve({
+                            success: false,
+                            error: `🛠️ AUTONOMOUS HEALING: Invalid project_number: '${JSON.stringify(rawProjNum) ?? typeof rawProjNum}'`,
+                        })
+                    }
+                    const nameProjNum = coerceRegistryProjectNumber(parsed.name)
+                    if (
+                        projectInfo &&
+                        parsedProjNum !== undefined &&
+                        projectInfo.project_number !== parsedProjNum &&
+                        projectInfo.id !== parsedProjNum
+                    ) {
+                        return Promise.resolve({
+                            success: false,
+                            error: `🛠️ AUTONOMOUS HEALING: Project '${foundName}' uses project_number ${String(projectInfo.project_number ?? projectInfo.id)}, not ${String(parsedProjNum)}.`,
+                        })
+                    }
+                    if (!projectInfo && (nameProjNum !== undefined || parsedProjNum !== undefined)) {
+                        if (
+                            nameProjNum !== undefined &&
+                            parsedProjNum !== undefined &&
+                            nameProjNum !== parsedProjNum
+                        ) {
+                            return Promise.resolve({
+                                success: false,
+                                error: `🛠️ AUTONOMOUS HEALING: Conflicting project_number values '${parsed.name}' and ${String(parsedProjNum)}.`,
+                            })
+                        }
+                        const targetNum = parsedProjNum ?? nameProjNum
                         for (const [pName, pData] of Object.entries(registry)) {
                             if (pData.project_number === targetNum || pData.id === targetNum) {
                                 foundName = pName

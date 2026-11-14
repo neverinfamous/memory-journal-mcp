@@ -237,13 +237,20 @@ function inheritRootBatchScope(
     const rootWs = firstDefinedEntry(rootObj, WORKSPACE_ALIAS_KEYS)
     const rootProj = firstDefinedEntry(rootObj, PROJECT_ALIAS_KEYS)
     const itemWs = firstDefinedEntry(itemObj, WORKSPACE_ALIAS_KEYS)
+    const itemTargetWs = firstDefinedEntry(itemObj, ['target_workspace_id', 'targetWorkspaceId'])
     const itemProj = firstDefinedEntry(itemObj, PROJECT_ALIAS_KEYS)
-    const namesOtherWorkspace =
-        itemWs !== undefined &&
+    const differsFromRoot = (entry: { value: unknown } | undefined): boolean =>
+        entry !== undefined &&
         (rootWs === undefined ||
-            (typeof itemWs.value === 'string' && typeof rootWs.value === 'string'
-                ? itemWs.value.trim().toLowerCase() !== rootWs.value.trim().toLowerCase()
-                : itemWs.value !== rootWs.value))
+            (typeof entry.value === 'string' && typeof rootWs.value === 'string'
+                ? entry.value.trim().toLowerCase() !== rootWs.value.trim().toLowerCase()
+                : entry.value !== rootWs.value))
+    const hasConcreteTargetWs =
+        itemTargetWs !== undefined &&
+        (typeof itemTargetWs.value !== 'string' || itemTargetWs.value.trim() !== '')
+    const namesOtherWorkspace =
+        differsFromRoot(itemWs) ||
+        (rootWs !== undefined && hasConcreteTargetWs && differsFromRoot(itemTargetWs))
     if (inheritProject && itemProj === undefined && rootProj !== undefined && !namesOtherWorkspace) {
         itemObj[rootProj.key] = rootProj.value
     }

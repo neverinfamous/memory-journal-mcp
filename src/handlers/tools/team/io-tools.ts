@@ -14,7 +14,8 @@ import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { sendProgress } from '../../../utils/progress-utils.js'
-import { resolveWorkspaceId, resolveWorkspaceFromFilePath } from '../../../utils/workspace-resolver.js'
+import { resolveWorkspaceFromFilePath } from '../../../utils/workspace-resolver.js'
+import { activeProjectRegistry, uniqueWorkspaceForProject } from '../../../utils/write-scope.js'
 import { resolveWriteWorkspaceId } from '../write-workspace.js'
 import { AggregateMcpError } from '../../../types/errors.js'
 import {
@@ -165,20 +166,34 @@ function resolveTeamImportScope(
     explicitWs: string | undefined,
     explicitPn: number | undefined,
     context: ToolContext
-): { wsId: string; projectNumber: number | undefined } {
+): {
+    wsId: string
+    projectNumber: number | undefined
+    lockedWsId: string | undefined
+    lockedProject: number | undefined
+} {
+    const trimmedWs = explicitWs?.trim()
+    const hasExplicitWs = trimmedWs !== undefined && trimmedWs !== '' && trimmedWs !== '*'
     const dirMatch =
-        explicitWs === undefined && explicitPn === undefined
+        !hasExplicitWs && explicitPn === undefined
             ? resolveWorkspaceFromFilePath(sourceDir, context.config)
+            : undefined
+    const effectiveRegistry = activeProjectRegistry(context.config?.projectRegistry)
+    const projectOwner =
+        !hasExplicitWs && dirMatch === undefined && explicitPn !== undefined
+            ? uniqueWorkspaceForProject(explicitPn, effectiveRegistry)
             : undefined
     const wsId = resolveWriteWorkspaceId(
         explicitWs ?? dirMatch?.workspaceId,
         explicitPn ?? dirMatch?.projectNumber,
         context.config
     )
+    const lockedWsId = (hasExplicitWs ? trimmedWs : undefined) ?? dirMatch?.workspaceId ?? projectOwner
+    const lockedProject = explicitPn ?? dirMatch?.projectNumber
     const projectNumber =
         resolveTeamProjectNumber(context, wsId, explicitPn ?? dirMatch?.projectNumber) ??
         undefined
-    return { wsId, projectNumber }
+    return { wsId, projectNumber, lockedWsId, lockedProject }
 }
 
 async function readAndConvertExternalMarkdownFiles(
@@ -275,7 +290,7 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                             recoverable: true,
                         }
                     }
-                    const wsId = resolveWorkspaceId(input.workspace_id, input.project_number, context.config)
+                    const wsId = resolveWriteWorkspaceId(input.workspace_id, input.project_number, context.config)
                     const projectNumber =
                         resolveTeamProjectNumber(context, wsId, input.project_number) ?? undefined
                     if (projectNumber === undefined) {
@@ -354,7 +369,7 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                 try {
                     if (!teamDb) return { ...TEAM_IO_NOT_CONFIGURED }
                     const input = TeamImportMarkdownSchema.parse(params)
-                    const { wsId, projectNumber } = resolveTeamImportScope(
+                    const { projectNumber, lockedWsId, lockedProject } = resolveTeamImportScope(
                         input.source_dir,
                         input.workspace_id,
                         input.project_number,
@@ -376,8 +391,11 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                             dry_run: input.dry_run,
                             limit: input.limit,
                             author,
-                            project_number: projectNumber,
-                            workspaceId: wsId,
+                            ...(lockedProject !== undefined
+                                ? { project_number: lockedProject }
+                                : {}),
+                            ...(lockedWsId !== undefined ? { workspaceId: lockedWsId } : {}),
+                            ...(context.config !== undefined ? { config: context.config } : {}),
                         },
                         context.teamVectorManager,
                         allowedRoots
@@ -411,7 +429,7 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                 try {
                     if (!teamDb) return { ...TEAM_IO_NOT_CONFIGURED }
                     const input = TeamImportExternalSchema.parse(params)
-                    const { wsId, projectNumber } = resolveTeamImportScope(
+                    const { projectNumber, lockedWsId, lockedProject } = resolveTeamImportScope(
                         input.source_dir,
                         input.workspace_id,
                         input.project_number,
@@ -442,8 +460,11 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                             dry_run: input.dry_run,
                             limit: input.limit,
                             author,
-                            project_number: projectNumber,
-                            workspaceId: wsId,
+                            ...(lockedProject !== undefined
+                                ? { project_number: lockedProject }
+                                : {}),
+                            ...(lockedWsId !== undefined ? { workspaceId: lockedWsId } : {}),
+                            ...(context.config !== undefined ? { config: context.config } : {}),
                         },
                         context.teamVectorManager
                     )

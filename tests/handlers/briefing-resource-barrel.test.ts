@@ -18,6 +18,7 @@ vi.mock('../../src/git/index.js', () => ({
 }))
 
 import { dynamicBriefingResource } from '../../src/handlers/resources/core/briefing/index.js'
+import { buildGitHubSection } from '../../src/handlers/resources/core/briefing/github-section.js'
 import {
     GitHubIntegration,
     getGitHubIntegration,
@@ -67,5 +68,21 @@ describe('Briefing Resources', () => {
         } as any)
 
         expect((result as any).data).toBeDefined()
+    })
+
+    it('dynamicBriefingResource does not call getGitHubIntegration or leak context.github for default without a registered path', async () => {
+        const result = await dynamicBriefingResource.handler('memory://briefing/default', {
+            github: { repo: 'leaked-cwd' } as never,
+            runtime: { type: 'stdio' },
+            briefingConfig: {
+                projectRegistry: {
+                    'memory-journal-mcp': { path: '/workspace/mj', project_number: 5 },
+                },
+            },
+        } as any)
+
+        expect((result as any).data).toBeDefined()
+        expect(getGitHubIntegration).not.toHaveBeenCalled()
+        expect(buildGitHubSection).toHaveBeenCalledWith(undefined, expect.anything(), undefined)
     })
 })

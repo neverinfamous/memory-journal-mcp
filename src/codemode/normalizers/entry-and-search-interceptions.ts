@@ -194,14 +194,20 @@ function applySingleIdInterception(
                 'Remove these parameters. Provide only the entry_id.'
             )
         }
-        if (typeof idVal === 'string' && isNaN(parseInt(idVal, 10))) {
+        if (typeof idVal === 'string' && !/^\d+$/.test(idVal.trim())) {
             return validationError(
                 `${methodName} requires a numeric entry_id, but received a non-numeric string ('${idVal}'). Journal entries use auto-incrementing integer IDs.`,
                 'Provide a numeric ID.'
             )
         }
     } else if (typeof args[0] === 'number' || typeof args[0] === 'string') {
-        const asNum = typeof args[0] === 'string' ? parseInt(args[0], 10) : args[0]
+        const strArg = typeof args[0] === 'string' ? args[0].trim() : undefined
+        const asNum =
+            typeof args[0] === 'number'
+                ? args[0]
+                : strArg !== undefined && /^\d+$/.test(strArg)
+                  ? Number(strArg)
+                  : NaN
         if (!isNaN(asNum)) {
             args[0] = { entry_id: asNum }
         } else {
@@ -253,6 +259,10 @@ function applyBatchAndMutationInterceptions(
     if (['update_entry', 'updateEntry', 'team_update_entry', 'teamUpdateEntry'].includes(methodName) && args.length === 1 && isRecord(args[0])) {
         const obj = { ...args[0] }
         args[0] = obj
+        if (obj['version'] !== undefined && obj['expected_version'] === undefined) {
+            obj['expected_version'] = obj['version']
+            delete obj['version']
+        }
         if (obj['keep'] !== undefined && obj['is_archived'] === undefined) {
             obj['is_archived'] = obj['keep'] === false || obj['keep'] === 0 || obj['keep'] === ''
             delete obj['keep']

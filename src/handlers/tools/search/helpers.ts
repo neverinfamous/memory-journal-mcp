@@ -196,7 +196,13 @@ export async function collectTeamSearchEntries(
 
     if (teamVectorManager !== undefined && query.trim() !== '') {
         try {
-            const hits = await teamVectorManager.search(query, limit, 0.15, options.workspaceId)
+            const hits = await teamVectorManager.search(
+                query,
+                limit,
+                0.15,
+                options.workspaceId,
+                options.projectNumber
+            )
             const ids = hits.map((hit) => hit.entryId)
             const hydrated = teamDb.getEntriesByIds(ids, options.workspaceId ?? 'default')
             for (const hit of hits) {

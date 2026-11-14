@@ -140,12 +140,12 @@ function buildCandidateQueries(options: LifecycleOptions): CandidateQueries {
     const importanceExpr = buildImportanceSqlExpression()
     // Intentional: an omitted workspaceId (or '*') leaves lifecycle operations database-wide;
     // only an explicit workspace id scopes the candidates to that workspace.
+    const rawWs = options.workspaceId?.trim()
+    const scopedWorkspace =
+        rawWs !== undefined && rawWs !== '' && rawWs !== '*' ? rawWs : undefined
     const scope: CandidateScope = {
         excludeTags: options.excludeTags ?? [],
-        scopedWorkspace:
-            options.workspaceId !== undefined && options.workspaceId !== '*'
-                ? options.workspaceId
-                : undefined,
+        scopedWorkspace,
         scopedProject: options.projectNumber,
     }
 
@@ -279,8 +279,11 @@ function runLifecycleTx(
             (error instanceof Error && error.message.includes('malformed'))
         if (isCorrupt) {
             // FTS5 index is out of sync with external content table.
-            // Rebuild it synchronously and retry the transaction.
-            db.prepare("INSERT INTO fts_content(fts_content) VALUES ('rebuild')").run()
+            // Rebuild it synchronously (live entries only) and retry the transaction.
+            db.exec(
+                "INSERT INTO fts_content(fts_content) VALUES ('delete-all'); " +
+                    'INSERT INTO fts_content(rowid, content) SELECT id, content FROM memory_journal WHERE deleted_at IS NULL'
+            )
 
             // Reset counters before retry
             hardDeletedCount = 0

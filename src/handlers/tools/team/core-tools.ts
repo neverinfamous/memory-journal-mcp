@@ -190,6 +190,7 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                                   anchors: input.anchors.map((a) => ({
                                       anchorPath: a.anchor_path,
                                       anchorType: a.anchor_type,
+                                      ...(a.status !== undefined ? { status: a.status } : {}),
                                   })),
                               }
                             : {}),

@@ -73,7 +73,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         context.config
                     )
                     let wsId: string
-                    let projectNumberForUpdate: number | undefined
+                    let projectNumberForUpdate: number | null | undefined
                     if (targetWorkspaceId !== undefined) {
                         const targetResolved = resolveProjectContext(
                             {
@@ -84,10 +84,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                             },
                             context.config
                         )
-                        projectNumberForUpdate =
-                            input.project_number === undefined
-                                ? undefined
-                                : targetResolved.projectNumber
+                        projectNumberForUpdate = targetResolved.projectNumber ?? null
                         if (input.workspace_id === '*') {
                             wsId = '*'
                         } else if (input.workspace_id !== undefined) {
@@ -121,10 +118,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                                 wsId = existingByPk.workspaceId
                             }
                         }
-                        if (
-                            input.project_number !== undefined &&
-                            (wsId === '*' || input.workspace_id !== undefined)
-                        ) {
+                        if (input.project_number !== undefined && input.workspace_id !== undefined) {
                             const scoped = db.getEntryById(input.entry_id, '*')
                             if (projectOwnershipMismatch(input.project_number, scoped?.projectNumber)) {
                                 return {

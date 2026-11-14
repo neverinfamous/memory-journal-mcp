@@ -105,6 +105,19 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
 
                     let results: SemanticSearchResult[]
                     if (input.entry_id !== undefined) {
+                        const seed = teamDb.getEntryById(input.entry_id, wsId)
+                        if (!seed || (projectNumber !== undefined && seed.projectNumber !== projectNumber)) {
+                            return {
+                                success: false,
+                                error: `Entry ${String(input.entry_id)} not found`,
+                                code: 'RESOURCE_NOT_FOUND',
+                                category: 'resource',
+                                recoverable: true,
+                                ...(input.query !== undefined ? { query: input.query } : {}),
+                                entries: [],
+                                count: 0,
+                            }
+                        }
                         results = await teamVectorManager.searchByEntryId(
                             input.entry_id,
                             internalLimit,

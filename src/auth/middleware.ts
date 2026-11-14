@@ -215,10 +215,7 @@ export function requireScope(scope: string): RequestHandler {
             return
         }
 
-        const scopeGranted =
-            authReq.auth.scopes.includes(scope) ||
-            authReq.auth.scopes.includes('admin') ||
-            authReq.auth.scopes.includes('full')
+        const scopeGranted = checkScope(authReq.auth.scopes, scope)
 
         if (!scopeGranted) {
             const error = new InsufficientScopeError(scope, authReq.auth.scopes)
@@ -260,13 +257,15 @@ export function requireAnyScope(scopes: string[]): RequestHandler {
             return
         }
 
+        const grantedScopes = authReq.auth.scopes
+
         // Full or admin scope grants all
-        if (authReq.auth.scopes.includes('full') || authReq.auth.scopes.includes('admin')) {
+        if (grantedScopes.includes('full') || grantedScopes.includes('admin')) {
             next()
             return
         }
 
-        const hasAnyScope = scopes.some((scope) => authReq.auth?.scopes.includes(scope))
+        const hasAnyScope = scopes.some((scope) => checkScope(grantedScopes, scope))
 
         if (!hasAnyScope) {
             const error = new InsufficientScopeError(scopes, authReq.auth.scopes)

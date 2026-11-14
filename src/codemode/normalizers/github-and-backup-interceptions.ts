@@ -50,8 +50,12 @@ const BACKUP_METHODS = [
     'teamListBackups',
     'restore_backup',
     'restoreBackup',
+    'team_restore_backup',
+    'teamRestoreBackup',
     'cleanup_backups',
     'cleanupBackups',
+    'team_cleanup_backups',
+    'teamCleanupBackups',
 ]
 
 export function applyGithubAndBackupInterceptions(

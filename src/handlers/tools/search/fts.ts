@@ -69,12 +69,16 @@ export function ftsSearch(
     // Decode compound cursor if it exists
     let personalCursor: string | undefined
     let teamCursor: string | undefined
+    let personalExhausted = false
+    let teamExhausted = false
     if (options.cursor) {
         if (teamDb && options.includeTeam === true && options.isPersonal !== true) {
             const compound = decodeCompoundCursor(options.cursor)
             if (compound) {
                 personalCursor = compound.p
                 teamCursor = compound.t
+                personalExhausted = compound.p === undefined
+                teamExhausted = compound.t === undefined
             } else {
                 personalCursor = options.cursor
             }
@@ -86,7 +90,9 @@ export function ftsSearch(
     const perDbLimit = calcPerDbLimit(options.limit, !!teamDb)
 
     let personalResult
-    if (!query && !hasFilters) {
+    if (personalExhausted) {
+        personalResult = { entries: [], nextCursor: undefined }
+    } else if (!query && !hasFilters) {
         personalResult = db.getRecentEntries(
             perDbLimit,
             options.isPersonal,
@@ -124,7 +130,9 @@ export function ftsSearch(
 
     if (teamDb && options.includeTeam === true && options.isPersonal !== true) {
         let teamResult
-        if (!query && !hasFilters) {
+        if (teamExhausted) {
+            teamResult = { entries: [], nextCursor: undefined }
+        } else if (!query && !hasFilters) {
             teamResult = teamDb.getRecentEntries(
                 perDbLimit,
                 undefined,

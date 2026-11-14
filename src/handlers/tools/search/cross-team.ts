@@ -20,7 +20,7 @@ import type { ToolContext, ToolDefinition } from '../../../types/index.js'
 import { ConfigurationError, ValidationError } from '../../../types/errors.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
-import { alignedProjectFilter } from '../../../utils/write-scope.js'
+import { activeProjectRegistry, alignedProjectFilter } from '../../../utils/write-scope.js'
 import { mergeMultipleSources, type EntryWithSource } from './helpers.js'
 import { logger } from '../../../utils/logger.js'
 
@@ -139,7 +139,11 @@ export async function handleCrossTeamSearch(
 ): Promise<z.infer<typeof CrossTeamSearchOutputSchema>> {
     const { config } = context
     const wsId = resolveWorkspaceId(args.workspace_id, args.project_number, config)
-    const alignedProject = alignedProjectFilter(wsId, args.project_number, config?.projectRegistry)
+    const alignedProject = alignedProjectFilter(
+        wsId,
+        args.project_number,
+        activeProjectRegistry(config?.projectRegistry)
+    )
 
     // 1. Resolve configured additional team DBs
     const additionalDbs: Record<string, string> = { ...(config?.additionalTeamDbs ?? {}) }

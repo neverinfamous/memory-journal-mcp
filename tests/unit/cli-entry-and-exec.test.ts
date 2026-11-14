@@ -293,6 +293,85 @@ describe('CLI Entry & Exec Commands', () => {
             expect(stderrOutput.join('')).toContain('not found or version mismatch')
         })
 
+        it('should reject --workspace * and mismatched --project without --workspace in updateEntryAction', async () => {
+            stdoutOutput = []
+            await createEntryAction(
+                'Baseline entry for update guard test',
+                {
+                    db: dbPath,
+                    workspace: 'adamic',
+                    project: 16,
+                    json: true,
+                },
+                dummyCmd
+            )
+            const created = JSON.parse(stdoutOutput.join('')) as { id: number }
+
+            const wildcardCmd = new Command('entry')
+            vi.spyOn(wildcardCmd, 'getOptionValueSource').mockImplementation((key: string) =>
+                ['db', 'id', 'expectedVersion', 'workspace', 'content'].includes(key)
+                    ? 'cli'
+                    : 'default'
+            )
+            stderrOutput = []
+            await expect(
+                updateEntryAction(
+                    {
+                        db: dbPath,
+                        id: created.id,
+                        expectedVersion: 1,
+                        workspace: '*',
+                        content: 'Should reject wildcard',
+                    },
+                    wildcardCmd
+                )
+            ).rejects.toThrow('PROCESS_EXIT_1')
+            expect(stderrOutput.join('')).toMatch(/Workspace '\*'|cannot be used|Validation Error/i)
+
+            const savedRegistryEnv = process.env['PROJECT_REGISTRY']
+            delete process.env['PROJECT_REGISTRY']
+            try {
+                const cfgFile = path.join(tmpDir, 'update-mismatch-config.json')
+                fs.writeFileSync(
+                    cfgFile,
+                    JSON.stringify({
+                        projectRegistry: {
+                            adamic: { path: path.join(tmpDir, 'adamic'), project_number: 16 },
+                            'memory-journal-mcp': { path: path.join(tmpDir, 'mj'), project_number: 5 },
+                        },
+                    }),
+                    'utf-8'
+                )
+                const updateCmd = new Command('entry')
+                vi.spyOn(updateCmd, 'getOptionValueSource').mockImplementation((key: string) =>
+                    ['db', 'config', 'id', 'expectedVersion', 'project', 'content'].includes(key)
+                        ? 'cli'
+                        : 'default'
+                )
+                stderrOutput = []
+                await expect(
+                    updateEntryAction(
+                        {
+                            db: dbPath,
+                            config: cfgFile,
+                            id: created.id,
+                            expectedVersion: 1,
+                            project: 5,
+                            content: 'Cross-project update without --workspace',
+                        },
+                        updateCmd
+                    )
+                ).rejects.toThrow('PROCESS_EXIT_1')
+                expect(stderrOutput.join('')).toMatch(/belongs to workspace|uses project_number/)
+            } finally {
+                if (savedRegistryEnv !== undefined) {
+                    process.env['PROJECT_REGISTRY'] = savedRegistryEnv
+                } else {
+                    delete process.env['PROJECT_REGISTRY']
+                }
+            }
+        })
+
         it('should attribute CLI buildEntryPayload and createEntryAction to registered CWD repo instead of hijacking on keyword aliases like "sqlite"', async () => {
             const adamicDir = path.join(tmpDir, 'adamic')
             const dbMcpDir = path.join(tmpDir, 'db-mcp')

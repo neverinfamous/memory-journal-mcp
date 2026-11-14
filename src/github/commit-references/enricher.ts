@@ -18,10 +18,10 @@ export async function enrichCommits(
     commitHashes: string[],
     github?: GitHubIntegration
 ): Promise<EnrichedCommit[]> {
-    const gitOptions = {
+    // simple-git sets windowsHide: true internally; spawnOptions only accepts uid/gid.
+    const gitOptions: Partial<SimpleGitOptions> = {
         baseDir: workingDir,
-        spawnOptions: { windowsHide: true },
-    } as unknown as SimpleGitOptions
+    }
     const git = simpleGit(gitOptions)
     const enriched: EnrichedCommit[] = []
 

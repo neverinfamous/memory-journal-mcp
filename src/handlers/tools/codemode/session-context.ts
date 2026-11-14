@@ -124,10 +124,27 @@ function injectProjectGithub(
     sessionContext: ToolContext,
     projectId: number | string | undefined,
     effectiveRegistry: ProjectRegistry,
-    fullAccess: boolean
+    fullAccess: boolean,
+    workspaceId?: string
 ): ToolContext | { errorResponse: Record<string, unknown> } {
-    if (projectId === undefined || effectiveRegistry === undefined) return sessionContext
-    const registryEntry = Object.values(effectiveRegistry).find((entry) => entry.project_number === projectId)
+    if (effectiveRegistry === undefined) return sessionContext
+    const concreteWs =
+        workspaceId !== undefined &&
+        workspaceId !== '' &&
+        workspaceId !== '*' &&
+        workspaceId.toLowerCase() !== 'default'
+            ? workspaceId
+            : undefined
+    let registryEntry =
+        concreteWs !== undefined ? lookupRegistryEntry(effectiveRegistry, concreteWs) : undefined
+    if (registryEntry === undefined && projectId !== undefined && concreteWs === undefined) {
+        const matches = Object.values(effectiveRegistry).filter(
+            (entry) => entry.project_number === projectId
+        )
+        if (matches.length === 1) {
+            registryEntry = matches[0]
+        }
+    }
     if (registryEntry?.path === undefined || registryEntry.path === '') return sessionContext
     const isSameAsCwd = cwdMatchesRegistryPath(registryEntry.path, process.cwd())
     if (!fullAccess && !isSameAsCwd) return sessionContext
@@ -162,12 +179,39 @@ export async function resolveCodeModeSessionContext(
     | { errorResponse: Record<string, unknown> }
 > {
     const effectiveRegistry = context.config?.projectRegistry ?? loadProjectRegistryFromConfig()
-    const explicitWorkspace =
-        (input.workspace_id !== undefined &&
-            input.workspace_id.trim() !== '' &&
-            input.workspace_id.trim() !== '*') ||
-        (input.repo !== undefined && input.repo.trim() !== '')
-    let projectId = resolveSessionProjectId(context, input, effectiveRegistry)
+    const rawWsTrimmed = input.workspace_id?.trim()
+    const rawRepoTrimmed = input.repo?.trim()
+    const hasExplicitRepo = rawRepoTrimmed !== undefined && rawRepoTrimmed !== ''
+    const hasExplicitConcreteWs =
+        rawWsTrimmed !== undefined && rawWsTrimmed !== '' && rawWsTrimmed !== '*'
+    const explicitWorkspace = hasExplicitConcreteWs || hasExplicitRepo
+
+    let repoRegistryKey: string | undefined
+    if (hasExplicitRepo && effectiveRegistry !== undefined) {
+        const repoLeaf = rawRepoTrimmed.includes('/')
+            ? (rawRepoTrimmed.split('/').pop()?.trim() ?? rawRepoTrimmed)
+            : rawRepoTrimmed
+        repoRegistryKey =
+            findCanonicalRegistryKey(repoLeaf, effectiveRegistry) ??
+            findCanonicalRegistryKey(rawRepoTrimmed, effectiveRegistry)
+    }
+    if (hasExplicitConcreteWs && repoRegistryKey !== undefined && effectiveRegistry !== undefined) {
+        const wsKey = findCanonicalRegistryKey(rawWsTrimmed, effectiveRegistry)
+        if (
+            rawWsTrimmed.toLowerCase() === 'default' ||
+            (wsKey !== undefined && wsKey !== repoRegistryKey)
+        ) {
+            return githubInjectError(
+                `workspace_id '${rawWsTrimmed}' conflicts with repo '${rawRepoTrimmed}' (registered workspace '${repoRegistryKey}').`
+            )
+        }
+    }
+
+    const explicitDefaultWithoutProject =
+        rawWsTrimmed?.toLowerCase() === 'default' && input.project_number === undefined
+    let projectId = explicitDefaultWithoutProject
+        ? undefined
+        : resolveSessionProjectId(context, input, effectiveRegistry)
     if (
         input.project_number !== undefined &&
         (typeof projectId !== 'number' || !Number.isInteger(projectId) || projectId <= 0)
@@ -180,7 +224,8 @@ export async function resolveCodeModeSessionContext(
     // [C3] Session scope is never guessed from keywords inside the submitted code.
     const resolvedContext = resolveProjectContext(
         {
-            workspace_id: input.workspace_id,
+            workspace_id:
+                input.workspace_id ?? (!hasExplicitConcreteWs ? repoRegistryKey : undefined),
             project_number: numericProjectId,
         },
         context.config
@@ -188,19 +233,22 @@ export async function resolveCodeModeSessionContext(
     const workspaceId = resolvedContext.workspaceId
     if (numericProjectId !== undefined) {
         pairStoredScope(workspaceId, numericProjectId, activeProjectRegistry(context.config?.projectRegistry))
-    } else if (resolvedContext.projectNumber !== undefined) {
+    } else if (!explicitDefaultWithoutProject && resolvedContext.projectNumber !== undefined) {
         numericProjectId = resolvedContext.projectNumber
         projectId = resolvedContext.projectNumber
     }
 
     const repoContext = await injectRepoGithub(context, input.repo, effectiveRegistry)
     if ('errorResponse' in repoContext) return repoContext
-    const sessionContext = injectProjectGithub(
-        repoContext,
-        projectId,
-        effectiveRegistry,
-        context.config?.codemodeInternalFullAccess === true
-    )
+    const sessionContext = hasExplicitRepo
+        ? repoContext
+        : injectProjectGithub(
+              repoContext,
+              projectId,
+              effectiveRegistry,
+              context.config?.codemodeInternalFullAccess === true,
+              workspaceId
+          )
     if ('errorResponse' in sessionContext) return sessionContext
     return { sessionContext, projectId, numericProjectId, workspaceId, explicitWorkspace }
 }

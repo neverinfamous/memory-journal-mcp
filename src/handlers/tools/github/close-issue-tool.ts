@@ -29,13 +29,15 @@ async function resolveKanbanMoveIfRequested(
     context: ToolContext,
     input: CloseIssueInput,
     resolved: { owner: string; repo: string; github: ToolContext['github'] },
-    issueNodeId: string | undefined
+    issueNodeId: string | undefined,
+    resolvedProjectNumber?: number
 ): Promise<KanbanMoveResult | undefined> {
     if (!input.move_to_done) return undefined
     if (!resolved.github || issueNodeId === undefined) {
         return { moved: false, error: 'Kanban move did not run.' }
     }
-    const projectNum = resolveProjectNumber(context, resolved.repo, input.project_number)
+    const projectNum =
+        resolvedProjectNumber ?? resolveProjectNumber(context, resolved.repo, input.project_number)
     if (projectNum === undefined) {
         return {
             moved: false,
@@ -111,7 +113,8 @@ async function executeCloseIssueMutation(
         context,
         input,
         resolved,
-        issueDetails.nodeId
+        issueDetails.nodeId,
+        projectNumber
     )
     const finalContent =
         `Closed GitHub issue #${String(input.issue_number)}: ${safeIssueTitle}\n\n` +

@@ -90,33 +90,59 @@ export async function buildBriefingData(
 
             const registryEntry = registry?.[resolvedRepo]
             if (registryEntry) {
-                const repoPath = registryEntry.path
-                activeRepoPath = repoPath
-                activeGithub = getGitHubIntegration(repoPath, context.runtime)
+                const repoPath: string | undefined = registryEntry.path
+                const hasRepoPath = repoPath !== undefined && repoPath.trim() !== ''
+                activeRepoPath = hasRepoPath ? repoPath : undefined
+                activeGithub = hasRepoPath ? getGitHubIntegration(repoPath, context.runtime) : undefined
                 activeProjectNumber = registryEntry.project_number
                 setActiveSessionProject(resolvedRepo, activeProjectNumber ?? null, context.runtime)
+            } else {
+                activeRepoPath = undefined
+                activeGithub = undefined
             }
         } else if (targetRepo.trim().toLowerCase() === 'default') {
             matchedTargetRepo = true
             activeWorkspaceId = 'default'
-            const registeredDefault = registry?.['default']?.project_number
+            const defaultEntry = registry?.['default']
+            const registeredDefault =
+                defaultEntry?.project_number ??
+                (config.defaultWorkspaceId === 'default' ? config.defaultProjectNumber : undefined)
+            const defaultPath: string | undefined = defaultEntry?.path
+            const hasDefaultPath = defaultPath !== undefined && defaultPath.trim() !== ''
             activeProjectNumber = registeredDefault
+            activeRepoPath = hasDefaultPath ? defaultPath : undefined
+            activeGithub = hasDefaultPath ? getGitHubIntegration(defaultPath, context.runtime) : undefined
             setActiveSessionProject('default', registeredDefault ?? null, context.runtime)
         }
         if (!matchedTargetRepo) {
             activeWorkspaceId = targetRepo
             activeProjectNumber = undefined
+            activeRepoPath = undefined
+            activeGithub = undefined
         }
     } else if (activeWorkspaceId && activeWorkspaceId !== 'default' && activeWorkspaceId !== '*') {
         const canonicalKey = findCanonicalRegistryKey(activeWorkspaceId, registry) ?? activeWorkspaceId
         activeWorkspaceId = canonicalKey
         const registryEntry = registry?.[canonicalKey]
         if (registryEntry) {
-            activeRepoPath = registryEntry.path
-            activeGithub = getGitHubIntegration(registryEntry.path, context.runtime)
+            const repoPath: string | undefined = registryEntry.path
+            const hasRepoPath = repoPath !== undefined && repoPath.trim() !== ''
+            activeRepoPath = hasRepoPath ? repoPath : undefined
+            activeGithub = hasRepoPath ? getGitHubIntegration(repoPath, context.runtime) : undefined
             if (registryEntry.project_number !== undefined) {
                 activeProjectNumber = registryEntry.project_number
             }
+        }
+    } else if (activeWorkspaceId === 'default') {
+        const defaultEntry = registry?.['default']
+        const defaultPath: string | undefined = defaultEntry?.path
+        const hasDefaultPath = defaultPath !== undefined && defaultPath.trim() !== ''
+        if (hasDefaultPath) {
+            activeRepoPath = defaultPath
+            activeGithub = getGitHubIntegration(defaultPath, context.runtime)
+        } else if (defaultEntry !== undefined) {
+            activeRepoPath = undefined
+            activeGithub = undefined
         }
     }
 
@@ -137,7 +163,20 @@ export async function buildBriefingData(
         ? journal.sessionSummaries.map((s) => `#${s.id} (${s.type}): ${s.preview}`)
         : null
 
-    const system = buildSystemContext(config, context.filterConfig, activeRepoPath, context.resourceCount)
+    const suppressSystemCwd =
+        targetRepo !== undefined ||
+        (activeWorkspaceId !== undefined &&
+            activeWorkspaceId !== '*' &&
+            registry?.[activeWorkspaceId] !== undefined &&
+            activeRepoPath === undefined)
+    const systemRepoPath = activeRepoPath ?? (suppressSystemCwd ? null : undefined)
+    const system = buildSystemContext(
+        config,
+        context.filterConfig,
+        systemRepoPath,
+        context.resourceCount,
+        journal.workspaceId
+    )
 
     const userMessage = formatUserMessage({
         repoName: github?.repo ?? 'local',

@@ -287,45 +287,35 @@ function normalizeProjectFields(obj: Record<string, unknown>): boolean {
     return modified
 }
 
-/** Fill in `workspace_id` / `project_number` from the registry, cwd or environment when missing. */
+/** Fill in `workspace_id` / `project_number` from explicit scope or env without synthesizing `'default'`. */
 function inferWorkspaceAndProject(obj: Record<string, unknown>): boolean {
     let modified = false
-    const wsId = typeof obj['workspace_id'] === 'string' ? obj['workspace_id'] : undefined
+    const rawWs = typeof obj['workspace_id'] === 'string' ? obj['workspace_id'].trim() : undefined
+    const wsId = rawWs !== undefined && rawWs !== '' ? rawWs : undefined
+    const isDefaultWs = wsId?.toLowerCase() === 'default'
     const projNum =
         typeof obj['project_number'] === 'number' && !Number.isNaN(obj['project_number'])
             ? obj['project_number']
             : undefined
 
-    if (wsId === undefined || wsId === '' || wsId === 'default' || projNum === undefined) {
-        // [INVARIANT] C3: no content/tag keyword guessing here — scope is bound by explicit
-        // args or session/registry context only, so entry text cannot hijack the workspace.
-        const resolved = resolveProjectContext({
-            workspace_id: wsId,
-            project_number: projNum,
-        })
-        if (
-            resolved.workspaceId !== undefined &&
-            resolved.workspaceId !== 'default' &&
-            wsId === undefined
-        ) {
+    // [INVARIANT] C1/C3: Never stamp 'default' or disk-CWD scope onto an omitted workspace_id in
+    // this config-free preprocessor; let the handler/interceptor resolve with full server config.
+    if (wsId === undefined && process.env['MCP_WORKSPACE_ID'] !== undefined && process.env['MCP_WORKSPACE_ID'].trim() !== '') {
+        obj['workspace_id'] = process.env['MCP_WORKSPACE_ID'].trim()
+        modified = true
+    }
+
+    const effectiveWs = typeof obj['workspace_id'] === 'string' ? obj['workspace_id'].trim() : undefined
+    const hasConcreteWs = effectiveWs !== undefined && effectiveWs !== '' && effectiveWs.toLowerCase() !== 'default'
+    if (projNum !== undefined && !hasConcreteWs && effectiveWs?.toLowerCase() !== 'default') {
+        const resolved = resolveProjectContext({ project_number: projNum })
+        if (resolved.workspaceId !== undefined && resolved.workspaceId !== 'default') {
             obj['workspace_id'] = resolved.workspaceId
             modified = true
-        } else if (
-            process.env['MCP_WORKSPACE_ID'] !== undefined &&
-            process.env['MCP_WORKSPACE_ID'].trim() !== '' &&
-            wsId === undefined
-        ) {
-            obj['workspace_id'] = process.env['MCP_WORKSPACE_ID'].trim()
-            modified = true
-        } else if (wsId === undefined && !('entry_id' in obj)) {
-            obj['workspace_id'] = resolved.workspaceId ?? 'default'
-            modified = true
         }
-        if (
-            obj['project_number'] === undefined &&
-            resolved.projectNumber !== undefined &&
-            wsId !== 'default'
-        ) {
+    } else if (projNum === undefined && hasConcreteWs && !isDefaultWs && effectiveWs !== '*') {
+        const resolved = resolveProjectContext({ workspace_id: effectiveWs })
+        if (resolved.projectNumber !== undefined) {
             obj['project_number'] = resolved.projectNumber
             modified = true
         }

@@ -20,10 +20,20 @@ export function getAgentContextResource(): InternalResourceDef {
             const match = /^memory:\/\/(?:agent-context|agent-id)(?:\/(.+))?$/.exec(uri)
             const rawRepo = match?.[1] !== undefined ? decodeURIComponent(match[1]) : undefined
             if (rawRepo?.toLowerCase() === 'default') {
+                const defaultProjNum =
+                    config?.projectRegistry?.['default']?.project_number ??
+                    (config?.defaultWorkspaceId === 'default'
+                        ? config.defaultProjectNumber
+                        : undefined)
+                setActiveSessionProject(
+                    'default',
+                    defaultProjNum !== undefined && defaultProjNum > 0 ? defaultProjNum : null,
+                    context?.runtime
+                )
                 return {
                     data: [
                         'Project: default',
-                        'Project Number: unresolved',
+                        `Project Number: ${defaultProjNum !== undefined && defaultProjNum > 0 ? String(defaultProjNum) : 'unresolved'}`,
                         'Workspace ID: default',
                         'Instructions: Use your Conversation ID as the session_id for all tool calls.',
                     ].join('\n'),

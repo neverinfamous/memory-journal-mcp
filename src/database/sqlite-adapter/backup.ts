@@ -200,9 +200,10 @@ export class BackupManager {
         assertNoPathTraversal(filename)
 
         const backupsDir = this.ctx.getBackupsDir()
+        const fold = (p: string): string => (process.platform === 'win32' ? p.toLowerCase() : p)
         const resolvedBackupsDir = path.resolve(backupsDir)
         const backupPath = path.resolve(backupsDir, filename)
-        const relToBackups = path.relative(resolvedBackupsDir, backupPath)
+        const relToBackups = path.relative(fold(resolvedBackupsDir), fold(backupPath))
 
         if (relToBackups.startsWith(`..${path.sep}`) || relToBackups === '..' || path.isAbsolute(relToBackups)) {
             throw new ValidationError(`Path traversal detected during restore resolution.`)
@@ -223,7 +224,7 @@ export class BackupManager {
 
         const realBackupPath = await fs.promises.realpath(backupPath)
         const realBackupsDir = await fs.promises.realpath(backupsDir)
-        const realRel = path.relative(realBackupsDir, realBackupPath)
+        const realRel = path.relative(fold(realBackupsDir), fold(realBackupPath))
         if (realRel.startsWith(`..${path.sep}`) || realRel === '..' || path.isAbsolute(realRel)) {
             throw new ValidationError('Resolved backup path escapes the backups directory.')
         }

@@ -479,7 +479,7 @@ export class VectorSearchManager {
             projectNumber?: number
             workspaceId?: string
         }
-    ): Promise<{ success: boolean; indexed: number; failed: number; firstError: string | null }> {
+    ): Promise<{ success: boolean; indexed: number; failed: number; firstError: string | null; warning?: string }> {
         await this.initialize()
         return rebuildIndex(this, this.dbAdapter, progress, options)
     }

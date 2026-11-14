@@ -21,6 +21,7 @@ const FLEXIBLE_PASSTHROUGH_SCHEMA = z.looseObject({ ...ErrorFieldsMixin.shape })
 export { searchDirectory, searchDirectoryAsync } from './directory-search.js'
 export type { GrepMatch, SearchDirectoryOptions } from './directory-search.js'
 import { searchDirectoryAsync } from './directory-search.js'
+import { logger } from '../../../../utils/logger.js'
 
 function normalizeStrippedArgs(params: unknown): Record<string, unknown> {
     const raw =
@@ -159,19 +160,23 @@ export async function handleGrepSearch(
                     ...(projArg !== undefined ? { project_number: projArg } : {}),
                 }
                 const searchResult = await Promise.resolve(searchTool.handler(searchPayload))
-                if (
-                    typeof searchResult === 'object' &&
-                    searchResult !== null &&
-                    (searchResult as Record<string, unknown>)['success'] !== false
-                ) {
+                if (typeof searchResult === 'object' && searchResult !== null) {
+                    const searchRecord = searchResult as Record<string, unknown>
+                    if (searchRecord['success'] === false) {
+                        return searchResult
+                    }
                     return {
                         success: true,
-                        ...(searchResult as Record<string, unknown>),
+                        ...searchRecord,
                         _healing_note: `🛠️ AUTONOMOUS HEALING: '${toolName}' was invoked as an MCP tool without a local directory path. It was automatically routed to journal 'search_entries' and executed successfully.`,
                     }
                 }
-            } catch {
-                // Fall through to empty matches
+            } catch (err) {
+                logger.debug('Dummy fs-fallback search_entries routing failed', {
+                    module: 'dummy-healing',
+                    toolName,
+                    error: err instanceof Error ? err.message : String(err),
+                })
             }
         }
     }

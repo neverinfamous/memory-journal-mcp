@@ -88,8 +88,12 @@ function resolveRequestedProjectUris(
             continue
         }
 
-        if (/^\d+$/.test(requested)) {
+        if (/^\d{1,10}$/.test(requested)) {
             const requestedNumber = Number(requested)
+            if (!Number.isSafeInteger(requestedNumber) || requestedNumber <= 0) {
+                notFound.push(requested)
+                continue
+            }
             const byNumber = registryKeys.filter(
                 (k) => getProjectNumber(registry[k]) === requestedNumber
             )
@@ -157,14 +161,26 @@ export function getLoadBriefingPromptDefinitions(): InternalPromptDef[] {
 
                 let activeWorkspace = ''
                 if (briefingConfig?.defaultProjectNumber !== undefined) {
-                    const activeKey = registryKeys.find(
-                        (key) =>
-                            getProjectNumber(registry[key]) === briefingConfig.defaultProjectNumber
-                    )
+                    const defaultProjNum = briefingConfig.defaultProjectNumber
+                    const defaultWs = briefingConfig.defaultWorkspaceId
+                    const matchingDefaultKey =
+                        defaultWs !== undefined
+                            ? registryKeys.find(
+                                  (key) =>
+                                      key.toLowerCase() === defaultWs.toLowerCase() &&
+                                      getProjectNumber(registry[key]) === defaultProjNum
+                              )
+                            : undefined
+                    const activeKey =
+                        matchingDefaultKey ??
+                        registryKeys.find(
+                            (key) => getProjectNumber(registry[key]) === defaultProjNum
+                        )
                     if (activeKey) {
-                        activeWorkspace = `${activeKey} (#${String(briefingConfig.defaultProjectNumber)})`
+                        activeWorkspace = `${activeKey} (#${String(defaultProjNum)})`
                     }
-                } else {
+                }
+                if (activeWorkspace === '') {
                     const resolvedWs = resourceWorkspace({
                         briefingConfig: {
                             ...briefingConfig,

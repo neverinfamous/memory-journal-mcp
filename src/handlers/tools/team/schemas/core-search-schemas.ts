@@ -38,7 +38,7 @@ export const TeamCreateEntrySchema = z.preprocess(
             tags: z.array(z.string()).optional().default([]),
             significance_type: z.enum(SIGNIFICANCE_TYPES).optional(),
             project_number: StrictProjectNumberSchema.optional(),
-            workspace_id: z.string().min(1, 'workspace_id (repository name) is required'),
+            workspace_id: z.string().min(1, 'workspace_id (repository name) is required').optional(),
             project_owner: z.string().optional(),
             issue_number: z.number().optional(),
             issue_url: z.string().optional(),

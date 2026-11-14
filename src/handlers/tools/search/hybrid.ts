@@ -105,7 +105,9 @@ export async function hybridSearch(
         ),
         // Semantic search (returns [] if vectorManager is unavailable)
         vectorManager
-            ? vectorManager.search(query, overfetchLimit, 0.15, options.workspaceId).catch((err: unknown) => {
+            ? vectorManager
+                  .search(query, overfetchLimit, 0.15, options.workspaceId, options.projectNumber)
+                  .catch((err: unknown) => {
                   logger.warning(
                       `Semantic search degraded: ${err instanceof Error ? err.message : String(err)}`,
                       { module: 'HybridSearch' }

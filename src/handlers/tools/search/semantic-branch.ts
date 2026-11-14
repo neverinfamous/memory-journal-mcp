@@ -90,7 +90,13 @@ export async function runSemanticSearch(
     const internalLimit = hasFilters
         ? Math.min(Math.max(needed * 10, 100), 1000)
         : Math.min(needed * 2, 1000)
-    const semanticResults = await vectorManager.search(query, internalLimit, 0.25, wsId)
+    const semanticResults = await vectorManager.search(
+        query,
+        internalLimit,
+        0.25,
+        wsId,
+        searchOptions.projectNumber
+    )
     const entryIds = semanticResults.map((r) => r.entryId)
     const entriesMap = db.getEntriesByIds(entryIds, wsId)
 

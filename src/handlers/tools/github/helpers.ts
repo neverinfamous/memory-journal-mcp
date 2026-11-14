@@ -130,8 +130,33 @@ export async function resolveOwner(
 
     if (registryEntry?.path) {
         toolGithub = getGitHubIntegration(registryEntry.path, context.config?.runtime)
+    } else if (inputWorkspaceId?.trim() === '*' && matchedRegistryKey === undefined) {
+        return {
+            error: true,
+            response: {
+                success: false,
+                error: "workspace_id '*' cannot identify a GitHub repository. Provide repo (owner/repo), a concrete workspace_id, or a registered project_number.",
+                code: 'VALIDATION_ERROR',
+                category: 'validation',
+                recoverable: true,
+            },
+        }
     } else if (context.github && inputWorkspaceId?.trim().toLowerCase() !== 'default') {
-        toolGithub = context.github
+        const cachedRepo =
+            typeof context.github.getCachedRepoInfo === 'function'
+                ? context.github.getCachedRepoInfo()?.repo
+                : undefined
+        const wsTrimmed = inputWorkspaceId?.trim()
+        if (
+            effectiveRepo ||
+            wsTrimmed === undefined ||
+            matchedRegistryKey !== undefined ||
+            cachedRepo === null ||
+            cachedRepo === undefined ||
+            cachedRepo.toLowerCase() === wsTrimmed.toLowerCase()
+        ) {
+            toolGithub = context.github
+        }
     }
 
     if (!toolGithub?.isApiAvailable()) {
@@ -238,15 +263,8 @@ export async function resolveOwnerRepo(
 
     let usedRegistryGithub = false
     if (registryEntry?.path) {
-        const candidate = getGitHubIntegration(registryEntry.path, context.config?.runtime)
-        if (candidate.isApiAvailable()) {
-            toolGithub = candidate
-            usedRegistryGithub = true
-        } else if (context.github) {
-            toolGithub = context.github
-        } else {
-            toolGithub = candidate
-        }
+        toolGithub = getGitHubIntegration(registryEntry.path, context.config?.runtime)
+        usedRegistryGithub = true
     } else if (input.workspace_id?.trim() === '*' && matchedRegistryKey === undefined) {
         // [BOUNDARY] The read wildcard never silently binds to the server CWD repository.
         return {
@@ -260,7 +278,21 @@ export async function resolveOwnerRepo(
             },
         }
     } else if (context.github && input.workspace_id?.trim().toLowerCase() !== 'default') {
-        toolGithub = context.github
+        const cachedRepo =
+            typeof context.github.getCachedRepoInfo === 'function'
+                ? context.github.getCachedRepoInfo()?.repo
+                : undefined
+        const wsTrimmed = input.workspace_id?.trim()
+        if (
+            effectiveRepo ||
+            wsTrimmed === undefined ||
+            matchedRegistryKey !== undefined ||
+            cachedRepo === null ||
+            cachedRepo === undefined ||
+            cachedRepo.toLowerCase() === wsTrimmed.toLowerCase()
+        ) {
+            toolGithub = context.github
+        }
     }
 
     if (!toolGithub?.isApiAvailable()) {

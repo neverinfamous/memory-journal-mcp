@@ -400,7 +400,7 @@ describe('Observability, SSE Transport, Utils & Catalog Resource', () => {
                 content: 'Test entry content',
                 project_number: 5,
             }) as Record<string, unknown>
-            expect(healed['workspace_id']).toBe('default')
+            expect(healed['workspace_id']).toBeUndefined()
 
             process.env['STALENESS_ACTIVE_HOURS'] = ''
             process.env['STALENESS_RECENT_DAYS'] = '  '

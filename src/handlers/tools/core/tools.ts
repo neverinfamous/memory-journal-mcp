@@ -380,8 +380,13 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         input.project_number,
                         context.config
                     )
+                    const effectiveProjectFilter = alignedProjectFilter(
+                        wsId,
+                        input.project_number,
+                        activeProjectRegistry(context.config?.projectRegistry)
+                    )
                     const tags = db
-                        .listTags(wsId, input.project_number)
+                        .listTags(wsId, effectiveProjectFilter)
                         .map((t) => ({ name: t.name, count: t.usageCount ?? 0 }))
                     return { success: true, tags, count: tags.length }
                 } catch (err) {

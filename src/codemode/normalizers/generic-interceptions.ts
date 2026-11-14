@@ -100,12 +100,6 @@ export function applyGenericInterceptions(
             obj['entries'] = obj['entries'].map((rawItem: unknown) => {
                 if (batchError !== undefined || !isRecord(rawItem)) return rawItem
                 const item: Record<string, unknown> = { ...rawItem }
-                if (item['workspace_id'] === undefined && item['workspaceId'] === undefined && topWs !== undefined) {
-                    item['workspace_id'] = topWs
-                }
-                if (item['project_number'] === undefined && item['projectNumber'] === undefined && topProj !== undefined) {
-                    item['project_number'] = topProj
-                }
                 extractMetadataContextAliases(item)
                 const itemError = coerceNumericStringIds(item)
                 if (itemError !== undefined) {
@@ -113,6 +107,24 @@ export function applyGenericInterceptions(
                     return rawItem
                 }
                 normalizeGenericFieldAliases(item, 'create_entry')
+                const rawItemWs = item['workspace_id'] ?? item['workspaceId']
+                const itemWs = typeof rawItemWs === 'string' ? rawItemWs.trim() : undefined
+                const itemNamesSameOrNoWs =
+                    itemWs === undefined ||
+                    itemWs === '' ||
+                    (typeof topWs === 'string' &&
+                        itemWs.toLowerCase() === topWs.trim().toLowerCase())
+                if ((itemWs === undefined || itemWs === '') && topWs !== undefined) {
+                    item['workspace_id'] = topWs
+                }
+                if (
+                    item['project_number'] === undefined &&
+                    item['projectNumber'] === undefined &&
+                    topProj !== undefined &&
+                    itemNamesSameOrNoWs
+                ) {
+                    item['project_number'] = topProj
+                }
                 resolveCreateEntryProjectContext(item)
                 synthesizeEntryMutationFields(item)
                 healAnchorsField(item)

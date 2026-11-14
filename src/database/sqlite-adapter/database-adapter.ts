@@ -149,6 +149,7 @@ export class DatabaseAdapter extends AdapterDelegates implements IDatabaseAdapte
         limit?: number
         offset?: number
         workspaceId?: string
+        projectNumber?: number
     }): { entries: JournalEntry[]; count: number } {
         return this.entriesMgr.getDeletedEntries(options)
     }

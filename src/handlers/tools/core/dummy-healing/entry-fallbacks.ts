@@ -379,8 +379,12 @@ export function getEntryAndCodemodeFallbackToolDefinitions(
                         if (codemodeTool !== undefined) {
                             const res = await Promise.resolve(codemodeTool.handler(params))
                             if (typeof res === 'object' && res !== null) {
+                                const resRecord = res as Record<string, unknown>
+                                if (resRecord['success'] === false) {
+                                    return res
+                                }
                                 return {
-                                    ...(res as Record<string, unknown>),
+                                    ...resRecord,
                                     _healing_note: `🛠️ AUTONOMOUS HEALING: '${name}' was called as an MCP tool. It was automatically translated and executed via Code Mode ('mj_execute_code').`,
                                 }
                             }

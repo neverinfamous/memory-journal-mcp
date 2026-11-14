@@ -124,11 +124,12 @@ export function resolveProjectContext(
             return { workspaceId: wsId, projectNumber: input.project_number }
         }
         const sessionCtx = getActiveSessionProject(config?.runtime)
-        const candidateWs =
+        const rawCandidateWs =
             registeredCwd?.workspaceId ??
             config?.defaultWorkspaceId ??
             sessionCtx.workspaceId ??
             'default'
+        const candidateWs = findCanonicalRegistryKey(rawCandidateWs, registry) ?? rawCandidateWs
         // [INVARIANT] Never pair an unregistered number with a workspace that already owns
         // a different registered number (cwd/session poisoning).
         const candidateProject = registry?.[candidateWs]?.project_number
@@ -165,6 +166,12 @@ export function resolveProjectContext(
     ) {
         const canonicalSessionWs =
             findCanonicalRegistryKey(sessionCtx.workspaceId, registry) ?? sessionCtx.workspaceId
+        if (canonicalSessionWs.toLowerCase() === 'default' && sessionCtx.projectNumber !== undefined) {
+            const sessionWorkspace = findWorkspaceByProjectNumber(sessionCtx.projectNumber, registry)
+            if (sessionWorkspace !== undefined) {
+                return { workspaceId: sessionWorkspace, projectNumber: sessionCtx.projectNumber }
+            }
+        }
         const registryProject = registry?.[canonicalSessionWs]?.project_number
         const sessionProject =
             unclaimedByOtherWorkspace(sessionCtx.projectNumber, canonicalSessionWs, registry) ??

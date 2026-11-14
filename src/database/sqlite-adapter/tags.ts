@@ -103,45 +103,35 @@ export class TagsManager {
     listTags(workspaceId?: string, projectNumber?: number): Tag[] {
         const wsId = effectiveWorkspace(workspaceId)
         const scopedProject =
-            typeof projectNumber === 'number' && projectNumber > 0 ? projectNumber : undefined
-        if (wsId !== '*' || scopedProject !== undefined) {
-            const hasDeletedAt =
-                this.db
-                    .prepare(
-                        "SELECT 1 FROM pragma_table_info('memory_journal') WHERE name = 'deleted_at'"
-                    )
-                    .get() !== undefined
-            const filters = [hasDeletedAt ? 'mj.deleted_at IS NULL' : '1 = 1']
-            const params: unknown[] = []
-            if (wsId !== '*') {
-                filters.push('mj.workspace_id = ?')
-                params.push(wsId)
-            }
-            if (scopedProject !== undefined) {
-                filters.push('mj.project_number = ?')
-                params.push(scopedProject)
-            }
-            const rows = this.db
+            typeof projectNumber === 'number' && projectNumber >= 0 ? projectNumber : undefined
+        const hasDeletedAt =
+            this.db
                 .prepare(
-                    `SELECT t.id, t.name, COUNT(et.entry_id) as usage_count
-                     FROM tags t
-                     JOIN entry_tags et ON t.id = et.tag_id
-                     JOIN memory_journal mj ON et.entry_id = mj.id
-                     WHERE ${filters.join(' AND ')}
-                     GROUP BY t.id, t.name
-                     HAVING COUNT(et.entry_id) > 0
-                     ORDER BY usage_count DESC`
+                    "SELECT 1 FROM pragma_table_info('memory_journal') WHERE name = 'deleted_at'"
                 )
-                .all(...params) as { id: number; name: string; usage_count: number }[]
-
-            return rows.map((r) => ({ id: r.id, name: r.name, usageCount: r.usage_count }))
+                .get() !== undefined
+        const filters = [hasDeletedAt ? 'mj.deleted_at IS NULL' : '1 = 1']
+        const params: unknown[] = []
+        if (wsId !== '*') {
+            filters.push('mj.workspace_id = ?')
+            params.push(wsId)
         }
-
+        if (scopedProject !== undefined) {
+            filters.push('mj.project_number = ?')
+            params.push(scopedProject)
+        }
         const rows = this.db
             .prepare(
-                'SELECT id, name, COALESCE(usage_count, 0) as usage_count FROM tags WHERE COALESCE(usage_count, 0) > 0 ORDER BY usage_count DESC'
+                `SELECT t.id, t.name, COUNT(et.entry_id) as usage_count
+                 FROM tags t
+                 JOIN entry_tags et ON t.id = et.tag_id
+                 JOIN memory_journal mj ON et.entry_id = mj.id
+                 WHERE ${filters.join(' AND ')}
+                 GROUP BY t.id, t.name
+                 HAVING COUNT(et.entry_id) > 0
+                 ORDER BY usage_count DESC`
             )
-            .all() as { id: number; name: string; usage_count: number }[]
+            .all(...params) as { id: number; name: string; usage_count: number }[]
 
         return rows.map((r) => ({ id: r.id, name: r.name, usageCount: r.usage_count }))
     }

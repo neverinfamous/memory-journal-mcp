@@ -25,6 +25,16 @@ function saveConfig(config: Record<string, unknown>, options?: Record<string, un
     fs.writeFileSync(targetPath, JSON.stringify(config, null, 4), 'utf-8')
 }
 
+function parsePositiveCliProjectNumber(raw: unknown): number {
+    const trimmed = String(raw).trim()
+    const num = /^\d+$/.test(trimmed) ? Number(trimmed) : Number.NaN
+    if (!Number.isInteger(num) || num < 1) {
+        process.stderr.write('Invalid project number.\n')
+        process.exit(1)
+    }
+    return num
+}
+
 export function projectListAction(options: Record<string, unknown>, _command: Command): void {
     const config = loadConfig(options)
     const registry = (config['projectRegistry'] ?? {}) as Record<string, { path: string, project_number?: number }>
@@ -67,12 +77,7 @@ export async function projectCreateAction(name: string, options: Record<string, 
     }
 
     if (options['number'] != null) {
-        const num = parseInt(options['number'] as string, 10)
-        if (isNaN(num)) {
-            process.stderr.write('Invalid project number.\n')
-            process.exit(1)
-        }
-        registry[name].project_number = num
+        registry[name].project_number = parsePositiveCliProjectNumber(options['number'])
     }
 
     saveConfig(config, options)
@@ -200,12 +205,7 @@ export function projectUpdateAction(name: string, options: Record<string, unknow
     }
 
     if (options['number'] != null) {
-        const num = parseInt(options['number'] as string, 10)
-        if (isNaN(num)) {
-            process.stderr.write('Invalid project number.\n')
-            process.exit(1)
-        }
-        project.project_number = num
+        project.project_number = parsePositiveCliProjectNumber(options['number'])
         modified = true
     }
 

@@ -2,6 +2,7 @@
  * Secure dispatcher and project/GitHub context resolution for Code Mode tool execution.
  */
 
+import * as path from 'node:path'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { isRecord } from '../../../codemode/normalizers/shared-utils.js'
 import { injectProjectNames } from '../index.js'
@@ -180,9 +181,20 @@ interface DispatchParamContext {
     explicitWorkspace?: boolean
 }
 
+function normalizeFsPath(filePath: string): string {
+    const resolved = path.resolve(filePath)
+    return process.platform === 'win32' ? resolved.toLowerCase() : resolved
+}
+
+function isDefaultWorkspaceName(value: unknown): boolean {
+    return typeof value === 'string' && value.trim().toLowerCase() === 'default'
+}
+
 async function autoPopulateGithubUrls(
     paramsObj: Record<string, unknown>,
-    sessionContext: ToolContext
+    sessionContext: ToolContext,
+    sessionWorkspaceId: string | undefined,
+    sessionProjectId: number | string | undefined
 ): Promise<void> {
     if (
         !(
@@ -193,6 +205,36 @@ async function autoPopulateGithubUrls(
         return
     }
     if (sessionContext.github === undefined) return
+    const targetWs =
+        typeof paramsObj['workspace_id'] === 'string' ? paramsObj['workspace_id'].trim() : undefined
+    if (targetWs === '*' || isDefaultWorkspaceName(targetWs)) return
+    if (
+        targetWs !== undefined &&
+        sessionWorkspaceId !== undefined &&
+        sessionWorkspaceId !== '*' &&
+        targetWs.toLowerCase() !== sessionWorkspaceId.toLowerCase()
+    ) {
+        return
+    }
+    if (
+        typeof paramsObj['project_number'] === 'number' &&
+        typeof sessionProjectId === 'number' &&
+        paramsObj['project_number'] !== sessionProjectId
+    ) {
+        return
+    }
+    const wsForLookup = targetWs ?? sessionWorkspaceId
+    if (wsForLookup !== undefined) {
+        const wsReg = lookupRegistryEntry(sessionContext.config?.projectRegistry, wsForLookup)
+        if (
+            wsReg?.path !== undefined &&
+            wsReg.path !== '' &&
+            sessionContext.config?.codemodeInternalFullAccess !== true &&
+            normalizeFsPath(wsReg.path) !== normalizeFsPath(process.cwd())
+        ) {
+            return
+        }
+    }
     try {
         const repoInfo = await sessionContext.github.getRepoInfo()
         if (repoInfo?.owner && repoInfo?.repo) {
@@ -221,16 +263,23 @@ async function normalizeDispatchParams(
     if (!isRecord(finalParams)) return { params: finalParams }
 
     const paramsObj = { ...finalParams }
-    const callerHasExplicitWs = paramsObj['workspace_id'] !== undefined || paramsObj['workspace'] !== undefined
-    // When the caller named a project but no workspace, let resolveProjectContext derive the
-    // workspace from that project instead of overriding it with the session workspace.
-    const callerPassedProjectOnly = paramsObj['project_number'] !== undefined && !callerHasExplicitWs
     if (paramsObj['workspace'] !== undefined && paramsObj['workspace_id'] === undefined) {
         paramsObj['workspace_id'] = paramsObj['workspace']
     }
     if (typeof paramsObj['workspace_id'] === 'number') {
         paramsObj['workspace_id'] = String(paramsObj['workspace_id'])
+    } else if (typeof paramsObj['workspace_id'] === 'string') {
+        const trimmedWs = paramsObj['workspace_id'].trim()
+        if (trimmedWs === '') {
+            delete paramsObj['workspace_id']
+        } else {
+            paramsObj['workspace_id'] = trimmedWs
+        }
     }
+    const callerHasExplicitWs = paramsObj['workspace_id'] !== undefined
+    // When the caller named a project but no workspace, let resolveProjectContext derive the
+    // workspace from that project instead of overriding it with the session workspace.
+    const callerPassedProjectOnly = paramsObj['project_number'] !== undefined && !callerHasExplicitWs
     if (typeof paramsObj['project_number'] === 'string') {
         const regEntry = lookupRegistryEntry(sessionContext.config?.projectRegistry, paramsObj['project_number'])
         if (regEntry?.project_number !== undefined) paramsObj['project_number'] = regEntry.project_number
@@ -280,7 +329,7 @@ async function normalizeDispatchParams(
                 supplied,
                 activeProjectRegistry(sessionContext.config?.projectRegistry)
             )
-        } else if (paramsObj['workspace_id'] !== 'default' && wsReg?.project_number !== undefined) {
+        } else if (!isDefaultWorkspaceName(paramsObj['workspace_id']) && wsReg?.project_number !== undefined) {
             paramsObj['project_number'] = wsReg.project_number
         }
     }
@@ -291,7 +340,7 @@ async function normalizeDispatchParams(
         paramsObj['project_number'] === undefined &&
         projectId !== undefined &&
         (callerWorkspaceId === undefined || callerWorkspaceId === workspaceId) &&
-        callerWorkspaceId !== 'default' &&
+        !isDefaultWorkspaceName(callerWorkspaceId) &&
         checkSchemaAcceptsKey(tool.inputSchema, 'project_number')
     ) {
         paramsObj['project_number'] = projectId
@@ -300,13 +349,44 @@ async function normalizeDispatchParams(
         !callerPassedProjectOnly &&
         paramsObj['workspace_id'] === undefined &&
         workspaceId !== undefined &&
-        (workspaceId !== 'default' || explicitWorkspace === true) &&
+        (!isDefaultWorkspaceName(workspaceId) || explicitWorkspace === true) &&
         checkSchemaAcceptsKey(tool.inputSchema, 'workspace_id')
     ) {
         paramsObj['workspace_id'] = workspaceId
     }
 
-    await autoPopulateGithubUrls(paramsObj, sessionContext)
+    if (
+        (tool.name === 'batch_create_entries' || tool.name === 'team_batch_create_entries') &&
+        Array.isArray(paramsObj['entries'])
+    ) {
+        paramsObj['entries'] = paramsObj['entries'].map((item: unknown): unknown => {
+            if (!isRecord(item)) return item
+            const nextItem = { ...item }
+            const hasItemWs =
+                typeof nextItem['workspace_id'] === 'string' && nextItem['workspace_id'].trim() !== ''
+            const hasItemProj = nextItem['project_number'] !== undefined
+            if (
+                !hasItemWs &&
+                !hasItemProj &&
+                workspaceId !== undefined &&
+                workspaceId !== '*' &&
+                (!isDefaultWorkspaceName(workspaceId) || explicitWorkspace === true)
+            ) {
+                nextItem['workspace_id'] = workspaceId
+            }
+            if (
+                nextItem['project_number'] === undefined &&
+                typeof projectId === 'number' &&
+                !isDefaultWorkspaceName(nextItem['workspace_id']) &&
+                (nextItem['workspace_id'] === undefined || nextItem['workspace_id'] === workspaceId)
+            ) {
+                nextItem['project_number'] = projectId
+            }
+            return nextItem
+        })
+    }
+
+    await autoPopulateGithubUrls(paramsObj, sessionContext, workspaceId, projectId)
 
     return { params: paramsObj }
 }

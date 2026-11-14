@@ -16,6 +16,11 @@ import { getProjectTools } from '../../src/handlers/tools/admin/project-tools.js
 import { getLifecycleTools } from '../../src/handlers/tools/admin/lifecycle-tools.js'
 import { getMiscTools } from '../../src/handlers/tools/admin/misc-tools.js'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
+import {
+    getActiveSessionProject,
+    setActiveSessionProject,
+} from '../../src/utils/workspace-resolver.js'
+import { ServerRuntime } from '../../src/utils/maintenance-lock.js'
 import type { ToolContext, ToolHandlerConfig } from '../../src/types/index.js'
 
 describe('ConfigManager & Configuration Tools', () => {
@@ -404,6 +409,53 @@ describe('ConfigManager & Configuration Tools', () => {
             expect(regRes.success).toBe(false)
             expect(regRes.error).toContain('invalid JSON')
             expect(fs.readFileSync(configPath, 'utf-8')).toBe(truncated)
+        })
+
+        it('updates active session workspaceId and projectNumber when update_project renames or changes project_number', async () => {
+            const runtime = new ServerRuntime()
+            const runtimeContext: ToolContext = {
+                db,
+                config: {
+                    projectRegistry: {},
+                    runtime,
+                },
+            }
+            const tools = getProjectTools(runtimeContext)
+            const registerTool = tools.find((t) => t.name === 'register_project')!
+            const updateTool = tools.find((t) => t.name === 'update_project')!
+            const deleteTool = tools.find((t) => t.name === 'delete_project')!
+
+            await registerTool.handler({
+                name: 'session-proj',
+                absolute_path: path.join(tmpDir, 'session-proj'),
+                project_number: 10,
+            })
+            setActiveSessionProject('session-proj', 10, runtime)
+            expect(getActiveSessionProject(runtime)).toEqual({
+                workspaceId: 'session-proj',
+                projectNumber: 10,
+            })
+
+            await updateTool.handler({
+                name: 'session-proj',
+                project_number: 25,
+            })
+            expect(getActiveSessionProject(runtime)).toEqual({
+                workspaceId: 'session-proj',
+                projectNumber: 25,
+            })
+
+            await updateTool.handler({
+                name: 'session-proj',
+                new_name: 'session-proj-v2',
+            })
+            expect(getActiveSessionProject(runtime)).toEqual({
+                workspaceId: 'session-proj-v2',
+                projectNumber: 25,
+            })
+
+            await deleteTool.handler({ name: 'session-proj-v2' })
+            expect(getActiveSessionProject(runtime)).toEqual({})
         })
     })
 

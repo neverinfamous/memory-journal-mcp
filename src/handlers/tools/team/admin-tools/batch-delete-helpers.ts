@@ -91,7 +91,7 @@ export function buildValidatedTeamBatchUpdates(
         if (
             existing !== null &&
             existing !== undefined &&
-            explicitWs === '*' &&
+            explicitWs !== undefined &&
             explicitPn !== undefined &&
             existing.projectNumber !== explicitPn
         ) {

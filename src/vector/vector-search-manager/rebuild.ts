@@ -5,6 +5,7 @@ import { sendProgress } from '../../utils/progress-utils.js'
 import { logger } from '../../utils/logger.js'
 import { REBUILD_BATCH_SIZE, REBUILD_PAGE_SIZE } from './types.js'
 import type { VectorSearchManager } from './manager.js'
+import { effectiveWorkspace } from '../../database/workspace-scope.js'
 
 // Allow mocking in tests
 export const setTimeoutFn = globalThis.setTimeout
@@ -122,7 +123,7 @@ export async function rebuildIndex(
     const force = options?.force ?? false
     const batchSize = options?.batchSize ?? REBUILD_BATCH_SIZE
     const pageSize = options?.pageSize ?? REBUILD_PAGE_SIZE
-    const wsScope = options?.workspaceId ?? '*'
+    const wsScope = effectiveWorkspace(options?.workspaceId)
 
     const stats: RebuildStats = { indexed: 0, skipped: 0, errorsCount: 0, firstError: null }
 
@@ -191,8 +192,8 @@ export async function rebuildIndex(
     return {
         success: stats.errorsCount === 0 && cleanupError === undefined,
         indexed: stats.indexed,
-        failed: stats.errorsCount,
-        firstError: stats.firstError,
+        failed: stats.errorsCount + (cleanupError !== undefined ? 1 : 0),
+        firstError: stats.firstError ?? cleanupError ?? null,
         ...(cleanupError !== undefined ? { warning: cleanupError } : {}),
     }
 }

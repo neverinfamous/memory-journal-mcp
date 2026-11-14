@@ -169,29 +169,30 @@ const GetStatisticsSchema = z.object({
     project_number: z.unknown().optional(), // Allow injected project_number
 }).strict()
 
-const STATISTICS_STRICT_KEYS = new Set([
-    'group_by',
-    'start_date',
-    'end_date',
-    'project_breakdown',
-    'workspace_id',
-    'project_number',
-])
+const STATISTICS_GROUP_BY_HINTS = new Set(['day', 'week', 'month'])
+const STATISTICS_HINT_KEYS = ['timeframe', 'period', 'time'] as const
 
 function isStatisticsArgRecord(params: unknown): params is Record<string, unknown> {
     return typeof params === 'object' && params !== null && !Array.isArray(params)
 }
 
-/** Drop public hint keys such as timeframe, period, and time before the strict parse. */
+/** Map documented hint keys (timeframe, period, time) onto group_by before the strict parse. */
 function omitNonStrictStatisticsKeys(params: unknown): unknown {
     if (!isStatisticsArgRecord(params)) return params
-    const kept: Record<string, unknown> = {}
-    for (const key of Object.keys(params)) {
-        if (STATISTICS_STRICT_KEYS.has(key) && key in params) {
-            kept[key] = params[key]
+    const copy: Record<string, unknown> = { ...params }
+    if (copy['group_by'] === undefined) {
+        for (const hintKey of STATISTICS_HINT_KEYS) {
+            const hintVal = copy[hintKey]
+            if (typeof hintVal === 'string' && STATISTICS_GROUP_BY_HINTS.has(hintVal)) {
+                copy['group_by'] = hintVal
+                break
+            }
         }
     }
-    return kept
+    for (const hintKey of STATISTICS_HINT_KEYS) {
+        Reflect.deleteProperty(copy, hintKey)
+    }
+    return copy
 }
 
 /** Relaxed schema — passed to SDK inputSchema so Zod errors reach the handler */
@@ -321,6 +322,11 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
                         input.workspace_id === undefined
                             ? '*'
                             : resolveWorkspaceId(input.workspace_id, resolvedProjectNumber, context.config)
+                    const effectiveProjectFilter = alignedProjectFilter(
+                        wsId,
+                        resolvedProjectNumber,
+                        activeProjectRegistry(context.config?.projectRegistry)
+                    )
 
                     const results = db.getCrossProjectInsights({
                         startDate: input.start_date,
@@ -328,8 +334,8 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
                         minEntries: input.min_entries,
                         inactiveThresholdDays: INACTIVE_THRESHOLD_DAYS,
                         workspaceId: wsId,
-                        ...(resolvedProjectNumber !== undefined
-                            ? { projectNumber: resolvedProjectNumber }
+                        ...(effectiveProjectFilter !== undefined
+                            ? { projectNumber: effectiveProjectFilter }
                             : {}),
                     })
 

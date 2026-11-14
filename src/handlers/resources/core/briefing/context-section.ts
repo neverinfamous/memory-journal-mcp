@@ -122,6 +122,7 @@ export function buildJournalContext(
     projectNumber?: number | null,
     activeWorkspaceId?: string
 ): JournalContext {
+    const targetWs = activeWorkspaceId || config.defaultWorkspaceId || 'default'
     const threshold = config.briefingImportanceThreshold ?? 0.3
     const importanceScoreCache = new Map<number, number>()
     const filterImportant = (entries: JournalEntry[]): JournalEntry[] => {
@@ -133,7 +134,7 @@ export function buildJournalContext(
             }
         }
         if (missingIds.length > 0 && typeof context.db.getEntriesByIdsWithImportance === 'function') {
-            const hydratedMap = context.db.getEntriesByIdsWithImportance(missingIds, activeWorkspaceId)
+            const hydratedMap = context.db.getEntriesByIdsWithImportance(missingIds, targetWs)
             for (const [id, hydrated] of hydratedMap) {
                 importanceScoreCache.set(id, hydrated.importance.score)
             }
@@ -143,12 +144,11 @@ export function buildJournalContext(
             const score =
                 e.importanceScore ??
                 importanceScoreCache.get(e.id) ??
-                context.db.calculateImportance(e.id, activeWorkspaceId)?.score ?? 0
+                context.db.calculateImportance(e.id, targetWs)?.score ?? 0
             return score >= threshold
         })
     }
 
-    const targetWs = activeWorkspaceId || config.defaultWorkspaceId || 'default'
     const finalSummaryEntries = fetchBriefingSummaries(
         context,
         config,
@@ -205,7 +205,7 @@ export function buildJournalContext(
     const totalEntries = context.db.getActiveEntryCount(targetWs)
     const lastModified = recentEntries[0]?.timestamp ?? new Date().toISOString()
 
-    return { totalEntries, latestEntries, latestSessionSummary, sessionSummaries, lastModified, workspaceId: activeWorkspaceId ?? config.defaultWorkspaceId }
+    return { totalEntries, latestEntries, latestSessionSummary, sessionSummaries, lastModified, workspaceId: targetWs }
 }
 
 // ============================================================================
@@ -302,7 +302,8 @@ export interface GraphSummary {
 
 export function buildGraphContext(context: ResourceContext, workspaceId?: string): GraphSummary | undefined {
     try {
-        const stats = context.db.getStatistics('week', undefined, undefined, false, workspaceId ?? 'default')
+        const targetWs = workspaceId ?? 'default'
+        const stats = context.db.getStatistics('week', undefined, undefined, false, targetWs)
         const comp = stats['relationshipComplexity'] as
             | { totalRelationships: number; avgPerEntry: number }
             | undefined
@@ -311,7 +312,7 @@ export function buildGraphContext(context: ResourceContext, workspaceId?: string
         if (!comp || !causal) return undefined
 
 
-        const totalActiveEntries = context.db.getActiveEntryCount(workspaceId)
+        const totalActiveEntries = context.db.getActiveEntryCount(targetWs)
 
         // Fetch top hubs and orphan ratio via purpose-built safe methods
         let topHubs: { id: number; preview: string; count: number }[] = []
@@ -319,7 +320,7 @@ export function buildGraphContext(context: ResourceContext, workspaceId?: string
         let degraded = false
 
         try {
-            const hubs = context.db.getRelationshipHubs(3, workspaceId)
+            const hubs = context.db.getRelationshipHubs(3, targetWs)
             topHubs = hubs.map(hub => ({
                 id: hub.entryId,
                 count: hub.totalLinks,
@@ -327,7 +328,7 @@ export function buildGraphContext(context: ResourceContext, workspaceId?: string
             }))
 
             if (totalActiveEntries > 0) {
-                const orphanCount = context.db.getOrphanCount(workspaceId)
+                const orphanCount = context.db.getOrphanCount(targetWs)
                 orphanRatio = orphanCount / totalActiveEntries
             }
         } catch (error) {

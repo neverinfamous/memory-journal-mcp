@@ -84,6 +84,19 @@ export function getSemanticSearchTool(context: ToolContext): ToolDefinition[] {
                     // Determine search method: by entry_id or by query
                     let results: SemanticSearchResult[]
                     if (input.entry_id !== undefined) {
+                        const seed = db.getEntryById(input.entry_id, wsId)
+                        if (!seed || (projectNumber !== undefined && seed.projectNumber !== projectNumber)) {
+                            return {
+                                success: false,
+                                error: `Entry ${String(input.entry_id)} not found`,
+                                code: 'RESOURCE_NOT_FOUND',
+                                category: 'resource',
+                                recoverable: true,
+                                ...(input.query !== undefined ? { query: input.query } : {}),
+                                entries: [],
+                                count: 0,
+                            }
+                        }
                         // Find related by ID: lookup existing embedding, skip re-embedding
                         results = await vectorManager.searchByEntryId(
                             input.entry_id,

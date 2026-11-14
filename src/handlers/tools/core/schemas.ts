@@ -30,7 +30,7 @@ export const CreateEntrySchema = z.preprocess(
         tags: z.array(z.string()).optional(),
         is_personal: z.boolean().optional().default(true),
         significance_type: z.enum(SIGNIFICANCE_TYPES).optional(),
-        workspace_id: z.string().min(1, 'workspace_id (repository name) is required'),
+        workspace_id: z.string().min(1, 'workspace_id (repository name) is required').optional(),
         project_number: z.number().int().optional(),
         project_owner: z.string().optional(),
         issue_number: z.number().optional(),

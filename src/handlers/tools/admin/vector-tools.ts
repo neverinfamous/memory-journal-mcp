@@ -8,6 +8,7 @@ import {
 import { relaxedNumber } from '../schemas.js'
 import { logger } from '../../../utils/logger.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
+import { activeProjectRegistry, alignedProjectFilter } from '../../../utils/write-scope.js'
 
 const preprocessVectorEntryId = (val: unknown): unknown => {
     if (typeof val === 'object' && val !== null) {
@@ -85,12 +86,18 @@ export function getVectorTools(context: ToolContext): ToolDefinition[] {
                             recoverable: false,
                         }
                     }
-                    const rebuildOpts: { projectNumber?: number; workspaceId?: string } = {}
-                    if (parsed.project_number !== undefined) {
-                        rebuildOpts.projectNumber = parsed.project_number
-                    }
-                    if (parsed.workspace_id !== undefined) {
-                        rebuildOpts.workspaceId = parsed.workspace_id
+                    const wsId =
+                        parsed.workspace_id === '*'
+                            ? '*'
+                            : resolveWorkspaceId(parsed.workspace_id, parsed.project_number, context.config)
+                    const projectNumber = alignedProjectFilter(
+                        wsId,
+                        parsed.project_number,
+                        activeProjectRegistry(context.config?.projectRegistry)
+                    )
+                    const rebuildOpts: { projectNumber?: number; workspaceId?: string } = {
+                        workspaceId: wsId,
+                        ...(projectNumber !== undefined ? { projectNumber } : {}),
                     }
                     const { success, indexed, failed, firstError } =
                         await vectorManager.rebuildIndex(

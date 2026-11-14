@@ -3,7 +3,7 @@ import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { ValidationError } from '../../../types/errors.js'
 import { resolveWriteWorkspaceId } from '../write-workspace.js'
-import { alignedProjectFilter } from '../../../utils/write-scope.js'
+import { activeProjectRegistry, alignedProjectFilter } from '../../../utils/write-scope.js'
 import { relaxedNumber } from '../schemas.js'
 import { healAgentHallucinations } from '../schemas/hallucination-healer.js'
 import {
@@ -116,7 +116,11 @@ export function getMiscTools(context: ToolContext): ToolDefinition[] {
                         source_tag,
                         target_tag,
                         wsId,
-                        alignedProjectFilter(wsId, input.project_number, context.config?.projectRegistry)
+                        alignedProjectFilter(
+                            wsId,
+                            input.project_number,
+                            activeProjectRegistry(context.config?.projectRegistry)
+                        )
                     )
                     return {
                         success: true,

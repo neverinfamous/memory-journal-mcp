@@ -249,10 +249,18 @@ export async function initializeDependencies(options: ServerOptions): Promise<Se
         toolFilterConfig: filterConfig,
         briefingConfig: {
             ...(options.briefingConfig ?? DEFAULT_BRIEFING_CONFIG),
-            // --default-workspace-id must reach briefing resources/prompts
+            // --default-workspace-id, --default-project-number, and projectRegistry must reach briefing resources/prompts
             ...(options.defaultWorkspaceId !== undefined &&
             options.briefingConfig?.defaultWorkspaceId === undefined
                 ? { defaultWorkspaceId: options.defaultWorkspaceId }
+                : {}),
+            ...(options.defaultProjectNumber !== undefined &&
+            options.briefingConfig?.defaultProjectNumber === undefined
+                ? { defaultProjectNumber: options.defaultProjectNumber }
+                : {}),
+            ...(options.projectRegistry !== undefined &&
+            options.briefingConfig?.projectRegistry === undefined
+                ? { projectRegistry: options.projectRegistry }
                 : {}),
         },
         codemodeInternalFullAccess: options.codemodeInternalFullAccess

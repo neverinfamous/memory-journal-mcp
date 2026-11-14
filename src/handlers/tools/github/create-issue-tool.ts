@@ -118,13 +118,19 @@ export function resolveIssueEntryScope(
         resolvedCtx.workspaceId === 'default' && canonicalRepo && callerWorkspace === undefined
             ? canonicalRepo
             : resolvedCtx.workspaceId
+    const effectiveRegistry = activeProjectRegistry(context.config?.projectRegistry)
+    const candidateWsRegistered =
+        candidateWs !== undefined &&
+        findCanonicalRegistryKey(candidateWs, effectiveRegistry) !== undefined
     const candidateProj = pairCallerWorkspace
         ? resolvedCtx.projectNumber
-        : (resolvedCtx.projectNumber ?? entryProjectNumber)
+        : candidateWsRegistered || inputProjectNumber !== undefined
+          ? (resolvedCtx.projectNumber ?? entryProjectNumber)
+          : undefined
     const paired = pairStoredScope(
         candidateWs,
         candidateProj,
-        activeProjectRegistry(context.config?.projectRegistry)
+        effectiveRegistry
     )
     return {
         workspaceId: paired.workspaceId ?? candidateWs,

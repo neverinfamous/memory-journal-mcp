@@ -1,5 +1,6 @@
 import type { Database } from 'better-sqlite3'
 import { isMissingTableError } from '../schema-errors.js'
+import { effectiveWorkspace } from '../../workspace-scope.js'
 
 /**
  * Standard Levenshtein distance algorithm.
@@ -50,7 +51,8 @@ export function levenshteinDistance(a: string, b: string): number {
  */
 export function buildVocabulary(db: Database, workspaceId?: string): string[] {
     const vocab = new Set<string>()
-    const scoped = workspaceId !== undefined && workspaceId !== '*'
+    const scopeId = effectiveWorkspace(workspaceId)
+    const scoped = scopeId !== '*'
 
     // Get tag names
     try {
@@ -63,7 +65,7 @@ export function buildVocabulary(db: Database, workspaceId?: string): string[] {
                            JOIN memory_journal mj ON mj.id = et.entry_id
                            WHERE mj.workspace_id = ? AND mj.deleted_at IS NULL`
                       )
-                      .all(workspaceId)
+                      .all(scopeId)
                 : db
                       .prepare(
                           `SELECT DISTINCT t.name FROM tags t
@@ -88,7 +90,7 @@ export function buildVocabulary(db: Database, workspaceId?: string): string[] {
                       .prepare(
                           'SELECT DISTINCT entry_type FROM memory_journal WHERE entry_type IS NOT NULL AND workspace_id = ? AND deleted_at IS NULL'
                       )
-                      .all(workspaceId)
+                      .all(scopeId)
                 : db
                       .prepare(
                           'SELECT DISTINCT entry_type FROM memory_journal WHERE entry_type IS NOT NULL AND deleted_at IS NULL'

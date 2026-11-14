@@ -31,6 +31,7 @@ import {
     isSuccessObject,
     matchesExactName,
     normalizeAndAliasToolCall,
+    resolveMcpCreateWorkspaceScope,
     resolveSingleProjectFromRegistry,
     toThrownValidationResponse,
     toValidationFailureResponse,
@@ -302,24 +303,49 @@ export function attachCallToolInterceptor(
             const healingEnabled =
                 options.agentHealing !== false && customToolHandlerConfig.agentHealing !== false
 
+            const liveBriefing = resolveActiveBriefingConfig(
+                context.configManager.getConfig().briefingConfig,
+                options,
+                context.allowedIoRoots
+            )
+            const liveRegistry = liveBriefing.projectRegistry
+            const liveDefaultProj = liveBriefing.defaultProjectNumber
+            const liveDefaultWs = liveBriefing.defaultWorkspaceId
+            customToolHandlerConfig.briefingConfig = liveBriefing
+            if (liveDefaultProj !== undefined) {
+                customToolHandlerConfig.defaultProjectNumber = liveDefaultProj
+            } else {
+                delete customToolHandlerConfig.defaultProjectNumber
+            }
+            if (liveDefaultWs !== undefined) {
+                customToolHandlerConfig.defaultWorkspaceId = liveDefaultWs
+            } else {
+                delete customToolHandlerConfig.defaultWorkspaceId
+            }
+            if (liveRegistry !== undefined) {
+                customToolHandlerConfig.projectRegistry = liveRegistry
+            } else {
+                delete customToolHandlerConfig.projectRegistry
+            }
+
             if (req.params !== undefined && healingEnabled) {
                 req.params.arguments ??= {}
                 normalizeAndAliasToolCall(req.params, {
                     ...options,
-                    ...(customToolHandlerConfig.projectRegistry !== undefined
-                        ? { projectRegistry: customToolHandlerConfig.projectRegistry }
+                    ...(liveRegistry !== undefined
+                        ? { projectRegistry: liveRegistry }
                         : {}),
-                    ...(customToolHandlerConfig.defaultProjectNumber !== undefined
-                        ? { defaultProjectNumber: customToolHandlerConfig.defaultProjectNumber }
+                    ...(liveDefaultProj !== undefined
+                        ? { defaultProjectNumber: liveDefaultProj }
                         : {}),
-                    ...(customToolHandlerConfig.defaultWorkspaceId !== undefined
-                        ? { defaultWorkspaceId: customToolHandlerConfig.defaultWorkspaceId }
+                    ...(liveDefaultWs !== undefined
+                        ? { defaultWorkspaceId: liveDefaultWs }
                         : {}),
                 })
                 const toolArgs = req.params.arguments
 
                 if (req.params.name !== undefined && req.params.name !== '') {
-                    setActiveProjectRegistry(customToolHandlerConfig.projectRegistry)
+                    setActiveProjectRegistry(liveRegistry)
                     let intercept: ReturnType<typeof applyArgInterceptions>
                     try {
                         intercept = applyArgInterceptions(req.params.name, [toolArgs])
@@ -346,6 +372,17 @@ export function attachCallToolInterceptor(
                         req.params.arguments = normalizedArgs as Record<string, unknown>
                     }
                 }
+            }
+
+            if (req.params?.arguments !== undefined) {
+                resolveMcpCreateWorkspaceScope(req.params.name, req.params.arguments, {
+                    ...customToolHandlerConfig,
+                    briefingConfig: liveBriefing,
+                    runtime: context.runtime,
+                    ...(liveRegistry !== undefined ? { projectRegistry: liveRegistry } : {}),
+                    ...(liveDefaultProj !== undefined ? { defaultProjectNumber: liveDefaultProj } : {}),
+                    ...(liveDefaultWs !== undefined ? { defaultWorkspaceId: liveDefaultWs } : {}),
+                })
             }
 
             if (

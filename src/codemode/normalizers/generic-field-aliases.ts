@@ -1,6 +1,6 @@
 import type { ProjectRegistryEntry } from '../../types/index.js'
 import { loadProjectRegistryFromConfig, resolveProjectContext } from '../../utils/workspace-resolver.js'
-import { activeProjectRegistry as registryForScope, pairStoredScope } from '../../utils/write-scope.js'
+import { pairStoredScope } from '../../utils/write-scope.js'
 import { hasMethodToken } from '../method-tokens.js'
 import { ENTRY_TYPE_ALIASES, isRecord, safeString } from './shared-utils.js'
 
@@ -266,15 +266,12 @@ function normalizeProjectAliases(obj: Record<string, unknown>): void {
         Reflect.deleteProperty(obj, 'projectNumber')
     }
     for (const projAlias of ['project_name', 'projectName'] as const) {
-        if (obj[projAlias] === undefined) continue
-        if (applyProjectNameAlias(obj[projAlias], obj)) {
+        if (obj[projAlias] !== undefined && applyProjectNameAlias(obj[projAlias], obj)) {
             Reflect.deleteProperty(obj, projAlias)
         }
     }
-    if (obj['project'] !== undefined) {
-        if (applyProjectNameAlias(obj['project'], obj)) {
-            delete obj['project']
-        }
+    if (obj['project'] !== undefined && applyProjectNameAlias(obj['project'], obj)) {
+        delete obj['project']
     }
 }
 
@@ -311,12 +308,17 @@ export function resolveCreateEntryProjectContext(obj: Record<string, unknown>): 
     // [INVARIANT] No content/tag/CWD guessing here: the host `secure-dispatcher` binds the
     // session scope first. We only pair explicitly supplied workspace/project values.
     const wsRaw = typeof obj['workspace_id'] === 'string' ? obj['workspace_id'] : undefined
-    const workspaceIsConcrete = wsRaw !== undefined && wsRaw !== '' && wsRaw !== '*'
+    const wsTrimmed = wsRaw?.trim()
+    const workspaceIsConcrete = wsTrimmed !== undefined && wsTrimmed !== '' && wsTrimmed !== '*'
     if (!workspaceIsConcrete && projNum === undefined) return
-    const resolved = resolveProjectContext({
-        ...(wsRaw !== undefined ? { workspace_id: wsRaw } : {}),
-        ...(projNum !== undefined ? { project_number: projNum } : {}),
-    })
+    const effectiveRegistry = activeProjectRegistry ?? loadProjectRegistryFromConfig()
+    const resolved = resolveProjectContext(
+        {
+            ...(wsTrimmed !== undefined ? { workspace_id: wsTrimmed } : {}),
+            ...(projNum !== undefined ? { project_number: projNum } : {}),
+        },
+        effectiveRegistry !== undefined ? { projectRegistry: effectiveRegistry } : undefined
+    )
     if (
         resolved.workspaceId !== undefined &&
         resolved.workspaceId !== '' &&
@@ -328,7 +330,7 @@ export function resolveCreateEntryProjectContext(obj: Record<string, unknown>): 
     const wsAfter = obj['workspace_id']
     const concreteAfter = typeof wsAfter === 'string' && wsAfter !== '' && wsAfter !== '*'
     if (projNum !== undefined && concreteAfter) {
-        pairStoredScope(wsAfter, projNum, registryForScope(activeProjectRegistry))
+        pairStoredScope(wsAfter, projNum, effectiveRegistry)
     } else if (obj['project_number'] === undefined && resolved.projectNumber !== undefined) {
         obj['project_number'] = resolved.projectNumber
     }

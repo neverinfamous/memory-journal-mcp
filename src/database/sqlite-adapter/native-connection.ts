@@ -188,7 +188,9 @@ export class NativeConnectionManager implements IDatabaseConnection {
             }
 
             const entryCount = (
-                db.prepare('SELECT COUNT(*) as c FROM memory_journal').get() as { c: number }
+                db
+                    .prepare('SELECT COUNT(*) as c FROM memory_journal WHERE deleted_at IS NULL')
+                    .get() as { c: number }
             ).c
             let needsRebuild = false
             let rebuildReason = ''
@@ -220,8 +222,11 @@ export class NativeConnectionManager implements IDatabaseConnection {
             this.ftsRebuildTimer = null
             if (this.db === null) return
             try {
-                // In-process rebuild on the existing (keyed, busy_timeout-configured) connection
-                this.db.exec("INSERT INTO fts_content(fts_content) VALUES ('rebuild')")
+                // In-process rebuild on the existing (keyed, busy_timeout-configured) connection (live entries only)
+                this.db.exec(
+                    "INSERT INTO fts_content(fts_content) VALUES ('delete-all'); " +
+                        'INSERT INTO fts_content(rowid, content) SELECT id, content FROM memory_journal WHERE deleted_at IS NULL'
+                )
                 logger.info(`Deferred FTS5 rebuild completed (${rebuildReason})`, {
                     module: 'NativeConnectionManager',
                     dbPath: this.dbPath,

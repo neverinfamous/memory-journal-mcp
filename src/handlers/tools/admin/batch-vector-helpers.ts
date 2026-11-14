@@ -1,11 +1,19 @@
 import type { ToolContext } from '../../../types/index.js'
 
 /** [INTENT] M4: vector cleanup is non-critical after a committed delete; surface failures as warnings. */
-export function safeDeleteVectors(db: ToolContext['db'], ids: number[]): string[] {
+export function safeDeleteVectors(
+    db: ToolContext['db'],
+    ids: number[],
+    vectorManager?: ToolContext['vectorManager']
+): string[] {
     const warnings: string[] = []
     for (const id of ids) {
         try {
-            db.deleteVector(id)
+            if (typeof vectorManager?.removeEntry === 'function') {
+                vectorManager.removeEntry(id)
+            } else {
+                db.deleteVector(id)
+            }
         } catch (err) {
             warnings.push(
                 `Vector cleanup failed for entry ${String(id)}: ${err instanceof Error ? err.message : String(err)}`
@@ -39,8 +47,7 @@ export function findWildcardProjectMismatches(
             if (u.target_workspace_id !== undefined) return false
             const ws = u.workspace_id ?? rootWorkspaceId
             const pn = u.project_number ?? rootProjectNumber
-            if (pn === undefined) return false
-            if (ws !== '*' && ws === undefined) return false
+            if (ws === undefined || pn === undefined) return false
             const entry = db.getEntryById(u.entry_id, '*')
             if (entry === null || entry === undefined) return ws === '*'
             return entry.projectNumber !== pn

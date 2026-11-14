@@ -30,14 +30,20 @@ export function enforceAccessBoundary(
     const isTeam =
         capabilities?.requiresTeamScope ??
         (targetType === 'resource'
-            ? targetName.startsWith('memory://team/')
+            ? targetName === 'memory://team' ||
+              targetName.startsWith('memory://team/') ||
+              targetName.startsWith('memory://team?')
             : getToolGroup(targetName) === 'team' ||
               targetName.startsWith('team_') ||
               targetName.startsWith('team-'))
 
     const isAudit =
         capabilities?.requiresAuditScope ??
-        (targetType === 'resource' ? targetName === 'memory://audit' : false)
+        (targetType === 'resource'
+            ? targetName === 'memory://audit' ||
+              targetName.startsWith('memory://audit/') ||
+              targetName.startsWith('memory://audit?')
+            : false)
 
     const isAdmin = capabilities?.requiresAdminScope ?? false
 

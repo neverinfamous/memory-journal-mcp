@@ -19,8 +19,11 @@ function getDatabasePath(): string {
                 if (fs.existsSync(resolvedCfgDb)) return resolvedCfgDb
             }
         }
-    } catch {
-        // Ignore config read errors and fall through to standard paths
+    } catch (err) {
+        console.warn(
+            'Warning: Failed to read server config for database path:',
+            err instanceof Error ? err.message : String(err)
+        )
     }
     const defaultProdPath = path.resolve(process.cwd(), 'data', 'mj-production.db')
     if (fs.existsSync(defaultProdPath)) {

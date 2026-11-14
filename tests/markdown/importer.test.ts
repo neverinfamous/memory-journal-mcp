@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { importMarkdownEntries } from '../../src/markdown/importer.js'
+import { ValidationError } from '../../src/types/errors.js'
 import * as fs from 'node:fs/promises'
 
 vi.mock('node:fs/promises', () => ({
@@ -291,5 +292,40 @@ Content`
         // No hard errors thrown, but it should be recorded
         expect(result.errors.length).toBe(1)
         expect(result.errors[0]?.error).toContain('Vector fail')
+    })
+
+    it('throws ValidationError when frontmatter workspace_id or project_number conflicts with caller options or uses "*"', async () => {
+        vi.mocked(fs.readFile).mockResolvedValueOnce(
+            '---\n{"workspace_id":"adamic"}\n---\nConflicting workspace body'
+        )
+        await expect(
+            importMarkdownEntries(
+                './import',
+                mockDb as any,
+                { workspaceId: 'memory-journal-mcp' },
+                undefined,
+                [process.cwd()]
+            )
+        ).rejects.toThrow(ValidationError)
+
+        vi.mocked(fs.readFile).mockResolvedValueOnce(
+            '---\n{"project_number":16}\n---\nConflicting project body'
+        )
+        await expect(
+            importMarkdownEntries(
+                './import',
+                mockDb as any,
+                { project_number: 5 },
+                undefined,
+                [process.cwd()]
+            )
+        ).rejects.toThrow(ValidationError)
+
+        vi.mocked(fs.readFile).mockResolvedValueOnce(
+            '---\n{"workspace_id":"*"}\n---\nWildcard workspace body'
+        )
+        await expect(
+            importMarkdownEntries('./import', mockDb as any, {}, undefined, [process.cwd()])
+        ).rejects.toThrow(ValidationError)
     })
 })

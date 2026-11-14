@@ -160,8 +160,9 @@ function setCached<T>(map: Map<string, TtlCacheEntry<T>>, key: string, value: T)
 
 function loadCachedGitHistory(
     commitCount: number,
-    targetPath?: string
+    targetPath?: string | null
 ): GitHistorySummary | null {
+    if (targetPath === null) return null
     const root = targetPath || resolveProjectRoot()
     const cached = getCached(cachedGitHistory, root)
     if (cached.hit) return cached.value
@@ -243,7 +244,8 @@ function loadCachedGitHistory(
     }
 }
 
-function loadCachedTestHealth(targetPath?: string): TestHealth | null {
+function loadCachedTestHealth(targetPath?: string | null): TestHealth | null {
+    if (targetPath === null) return null
     const root = targetPath || resolveProjectRoot()
     const cached = getCached(cachedTestHealth, root)
     if (cached.hit) return cached.value
@@ -312,7 +314,8 @@ export function parseLastReleaseAge(content: string): number | null {
     return Math.max(0, Math.floor(elapsed / 86_400_000))
 }
 
-function loadCachedLastReleaseDaysAgo(targetPath?: string): number | null {
+function loadCachedLastReleaseDaysAgo(targetPath?: string | null): number | null {
+    if (targetPath === null) return null
     const root = targetPath || resolveProjectRoot()
     const cached = getCached(cachedLastReleaseDaysAgo, root)
     if (cached.hit) return cached.value
@@ -349,8 +352,9 @@ function loadCachedLastReleaseDaysAgo(targetPath?: string): number | null {
 export function buildSystemContext(
     config?: BriefingConfig,
     filterConfig?: ToolFilterConfig | null,
-    targetRepoPath?: string,
-    resourceCount?: number
+    targetRepoPath?: string | null,
+    resourceCount?: number,
+    activeWorkspaceId?: string
 ): SystemContext {
     const now = new Date()
 
@@ -394,29 +398,33 @@ export function buildSystemContext(
     // IO roots count
     const ioRootCount = config?.allowedIoRoots?.length ?? 0
 
+    const root = targetRepoPath === null ? null : (targetRepoPath || resolveProjectRoot())
+
     // Check for code-map.md in project root
     let hasCodeMap = false
-    try {
-        const root = targetRepoPath || resolveProjectRoot()
-        hasCodeMap = fs.existsSync(path.join(root, 'test-server', 'code-map.md'))
-    } catch {
-        // Non-critical — code-map indicator is best-effort
+    if (root !== null) {
+        try {
+            hasCodeMap = fs.existsSync(path.join(root, 'test-server', 'code-map.md'))
+        } catch {
+            // Non-critical — code-map indicator is best-effort
+        }
     }
 
     // Check for local health status
     let localCheck: boolean | null = null
-    try {
-        const root = targetRepoPath || resolveProjectRoot()
-        const healthPath = path.join(root, '.test-output', 'health-status.json')
-        if (fs.existsSync(healthPath)) {
-            const content = fs.readFileSync(healthPath, 'utf-8')
-            const parsed = JSON.parse(content) as { ok?: boolean }
-            if (typeof parsed.ok === 'boolean') {
-                localCheck = parsed.ok
+    if (root !== null) {
+        try {
+            const healthPath = path.join(root, '.test-output', 'health-status.json')
+            if (fs.existsSync(healthPath)) {
+                const content = fs.readFileSync(healthPath, 'utf-8')
+                const parsed = JSON.parse(content) as { ok?: boolean }
+                if (typeof parsed.ok === 'boolean') {
+                    localCheck = parsed.ok
+                }
             }
+        } catch {
+            // Non-critical
         }
-    } catch {
-        // Non-critical
     }
 
     return {
@@ -433,6 +441,6 @@ export function buildSystemContext(
         hasCodeMap,
         lastReleaseDaysAgo: loadCachedLastReleaseDaysAgo(targetRepoPath),
         localCheck,
-        workspaceId: config?.defaultWorkspaceId,
+        workspaceId: activeWorkspaceId ?? config?.defaultWorkspaceId,
     }
 }

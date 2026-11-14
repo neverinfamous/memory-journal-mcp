@@ -28,19 +28,18 @@ export function setActiveSessionProject(
             ? projectNumber
             : undefined
     // [INTENT] Switching to a different workspace without a project number must not keep
-    // the previous workspace's project number attached.
+    // the previous workspace's project number attached; setting only a new project number
+    // must not retain a stale workspace from a different project.
     const switchedWorkspace = (prevWs: string | undefined): boolean =>
         validWs !== undefined && prevWs !== undefined && prevWs !== validWs
+    const dropPrevWorkspace = validWs === undefined && validProj !== undefined
 
     if (runtime !== undefined && runtime !== null) {
         const prev = runtimeSessionProjects.get(runtime)
         const dropPrevProject = clearProject || switchedWorkspace(prev?.workspaceId)
+        const nextWs = validWs ?? (!dropPrevWorkspace ? prev?.workspaceId : undefined)
         runtimeSessionProjects.set(runtime, {
-            ...(validWs !== undefined
-                ? { workspaceId: validWs }
-                : prev?.workspaceId !== undefined
-                  ? { workspaceId: prev.workspaceId }
-                  : {}),
+            ...(nextWs !== undefined ? { workspaceId: nextWs } : {}),
             ...(validProj !== undefined
                 ? { projectNumber: validProj }
                 : !dropPrevProject && prev?.projectNumber !== undefined
@@ -50,6 +49,7 @@ export function setActiveSessionProject(
     }
     const dropGlobalProject = clearProject || switchedWorkspace(activeSessionWorkspaceId)
     if (validWs !== undefined) activeSessionWorkspaceId = validWs
+    else if (dropPrevWorkspace) activeSessionWorkspaceId = undefined
     if (validProj !== undefined) activeSessionProjectNumber = validProj
     else if (dropGlobalProject) activeSessionProjectNumber = undefined
 }
@@ -71,7 +71,11 @@ export function getActiveSessionProject(runtime?: object | null): {
     }
 }
 
-export function clearActiveSessionProject(): void {
+export function clearActiveSessionProject(runtime?: object | null): void {
+    if (runtime !== undefined && runtime !== null) {
+        runtimeSessionProjects.delete(runtime)
+        return
+    }
     activeSessionWorkspaceId = undefined
     activeSessionProjectNumber = undefined
 }

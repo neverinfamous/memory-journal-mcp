@@ -7,7 +7,7 @@
 import type { InternalPromptDef } from './index.js'
 import { buildAuditPromptDefinition } from './adversarial-audit-factory.js'
 
-export const CODE_QUALITY_PROMPT_REVISION = '2026-11-13-audit-pass21'
+export const CODE_QUALITY_PROMPT_REVISION = '2026-11-13-audit-pass22'
 
 const SCAN_METHOD_1 = `     \`\`\`powershell
      $skip = @('vendor','third_party','node_modules','dist','coverage','build','.next','out')
@@ -55,7 +55,7 @@ const DETECTORS = `     1. **Silent Catch Block Detector**: Find every \`catch\`
         - Content or tag keywords that select a different registered project than the active session, the cwd, or an explicit project number are a finding. A session project number counts even when the session workspace is missing or \`default\`, and wins over keyword aliases.
         - Hot-reload listeners must propagate registry/default changes (including cleared fields) to background schedulers and interceptors; sticky per-session context must never be written onto shared long-lived config.
         - A query with no workspace predicate selects every row and is a finding; an omission that becomes the server's configured default is a product note. A resource that rewrites an explicit \`default\` workspace into the cwd project is High.
-        - Explicit \`'*'\` on multi-workspace DB queries/admin operations is an intentional override, but a supplied project number must still be applied; flag \`'*'\` manufactured by a fallback after a miss or passed to a single-root filesystem mutation (High). Lookup-then-narrow \`'*'\` (load by id, then use that row's workspace) is acceptable; dropping an already-parsed workspace or project before that lookup is the defect.
+        - Explicit \`'*'\` on multi-workspace DB queries/admin operations is an intentional override, but a supplied project number must still be applied; flag \`'*'\` manufactured by a fallback after a miss or passed to a single-root filesystem mutation (High). Lookup-then-narrow \`'*'\` (load by id, then use that row's workspace) is acceptable; dropping an already-parsed workspace or project before that lookup is the defect; Code Mode session/dispatch normalizers, markdown/external importers, and CLI update commands must enforce the same workspace/project pair and CWD-isolation invariants as direct MCP tool calls.
     11. **Safety gate**: Flag a \`catch\` that logs and then continues a destructive operation, such as a failed backup followed by a prune.`
 
 function buildCodeQualityBody(target: string, copilotInstruction: string, priorAuditSection: string): string {

@@ -41,10 +41,10 @@ export class GitHubClient {
             cwd: process.cwd(),
         })
 
-        const gitOptions = {
+        // simple-git sets windowsHide: true internally; spawnOptions only accepts uid/gid.
+        const gitOptions: Partial<simpleGitImport.SimpleGitOptions> = {
             baseDir: effectiveDir,
-            spawnOptions: { windowsHide: true }
-        } as unknown as simpleGitImport.SimpleGitOptions
+        }
         this.git = simpleGit(gitOptions)
 
         if (resolvedToken) {

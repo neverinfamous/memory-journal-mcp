@@ -9,7 +9,9 @@ import { logger } from '../../../utils/logger.js'
 import {
     findCanonicalRegistryKey,
     loadProjectRegistryFromConfig,
+    resolveProjectContext,
 } from '../../../utils/workspace-resolver.js'
+import type { ToolHandlerConfig } from '../../../types/index.js'
 import type { ServerOptions } from '../types.js'
 
 /**
@@ -350,5 +352,85 @@ export function resolveSingleProjectFromRegistry(
     return {
         success: false,
         error: `🛠️ AUTONOMOUS HEALING: Project not found: '${nameArg ?? String(numericTarget ?? '')}'`,
+    }
+}
+
+/**
+ * Resolve omitted `workspace_id` for direct MCP `create_entry` / `batch_create_entries` calls
+ * using live server configuration before `inputSchema` (`CreateEntrySchemaMcp`) runs.
+ */
+export function resolveMcpCreateWorkspaceScope(
+    toolName: string | undefined,
+    toolArgs: Record<string, unknown>,
+    resolverConfig: ToolHandlerConfig
+): void {
+    if (toolName === 'create_entry') {
+        if (toolArgs['workspace_id'] !== undefined) return
+        try {
+            const resolved = resolveProjectContext(
+                {
+                    ...(typeof toolArgs['project_number'] === 'number'
+                        ? { project_number: toolArgs['project_number'] }
+                        : {}),
+                    ...(typeof toolArgs['content'] === 'string'
+                        ? { content: toolArgs['content'] }
+                        : {}),
+                    ...(Array.isArray(toolArgs['tags'])
+                        ? {
+                              tags: toolArgs['tags'].filter(
+                                  (t): t is string => typeof t === 'string'
+                              ),
+                          }
+                        : {}),
+                },
+                resolverConfig
+            )
+            toolArgs['workspace_id'] = resolved.workspaceId
+            if (toolArgs['project_number'] === undefined && resolved.projectNumber !== undefined) {
+                toolArgs['project_number'] = resolved.projectNumber
+            }
+        } catch {
+            // Defer validation errors (e.g. ambiguous project_number) to the tool handler.
+        }
+        return
+    }
+    if (toolName === 'batch_create_entries' && Array.isArray(toolArgs['entries'])) {
+        const rootWs =
+            typeof toolArgs['workspace_id'] === 'string' && toolArgs['workspace_id'].trim() !== ''
+                ? toolArgs['workspace_id']
+                : undefined
+        const rootProj =
+            typeof toolArgs['project_number'] === 'number' ? toolArgs['project_number'] : undefined
+        for (const entry of toolArgs['entries']) {
+            if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) continue
+            const item = entry as Record<string, unknown>
+            if (item['workspace_id'] !== undefined) continue
+            try {
+                const resolved = resolveProjectContext(
+                    {
+                        ...(rootWs !== undefined ? { workspace_id: rootWs } : {}),
+                        ...(typeof item['project_number'] === 'number'
+                            ? { project_number: item['project_number'] }
+                            : rootWs === undefined && rootProj !== undefined
+                              ? { project_number: rootProj }
+                              : {}),
+                        ...(typeof item['content'] === 'string'
+                            ? { content: item['content'] }
+                            : {}),
+                        ...(Array.isArray(item['tags'])
+                            ? {
+                                  tags: item['tags'].filter(
+                                      (t): t is string => typeof t === 'string'
+                                  ),
+                              }
+                            : {}),
+                    },
+                    resolverConfig
+                )
+                item['workspace_id'] = resolved.workspaceId
+            } catch {
+                // Defer validation errors to the tool handler.
+            }
+        }
     }
 }

@@ -8,7 +8,7 @@ import type { ToolDefinition, ToolContext } from '../../../../types/index.js'
 import { formatHandlerError } from '../../../../utils/error-helpers.js'
 import { logger } from '../../../../utils/logger.js'
 import { resolveWriteWorkspaceId } from '../../write-workspace.js'
-import { alignedProjectFilter } from '../../../../utils/write-scope.js'
+import { activeProjectRegistry, alignedProjectFilter } from '../../../../utils/write-scope.js'
 import { TEAM_DB_ERROR_RESPONSE, fetchAuthor, triggerTeamNotifications, resolveTeamProjectNumber } from '../helpers.js'
 import { checkSingleTeamOwnership, missingProjectNumberResponse } from './batch-delete-helpers.js'
 import {
@@ -95,7 +95,7 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     if (
-                        input.workspace_id === '*' &&
+                        input.workspace_id !== undefined &&
                         input.project_number !== undefined &&
                         existing.projectNumber !== input.project_number
                     ) {
@@ -425,7 +425,7 @@ export function getTeamAdminCrudTools(context: ToolContext): ToolDefinition[] {
                         alignedProjectFilter(
                             wsId,
                             scopedProject ?? undefined,
-                            context.config?.projectRegistry
+                            activeProjectRegistry(context.config?.projectRegistry)
                         )
                     )
 

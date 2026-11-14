@@ -3,6 +3,7 @@ import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import type { RelationshipType, CreateEntryInput, ToolHandlerConfig } from '../../types/index.js'
 import { z } from 'zod'
 import { ValidationError } from '../../types/errors.js'
+import { activeProjectRegistry, pairStoredScope } from '../../utils/write-scope.js'
 import { createEntryOptionsSchema, updateEntryOptionsSchema } from '../schemas.js'
 import {
     getDb,
@@ -58,7 +59,8 @@ function handleCliEntryError(e: unknown, actionLabel: 'create' | 'update'): neve
 async function loadCliEntryContentAndPayload(
     options: HealedEntryOptions,
     config: ToolHandlerConfig,
-    fallbackContent?: string
+    fallbackContent?: string,
+    fallbackWorkspaceId?: string
 ): Promise<{
     content: string
     metadata: Record<string, unknown>
@@ -79,7 +81,13 @@ async function loadCliEntryContentAndPayload(
     }
 
     const metadata = { ...frontmatter, ...parseMetadata(options.metadata) }
-    const payload = buildEntryPayload(options, metadata, config, content)
+    const payload = buildEntryPayload(
+        options,
+        metadata,
+        config,
+        content,
+        fallbackWorkspaceId
+    )
     return { content, metadata, payload }
 }
 
@@ -237,8 +245,16 @@ export async function updateEntryAction(...args: unknown[]): Promise<void> {
         const { content, payload } = await loadCliEntryContentAndPayload(
             options,
             config,
-            existingEntry?.content
+            existingEntry?.content,
+            existingEntry?.workspaceId
         )
+
+        if (payload.workspaceId?.trim() === '*') {
+            throw new ValidationError(
+                "workspace_id '*' cannot be used to update an entry. Pass a concrete workspace.",
+                { workspaceId: '*' }
+            )
+        }
 
         const updates: Omit<Partial<CreateEntryInput>, 'projectNumber'> & {
             projectNumber?: number | null
@@ -266,7 +282,7 @@ export async function updateEntryAction(...args: unknown[]): Promise<void> {
         const canReassignWorkspace =
             payload.workspaceId !== undefined &&
             payload.workspaceId !== '*' &&
-            (payload.hasExplicitWorkspace === true || payload.hasExplicitProject === true)
+            payload.hasExplicitWorkspace === true
         if (canReassignWorkspace && payload.workspaceId !== undefined) {
             if (existingEntry !== null && existingEntry.workspaceId !== payload.workspaceId) {
                 updates.workspaceId = '*'
@@ -278,6 +294,13 @@ export async function updateEntryAction(...args: unknown[]): Promise<void> {
                 updates.workspaceId = payload.workspaceId
             }
         } else if (existingEntry?.workspaceId !== undefined) {
+            if (payload.hasExplicitProject === true && payload.projectNumber !== undefined) {
+                pairStoredScope(
+                    existingEntry.workspaceId,
+                    payload.projectNumber,
+                    activeProjectRegistry(config.projectRegistry)
+                )
+            }
             updates.workspaceId = existingEntry.workspaceId
         } else if (payload.workspaceId !== undefined) {
             updates.workspaceId = payload.workspaceId

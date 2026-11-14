@@ -2,6 +2,7 @@ import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
+import { activeProjectRegistry, alignedProjectFilter } from '../../../utils/write-scope.js'
 import { coerceNumber } from '../../../utils/query-helpers.js'
 import { VectorStatsOutputSchema } from './schemas.js'
 import { EntriesListOutputSchema, relaxedNumber } from '../schemas.js'
@@ -76,11 +77,16 @@ export function getMiscSearchTools(context: ToolContext): ToolDefinition[] {
                     const rawWs = parsed.workspace_id ?? parsed.workspaceId
                     const rawProj = parsed.project_number ?? parsed.projectNumber
                     const wsId = rawWs === '*' ? '*' : resolveWorkspaceId(rawWs, rawProj, context.config)
+                    const projectNumber = alignedProjectFilter(
+                        wsId,
+                        rawProj,
+                        activeProjectRegistry(context.config?.projectRegistry)
+                    )
                     const result = db.getDeletedEntries({
                         limit: parsed.limit,
                         offset: parsed.offset,
                         workspaceId: wsId,
-                        ...(typeof rawProj === 'number' ? { projectNumber: rawProj } : {}),
+                        ...(projectNumber !== undefined ? { projectNumber } : {}),
                     })
                     return {
                         success: true,

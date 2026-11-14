@@ -191,12 +191,14 @@ export function resolvePromptPriorWorkspace(
     const requested = workspaceId?.trim()
     if (requested !== undefined && requested !== '' && requested !== '*') {
         if (requested.toLowerCase() === 'default') return 'default'
-        if (/^#?\d+$/.test(requested)) {
+        if (/^#?\d{1,10}$/.test(requested)) {
             // [INVARIANT] A numeric id resolves only through the registry; an unmatched number
             // is never echoed back as a literal workspace name (C8). Falls through to fallback.
             const num = Number(requested.replace(/^#/, ''))
             const matchByNum =
-                registry !== undefined ? uniqueWorkspaceForProject(num, registry) : undefined
+                Number.isSafeInteger(num) && num > 0 && registry !== undefined
+                    ? uniqueWorkspaceForProject(num, registry)
+                    : undefined
             if (matchByNum !== undefined) {
                 return sanitizePromptTarget(matchByNum).slice(0, MAX_WORKSPACE_ID_LENGTH)
             }
@@ -214,9 +216,12 @@ export function resolvePromptPriorWorkspace(
     // session/config resolution instead of forcing `default`.
     const isPlaceholder = cleanTarget === '{target}' || cleanTarget === '{topic}'
     if (cleanTarget !== undefined && cleanTarget !== '' && !isPlaceholder && registry !== undefined) {
-        if (/^#?\d+$/.test(cleanTarget)) {
+        if (/^#?\d{1,10}$/.test(cleanTarget)) {
             const num = Number(cleanTarget.replace(/^#/, ''))
-            const matchByNum = uniqueWorkspaceForProject(num, registry)
+            const matchByNum =
+                Number.isSafeInteger(num) && num > 0
+                    ? uniqueWorkspaceForProject(num, registry)
+                    : undefined
             if (matchByNum !== undefined) {
                 return sanitizePromptTarget(matchByNum).slice(0, MAX_WORKSPACE_ID_LENGTH)
             }
@@ -272,7 +277,8 @@ export function buildPlanReviewPriorContextSection(
         runtime
     )
     const registry = briefingConfig?.projectRegistry ?? loadProjectRegistryFromConfig()
-    const priorProjectNumber = registry?.[priorWorkspace]?.project_number
+    const canonicalKey = exactRegistryKey(priorWorkspace, registry) ?? priorWorkspace
+    const priorProjectNumber = registry?.[canonicalKey]?.project_number
     const hasTopic =
         rawTopic !== undefined && rawTopic.trim() !== '' && topic !== '{topic}'
 
@@ -321,7 +327,8 @@ export function buildPriorAuditSection(
         runtime
     )
     const registry = briefingConfig?.projectRegistry ?? loadProjectRegistryFromConfig()
-    const priorProjectNumber = registry?.[priorWorkspace]?.project_number
+    const canonicalKey = exactRegistryKey(priorWorkspace, registry) ?? priorWorkspace
+    const priorProjectNumber = registry?.[canonicalKey]?.project_number
     // [INTENT] Tag-only lookup: a text query restricted to the same tag/workspace can only
     // return a subset, so no secondary search is needed (L8).
     const priorAudits: { id: number; entryType: string; content: string; timestamp: string }[] =
