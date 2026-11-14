@@ -3,6 +3,7 @@ import {
     generateStandardInstructions,
     generateCodeModeInstructions,
 } from '../../src/constants/server-instructions.js'
+import type { ToolGroup } from '../../src/types/index.js'
 
 describe('server-instructions generation', () => {
     it('generates standard instructions without code mode reference', () => {
@@ -30,10 +31,23 @@ describe('server-instructions generation', () => {
         const text = generateCodeModeInstructions(tools, [])
         expect(text).toContain('## Quick Access')
         expect(text).toContain('## Code Mode')
-        expect(text).not.toContain('## Active Tools')
+        expect(text).toContain('## Active Tools (1)')
+        expect(text).toContain('**codemode**: `mj_execute_code`')
+        expect(text).not.toContain('**core**:')
         // Inject the full reference
         expect(text).toContain('# Code Mode API Reference')
         expect(text).toContain('### `mj.core`')
+    })
+
+    it('scopes Active Tools to registered MCP tools when enabledGroups expands for sandbox access', () => {
+        const tools = new Set(['mj_execute_code', 'update_configuration'])
+        const groups = new Set<ToolGroup>(['core', 'search', 'admin', 'codemode'])
+        const text = generateCodeModeInstructions(tools, [], undefined, groups)
+        expect(text).toContain('## Active Tools (2)')
+        expect(text).toContain('**codemode**: `mj_execute_code`')
+        expect(text).toContain('**admin**: `update_configuration`')
+        expect(text).not.toContain('**core**:')
+        expect(text).toContain('Read `memory://help/{group}` for: core, search, admin, codemode.')
     })
 
 

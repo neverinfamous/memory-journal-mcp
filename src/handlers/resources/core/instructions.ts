@@ -71,7 +71,8 @@ export const instructionsResource: InternalResourceDef = {
             ? generateCodeModeInstructions
             : generateStandardInstructions
 
-        let finalEnabledTools = enabledTools
+        // [INTENT] Active Tools reflects actually registered MCP tools (`enabledTools`),
+        // while `finalEnabledGroups` advertises sandbox-accessible `memory://help/{group}` docs.
         let finalEnabledGroups = enabledGroups
 
         if (isCodeModeOnly) {
@@ -91,7 +92,7 @@ export const instructionsResource: InternalResourceDef = {
                     'codemodeInternalFullAccess' in currentConfig &&
                     currentConfig.codemodeInternalFullAccess === true
                 ) {
-                    finalEnabledTools =
+                    const sandboxVisibleTools =
                         isReadonlyMetaActive(filterRaw) && readOnlyHints !== undefined
                             ? new Set(
                                   [...allToolNames].filter((name) =>
@@ -104,7 +105,7 @@ export const instructionsResource: InternalResourceDef = {
                               )
                             : allToolNames
                     finalEnabledGroups = isReadonlyMetaActive(filterRaw)
-                        ? getEnabledGroups(finalEnabledTools)
+                        ? getEnabledGroups(sandboxVisibleTools)
                         : new Set<ToolGroup>(
                               Object.keys(TOOL_GROUPS).filter((k): k is ToolGroup => k in TOOL_GROUPS)
                           )
@@ -113,7 +114,7 @@ export const instructionsResource: InternalResourceDef = {
         }
 
         const instructions = generatorFn(
-            finalEnabledTools,
+            enabledTools,
             prompts,
             undefined,
             finalEnabledGroups,

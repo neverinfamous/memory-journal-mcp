@@ -7,7 +7,8 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { getResources, readResource } from '../../src/handlers/resources/index.js'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
-import { getAllToolNames } from '../../src/filtering/tool-filter.js'
+import { getAllToolNames, parseToolFilter } from '../../src/filtering/tool-filter.js'
+import { ServerRuntime } from '../../src/utils/maintenance-lock.js'
 import { vi } from 'vitest'
 
 vi.mock('../../src/git/git-client.js', () => {
@@ -138,6 +139,52 @@ describe('Resource Handlers', () => {
 
             const text = result.data as string
             expect(text).toContain(`Active Tools (${getAllToolNames().length})`)
+        })
+
+        it('should list only registered MCP tools in Active Tools under codemode filter regardless of codemodeInternalFullAccess', async () => {
+            const filterConfig = parseToolFilter('codemode')
+
+            const runtimeDisabled = new ServerRuntime()
+            runtimeDisabled.configManager = { getConfig: () => ({ codemodeInternalFullAccess: false }) }
+            const resDisabled = await readResource(
+                'memory://instructions',
+                db,
+                undefined,
+                filterConfig,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                runtimeDisabled
+            )
+            const textDisabled = resDisabled.data as string
+            expect(textDisabled).toContain('## Active Tools (2)')
+            expect(textDisabled).toContain('**codemode**: `mj_execute_code`')
+            expect(textDisabled).toContain('**admin**: `update_configuration`')
+            expect(textDisabled).toContain('# Code Mode API Reference')
+            expect(textDisabled).not.toContain('**core**:')
+            expect(textDisabled).toContain('Read `memory://help/{group}` for: admin, codemode.')
+
+            const runtimeEnabled = new ServerRuntime()
+            runtimeEnabled.configManager = { getConfig: () => ({ codemodeInternalFullAccess: true }) }
+            const resEnabled = await readResource(
+                'memory://instructions',
+                db,
+                undefined,
+                filterConfig,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                runtimeEnabled
+            )
+            const textEnabled = resEnabled.data as string
+            expect(textEnabled).toContain('## Active Tools (2)')
+            expect(textEnabled).toContain('**codemode**: `mj_execute_code`')
+            expect(textEnabled).toContain('**admin**: `update_configuration`')
+            expect(textEnabled).toContain('# Code Mode API Reference')
+            expect(textEnabled).not.toContain('**core**:')
+            expect(textEnabled).toMatch(/Read `memory:\/\/help\/\{group\}` for:.*core.*github/)
         })
 
         it('should read memory://recent', async () => {

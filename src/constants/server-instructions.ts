@@ -181,10 +181,16 @@ export function generateCodeModeInstructions(
     config?: { defaultWorkspaceId?: string; instructionLevel?: InstructionLevel }
 ): string {
     const resolvedGroups = enabledGroups ?? getEnabledGroups(enabledTools)
+    const standard = generateStandardInstructions(
+        enabledTools,
+        prompts,
+        latestEntry,
+        resolvedGroups,
+        config
+    )
     if (config?.instructionLevel === 'essential') {
-        return generateStandardInstructions(enabledTools, prompts, latestEntry, resolvedGroups, config)
+        return standard
     }
-    const standard = generateStandardInstructions(new Set<string>(), prompts, latestEntry, resolvedGroups, config)
     return standard + '\n\n' + (HELP_CONTENT.get('codemode') ?? '')
 }
 

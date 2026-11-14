@@ -76,25 +76,27 @@ export function buildServerInstructions(
     }
 
     if (isCodeModeOnly) {
-        const rawFinalEnabled =
-            currentConfig.codemodeInternalFullAccess === true ? allToolNames : enabledSet
-        const finalEnabledTools =
+        // [INTENT] Keep `enabledSet` scoped to registered MCP tools for `## Active Tools`;
+        // expand only `finalGroups` when `codemodeInternalFullAccess` unlocks sandbox namespaces.
+        const sandboxVisibleTools =
             isReadonlyMetaActive(filterRaw) && readOnlyHints !== undefined
                 ? new Set(
-                      [...rawFinalEnabled].filter((name) =>
+                      [...allToolNames].filter((name) =>
                           isToolVisibleForFilter(name, readOnlyHints.get(name), filterRaw)
                       )
                   )
-                : rawFinalEnabled
+                : allToolNames
         const finalGroups =
             currentConfig.codemodeInternalFullAccess === true
                 ? isReadonlyMetaActive(filterRaw)
-                    ? getEnabledGroups(finalEnabledTools)
-                    : new Set(Object.keys(TOOL_GROUPS) as ToolGroup[])
+                    ? getEnabledGroups(sandboxVisibleTools)
+                    : new Set<ToolGroup>(
+                          Object.keys(TOOL_GROUPS).filter((k): k is ToolGroup => k in TOOL_GROUPS)
+                      )
                 : groups
 
         return generateCodeModeInstructions(
-            finalEnabledTools,
+            enabledSet,
             mappedPrompts,
             undefined,
             finalGroups,
