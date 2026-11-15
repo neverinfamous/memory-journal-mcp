@@ -42,6 +42,7 @@ import {
 } from '../../src/handlers/tools/search/schemas.js'
 import { decodeCompoundCursor } from '../../src/handlers/tools/search/fts.js'
 import { CreateEntrySchema } from '../../src/handlers/tools/core/schemas.js'
+import { GitHubContextOutputSchema } from '../../src/handlers/tools/github/schemas.js'
 import { MAX_CONTENT_LENGTH } from '../../src/handlers/tools/schemas/constants-and-primitives.js'
 import { ValidationError } from '../../src/types/errors.js'
 import type { ToolContext, ToolDefinition } from '../../src/types/index.js'
@@ -462,6 +463,34 @@ describe('Pass 26 Audit Regressions', () => {
             expect(resolveRegistryMatchForTarget(REGISTRY, 'memory-journal-mcp/src/cli')).toBe('memory-journal-mcp')
             expect(resolveRegistryMatchForTarget(REGISTRY, 'memory-journal-mcp\\src\\utils')).toBe('memory-journal-mcp')
             expect(resolveRegistryMatchForTarget(REGISTRY, 'src/cli')).toBeUndefined()
+        })
+
+        it('validates GitHubContextOutputSchema degraded as string[] rather than boolean', () => {
+            const parsed = GitHubContextOutputSchema.parse({
+                repoName: null,
+                branch: null,
+                commit: null,
+                remoteUrl: null,
+                issues: [],
+                pullRequests: [],
+                issueCount: 0,
+                prCount: 0,
+                degraded: ['commit'],
+            })
+            expect(parsed.degraded).toEqual(['commit'])
+            expect(() =>
+                GitHubContextOutputSchema.parse({
+                    repoName: null,
+                    branch: null,
+                    commit: null,
+                    remoteUrl: null,
+                    issues: [],
+                    pullRequests: [],
+                    issueCount: 0,
+                    prCount: 0,
+                    degraded: true,
+                })
+            ).toThrow()
         })
     })
 })
