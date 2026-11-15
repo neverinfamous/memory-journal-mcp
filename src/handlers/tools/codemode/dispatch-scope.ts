@@ -9,6 +9,7 @@ import { isRecord } from '../../../codemode/normalizers/shared-utils.js'
 import { logger } from '../../../utils/logger.js'
 import { activeProjectRegistry, pairStoredScope } from '../../../utils/write-scope.js'
 import { lookupRegistryEntry } from './session-context.js'
+import { normalizeBatchDispatchItems } from './dispatch-batch-scope.js'
 
 interface ZodLike {
     shape?: Record<string, unknown>
@@ -199,20 +200,7 @@ async function autoPopulateGithubUrls(
     }
 }
 
-export async function normalizeDispatchParams(
-    tool: ToolDefinition,
-    toolParams: unknown,
-    ctx: DispatchParamContext
-): Promise<{ params: unknown } | { errorResult: Record<string, unknown> }> {
-    const { sessionContext, projectId, workspaceId, explicitWorkspace } = ctx
-    const finalParams = deepCamelToSnake(toolParams, 0, (key) => checkSchemaAcceptsKey(tool.inputSchema, key))
-    if (!isRecord(finalParams)) return { params: finalParams }
-
-    const reg = activeProjectRegistry(sessionContext.config?.projectRegistry)
-    const paramsObj = { ...finalParams }
-    const aliasDerivedWs = paramsObj['_alias_derived_workspace'] === true
-    delete paramsObj['_alias_derived_workspace']
-
+function normalizeWorkspaceStringField(paramsObj: Record<string, unknown>): void {
     if (paramsObj['workspace'] !== undefined && paramsObj['workspace_id'] === undefined) {
         paramsObj['workspace_id'] = paramsObj['workspace']
     }
@@ -226,14 +214,23 @@ export async function normalizeDispatchParams(
             paramsObj['workspace_id'] = trimmedWs
         }
     }
+}
 
+interface RootScopeFlags {
+    callerPassedProjectOnly: boolean
+    hasCrossWorkspaceTarget: boolean
+}
+
+function resolveRootScopePairing(
+    tool: ToolDefinition,
+    paramsObj: Record<string, unknown>,
+    reg: NonNullable<ToolContext['config']>['projectRegistry'],
+    ctx: DispatchParamContext,
+    aliasDerivedWs: boolean
+): RootScopeFlags {
+    const { workspaceId, explicitWorkspace } = ctx
     const callerHasExplicitWs = paramsObj['workspace_id'] !== undefined && !aliasDerivedWs
-    // When the caller named a project (or resolved workspace via project alias) inside an
-    // explicitly pinned session, validate/override against the session workspace instead of escaping.
     const callerPassedProjectOnly = paramsObj['project_number'] !== undefined && !callerHasExplicitWs
-
-    const topProjError = coerceProjectNumberField(paramsObj, reg)
-    if (topProjError !== undefined) return topProjError
 
     if (
         aliasDerivedWs &&
@@ -248,6 +245,29 @@ export async function normalizeDispatchParams(
         )
     }
 
+    const callerTargetWs =
+        typeof paramsObj['target_workspace_id'] === 'string' && paramsObj['target_workspace_id'].trim() !== ''
+            ? paramsObj['target_workspace_id'].trim()
+            : undefined
+    const hasCrossWorkspaceTarget =
+        callerTargetWs !== undefined &&
+        (typeof workspaceId !== 'string' || callerTargetWs.toLowerCase() !== workspaceId.toLowerCase())
+    const supplied = typeof paramsObj['project_number'] === 'number' ? paramsObj['project_number'] : undefined
+
+    if (callerTargetWs !== undefined && callerTargetWs !== '*') {
+        if (supplied !== undefined) {
+            pairStoredScope(callerTargetWs, supplied, reg)
+        } else if (
+            !isDefaultWorkspaceName(callerTargetWs) &&
+            checkSchemaAcceptsKey(tool.inputSchema, 'project_number')
+        ) {
+            const targetReg = lookupRegistryEntry(reg, callerTargetWs)
+            if (targetReg?.project_number !== undefined) {
+                paramsObj['project_number'] = targetReg.project_number
+            }
+        }
+    }
+
     if (
         !callerHasExplicitWs &&
         callerPassedProjectOnly &&
@@ -255,21 +275,21 @@ export async function normalizeDispatchParams(
         workspaceId !== undefined &&
         workspaceId !== '*'
     ) {
-        const supplied = typeof paramsObj['project_number'] === 'number' ? paramsObj['project_number'] : undefined
-        if (supplied !== undefined) {
+        if (!hasCrossWorkspaceTarget && supplied !== undefined) {
             pairStoredScope(workspaceId, supplied, reg)
         }
         if (checkSchemaAcceptsKey(tool.inputSchema, 'workspace_id')) {
             paramsObj['workspace_id'] = workspaceId
         }
     }
+
     if (
+        !hasCrossWorkspaceTarget &&
         typeof paramsObj['workspace_id'] === 'string' &&
         paramsObj['workspace_id'] !== '*' &&
         checkSchemaAcceptsKey(tool.inputSchema, 'project_number')
     ) {
         const wsReg = lookupRegistryEntry(reg, paramsObj['workspace_id'])
-        const supplied = typeof paramsObj['project_number'] === 'number' ? paramsObj['project_number'] : undefined
         if (supplied !== undefined) {
             pairStoredScope(paramsObj['workspace_id'], supplied, reg)
         } else if (!isDefaultWorkspaceName(paramsObj['workspace_id']) && wsReg?.project_number !== undefined) {
@@ -277,28 +297,22 @@ export async function normalizeDispatchParams(
         }
     }
 
+    return { callerPassedProjectOnly, hasCrossWorkspaceTarget }
+}
+
+function applyRootSessionInheritance(
+    tool: ToolDefinition,
+    paramsObj: Record<string, unknown>,
+    ctx: DispatchParamContext,
+    flags: RootScopeFlags
+): void {
+    const { projectId, workspaceId, explicitWorkspace } = ctx
     const callerWorkspaceId =
         typeof paramsObj['workspace_id'] === 'string' ? paramsObj['workspace_id'] : undefined
-    const callerTargetWs =
-        typeof paramsObj['target_workspace_id'] === 'string' && paramsObj['target_workspace_id'].trim() !== ''
-            ? paramsObj['target_workspace_id'].trim()
-            : undefined
-    const hasCrossWorkspaceTarget = callerTargetWs !== undefined && callerTargetWs !== workspaceId
-    const batchArrayKey =
-        (tool.name === 'batch_create_entries' || tool.name === 'team_batch_create_entries') &&
-        Array.isArray(paramsObj['entries'])
-            ? 'entries'
-            : (tool.name === 'batch_update_entries' || tool.name === 'team_batch_update_entries') &&
-                Array.isArray(paramsObj['updates'])
-              ? 'updates'
-              : undefined
-    const isBatchScopedTool = batchArrayKey !== undefined
 
     // [INVARIANT] Explicit `workspace_id: 'default'` never inherits the session projectId.
-    // Batch tools inherit per-item scope below so root defaults never clobber project-only items.
     if (
-        !isBatchScopedTool &&
-        !hasCrossWorkspaceTarget &&
+        !flags.hasCrossWorkspaceTarget &&
         paramsObj['project_number'] === undefined &&
         projectId !== undefined &&
         (callerWorkspaceId === undefined ||
@@ -312,8 +326,7 @@ export async function normalizeDispatchParams(
     // [H2] Wildcard `'*'` only propagates automatically to read-only tools.
     const canInheritSessionWorkspace = workspaceId !== '*' || tool.annotations?.readOnlyHint === true
     if (
-        !isBatchScopedTool &&
-        !callerPassedProjectOnly &&
+        !flags.callerPassedProjectOnly &&
         paramsObj['workspace_id'] === undefined &&
         workspaceId !== undefined &&
         canInheritSessionWorkspace &&
@@ -322,112 +335,49 @@ export async function normalizeDispatchParams(
     ) {
         paramsObj['workspace_id'] = workspaceId
     }
+}
+
+export async function normalizeDispatchParams(
+    tool: ToolDefinition,
+    toolParams: unknown,
+    ctx: DispatchParamContext
+): Promise<{ params: unknown } | { errorResult: Record<string, unknown> }> {
+    const { sessionContext, projectId, workspaceId, explicitWorkspace } = ctx
+    const finalParams = deepCamelToSnake(toolParams, 0, (key) => checkSchemaAcceptsKey(tool.inputSchema, key))
+    if (!isRecord(finalParams)) return { params: finalParams }
+
+    const reg = activeProjectRegistry(sessionContext.config?.projectRegistry)
+    const paramsObj = { ...finalParams }
+    const aliasDerivedWs = paramsObj['_alias_derived_workspace'] === true
+    delete paramsObj['_alias_derived_workspace']
+
+    normalizeWorkspaceStringField(paramsObj)
+    const topProjError = coerceProjectNumberField(paramsObj, reg)
+    if (topProjError !== undefined) return topProjError
+
+    const flags = resolveRootScopePairing(tool, paramsObj, reg, ctx, aliasDerivedWs)
+    const batchArrayKey =
+        (tool.name === 'batch_create_entries' || tool.name === 'team_batch_create_entries') &&
+        Array.isArray(paramsObj['entries'])
+            ? 'entries'
+            : (tool.name === 'batch_update_entries' || tool.name === 'team_batch_update_entries') &&
+                Array.isArray(paramsObj['updates'])
+              ? 'updates'
+              : undefined
 
     if (batchArrayKey !== undefined) {
-        const nextItems: unknown[] = []
-        for (const item of paramsObj[batchArrayKey] as unknown[]) {
-            if (!isRecord(item)) {
-                nextItems.push(item)
-                continue
-            }
-            const nextItem = { ...item }
-            const itemAliasDerivedWs = nextItem['_alias_derived_workspace'] === true
-            delete nextItem['_alias_derived_workspace']
-
-            const itemProjErr = coerceProjectNumberField(nextItem, reg)
-            if (itemProjErr !== undefined) return itemProjErr
-
-            const rawItemWs =
-                typeof nextItem['workspace_id'] === 'string' && nextItem['workspace_id'].trim() !== ''
-                    ? nextItem['workspace_id'].trim()
-                    : undefined
-            const itemProjNum =
-                typeof nextItem['project_number'] === 'number' && Number.isFinite(nextItem['project_number'])
-                    ? nextItem['project_number']
-                    : undefined
-            if (
-                itemAliasDerivedWs &&
-                explicitWorkspace === true &&
-                typeof workspaceId === 'string' &&
-                workspaceId !== '*'
-            ) {
-                if (rawItemWs !== undefined && rawItemWs.toLowerCase() !== workspaceId.toLowerCase()) {
-                    throw new ValidationError(
-                        `Project alias resolved workspace '${rawItemWs}' does not match session workspace '${workspaceId}'.`
-                    )
-                }
-                if (itemProjNum !== undefined) {
-                    pairStoredScope(workspaceId, itemProjNum, reg)
-                }
-                nextItem['workspace_id'] = workspaceId
-            }
-
-            const callerItemWs =
-                typeof nextItem['workspace_id'] === 'string' && nextItem['workspace_id'].trim() !== ''
-                    ? nextItem['workspace_id'].trim()
-                    : undefined
-            const hasItemWs = callerItemWs !== undefined && !itemAliasDerivedWs
-            const hasItemProj = nextItem['project_number'] !== undefined
-            const itemTargetWs =
-                typeof nextItem['target_workspace_id'] === 'string' && nextItem['target_workspace_id'].trim() !== ''
-                    ? nextItem['target_workspace_id'].trim()
-                    : undefined
-            const itemCrossWsMove =
-                itemTargetWs !== undefined &&
-                (typeof workspaceId !== 'string' || itemTargetWs.toLowerCase() !== workspaceId.toLowerCase())
-
-            if (itemTargetWs !== undefined && itemProjNum !== undefined) {
-                pairStoredScope(itemTargetWs, itemProjNum, reg)
-            } else if (hasItemWs && callerItemWs !== '*' && !itemCrossWsMove) {
-                const wsReg = lookupRegistryEntry(reg, callerItemWs)
-                if (itemProjNum !== undefined) {
-                    pairStoredScope(callerItemWs, itemProjNum, reg)
-                } else if (
-                    batchArrayKey === 'entries' &&
-                    !isDefaultWorkspaceName(callerItemWs) &&
-                    wsReg?.project_number !== undefined &&
-                    nextItem['project_number'] === undefined
-                ) {
-                    nextItem['project_number'] = wsReg.project_number
-                }
-            }
-
-            if (
-                explicitWorkspace === true &&
-                !hasItemWs &&
-                itemProjNum !== undefined &&
-                typeof workspaceId === 'string' &&
-                workspaceId !== '*'
-            ) {
-                pairStoredScope(workspaceId, itemProjNum, reg)
-                nextItem['workspace_id'] = workspaceId
-            }
-            if (
-                !hasItemWs &&
-                !hasItemProj &&
-                workspaceId !== undefined &&
-                workspaceId !== '*' &&
-                (!isDefaultWorkspaceName(workspaceId) || explicitWorkspace === true)
-            ) {
-                nextItem['workspace_id'] = workspaceId
-            }
-            if (
-                !itemCrossWsMove &&
-                nextItem['project_number'] === undefined &&
-                typeof projectId === 'number' &&
-                !isDefaultWorkspaceName(callerItemWs) &&
-                (callerItemWs === undefined ||
-                    (typeof workspaceId === 'string' &&
-                        callerItemWs.toLowerCase() === workspaceId.toLowerCase()))
-            ) {
-                nextItem['project_number'] = projectId
-            }
-            nextItems.push(nextItem)
-        }
-        paramsObj[batchArrayKey] = nextItems
+        const batchError = normalizeBatchDispatchItems(batchArrayKey, paramsObj, reg, {
+            projectId,
+            workspaceId,
+            explicitWorkspace,
+            isDefaultWorkspaceName,
+            coerceProjectNumberField,
+        })
+        if (batchError !== undefined) return batchError
+    } else {
+        applyRootSessionInheritance(tool, paramsObj, ctx, flags)
     }
 
     await autoPopulateGithubUrls(paramsObj, sessionContext, workspaceId, projectId)
-
     return { params: paramsObj }
 }

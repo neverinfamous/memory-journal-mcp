@@ -40,7 +40,8 @@ function getPlanReviewPromptDefinition(): InternalPromptDef {
             const scope = validateAdversarialPromptScope(
                 parsed.workspace_id,
                 parsed.project_number,
-                briefingConfig
+                briefingConfig,
+                parsed.topic
             )
             const topic = sanitizePromptTarget(parsed.topic ?? '{topic}')
             const depth: ReviewDepth = parsed.depth ?? 'standard'

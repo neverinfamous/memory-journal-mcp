@@ -217,6 +217,10 @@ export interface RpcRequest {
     method: string
     /** Arguments to pass to the method */
     args: unknown[]
+    /** Enforced read-only constraint propagated from nested sandbox execution */
+    readonly?: boolean
+    /** Enforced dry-run constraint propagated from nested sandbox execution */
+    dryRun?: boolean
 }
 
 /**

@@ -265,6 +265,45 @@ const RATE_LIMIT_WINDOW_MS = 60_000
 // =============================================================================
 
 /**
+ * Stateless code validation against Code Mode security policies (allocates no rate-limit timers).
+ */
+export function validateSandboxCode(
+    code: string,
+    config: SecurityConfig = DEFAULT_SECURITY_CONFIG
+): ValidationResult {
+    const errors: string[] = []
+
+    if (Buffer.byteLength(code, 'utf-8') > config.maxCodeLength) {
+        errors.push(`Code exceeds maximum length of ${String(config.maxCodeLength)} bytes`)
+    }
+
+    if (code.trim().length === 0) {
+        errors.push('Code cannot be empty')
+    }
+
+    const strippedCode = stripCommentsAndStrings(code)
+
+    for (const pattern of config.blockedPatterns) {
+        if (pattern.test(strippedCode)) {
+            let hint = ''
+            if (pattern.source.includes('require') || pattern.source.includes('import')) {
+                hint = ' Dynamic require() and ES module import statements are disabled in sandboxed Code Mode. To manage journal entries or settings, use mj.* tools directly (e.g., `await mj.core.createEntry({ content: "..." })` or `await mj.search.searchEntries({ query: "..." })`).'
+            } else if (pattern.source.includes('fs')) {
+                hint = ' Node.js filesystem access is disabled in sandboxed Code Mode. To query database metrics, health, or journal entries, use `await mj.analytics.getStatistics()` or `await mj.core.getRecentEntries()`. File existence and stat queries on database paths are auto-healed in Code Mode.'
+            } else if (pattern.source.includes('process')) {
+                hint = ' Process access is disabled in sandboxed Code Mode.'
+            }
+            errors.push(`🛠️ AUTONOMOUS HEALING: Code contains blocked pattern: ${pattern.source}.${hint}`)
+        }
+    }
+
+    return {
+        valid: errors.length === 0,
+        errors,
+    }
+}
+
+/**
  * Validates user-submitted code against security policies before execution.
  */
 export class CodeModeSecurityManager {
@@ -295,41 +334,7 @@ export class CodeModeSecurityManager {
      * Returns a ValidationResult with any violations found.
      */
     validateCode(code: string): ValidationResult {
-        const errors: string[] = []
-
-        // Length check
-        if (Buffer.byteLength(code, 'utf-8') > this.config.maxCodeLength) {
-            errors.push(`Code exceeds maximum length of ${String(this.config.maxCodeLength)} bytes`)
-        }
-
-        // Empty code check
-        if (code.trim().length === 0) {
-            errors.push('Code cannot be empty')
-        }
-
-        // Single-pass lexical scan to strip comments and string contents while preserving
-        // template literal `${...}` expressions and sensitive bracket-access strings
-        const strippedCode = stripCommentsAndStrings(code)
-
-        // Blocked pattern scan
-        for (const pattern of this.config.blockedPatterns) {
-            if (pattern.test(strippedCode)) {
-                let hint = ''
-                if (pattern.source.includes('require') || pattern.source.includes('import')) {
-                    hint = ' Dynamic require() and ES module import statements are disabled in sandboxed Code Mode. To manage journal entries or settings, use mj.* tools directly (e.g., `await mj.core.createEntry({ content: "..." })` or `await mj.search.searchEntries({ query: "..." })`).'
-                } else if (pattern.source.includes('fs')) {
-                    hint = ' Node.js filesystem access is disabled in sandboxed Code Mode. To query database metrics, health, or journal entries, use `await mj.analytics.getStatistics()` or `await mj.core.getRecentEntries()`. File existence and stat queries on database paths are auto-healed in Code Mode.'
-                } else if (pattern.source.includes('process')) {
-                    hint = ' Process access is disabled in sandboxed Code Mode.'
-                }
-                errors.push(`🛠️ AUTONOMOUS HEALING: Code contains blocked pattern: ${pattern.source}.${hint}`)
-            }
-        }
-
-        return {
-            valid: errors.length === 0,
-            errors,
-        }
+        return validateSandboxCode(code, this.config)
     }
 
     // =========================================================================

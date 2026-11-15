@@ -22,7 +22,7 @@ The server supports the standard MCP `resources/subscribe` capability. You can s
 
 ### Runtime Config, Mutations, Batching & Audit
 
-- **Runtime Config**: `update_configuration({ tool_filter, briefing_config, ... })` hot-reloads active tool filters and workspace/project defaults without restarting and emits `notifications/tools/list_changed`.
+- **Runtime Config**: `update_configuration({ tool_filter, briefing_entries, briefing_summaries, workspace_id, project_number, ... })` hot-reloads active tool filters and workspace/project defaults without restarting and emits `notifications/tools/list_changed`.
 - **Project Registry**: `register_project`, `update_project`, `delete_project`, `get_project`, `list_projects`.
 - **Entry Mutations**: `update_entry` (pass `expected_version` on direct MCP calls; Code Mode auto-injects via `auto_version: true`), `delete_entry`, `restore_entry`, `batch_create_entries`, `batch_update_entries`, `batch_delete_entries` (max 50 items per batch transaction).
 - **Audit Logs**: `search_audit_log` queries mutating tool/resource audit records (requires `--audit-log` to be enabled on the server).

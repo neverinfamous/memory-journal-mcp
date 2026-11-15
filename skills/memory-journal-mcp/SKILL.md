@@ -41,8 +41,8 @@ Static operational anchor for `memory-journal-mcp` Code Mode (`mj_execute_code`)
     workspace_id: 'my-repo',
   });
   const top = hits.entries[0] ?? decisions.entries[0];
-  const full = top ? await mj.core.getEntryById({ entry_id: top.id }) : null;
-  const graph = top ? await mj.relationships.visualizeRelationships({ entry_id: top.id, depth: 2 }) : null;
+  const full = top ? await mj.core.getEntryById({ entry_id: top.id, workspace_id: 'my-repo' }) : null;
+  const graph = top ? await mj.relationships.visualizeRelationships({ entry_id: top.id, depth: 2, workspace_id: 'my-repo' }) : null;
   return { hits, decisions, full, graph };
   ```
   - Search tag `"copilot-finding"` before opening PRs to prevent recurring review regressions.

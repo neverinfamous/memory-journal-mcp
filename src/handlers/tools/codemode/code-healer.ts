@@ -293,7 +293,9 @@ export function healCodeModeScript(code: string): string {
         }
     )
     executionCode = executionCode.replace(/export\s+default\s+/g, '')
-    executionCode = executionCode.replace(/\btools\./g, 'mj.')
+    executionCode = executionCode.replace(/\btools\./g, (match, offset: number, fullStr: string) =>
+        isInsideStringLiteral(fullStr, offset) ? match : 'mj.'
+    )
 
     // Auto-heal dynamic import(), require(), and static import statements
     executionCode = executionCode.replace(
@@ -326,15 +328,33 @@ export function healCodeModeScript(code: string): string {
 
     executionCode = executionCode.replace(
         /(?:fs|fs\.promises)\.readFileSync\s*\([^)]*\)/g,
-        '(typeof context !== "undefined" && context.content ? context.content : "")'
+        (match, offset: number, fullStr: string) =>
+            isInsideStringLiteral(fullStr, offset)
+                ? match
+                : '(typeof context !== "undefined" && context.content ? context.content : "")'
     )
     executionCode = executionCode.replace(
         /(?:fs|fs\.promises)\.readFile\s*\([^)]*\)/g,
-        'Promise.resolve(typeof context !== "undefined" && context.content ? context.content : "")'
+        (match, offset: number, fullStr: string) =>
+            isInsideStringLiteral(fullStr, offset)
+                ? match
+                : 'Promise.resolve(typeof context !== "undefined" && context.content ? context.content : "")'
     )
-    executionCode = executionCode.replace(/\bfs\.(existsSync|statSync|stat|lstatSync)\s*\(/g, '__safeFs.$1(')
-    executionCode = executionCode.replace(/process\.env\.([a-zA-Z0-9_]+)/g, () => 'undefined')
-    executionCode = executionCode.replace(/process\.env/g, '{}')
+    executionCode = executionCode.replace(
+        /\bfs\.(existsSync|statSync|stat|lstatSync)\s*\(/g,
+        (match, method: string, offset: number, fullStr: string) =>
+            isInsideStringLiteral(fullStr, offset) ? match : `__safeFs.${method}(`
+    )
+    executionCode = executionCode.replace(
+        /process\.env\.([a-zA-Z0-9_]+)/g,
+        (match, _key: string, offset: number, fullStr: string) =>
+            isInsideStringLiteral(fullStr, offset) ? match : 'undefined'
+    )
+    executionCode = executionCode.replace(
+        /process\.env\b/g,
+        (match, offset: number, fullStr: string) =>
+            isInsideStringLiteral(fullStr, offset) ? match : '{}'
+    )
 
     if (!isValidJsScript(executionCode) || hasAccidentalTaggedTemplateBackticks(executionCode)) {
         executionCode = applyTemplateAndQuoteDelimiterHealing(executionCode)

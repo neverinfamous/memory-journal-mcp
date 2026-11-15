@@ -30,7 +30,7 @@ export const SearchEntriesSchema = z.preprocess(
         .describe(
             'Search strategy: auto (default, heuristic-based), fts (FTS5 keyword), semantic (vector), hybrid (RRF fusion of FTS5+vector)'
         ),
-    limit: z.number().max(MAX_QUERY_LIMIT).optional().default(10),
+    limit: z.number().int().min(1).max(MAX_QUERY_LIMIT).optional().default(10),
     workspace_id: z.string().optional(),
     is_personal: z.boolean().optional(),
     project_number: z.number().optional(),
@@ -130,7 +130,7 @@ export const SearchByDateRangeSchema = z.preprocess(
     issue_number: z.number().optional(),
     pr_number: z.number().optional(),
     workflow_run_id: z.number().optional(),
-    limit: z.number().max(MAX_QUERY_LIMIT).optional().default(500),
+    limit: z.number().int().min(1).max(MAX_QUERY_LIMIT).optional().default(500),
     sort_by: z
         .enum(['timestamp', 'importance'])
         .optional()
@@ -190,7 +190,7 @@ export const SemanticSearchSchema = z.preprocess(
         .describe(
             'Find entries related to this entry ID (uses existing embedding, skips re-embedding)'
         ),
-    limit: z.number().max(MAX_QUERY_LIMIT).optional().default(10),
+    limit: z.number().int().min(1).max(MAX_QUERY_LIMIT).optional().default(10),
     similarity_threshold: z.number().optional().default(0.25),
     workspace_id: z.string().optional(),
     is_personal: z.boolean().optional(),

@@ -86,8 +86,6 @@ function buildBatchDeleteNotFoundAbort(
         category: 'resource',
         recoverable: false,
         suggestion: 'Verify the entry identifiers and try again',
-        count: 0,
-        deleted: [],
         notFound: missing,
         permanent,
     }

@@ -73,9 +73,26 @@ export function resolveGitWorkingDir(
         trimmedRawTarget !== undefined && ['default', '*'].includes(trimmedRawTarget.toLowerCase())
             ? undefined
             : trimmedRawTarget
-    const pNum =
-        typeof input.project_number === 'string' ? Number(input.project_number) : input.project_number
-    if (registry && pNum !== undefined && !Number.isNaN(pNum) && trimmedRawTarget !== undefined && trimmedRawTarget !== '' && trimmedRawTarget !== '*') {
+    let pNum: number | undefined
+    if (input.project_number !== undefined) {
+        if (typeof input.project_number === 'string') {
+            const trimmedPn = input.project_number.trim()
+            if (trimmedPn === '' || !/^\d+$/.test(trimmedPn)) {
+                throw new ValidationError(
+                    `Invalid project_number '${input.project_number}': expected a positive integer.`
+                )
+            }
+            pNum = Number(trimmedPn)
+        } else {
+            pNum = input.project_number
+        }
+        if (!Number.isInteger(pNum) || pNum <= 0) {
+            throw new ValidationError(
+                `Invalid project_number ${String(input.project_number)}: expected a positive integer.`
+            )
+        }
+    }
+    if (registry && pNum !== undefined && trimmedRawTarget !== undefined && trimmedRawTarget !== '' && trimmedRawTarget !== '*') {
         const owners = Object.entries(registry)
             .filter(([, entry]) => entry.project_number === pNum)
             .map(([key]) => key)
@@ -113,7 +130,7 @@ export function resolveGitWorkingDir(
     if (
         trimmedRawTarget !== undefined &&
         (trimmedRawTarget === '*' || trimmedRawTarget.toLowerCase() === 'default') &&
-        (pNum === undefined || Number.isNaN(pNum))
+        pNum === undefined
     ) {
         throw new ValidationError(
             `workspace_id '${trimmedRawTarget}' cannot identify a git repository without repo, project_number, or cwd. ${formatRegisteredReposHint(registry)}`
@@ -256,7 +273,13 @@ export async function evaluateAnchorStaleness(
 ): Promise<StalenessCheckRow> {
     try {
         const resolvedRoot = path.resolve(workspaceRoot)
-        const fullPath = path.resolve(resolvedRoot, anchor.anchorPath)
+        const normalizedRaw = anchor.anchorPath.replace(/\\/g, '/')
+        const hashIdx = normalizedRaw.indexOf('#')
+        const relAnchorFile = (hashIdx >= 0 ? normalizedRaw.slice(0, hashIdx) : normalizedRaw).trim()
+        if (relAnchorFile === '') {
+            throw new Error(`Path traversal detected: ${anchor.anchorPath}`)
+        }
+        const fullPath = path.resolve(resolvedRoot, relAnchorFile)
         const relPath =
             process.platform === 'win32'
                 ? path.relative(resolvedRoot.toLowerCase(), fullPath.toLowerCase())
@@ -272,7 +295,7 @@ export async function evaluateAnchorStaleness(
         if (isDeleted) {
             newStatus = 'invalidated'
         } else {
-            commitsSince = await countCommitsSince(anchor.anchorPath, entryTimestamp)
+            commitsSince = await countCommitsSince(relAnchorFile, entryTimestamp)
             if (commitsSince > 0) {
                 newStatus = 'stale'
             } else if (anchor.status === 'pending') {

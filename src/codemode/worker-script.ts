@@ -19,9 +19,7 @@ import { createUpdateMemoryFn, createContextProxy } from './worker/namespace-shi
 import { createShimMjProxy } from './worker/mj-shim-proxy.js'
 import { buildSandboxGlobals } from './worker/sandbox-globals.js'
 import { serializeAndEnforceEgress } from './worker/result-compactor.js'
-import { CodeModeSecurityManager } from './security.js'
-
-const nestedSecurityManager = new CodeModeSecurityManager()
+import { validateSandboxCode } from './security.js'
 
 // [L4] Hardening failures are fatal: refuse to execute any user code in a half-hardened realm.
 const hardeningFailures = hardenOuterFunctionPrototypes()
@@ -68,27 +66,54 @@ function rejectPendingRpcRequests(message: string): void {
     pendingRpcRequests.clear()
 }
 
-function rpcCall(group: string, method: string, args: unknown[]): Promise<unknown> {
-    return new Promise((resolve, reject) => {
-        if (!rpcPort) {
-            reject(new Error('RPC port not initialized'))
-            return
-        }
-        const id = ++rpcIdCounter
-        pendingRpcRequests.set(id, { resolve, reject })
-        const request: RpcRequest = { id, group, method, args }
-        rpcPort.postMessage(request)
-    })
+type RpcCallFn = (group: string, method: string, args: unknown[]) => Promise<unknown>
+
+function createScopedRpcCall(overrides?: { readonly?: boolean; dryRun?: boolean }): RpcCallFn {
+    return (group: string, method: string, args: unknown[]): Promise<unknown> => {
+        return new Promise((resolve, reject) => {
+            if (!rpcPort) {
+                reject(new Error('RPC port not initialized'))
+                return
+            }
+            const id = ++rpcIdCounter
+            pendingRpcRequests.set(id, { resolve, reject })
+            const request: RpcRequest = {
+                id,
+                group,
+                method,
+                args,
+                ...(overrides?.readonly === true ? { readonly: true } : {}),
+                ...(overrides?.dryRun === true ? { dryRun: true } : {}),
+            }
+            rpcPort.postMessage(request)
+        })
+    }
 }
 
-function createSandboxExecutor(
-    shimMj: Record<string, unknown>,
-    vmContextRef: { current?: vm.Context },
-    timeoutMs: number,
-    readonlyMode?: boolean,
-    contextObj?: Record<string, unknown>
-): (arg: unknown) => Promise<unknown> {
-    const pinnedWorkspaceRaw = contextObj?.['__mj_workspace_id']
+const rpcCall = createScopedRpcCall()
+
+type RunIsolatedNestedFn = (wrapped: string, nestedReadonly: boolean, nestedDryRun: boolean) => Promise<unknown>
+
+interface SandboxExecutorOptions {
+    shimMj: Record<string, unknown>
+    vmContextRef: { current?: vm.Context }
+    timeoutMs: number
+    readonlyMode: boolean | undefined
+    dryRunMode: boolean | undefined
+    pinnedWorkspaceRaw: unknown
+    runIsolatedNestedCode: RunIsolatedNestedFn
+}
+
+function createSandboxExecutor(options: SandboxExecutorOptions): (arg: unknown) => Promise<unknown> {
+    const {
+        shimMj,
+        vmContextRef,
+        timeoutMs,
+        readonlyMode,
+        dryRunMode,
+        pinnedWorkspaceRaw,
+        runIsolatedNestedCode,
+    } = options
     const pinnedWorkspace =
         typeof pinnedWorkspaceRaw === 'string' &&
         pinnedWorkspaceRaw.trim() !== '' &&
@@ -138,7 +163,7 @@ function createSandboxExecutor(
                     code: 'PERMISSION_DENIED',
                 }
             }
-            if (argDryRun) {
+            if (argDryRun || dryRunMode === true) {
                 return {
                     success: false,
                     error: 'dry_run is not supported for synthesized entry writes inside nested execute_code',
@@ -159,7 +184,7 @@ function createSandboxExecutor(
                     code: 'PERMISSION_DENIED',
                 }
             }
-            if (argDryRun) {
+            if (argDryRun || dryRunMode === true) {
                 return {
                     success: false,
                     error: 'dry_run is not supported for synthesized entry writes inside nested execute_code',
@@ -168,7 +193,7 @@ function createSandboxExecutor(
             }
             return invokeCreateEntry(natural)
         }
-        const validation = nestedSecurityManager.validateCode(codeToExec)
+        const validation = validateSandboxCode(codeToExec)
         if (!validation.valid) {
             return {
                 success: false,
@@ -179,6 +204,10 @@ function createSandboxExecutor(
         if (vmContextRef.current !== undefined) {
             const transformed = transformAutoReturn(codeToExec)
             const wrapped = `(async () => {\n${transformed}\n})()`
+            const effectiveDryRun = dryRunMode === true || argDryRun
+            if ((effectiveReadonly && readonlyMode !== true) || (effectiveDryRun && dryRunMode !== true)) {
+                return runIsolatedNestedCode(wrapped, effectiveReadonly, effectiveDryRun)
+            }
             return (await vm.runInContext(wrapped, vmContextRef.current, { timeout: timeoutMs })) as unknown
         }
         return { success: false, error: 'No code was executed', code: 'VALIDATION_ERROR' }
@@ -217,6 +246,106 @@ function naturalLanguageEntry(codeToExec: string): { title: string; content: str
     return { title, content: trimmed, entry_type: 'technical_note' }
 }
 
+interface VmExecutionContextOptions {
+    rpcFn: RpcCallFn
+    methodList: Record<string, string[]>
+    schemaList: Record<string, Record<string, string>> | undefined
+    timeoutMs: number
+    contextObj: Record<string, unknown> | undefined
+    readonlyMode: boolean | undefined
+    dryRunMode: boolean | undefined
+    pinnedWorkspaceRaw: unknown
+    activeTimers: Set<NodeJS.Timeout>
+}
+
+function createVmExecutionContext(options: VmExecutionContextOptions): vm.Context {
+    const {
+        rpcFn,
+        methodList,
+        schemaList,
+        timeoutMs,
+        contextObj,
+        readonlyMode,
+        dryRunMode,
+        pinnedWorkspaceRaw,
+        activeTimers,
+    } = options
+    const mjApi = buildApiProxy(rpcFn, methodList, schemaList, readonlyMode, contextObj)
+
+    for (const key of Object.keys(mjApi)) {
+        const val = mjApi[key]
+        if (typeof val === 'object' && val !== null) Object.freeze(val)
+    }
+    Object.freeze(mjApi)
+
+    const safeFsShim = createSafeFsShim(contextObj)
+    const executeCodeFnRef: { current?: (arg: unknown) => Promise<unknown> } = {}
+    const updateMemoryFnHolder: { current?: (arg: unknown) => unknown } = {}
+
+    const shimMj = createShimMjProxy({
+        mjApi,
+        safeFsShim,
+        executeCodeFnRef,
+        getUpdateMemoryFn: () => updateMemoryFnHolder.current ?? (() => undefined),
+    })
+
+    const updateMemoryFn = createUpdateMemoryFn(shimMj)
+    updateMemoryFnHolder.current = updateMemoryFn
+
+    const frozenContext = createContextProxy(contextObj)
+    const vmContextRef: { current?: vm.Context } = {}
+    const runIsolatedNestedCode: RunIsolatedNestedFn = async (
+        wrapped: string,
+        nestedReadonly: boolean,
+        nestedDryRun: boolean
+    ): Promise<unknown> => {
+        const overrides: { readonly?: boolean; dryRun?: boolean } = {}
+        if (nestedReadonly) overrides.readonly = true
+        if (nestedDryRun) overrides.dryRun = true
+        const nestedContext = createVmExecutionContext({
+            rpcFn: createScopedRpcCall(overrides),
+            methodList,
+            schemaList,
+            timeoutMs,
+            contextObj,
+            readonlyMode: nestedReadonly,
+            dryRunMode: nestedDryRun,
+            pinnedWorkspaceRaw,
+            activeTimers,
+        })
+        return (await vm.runInContext(wrapped, nestedContext, { timeout: timeoutMs })) as unknown
+    }
+
+    const executeCodeFn = createSandboxExecutor({
+        shimMj,
+        vmContextRef,
+        timeoutMs,
+        readonlyMode,
+        dryRunMode,
+        pinnedWorkspaceRaw,
+        runIsolatedNestedCode,
+    })
+    executeCodeFnRef.current = executeCodeFn
+
+    const sandbox = buildSandboxGlobals({
+        mjApi,
+        shimMj,
+        safeFsShim,
+        frozenContext,
+        executeCodeFn,
+        updateMemoryFn,
+        activeTimers,
+    })
+
+    const context = vm.createContext(sandbox, {
+        name: 'codemode-worker-sandbox',
+        codeGeneration: { strings: false, wasm: false },
+    })
+    vmContextRef.current = context
+    freezeInnerVmContext(context)
+    return context
+}
+
 async function executeCode(
     code: string,
     methodList: Record<string, string[]>,
@@ -233,60 +362,25 @@ async function executeCode(
     const activeTimers = new Set<NodeJS.Timeout>()
 
     const registryPayload = contextObj?.['__mj_project_registry']
-    if (contextObj !== undefined) Reflect.deleteProperty(contextObj, '__mj_project_registry')
+    const pinnedWorkspaceRaw = contextObj?.['__mj_workspace_id']
+    if (contextObj !== undefined) {
+        Reflect.deleteProperty(contextObj, '__mj_project_registry')
+        Reflect.deleteProperty(contextObj, '__mj_workspace_id')
+    }
     setActiveProjectRegistry(readProjectRegistryPayload(registryPayload))
 
     try {
-        const mjApi = buildApiProxy(rpcCall, methodList, schemaList, readonlyMode, contextObj)
-
-        for (const key of Object.keys(mjApi)) {
-            const val = mjApi[key]
-            if (typeof val === 'object' && val !== null) Object.freeze(val)
-        }
-        Object.freeze(mjApi)
-
-        const safeFsShim = createSafeFsShim(contextObj)
-        const executeCodeFnRef: { current?: (arg: unknown) => Promise<unknown> } = {}
-        const updateMemoryFnHolder: { current?: (arg: unknown) => unknown } = {}
-
-        const shimMj = createShimMjProxy({
-            mjApi,
-            safeFsShim,
-            executeCodeFnRef,
-            getUpdateMemoryFn: () => updateMemoryFnHolder.current ?? (() => undefined),
-        })
-
-        const updateMemoryFn = createUpdateMemoryFn(shimMj)
-        updateMemoryFnHolder.current = updateMemoryFn
-
-        const frozenContext = createContextProxy(contextObj)
-        const vmContextRef: { current?: vm.Context } = {}
-        const executeCodeFn = createSandboxExecutor(
-            shimMj,
-            vmContextRef,
+        const context = createVmExecutionContext({
+            rpcFn: rpcCall,
+            methodList,
+            schemaList,
             timeoutMs,
+            contextObj,
             readonlyMode,
-            contextObj
-        )
-        executeCodeFnRef.current = executeCodeFn
-
-        const sandbox = buildSandboxGlobals({
-            mjApi,
-            shimMj,
-            safeFsShim,
-            frozenContext,
-            executeCodeFn,
-            updateMemoryFn,
+            dryRunMode: undefined,
+            pinnedWorkspaceRaw,
             activeTimers,
         })
-
-        const context = vm.createContext(sandbox, {
-            name: 'codemode-worker-sandbox',
-            codeGeneration: { strings: false, wasm: false },
-        })
-        vmContextRef.current = context
-
-        freezeInnerVmContext(context)
 
         const transformed = transformAutoReturn(code)
         const script = new vm.Script(`(async () => {\n${transformed}\n})()`, {

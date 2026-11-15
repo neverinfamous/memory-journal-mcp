@@ -107,6 +107,19 @@ function saveConfig(config: Record<string, unknown>, context?: ToolContext, chan
         const briefingConfig = { ...manager.getConfig().briefingConfig, projectRegistry: reg }
         applyDefaultsChange(briefingConfig, change)
         manager.updateConfig({ briefingConfig })
+    } else if (
+        manager !== null &&
+        typeof manager === 'object' &&
+        'updateConfig' in manager &&
+        typeof (manager as { updateConfig?: unknown }).updateConfig === 'function'
+    ) {
+        const mgrLike = manager as {
+            getConfig?: () => { briefingConfig?: Record<string, unknown> }
+            updateConfig: (cfg: Record<string, unknown>) => unknown
+        }
+        const existingBriefing = mgrLike.getConfig?.()?.briefingConfig ?? {}
+        const briefingConfig = { ...existingBriefing, projectRegistry: reg }
+        mgrLike.updateConfig({ briefingConfig })
     }
 }
 

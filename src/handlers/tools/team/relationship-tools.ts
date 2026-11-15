@@ -10,7 +10,8 @@ import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { ValidationError } from '../../../types/errors.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
 import { resolveWriteWorkspaceId } from '../write-workspace.js'
-import { TEAM_DB_ERROR_RESPONSE, triggerTeamNotifications, resolveTeamProjectNumber } from './helpers.js'
+import { TEAM_DB_ERROR_RESPONSE, triggerTeamNotifications, resolveTeamProjectNumber, missingTeamProjectNumberError } from './helpers.js'
+import { DATE_MIN_SENTINEL, DATE_MAX_SENTINEL } from '../schemas.js'
 import {
     TeamLinkEntriesSchema,
     TeamLinkEntriesSchemaMcp,
@@ -24,12 +25,24 @@ import {
 // Helpers
 // ============================================================================
 
+function isInScopedGraphPartition(
+    entry: { workspaceId?: string; projectNumber?: number | null } | null | undefined,
+    wsId: string,
+    projectNumber?: number
+): boolean {
+    if (!entry) return false
+    const wsMatches = wsId === '*' || entry.workspaceId === undefined || entry.workspaceId === wsId
+    const projMatches = projectNumber === undefined || entry.projectNumber === projectNumber
+    return wsMatches && projMatches
+}
+
 /** Breadth-first walk of relationships from `startId`, returning the start id plus neighbors up to `depth`. */
 function collectNeighborhood(
     teamDb: IDatabaseAdapter,
     startId: number,
     depth: number,
-    workspaceId: string
+    workspaceId: string,
+    projectNumber?: number
 ): number[] {
     const entryIds: number[] = [startId]
     const visited = new Set<number>(entryIds)
@@ -40,16 +53,27 @@ function collectNeighborhood(
             typeof teamDb.getRelationshipsForEntries === 'function'
                 ? teamDb.getRelationshipsForEntries(frontier, workspaceId)
                 : null
-        const nextFrontier: number[] = []
+        const candidateIds: number[] = []
         for (const fid of frontier) {
             const rels = relMap ? (relMap.get(fid) ?? []) : teamDb.getRelationships(fid, workspaceId)
             for (const r of rels) {
                 const otherId = r.fromEntryId === fid ? r.toEntryId : r.fromEntryId
                 if (!visited.has(otherId)) {
                     visited.add(otherId)
-                    nextFrontier.push(otherId)
+                    candidateIds.push(otherId)
                 }
             }
+        }
+        let nextFrontier = candidateIds
+        if (projectNumber !== undefined && candidateIds.length > 0) {
+            const batchEntries =
+                typeof teamDb.getEntriesByIds === 'function'
+                    ? teamDb.getEntriesByIds(candidateIds, workspaceId)
+                    : null
+            nextFrontier = candidateIds.filter((cid) => {
+                const target = batchEntries ? (batchEntries.get(cid) ?? null) : teamDb.getEntryById(cid, workspaceId)
+                return isInScopedGraphPartition(target, workspaceId, projectNumber)
+            })
         }
         frontier = nextFrontier
         entryIds.push(...nextFrontier)
@@ -61,7 +85,8 @@ function collectNeighborhood(
 export function buildRelationshipGraph(
     teamDb: IDatabaseAdapter,
     entryIds: number[],
-    wsId: string
+    wsId: string,
+    projectNumber?: number
 ): { nodes: Map<number, string>; edges: { from: number; to: number; type: string }[] } {
     const nodes = new Map<number, string>()
     const edges: { from: number; to: number; type: string }[] = []
@@ -76,11 +101,7 @@ export function buildRelationshipGraph(
 
     for (const eid of entryIds) {
         const rawEntry = batchEntries ? (batchEntries.get(eid) ?? null) : teamDb.getEntryById(eid, wsId)
-        const entry =
-            rawEntry &&
-            (wsId === '*' || rawEntry.workspaceId === undefined || rawEntry.workspaceId === wsId)
-                ? rawEntry
-                : null
+        const entry = rawEntry && isInScopedGraphPartition(rawEntry, wsId, projectNumber) ? rawEntry : null
         if (entry) {
             let label = entry.content.substring(0, 40).replace(/\n/g, ' ')
             if (entry.content.length > 40) label += '...'
@@ -97,8 +118,8 @@ export function buildRelationshipGraph(
             }
         }
     }
-    // Only keep edges whose endpoints both resolved to nodes in this workspace;
-    // links that cross into another workspace must not leak through.
+    // Only keep edges whose endpoints both resolved to nodes in this workspace/project;
+    // links that cross into another project or workspace must not leak through.
     const scopedEdges = edges.filter((e) => nodes.has(e.from) && nodes.has(e.to))
     return { nodes, edges: scopedEdges }
 }
@@ -299,6 +320,9 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                     let wsId = resolveWorkspaceId(workspace_id, project_number, context.config)
                     const resolvedProject = resolveTeamProjectNumber(context, wsId, project_number, workspace_id)
                     const projectNumber = typeof resolvedProject === 'number' ? resolvedProject : undefined
+                    if (projectNumber === undefined) {
+                        return missingTeamProjectNumberError()
+                    }
 
                     // Collect entry IDs to visualize
                     let entryIds: number[] = []
@@ -319,10 +343,10 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                             }
                         }
                         // Start from a specific entry and traverse
-                        entryIds = collectNeighborhood(teamDb, entry_id, depth, wsId)
+                        entryIds = collectNeighborhood(teamDb, entry_id, depth, wsId, projectNumber)
                     } else if (tag) {
                         // Get entries by tag using an all-time date range to bypass date filtering
-                        const { entries: tagEntries } = teamDb.searchByDateRange('1970-01-01', '2999-12-31', {
+                        const { entries: tagEntries } = teamDb.searchByDateRange(DATE_MIN_SENTINEL, DATE_MAX_SENTINEL, {
                             tags: [tag],
                             limit: 50,
                             workspaceId: wsId,
@@ -354,7 +378,7 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                         }
                     }
 
-                    const { nodes, edges } = buildRelationshipGraph(teamDb, entryIds, wsId)
+                    const { nodes, edges } = buildRelationshipGraph(teamDb, entryIds, wsId, projectNumber)
 
                     // Generate Mermaid
                     let mermaid = 'graph LR\n'

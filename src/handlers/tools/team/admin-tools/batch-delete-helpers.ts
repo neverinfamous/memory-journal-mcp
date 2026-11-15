@@ -274,26 +274,37 @@ export async function cleanupDeletedVectors(
     context: ToolContext,
     teamDb: TeamDbInstance,
     deleted: number[]
-): Promise<void> {
-    if (!context.teamVectorManager) {
+): Promise<string[]> {
+    const warnings: string[] = []
+    if (deleted.length === 0) {
         await sendProgress(context.progress, 2, 2, 'Team batch delete complete')
-        return
+        return warnings
     }
-    const reporter = createBatchProgressReporter(context.progress, deleted.length, 10)
+    const reporter = context.teamVectorManager
+        ? createBatchProgressReporter(context.progress, deleted.length, 10)
+        : undefined
     for (let i = 0; i < deleted.length; i++) {
         const id = deleted[i]
         if (id !== undefined) {
             try {
                 teamDb.deleteVector(id)
             } catch (vecErr) {
+                const msg = vecErr instanceof Error ? vecErr.message : String(vecErr)
                 logger.warning('Team batch delete vector cleanup failed', {
                     entryId: id,
-                    error: vecErr instanceof Error ? vecErr.message : String(vecErr),
+                    error: msg,
                 })
+                warnings.push(`Vector cleanup failed for team entry ${String(id)}: ${msg}`)
             }
         }
-        await reporter(i + 1, `Updating index ${String(i + 1)}/${String(deleted.length)}...`)
+        if (reporter !== undefined) {
+            await reporter(i + 1, `Updating index ${String(i + 1)}/${String(deleted.length)}...`)
+        }
     }
+    if (reporter === undefined) {
+        await sendProgress(context.progress, 2, 2, 'Team batch delete complete')
+    }
+    return warnings
 }
 
 type TeamBatchDeleteInput = z.infer<typeof TeamBatchDeleteEntriesSchema>
@@ -351,7 +362,7 @@ export async function executeTeamBatchDelete(
         wsId
     )
     await sendProgress(context.progress, 1, 2, `Deleted ${String(deleted.length)} team entries...`)
-    await cleanupDeletedVectors(context, teamDb, deleted)
+    const vectorWarnings = await cleanupDeletedVectors(context, teamDb, deleted)
 
     if (deleted.length > 0) {
         triggerTeamNotifications(context)
@@ -375,5 +386,6 @@ export async function executeTeamBatchDelete(
         deleted,
         notFound: finalNotFound,
         permanent: input.permanent,
+        ...(vectorWarnings.length > 0 ? { warning: vectorWarnings.join('; ') } : {}),
     }
 }

@@ -8,8 +8,7 @@ import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { sendProgress } from '../../../utils/progress-utils.js'
-import { resolveAuthor, resolveAuthenticatedAuthor } from '../../../utils/security-utils.js'
-import { getAuthContext } from '../../../auth/auth-context.js'
+import { resolveTeamCreateAuthor } from './admin-tools/batch-create-helpers.js'
 import { resolveIssueUrl } from '../../../utils/github-helpers.js'
 import { autoIndexEntry } from '../../../utils/vector-index-helpers.js'
 import { resolveWorkspaceId, resolveProjectContext } from '../../../utils/workspace-resolver.js'
@@ -18,6 +17,7 @@ import {
     TEAM_DB_ERROR_RESPONSE,
     batchFetchAuthors,
     fetchAuthor,
+    missingTeamProjectNumberError,
     triggerTeamNotifications,
     resolveTeamProjectNumber,
 } from './helpers.js'
@@ -33,7 +33,7 @@ import {
     TeamEntryDetailOutputSchema,
     TeamTagsListOutputSchema,
 } from './schemas.js'
-import { coerceSignificanceAlias } from '../schemas.js'
+import { coerceSignificanceAlias, relaxedNumber, StrictProjectNumberSchema } from '../schemas.js'
 import { linkRequestedRelationships } from '../relationship-linking.js'
 
 // ============================================================================
@@ -111,44 +111,15 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    // SEC-2.3: Bind authorship to the authenticated principal when OAuth is active.
-                    // Hard-reject if caller supplies a mismatched author — prevents impersonation.
-                    const authCtx = getAuthContext()
-                    let author: string
-                    if (authCtx?.authenticated) {
-                        const authId = resolveAuthenticatedAuthor()
-
-                        if (input.author !== undefined && input.author !== authId) {
-                            return {
-                                success: false,
-                                error: `Author mismatch: supplied author "${input.author}" does not match authenticated principal "${authId}". Omit the author field to use your identity automatically.`,
-                                code: 'PERMISSION_DENIED',
-                                category: 'auth',
-                                suggestion:
-                                    'Omit the author field to use your authenticated identity automatically.',
-                                recoverable: false,
-                            }
-                        }
-                        author = authId
-                    } else {
-                        if (input.author !== undefined) {
-                            author = input.author
-                        } else {
-                            const systemAuthor = resolveAuthor()
-                            if (systemAuthor === 'unknown') {
-                                return {
-                                    success: false,
-                                    error: 'Identity cannot be resolved securely. In non-OAuth environments, you must set the TEAM_AUTHOR environment variable to claim an identity.',
-                                    code: 'PERMISSION_DENIED',
-                                    category: 'auth',
-                                    suggestion:
-                                        'Set the TEAM_AUTHOR environment variable or enable OAuth.',
-                                    recoverable: false,
-                                }
-                            }
-                            author = systemAuthor
-                        }
+                    const authorResult = resolveTeamCreateAuthor(
+                        input.author,
+                        teamDb,
+                        context.config
+                    )
+                    if ('errorResponse' in authorResult) {
+                        return authorResult.errorResponse
                     }
+                    const { author } = authorResult
 
                     // Optional progress for long operations
                     await sendProgress(progress, 0, 2, 'Creating team entry...')
@@ -199,7 +170,8 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                         teamDb,
                         entry.id,
                         input.relationships,
-                        wsId
+                        wsId,
+                        projectNumber
                     )
 
                     teamDb.flushSave()
@@ -208,14 +180,19 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
 
                     triggerTeamNotifications(context)
 
+                    const warnings: string[] = [
+                        ...(indexStatus === 'failed'
+                            ? [`Entry #${String(entry.id)} was saved but vector indexing failed.`]
+                            : []),
+                        ...relationshipWarnings,
+                    ]
+
                     return {
                         success: indexStatus !== 'failed',
                         entry: { ...entry, author },
                         author,
                         vectorIndex: indexStatus,
-                        ...(indexStatus === 'failed'
-                            ? { warning: `Entry #${String(entry.id)} was saved but vector indexing failed.` }
-                            : {}),
+                        ...(warnings.length > 0 ? { warning: warnings.join('; ') } : {}),
                         ...(relationshipWarnings.length > 0 ? { relationshipWarnings } : {}),
                     }
                 } catch (err) {
@@ -364,7 +341,7 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                 'List all tags used in the team database with usage counts. Requires TEAM_DB_PATH.',
             group: 'team',
             inputSchema: z.object({
-                project_number: z.coerce.number().int().optional(),
+                project_number: relaxedNumber().optional(),
                 workspace_id: z.string().optional(),
             }),
             outputSchema: TeamTagsListOutputSchema,
@@ -382,19 +359,27 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
 
                     const input = z
                         .object({
-                            project_number: z.coerce.number().int().optional(),
+                            project_number: StrictProjectNumberSchema.optional(),
                             workspace_id: z.string().optional(),
                         })
+                        .strict()
                         .parse(params ?? {})
                     const wsId = resolveWorkspaceId(
                         input.workspace_id,
                         input.project_number,
                         context.config
                     )
-                    const rawTags = teamDb.listTags(
+                    const resolvedProject = alignedProjectFilter(
                         wsId,
-                        alignedProjectFilter(wsId, input.project_number, context.config?.projectRegistry)
+                        input.project_number,
+                        activeProjectRegistry(context.config?.projectRegistry)
                     )
+                    if (wsId === '*' && resolvedProject === undefined) {
+                        return missingTeamProjectNumberError(
+                            'Missing project_number. Wildcard workspace_id "*" requires an explicit project_number.'
+                        )
+                    }
+                    const rawTags = teamDb.listTags(wsId, resolvedProject)
                     const tags = rawTags.map((t) => ({ name: t.name, count: t.usageCount }))
                     return { success: true, tags, count: tags.length }
                 } catch (err) {

@@ -84,6 +84,7 @@ export const GitHubPullRequestOutputSchema = z
         title: z.string(),
         url: z.string(),
         state: z.enum(['OPEN', 'CLOSED', 'MERGED']),
+        headRef: z.string().optional(),
     })
     .extend(ErrorFieldsMixin.shape)
 
@@ -145,6 +146,13 @@ export const GitHubContextOutputSchema = z
         pullRequests: z.array(GitHubPullRequestOutputSchema).optional(),
         issueCount: z.number().optional(),
         prCount: z.number().optional(),
+        owner: z.string().optional(),
+        repo: z.string().optional(),
+        detectedOwner: z.string().nullable().optional(),
+        detectedRepo: z.string().nullable().optional(),
+        requiresUserInput: z.boolean().optional(),
+        instruction: z.string().optional(),
+        degraded: z.boolean().optional(),
         error: z.string().optional(),
     })
     .extend(ErrorFieldsMixin.shape)

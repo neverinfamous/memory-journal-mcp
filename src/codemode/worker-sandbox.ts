@@ -259,7 +259,16 @@ export class WorkerSandbox {
             }
 
             hostPort.on('message', (msg: RpcRequest) => {
-                void handleRpcRequest(msg, apiBindings, hostPort, methodList)
+                void handleRpcRequest(msg, apiBindings, hostPort, methodList).catch((err: unknown) => {
+                    try {
+                        hostPort.postMessage({
+                            id: typeof msg?.id === 'number' ? msg.id : 0,
+                            error: err instanceof Error ? err.message : String(err),
+                        })
+                    } catch {
+                        // Port already closed
+                    }
+                })
             })
             this.worker?.ref()
 

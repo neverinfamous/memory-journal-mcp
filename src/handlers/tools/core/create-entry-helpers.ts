@@ -115,8 +115,15 @@ export async function recordTeamShareOutcome(
         relationshipWarnings.push(
             `Team sharing failed: ${shareErr instanceof Error ? shareErr.message : String(shareErr)}`
         )
+        return { sharedWithTeam: false }
     }
-    if (shared !== undefined && context.teamVectorManager !== undefined) {
+    if (shared === undefined) {
+        relationshipWarnings.push(
+            'Team sharing skipped: author identity could not be resolved (set TEAM_AUTHOR or enable OAuth).'
+        )
+        return { sharedWithTeam: false }
+    }
+    if (context.teamVectorManager !== undefined) {
         try {
             await context.teamVectorManager.addEntry(shared.entry)
         } catch (vecErr) {

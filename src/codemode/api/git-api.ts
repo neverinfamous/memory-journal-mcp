@@ -41,6 +41,10 @@ export function applyGitInterceptions(methodName: string, args: unknown[]): { ar
             delete obj['max_count'];
         }
 
+        if (obj['repo_name'] !== undefined && obj['repo'] === undefined) {
+            obj['repo'] = obj['repo_name'];
+            delete obj['repo_name'];
+        }
         if (obj['repository'] !== undefined && obj['repo'] === undefined) {
             obj['repo'] = obj['repository'];
             delete obj['repository'];

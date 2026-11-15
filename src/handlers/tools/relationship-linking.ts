@@ -13,6 +13,7 @@ interface RequestedRelationship {
 
 /** Minimal adapter surface needed to create a relationship. */
 interface RelationshipLinker {
+    getEntryById?(id: number, workspaceId?: string): { projectNumber?: number | null } | null
     linkEntries(
         fromId: number,
         toId: number,
@@ -44,11 +45,30 @@ export function linkRequestedRelationships(
     db: RelationshipLinker,
     entryId: number,
     relationships: readonly RequestedRelationship[] | undefined,
-    workspaceId?: string
+    workspaceId?: string,
+    projectNumber?: number
 ): string[] {
     const warnings: string[] = []
     for (const rel of relationships ?? []) {
         try {
+            if (projectNumber !== undefined && typeof db.getEntryById === 'function') {
+                const target = db.getEntryById(rel.targetId, workspaceId)
+                const targetProject = target?.projectNumber
+                if (
+                    targetProject !== null &&
+                    targetProject !== undefined &&
+                    targetProject !== projectNumber
+                ) {
+                    const reason = `Target entry #${String(rel.targetId)} belongs to project #${String(targetProject)}, not project #${String(projectNumber)}`
+                    logger.warning(`Relationship link skipped: ${reason}`, {
+                        module: 'RelationshipLinking',
+                    })
+                    warnings.push(
+                        `Relationship ${rel.relationType} #${String(entryId)} -> #${String(rel.targetId)} was not created: ${reason}`
+                    )
+                    continue
+                }
+            }
             const type = toCanonicalRelationType(rel.relationType)
             if (workspaceId !== undefined) {
                 db.linkEntries(entryId, rel.targetId, type, undefined, workspaceId)

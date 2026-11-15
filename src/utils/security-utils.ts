@@ -387,21 +387,29 @@ export function sanitizeAuthor(raw: string): string {
  * Prioritizes authenticated claims over TEAM_AUTHOR environment variables.
  * Uses sanitizeAuthor() to strip control characters and cap length.
  */
+export function nonEmptyAuthClaim(value: unknown): string | undefined {
+    if (typeof value !== 'string') return undefined
+    const trimmed = value.trim()
+    return trimmed.length > 0 && trimmed.toLowerCase() !== 'unknown' ? trimmed : undefined
+}
+
 export function resolveAuthenticatedAuthor(): string {
     const authCtx = getAuthContext()
-    if (authCtx?.authenticated && authCtx.claims) {
+    if (authCtx?.authenticated) {
         const claims = authCtx.claims
-        const email = typeof claims['email'] === 'string' ? claims['email'] : undefined
-        const prefName =
-            typeof claims['preferred_username'] === 'string'
-                ? claims['preferred_username']
-                : undefined
-        const subject = typeof claims['subject'] === 'string' ? claims['subject'] : undefined
-
-        const claimAuthor = email ?? prefName ?? claims.sub ?? subject
-        if (claimAuthor) {
-            return sanitizeAuthor(claimAuthor)
+        const claimAuthor =
+            nonEmptyAuthClaim(claims?.['email']) ??
+            nonEmptyAuthClaim(claims?.['preferred_username']) ??
+            nonEmptyAuthClaim(claims?.sub) ??
+            nonEmptyAuthClaim(claims?.['subject']) ??
+            nonEmptyAuthClaim(claims?.client_id)
+        if (claimAuthor !== undefined) {
+            const sanitized = sanitizeAuthor(claimAuthor)
+            if (sanitized.length > 0 && sanitized.toLowerCase() !== 'unknown') {
+                return sanitized
+            }
         }
+        return 'unknown'
     }
 
     return resolveAuthor()

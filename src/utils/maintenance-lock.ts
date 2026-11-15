@@ -114,8 +114,6 @@ export class ServerRuntime {
     public configManager: unknown = null
     public stopBackgroundTasks: (() => void) | null = null
     public pendingVectorInit: Promise<void> | null = null
-    public activeWorkspaceId: string | undefined = undefined
-    public activeProjectNumber: number | undefined = undefined
 }
 
 // Legacy Fallbacks removed. Consumers MUST provide a valid ServerRuntime to use MaintenanceManager logic.

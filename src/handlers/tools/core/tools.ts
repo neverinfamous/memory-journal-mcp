@@ -125,7 +125,8 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         db,
                         id,
                         input.relationships,
-                        wsId
+                        wsId,
+                        projectNumber
                     )
 
                     const vectorWarning = await indexCreatedEntry(context, progress, createdEntry)
@@ -143,11 +144,16 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         ? await recordTeamShareOutcome(context, entryInput, relationshipWarnings)
                         : { sharedWithTeam: false }
 
+                    const allWarnings = [
+                        ...(vectorWarning !== undefined ? [vectorWarning] : []),
+                        ...relationshipWarnings,
+                    ]
+
                     return {
                         success: true,
                         id,
                         entry: finalEntry,
-                        ...(vectorWarning !== undefined ? { warning: vectorWarning } : {}),
+                        ...(allWarnings.length > 0 ? { warning: allWarnings.join('; ') } : {}),
                         ...(teamShare.sharedWithTeam
                             ? { sharedWithTeam: true, ...(teamShare.author !== undefined ? { author: teamShare.author } : {}) }
                             : {}),

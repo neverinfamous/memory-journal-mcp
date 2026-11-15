@@ -32,7 +32,7 @@ export interface YamlParseResult {
  * @returns Parsed frontmatter and remaining body text
  */
 export function parseYamlFrontmatter(content: string): YamlParseResult {
-    const lines = content.split('\n')
+    const lines = content.split(/\r?\n/)
 
     // Must start with ---
     if (lines[0]?.trim() !== '---') {

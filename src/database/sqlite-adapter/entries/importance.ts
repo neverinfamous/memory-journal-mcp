@@ -31,9 +31,13 @@ export function buildImportanceCte(): string {
                    COUNT(*) AS rel_count,
                    SUM(CASE WHEN relationship_type IN ('blocked_by', 'resolved', 'caused') THEN 1 ELSE 0 END) AS causal_count
             FROM (
-                SELECT from_entry_id AS entry_id, relationship_type FROM relationships
+                SELECT r.from_entry_id AS entry_id, r.relationship_type
+                FROM relationships r
+                JOIN memory_journal peer ON peer.id = r.to_entry_id AND peer.deleted_at IS NULL
                 UNION ALL
-                SELECT to_entry_id AS entry_id, relationship_type FROM relationships
+                SELECT r.to_entry_id AS entry_id, r.relationship_type
+                FROM relationships r
+                JOIN memory_journal peer ON peer.id = r.from_entry_id AND peer.deleted_at IS NULL
             )
             GROUP BY entry_id
         ),
@@ -86,11 +90,13 @@ export function calculateImportance(
         m.trust_score as trustScore,
         m.validation_status as validationStatus,
         m.timestamp,
-        (SELECT COUNT(*) FROM relationships
-         WHERE from_entry_id = ? OR to_entry_id = ?) AS rel_count,
-        (SELECT COUNT(*) FROM relationships
-         WHERE (from_entry_id = ? OR to_entry_id = ?)
-         AND relationship_type IN ('blocked_by', 'resolved', 'caused')) AS causal_count,
+        (SELECT COUNT(*) FROM relationships r
+         WHERE (r.from_entry_id = ? AND EXISTS (SELECT 1 FROM memory_journal p WHERE p.id = r.to_entry_id AND p.deleted_at IS NULL))
+            OR (r.to_entry_id = ? AND EXISTS (SELECT 1 FROM memory_journal p WHERE p.id = r.from_entry_id AND p.deleted_at IS NULL))) AS rel_count,
+        (SELECT COUNT(*) FROM relationships r
+         WHERE ((r.from_entry_id = ? AND EXISTS (SELECT 1 FROM memory_journal p WHERE p.id = r.to_entry_id AND p.deleted_at IS NULL))
+            OR (r.to_entry_id = ? AND EXISTS (SELECT 1 FROM memory_journal p WHERE p.id = r.from_entry_id AND p.deleted_at IS NULL)))
+         AND r.relationship_type IN ('blocked_by', 'resolved', 'caused')) AS causal_count,
         (SELECT MIN(
             CASE status
                 WHEN 'invalidated' THEN 1
@@ -171,9 +177,15 @@ function loadImportanceStats(
                COUNT(*) AS rel_count,
                SUM(CASE WHEN relationship_type IN ('blocked_by', 'resolved', 'caused') THEN 1 ELSE 0 END) AS causal_count
         FROM (
-            SELECT from_entry_id AS entry_id, relationship_type FROM relationships WHERE from_entry_id IN (${marks})
+            SELECT r.from_entry_id AS entry_id, r.relationship_type
+            FROM relationships r
+            JOIN memory_journal peer ON peer.id = r.to_entry_id AND peer.deleted_at IS NULL
+            WHERE r.from_entry_id IN (${marks})
             UNION ALL
-            SELECT to_entry_id AS entry_id, relationship_type FROM relationships WHERE to_entry_id IN (${marks})
+            SELECT r.to_entry_id AS entry_id, r.relationship_type
+            FROM relationships r
+            JOIN memory_journal peer ON peer.id = r.from_entry_id AND peer.deleted_at IS NULL
+            WHERE r.to_entry_id IN (${marks})
         )
         GROUP BY entry_id
     `

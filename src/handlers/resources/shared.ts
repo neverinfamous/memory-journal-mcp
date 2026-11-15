@@ -47,7 +47,7 @@ function resolveTargetRepoGithub(
             annotations: { lastModified },
         }
     }
-    const registry = config?.projectRegistry
+    const registry = config?.projectRegistry ?? loadProjectRegistryFromConfig()
 
     // Attempt to find exact match, then fallback to just the repo name if owner/repo format was used
     let registryKey: string = targetRepo
@@ -61,9 +61,18 @@ function resolveTargetRepoGithub(
 
     if (registry && Object.prototype.hasOwnProperty.call(registry, registryKey)) {
         const entry = registry[registryKey]
-        if (entry) {
+        if (entry && typeof entry.path === 'string' && entry.path.trim() !== '') {
             return getGitHubIntegration(entry.path, runtime)
         }
+        return {
+            data: {
+                error: 'GitHub integration not available',
+                hint: `Workspace '${registryKey}' has no local repository path configured.`,
+            },
+            annotations: { lastModified },
+        }
+    }
+    if (targetRepo.trim().toLowerCase() === 'default') {
         return {
             data: { error: 'GitHub integration not available' },
             annotations: { lastModified },
@@ -81,7 +90,7 @@ async function resolveFallbackRegistryRepo(
     runtime: ServerRuntime | undefined,
     lastModified: string
 ): Promise<GitHubRepoResolved | undefined> {
-    const registry = config?.projectRegistry
+    const registry = config?.projectRegistry ?? loadProjectRegistryFromConfig()
     if (!registry) return undefined
     let fallbackKeys = Object.keys(registry)
 
@@ -96,7 +105,7 @@ async function resolveFallbackRegistryRepo(
 
     for (const key of fallbackKeys) {
         const project = registry[key]
-        if (project) {
+        if (project && typeof project.path === 'string' && project.path.trim() !== '') {
             const fallbackGithub = getGitHubIntegration(project.path, runtime)
             const fallbackRepoInfo = await fallbackGithub.getRepoInfo()
             if (fallbackRepoInfo.owner && fallbackRepoInfo.repo) {

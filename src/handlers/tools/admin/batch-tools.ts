@@ -73,7 +73,8 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
                                     db,
                                     createdEntry.id,
                                     input.entries[sourceIndex]?.relationships,
-                                    prepared[sourceIndex]?.input.workspaceId
+                                    prepared[sourceIndex]?.input.workspaceId,
+                                    prepared[sourceIndex]?.input.projectNumber
                                 )
                             )
                         }

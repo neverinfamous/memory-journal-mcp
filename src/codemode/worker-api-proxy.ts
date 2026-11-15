@@ -15,8 +15,6 @@ import {
     createGetConfigInterceptor,
     createGetBriefingInterceptor,
     createReadResourceInterceptor,
-    createFactoryFnProxy,
-    createUnknownGroupRejectionProxy,
 } from './proxy-helpers.js'
 import {
     createSchemaProxy,
@@ -25,22 +23,7 @@ import {
     createSystemProxy,
     createContextNamespaceProxy,
 } from './proxy-namespaces.js'
-
-const FACTORY_METHOD_NAMES = new Set([
-    'getInstance', 'get_instance', 'createInstance', 'create_instance',
-    'getClient', 'get_client', 'createClient', 'create_client',
-    'initClient', 'init_client', 'initInstance', 'init_instance',
-    'getJournal', 'get_journal', 'loadJournal', 'load_journal',
-    'loadMemory', 'load_memory', 'getDatabase', 'get_database',
-    'getDb', 'get_db', 'connectToDatabase', 'connect_to_database',
-    'openDatabase', 'open_database', 'init', 'initialize',
-    'connect', 'open', 'default',
-])
-
-const KNOWN_PROMPTS = [
-    'session-summary', 'plan-draft', 'adversarial-review',
-    'copilot-validation', 'plan-refinement', 'team-session-summary',
-]
+import { createApiRootGetTrap } from './worker/api-proxy-trap.js'
 
 function getPropOrSnake(obj: unknown, snake: string, camel: string): unknown {
     if ((typeof obj === 'object' && obj !== null) || typeof obj === 'function') {
@@ -337,98 +320,13 @@ export function buildApiProxy(
     api['openDatabase'] = () => api
 
     return new Proxy(api, {
-        get(target, prop): unknown {
-            if (typeof prop === 'symbol') return undefined
-            if (prop in target) return target[prop]
-            if (prop === 'gitApi') return target['git']
-            if (
-                prop === 'graph' ||
-                prop === 'rel' ||
-                prop === 'relations' ||
-                prop === 'relationship'
-            ) {
-                return target['relationships'] ?? target
-            }
-            if (prop === 'journal' || prop === 'memory' || prop === 'entries' || prop === 'entry')
-                return target['core'] ?? target
-            if (prop === 'schema') return target['schema']
-            if (prop === 'projects' || prop === 'project') return target['projects']
-            if (prop === 'tags' || prop === 'tag') return target['tags']
-            if (prop === 'system') return target['system']
-            if (prop === 'context') return target['context']
-            if (prop === 'getContext' || prop === 'get_context') return target['getContext']
-            if (prop === 'sqlite' || prop === 'sqlite3' || prop === 'db') return target
-            if (prop === 'then') return undefined
-
-            if (FACTORY_METHOD_NAMES.has(prop)) return createFactoryFnProxy(api)
-
-            if (typeof prop === 'string') {
-                const snakeKey = /[A-Z]/.test(prop)
-                    ? prop.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
-                    : prop
-
-                for (const [g, groupAliases] of Object.entries(METHOD_ALIASES)) {
-                    if (groupAliases?.[prop] !== undefined) {
-                        const canonicalCamel = groupAliases[prop]
-                        const canonicalSnake = canonicalCamel.replace(/[A-Z]/g, (l) => `_${l.toLowerCase()}`)
-                        if (methods[g]?.includes(canonicalSnake)) {
-                            return createMethodProxyFn(g, canonicalSnake)
-                        }
-                    }
-                }
-
-                const teamSnakeKey = `team_${snakeKey}`
-                const teamGroup = Object.keys(methods).find((g) => methods[g]?.includes(teamSnakeKey))
-                if (teamGroup !== undefined && !Object.keys(methods).some((g) => methods[g]?.includes(snakeKey))) {
-                    return createMethodProxyFn(teamGroup, teamSnakeKey)
-                }
-
-                const foundGroup = Object.keys(methods).find((g) => methods[g]?.includes(snakeKey))
-                if (foundGroup !== undefined) {
-                    return createMethodProxyFn(foundGroup, snakeKey)
-                }
-            }
-
-            if (readonlyMode === true && typeof prop === 'string') {
-                const topSchema = resolveFallbackSchema(schemas, '_topLevel', prop, prop)
-                if (topSchema !== undefined) {
-                    const roReason = `🛠️ AUTONOMOUS HEALING: Operation '${prop}' is blocked in readonly mode. Read operations only.`
-                    const roFn = (..._args: unknown[]): Promise<unknown> =>
-                        wrapPromise(
-                            Promise.resolve(
-                                wrapResult({
-                                    success: false,
-                                    error: roReason,
-                                    code: 'VALIDATION_ERROR',
-                                    category: 'validation',
-                                    recoverable: true,
-                                })
-                            ),
-                            prop
-                        )
-                    attachMethodIntrospection(roFn, '_topLevel', prop, () => topSchema, roReason)
-                    return roFn
-                }
-            }
-
-            const available = Object.keys(methods).filter((k) => k !== '_topLevel').join(', ')
-            let reason = `Group or property '${prop}' is not found on 'mj'. Available groups: ${available}. Use mj.help() for more info.`
-
-            if (typeof prop === 'string') {
-                const normalized = prop.replace(/^mj_/, '').replace(/_/g, '-')
-                const isPrompt =
-                    KNOWN_PROMPTS.includes(normalized) ||
-                    KNOWN_PROMPTS.includes(prop) ||
-                    KNOWN_PROMPTS.includes(prop.replace(/^mj_/, ''))
-
-                if (isPrompt) {
-                    reason = `'${prop}' is an MCP Prompt, not an MCP Tool. Code Mode cannot invoke MCP Prompts directly. Please use the 'get_prompt' tool (or your native MCP Prompts integration) outside of Code Mode to evaluate it, then use 'mj.core.createEntry' to save the result.`
-                } else if (prop.startsWith('mj_')) {
-                    reason = `'${prop}' is not a valid root tool in Code Mode. Code Mode uses namespaced groups (e.g., 'mj.core.searchEntries'). Use 'mj.help()' to see available namespaces.`
-                }
-            }
-
-            return createUnknownGroupRejectionProxy(prop, reason)
-        },
+        get: createApiRootGetTrap({
+            api,
+            methods,
+            schemas,
+            readonlyMode,
+            createMethodProxyFn,
+            resolveFallbackSchema,
+        }),
     })
 }

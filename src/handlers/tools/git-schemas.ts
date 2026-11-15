@@ -1,13 +1,14 @@
 import { z } from 'zod'
 import { ErrorFieldsMixin } from './error-fields-mixin.js'
-import { relaxedNumber } from './schemas.js'
+import { relaxedNumber, StrictProjectNumberSchema } from './schemas.js'
 
 export const GitHistoryOptionsSchema = z.object({
     ref: z.string().optional(), path: z.string().optional(), maxCount: z.number().optional(),
     since: z.string().optional(), sortBy: z.enum(['date', 'impact']).optional(),
     scope: z.string().optional(), techDebtAudit: z.boolean().optional(),
-    repo: z.string().optional(), workspace_id: z.string().optional(), workspaceId: z.string().optional(),
-    project_number: z.number().optional(), cwd: z.string().optional(),
+    repo: z.string().optional(), repo_name: z.string().optional(),
+    workspace_id: z.string().optional(), workspaceId: z.string().optional(),
+    project_number: StrictProjectNumberSchema.optional(), cwd: z.string().optional(),
 })
 
 export const GitHistoryOptionsSchemaMcp = z.object({
@@ -16,6 +17,7 @@ export const GitHistoryOptionsSchemaMcp = z.object({
     maxCount: relaxedNumber().optional().describe('Maximum number of commits to return. Default: 50'),
     max_count: relaxedNumber().optional(), limit: relaxedNumber().optional(),
     repo: z.string().optional().describe('Target repository or workspace name'),
+    repo_name: z.string().optional(),
     workspace_id: z.string().optional(), workspaceId: z.string().optional(),
     project_number: relaxedNumber().optional(), cwd: z.string().optional(),
     since: z.string().optional().describe('Show commits more recent than a specific date'),
@@ -27,9 +29,9 @@ export const GitHistoryOptionsSchemaMcp = z.object({
 export const GitSearchOptionsSchema = z.object({
     query: z.string().min(1), maxCount: z.number().optional(),
     sortBy: z.enum(['date', 'impact']).optional(), scope: z.string().optional(),
-    techDebtAudit: z.boolean().optional(), repo: z.string().optional(),
+    techDebtAudit: z.boolean().optional(), repo: z.string().optional(), repo_name: z.string().optional(),
     workspace_id: z.string().optional(), workspaceId: z.string().optional(),
-    project_number: z.number().optional(), cwd: z.string().optional(),
+    project_number: StrictProjectNumberSchema.optional(), cwd: z.string().optional(),
 })
 
 export const GitSearchOptionsSchemaMcp = z.object({
@@ -37,6 +39,7 @@ export const GitSearchOptionsSchemaMcp = z.object({
     maxCount: relaxedNumber().optional().describe('Maximum number of commits to return. Default: 50'),
     max_count: relaxedNumber().optional(), limit: relaxedNumber().optional(),
     repo: z.string().optional().describe('Target repository or workspace name'),
+    repo_name: z.string().optional(),
     workspace_id: z.string().optional(), workspaceId: z.string().optional(),
     project_number: relaxedNumber().optional(), cwd: z.string().optional(),
     sortBy: z.string().optional().describe('Sort commits by date or impact score'),
@@ -45,24 +48,27 @@ export const GitSearchOptionsSchemaMcp = z.object({
 }).transform((d) => ({ ...d, maxCount: d.maxCount ?? d.max_count ?? d.limit }))
 
 export const GitReleaseInfoOptionsSchema = z.object({
-    ref: z.string().optional(), repo: z.string().optional(), workspace_id: z.string().optional(),
-    workspaceId: z.string().optional(), project_number: relaxedNumber().optional(), cwd: z.string().optional(),
+    ref: z.string().optional(), repo: z.string().optional(), repo_name: z.string().optional(),
+    workspace_id: z.string().optional(), workspaceId: z.string().optional(),
+    project_number: StrictProjectNumberSchema.optional(), cwd: z.string().optional(),
 })
 
 export const GitReleaseInfoOptionsSchemaMcp = z.object({
     ref: z.string().optional().describe('Git reference (branch, tag, commit). Default: HEAD'),
     repo: z.string().optional().describe('Target repository or workspace name'),
+    repo_name: z.string().optional(),
     workspace_id: z.string().optional(), workspaceId: z.string().optional(),
     project_number: relaxedNumber().optional(), cwd: z.string().optional(),
 })
 
 export const GitUnreleasedOptionsSchema = z.object({
-    repo: z.string().optional(), workspace_id: z.string().optional(),
-    workspaceId: z.string().optional(), project_number: relaxedNumber().optional(), cwd: z.string().optional(),
+    repo: z.string().optional(), repo_name: z.string().optional(),
+    workspace_id: z.string().optional(), workspaceId: z.string().optional(),
+    project_number: relaxedNumber().optional(), cwd: z.string().optional(),
 })
 
 export const GitAnalyzePatternsOptionsSchema = z.object({
-    maxCount: relaxedNumber().optional().default(50), repo: z.string().optional(),
+    maxCount: relaxedNumber().optional().default(50), repo: z.string().optional(), repo_name: z.string().optional(),
     workspace_id: z.string().optional(), workspaceId: z.string().optional(),
     project_number: relaxedNumber().optional(), cwd: z.string().optional(),
 })

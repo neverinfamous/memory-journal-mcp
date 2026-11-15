@@ -7,6 +7,7 @@ import {
     EntryOutputSchema,
     RelationshipOutputSchema,
     ImportanceBreakdownSchema,
+    MAX_CONTENT_LENGTH,
     relaxedNumber,
     healAgentHallucinations,
     StrictProjectNumberSchema,
@@ -26,7 +27,7 @@ export const CreateEntrySchema = z.preprocess(
     (val: unknown) => healAgentHallucinations(val),
     z.object({
         entry_type: z.enum(ENTRY_TYPES).optional().default('personal_reflection'),
-        content: z.string().min(1),
+        content: z.string().min(1).max(MAX_CONTENT_LENGTH),
         tags: z.array(z.string()).optional(),
         is_personal: z.boolean().optional().default(true),
         significance_type: z.enum(SIGNIFICANCE_TYPES).optional(),

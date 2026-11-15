@@ -123,8 +123,8 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         count: enriched.length,
                         degraded: result.degraded ?? false,
                         next_cursor: nextCursor,
-                        suggestions: (result as { suggestions?: string[] }).suggestions,
-                        correctedQuery: (result as { correctedQuery?: string }).correctedQuery,
+                        suggestions: result.suggestions,
+                        correctedQuery: result.correctedQuery,
                     }
                 } catch (err) {
                     return formatHandlerError(err)

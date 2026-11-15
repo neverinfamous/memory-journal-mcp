@@ -4,6 +4,23 @@
 
 import type { MessagePort } from 'node:worker_threads'
 import type { RpcRequest, RpcResponse } from './types.js'
+import { runWithRpcExecutionOverrides } from './rpc-context.js'
+
+function safePostRpcResponse(hostPort: MessagePort, response: RpcResponse): void {
+    try {
+        hostPort.postMessage(response)
+    } catch (postErr) {
+        const fallbackMsg = postErr instanceof Error ? postErr.message : String(postErr)
+        try {
+            hostPort.postMessage({
+                id: response.id,
+                error: `RPC response serialization failed: ${fallbackMsg}`,
+            } satisfies RpcResponse)
+        } catch {
+            // Host port already closed/terminated; swallow to avoid unhandled rejection on host thread.
+        }
+    }
+}
 
 export async function handleRpcRequest(
     req: RpcRequest,
@@ -19,7 +36,7 @@ export async function handleRpcRequest(
     try {
         if (typeof req.group !== 'string' || typeof req.method !== 'string') {
             response.error = 'Malformed RPC request: group and method must be strings'
-            hostPort.postMessage(response)
+            safePostRpcResponse(hostPort, response)
             return
         }
 
@@ -28,7 +45,7 @@ export async function handleRpcRequest(
             : undefined
         if (!allowedMethods?.includes(req.method)) {
             response.error = `Unauthorized method invocation: ${req.group}.${req.method}`
-            hostPort.postMessage(response)
+            safePostRpcResponse(hostPort, response)
             return
         }
 
@@ -46,7 +63,16 @@ export async function handleRpcRequest(
         }
 
         if (typeof target === 'function') {
-            response.result = await (target as (...args: unknown[]) => Promise<unknown>)(...safeArgs)
+            const callFn = (): Promise<unknown> =>
+                (target as (...args: unknown[]) => Promise<unknown>)(...safeArgs)
+            if (req.readonly === true || req.dryRun === true) {
+                const overrides: { readonly?: boolean; dryRun?: boolean } = {}
+                if (req.readonly === true) overrides.readonly = true
+                if (req.dryRun === true) overrides.dryRun = true
+                response.result = await runWithRpcExecutionOverrides(overrides, callFn)
+            } else {
+                response.result = await callFn()
+            }
         } else {
             response.error = `Unknown method: ${req.group}.${req.method}`
         }
@@ -54,5 +80,5 @@ export async function handleRpcRequest(
         response.error = err instanceof Error ? err.message : String(err)
     }
 
-    hostPort.postMessage(response)
+    safePostRpcResponse(hostPort, response)
 }

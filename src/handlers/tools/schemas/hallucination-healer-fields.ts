@@ -347,9 +347,10 @@ export function healAnchorsField(obj: Record<string, unknown>): boolean {
                 modified = true
                 continue
             }
+            const normalizedAnchor = trimmed.replace(/\\/g, '/')
             healedAnchors.push({
-                anchor_path: trimmed,
-                anchor_type: trimmed.includes('#') ? 'symbol' : 'file',
+                anchor_path: normalizedAnchor,
+                anchor_type: normalizedAnchor.includes('#') ? 'symbol' : 'file',
                 status: 'pending',
             })
             modified = true
@@ -366,7 +367,8 @@ export function healAnchorsField(obj: Record<string, unknown>): boolean {
                 itemObj['filepath']
             const rawType = itemObj['anchor_type'] ?? itemObj['anchorType'] ?? itemObj['type']
             const rawStatus = itemObj['status']
-            const normalizedPath = typeof rawPath === 'string' ? rawPath.trim() : undefined
+            const normalizedPath =
+                typeof rawPath === 'string' ? rawPath.trim().replace(/\\/g, '/') : undefined
             const normalizedType =
                 typeof rawType === 'string' && rawType.trim() !== ''
                     ? rawType.trim()

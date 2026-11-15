@@ -2,28 +2,31 @@ import type { ToolContext, ToolDefinition } from '../../../types/index.js'
 import { AuthorizationError } from '../../../types/errors.js'
 import type { TeamRole } from '../../../database/core/interfaces.js'
 import { getAuthContext } from '../../../auth/auth-context.js'
-import { resolveAuthor } from '../../../utils/security-utils.js'
+import { resolveAuthor, sanitizeAuthor, nonEmptyAuthClaim } from '../../../utils/security-utils.js'
 
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 
 /**
  * Resolves the identity of the user calling the tool.
- * Prefers OAuth claims and falls back to the TEAM_AUTHOR environment variable.
+ * When OAuth authenticated, resolves strictly from claims (never falling back to TEAM_AUTHOR).
  */
 export function getCallerIdentity(): string {
     const authCtx = getAuthContext()
     if (authCtx?.authenticated) {
         const claims = authCtx.claims
-        const email = typeof claims?.['email'] === 'string' ? claims['email'] : undefined
-        const prefName = typeof claims?.['preferred_username'] === 'string' ? claims['preferred_username'] : undefined
-        const subject = typeof claims?.['subject'] === 'string' ? claims['subject'] : undefined
-        const clientId = typeof claims?.client_id === 'string' ? claims.client_id : undefined
-        const resolved = email ?? prefName ?? claims?.sub ?? subject ?? clientId
-        if (resolved && resolved !== 'unknown') {
-            return resolved
+        const resolved =
+            nonEmptyAuthClaim(claims?.['email']) ??
+            nonEmptyAuthClaim(claims?.['preferred_username']) ??
+            nonEmptyAuthClaim(claims?.sub) ??
+            nonEmptyAuthClaim(claims?.['subject']) ??
+            nonEmptyAuthClaim(claims?.client_id)
+        if (resolved !== undefined) {
+            const sanitized = sanitizeAuthor(resolved)
+            if (sanitized.length > 0 && sanitized.toLowerCase() !== 'unknown') {
+                return sanitized
+            }
         }
-        const envTeamAuthor = process.env['TEAM_AUTHOR']?.trim().replace(/"/g, '')
-        return envTeamAuthor && envTeamAuthor.length > 0 ? envTeamAuthor : 'unknown'
+        return 'unknown'
     }
     // For non-OAuth environments, fallback to the environment variable (TEAM_AUTHOR)
     return resolveAuthor()

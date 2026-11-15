@@ -70,120 +70,156 @@ export const dynamicBriefingResource: InternalResourceDef = {
     },
 }
 
+interface BriefingScopeResolution {
+    registry: ReturnType<typeof loadProjectRegistryFromConfig>
+    hasRegistry: boolean
+    activeGithub: ResourceContext['github']
+    activeRepoPath: string | undefined
+    activeWorkspaceId: string | undefined
+    activeProjectNumber: number | undefined
+}
+
+function resolveDefaultBriefingScope(
+    context: ResourceContext,
+    config: typeof DEFAULT_BRIEFING_CONFIG,
+    registry: ReturnType<typeof loadProjectRegistryFromConfig>,
+    activeWorkspaceId: string | undefined,
+    initialProjectNumber: number | undefined
+): Pick<BriefingScopeResolution, 'activeWorkspaceId' | 'activeProjectNumber' | 'activeRepoPath' | 'activeGithub'> {
+    const hasRegistry = registry !== undefined && Object.keys(registry).length > 0
+    if (activeWorkspaceId && activeWorkspaceId !== 'default' && activeWorkspaceId !== '*') {
+        const canonicalKey = findCanonicalRegistryKey(activeWorkspaceId, registry) ?? activeWorkspaceId
+        const registryEntry = registry?.[canonicalKey]
+        const repoPath = registryEntry?.path
+        const hasRepoPath = repoPath !== undefined && repoPath.trim() !== ''
+        const matchesDefaultWs = config.defaultWorkspaceId?.toLowerCase() === canonicalKey.toLowerCase()
+        const resolvedProj =
+            registryEntry?.project_number ?? (matchesDefaultWs ? initialProjectNumber : undefined)
+        return {
+            activeWorkspaceId: canonicalKey,
+            activeRepoPath: hasRepoPath ? repoPath : undefined,
+            activeGithub: hasRepoPath ? getGitHubIntegration(repoPath, context.runtime) : undefined,
+            activeProjectNumber: resolvedProj,
+        }
+    }
+
+    if (activeWorkspaceId === 'default') {
+        const defaultEntry = registry?.['default']
+        const defaultPath = defaultEntry?.path
+        const hasDefaultPath = defaultPath !== undefined && defaultPath.trim() !== ''
+        return {
+            activeWorkspaceId: 'default',
+            activeRepoPath: hasDefaultPath ? defaultPath : undefined,
+            activeGithub: hasDefaultPath
+                ? getGitHubIntegration(defaultPath, context.runtime)
+                : hasRegistry || config.defaultWorkspaceId?.toLowerCase() === 'default'
+                  ? undefined
+                  : context.github,
+            activeProjectNumber:
+                defaultEntry?.project_number ??
+                (config.defaultWorkspaceId?.toLowerCase() === 'default'
+                    ? config.defaultProjectNumber
+                    : undefined),
+        }
+    }
+
+    return {
+        activeWorkspaceId,
+        activeProjectNumber: initialProjectNumber,
+        activeRepoPath: undefined,
+        activeGithub: context.github,
+    }
+}
+
+function resolveBriefingScope(
+    context: ResourceContext,
+    config: typeof DEFAULT_BRIEFING_CONFIG,
+    targetRepo: string | undefined,
+    options?: { pinSession?: boolean }
+): BriefingScopeResolution {
+    const registry = config.projectRegistry ?? loadProjectRegistryFromConfig()
+    const hasRegistry = registry !== undefined && Object.keys(registry).length > 0
+    const initialWorkspaceId = resourceWorkspace({
+        briefingConfig: config,
+        ...(context.runtime !== undefined ? { runtime: context.runtime } : {}),
+    })
+    const initialProjectNumber =
+        (config.defaultWorkspaceId === undefined && initialWorkspaceId !== 'default') ||
+        (initialWorkspaceId !== undefined &&
+            config.defaultWorkspaceId?.toLowerCase() === initialWorkspaceId.toLowerCase())
+            ? config.defaultProjectNumber
+            : undefined
+
+    if (!targetRepo) {
+        return {
+            registry,
+            hasRegistry,
+            ...resolveDefaultBriefingScope(context, config, registry, initialWorkspaceId, initialProjectNumber),
+        }
+    }
+
+    const numericTarget = /^#?(\d+)$/.exec(targetRepo)
+    const numericWorkspace =
+        numericTarget !== null ? uniqueWorkspaceForProject(Number(numericTarget[1]), registry) : undefined
+    const resolvedRepo = exactRegistryKey(targetRepo, registry) ?? numericWorkspace
+
+    if (resolvedRepo !== undefined) {
+        const registryEntry = registry?.[resolvedRepo]
+        const repoPath = registryEntry?.path
+        const hasRepoPath = repoPath !== undefined && repoPath.trim() !== ''
+        const activeProjectNumber = registryEntry?.project_number
+        if (registryEntry && options?.pinSession !== false) {
+            setActiveSessionProject(resolvedRepo, activeProjectNumber ?? null, context.runtime)
+        }
+        return {
+            registry,
+            hasRegistry,
+            activeWorkspaceId: resolvedRepo,
+            activeRepoPath: hasRepoPath ? repoPath : undefined,
+            activeGithub: hasRepoPath ? getGitHubIntegration(repoPath, context.runtime) : undefined,
+            activeProjectNumber,
+        }
+    }
+
+    if (targetRepo.trim().toLowerCase() === 'default') {
+        const defaultEntry = registry?.['default']
+        const registeredDefault =
+            defaultEntry?.project_number ??
+            (config.defaultWorkspaceId === 'default' ? config.defaultProjectNumber : undefined)
+        const defaultPath = defaultEntry?.path
+        const hasDefaultPath = defaultPath !== undefined && defaultPath.trim() !== ''
+        if (options?.pinSession !== false) {
+            setActiveSessionProject('default', registeredDefault ?? null, context.runtime)
+        }
+        return {
+            registry,
+            hasRegistry,
+            activeWorkspaceId: 'default',
+            activeProjectNumber: registeredDefault,
+            activeRepoPath: hasDefaultPath ? defaultPath : undefined,
+            activeGithub: hasDefaultPath ? getGitHubIntegration(defaultPath, context.runtime) : undefined,
+        }
+    }
+
+    return {
+        registry,
+        hasRegistry,
+        activeWorkspaceId: targetRepo,
+        activeProjectNumber: undefined,
+        activeRepoPath: undefined,
+        activeGithub: undefined,
+    }
+}
+
 export async function buildBriefingData(
     context: ResourceContext,
     targetRepo?: string,
     options?: { pinSession?: boolean }
 ): Promise<ResourceResult> {
     const config = { ...DEFAULT_BRIEFING_CONFIG, ...context.briefingConfig }
+    const { hasRegistry, activeGithub, activeRepoPath, activeWorkspaceId, activeProjectNumber } =
+        resolveBriefingScope(context, config, targetRepo, options)
 
-    const registry = config.projectRegistry ?? loadProjectRegistryFromConfig()
-    const hasRegistry = registry !== undefined && Object.keys(registry).length > 0
-    let activeGithub = context.github
-    let activeRepoPath: string | undefined
-    let activeWorkspaceId: string | undefined = resourceWorkspace({
-        briefingConfig: config,
-        ...(context.runtime !== undefined ? { runtime: context.runtime } : {}),
-    })
-    let activeProjectNumber =
-        (config.defaultWorkspaceId === undefined && activeWorkspaceId !== 'default') ||
-        (activeWorkspaceId !== undefined &&
-            config.defaultWorkspaceId?.toLowerCase() === activeWorkspaceId.toLowerCase())
-            ? config.defaultProjectNumber
-            : undefined
-
-    if (targetRepo) {
-        let matchedTargetRepo = false
-        const numericTarget = /^#?(\d+)$/.exec(targetRepo)
-        const numericWorkspace =
-            numericTarget !== null
-                ? uniqueWorkspaceForProject(Number(numericTarget[1]), registry)
-                : undefined
-        const resolvedRepo = exactRegistryKey(targetRepo, registry) ?? numericWorkspace
-        if (resolvedRepo !== undefined) {
-            matchedTargetRepo = true
-            activeWorkspaceId = resolvedRepo
-
-            const registryEntry = registry?.[resolvedRepo]
-            if (registryEntry) {
-                const repoPath: string | undefined = registryEntry.path
-                const hasRepoPath = repoPath !== undefined && repoPath.trim() !== ''
-                activeRepoPath = hasRepoPath ? repoPath : undefined
-                activeGithub = hasRepoPath ? getGitHubIntegration(repoPath, context.runtime) : undefined
-                activeProjectNumber = registryEntry.project_number
-                if (options?.pinSession !== false) {
-                    setActiveSessionProject(
-                        resolvedRepo,
-                        activeProjectNumber ?? null,
-                        context.runtime
-                    )
-                }
-            } else {
-                activeRepoPath = undefined
-                activeGithub = undefined
-            }
-        } else if (targetRepo.trim().toLowerCase() === 'default') {
-            matchedTargetRepo = true
-            activeWorkspaceId = 'default'
-            const defaultEntry = registry?.['default']
-            const registeredDefault =
-                defaultEntry?.project_number ??
-                (config.defaultWorkspaceId === 'default' ? config.defaultProjectNumber : undefined)
-            const defaultPath: string | undefined = defaultEntry?.path
-            const hasDefaultPath = defaultPath !== undefined && defaultPath.trim() !== ''
-            activeProjectNumber = registeredDefault
-            activeRepoPath = hasDefaultPath ? defaultPath : undefined
-            activeGithub = hasDefaultPath ? getGitHubIntegration(defaultPath, context.runtime) : undefined
-            if (options?.pinSession !== false) {
-                setActiveSessionProject('default', registeredDefault ?? null, context.runtime)
-            }
-        }
-        if (!matchedTargetRepo) {
-            activeWorkspaceId = targetRepo
-            activeProjectNumber = undefined
-            activeRepoPath = undefined
-            activeGithub = undefined
-        }
-    } else if (activeWorkspaceId && activeWorkspaceId !== 'default' && activeWorkspaceId !== '*') {
-        const canonicalKey = findCanonicalRegistryKey(activeWorkspaceId, registry) ?? activeWorkspaceId
-        activeWorkspaceId = canonicalKey
-        const registryEntry = registry?.[canonicalKey]
-        if (registryEntry) {
-            const repoPath: string | undefined = registryEntry.path
-            const hasRepoPath = repoPath !== undefined && repoPath.trim() !== ''
-            activeRepoPath = hasRepoPath ? repoPath : undefined
-            activeGithub = hasRepoPath ? getGitHubIntegration(repoPath, context.runtime) : undefined
-            if (registryEntry.project_number !== undefined) {
-                activeProjectNumber = registryEntry.project_number
-            } else if (config.defaultWorkspaceId?.toLowerCase() !== canonicalKey.toLowerCase()) {
-                activeProjectNumber = undefined
-            }
-        } else {
-            activeRepoPath = undefined
-            activeGithub = undefined
-            if (config.defaultWorkspaceId?.toLowerCase() !== canonicalKey.toLowerCase()) {
-                activeProjectNumber = undefined
-            }
-        }
-    } else if (activeWorkspaceId === 'default') {
-        const defaultEntry = registry?.['default']
-        const defaultPath: string | undefined = defaultEntry?.path
-        const hasDefaultPath = defaultPath !== undefined && defaultPath.trim() !== ''
-        if (hasDefaultPath) {
-            activeRepoPath = defaultPath
-            activeGithub = getGitHubIntegration(defaultPath, context.runtime)
-        } else if (hasRegistry || config.defaultWorkspaceId?.toLowerCase() === 'default') {
-            activeRepoPath = undefined
-            activeGithub = undefined
-        }
-        activeProjectNumber =
-            defaultEntry?.project_number ??
-            (config.defaultWorkspaceId?.toLowerCase() === 'default'
-                ? config.defaultProjectNumber
-                : undefined)
-    }
-
-    // Build all sections
     const journal = buildJournalContext(context, config, activeProjectNumber, activeWorkspaceId)
     const github = await buildGitHubSection(
         activeGithub,
@@ -193,9 +229,7 @@ export async function buildBriefingData(
     const team = buildTeamContext(context, config, activeProjectNumber, activeWorkspaceId)
     const insights = buildInsightsSection(context, activeWorkspaceId)
     const graphStats = buildGraphContext(context, journal.workspaceId)
-
     const latestPreviews = journal.latestEntries.map((e) => `#${e.id} (${e.type}): ${e.preview}`)
-
     const summaryPreviews = journal.sessionSummaries
         ? journal.sessionSummaries.map((s) => `#${s.id} (${s.type}): ${s.preview}`)
         : null
@@ -228,21 +262,11 @@ export async function buildBriefingData(
         teamTotalEntries: team?.teamInfo.totalEntries,
         analyticsInsights: insights ?? undefined,
         graphSummary: graphStats,
-        version: system.version,
-        toolCount: system.toolCount,
-        resourceCount: system.resourceCount,
-        promptCount: system.promptCount,
-        localTime: system.localTime,
         gitHistory: system.gitHistory ?? undefined,
-        testHealth: system.testHealth ?? undefined,
-        filterSummary: system.filterSummary,
         isReadonly: system.isReadonly,
         teamConfigured: !!context.teamDb,
         githubConfigured: !!activeGithub,
         ioRootCount: system.ioRootCount,
-        hasCodeMap: system.hasCodeMap,
-        lastReleaseDaysAgo: system.lastReleaseDaysAgo ?? undefined,
-        localCheck: system.localCheck ?? undefined,
         workspaceId: journal.workspaceId ?? system.workspaceId,
         deprecationWarnings: context.runtime?.metrics?.getDeprecationWarnings() ?? [],
     })

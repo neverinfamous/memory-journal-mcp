@@ -337,6 +337,7 @@ export class NativeConnectionManager implements IDatabaseConnection {
             this.db.close()
             this.db = null
         }
+        this.initialized = false
         logger.info('Native database closed', { module: 'NativeConnectionManager' })
     }
 
@@ -365,6 +366,8 @@ export class NativeConnectionManager implements IDatabaseConnection {
             }
             const cached = stmtCache.get(source)
             if (cached !== undefined) {
+                stmtCache.delete(source)
+                stmtCache.set(source, cached)
                 return cached
             }
             const stmt = rawPrepare(source)

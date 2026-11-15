@@ -87,7 +87,7 @@ export function getTeamAnalyticsTools(context: ToolContext): ToolDefinition[] {
 
                     return {
                         success: authorStatsError === undefined,
-                        ...(stats as object),
+                        ...stats,
                         authors,
                         ...(authorStatsError !== undefined
                             ? { warning: `Author statistics failed: ${authorStatsError}` }

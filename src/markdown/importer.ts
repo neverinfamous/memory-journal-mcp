@@ -311,7 +311,7 @@ function upsertParsedFile(
     db: IDatabaseAdapter,
     options: ImportOptions,
     result: ImportResult
-): { entryId: number; workspaceId: string | undefined } {
+): { entryId: number; workspaceId: string | undefined; projectNumber: number | undefined } {
     const { body, metadata } = file
     const { author } = options
     const { effectiveWsId, effectiveProjNum, rawEntryType, significanceType, existing } =
@@ -331,7 +331,7 @@ function upsertParsedFile(
         }
         result.updated++
         // [INTENT] Use the stored (canonical) workspace for relationship linking and vector indexing.
-        return { entryId: metadata.mj_id, workspaceId: updated.workspaceId ?? effectiveWsId }
+        return { entryId: metadata.mj_id, workspaceId: updated.workspaceId ?? effectiveWsId, projectNumber: effectiveProjNum }
     }
 
     const resolvedAuthor = author ?? metadata.author
@@ -346,7 +346,7 @@ function upsertParsedFile(
         workspaceId: effectiveWsId,
     })
     result.created++
-    return { entryId: newEntry.id, workspaceId: newEntry.workspaceId ?? effectiveWsId }
+    return { entryId: newEntry.id, workspaceId: newEntry.workspaceId ?? effectiveWsId, projectNumber: effectiveProjNum }
 }
 
 /**
@@ -381,6 +381,7 @@ export async function processImportBatch(
             entryId: number
             relationships: { type: string; target_id: number }[] | undefined
             workspaceId: string | undefined
+            projectNumber: number | undefined
         }[] = []
 
         for (const file of files) {
@@ -396,7 +397,12 @@ export async function processImportBatch(
                 continue
             }
 
-            const { entryId, workspaceId: entryWsId } = upsertParsedFile(file, db, options, result)
+            const { entryId, workspaceId: entryWsId, projectNumber: entryProjNum } = upsertParsedFile(
+                file,
+                db,
+                options,
+                result
+            )
             if (metadata.mj_id !== undefined) {
                 idRemap.set(metadata.mj_id, entryId)
             }
@@ -404,6 +410,7 @@ export async function processImportBatch(
                 entryId,
                 relationships: metadata.relationships,
                 workspaceId: entryWsId,
+                projectNumber: entryProjNum,
             })
             vectorQueue.push({ entryId, filename, workspaceId: entryWsId })
         }
@@ -414,7 +421,8 @@ export async function processImportBatch(
                 pending.entryId,
                 pending.relationships,
                 pending.workspaceId,
-                idRemap
+                idRemap,
+                pending.projectNumber
             )
             result.relationshipsLinked += linked.linked
             for (const targetId of linked.missingTargets) {

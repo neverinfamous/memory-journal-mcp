@@ -139,7 +139,8 @@ export function getTeamExportTools(context: ToolContext): ToolDefinition[] {
                     // batch so post-filtering doesn't silently return too few results.
                     const hasTypeFilter = !!entry_type
                     const hasTagFilter = tags && tags.length > 0
-                    const fetchLimit = hasTypeFilter || hasTagFilter ? 500 : limit
+                    const fetchLimit =
+                        hasTypeFilter || hasTagFilter ? Math.min(Math.max(limit * 5, 500), 5000) : limit
 
                     const projectFilter =
                         alignedProject !== undefined ? { projectNumber: alignedProject } : {}

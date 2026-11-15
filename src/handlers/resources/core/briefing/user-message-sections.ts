@@ -6,7 +6,7 @@
 import type { BriefingGitHub } from './github-section.js'
 import type { GraphSummary } from './context-section.js'
 import type { BriefingInsights } from './insights-section.js'
-import type { GitHistorySummary, TestHealth } from './system-section.js'
+import type { GitHistorySummary } from './system-section.js'
 
 export interface BriefingUserMessageOptions {
     repoName: string
@@ -19,21 +19,11 @@ export interface BriefingUserMessageOptions {
     teamTotalEntries?: number
     analyticsInsights?: BriefingInsights
     graphSummary?: GraphSummary
-    version?: string
-    toolCount?: number
-    resourceCount?: number
-    promptCount?: number
-    localTime?: string
     gitHistory?: GitHistorySummary | null
-    testHealth?: TestHealth
-    filterSummary?: string | null
     isReadonly?: boolean
     teamConfigured?: boolean
     githubConfigured?: boolean
     ioRootCount?: number
-    hasCodeMap?: boolean
-    lastReleaseDaysAgo?: number
-    localCheck?: boolean
     deprecationWarnings?: string[]
     workspaceId?: string
 }
@@ -342,7 +332,7 @@ export function buildFlagsAlert(opts: BriefingUserMessageOptions): string {
     const graphSummary = opts.graphSummary
     if (graphSummary?.orphanRatio !== undefined && graphSummary.orphanRatio > 0.2) {
         const orphanPct = Math.round(graphSummary.orphanRatio * 100)
-        flagsAlert += `⚠️ **Journal Health:** ${orphanPct}% of entries are orphaned (0 relationships). Consider running \`mj-mcp-optimize\`.\n\n`
+        flagsAlert += `⚠️ **Journal Health:** ${orphanPct}% of entries are orphaned (0 relationships). Consider running \`optimize-journal\`.\n\n`
     }
     if (opts.deprecationWarnings && opts.deprecationWarnings.length > 0) {
         flagsAlert += `⚠️ **Deprecation Warning(s):**\n${opts.deprecationWarnings.map((w) => `🚩 ${w}`).join('\n')}\n\n`

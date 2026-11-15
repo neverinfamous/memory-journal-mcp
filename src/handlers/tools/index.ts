@@ -50,9 +50,6 @@ import { injectTokenEstimate } from '../../observability/index.js'
 import { enforceAccessBoundary } from '../../auth/validation.js'
 import { ConfigurationError } from '../../types/errors.js'
 import {
-    ARG_ALIASES,
-    BOOLEAN_COERCIONS,
-    NUMBER_COERCIONS,
     applyArgInterceptions,
     injectProjectNames,
     getToolIcon,
@@ -65,9 +62,6 @@ import { getAuthContext } from '../../auth/auth-context.js'
 // Re-export for backward compatibility
 export type { ToolHandlerConfig }
 export {
-    ARG_ALIASES,
-    BOOLEAN_COERCIONS,
-    NUMBER_COERCIONS,
     applyArgInterceptions,
     injectProjectNames,
 }

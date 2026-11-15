@@ -24,14 +24,6 @@ import { BACKUP_HELP } from './instructions/backup.js';
 import { GOTCHAS_HELP } from './instructions/gotchas.js';
 import { TEMPLATES_HELP } from './instructions/templates.js';
 import { TEAM_HELP } from './instructions/team.js';
-/**
- * Resource definition for instruction generation
- */
-export interface ResourceDefinition {
-    uri: string
-    name: string
-    description?: string
-}
 
 /**
  * Prompt definition for instruction generation

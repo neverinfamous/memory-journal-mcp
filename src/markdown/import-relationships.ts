@@ -13,7 +13,8 @@ export function linkImportedRelationships(
     entryId: number,
     relationships: { type: string; target_id: number }[] | undefined,
     workspaceId: string | undefined,
-    idRemap: ReadonlyMap<number, number>
+    idRemap: ReadonlyMap<number, number>,
+    projectNumber?: number
 ): { linked: number; rejected: string[]; missingTargets: number[] } {
     if (relationships === undefined) return { linked: 0, rejected: [], missingTargets: [] }
     let linked = 0
@@ -39,7 +40,14 @@ export function linkImportedRelationships(
         )
         if (alreadyExists) continue
         const targetExists = db.getEntryById(targetId, workspaceId)
-        if (targetExists === null || targetExists === undefined) {
+        if (
+            targetExists === null ||
+            targetExists === undefined ||
+            (projectNumber !== undefined &&
+                targetExists.projectNumber !== null &&
+                targetExists.projectNumber !== undefined &&
+                targetExists.projectNumber !== projectNumber)
+        ) {
             missingTargets.push(targetId)
             continue
         }

@@ -89,12 +89,7 @@ function applyAnalyticsInterceptions(
     }
 
     if (
-        [
-            'get_cross_project_insights',
-            'getCrossProjectInsights',
-            'team_get_cross_project_insights',
-            'teamGetCrossProjectInsights',
-        ].includes(methodName) &&
+        ['get_cross_project_insights', 'getCrossProjectInsights'].includes(methodName) &&
         obj['limit'] !== undefined
     ) {
         return validationErr('get_cross_project_insights does not accept a limit parameter. It analyzes all projects.', 'Remove the limit parameter.')

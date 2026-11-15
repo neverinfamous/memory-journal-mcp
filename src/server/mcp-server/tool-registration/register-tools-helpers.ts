@@ -225,11 +225,18 @@ export function resolveActiveBriefingConfig(
         ) {
             return undefined
         }
-        return canonicalWs === 'default' &&
-            registryProject === undefined &&
-            briefingConfig.defaultWorkspaceId !== 'default'
-            ? registryProject
-            : candidateProj
+        if (canonicalWs?.toLowerCase() === 'default' && registryProject === undefined) {
+            if (briefingConfig.defaultWorkspaceId?.toLowerCase() !== 'default') {
+                return undefined
+            }
+            if (applicableDefaultProj !== undefined) {
+                return applicableDefaultProj
+            }
+            return sessionCtx.workspaceId?.toLowerCase() === 'default'
+                ? sessionCtx.projectNumber
+                : undefined
+        }
+        return candidateProj
     })()
     const nextConfig: typeof DEFAULT_BRIEFING_CONFIG = {
         ...briefingConfig,

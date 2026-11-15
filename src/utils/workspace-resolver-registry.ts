@@ -78,14 +78,20 @@ function matchKeyCaseInsensitive(
     registry: Record<string, RegistryEntry>
 ): string | undefined {
     const candidateLower = candidate.toLowerCase()
-    const candidateSlug = candidateLower.replace(/_/g, '-')
-    for (const key of Object.keys(registry)) {
-        const keyLower = key.toLowerCase()
-        if (keyLower === candidateLower || keyLower.replace(/_/g, '-') === candidateSlug) {
+    const keys = Object.keys(registry)
+    for (const key of keys) {
+        if (key.toLowerCase() === candidateLower) {
             return key
         }
     }
-    return undefined
+    const candidateSlug = candidateLower.replace(/_/g, '-')
+    const slugMatches: string[] = []
+    for (const key of keys) {
+        if (key.toLowerCase().replace(/_/g, '-') === candidateSlug) {
+            slugMatches.push(key)
+        }
+    }
+    return slugMatches.length === 1 ? slugMatches[0] : undefined
 }
 
 function matchAliasInTable(

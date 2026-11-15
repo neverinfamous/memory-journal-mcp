@@ -92,6 +92,11 @@ export function buildSandboxUserContext(
         userContext['workspace_id'] ??= resolvedWorkspaceId
         userContext['workspaceId'] ??= resolvedWorkspaceId
     }
+    if (explicitWorkspace === true && workspaceId !== undefined && workspaceId !== '*') {
+        userContext['__mj_workspace_id'] = workspaceId
+    } else {
+        Reflect.deleteProperty(userContext, '__mj_workspace_id')
+    }
     if (reg !== undefined) {
         userContext['__mj_project_registry'] = reg
     } else {

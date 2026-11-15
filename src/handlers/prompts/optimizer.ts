@@ -193,7 +193,7 @@ ${optionCHeading}
      - 🛡️ **Trust Calibration**: Normalize trust scores (\`trust_score\` between \`0.90\`–\`1.00\` for verified code/tests).
      - 💥 **Impact Calibration**: Calibrate impact scores (\`impact_score\` between \`0.30\`–\`0.80\` based on blast radius).
      - 🏷️ **Tag Consolidation & Significance**: Assign explicit \`significance_type\`, enrich empty/generic tag lists, and merge synonymous tags globally via \`mj.admin.mergeTags({ source_tag, target_tag, workspace_id: '*' })\` (never iterate per-workspace to avoid "Tag not found" on subsequent scopes).
-     - 🧹 **Noise Pruning, Auto-Prune & Vector Parity**: Soft-delete zero-value transient noise (\`significanceType === null\`) via \`mj.admin.deleteEntry\`, run \`mj.admin.runAutoPrune(${autoPruneArg})\`, and verify \`mj.search.getVectorIndexStats({})\` (rebuilding via \`mj.admin.rebuildVectorIndex({})\` if drifted).
+     - 🧹 **Noise Pruning, Auto-Prune & Vector Parity**: Soft-delete zero-value transient noise (\`significanceType === null\`) via \`mj.admin.deleteEntry\`, run \`mj.admin.runAutoPrune(${autoPruneArg})\`, and verify \`mj.search.getVectorIndexStats({})\` (rebuilding via \`mj.admin.rebuildVectorIndex(${autoPruneArg})\` if drifted).
 3. **Subagent Batch Parallelization & Strict Isolation**:
    - Delegate domain project workloads to parallel subagents using \`Model: 'inherit'\`.
    - **Strict Isolation**: Subagents MUST NEVER write files to project directories; all scratch files must be saved in \`<appDataDir>\\\\brain\\\\<conversation-id>\\\\scratch\\\\\`.

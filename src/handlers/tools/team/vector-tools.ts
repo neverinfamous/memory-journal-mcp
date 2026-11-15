@@ -131,15 +131,14 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                                 category: 'resource',
                                 recoverable: true,
                                 ...(input.query !== undefined ? { query: input.query } : {}),
-                                entries: [],
-                                count: 0,
                             }
                         }
                         results = await teamVectorManager.searchByEntryId(
                             input.entry_id,
                             internalLimit,
                             input.similarity_threshold ?? 0.25,
-                            wsId
+                            wsId,
+                            projectNumber
                         )
                     } else {
                         results = await teamVectorManager.search(
@@ -257,11 +256,11 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
             handler: (_params: unknown) => {
                 try {
                     if (!teamDb) {
-                        return { available: false, error: TEAM_DB_ERROR_RESPONSE.error }
+                        return { success: false, available: false, error: TEAM_DB_ERROR_RESPONSE.error }
                     }
 
                     if (!teamVectorManager) {
-                        return { available: false, error: 'Team vector search not available' }
+                        return { success: false, available: false, error: 'Team vector search not available' }
                     }
 
                     const stats = teamVectorManager.getStats()

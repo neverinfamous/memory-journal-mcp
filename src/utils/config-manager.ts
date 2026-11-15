@@ -233,6 +233,16 @@ export class ConfigManager extends EventEmitter {
             if (this.config.briefingConfig.workflowCount !== undefined) parsed['briefingWorkflows'] = this.config.briefingConfig.workflowCount
             if (this.config.briefingConfig.workflowStatusBreakdown !== undefined) parsed['briefingWorkflowStatus'] = this.config.briefingConfig.workflowStatusBreakdown
             if (this.config.briefingConfig.copilotReviews !== undefined) parsed['briefingCopilot'] = this.config.briefingConfig.copilotReviews
+            if (this.config.briefingConfig.defaultWorkspaceId !== undefined) {
+                parsed['defaultWorkspaceId'] = this.config.briefingConfig.defaultWorkspaceId
+            } else {
+                delete parsed['defaultWorkspaceId']
+            }
+            if (this.config.briefingConfig.defaultProjectNumber !== undefined) {
+                parsed['defaultProjectNumber'] = this.config.briefingConfig.defaultProjectNumber
+            } else {
+                delete parsed['defaultProjectNumber']
+            }
 
             let serialized: string
             if (this.configFilePath.endsWith('.json')) {

@@ -6,19 +6,13 @@ import { DatabaseAdapterFactory } from '../../database/adapter-factory.js'
 import { DatabaseAdapterProxy } from '../../database/core/DatabaseAdapterProxy.js'
 import { getGitHubIntegration } from '../../github/github-integration/index.js'
 import { logger } from '../../utils/logger.js'
-import type { Scheduler } from '../scheduler.js'
-import { DEFAULT_BRIEFING_CONFIG } from '../../handlers/resources/shared.js'
 import { ServerRuntime } from '../../utils/maintenance-lock.js'
-import { ConfigManager } from '../../utils/config-manager.js'
+import type { ConfigManager } from '../../utils/config-manager.js'
+import type { Scheduler } from '../scheduler.js'
 import { AuditLogger, createAuditInterceptor } from '../../audit/index.js'
 import { awaitPendingVectorInit } from './core-helpers.js'
-import {
-    createSchedulerIfConfigured,
-    createVectorManagers,
-    resolveToolFilterConfig,
-    runStartupAutoPrune,
-    seedInitialDigest,
-} from './initialization-helpers.js'
+import { createVectorManagers } from './initialization-helpers.js'
+import { initConfigAndStartupJobs, resolveFinalAllowedIoRoots } from './initialization-config.js'
 
 import type { ServerOptions, ServerContext } from './types.js'
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
@@ -247,8 +241,43 @@ async function safeCloseStartupResources(resources: {
     }
 }
 
-export async function initializeDependencies(options: ServerOptions): Promise<ServerContext> {
+async function setupCoreDatabasesAndAudit(options: ServerOptions, runtime: ServerRuntime): Promise<{
+    primaryDb: IDatabaseAdapter
+    testDb: IDatabaseAdapter | undefined
+    db: IDatabaseAdapter
+    activeMetricsPath: string | undefined
+}> {
     const { dbPath, testDbPath } = options
+    const primaryDb = await DatabaseAdapterFactory.create(dbPath, options)
+    await primaryDb.initialize()
+    logger.info('Database initialized', { module: 'McpServer', dbPath })
+
+    let testDb: IDatabaseAdapter | undefined
+    if (testDbPath) {
+        testDb = await DatabaseAdapterFactory.create(testDbPath, options)
+        await testDb.initialize()
+        logger.info('Test database initialized', { module: 'McpServer', testDbPath })
+    }
+
+    const db = DatabaseAdapterProxy.create(primaryDb, testDb)
+    if (options.auditConfig?.enabled) {
+        runtime.auditLogger = new AuditLogger(options.auditConfig)
+        runtime.auditInterceptor = createAuditInterceptor(runtime.auditLogger)
+        logger.info('Audit logging enabled', {
+            module: 'McpServer',
+            path: options.auditConfig.logPath,
+            redact: options.auditConfig.redact,
+            auditReads: options.auditConfig.auditReads,
+        })
+    }
+
+    const activeMetricsPath = options.persistMetrics
+        ? await configureMetricsPersistence(runtime, options, dbPath)
+        : undefined
+    return { primaryDb, testDb, db, activeMetricsPath }
+}
+
+export async function initializeDependencies(options: ServerOptions): Promise<ServerContext> {
     const runtime = new ServerRuntime()
     let primaryDb: IDatabaseAdapter | undefined
     let testDb: IDatabaseAdapter | undefined
@@ -258,43 +287,16 @@ export async function initializeDependencies(options: ServerOptions): Promise<Se
     let scheduler: Scheduler | null = null
 
     try {
-        // Initialize database
-        primaryDb = await DatabaseAdapterFactory.create(dbPath, options)
-        await primaryDb.initialize()
-        logger.info('Database initialized', { module: 'McpServer', dbPath })
-
-        if (testDbPath) {
-            testDb = await DatabaseAdapterFactory.create(testDbPath, options)
-            await testDb.initialize()
-            logger.info('Test database initialized', { module: 'McpServer', testDbPath })
-        }
-
-        const db = DatabaseAdapterProxy.create(primaryDb, testDb)
-
-        // Initialize audit logging if configured
-        if (options.auditConfig?.enabled) {
-            runtime.auditLogger = new AuditLogger(options.auditConfig)
-            runtime.auditInterceptor = createAuditInterceptor(runtime.auditLogger)
-            logger.info('Audit logging enabled', {
-                module: 'McpServer',
-                path: options.auditConfig.logPath,
-                redact: options.auditConfig.redact,
-                auditReads: options.auditConfig.auditReads,
-            })
-        }
-
-        // Configure metrics persistence path
-        let activeMetricsPath: string | undefined
-        if (options.persistMetrics) {
-            activeMetricsPath = await configureMetricsPersistence(runtime, options, dbPath)
-        }
+        const coreSetup = await setupCoreDatabasesAndAudit(options, runtime)
+        primaryDb = coreSetup.primaryDb
+        testDb = coreSetup.testDb
+        const { db, activeMetricsPath } = coreSetup
 
         const teamResult = await initializeTeamDatabase(options)
         primaryTeamDb = teamResult.primaryTeamDb
         testTeamDb = teamResult.testTeamDb
         const { teamDb } = teamResult
 
-        // Initialize vector search managers (lazy loading) and start background initialization
         const { vectorManager, teamVectorManager, pendingVectorInit } = createVectorManagers({
             options,
             primaryDb,
@@ -305,103 +307,11 @@ export async function initializeDependencies(options: ServerOptions): Promise<Se
         runtime.pendingVectorInit = pendingVectorInit
 
         const github = await initializeGitHubIntegration(options, runtime)
+        const configAndJobs = await initConfigAndStartupJobs({ options, db, vectorManager, runtime })
+        configManager = configAndJobs.configManager
+        scheduler = configAndJobs.scheduler
 
-        // Parse tool filter
-        const filterConfig = resolveToolFilterConfig(options)
-
-        const rawToolFilter = options.toolFilter ?? process.env['MEMORY_JOURNAL_MCP_TOOL_FILTER'] ?? process.env['TOOL_FILTER']
-
-        configManager = new ConfigManager({
-            rawToolFilter,
-            toolFilterConfig: filterConfig,
-            briefingConfig: {
-                ...(options.briefingConfig ?? DEFAULT_BRIEFING_CONFIG),
-                // --default-workspace-id, --default-project-number, and projectRegistry must reach briefing resources/prompts
-                ...(options.defaultWorkspaceId !== undefined &&
-                options.briefingConfig?.defaultWorkspaceId === undefined
-                    ? { defaultWorkspaceId: options.defaultWorkspaceId }
-                    : {}),
-                ...(options.defaultProjectNumber !== undefined &&
-                options.briefingConfig?.defaultProjectNumber === undefined
-                    ? { defaultProjectNumber: options.defaultProjectNumber }
-                    : {}),
-                ...(options.projectRegistry !== undefined &&
-                options.briefingConfig?.projectRegistry === undefined
-                    ? { projectRegistry: options.projectRegistry }
-                    : {}),
-            },
-            codemodeInternalFullAccess: options.codemodeInternalFullAccess
-        }, options.configFilePath)
-
-        runtime.configManager = configManager
-
-        // [INVARIANT] Auto-prune runs only after `--config` is loaded so it is scoped to the
-        // effective default workspace/project (H3).
-        const loadedBriefing = configManager.getConfig().briefingConfig
-        await runStartupAutoPrune(db, options, {
-            ...(loadedBriefing.defaultWorkspaceId !== undefined
-                ? { defaultWorkspaceId: loadedBriefing.defaultWorkspaceId }
-                : {}),
-            ...(loadedBriefing.defaultProjectNumber !== undefined
-                ? { defaultProjectNumber: loadedBriefing.defaultProjectNumber }
-                : {}),
-            ...(loadedBriefing.projectRegistry !== undefined
-                ? { projectRegistry: loadedBriefing.projectRegistry }
-                : {}),
-        })
-
-        const effectiveDefaultWorkspaceId =
-            options.defaultWorkspaceId ?? loadedBriefing.defaultWorkspaceId
-        const effectiveDefaultProjectNumber =
-            options.defaultProjectNumber ?? loadedBriefing.defaultProjectNumber
-        const effectiveProjectRegistry = options.projectRegistry ?? loadedBriefing.projectRegistry
-        const effectiveOptions: ServerOptions = {
-            ...options,
-            ...(effectiveDefaultWorkspaceId !== undefined
-                ? { defaultWorkspaceId: effectiveDefaultWorkspaceId }
-                : {}),
-            ...(effectiveDefaultProjectNumber !== undefined
-                ? { defaultProjectNumber: effectiveDefaultProjectNumber }
-                : {}),
-            ...(effectiveProjectRegistry !== undefined
-                ? { projectRegistry: effectiveProjectRegistry }
-                : {}),
-        }
-
-        // Initialize scheduler (HTTP/SSE only) — must be before handleResourceRead
-        // which captures scheduler in its closure.
-        scheduler = createSchedulerIfConfigured(
-            effectiveOptions,
-            db,
-            vectorManager,
-            runtime
-        )
-
-        // Seed initial digest snapshot so first briefing read has analytics.
-        // Runs for both stdio and HTTP transports.
-        seedInitialDigest(db, effectiveOptions)
-
-        let finalAllowedIoRoots = options.allowedIoRoots
-        if (!finalAllowedIoRoots) {
-            if (options.transport === 'http') {
-                const errorMsg = `FATAL: Refusing to bind HTTP transport without explicit ALLOWED_IO_ROOTS. You MUST specify --allowed-io-roots (or ALLOWED_IO_ROOTS env var) to prevent ambient filesystem authority.`
-                logger.error(errorMsg, { module: 'HTTP' })
-                throw new Error(errorMsg)
-            }
-            finalAllowedIoRoots = [] // Empty array means NO filesystem access
-            logger.warning(
-                '⚠️ SECURITY WARNING: ALLOWED_IO_ROOTS not explicitly provided. Defaulting to empty array (NO filesystem access). You MUST specify --allowed-io-roots (or ALLOWED_IO_ROOTS env var) to enable filesystem tools.',
-                {
-                    module: 'McpServer',
-                }
-            )
-        }
-
-        logger.info('IO sandbox configured', {
-            module: 'McpServer',
-            allowedRoots: finalAllowedIoRoots,
-        })
-
+        const allowedIoRoots = resolveFinalAllowedIoRoots(options)
         const skillCatalog = await loadBundledSkillCatalog()
 
         return {
@@ -415,7 +325,7 @@ export async function initializeDependencies(options: ServerOptions): Promise<Se
             github,
             configManager,
             scheduler,
-            allowedIoRoots: finalAllowedIoRoots,
+            allowedIoRoots,
             activeMetricsPath,
             ...(skillCatalog ? { skillCatalog } : {}),
         }

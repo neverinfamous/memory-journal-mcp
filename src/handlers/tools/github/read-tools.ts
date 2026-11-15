@@ -254,15 +254,11 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                     // Fetch comments if requested
                     let comments: { author: string; body: string; createdAt: string }[] | undefined
                     if (input.include_comments) {
-                        const rawComments = await resolved.github.getIssueComments(
+                        comments = await resolved.github.getIssueComments(
                             resolved.owner,
                             resolved.repo,
                             input.issue_number
                         )
-                        comments = rawComments.map((comment) => ({
-                            ...comment,
-                            body: markUntrustedContent(comment.body),
-                        }))
                     }
 
                     return {

@@ -11,6 +11,7 @@ import { enforceAccessBoundary } from '../../../auth/validation.js'
 import { globalSubscriptionManager } from '../../../server/subscription-manager.js'
 import { logger } from '../../../utils/logger.js'
 import { activeProjectRegistry, uniqueWorkspaceForProject } from '../../../utils/write-scope.js'
+import { getRpcExecutionOverrides } from '../../../codemode/rpc-context.js'
 import { normalizeDispatchParams } from './dispatch-scope.js'
 
 export { resolveCodeModeSessionContext } from './session-context.js'
@@ -75,9 +76,20 @@ export function createSecureDispatcher(
         if ('errorResult' in normalized) return normalized.errorResult
         let finalParams = normalized.params
 
+        const rpcOverrides = getRpcExecutionOverrides()
+        if (rpcOverrides?.readonly === true && tool.annotations?.readOnlyHint !== true) {
+            return {
+                success: false,
+                error: `🛠️ AUTONOMOUS HEALING: Operation '${tool.name}' is blocked in readonly mode. Read operations only.`,
+                code: 'PERMISSION_DENIED',
+                category: 'auth',
+                recoverable: true,
+            }
+        }
+
         finalParams = applyAutoVersion(tool, finalParams, autoVersion, sessionContext)
 
-        if (tool.annotations?.readOnlyHint === false && dryRun) {
+        if (tool.annotations?.readOnlyHint === false && (dryRun || rpcOverrides?.dryRun === true)) {
             return {
                 success: true,
                 dry_run: true,
