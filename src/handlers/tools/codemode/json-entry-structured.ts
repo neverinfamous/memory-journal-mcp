@@ -4,7 +4,7 @@
  */
 
 import { isRecord } from '../../../codemode/normalizers/shared-utils.js'
-import { loadProjectRegistryFromConfig } from '../../../utils/workspace-resolver.js'
+import { findCanonicalRegistryKey, loadProjectRegistryFromConfig } from '../../../utils/workspace-resolver.js'
 
 interface PayloadSignals {
     hasContent: boolean
@@ -68,20 +68,65 @@ function recoverNamedToolCall(target: Record<string, unknown>, original: Record<
         : isRecord(target['args'])
           ? { ...target['args'] }
           : {}
-    assignMissingScope(toolParams, target)
-    if (original !== target) assignMissingScope(toolParams, original)
+    assignMissingScope(toolParams, target, original)
     const cleanTool = toolName.replace(/^mj[._]/, '')
     return `return await (mj.${cleanTool} || mj.core.${cleanTool})(${JSON.stringify(toolParams)});`
 }
 
-function assignMissingScope(params: Record<string, unknown>, source: Record<string, unknown>): void {
-    if (params['workspace_id'] === undefined && params['workspaceId'] === undefined) {
-        const wsId = readWorkspaceId(source)
-        if (wsId !== undefined) params['workspace_id'] = wsId
+function resolveCompatibleInheritedScope(
+    target: Record<string, unknown>,
+    original: Record<string, unknown>,
+    allowDefaultProjForward = false
+): { workspaceId?: string; projectNumber?: number | string } {
+    const targetWs = readWorkspaceId(target)
+    const origWs = original !== target ? readWorkspaceId(original) : undefined
+    const targetProj = readProjectNumber(target)
+    const origProj = original !== target ? readProjectNumber(original) : undefined
+
+    const workspaceId =
+        targetWs ?? (targetProj === undefined ? origWs : undefined)
+    const compatibleWs =
+        targetWs === undefined || targetWs.toLowerCase() === origWs?.toLowerCase()
+    const targetIsDefault = targetWs?.toLowerCase() === 'default'
+    const origIsDefaultWithoutTargetWs =
+        targetWs === undefined && origWs?.toLowerCase() === 'default'
+    const allowOrigProj =
+        targetProj === undefined &&
+        origProj !== undefined &&
+        compatibleWs &&
+        !targetIsDefault &&
+        (!origIsDefaultWithoutTargetWs || allowDefaultProjForward)
+
+    return {
+        ...(workspaceId !== undefined ? { workspaceId } : {}),
+        ...(targetProj !== undefined
+            ? { projectNumber: targetProj }
+            : allowOrigProj
+              ? { projectNumber: origProj }
+              : {}),
     }
-    if (params['project_number'] === undefined && params['projectNumber'] === undefined) {
-        const projNum = readProjectNumber(source)
-        if (projNum !== undefined) params['project_number'] = projNum
+}
+
+function assignMissingScope(
+    params: Record<string, unknown>,
+    target: Record<string, unknown>,
+    original: Record<string, unknown>
+): void {
+    const hasWsParam = params['workspace_id'] !== undefined || params['workspaceId'] !== undefined
+    const hasProjParam = params['project_number'] !== undefined || params['projectNumber'] !== undefined
+    const effectiveTarget = hasWsParam || hasProjParam
+        ? {
+              ...target,
+              ...(hasWsParam ? { workspace_id: params['workspace_id'] ?? params['workspaceId'] } : {}),
+              ...(hasProjParam ? { project_number: params['project_number'] ?? params['projectNumber'] } : {}),
+          }
+        : target
+    const scope = resolveCompatibleInheritedScope(effectiveTarget, original)
+    if (!hasWsParam && scope.workspaceId !== undefined) {
+        params['workspace_id'] = scope.workspaceId
+    }
+    if (!hasProjParam && scope.projectNumber !== undefined) {
+        params['project_number'] = scope.projectNumber
     }
 }
 
@@ -114,11 +159,11 @@ function readWorkspaceId(target: Record<string, unknown>): string | undefined {
 /** Maps a `repo` / `owner/repo` value onto a registered workspace key; never copies it verbatim. */
 export function resolveRepoWorkspace(repo: unknown): string | undefined {
     if (typeof repo !== 'string' || repo.trim() === '') return undefined
-    const name = repo.trim().split('/').pop()?.toLowerCase() ?? ''
+    const name = repo.trim().split('/').pop()?.trim() ?? ''
     if (name === '') return undefined
     const registry = loadProjectRegistryFromConfig()
     if (registry === undefined) return undefined
-    return Object.keys(registry).find((key) => key.toLowerCase() === name)
+    return findCanonicalRegistryKey(name, registry)
 }
 
 function recoverSearchCall(target: Record<string, unknown>, original: Record<string, unknown>): string | null {
@@ -139,10 +184,9 @@ function recoverSearchCall(target: Record<string, unknown>, original: Record<str
               : ''
     const searchParams: Record<string, unknown> = { query: queryStr }
     if (typeof target['limit'] === 'number') searchParams['limit'] = target['limit']
-    const projNum = readProjectNumber(target) ?? readProjectNumber(original)
-    if (projNum !== undefined) searchParams['project_number'] = projNum
-    const wsId = readWorkspaceId(target) ?? readWorkspaceId(original)
-    if (wsId !== undefined) searchParams['workspace_id'] = wsId
+    const scope = resolveCompatibleInheritedScope(target, original)
+    if (scope.projectNumber !== undefined) searchParams['project_number'] = scope.projectNumber
+    if (scope.workspaceId !== undefined) searchParams['workspace_id'] = scope.workspaceId
     return `return await mj.search.searchEntries(${JSON.stringify(searchParams)});`
 }
 
@@ -170,10 +214,9 @@ function recoverEntryMutation(
     const op = readOperation(target)
     if ((op === 'delete' || op === 'delete_entry') && entryId !== undefined) {
         const deleteParams: Record<string, unknown> = { entry_id: entryId }
-        const wsId = readWorkspaceId(target) ?? readWorkspaceId(original)
-        if (wsId !== undefined) deleteParams['workspace_id'] = wsId
-        const projNum = readProjectNumber(target) ?? readProjectNumber(original)
-        if (projNum !== undefined) deleteParams['project_number'] = projNum
+        const scope = resolveCompatibleInheritedScope(target, original)
+        if (scope.workspaceId !== undefined) deleteParams['workspace_id'] = scope.workspaceId
+        if (scope.projectNumber !== undefined) deleteParams['project_number'] = scope.projectNumber
         return `return await mj.admin.deleteEntry(${JSON.stringify(deleteParams)});`
     }
     const signals = readPayloadSignals(target, op)
@@ -183,21 +226,12 @@ function recoverEntryMutation(
     if (!hasJournalFields(signals)) return null
 
     const entryParams = buildEntryParams(target, signals)
-    const targetWs = readWorkspaceId(target)
-    const origWs = readWorkspaceId(original)
-    const targetProj = readProjectNumber(target)
-    const origProj = readProjectNumber(original)
-    if (targetWs === undefined && targetProj === undefined && origWs !== undefined) {
-        entryParams['workspace_id'] = origWs
+    const scope = resolveCompatibleInheritedScope(target, original, true)
+    if (entryParams['workspace_id'] === undefined && scope.workspaceId !== undefined) {
+        entryParams['workspace_id'] = scope.workspaceId
     }
-    if (
-        targetProj === undefined &&
-        (targetWs === undefined || targetWs === origWs) &&
-        targetWs?.toLowerCase() !== 'default' &&
-        !(targetWs === undefined && origWs?.toLowerCase() === 'default') &&
-        origProj !== undefined
-    ) {
-        entryParams['project_number'] = origProj
+    if (entryParams['project_number'] === undefined && scope.projectNumber !== undefined) {
+        entryParams['project_number'] = scope.projectNumber
     }
     const isTeamOp = op === 'team_create_entry' || op === 'team_update_entry'
     const isUpdate =
@@ -222,11 +256,10 @@ function formatGetEntryById(
     original: Record<string, unknown>,
 ): string {
     const params: Record<string, unknown> = { entry_id: entryId }
-    const wsId = readWorkspaceId(target) ?? readWorkspaceId(original)
-    if (wsId !== undefined) params['workspace_id'] = wsId
-    const projNum = readProjectNumber(target) ?? readProjectNumber(original)
-    if (projNum !== undefined) params['project_number'] = projNum
-    if (wsId === undefined && projNum === undefined) {
+    const scope = resolveCompatibleInheritedScope(target, original)
+    if (scope.workspaceId !== undefined) params['workspace_id'] = scope.workspaceId
+    if (scope.projectNumber !== undefined) params['project_number'] = scope.projectNumber
+    if (scope.workspaceId === undefined && scope.projectNumber === undefined) {
         return `return await mj.core.getEntryById({ entry_id: ${entryId} });`
     }
     return `return await mj.core.getEntryById(${JSON.stringify(params)});`

@@ -3,6 +3,7 @@
  * Split out of `payload-synthesizer.ts` to keep each module cohesive and < 400 lines.
  */
 
+import * as vm from 'node:vm'
 import type { z } from 'zod'
 import { isRecord } from '../../../codemode/normalizers/shared-utils.js'
 import type { ExecuteCodeSchema } from './schemas.js'
@@ -10,8 +11,41 @@ import { resolveRepoWorkspace } from './json-entry-structured.js'
 
 export type ExecuteCodeInput = z.infer<typeof ExecuteCodeSchema>
 
+const JS_CODE_ALIAS_KEYS = [
+    'code',
+    'script',
+    'js',
+    'javascript',
+    'eval',
+    'source',
+    'expression',
+    'fn',
+    'exec',
+    'code_snippet',
+    'raw_code',
+    'statement',
+    'statements',
+    'codeBlock',
+    'code_block',
+    'script_content',
+    'js_code',
+    'code_string',
+] as const
+
 const NATURAL_VERB_PATTERN =
     /^(write|document|create|include|record|summary|log|add|added|please|here\s+is|this\s+is|note|task|fix|fixed|implement|implemented|refactor|refactored|update|updated|change|changed|feat|feature|bug|bugfix|chore|perf|test|tests|tested|docs|cleanup|resolved|resolve|remove|removed|hotfix|patch|replace|replaced|migrate|migrated|upgrade|upgraded|enhance|enhanced|improve|improved|delete|deleted|extract|extracted|prevent|prevented|handle|handled|verify|verified|configure|configured|switch|switched|align|aligned|adjust|adjusted|simplify|simplified|rewrite|rewrote|optimize|optimized|investigate|investigated|evaluate|evaluated|eliminate|eliminated|diagnose|diagnosed)\b/i
+
+function isParsableJsCode(trimmed: string): boolean {
+    if (/^[A-Za-z_$][\w$]*$/.test(trimmed)) return false
+    if (/^\s*(?:[*#-]\s|\d+\.\s)/.test(trimmed)) return false
+    if (/^[A-Za-z0-9_-]+:\s+/.test(trimmed) && !/[(.=[\];]/.test(trimmed)) return false
+    try {
+        new vm.Script(`(async () => {\n${trimmed}\n})()`)
+        return true
+    } catch {
+        return false
+    }
+}
 
 export function isNaturalLanguagePrompt(text: string): boolean {
     const trimmed = text.trim()
@@ -23,6 +57,7 @@ export function isNaturalLanguagePrompt(text: string): boolean {
     ) {
         return false
     }
+    if (isParsableJsCode(trimmed)) return false
     if (NATURAL_VERB_PATTERN.test(trimmed)) return true
     if (/^\s*([*#-]\s*\*?|\d+\.\s|[A-Z][a-z0-9_-]+:)/m.test(trimmed)) return true
     return trimmed.split(/\s+/).length >= 3 && !/[;{}=]/.test(trimmed)
@@ -150,7 +185,10 @@ export function synthesizeNaturalLanguageOrEntryPayload(executionCode: string, i
             ? rawObj['input']
             : rawObj
     const isFlatCall = entryObj === rawObj
-    const hasExplicitCode = typeof input.code === 'string' && input.code.trim().length > 0
+    const hasExplicitCode = JS_CODE_ALIAS_KEYS.some((key) => {
+        const val = input[key]
+        return typeof val === 'string' && val.trim().length > 0
+    })
     const isExplicitJsCode = hasExplicitCode && !isNaturalLanguagePrompt(executionCode)
 
     const entryKeys = isFlatCall ? ENTRY_KEYS : [...ENTRY_KEYS, 'project_number', 'session_id']

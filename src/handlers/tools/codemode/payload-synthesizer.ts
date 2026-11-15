@@ -214,7 +214,10 @@ export function resolveExecutionPayload(
             initial.sourceKey === 'query' &&
             trimmedInitial !== '' &&
             !trimmedInitial.startsWith('{') &&
-            !/\b(?:const|let|var|function|return|await|mj\.|import|export)\b/.test(trimmedInitial) &&
+            !/[();={}[\]`]/.test(trimmedInitial) &&
+            !/\b(?:const|let|var|function|return|await|mj\.|import|export|process|global|globalThis|require|eval|Function|Reflect|Proxy|constructor|__proto__|prototype)\b/.test(
+                trimmedInitial
+            ) &&
             !/^(?:SELECT|INSERT|UPDATE|DELETE|PRAGMA|SHOW|DESCRIBE|EXPLAIN|WITH|SCHEMA|TABLES)\b/i.test(trimmedInitial)
         if (isPlainQuery || (initial.sourceKey === 'query' && isNaturalLanguagePrompt(executionCode))) {
             executionCode = buildQuerySearch(executionCode, input, params)
@@ -267,7 +270,7 @@ function recoverFromContextField(ctxVal: unknown): string | undefined {
                 entry_type: typeof ctxVal['type'] === 'string' ? ctxVal['type'] : 'technical_note',
             }
             if (wsVal !== undefined) entryPayload['workspace_id'] = wsVal
-            if (projVal !== undefined && wsVal?.toLowerCase() !== 'default') entryPayload['project_number'] = projVal
+            if (projVal !== undefined) entryPayload['project_number'] = projVal
             return `return await mj.createEntry(${JSON.stringify(entryPayload)});`
         }
     }

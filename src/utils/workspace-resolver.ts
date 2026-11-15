@@ -42,7 +42,7 @@ function assertNotForeignProject(
     registry: Record<string, RegistryEntry> | undefined
 ): void {
     const owner = findWorkspaceByProjectNumber(projectNumber, registry)
-    if (owner !== undefined && owner !== wsId) {
+    if (owner !== undefined && owner.toLowerCase() !== wsId.toLowerCase()) {
         throw new ValidationError(
             `project_number ${String(projectNumber)} belongs to workspace '${owner}', not '${wsId}'.`,
             { workspaceId: wsId, projectNumber }
@@ -179,8 +179,8 @@ export function resolveProjectContext(
         }
         const registryProject = registry?.[canonicalSessionWs]?.project_number
         const sessionProject =
-            unclaimedByOtherWorkspace(sessionCtx.projectNumber, canonicalSessionWs, registry) ??
             registryProject ??
+            unclaimedByOtherWorkspace(sessionCtx.projectNumber, canonicalSessionWs, registry) ??
             (canonicalSessionWs.toLowerCase() === 'default'
                 ? undefined
                 : unclaimedByOtherWorkspace(
@@ -190,12 +190,18 @@ export function resolveProjectContext(
                   ))
         return { workspaceId: canonicalSessionWs, projectNumber: sessionProject }
     }
+    const configuredDefaultWs =
+        typeof config?.defaultWorkspaceId === 'string' &&
+        config.defaultWorkspaceId.trim() !== '' &&
+        config.defaultWorkspaceId.trim() !== '*'
+            ? config.defaultWorkspaceId.trim()
+            : undefined
     if (sessionCtx.projectNumber !== undefined) {
         const sessionWorkspace = findWorkspaceByProjectNumber(sessionCtx.projectNumber, registry)
         if (sessionWorkspace !== undefined) {
             return { workspaceId: sessionWorkspace, projectNumber: sessionCtx.projectNumber }
         }
-        const rawDefaultWs = config?.defaultWorkspaceId ?? 'default'
+        const rawDefaultWs = configuredDefaultWs ?? 'default'
         const canonicalDefaultWs = findCanonicalRegistryKey(rawDefaultWs, registry) ?? rawDefaultWs
         const defaultOwnerProj = registry?.[canonicalDefaultWs]?.project_number
         const fallbackWs =
@@ -208,22 +214,34 @@ export function resolveProjectContext(
         }
     }
 
-    // 5. Keywords only when no explicit scope, cwd, or session was available.
+    const hasConcreteDefaultWs =
+        configuredDefaultWs !== undefined && configuredDefaultWs.toLowerCase() !== 'default'
+
+    // 5. Keywords only when no explicit scope, cwd, session, or concrete configured default was available.
     // preferCwdOverKeywords skips this step for CLI callers that already tried cwd.
-    if (registry !== undefined && input.preferCwdOverKeywords !== true) {
+    if (!hasConcreteDefaultWs && registry !== undefined && input.preferCwdOverKeywords !== true) {
         const matched = matchRegistryByTagsOrContent(input, registry)
         if (matched !== undefined) return matched
     }
 
-    const rawFallbackWs = config?.defaultWorkspaceId ?? sessionCtx.workspaceId ?? 'default'
+    const sessionWsFallback =
+        sessionCtx.workspaceId !== undefined &&
+        sessionCtx.workspaceId.trim() !== '' &&
+        sessionCtx.workspaceId.trim() !== '*'
+            ? sessionCtx.workspaceId.trim()
+            : undefined
+    const rawFallbackWs = configuredDefaultWs ?? sessionWsFallback ?? 'default'
     const fallbackWorkspace = findCanonicalRegistryKey(rawFallbackWs, registry) ?? rawFallbackWs
+    const fallbackRegistryProj = registry?.[fallbackWorkspace]?.project_number
     return {
         workspaceId: fallbackWorkspace,
-        projectNumber: unclaimedByOtherWorkspace(
-            config?.defaultProjectNumber ?? sessionCtx.projectNumber,
-            fallbackWorkspace,
-            registry
-        ),
+        projectNumber:
+            fallbackRegistryProj ??
+            unclaimedByOtherWorkspace(
+                config?.defaultProjectNumber ?? sessionCtx.projectNumber,
+                fallbackWorkspace,
+                registry
+            ),
     }
 }
 

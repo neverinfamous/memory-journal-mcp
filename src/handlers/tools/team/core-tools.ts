@@ -89,8 +89,6 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                         {
                             workspace_id: input.workspace_id,
                             project_number: input.project_number,
-                            content: input.content,
-                            tags: input.tags
                         },
                         context.config
                     )

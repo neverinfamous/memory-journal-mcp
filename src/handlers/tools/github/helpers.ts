@@ -72,6 +72,8 @@ interface RegistryScopeResolution {
     matchedRegistryKey: string | undefined
     registryEntry: RegistryEntry | undefined
     hasRegistry: boolean
+    registry: Registry | undefined
+    effectiveWorkspaceScope: string | undefined
 }
 
 function githubScopeValidationError(error: string): {
@@ -100,6 +102,22 @@ function resolveGitHubRegistryScope(
     const trimmedWs = inputWorkspaceId?.trim()
     const concreteWs =
         trimmedWs !== undefined && trimmedWs !== '' && trimmedWs !== '*' ? trimmedWs : undefined
+    const defaultWsRaw = context.config?.defaultWorkspaceId?.trim()
+    const configuredDefaultWs =
+        defaultWsRaw !== undefined &&
+        defaultWsRaw !== '' &&
+        defaultWsRaw !== '*' &&
+        defaultWsRaw.toLowerCase() !== 'default'
+            ? defaultWsRaw
+            : undefined
+    const effectiveWorkspaceScope =
+        concreteWs ??
+        (!effectiveRepo &&
+        inputProjectNumber === undefined &&
+        trimmedWs !== '*' &&
+        trimmedWs?.toLowerCase() !== 'default'
+            ? configuredDefaultWs
+            : undefined)
 
     if (registry) {
         const wsKey =
@@ -159,12 +177,13 @@ function resolveGitHubRegistryScope(
 
     let matchedRegistryKey: string | undefined
     if (!effectiveRepo && registry) {
-        if (concreteWs !== undefined) {
+        const lookupWs = concreteWs ?? effectiveWorkspaceScope
+        if (lookupWs !== undefined) {
             matchedRegistryKey =
-                findCanonicalRegistryKey(concreteWs, registry) ??
-                (Object.prototype.hasOwnProperty.call(registry, concreteWs) ? concreteWs : undefined)
+                findCanonicalRegistryKey(lookupWs, registry) ??
+                (Object.prototype.hasOwnProperty.call(registry, lookupWs) ? lookupWs : undefined)
         }
-        const namedDefault = concreteWs?.toLowerCase() === 'default'
+        const namedDefault = lookupWs?.toLowerCase() === 'default'
         if (matchedRegistryKey === undefined && inputProjectNumber !== undefined && !namedDefault) {
             const matches = Object.entries(registry).filter(
                 ([, entry]) => entry.project_number === inputProjectNumber
@@ -181,7 +200,13 @@ function resolveGitHubRegistryScope(
         : matchedRegistryKey
     const registryEntry = registryKey && registry ? registry[registryKey] : undefined
     const hasRegistry = registry !== undefined && Object.keys(registry).length > 0
-    return { matchedRegistryKey, registryEntry, hasRegistry }
+    return {
+        matchedRegistryKey,
+        registryEntry,
+        hasRegistry,
+        registry,
+        effectiveWorkspaceScope,
+    }
 }
 
 async function resolveToolGitHubInstance(
@@ -194,7 +219,7 @@ async function resolveToolGitHubInstance(
     | { github: GitHubIntegration; usedRegistryGithub: boolean }
     | { error: true; response: Record<string, unknown> }
 > {
-    const { matchedRegistryKey, registryEntry, hasRegistry } = scopeRes
+    const { matchedRegistryKey, registryEntry, hasRegistry, registry, effectiveWorkspaceScope } = scopeRes
     let toolGithub: GitHubIntegration | undefined
     let usedRegistryGithub = false
 
@@ -206,11 +231,18 @@ async function resolveToolGitHubInstance(
         return githubScopeValidationError(
             "workspace_id '*' cannot identify a GitHub repository. Provide repo (owner/repo), a concrete workspace_id, or a registered project_number."
         )
+    } else if (
+        !effectiveRepo &&
+        inputWorkspaceId?.trim().toLowerCase() === 'default'
+    ) {
+        return githubScopeValidationError(
+            "workspace_id 'default' cannot identify a GitHub repository. Provide repo (owner/repo) or a registered workspace_id."
+        )
     } else if (context.github && inputWorkspaceId?.trim().toLowerCase() !== 'default') {
-        const wsTrimmed = inputWorkspaceId?.trim()
-        const needsRepoMatch =
-            !effectiveRepo && matchedRegistryKey === undefined && wsTrimmed !== undefined && wsTrimmed !== ''
-        if (needsRepoMatch) {
+        const targetScope = !effectiveRepo
+            ? (matchedRegistryKey ?? effectiveWorkspaceScope)
+            : undefined
+        if (targetScope !== undefined) {
             const cachedRepo =
                 typeof context.github.getCachedRepoInfo === 'function'
                     ? context.github.getCachedRepoInfo()?.repo
@@ -218,9 +250,18 @@ async function resolveToolGitHubInstance(
             const detectedRepo =
                 cachedRepo ??
                 (await context.github.getRepoInfo().catch(() => ({ repo: null }))).repo
-            if (detectedRepo?.toLowerCase() !== wsTrimmed.toLowerCase()) {
+            const detectedCanonical =
+                detectedRepo !== null && detectedRepo !== undefined && detectedRepo !== ''
+                    ? (findCanonicalRegistryKey(detectedRepo, registry) ?? detectedRepo).toLowerCase()
+                    : undefined
+            if (
+                detectedCanonical !== targetScope.toLowerCase() &&
+                detectedRepo?.toLowerCase() !== targetScope.toLowerCase()
+            ) {
                 return githubScopeValidationError(
-                    `workspace_id "${wsTrimmed}" is not registered and does not match the current repository.`
+                    matchedRegistryKey !== undefined
+                        ? `workspace "${matchedRegistryKey}" is registered without a repository path and does not match the current repository (${detectedRepo ?? 'unknown'}).`
+                        : `workspace_id "${targetScope}" is not registered and does not match the current repository.`
                 )
             }
             toolGithub = context.github

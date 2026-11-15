@@ -12,6 +12,22 @@ import type { UpdateEntryInput } from './crud-update.js'
 
 export type { UpdateEntryInput }
 
+const authorColumnCache = new WeakMap<object, boolean>()
+
+function hasAuthorColumn(db: EntriesSharedContext['db']): boolean {
+    const cached = authorColumnCache.get(db)
+    if (cached !== undefined) return cached
+    const rows = db.prepare('PRAGMA table_info(memory_journal)').all()
+    const hasCol =
+        Array.isArray(rows) &&
+        rows.some((row): boolean => {
+            if (typeof row !== 'object' || row === null || !('name' in row)) return false
+            return Object.getOwnPropertyDescriptor(row, 'name')?.value === 'author'
+        })
+    authorColumnCache.set(db, hasCol)
+    return hasCol
+}
+
 /** Identifies the failing item (array index or entry id) inside an all-or-nothing batch transaction. */
 class BatchTransactionError extends Error {
     constructor(
@@ -122,8 +138,6 @@ function insertEntryRow(context: EntriesSharedContext, input: CreateEntryInput):
                 ...(input.projectNumber !== undefined
                     ? { project_number: input.projectNumber }
                     : {}),
-                content: input.content,
-                ...(input.tags !== undefined ? { tags: input.tags } : {}),
             },
             context.config
         )
@@ -164,7 +178,7 @@ function insertEntryRow(context: EntriesSharedContext, input: CreateEntryInput):
             input.sessionId ?? null,
         ]
 
-        if (input.author !== undefined) {
+        if (input.author !== undefined && hasAuthorColumn(db)) {
             columns.push('author')
             values.push(input.author)
         }

@@ -193,7 +193,8 @@ const seoAudit = buildAuditPromptDefinition({
     body: ({ target, copilotInstruction, priorAuditSection }) => `# Adversarial SEO Audit
 ${buildSharedAuditPreamble(target, 'file or module')}
 
-1. Perform a multi-pass audit. For a large site, spawn read-only subagents. In Cursor use the Task tool with subagent type \`explore\` or \`generalPurpose\`. Check:
+1. Perform a multi-pass audit. For a large site, spawn read-only subagents. In Cursor use the Task tool with subagent type \`explore\` or \`generalPurpose\`; on any other host use that host's read-only subagent tool.
+${buildSubagentProtocolGuidance()}
    - Technical SEO (meta tags, Open Graph, canonicals, viewport).
    - Semantic HTML and accessibility (ARIA, alt text, structural hierarchy).
    - Core Web Vitals implications (DOM size, layout shifts, LCP elements).
@@ -211,7 +212,8 @@ const skillAudit = buildAuditPromptDefinition({
     body: ({ target, copilotInstruction, priorAuditSection }) => `# Adversarial Skill Audit
 ${buildSharedAuditPreamble(target, 'skill')}
 
-1. **Subagent Research Phase**: Use the host's web search tool for official docs, release notes, and credible write-ups of the latest practices and version changes for the target skill. In Cursor use the Task tool with subagent type \`explore\` or \`generalPurpose\` when the skill tree is large. Wait for those findings.
+1. **Subagent Research Phase**: Use the host's web search tool for official docs, release notes, and credible write-ups of the latest practices and version changes for the target skill. In Cursor use the Task tool with subagent type \`explore\` or \`generalPurpose\` when the skill tree is large; on any other host use that host's read-only subagent tool. Wait for those findings.
+${buildSubagentProtocolGuidance()}
 2. **Gap Analysis**: Compare the subagent research findings against the current skill's contents to identify missing context, outdated information, or new version features.
 3. **Structural Evaluation**: Evaluate the agent skill for trigger reliability, safety gates, and markdown frontmatter compliance.
 4. **External Validation (Copilot — Opt-In)**: ${copilotInstruction}
@@ -233,7 +235,8 @@ const workflowAudit = buildAuditPromptDefinition({
     body: ({ target, copilotInstruction, priorAuditSection }) => `# Adversarial Workflow Audit
 ${buildSharedAuditPreamble(target, 'workflow')}
 
-1. Evaluate the workflow for sequential clarity, human-in-the-loop safety gates, and infinite loop prevention. For a large workflow tree, spawn read-only subagents. In Cursor use the Task tool with subagent type \`explore\` or \`generalPurpose\`.
+1. Evaluate the workflow for sequential clarity, human-in-the-loop safety gates, and infinite loop prevention. For a large workflow tree, spawn read-only subagents. In Cursor use the Task tool with subagent type \`explore\` or \`generalPurpose\`; on any other host use that host's read-only subagent tool.
+${buildSubagentProtocolGuidance()}
 ${buildStandardAuditClosing(copilotInstruction, priorAuditSection)}`,
 })
 

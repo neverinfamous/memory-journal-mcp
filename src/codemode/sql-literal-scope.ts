@@ -31,7 +31,8 @@ export function scopeFromInsertLiterals(cleanSql: string): Record<string, unknow
     const values = splitSqlValueList(match[2])
     const scope: Record<string, unknown> = {}
     for (let i = 0; i < columns.length; i++) {
-        const column = columns[i]
+        const rawCol = columns[i]
+        const column = rawCol?.replace(/^[a-zA-Z_][\w]*\./, '')
         const raw = values[i]
         if (column === undefined || raw === undefined || raw === '?') continue
         if (column === 'workspace_id' && raw.length >= 2 && (raw.startsWith("'") || raw.startsWith('"'))) {
@@ -52,10 +53,23 @@ export function scopeFromInsertLiterals(cleanSql: string): Record<string, unknow
     return scope
 }
 
+export function hasUnsupportedWherePredicate(cleanSql: string): boolean {
+    const wherePart = /\bWHERE\b([\s\S]*)$/i.exec(cleanSql)?.[1]
+    if (wherePart === undefined) return false
+    const strippedWhere = wherePart.replace(/'(?:''|[^'])*'|"(?:""|[^"])*"/g, "''")
+    return /\b(?:OR|NOT|IS\s+(?:NOT\s+)?NULL|IN\s*\()\b|!=|<>|[<>]/i.test(strippedWhere)
+}
+
 export function scopeFromSqlLiterals(cleanSql: string): Record<string, unknown> {
-    const projectMatch = /\b(?:WHERE|AND)\s+\(*[`"']?(?:project_number|project_id)[`"']?\s*=\s*['"]?(\d+)['"]?/i.exec(cleanSql)
+    const projectMatch =
+        /\b(?:WHERE|AND)\s+\(*(?:[`"']?[a-zA-Z_][\w]*[`"']?\.)?[`"']?(?:project_number|project_id)[`"']?\s*=\s*['"]?(\d+)['"]?/i.exec(
+            cleanSql
+        )
     const projectVal = projectMatch?.[1] !== undefined ? parseInt(projectMatch[1], 10) : undefined
-    const wsMatch = /\b(?:WHERE|AND)\s+\(*[`"']?workspace_id[`"']?\s*=\s*['"]([^'"]+)['"]/i.exec(cleanSql)
+    const wsMatch =
+        /\b(?:WHERE|AND)\s+\(*(?:[`"']?[a-zA-Z_][\w]*[`"']?\.)?[`"']?workspace_id[`"']?\s*=\s*['"]([^'"]+)['"]/i.exec(
+            cleanSql
+        )
     const wsVal = wsMatch?.[1]
     return {
         ...(projectVal !== undefined ? { project_number: projectVal } : {}),

@@ -7,7 +7,12 @@
  * binds resolve to `unmapped` instead of guessing (e.g. "first number = entry_id").
  */
 
-import { scopeFromInsertLiterals, scopeFromSqlLiterals, splitSqlValueList } from './sql-literal-scope.js'
+import {
+    hasUnsupportedWherePredicate,
+    scopeFromInsertLiterals,
+    scopeFromSqlLiterals,
+    splitSqlValueList,
+} from './sql-literal-scope.js'
 
 export interface ParsedSql {
     action: 'create' | 'update' | 'delete' | 'get_by_id' | 'unmapped' | 'other'
@@ -20,7 +25,16 @@ interface Placeholder {
 }
 
 const UNMAPPED: ParsedSql = { action: 'unmapped', params: {} }
-const WHERE_ID_LITERAL = /\bWHERE\s+[`"']?(?:id|entry_id)[`"']?\s*=\s*(\d+)/i
+const UNPARSEABLE = Symbol('unparseable')
+const ENTRY_TABLE_NAMES = new Set([
+    'memory_journal',
+    'entries',
+    'journal',
+    'journal_entries',
+    'memories',
+])
+const WHERE_ID_LITERAL =
+    /\b(?:WHERE|AND)\s+(?:[`"']?[a-zA-Z_][\w]*[`"']?\.)?[`"']?(?:id|entry_id)[`"']?\s*=\s*(\d+)/i
 const COLUMN_BEFORE_PLACEHOLDER = /[`"'[]?([A-Za-z_][\w]*)[`"'\]]?\s*(?:=|==|LIKE)\s*$/i
 
 function isPlainRecord(val: unknown): val is Record<string, unknown> {
@@ -94,6 +108,10 @@ function assignColumn(payload: Record<string, unknown>, column: string, val: unk
         }
         case 'project_number':
         case 'project_id': {
+            if (val === null) {
+                payload['project_number'] = null
+                return true
+            }
             const pn = toPositiveInt(val)
             if (pn !== undefined) payload['project_number'] = pn
             return pn !== undefined
@@ -104,11 +122,19 @@ function assignColumn(payload: Record<string, unknown>, column: string, val: unk
                 return true
             }
             return false
+        case 'significance_type':
+            if (val === null || typeof val === 'string') {
+                payload['significance_type'] = val
+                return true
+            }
+            return false
         case 'content':
         case 'title':
-        case 'significance_type':
-            if (typeof val === 'string') payload[column] = val
-            return true
+            if (typeof val === 'string') {
+                payload[column] = val
+                return true
+            }
+            return false
         case 'entry_type':
         case 'type':
             if (typeof val === 'string') payload['entry_type'] = val
@@ -139,11 +165,18 @@ function mergeRecordBinds(payload: Record<string, unknown>, args: unknown[]): bo
 
 function parseLiteral(raw: string): unknown {
     const trimmed = raw.trim()
-    if (/^-?\d+$/.test(trimmed)) return Number(trimmed)
-    if (trimmed.length >= 2 && (trimmed.startsWith("'") || trimmed.startsWith('"'))) {
+    if (/^null$/i.test(trimmed)) return null
+    if (/^true$/i.test(trimmed)) return true
+    if (/^false$/i.test(trimmed)) return false
+    if (/^-?\d+(?:\.\d+)?$/.test(trimmed)) return Number(trimmed)
+    if (
+        trimmed.length >= 2 &&
+        ((trimmed.startsWith("'") && trimmed.endsWith("'")) ||
+            (trimmed.startsWith('"') && trimmed.endsWith('"')))
+    ) {
         return trimmed.slice(1, -1).replace(/''/g, "'")
     }
-    return undefined
+    return UNPARSEABLE
 }
 
 /**
@@ -177,11 +210,18 @@ function applyWhereScope(payload: Record<string, unknown>, cleanSql: string): vo
 }
 
 function literalEntryId(cleanSql: string): number | undefined {
-    const match = WHERE_ID_LITERAL.exec(cleanSql)
+    const whereClause = /\bWHERE\b[\s\S]*$/i.exec(cleanSql)?.[0]
+    if (whereClause === undefined) return undefined
+    const match = WHERE_ID_LITERAL.exec(whereClause)
     return match?.[1] !== undefined ? parseInt(match[1], 10) : undefined
 }
 
 function parseUpdate(cleanSql: string, args: unknown[]): ParsedSql {
+    const tableMatch = /^UPDATE\s+(?:[`"']?[a-zA-Z_][\w]*[`"']?\.)?[`"']?([a-zA-Z0-9_]+)[`"']?/i.exec(cleanSql)
+    const tableName = tableMatch?.[1]?.toLowerCase()
+    if (tableName === undefined || !ENTRY_TABLE_NAMES.has(tableName)) return UNMAPPED
+    if (hasUnsupportedWherePredicate(cleanSql)) return UNMAPPED
+
     const setFields: Record<string, unknown> = {}
     const where: Record<string, unknown> = {}
     const id = literalEntryId(cleanSql)
@@ -197,8 +237,13 @@ function parseUpdate(cleanSql: string, args: unknown[]): ParsedSql {
     for (const assignment of splitSqlValueList(setClause)) {
         const eq = assignment.indexOf('=')
         if (eq < 0) continue
-        const literal = parseLiteral(assignment.slice(eq + 1))
-        if (literal !== undefined && !assignColumn(setFields, normalizeColumn(assignment.slice(0, eq)), literal)) {
+        const rhs = assignment.slice(eq + 1).trim()
+        if (rhs === '?' || /^[@:$][A-Za-z_][\w]*$/.test(rhs)) continue
+        const literal = parseLiteral(rhs)
+        if (
+            literal === UNPARSEABLE ||
+            !assignColumn(setFields, normalizeColumn(assignment.slice(0, eq)), literal)
+        ) {
             return UNMAPPED
         }
     }
@@ -244,7 +289,9 @@ function bindInsertColumns(
     for (let i = 0; i < columns.length; i++) {
         const column = columns[i] ?? ''
         const raw = values[i] ?? ''
-        if (raw === '?') {
+        const rawTrimmed = raw.trim()
+        if (rawTrimmed === '?' || /^[@:$][A-Za-z_][\w]*$/.test(rawTrimmed)) {
+            if (rawTrimmed !== '?') continue
             // Record-only binds (named params) leave placeholders to mergeRecordBinds.
             if (positional.length === 0) {
                 if (!hasRecordBind) return false
@@ -255,12 +302,16 @@ function bindInsertColumns(
             continue
         }
         const literal = parseLiteral(raw)
-        if (literal !== undefined && !assignColumn(payload, column, literal)) return false
+        if (literal === UNPARSEABLE || !assignColumn(payload, column, literal)) return false
     }
     return true
 }
 
 function parseInsert(cleanSql: string, args: unknown[]): ParsedSql {
+    const tableMatch = /^INSERT\s+INTO\s+(?:[`"']?[a-zA-Z_][\w]*[`"']?\.)?[`"']?([a-zA-Z0-9_]+)[`"']?/i.exec(cleanSql)
+    const tableName = tableMatch?.[1]?.toLowerCase()
+    if (tableName === undefined || !ENTRY_TABLE_NAMES.has(tableName)) return UNMAPPED
+
     const payload: Record<string, unknown> = {}
     const match = /\bINSERT\s+INTO\b[\s\S]*?\(([^)]*)\)\s*VALUES\s*\(([\s\S]*)\)\s*;?\s*$/i.exec(cleanSql)
     const positional = args.filter((a) => !isPlainRecord(a))
@@ -286,6 +337,11 @@ function parseInsert(cleanSql: string, args: unknown[]): ParsedSql {
 }
 
 function parseWhereOnly(cleanSql: string, args: unknown[], action: 'delete' | 'get_by_id'): ParsedSql {
+    const tableMatch = /\bFROM\s+(?:[`"']?[a-zA-Z_][\w]*[`"']?\.)?[`"']?([a-zA-Z0-9_]+)[`"']?/i.exec(cleanSql)
+    const tableName = tableMatch?.[1]?.toLowerCase()
+    if (tableName === undefined || !ENTRY_TABLE_NAMES.has(tableName)) return UNMAPPED
+    if (hasUnsupportedWherePredicate(cleanSql)) return UNMAPPED
+
     const payload: Record<string, unknown> = {}
     const id = literalEntryId(cleanSql)
     if (id !== undefined) payload['entry_id'] = id

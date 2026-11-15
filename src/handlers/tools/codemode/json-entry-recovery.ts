@@ -3,6 +3,7 @@
  */
 
 import { recoverStructuredJsonCode } from './json-entry-structured.js'
+import { stripCommentsAndStrings } from '../../../codemode/security.js'
 
 /**
  * Auto-heals raw JSON objects or stringified JSON passed as Code Mode execution payloads,
@@ -21,16 +22,23 @@ export function extractAndRecoverEntryCode(code: string): string | null {
     const jsonRecovered = extractAndRecoverJsonCode(code)
     if (jsonRecovered !== null) return jsonRecovered
 
+    // Reject multi-call scripts so scope/id fields from an earlier statement are never stolen.
+    const strippedCode = stripCommentsAndStrings(code)
+    const callMatches = strippedCode.match(
+        /\b(?:createEntry|teamCreateEntry|appendEntry|create_entry|team_create_entry|addMemory|createMemory|saveMemory|updateEntry|teamUpdateEntry|update_entry|team_update_entry|updateMemory|searchEntries|deleteEntry|getEntryById|listTags|getRecentEntries)\s*\(/gi
+    )
+    if (callMatches !== null && callMatches.length > 1) return null
+
     const isCreate =
         /\b(?:createEntry|teamCreateEntry|appendEntry|create_entry|team_create_entry|addMemory|createMemory|saveMemory)\b/i.test(
-            code
+            strippedCode
         )
     const isStrictUpdate =
-        /\b(?:updateEntry|teamUpdateEntry|update_entry|team_update_entry)\b/i.test(code)
-    const isLegacyUpdateAlias = !isStrictUpdate && /\bupdateMemory\b/i.test(code)
+        /\b(?:updateEntry|teamUpdateEntry|update_entry|team_update_entry)\b/i.test(strippedCode)
+    const isLegacyUpdateAlias = !isStrictUpdate && /\bupdateMemory\b/i.test(strippedCode)
     const isUpdate =
-        isStrictUpdate || (isLegacyUpdateAlias && /\b(?:entry_id|id)\s*:\s*\d+/i.test(code))
-    const isTeamCall = /\b(?:teamCreateEntry|teamUpdateEntry|team_create_entry|team_update_entry)\b/i.test(code)
+        isStrictUpdate || (isLegacyUpdateAlias && /\b(?:entry_id|id)\s*:\s*\d+/i.test(strippedCode))
+    const isTeamCall = /\b(?:teamCreateEntry|teamUpdateEntry|team_create_entry|team_update_entry)\b/i.test(strippedCode)
 
     if (!isCreate && !isStrictUpdate && !isLegacyUpdateAlias) return null
 
@@ -63,15 +71,18 @@ export function extractAndRecoverEntryCode(code: string): string | null {
 
     if (content === undefined || content === '') return null
 
-    // [C4] Field regexes scan the code with the content body removed, so `project: 5` or
-    // `workspace_id: 'x'` text quoted inside the entry content can never re-scope the write.
-    const scanCode = code.split(content).join('')
+    // [C4] Field regexes scan the code with content and title literals removed, so `project: 5` or
+    // `workspace_id: 'x'` text quoted inside content or title can never re-scope the write.
+    const scanWithTitle = code.split(content).join('')
     content = content.replace(/\\+'/g, "'").replace(/\\+"/g, '"').replace(/\\`/g, '`')
 
-    const typeMatch = /\b(?:entry_type|type)\s*:\s*(['"])([^'"]+)\1/i.exec(scanCode)
     const titleMatch =
-        /\btitle\s*:\s*(['"`])([\s\S]*?)\1(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\)))/i.exec(scanCode) ??
-        /\btitle\s*:\s*(['"])([^'"]+)\1/i.exec(scanCode)
+        /\btitle\s*:\s*(['"`])([\s\S]*?)\1(?=\s*(?:,\s*[a-zA-Z_$][\w$]*\s*:|\s*,\s*\}|\s*\}|\s*\)))/i.exec(scanWithTitle) ??
+        /\btitle\s*:\s*(['"])([^'"]+)\1/i.exec(scanWithTitle)
+    const scanCode =
+        titleMatch?.[0] !== undefined ? scanWithTitle.split(titleMatch[0]).join('') : scanWithTitle
+
+    const typeMatch = /\b(?:entry_type|type)\s*:\s*(['"])([^'"]+)\1/i.exec(scanCode)
     const projectMatch =
         /\b(?:project_number|projectNumber|project_id|projectId|project_name|projectName|project)\s*:\s*(?:(\d+)|(['"`])([^'"`]+)\2)/i.exec(scanCode)
     const workspaceMatch = /\b(?:workspace_id|workspaceId|workspace)\s*:\s*(['"`])([^'"`]+)\1/i.exec(scanCode)

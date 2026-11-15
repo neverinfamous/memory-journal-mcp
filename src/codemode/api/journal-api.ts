@@ -15,15 +15,12 @@ import { resolveProjectContext } from '../../utils/workspace-resolver.js'
 import { activeProjectRegistry, pairStoredScope } from '../../utils/write-scope.js'
 import { createGroupApi, toolNameToMethodName } from './group-factory.js'
 import { isRecord } from '../normalizers/shared-utils.js'
+import { readProjectRegistryPayload } from '../normalizers/generic-field-aliases.js'
 import { ValidationError } from '../../types/errors.js'
 import {
-    createGetConfigFn,
-    createRegisterProjectFn,
-    createUpdateProjectFn,
-    createDeleteProjectFn,
-    createListProjectsFn,
-    createGetProjectFn,
-} from './project-registry-ops.js'
+    buildSandboxSchemasMap,
+    wireProjectAndTeamAliasesHelper,
+} from './journal-api-aliases.js'
 import { buildSandboxBindingsMap } from './sandbox-bindings.js'
 
 const TOOL_SCHEMA_STRING_CACHE = new WeakMap<ToolDefinition, string>()
@@ -138,8 +135,11 @@ export class JournalApi {
             fallbackProj?: unknown
         ): void => {
             const itemWs = rec['workspace_id'] ?? rec['workspaceId']
+            const itemWsNorm = typeof itemWs === 'string' ? itemWs.trim().toLowerCase() : ''
+            const fallbackWsNorm = typeof fallbackWs === 'string' ? fallbackWs.trim().toLowerCase() : ''
             const itemNamesOtherWs =
-                typeof itemWs === 'string' && itemWs !== '' && (itemWs !== fallbackWs || itemWs === 'default')
+                itemWsNorm !== '' &&
+                (itemWsNorm === 'default' ? fallbackWsNorm !== 'default' : itemWsNorm !== fallbackWsNorm)
             if (itemWs === undefined && fallbackWs !== undefined) {
                 rec['workspace_id'] = fallbackWs
             }
@@ -178,12 +178,16 @@ export class JournalApi {
             // to `secure-dispatcher` so session scope pair-checking runs first.
             if (hasExplicitWs) {
                 const trimmedWs = currentWs.trim()
-                const resolved = resolveProjectContext({
-                    workspace_id: trimmedWs,
-                    ...(projNum !== undefined ? { project_number: projNum } : {}),
-                })
+                const providerRegistry = readProjectRegistryPayload(this.registryProvider?.())
+                const resolved = resolveProjectContext(
+                    {
+                        workspace_id: trimmedWs,
+                        ...(projNum !== undefined ? { project_number: projNum } : {}),
+                    },
+                    providerRegistry !== undefined ? { projectRegistry: providerRegistry } : undefined
+                )
                 if (projNum !== undefined) {
-                    pairStoredScope(trimmedWs, projNum, activeProjectRegistry())
+                    pairStoredScope(trimmedWs, projNum, activeProjectRegistry(providerRegistry))
                 } else if (
                     trimmedWs.toLowerCase() !== 'default' &&
                     rec['project_number'] === undefined &&
@@ -301,86 +305,15 @@ export class JournalApi {
     }
 
     private wireProjectAndTeamAliases(): void {
-        const getConfigFn = createGetConfigFn(this.registryProvider)
-        this.admin['getConfig'] = getConfigFn
-        this.core['getConfig'] = getConfigFn
-
-        const existingRegisterProject = this.admin['registerProject']
-        const existingUpdateProject = this.admin['updateProject']
-        const existingDeleteProject = this.admin['deleteProject']
-
-        if (typeof existingRegisterProject === 'function') {
-            const fallbackRegister = this.hasDispatcher ? undefined : createRegisterProjectFn(this.core)
-            const wrappedRegister = async (...args: unknown[]): Promise<unknown> => {
-                if (isRecord(args[0])) return await existingRegisterProject(args[0])
-                if (typeof args[0] === 'string') {
-                    return await existingRegisterProject({
-                        name: args[0],
-                        absolute_path: typeof args[1] === 'string' ? args[1] : '',
-                        ...(typeof args[2] === 'number' ? { project_number: args[2] } : {}),
-                    })
-                }
-                if (fallbackRegister === undefined) return await existingRegisterProject({})
-                return await fallbackRegister(...args)
-            }
-            this.copyFnSchema(existingRegisterProject, wrappedRegister)
-            this.admin['registerProject'] = wrappedRegister
-        }
-        if (typeof existingUpdateProject === 'function') {
-            const fallbackUpdate = this.hasDispatcher ? undefined : createUpdateProjectFn()
-            const wrappedUpdate = async (...args: unknown[]): Promise<unknown> => {
-                if (isRecord(args[0])) return await existingUpdateProject(args[0])
-                if (typeof args[0] === 'string') {
-                    return await existingUpdateProject({
-                        name: args[0],
-                        ...(typeof args[1] === 'string' && args[1] !== '' ? { new_name: args[1] } : {}),
-                        ...(typeof args[2] === 'string' && args[2] !== '' ? { absolute_path: args[2] } : {}),
-                        ...(typeof args[3] === 'number' ? { project_number: args[3] } : {}),
-                    })
-                }
-                if (fallbackUpdate === undefined) return await existingUpdateProject({})
-                return await fallbackUpdate(...args)
-            }
-            this.copyFnSchema(existingUpdateProject, wrappedUpdate)
-            this.admin['updateProject'] = wrappedUpdate
-        }
-        if (typeof existingDeleteProject === 'function') {
-            const fallbackDelete = this.hasDispatcher ? undefined : createDeleteProjectFn()
-            const wrappedDelete = async (...args: unknown[]): Promise<unknown> => {
-                if (isRecord(args[0])) return await existingDeleteProject(args[0])
-                if (typeof args[0] === 'string') {
-                    return await existingDeleteProject({ name: args[0] })
-                }
-                if (fallbackDelete === undefined) return await existingDeleteProject({})
-                return await fallbackDelete(...args)
-            }
-            this.copyFnSchema(existingDeleteProject, wrappedDelete)
-            this.admin['deleteProject'] = wrappedDelete
-        }
-
-        const listProjectsFn = createListProjectsFn(this.registryProvider)
-        const getProjectFn = createGetProjectFn(listProjectsFn)
-
-        for (const grp of [this.core, this.search, this.admin]) {
-            grp['listProjects'] = listProjectsFn
-            grp['getProjects'] = listProjectsFn
-            grp['getProject'] = getProjectFn
-        }
-        this.core['searchProjects'] = listProjectsFn
-        this.search['searchProjects'] = listProjectsFn
-
-        if (this.team['teamDeleteEntry']) {
-            this.team['deleteEntry'] = this.team['teamDeleteEntry']
-            this.team['delete'] = this.team['teamDeleteEntry']
-        }
-        if (this.team['teamUpdateEntry']) {
-            this.team['updateEntry'] = this.team['teamUpdateEntry']
-            this.team['update'] = this.team['teamUpdateEntry']
-        }
-        if (this.team['teamCreateEntry']) {
-            this.team['createEntry'] = this.team['teamCreateEntry']
-            this.team['create'] = this.team['teamCreateEntry']
-        }
+        wireProjectAndTeamAliasesHelper({
+            core: this.core,
+            search: this.search,
+            admin: this.admin,
+            team: this.team,
+            hasDispatcher: this.hasDispatcher,
+            registryProvider: this.registryProvider,
+            copyFnSchema: (source, wrapper) => this.copyFnSchema(source, wrapper),
+        })
     }
 
     private wireMethodAliases(): void {
@@ -424,38 +357,12 @@ export class JournalApi {
     }
 
     createSandboxSchemas(): Record<string, Record<string, string>> {
-        const schemas: Record<string, Record<string, string>> = {}
-        for (const [groupName, tools] of this.toolsByGroup.entries()) {
-            const groupSchemas: Record<string, string> = {}
-            for (const tool of tools) {
-                const methodName = toolNameToMethodName(tool.name, groupName)
-                const typeStr = this.getToolSchemaString(tool)
-                groupSchemas[methodName] = typeStr
-                if (tool.name !== methodName) groupSchemas[tool.name] = typeStr
-            }
-            const aliases = METHOD_ALIASES[groupName]
-            if (aliases) {
-                for (const [aliasName, canonicalName] of Object.entries(aliases)) {
-                    if (groupSchemas[canonicalName] !== undefined) groupSchemas[aliasName] = groupSchemas[canonicalName]
-                }
-            }
-            schemas[groupName] = groupSchemas
-        }
-
-        for (const [key, val] of Object.entries(this.createSandboxBindings())) {
-            if (typeof val === 'function') {
-                const s = this.fnSchemas.get(val)
-                if (s !== undefined) (schemas['_topLevel'] ??= {})[key] = s
-            } else if (isRecord(val)) {
-                for (const [mName, mVal] of Object.entries(val)) {
-                    if (typeof mVal === 'function') {
-                        const s = this.fnSchemas.get(mVal)
-                        if (s !== undefined) (schemas[key] ??= {})[mName] = s
-                    }
-                }
-            }
-        }
-        return schemas
+        return buildSandboxSchemasMap({
+            toolsByGroup: this.toolsByGroup,
+            bindings: this.createSandboxBindings(),
+            fnSchemas: this.fnSchemas,
+            getToolSchemaString: (tool) => this.getToolSchemaString(tool),
+        })
     }
 }
 

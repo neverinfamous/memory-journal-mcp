@@ -2,9 +2,13 @@
  * Memory Journal MCP Server - Adversarial Prompt Argument Schemas & Scope Validation
  */
 
+import * as path from 'node:path'
 import { z } from 'zod'
 import { ValidationError } from '../../types/errors.js'
-import { loadProjectRegistryFromConfig } from '../../utils/workspace-resolver.js'
+import {
+    cwdMatchesRegistryPath,
+    loadProjectRegistryFromConfig,
+} from '../../utils/workspace-resolver.js'
 import {
     activeProjectRegistry,
     exactRegistryKey,
@@ -12,6 +16,39 @@ import {
     uniqueWorkspaceForProject,
 } from '../../utils/write-scope.js'
 import type { BriefingConfig } from '../resources/shared.js'
+
+export function resolveRegistryMatchForTarget(
+    registry: NonNullable<BriefingConfig['projectRegistry']>,
+    cleanTarget: string
+): string | undefined {
+    if (/^#?\d{1,10}$/.test(cleanTarget)) {
+        const num = Number(cleanTarget.replace(/^#/, ''))
+        const matchByNum =
+            Number.isSafeInteger(num) && num > 0
+                ? uniqueWorkspaceForProject(num, registry)
+                : undefined
+        if (matchByNum !== undefined) return matchByNum
+    }
+    const exactMatch = exactRegistryKey(cleanTarget, registry)
+    if (exactMatch !== undefined) return exactMatch
+    // [BOUNDARY] Only absolute targets are path-matched; a relative target would otherwise
+    // resolve against the server's process.cwd(), not the caller's project.
+    if (path.isAbsolute(cleanTarget)) {
+        const sortedEntries = Object.entries(registry).sort(
+            ([, a], [, b]) => (b.path?.length ?? 0) - (a.path?.length ?? 0)
+        )
+        for (const [key, data] of sortedEntries) {
+            if (
+                data.path !== undefined &&
+                data.path.trim() !== '' &&
+                cwdMatchesRegistryPath(data.path, cleanTarget)
+            ) {
+                return key
+            }
+        }
+    }
+    return undefined
+}
 
 function emptyToUndefined(val: unknown): unknown {
     return typeof val === 'string' && val.trim() === '' ? undefined : val
@@ -121,19 +158,57 @@ export const AUDIT_ARGUMENTS = [
 export function validateAdversarialPromptScope(
     workspaceId?: string,
     projectNumber?: number,
-    briefingConfig?: Partial<BriefingConfig>
+    briefingConfig?: Partial<BriefingConfig>,
+    targetOrTopic?: string
 ): { effectiveWorkspaceId?: string; projectNumber?: number } {
     const trimmedWs = workspaceId?.trim()
     if (trimmedWs === '*') {
         throw new ValidationError("Wildcard workspace_id '*' is not valid for a single-target prompt.")
     }
 
+    const registry = briefingConfig?.projectRegistry ?? loadProjectRegistryFromConfig()
+    const cleanTarget = targetOrTopic?.trim()
+    const isPlaceholder = cleanTarget === '{target}' || cleanTarget === '{topic}'
+    const targetMatch =
+        cleanTarget !== undefined &&
+        cleanTarget !== '' &&
+        !isPlaceholder &&
+        registry !== undefined
+            ? resolveRegistryMatchForTarget(registry, cleanTarget)
+            : undefined
+
     const effectiveWs = trimmedWs !== undefined && trimmedWs !== '' ? trimmedWs : undefined
+    if (targetMatch !== undefined && registry !== undefined) {
+        if (effectiveWs !== undefined) {
+            if (/^#?\d{1,10}$/.test(effectiveWs)) {
+                const numMatch = uniqueWorkspaceForProject(
+                    Number(effectiveWs.replace(/^#/, '')),
+                    registry
+                )
+                if (numMatch?.toLowerCase() !== targetMatch.toLowerCase()) {
+                    throw new ValidationError(
+                        `workspace_id '${effectiveWs}' conflicts with target '${cleanTarget}' (registered workspace '${targetMatch}').`
+                    )
+                }
+            } else if (
+                effectiveWs.toLowerCase() === 'default' ||
+                (exactRegistryKey(effectiveWs, registry) ?? effectiveWs).toLowerCase() !==
+                    targetMatch.toLowerCase()
+            ) {
+                throw new ValidationError(
+                    `workspace_id '${effectiveWs}' conflicts with target '${cleanTarget}' (registered workspace '${targetMatch}').`
+                )
+            }
+        }
+        if (projectNumber !== undefined) {
+            pairStoredScope(targetMatch, projectNumber, activeProjectRegistry(registry))
+        }
+    }
+
     if (projectNumber === undefined) {
         return effectiveWs !== undefined ? { effectiveWorkspaceId: effectiveWs } : {}
     }
 
-    const registry = briefingConfig?.projectRegistry ?? loadProjectRegistryFromConfig()
     if (registry === undefined || Object.keys(registry).length === 0) {
         return {
             ...(effectiveWs !== undefined ? { effectiveWorkspaceId: effectiveWs } : {}),

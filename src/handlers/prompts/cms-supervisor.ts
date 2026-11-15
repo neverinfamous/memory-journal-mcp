@@ -9,6 +9,7 @@ import { ICON_PROMPT } from '../../constants/icons.js'
 import type { InternalPromptDef } from './index.js'
 import type { BriefingConfig } from '../resources/shared.js'
 import { loadProjectRegistryFromConfig } from '../../utils/workspace-resolver.js'
+import { exactRegistryKey } from '../../utils/write-scope.js'
 import { markUntrustedContent } from '../../utils/security-utils.js'
 import { z } from 'zod'
 import { coerceNumber } from '../../utils/query-helpers.js'
@@ -125,7 +126,17 @@ export function getCmsSupervisorPromptDefinitions(): InternalPromptDef[] {
                 )
                 const autoRestore = restoreRes.success ? restoreRes.data : true
                 const registry = briefingConfig?.projectRegistry ?? loadProjectRegistryFromConfig()
-                const mjProjectNumber = registry?.['memory-journal-mcp']?.project_number ?? 5
+                const mjKey = exactRegistryKey('memory-journal-mcp', registry)
+                const mjProjectNumber =
+                    mjKey !== undefined ? registry?.[mjKey]?.project_number : undefined
+                const supervisorProjectLabel =
+                    mjProjectNumber !== undefined
+                        ? `project #${String(mjProjectNumber)}`
+                        : 'its resolved registry `project_number` (via `memory://agent-context/memory-journal-mcp` or `mj.admin.listProjects()`)'
+                const supervisorProjectField =
+                    mjProjectNumber !== undefined
+                        ? `\`project_number: ${String(mjProjectNumber)}\``
+                        : '`project_number: <resolved_project_number>`'
                 const latestNremSnippet = fetchLatestNremSnippet(db)
                 const deletedSnippet = fetchDeletedEntriesSnapshot(db, lookbackHours)
 
@@ -185,21 +196,21 @@ ${markUntrustedContent(deletedSnippet)}
 1. Apply all approved code, schema, prompt, or documentation fixes in a single cohesive batch.
 2. Check working tree status via \`bun .\\.agents\\scripts\\get-git-history-json.ts --uncommitted --stats\`.
 3. **If \`0\` files are modified/untracked in \`memory-journal-mcp\`**:
-   - **SKIP** \`pnpm run lint\`, \`pnpm run typecheck\`, \`pnpm run build\`, \`npx vitest run\`, and \`npx playwright test\` completely! Proceed directly to Phase D.
+   - **SKIP** \`pnpm run lint\`, \`pnpm run typecheck\`, \`pnpm run build\`, \`pnpm exec vitest run\`, and \`pnpm exec playwright test\` completely! Proceed directly to Phase D.
 4. **If \`>= 1\` files are modified in \`memory-journal-mcp\`**:
    - Terminate all subagents (\`manage_subagents\` \`Action: 'kill_all'\`) and verify no competing \`vitest\`, \`playwright\`, or \`tsc\` process is active.
    - Run the 5-stage validation gate **strictly sequentially once** (never concurrently):
      1. \`pnpm run lint\`
      2. \`pnpm run typecheck\`
      3. \`pnpm run build\`
-     4. \`npx vitest run\`
-     5. \`npx playwright test\`
+     4. \`pnpm exec vitest run\`
+     5. \`pnpm exec playwright test\`
    - Commit the verified changes via \`bun .\\.agents\\scripts\\commit.ts --msg "fix(cms): <summary>" --impact 0.5 --confidence 0.95 --validation passed --journal --add <changed_files>\`.
 
 ### Phase D — Telemetry Cleanup & Supervisor Journal Entry
 1. If \`logs/agent-issues.jsonl\` contained issues that were resolved and validated in Phase C, clear \`logs/agent-issues.jsonl\`.
-2. Log the completed supervisor run in \`memory-journal-mcp\` (project #${String(mjProjectNumber)}) using \`mj.core.createEntry\` with:
-   - \`workspace_id: 'memory-journal-mcp'\`, \`project_number: ${String(mjProjectNumber)}\`
+2. Log the completed supervisor run in \`memory-journal-mcp\` (${supervisorProjectLabel}) using \`mj.core.createEntry\` with:
+   - \`workspace_id: 'memory-journal-mcp'\`, ${supervisorProjectField}
    - \`entry_type: 'maintenance'\`
    - \`significance_type: 'milestone'\`
    - \`tags: ['cms', 'cms-04-rem-supervisor', 'meta-learning', 'maintenance']\`

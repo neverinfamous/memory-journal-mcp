@@ -92,15 +92,17 @@ export function rankByBlendedScore(
     db: ToolContext['db'],
     ranked: EntryWithSource[],
     wsId: string,
-    relevanceMap: Map<number, number>,
+    relevanceMap: ReadonlyMap<string, number>,
     teamDb?: ToolContext['teamDb']
 ): EntryWithSource[] {
     const scored = attachImportance(db, ranked, wsId, teamDb)
     scored.sort((a, b) => {
         const aId = typeof a['id'] === 'number' ? a['id'] : -1
         const bId = typeof b['id'] === 'number' ? b['id'] : -1
-        const aRel = relevanceMap.get(aId) ?? (typeof a['similarity'] === 'number' ? a['similarity'] : 0)
-        const bRel = relevanceMap.get(bId) ?? (typeof b['similarity'] === 'number' ? b['similarity'] : 0)
+        const aKey = `${a.source ?? 'personal'}:${String(aId)}`
+        const bKey = `${b.source ?? 'personal'}:${String(bId)}`
+        const aRel = relevanceMap.get(aKey) ?? (typeof a['similarity'] === 'number' ? a['similarity'] : 0)
+        const bRel = relevanceMap.get(bKey) ?? (typeof b['similarity'] === 'number' ? b['similarity'] : 0)
         const aImp = typeof a['importanceScore'] === 'number' ? a['importanceScore'] : 0
         const bImp = typeof b['importanceScore'] === 'number' ? b['importanceScore'] : 0
         return bRel * (1.0 + 0.35 * bImp) - aRel * (1.0 + 0.35 * aImp)
@@ -129,9 +131,9 @@ export async function runSemanticSearch(
         searchOptions.projectNumber
     )
     const entryIds = semanticResults.map((r) => r.entryId)
-    const relevanceMap = new Map<number, number>()
+    const relevanceMap = new Map<string, number>()
     for (const result of semanticResults) {
-        relevanceMap.set(result.entryId, result.score)
+        relevanceMap.set(`personal:${String(result.entryId)}`, result.score)
     }
     const entriesMap = db.getEntriesByIds(entryIds, wsId)
 

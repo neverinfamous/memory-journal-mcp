@@ -19,6 +19,9 @@ import { createUpdateMemoryFn, createContextProxy } from './worker/namespace-shi
 import { createShimMjProxy } from './worker/mj-shim-proxy.js'
 import { buildSandboxGlobals } from './worker/sandbox-globals.js'
 import { serializeAndEnforceEgress } from './worker/result-compactor.js'
+import { CodeModeSecurityManager } from './security.js'
+
+const nestedSecurityManager = new CodeModeSecurityManager()
 
 // [L4] Hardening failures are fatal: refuse to execute any user code in a half-hardened realm.
 const hardeningFailures = hardenOuterFunctionPrototypes()
@@ -81,8 +84,18 @@ function rpcCall(group: string, method: string, args: unknown[]): Promise<unknow
 function createSandboxExecutor(
     shimMj: Record<string, unknown>,
     vmContextRef: { current?: vm.Context },
-    timeoutMs: number
+    timeoutMs: number,
+    readonlyMode?: boolean,
+    contextObj?: Record<string, unknown>
 ): (arg: unknown) => Promise<unknown> {
+    const pinnedWorkspaceRaw = contextObj?.['__mj_workspace_id']
+    const pinnedWorkspace =
+        typeof pinnedWorkspaceRaw === 'string' &&
+        pinnedWorkspaceRaw.trim() !== '' &&
+        pinnedWorkspaceRaw.trim() !== '*'
+            ? pinnedWorkspaceRaw.trim()
+            : undefined
+
     const invokeCreateEntry = (payload: unknown): unknown => {
         const coreGroup = shimMj['core']
         if ((typeof coreGroup === 'object' && coreGroup !== null) || typeof coreGroup === 'function') {
@@ -93,13 +106,76 @@ function createSandboxExecutor(
     }
 
     return async (arg: unknown): Promise<unknown> => {
+        const isPlainRec = (val: unknown): val is Record<string, unknown> =>
+            typeof val === 'object' && val !== null && !Array.isArray(val)
+        const argRec = isPlainRec(arg) ? arg : undefined
+        const argReadonly = argRec?.['readonly'] === true
+        const argDryRun = argRec?.['dry_run'] === true || argRec?.['dryRun'] === true
+        const rawArgWs = argRec?.['workspace_id'] ?? argRec?.['workspaceId']
+        const argWs =
+            typeof rawArgWs === 'string' && rawArgWs.trim() !== '' && rawArgWs.trim() !== '*'
+                ? rawArgWs.trim()
+                : undefined
+        if (
+            argWs !== undefined &&
+            pinnedWorkspace !== undefined &&
+            argWs.toLowerCase() !== pinnedWorkspace.toLowerCase()
+        ) {
+            return {
+                success: false,
+                error: `Workspace '${argWs}' conflicts with pinned session workspace '${pinnedWorkspace}'`,
+                code: 'VALIDATION_ERROR',
+            }
+        }
+        const effectiveReadonly = readonlyMode === true || argReadonly
+
         const codeToExec = readExecutableCode(arg)
-        if (codeToExec === null) return invokeCreateEntry(arg)
+        if (codeToExec === null) {
+            if (effectiveReadonly) {
+                return {
+                    success: false,
+                    error: 'Write operations are disabled in readonly mode',
+                    code: 'PERMISSION_DENIED',
+                }
+            }
+            if (argDryRun) {
+                return {
+                    success: false,
+                    error: 'dry_run is not supported for synthesized entry writes inside nested execute_code',
+                    code: 'VALIDATION_ERROR',
+                }
+            }
+            return invokeCreateEntry(arg)
+        }
         if (codeToExec === '') {
             return { success: false, error: 'No code was executed', code: 'VALIDATION_ERROR' }
         }
         const natural = naturalLanguageEntry(codeToExec)
-        if (natural !== undefined) return invokeCreateEntry(natural)
+        if (natural !== undefined) {
+            if (effectiveReadonly) {
+                return {
+                    success: false,
+                    error: 'Write operations are disabled in readonly mode',
+                    code: 'PERMISSION_DENIED',
+                }
+            }
+            if (argDryRun) {
+                return {
+                    success: false,
+                    error: 'dry_run is not supported for synthesized entry writes inside nested execute_code',
+                    code: 'VALIDATION_ERROR',
+                }
+            }
+            return invokeCreateEntry(natural)
+        }
+        const validation = nestedSecurityManager.validateCode(codeToExec)
+        if (!validation.valid) {
+            return {
+                success: false,
+                error: validation.errors.join('; '),
+                code: 'SECURITY_VIOLATION',
+            }
+        }
         if (vmContextRef.current !== undefined) {
             const transformed = transformAutoReturn(codeToExec)
             const wrapped = `(async () => {\n${transformed}\n})()`
@@ -185,7 +261,13 @@ async function executeCode(
 
         const frozenContext = createContextProxy(contextObj)
         const vmContextRef: { current?: vm.Context } = {}
-        const executeCodeFn = createSandboxExecutor(shimMj, vmContextRef, timeoutMs)
+        const executeCodeFn = createSandboxExecutor(
+            shimMj,
+            vmContextRef,
+            timeoutMs,
+            readonlyMode,
+            contextObj
+        )
         executeCodeFnRef.current = executeCodeFn
 
         const sandbox = buildSandboxGlobals({

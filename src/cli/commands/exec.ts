@@ -6,6 +6,8 @@ import { callTool } from '../../handlers/tools/index.js'
 import { globalSubscriptionManager } from '../../server/subscription-manager.js'
 import type { ToolHandlerConfig } from '../../types/index.js'
 import { ConfigResolver } from '../../utils/config-resolver.js'
+import { findCanonicalRegistryKey } from '../../utils/workspace-resolver.js'
+import { activeProjectRegistry, pairStoredScope } from '../../utils/write-scope.js'
 import { buildServerOptions } from '../server-options-builder.js'
 import { dumpConfigAndExit } from '../dump-config.js'
 import { type z } from 'zod'
@@ -29,6 +31,38 @@ export async function execAction(scriptPath: string, options: z.infer<typeof exe
 
     if (options.workspace?.trim() === '*' || options.defaultWorkspaceId?.trim() === '*') {
         configErrors.push("Wildcard '*' is not allowed for --workspace or --default-workspace-id.")
+    }
+
+    const execWorkspaceId =
+        options.workspace !== undefined && options.workspace.trim() !== ''
+            ? options.workspace.trim()
+            : undefined
+    const explicitDefaultProject =
+        options.defaultProject !== undefined ||
+        command.getOptionValueSource('defaultProject') === 'cli'
+    if (execWorkspaceId !== undefined && execWorkspaceId !== '*') {
+        const prevDefaultWs = serverOptions.defaultWorkspaceId
+        serverOptions.defaultWorkspaceId = execWorkspaceId
+        if (
+            !explicitDefaultProject &&
+            execWorkspaceId.toLowerCase() !== prevDefaultWs?.trim().toLowerCase()
+        ) {
+            serverOptions.defaultProjectNumber = undefined
+        }
+        const preCheckProj =
+            options.defaultProject ??
+            (explicitDefaultProject ? serverOptions.defaultProjectNumber : undefined)
+        if (preCheckProj !== undefined) {
+            try {
+                pairStoredScope(
+                    execWorkspaceId,
+                    preCheckProj,
+                    activeProjectRegistry(serverOptions.projectRegistry)
+                )
+            } catch (err) {
+                configErrors.push(err instanceof Error ? err.message : String(err))
+            }
+        }
     }
 
     if (configErrors.length > 0) {
@@ -64,14 +98,36 @@ export async function execAction(scriptPath: string, options: z.infer<typeof exe
         serverOptions,
         allowedIoRoots
     )
+    const effectiveRegistry = serverOptions.projectRegistry ?? briefingConfig.projectRegistry
+    let resolvedDefaultProj =
+        serverOptions.defaultProjectNumber ?? briefingConfig.defaultProjectNumber
+    if (execWorkspaceId !== undefined) {
+        const canonicalExecWs =
+            findCanonicalRegistryKey(execWorkspaceId, effectiveRegistry) ?? execWorkspaceId
+        const registryExecProj = effectiveRegistry?.[canonicalExecWs]?.project_number
+        const briefingMatchesExecWs =
+            briefingConfig.defaultWorkspaceId?.trim().toLowerCase() ===
+            canonicalExecWs.toLowerCase()
+        resolvedDefaultProj = explicitDefaultProject
+            ? (options.defaultProject ?? serverOptions.defaultProjectNumber)
+            : (serverOptions.defaultProjectNumber ??
+                  registryExecProj ??
+                  (briefingMatchesExecWs ? briefingConfig.defaultProjectNumber : undefined))
+        if (resolvedDefaultProj !== undefined) {
+            pairStoredScope(
+                canonicalExecWs,
+                resolvedDefaultProj,
+                activeProjectRegistry(effectiveRegistry)
+            )
+        }
+    }
     const baseConfig: ToolHandlerConfig = {
-        defaultProjectNumber:
-            serverOptions.defaultProjectNumber ?? briefingConfig.defaultProjectNumber,
+        defaultProjectNumber: resolvedDefaultProj,
         defaultWorkspaceId:
             options.workspace ??
             serverOptions.defaultWorkspaceId ??
             briefingConfig.defaultWorkspaceId,
-        projectRegistry: serverOptions.projectRegistry ?? briefingConfig.projectRegistry,
+        projectRegistry: effectiveRegistry,
         additionalTeamDbs: serverOptions.additionalTeamDbs,
         allowedIoRoots,
         filterConfig,
@@ -92,10 +148,6 @@ export async function execAction(scriptPath: string, options: z.infer<typeof exe
         callTool(name, args, db, vectorManager, github, customToolHandlerConfig, undefined, teamDb ?? undefined, teamVectorManager ?? undefined)
     customToolHandlerConfig.dispatch = dispatch
 
-    const execWorkspaceId =
-        options.workspace !== undefined && options.workspace.trim() !== ''
-            ? options.workspace.trim()
-            : undefined
     let exitCode = 0
     try {
         const result = await callTool(

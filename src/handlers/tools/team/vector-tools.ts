@@ -9,6 +9,7 @@ import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { resolveWorkspaceId } from '../../../utils/workspace-resolver.js'
+import { activeProjectRegistry, alignedProjectFilter } from '../../../utils/write-scope.js'
 import { logger } from '../../../utils/logger.js'
 import { relaxedNumber, StrictProjectNumberSchema } from '../schemas.js'
 import {
@@ -335,8 +336,16 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                         parsed.workspace_id?.trim() === '*'
                             ? '*'
                             : resolveWorkspaceId(parsed.workspace_id, parsed.project_number, context.config)
+                    const projectNumber = alignedProjectFilter(
+                        wsId,
+                        parsed.project_number,
+                        activeProjectRegistry(context.config?.projectRegistry)
+                    )
                     const { success, indexed, failed, firstError } =
-                        await teamVectorManager.rebuildIndex(progress, { workspaceId: wsId })
+                        await teamVectorManager.rebuildIndex(progress, {
+                            workspaceId: wsId,
+                            ...(projectNumber !== undefined ? { projectNumber } : {}),
+                        })
 
                     if (!success && firstError) {
                         logger.warning(`Team vector index rebuild had errors: ${firstError}`)

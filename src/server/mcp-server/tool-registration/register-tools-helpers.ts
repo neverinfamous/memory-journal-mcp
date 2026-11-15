@@ -14,6 +14,7 @@ import type { PromptDefinition } from '../../registration.js'
 import { globalSubscriptionManager } from '../../subscription-manager.js'
 import { logAgentIssue } from '../../../utils/issue-logger.js'
 import { findCanonicalRegistryKey, getActiveSessionProject } from '../../../utils/workspace-resolver.js'
+import { activeProjectRegistry, pairStoredScope } from '../../../utils/write-scope.js'
 import type { ServerContext, ServerOptions } from '../types.js'
 
 /**
@@ -186,24 +187,50 @@ export function resolveActiveBriefingConfig(
     const applicableDefaultProj = briefingDefaultApplies
         ? briefingConfig.defaultProjectNumber
         : undefined
-    const candidateProj =
-        applicableDefaultProj ?? registryProject ?? sessionCtx.projectNumber
-    const projClaimedElsewhere =
-        candidateProj !== undefined &&
-        canonicalWs !== undefined &&
-        resolvedRegistry !== undefined &&
-        Object.entries(resolvedRegistry).some(
-            ([k, v]) =>
-                v.project_number === candidateProj &&
-                k.toLowerCase() !== canonicalWs.toLowerCase()
-        )
-    const resolvedDefaultProj =
-        projClaimedElsewhere ||
-        (canonicalWs === 'default' &&
+    const resolvedDefaultProj = ((): number | undefined => {
+        if (canonicalConfigWs !== undefined && applicableDefaultProj !== undefined) {
+            return (
+                pairStoredScope(
+                    canonicalConfigWs,
+                    applicableDefaultProj,
+                    activeProjectRegistry(resolvedRegistry)
+                ).projectNumber ?? undefined
+            )
+        }
+        const candidateProj =
+            applicableDefaultProj ?? registryProject ?? sessionCtx.projectNumber
+        const projClaimedElsewhere =
+            canonicalConfigWs === undefined &&
+            candidateProj !== undefined &&
+            canonicalWs !== undefined &&
+            resolvedRegistry !== undefined &&
+            Object.entries(resolvedRegistry).some(
+                ([k, v]) =>
+                    v.project_number === candidateProj &&
+                    k.toLowerCase() !== canonicalWs.toLowerCase()
+            )
+        if (projClaimedElsewhere) return registryProject
+        if (
+            canonicalConfigWs !== undefined &&
             registryProject === undefined &&
-            briefingConfig.defaultWorkspaceId !== 'default')
+            sessionCtx.projectNumber !== undefined &&
+            candidateProj === sessionCtx.projectNumber &&
+            resolvedRegistry !== undefined &&
+            Object.entries(resolvedRegistry).some(
+                ([k, v]) =>
+                    v.project_number === candidateProj &&
+                    canonicalWs !== undefined &&
+                    k.toLowerCase() !== canonicalWs.toLowerCase()
+            )
+        ) {
+            return undefined
+        }
+        return canonicalWs === 'default' &&
+            registryProject === undefined &&
+            briefingConfig.defaultWorkspaceId !== 'default'
             ? registryProject
             : candidateProj
+    })()
     const nextConfig: typeof DEFAULT_BRIEFING_CONFIG = {
         ...briefingConfig,
         allowedIoRoots,

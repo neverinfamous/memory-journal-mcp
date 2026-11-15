@@ -64,10 +64,6 @@ export function inheritRootBatchScope(
         itemWs !== undefined &&
         typeof itemWs.value === 'string' &&
         itemWs.value.trim().toLowerCase() === 'default'
-    const rootIsDefaultWs =
-        rootWs !== undefined &&
-        typeof rootWs.value === 'string' &&
-        rootWs.value.trim().toLowerCase() === 'default'
     const namesOtherWorkspace =
         differsFromRoot(itemWs) || (hasConcreteTargetWs && differsFromRoot(itemTargetWs))
     if (
@@ -75,8 +71,7 @@ export function inheritRootBatchScope(
         itemProj === undefined &&
         rootProj !== undefined &&
         !namesOtherWorkspace &&
-        !itemIsDefaultWs &&
-        !(itemWs === undefined && rootIsDefaultWs)
+        !itemIsDefaultWs
     ) {
         itemObj[rootProj.key] = rootProj.value
     }

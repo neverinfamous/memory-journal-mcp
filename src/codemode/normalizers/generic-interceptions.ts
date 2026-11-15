@@ -85,7 +85,9 @@ export function applyGenericInterceptions(
 
     cleanSdkMetadataKeys(obj)
     normalizeSearchGrepAliases(methodName, obj)
-    extractMetadataContextAliases(obj)
+    if (!EXECUTE_METHODS.has(methodName)) {
+        extractMetadataContextAliases(obj)
+    }
     const idError = coerceNumericStringIds(obj)
     if (idError !== undefined) return idError
     const aliasError = normalizeGenericFieldAliases(obj, methodName)

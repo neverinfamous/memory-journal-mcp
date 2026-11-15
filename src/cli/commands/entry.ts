@@ -243,7 +243,8 @@ export async function updateEntryAction(...args: unknown[]): Promise<void> {
             process.exit(1)
         }
 
-        if (options.workspace?.trim() === '*') {
+        const rawWorkspaceOpt = options.workspaceId ?? options.workspace ?? options.workspace_id
+        if (rawWorkspaceOpt?.trim() === '*') {
             throw new ValidationError(
                 "workspace_id '*' cannot be used to update an entry. Pass a concrete workspace.",
                 { workspaceId: '*' }
@@ -252,7 +253,7 @@ export async function updateEntryAction(...args: unknown[]): Promise<void> {
 
         const existingEntry = db.getEntryById(entryId, '*')
         const implicitWorkspace =
-            options.workspace === undefined
+            rawWorkspaceOpt === undefined
                 ? resolveWorkspaceId(undefined, undefined, {
                       runtime: null,
                       ...(config.defaultWorkspaceId !== undefined
@@ -266,7 +267,6 @@ export async function updateEntryAction(...args: unknown[]): Promise<void> {
         if (
             existingEntry !== null &&
             implicitWorkspace !== undefined &&
-            implicitWorkspace !== 'default' &&
             existingEntry.workspaceId !== undefined &&
             existingEntry.workspaceId.toLowerCase() !== implicitWorkspace.toLowerCase()
         ) {

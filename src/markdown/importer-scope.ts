@@ -97,10 +97,12 @@ export function resolveImportedFileContext(
         pairStoredScope(explicitWs, rawProjectNumber, effectiveRegistry)
     }
 
+    const effectiveInputWs =
+        concreteCallerWorkspace(options.workspaceId) ?? concreteCallerWorkspace(metadata.workspace_id)
     const resolved = resolveProjectContext(
         {
-            workspace_id: rawWorkspaceId,
-            project_number: rawProjectNumber,
+            ...(effectiveInputWs !== undefined ? { workspace_id: effectiveInputWs } : {}),
+            ...(rawProjectNumber !== undefined ? { project_number: rawProjectNumber } : {}),
         },
         options.config
     )

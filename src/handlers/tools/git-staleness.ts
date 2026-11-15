@@ -110,6 +110,15 @@ export function resolveGitWorkingDir(
             }
         }
     }
+    if (
+        trimmedRawTarget !== undefined &&
+        (trimmedRawTarget === '*' || trimmedRawTarget.toLowerCase() === 'default') &&
+        (pNum === undefined || Number.isNaN(pNum))
+    ) {
+        throw new ValidationError(
+            `workspace_id '${trimmedRawTarget}' cannot identify a git repository without repo, project_number, or cwd. ${formatRegisteredReposHint(registry)}`
+        )
+    }
     if (target !== undefined && target !== '') {
         if (registry) {
             const canonicalKey = findCanonicalRegistryKey(target, registry)
@@ -149,6 +158,35 @@ export function resolveGitWorkingDir(
         )
     }
     const currentCwd = process.cwd()
+    const defaultWs = config?.defaultWorkspaceId?.trim()
+    if (
+        defaultWs !== undefined &&
+        defaultWs !== '' &&
+        defaultWs !== '*' &&
+        defaultWs.toLowerCase() !== 'default'
+    ) {
+        const canonicalDefaultKey = registry
+            ? (findCanonicalRegistryKey(defaultWs, registry) ??
+              (Object.prototype.hasOwnProperty.call(registry, defaultWs) ? defaultWs : undefined))
+            : undefined
+        const defaultEntry =
+            canonicalDefaultKey !== undefined && registry !== undefined
+                ? registry[canonicalDefaultKey]
+                : undefined
+        if (defaultEntry?.path && fs.existsSync(defaultEntry.path)) {
+            return defaultEntry.path
+        }
+        if (
+            hasGitAncestor(currentCwd) &&
+            (registry === undefined ||
+                path.basename(currentCwd).toLowerCase() === defaultWs.toLowerCase())
+        ) {
+            return currentCwd
+        }
+        throw new ValidationError(
+            `Configured workspace '${defaultWs}' did not resolve to an existing git repository path. ${formatRegisteredReposHint(registry)}`
+        )
+    }
     if (hasGitAncestor(currentCwd)) {
         return currentCwd
     }
@@ -157,11 +195,6 @@ export function resolveGitWorkingDir(
             if (entry.path && cwdMatchesRegistryPath(entry.path, currentCwd) && fs.existsSync(entry.path)) {
                 return entry.path
             }
-        }
-        const defaultWs = config?.defaultWorkspaceId
-        const defaultEntry = defaultWs !== undefined ? registry[defaultWs] : undefined
-        if (defaultEntry?.path && fs.existsSync(defaultEntry.path)) {
-            return defaultEntry.path
         }
     }
     throw new ValidationError(

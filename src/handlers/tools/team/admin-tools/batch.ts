@@ -90,8 +90,6 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                             {
                                 workspace_id: namedWorkspace,
                                 project_number: effectiveProject,
-                                content: e.content,
-                                tags: e.tags,
                             },
                             context.config
                         )
@@ -146,10 +144,13 @@ export function getTeamAdminBatchTools(context: ToolContext): ToolDefinition[] {
                                 recoverable: false,
                             }
                         }
+                        const explicitDefault = namedWorkspace?.trim().toLowerCase() === 'default'
                         const workspaceId = resolveWriteWorkspaceId(
-                            resolved.workspaceId !== 'default'
-                                ? resolved.workspaceId
-                                : (e.workspace_id ?? input.workspace_id),
+                            explicitDefault
+                                ? 'default'
+                                : resolved.workspaceId !== 'default'
+                                  ? resolved.workspaceId
+                                  : namedWorkspace,
                             projectNumber,
                             context.config
                         )

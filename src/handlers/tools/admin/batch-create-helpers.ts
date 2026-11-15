@@ -42,8 +42,6 @@ async function prepareBatchEntry(
         {
             workspace_id: e.workspace_id,
             project_number: requestedProject,
-            content: e.content,
-            tags: e.tags,
         },
         context.config
     )

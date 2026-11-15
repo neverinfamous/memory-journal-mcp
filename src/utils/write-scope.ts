@@ -37,7 +37,11 @@ export function exactRegistryKey(
     for (const key of Object.keys(registry)) {
         if (key.toLowerCase() === lower) return key
     }
-    return undefined
+    const slug = lower.replace(/_/g, '-')
+    const slugMatches = Object.keys(registry).filter(
+        (key) => key.toLowerCase().replace(/_/g, '-') === slug
+    )
+    return slugMatches.length === 1 ? slugMatches[0] : undefined
 }
 
 export function workspacesForProject(

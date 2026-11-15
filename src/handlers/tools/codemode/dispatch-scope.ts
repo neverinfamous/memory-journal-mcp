@@ -243,11 +243,9 @@ export async function normalizeDispatchParams(
         typeof paramsObj['workspace_id'] === 'string' &&
         paramsObj['workspace_id'].toLowerCase() !== workspaceId.toLowerCase()
     ) {
-        if (typeof paramsObj['project_number'] !== 'number') {
-            throw new ValidationError(
-                `Project alias resolved workspace '${paramsObj['workspace_id']}' does not match session workspace '${workspaceId}'.`
-            )
-        }
+        throw new ValidationError(
+            `Project alias resolved workspace '${paramsObj['workspace_id']}' does not match session workspace '${workspaceId}'.`
+        )
     }
 
     if (
@@ -303,7 +301,9 @@ export async function normalizeDispatchParams(
         !hasCrossWorkspaceTarget &&
         paramsObj['project_number'] === undefined &&
         projectId !== undefined &&
-        (callerWorkspaceId === undefined || callerWorkspaceId === workspaceId) &&
+        (callerWorkspaceId === undefined ||
+            (typeof workspaceId === 'string' &&
+                callerWorkspaceId.toLowerCase() === workspaceId.toLowerCase())) &&
         !isDefaultWorkspaceName(callerWorkspaceId) &&
         checkSchemaAcceptsKey(tool.inputSchema, 'project_number')
     ) {
@@ -351,12 +351,13 @@ export async function normalizeDispatchParams(
                 typeof workspaceId === 'string' &&
                 workspaceId !== '*'
             ) {
-                if (itemProjNum !== undefined) {
-                    pairStoredScope(workspaceId, itemProjNum, reg)
-                } else if (rawItemWs !== undefined && rawItemWs.toLowerCase() !== workspaceId.toLowerCase()) {
+                if (rawItemWs !== undefined && rawItemWs.toLowerCase() !== workspaceId.toLowerCase()) {
                     throw new ValidationError(
                         `Project alias resolved workspace '${rawItemWs}' does not match session workspace '${workspaceId}'.`
                     )
+                }
+                if (itemProjNum !== undefined) {
+                    pairStoredScope(workspaceId, itemProjNum, reg)
                 }
                 nextItem['workspace_id'] = workspaceId
             }
@@ -371,7 +372,25 @@ export async function normalizeDispatchParams(
                 typeof nextItem['target_workspace_id'] === 'string' && nextItem['target_workspace_id'].trim() !== ''
                     ? nextItem['target_workspace_id'].trim()
                     : undefined
-            const itemCrossWsMove = itemTargetWs !== undefined && itemTargetWs !== workspaceId
+            const itemCrossWsMove =
+                itemTargetWs !== undefined &&
+                (typeof workspaceId !== 'string' || itemTargetWs.toLowerCase() !== workspaceId.toLowerCase())
+
+            if (itemTargetWs !== undefined && itemProjNum !== undefined) {
+                pairStoredScope(itemTargetWs, itemProjNum, reg)
+            } else if (hasItemWs && callerItemWs !== '*' && !itemCrossWsMove) {
+                const wsReg = lookupRegistryEntry(reg, callerItemWs)
+                if (itemProjNum !== undefined) {
+                    pairStoredScope(callerItemWs, itemProjNum, reg)
+                } else if (
+                    batchArrayKey === 'entries' &&
+                    !isDefaultWorkspaceName(callerItemWs) &&
+                    wsReg?.project_number !== undefined &&
+                    nextItem['project_number'] === undefined
+                ) {
+                    nextItem['project_number'] = wsReg.project_number
+                }
+            }
 
             if (
                 explicitWorkspace === true &&
@@ -381,6 +400,7 @@ export async function normalizeDispatchParams(
                 workspaceId !== '*'
             ) {
                 pairStoredScope(workspaceId, itemProjNum, reg)
+                nextItem['workspace_id'] = workspaceId
             }
             if (
                 !hasItemWs &&
@@ -396,7 +416,9 @@ export async function normalizeDispatchParams(
                 nextItem['project_number'] === undefined &&
                 typeof projectId === 'number' &&
                 !isDefaultWorkspaceName(callerItemWs) &&
-                (callerItemWs === undefined || callerItemWs === workspaceId)
+                (callerItemWs === undefined ||
+                    (typeof workspaceId === 'string' &&
+                        callerItemWs.toLowerCase() === workspaceId.toLowerCase()))
             ) {
                 nextItem['project_number'] = projectId
             }

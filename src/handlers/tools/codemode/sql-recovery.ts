@@ -2,8 +2,16 @@
  * SQL and prepared statement recovery helpers for Code Mode execution payloads.
  */
 
-import { scopeFromSqlLiterals } from '../../../codemode/sql-literal-scope.js'
+import { hasUnsupportedWherePredicate, scopeFromSqlLiterals } from '../../../codemode/sql-literal-scope.js'
 import { parseSqlStatement } from '../../../codemode/sql-positional-binder.js'
+
+const ENTRY_TABLE_NAMES = new Set([
+    'memory_journal',
+    'entries',
+    'journal',
+    'journal_entries',
+    'memories',
+])
 
 /**
  * Auto-heals raw SQL queries passed as code or script in Code Mode,
@@ -34,17 +42,23 @@ export function extractAndRecoverSqlCode(code: string): string | null {
         return null
     }
 
-    const fromMatch = /\bFROM\s+[`"']?([a-zA-Z0-9_]+)[`"']?/i.exec(cleanSql)
+    const fromMatch = /\bFROM\s+(?:[`"']?[a-zA-Z_][\w]*[`"']?\.)?[`"']?([a-zA-Z0-9_]+)[`"']?/i.exec(cleanSql)
     const tableName = fromMatch?.[1]?.toLowerCase()
+    const updateTableMatch = /^UPDATE\s+(?:[`"']?[a-zA-Z_][\w]*[`"']?\.)?[`"']?([a-zA-Z0-9_]+)[`"']?/i.exec(cleanSql)
+    const updateTable = updateTableMatch?.[1]?.toLowerCase()
 
     const limitMatch = /\bLIMIT\s+(\d+)/i.exec(cleanSql)
     const limitVal = limitMatch?.[1] !== undefined ? parseInt(limitMatch[1], 10) : undefined
 
-    const idMatch = /\b(?:WHERE|AND)\s+[`"']?(?:id|entry_id)[`"']?\s*=\s*(\d+)/i.exec(cleanSql)
+    const whereClause = /\bWHERE\b[\s\S]*$/i.exec(cleanSql)?.[0] ?? ''
+    const idMatch =
+        /\b(?:WHERE|AND)\s+(?:[`"']?[a-zA-Z_][\w]*[`"']?\.)?[`"']?(?:id|entry_id)[`"']?\s*=\s*(\d+)/i.exec(
+            whereClause
+        )
     const idVal = idMatch?.[1] !== undefined ? parseInt(idMatch[1], 10) : undefined
 
     const likeMatch =
-        /\b(?:WHERE|AND)\s+[`"']?(?:content|title|tags|body|text|summary|name)[`"']?\s+(?:LIKE|ILIKE|=)\s*['"]%?([^%'"]+)%?['"]/i.exec(
+        /\b(?:WHERE|AND)\s+(?:[`"']?[a-zA-Z_][\w]*[`"']?\.)?[`"']?(?:content|title|tags|body|text|summary|name)[`"']?\s+(?:LIKE|ILIKE|=)\s*['"]%?([^%'"]+)%?['"]/i.exec(
             cleanSql
         )
     const searchQuery = likeMatch?.[1]
@@ -95,7 +109,14 @@ export function extractAndRecoverSqlCode(code: string): string | null {
         return `return await mj.admin.searchAuditLog(${JSON.stringify(scopeFields)});`
     }
 
+    if (hasUnsupportedWherePredicate(cleanSql)) {
+        return null
+    }
+
     if (/^SELECT\b/i.test(cleanSql)) {
+        if (tableName === undefined || !ENTRY_TABLE_NAMES.has(tableName)) {
+            return null
+        }
         if (isCount) {
             return null
         }
@@ -123,6 +144,9 @@ export function extractAndRecoverSqlCode(code: string): string | null {
     }
 
     if (/^UPDATE\b/i.test(cleanSql)) {
+        if (updateTable === undefined || !ENTRY_TABLE_NAMES.has(updateTable)) {
+            return null
+        }
         if (idVal !== undefined) {
             const setClause = /\bSET\s+([\s\S]*?)(?:\bWHERE\b|$)/i.exec(cleanSql)?.[1] ?? ''
             const setContentMatch = /\bcontent\s*=\s*(['"])([\s\S]*?)\1/i.exec(setClause)
@@ -153,6 +177,9 @@ export function extractAndRecoverSqlCode(code: string): string | null {
     }
 
     if (/^DELETE\b/i.test(cleanSql)) {
+        if (tableName === undefined || !ENTRY_TABLE_NAMES.has(tableName)) {
+            return null
+        }
         if (idVal !== undefined) {
             return `return await mj.admin.deleteEntry(${JSON.stringify({ entry_id: idVal, ...scopeFields })});`
         }

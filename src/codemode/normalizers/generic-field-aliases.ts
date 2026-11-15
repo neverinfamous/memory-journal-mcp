@@ -366,7 +366,7 @@ export function normalizeExecuteCodeAliases(obj: Record<string, unknown>): void 
     if (obj['code'] !== undefined) return
 
     const codeAlias =
-        obj['script'] ?? obj['js'] ?? obj['javascript'] ?? obj['query'] ?? obj['command'] ?? obj['content'] ??
+        obj['script'] ?? obj['js'] ?? obj['javascript'] ?? obj['command'] ?? obj['content'] ??
         obj['eval'] ?? obj['source'] ?? obj['body'] ?? obj['expression'] ?? obj['fn'] ?? obj['exec'] ??
         obj['code_snippet'] ?? obj['raw_code'] ?? obj['statement'] ?? obj['statements'] ?? obj['codeBlock'] ??
         obj['code_block'] ?? obj['script_content'] ?? obj['js_code'] ?? obj['code_string'] ?? obj['action'] ??
@@ -380,7 +380,7 @@ export function normalizeExecuteCodeAliases(obj: Record<string, unknown>): void 
         obj['code'] = JSON.stringify(obj)
     } else {
         for (const [k, v] of Object.entries(obj)) {
-            if (typeof v === 'string' && v.trim().length > 0 && !['repo', 'workspace_id', 'expected_version', 'auto_version', 'project_number'].includes(k)) {
+            if (typeof v === 'string' && v.trim().length > 0 && !['repo', 'workspace_id', 'expected_version', 'auto_version', 'project_number', 'query'].includes(k)) {
                 obj['code'] = v
                 break
             }

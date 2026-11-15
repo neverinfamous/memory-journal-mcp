@@ -75,8 +75,6 @@ export function getSearchEntriesTool(context: ToolContext): ToolDefinition[] {
                                     }
                                 )
                             ),
-                            entries: [],
-                            count: 0,
                             degraded: false,
                         }
                     }

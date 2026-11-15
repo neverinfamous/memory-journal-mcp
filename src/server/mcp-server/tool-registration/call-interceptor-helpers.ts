@@ -9,10 +9,10 @@ import { logger } from '../../../utils/logger.js'
 import {
     findCanonicalRegistryKey,
     loadProjectRegistryFromConfig,
-    resolveProjectContext,
 } from '../../../utils/workspace-resolver.js'
-import type { ToolHandlerConfig } from '../../../types/index.js'
 import type { ServerOptions } from '../types.js'
+
+export { resolveMcpCreateWorkspaceScope } from './create-scope-interceptor.js'
 
 /**
  * Pure helpers for the call-tool interceptor (payload formatting, key healing, name matching).
@@ -354,110 +354,5 @@ export function resolveSingleProjectFromRegistry(
     return {
         success: false,
         error: `🛠️ AUTONOMOUS HEALING: Project not found: '${nameArg ?? String(numericTarget ?? '')}'`,
-    }
-}
-
-/**
- * Resolve omitted `workspace_id` for direct MCP `create_entry` / `batch_create_entries` calls
- * using live server configuration before `inputSchema` (`CreateEntrySchemaMcp`) runs.
- */
-function parsePositiveProjectNumber(value: unknown): number | undefined {
-    if (typeof value === 'number' && Number.isInteger(value) && value > 0) {
-        return value
-    }
-    if (typeof value === 'string') {
-        const trimmed = value.trim().replace(/^#/, '')
-        if (/^[1-9]\d*$/.test(trimmed)) {
-            const parsed = Number.parseInt(trimmed, 10)
-            if (Number.isInteger(parsed) && parsed > 0) return parsed
-        }
-    }
-    return undefined
-}
-
-export function resolveMcpCreateWorkspaceScope(
-    toolName: string | undefined,
-    toolArgs: Record<string, unknown>,
-    resolverConfig: ToolHandlerConfig
-): void {
-    if (toolName === 'create_entry') {
-        if (toolArgs['workspace_id'] !== undefined) return
-        const parsedProj = parsePositiveProjectNumber(toolArgs['project_number'])
-        try {
-            const resolved = resolveProjectContext(
-                {
-                    ...(parsedProj !== undefined ? { project_number: parsedProj } : {}),
-                    ...(typeof toolArgs['content'] === 'string'
-                        ? { content: toolArgs['content'] }
-                        : {}),
-                    ...(Array.isArray(toolArgs['tags'])
-                        ? {
-                              tags: toolArgs['tags'].filter(
-                                  (t): t is string => typeof t === 'string'
-                              ),
-                          }
-                        : {}),
-                },
-                resolverConfig
-            )
-            toolArgs['workspace_id'] = resolved.workspaceId
-            if (toolArgs['project_number'] === undefined && resolved.projectNumber !== undefined) {
-                toolArgs['project_number'] = resolved.projectNumber
-            }
-        } catch {
-            // Defer validation errors (e.g. ambiguous project_number) to the tool handler.
-        }
-        return
-    }
-    if (toolName === 'batch_create_entries' && Array.isArray(toolArgs['entries'])) {
-        const rawRootWs =
-            typeof toolArgs['workspace_id'] === 'string' && toolArgs['workspace_id'].trim() !== ''
-                ? toolArgs['workspace_id'].trim()
-                : undefined
-        if (rawRootWs === '*') {
-            for (const entry of toolArgs['entries']) {
-                if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) continue
-                const item = entry as Record<string, unknown>
-                if (item['workspace_id'] === undefined) {
-                    item['workspace_id'] = '*'
-                }
-            }
-            return
-        }
-        const rootProj = parsePositiveProjectNumber(toolArgs['project_number'])
-        for (const entry of toolArgs['entries']) {
-            if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) continue
-            const item = entry as Record<string, unknown>
-            if (item['workspace_id'] !== undefined) continue
-            const itemProj = parsePositiveProjectNumber(item['project_number'])
-            try {
-                const resolved = resolveProjectContext(
-                    {
-                        ...(rawRootWs !== undefined ? { workspace_id: rawRootWs } : {}),
-                        ...(itemProj !== undefined
-                            ? { project_number: itemProj }
-                            : rawRootWs === undefined && rootProj !== undefined
-                              ? { project_number: rootProj }
-                              : {}),
-                        ...(typeof item['content'] === 'string'
-                            ? { content: item['content'] }
-                            : {}),
-                        ...(Array.isArray(item['tags'])
-                            ? {
-                                  tags: item['tags'].filter(
-                                      (t): t is string => typeof t === 'string'
-                                  ),
-                              }
-                            : {}),
-                    },
-                    resolverConfig
-                )
-                item['workspace_id'] = resolved.workspaceId
-            } catch {
-                if (rawRootWs !== undefined && item['workspace_id'] === undefined) {
-                    item['workspace_id'] = rawRootWs
-                }
-            }
-        }
     }
 }

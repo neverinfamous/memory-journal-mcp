@@ -18,7 +18,7 @@ import {
     validateAdversarialPromptScope,
 } from './adversarial-helpers.js'
 
-export const AUDIT_PROMPT_REVISION = '2026-11-14-audit-pass24'
+export const AUDIT_PROMPT_REVISION = '2026-11-15-audit-pass25'
 
 export function buildSharedAuditPreamble(target: string, targetKind = 'file or module'): string {
     return `Prompt revision: ${AUDIT_PROMPT_REVISION}.
@@ -28,7 +28,7 @@ If the target is '{target}', determine it from the user's request. If the user h
 
 This prompt is shared by every project. Audit the repository the user named. Do not assume that repository is memory-journal-mcp, and do not copy this server's directory layout, commit script, or parameter-normalizer filenames onto a different codebase. Discover those in the target.
 
-If \`memory://briefing/{repo}\` cannot be read, continue the audit. Bind \`workspace_id\` and \`project_number\` only from the registry entry for the repository the user named. If that pair is missing, do not call \`create_entry\`. Record the resource failure.`
+If \`memory://briefing/{repo}\` cannot be read, continue the audit (and use \`memory://agent-context/{repo}\` rather than bare \`memory://agent-id\` for mid-task recovery in multi-project setups). Bind \`workspace_id\` and \`project_number\` only from the registry entry for the repository the user named. If that pair is missing, do not call \`create_entry\` or \`mj.core.createEntry\`. Record the resource failure.`
 }
 
 export interface AuditPromptBodyContext {
@@ -67,7 +67,8 @@ export function buildAuditPromptDefinition(spec: AuditPromptSpec): InternalPromp
             const scope = validateAdversarialPromptScope(
                 parsed.workspace_id,
                 parsed.project_number,
-                briefingConfig
+                briefingConfig,
+                parsed.target
             )
             const target = sanitizePromptTarget(parsed.target ?? '{target}')
             const copilotInstruction = buildCopilotStep(

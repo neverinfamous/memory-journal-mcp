@@ -106,11 +106,20 @@ describe('Handler Error Branches', () => {
         })
 
         it('should handle empty query gracefully', async () => {
-            const result = (await callTool('search_entries', { query: '' }, db)) as {
-                entries: unknown[]
+            const bareResult = (await callTool('search_entries', { query: '' }, db)) as {
+                success: boolean
+                code: string
+                error: string
             }
+            expect(bareResult.success).toBe(false)
+            expect(bareResult.code).toBe('VALIDATION_ERROR')
 
-            expect(result.entries).toBeDefined()
+            const filteredResult = (await callTool(
+                'search_entries',
+                { query: '', is_personal: true },
+                db
+            )) as { entries: unknown[] }
+            expect(filteredResult.entries).toBeDefined()
         })
     })
 

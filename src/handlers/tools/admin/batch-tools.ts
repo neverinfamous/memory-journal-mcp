@@ -194,16 +194,13 @@ export function getBatchTools(context: ToolContext): ToolDefinition[] {
                                 explicitPn === undefined ? undefined : resolvedUpdate.projectNumber
                             resolvedWs =
                                 explicitWs === '*' ? '*' : resolvedUpdate.workspaceId
-                            if (explicitWs === undefined) {
+                            if (explicitWs === undefined && explicitPn === undefined) {
                                 const existingByPk =
                                     typeof db.getEntryById === 'function'
                                         ? db.getEntryById(u.entry_id, '*')
                                         : undefined
                                 if (existingByPk?.workspaceId !== undefined) {
                                     resolvedWs = existingByPk.workspaceId
-                                }
-                                if (explicitPn !== undefined) {
-                                    projectNumberForUpdate ??= explicitPn
                                 }
                             }
                         }

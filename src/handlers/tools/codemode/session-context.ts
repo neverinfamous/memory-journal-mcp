@@ -3,6 +3,7 @@ import { getGitHubIntegration } from '../../../github/github-integration/index.j
 import {
     cwdMatchesRegistryPath,
     findCanonicalRegistryKey,
+    getActiveSessionProject,
     loadProjectRegistryFromConfig,
     resolveProjectContext,
 } from '../../../utils/workspace-resolver.js'
@@ -76,18 +77,35 @@ function projectIdFromDefaults(
     context: ToolContext,
     effectiveRegistry: ProjectRegistry
 ): number | undefined {
+    const rawDefaultWs = context.config?.defaultWorkspaceId?.trim()
+    if (rawDefaultWs !== undefined && rawDefaultWs !== '' && rawDefaultWs !== '*') {
+        if (rawDefaultWs.toLowerCase() === 'default') {
+            return lookupRegistryEntry(effectiveRegistry, 'default')?.project_number
+        }
+        return (
+            lookupRegistryEntry(effectiveRegistry, rawDefaultWs)?.project_number ??
+            context.config?.defaultProjectNumber
+        )
+    }
     if (context.config?.defaultProjectNumber !== undefined) {
         return context.config.defaultProjectNumber
     }
     if (effectiveRegistry === undefined) return undefined
     const cwd = process.cwd()
-    for (const entry of Object.values(effectiveRegistry)) {
-        if (
-            entry.path !== undefined &&
-            entry.path !== '' &&
-            cwdMatchesRegistryPath(entry.path, cwd) &&
-            entry.project_number !== undefined
-        ) {
+    const sortedEntries = Object.values(effectiveRegistry)
+        .filter(
+            (entry): entry is { path: string; project_number: number } =>
+                entry.path !== undefined &&
+                entry.path !== '' &&
+                entry.project_number !== undefined
+        )
+        .sort(
+            (a, b) =>
+                b.path.replace(/\\/g, '/').replace(/\/+$/, '').length -
+                a.path.replace(/\\/g, '/').replace(/\/+$/, '').length
+        )
+    for (const entry of sortedEntries) {
+        if (cwdMatchesRegistryPath(entry.path, cwd)) {
             return entry.project_number
         }
     }
@@ -187,24 +205,47 @@ export async function resolveCodeModeSessionContext(
     const explicitWorkspace = hasExplicitConcreteWs || hasExplicitRepo
 
     let repoRegistryKey: string | undefined
-    if (hasExplicitRepo && effectiveRegistry !== undefined) {
-        const repoLeaf = rawRepoTrimmed.includes('/')
+    const repoLeaf =
+        hasExplicitRepo && rawRepoTrimmed.includes('/')
             ? (rawRepoTrimmed.split('/').pop()?.trim() ?? rawRepoTrimmed)
             : rawRepoTrimmed
+    if (hasExplicitRepo && effectiveRegistry !== undefined) {
         repoRegistryKey =
-            findCanonicalRegistryKey(repoLeaf, effectiveRegistry) ??
-            findCanonicalRegistryKey(rawRepoTrimmed, effectiveRegistry)
+            (repoLeaf !== undefined && repoLeaf !== ''
+                ? findCanonicalRegistryKey(repoLeaf, effectiveRegistry)
+                : undefined) ?? findCanonicalRegistryKey(rawRepoTrimmed, effectiveRegistry)
     }
-    if (hasExplicitConcreteWs && repoRegistryKey !== undefined && effectiveRegistry !== undefined) {
-        const wsKey = findCanonicalRegistryKey(rawWsTrimmed, effectiveRegistry)
-        if (
+    if (hasExplicitConcreteWs && hasExplicitRepo) {
+        if (repoRegistryKey !== undefined && effectiveRegistry !== undefined) {
+            const wsKey = findCanonicalRegistryKey(rawWsTrimmed, effectiveRegistry)
+            if (
+                rawWsTrimmed.toLowerCase() === 'default' ||
+                (wsKey ?? rawWsTrimmed).toLowerCase() !== repoRegistryKey.toLowerCase()
+            ) {
+                return githubInjectError(
+                    `workspace_id '${rawWsTrimmed}' conflicts with repo '${rawRepoTrimmed}' (registered workspace '${repoRegistryKey}').`
+                )
+            }
+        } else if (
             rawWsTrimmed.toLowerCase() === 'default' ||
-            (wsKey !== undefined && wsKey !== repoRegistryKey)
+            (repoLeaf !== undefined &&
+                repoLeaf !== '' &&
+                rawWsTrimmed.toLowerCase() !== repoLeaf.toLowerCase())
         ) {
             return githubInjectError(
-                `workspace_id '${rawWsTrimmed}' conflicts with repo '${rawRepoTrimmed}' (registered workspace '${repoRegistryKey}').`
+                `workspace_id '${rawWsTrimmed}' conflicts with repo '${rawRepoTrimmed}'.`
             )
         }
+    }
+    if (
+        hasExplicitRepo &&
+        effectiveRegistry !== undefined &&
+        Object.keys(effectiveRegistry).length > 0 &&
+        repoRegistryKey === undefined
+    ) {
+        return githubInjectError(
+            `Repository '${rawRepoTrimmed}' is not registered in projectRegistry.`
+        )
     }
 
     const explicitDefaultWithoutProject =
@@ -223,17 +264,48 @@ export async function resolveCodeModeSessionContext(
     const isWildcardWorkspace = rawWsTrimmed === '*'
     let numericProjectId = typeof projectId === 'number' ? projectId : undefined
     // [C3] Session scope is never guessed from keywords inside the submitted code.
+    const fallbackRepoWs =
+        repoRegistryKey ?? (repoLeaf !== undefined && repoLeaf !== '' ? repoLeaf : undefined)
+    const configuredDefaultWsRaw = context.config?.defaultWorkspaceId?.trim()
+    const configuredDefaultWs =
+        configuredDefaultWsRaw !== undefined &&
+        configuredDefaultWsRaw !== '' &&
+        configuredDefaultWsRaw !== '*'
+            ? configuredDefaultWsRaw
+            : undefined
+    const sessionCtx = getActiveSessionProject(context.config?.runtime)
+    const sessionWs =
+        sessionCtx.workspaceId !== undefined &&
+        sessionCtx.workspaceId.trim() !== '' &&
+        sessionCtx.workspaceId.trim() !== '*'
+            ? sessionCtx.workspaceId.trim()
+            : undefined
+    const hasActiveSessionScope = sessionWs !== undefined || sessionCtx.projectNumber !== undefined
+    const fallbackConfiguredWs =
+        input.project_number === undefined && configuredDefaultWs !== undefined
+            ? configuredDefaultWs.toLowerCase() === 'default' && hasActiveSessionScope
+                ? sessionWs
+                : configuredDefaultWs
+            : undefined
+    const effectiveProjectInput =
+        numericProjectId ??
+        (input.project_number === undefined &&
+        configuredDefaultWs?.toLowerCase() === 'default' &&
+        sessionWs === undefined
+            ? sessionCtx.projectNumber
+            : undefined)
     const resolvedContext = resolveProjectContext(
         {
             workspace_id:
-                input.workspace_id ?? (!hasExplicitConcreteWs ? repoRegistryKey : undefined),
-            project_number: numericProjectId,
+                input.workspace_id ??
+                (!hasExplicitConcreteWs ? (fallbackRepoWs ?? fallbackConfiguredWs) : undefined),
+            project_number: effectiveProjectInput,
         },
         context.config
     )
     const workspaceId = isWildcardWorkspace ? '*' : resolvedContext.workspaceId
     if (numericProjectId !== undefined && workspaceId !== '*') {
-        pairStoredScope(workspaceId, numericProjectId, activeProjectRegistry(context.config?.projectRegistry))
+        pairStoredScope(workspaceId, numericProjectId, activeProjectRegistry(effectiveRegistry))
     } else if (
         !isWildcardWorkspace &&
         !explicitDefaultWithoutProject &&

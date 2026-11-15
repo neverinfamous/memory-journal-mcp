@@ -94,7 +94,7 @@ export const updateConfigurationSchema = z.preprocess(
             briefing_workflows: z.number().int().min(0).optional(),
             briefing_workflow_status: z.boolean().optional(),
             briefing_copilot: z.boolean().optional(),
-            project_number: z.number().int().optional(),
+            project_number: z.number().int().positive().optional(),
             workspace_id: z.string().optional(),
         })
         .strict()
@@ -148,6 +148,15 @@ function applyScopeConfigurationUpdate(
             "workspace_id '*' is a read-only wildcard and cannot be configured as a write workspace."
         )
     }
+    if (args.workspace_id?.trim() === '') {
+        throw new ValidationError('workspace_id cannot be empty.')
+    }
+    if (
+        args.project_number !== undefined &&
+        (!Number.isInteger(args.project_number) || args.project_number <= 0)
+    ) {
+        throw new ValidationError('project_number must be a positive integer.')
+    }
     if (args.workspace_id === undefined && args.project_number === undefined) {
         return false
     }
@@ -156,8 +165,17 @@ function applyScopeConfigurationUpdate(
     let nextWorkspaceId = newBc.defaultWorkspaceId
     let nextProjectNumber = newBc.defaultProjectNumber
 
-    if (args.workspace_id !== undefined && args.project_number !== undefined) {
-        const canonical = findCanonicalRegistryKey(args.workspace_id, registry) ?? args.workspace_id
+    const trimmedInputWs = args.workspace_id?.trim()
+    const normalizedInputWs =
+        trimmedInputWs !== undefined
+            ? trimmedInputWs.toLowerCase() === 'default'
+                ? 'default'
+                : trimmedInputWs
+            : undefined
+
+    if (normalizedInputWs !== undefined && args.project_number !== undefined) {
+        const canonical =
+            findCanonicalRegistryKey(normalizedInputWs, registry) ?? normalizedInputWs
         const exactKey = exactRegistryKey(canonical, activeProjectRegistry(registry)) ?? canonical
         const regProjNum = registry?.[exactKey]?.project_number
         if (regProjNum !== undefined && args.project_number !== regProjNum) {
@@ -169,17 +187,32 @@ function applyScopeConfigurationUpdate(
 
     if (args.project_number !== undefined) {
         nextProjectNumber = args.project_number
-        if (args.workspace_id === undefined) {
-            nextWorkspaceId = Object.entries(registry ?? {}).find(
+        if (normalizedInputWs === undefined) {
+            const matches = Object.entries(registry ?? {}).filter(
                 ([, entry]) => entry.project_number === args.project_number
-            )?.[0]
+            )
+            if (matches.length > 1) {
+                throw new ValidationError(
+                    `project_number ${String(args.project_number)} is ambiguous across multiple workspaces.`
+                )
+            }
+            const matched = matches[0]
+            if (matched !== undefined) {
+                nextWorkspaceId = matched[0]
+            }
         }
         updatedKeys.push('project_number')
     }
 
-    if (args.workspace_id !== undefined) {
-        const canonical = findCanonicalRegistryKey(args.workspace_id, registry) ?? args.workspace_id
-        const exactKey = exactRegistryKey(canonical, activeProjectRegistry(registry)) ?? canonical
+    if (normalizedInputWs !== undefined) {
+        const canonical =
+            normalizedInputWs === 'default'
+                ? 'default'
+                : (findCanonicalRegistryKey(normalizedInputWs, registry) ?? normalizedInputWs)
+        const exactKey =
+            normalizedInputWs === 'default'
+                ? 'default'
+                : (exactRegistryKey(canonical, activeProjectRegistry(registry)) ?? canonical)
         const regProjNum = registry?.[exactKey]?.project_number
         nextWorkspaceId = exactKey
         if (args.project_number === undefined) {

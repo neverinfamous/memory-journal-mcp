@@ -77,8 +77,6 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         {
                             workspace_id: input.workspace_id,
                             project_number: input.project_number,
-                            content: input.content,
-                            tags: input.tags
                         },
                         context.config
                     )
@@ -188,12 +186,22 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         (input.project_number !== undefined &&
                             entry.projectNumber !== input.project_number)
                     ) {
+                        const teamCandidate =
+                            !entry && context.teamDb !== undefined
+                                ? context.teamDb.getEntryById(input.entry_id, wsId)
+                                : null
+                        const matchingTeamEntry =
+                            teamCandidate !== null &&
+                            (input.project_number === undefined ||
+                                teamCandidate.projectNumber === input.project_number)
                         return {
                             success: false,
                             error: `Entry ${String(input.entry_id)} not found`,
                             code: 'RESOURCE_NOT_FOUND',
                             category: 'resource',
-                            suggestion: 'Verify the entry ID exists and you have access to it',
+                            suggestion: matchingTeamEntry
+                                ? `No personal entry #${String(input.entry_id)} was found in workspace '${wsId}', but team entry #${String(input.entry_id)} exists in the team database. Call team_get_entry_by_id (or mj.team.getEntryById) instead.`
+                                : 'Verify the entry ID exists and you have access to it',
                             recoverable: true,
                         }
                     }

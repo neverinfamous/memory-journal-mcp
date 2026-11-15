@@ -78,7 +78,7 @@ export async function hybridSearch(
         teamDb?: IDatabaseAdapter
         teamVectorManager?: VectorSearchManager
     }
-): Promise<{ entries: EntryWithSource[]; fusionScores: Map<number, number>; degraded?: boolean }> {
+): Promise<{ entries: EntryWithSource[]; fusionScores: Map<string, number>; degraded?: boolean }> {
     const overfetchLimit = Math.min(Math.max(options.limit * OVERFETCH_MULTIPLIER, 50), 500)
 
     let semanticDegraded = false
@@ -168,5 +168,10 @@ export async function hybridSearch(
         output = mergeAndDedup(entries, teamEntries, options.limit, 'preserve')
     }
 
-    return { entries: output, fusionScores, degraded: isDegraded }
+    const qualifiedFusionScores = new Map<string, number>()
+    for (const [id, score] of fusionScores) {
+        qualifiedFusionScores.set(`personal:${String(id)}`, score)
+    }
+
+    return { entries: output, fusionScores: qualifiedFusionScores, degraded: isDegraded }
 }
